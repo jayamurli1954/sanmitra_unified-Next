@@ -1,0 +1,1011 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from math import ceil
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, Query, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.auth.dependencies import get_current_user
+from app.core.tenants.context import resolve_app_key, resolve_tenant_id
+from app.db.mongo import get_collection
+from app.db.postgres import get_async_session
+from app.accounting.schemas import JournalLineIn, JournalPostRequest
+from app.accounting.service import post_journal_entry
+from app.accounting.models.entities import Account
+
+
+async def _resolve_account_id_by_code(
+    session: AsyncSession, app_key: str, tenant_id: str, code: str
+) -> int | None:
+    """Look up Account.id from a code string like '3020'."""
+    if not code:
+        return None
+    code_str = str(code).strip()
+    if not code_str:
+        return None
+    stmt = select(Account.id).where(
+        Account.app_key == app_key,
+        Account.tenant_id == tenant_id,
+        Account.code == code_str,
+    ).limit(1)
+    result = await session.execute(stmt)
+    row = result.first()
+    return int(row[0]) if row else None
+
+router = APIRouter(tags=["mitrabooks-compat"])
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items() if key != "_id"}
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
+
+
+def _page(items: list[dict[str, Any]], page: int, page_size: int, key: str) -> dict[str, Any]:
+    total = len(items)
+    total_pages = max(1, ceil(total / page_size)) if total else 1
+    start = (max(page, 1) - 1) * page_size
+    return {
+        key: _json_safe(items[start : start + page_size]),
+        "total": total,
+        "page": max(page, 1),
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+def _ctx(current_user: dict, x_tenant_id: str | None, x_app_key: str | None) -> tuple[str, str]:
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mitrabooks").strip())
+    return tenant_id, app_key
+
+
+async def _seq_id(col_name: str, tenant_id: str, app_key: str, company_id: int) -> int:
+    """Generate next id as max(existing id) + 1 to avoid collisions when records are deleted."""
+    col = get_collection(col_name)
+    cursor = col.find(
+        {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id},
+        {"id": 1, "_id": 0},
+    ).sort("id", -1).limit(1)
+    rows = await cursor.to_list(length=1)
+    max_id = int(rows[0].get("id", 0)) if rows else 0
+    return max_id + 1
+
+
+@router.get("/companies/me")
+async def companies_me(current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    col = get_collection("mb_companies")
+    doc = await col.find_one({"tenant_id": tenant_id, "app_key": app_key})
+    if doc:
+        return doc
+    seeded = {
+        "id": 1,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "name": "MitraBooks Company",
+        "legal_name": "MitraBooks Company Pvt Ltd",
+        "company_type": "Private Limited",
+        "currency": "INR",
+        "fiscal_year_start": "2026-04-01",
+        "timezone": "Asia/Kolkata",
+        "accounting_method": "accrual",
+        "enable_multi_currency": False,
+        "enable_inventory": False,
+        "enable_gst": True,
+        "subscription_plan": "free",
+        "max_users": 5,
+        "max_transactions_per_month": 5000,
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }
+    await col.insert_one(seeded)
+    return seeded
+
+
+@router.get("/accounts/statistics")
+async def account_statistics(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    col = get_collection("mb_accounts")
+    rows = await col.find({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id}).to_list(length=5000)
+    by_type: dict[str, int] = {}
+    for r in rows:
+        t = str(r.get("account_type") or "unknown")
+        by_type[t] = by_type.get(t, 0) + 1
+    return {"company_id": company_id, "total_accounts": len(rows), "active_accounts": sum(1 for r in rows if bool(r.get("is_active", True))), "accounts_by_type": by_type}
+
+
+@router.post("/parties")
+async def create_party(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    company_id = int(payload.get("company_id") or 1)
+    party_id = await _seq_id("mb_parties", tenant_id, app_key, company_id)
+    party = {
+        "id": party_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "party_code": str(payload.get("party_code") or f"P{party_id:04d}"),
+        "party_name": str(payload.get("party_name") or "Party"),
+        "party_type": str(payload.get("party_type") or "customer"),
+        "gst_type": str(payload.get("gst_type") or "unregistered"),
+        "opening_balance": _as_float(payload.get("opening_balance"), 0.0),
+        "current_balance": _as_float(payload.get("opening_balance"), 0.0),
+        "is_active": bool(payload.get("is_active", True)),
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }
+    party.update({k: v for k, v in payload.items() if k not in party})
+    await get_collection("mb_parties").insert_one(party)
+    return party
+
+
+@router.post("/parties/quick/customer")
+async def create_party_quick_customer(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await create_party({**payload, "party_type": "customer"}, current_user, x_tenant_id, x_app_key)
+
+
+@router.post("/parties/quick/vendor")
+async def create_party_quick_vendor(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await create_party({**payload, "party_type": "vendor"}, current_user, x_tenant_id, x_app_key)
+
+
+@router.get("/parties")
+async def list_parties(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), party_type: str | None = Query(default=None), search: str | None = Query(default=None), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    filters: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id}
+    if party_type:
+        filters["party_type"] = party_type
+    rows = await get_collection("mb_parties").find(filters).to_list(length=5000)
+    if search:
+        s = search.strip().lower()
+        rows = [r for r in rows if s in str(r.get("party_name") or "").lower() or s in str(r.get("party_code") or "").lower()]
+    rows.sort(key=lambda r: str(r.get("party_name") or ""))
+    return _page(rows, page, page_size, "parties")
+
+
+@router.get("/parties/customers")
+async def list_customers(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), search: str | None = Query(default=None), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await list_parties(company_id, page, page_size, "customer", search, current_user, x_tenant_id, x_app_key)
+
+
+@router.get("/parties/vendors")
+async def list_vendors(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), search: str | None = Query(default=None), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await list_parties(company_id, page, page_size, "vendor", search, current_user, x_tenant_id, x_app_key)
+
+
+@router.get("/parties/{party_id}")
+async def get_party(party_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return await get_collection("mb_parties").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id})
+
+
+@router.get("/parties/lookup/code/{party_code}")
+async def lookup_party_by_code(party_code: str, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return await get_collection("mb_parties").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "party_code": party_code})
+
+
+@router.put("/parties/{party_id}")
+async def update_party(party_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
+    patch["updated_at"] = _now_iso()
+    col = get_collection("mb_parties")
+    await col.update_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id}, {"$set": patch})
+    return await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id})
+
+
+@router.delete("/parties/{party_id}")
+async def delete_party(party_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    await get_collection("mb_parties").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id})
+    return {"status": "deleted", "id": party_id}
+
+
+@router.get("/parties/{party_id}/balance")
+async def party_balance(party_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    party = await get_party(party_id, company_id, current_user, x_tenant_id, x_app_key)
+    bal = _as_float((party or {}).get("current_balance"), 0.0)
+    return {"receivable": max(bal, 0.0), "payable": abs(min(bal, 0.0)), "net_balance": bal}
+
+
+@router.get("/parties/{party_id}/ledger")
+async def party_ledger(party_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    party = await get_party(party_id, company_id, current_user, x_tenant_id, x_app_key)
+    opening = _as_float((party or {}).get("opening_balance"), 0.0)
+    return {"party": party, "opening_balance": opening, "transactions": [], "closing_balance": opening, "total_debit": 0.0, "total_credit": 0.0}
+
+
+@router.get("/parties/statistics")
+async def parties_statistics(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    rows = (await list_parties(company_id, 1, 5000, None, None, current_user, x_tenant_id, x_app_key)).get("parties", [])
+    return {"total_parties": len(rows), "customers": sum(1 for r in rows if str(r.get("party_type") or "") in {"customer", "both"}), "vendors": sum(1 for r in rows if str(r.get("party_type") or "") in {"vendor", "both"}), "active_parties": sum(1 for r in rows if bool(r.get("is_active", True)))}
+
+
+def _invoice_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_id: int, invoice_id: int) -> dict[str, Any]:
+    total_amount = _as_float(payload.get("total_amount"), 0.0)
+    return {
+        "id": invoice_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "invoice_type": str(payload.get("invoice_type") or "sales_invoice"),
+        "invoice_number": str(payload.get("invoice_number") or f"INV-{invoice_id:05d}"),
+        "invoice_date": str(payload.get("invoice_date") or date.today().isoformat()),
+        "due_date": payload.get("due_date"),
+        "customer_id": payload.get("customer_id"),
+        "vendor_id": payload.get("vendor_id"),
+        "financial_year": str(payload.get("financial_year") or f"{datetime.now(timezone.utc).year}-{datetime.now(timezone.utc).year + 1}"),
+        "lines": payload.get("lines") or [],
+        "total_amount": total_amount,
+        "paid_amount": _as_float(payload.get("paid_amount"), 0.0),
+        "balance_amount": total_amount - _as_float(payload.get("paid_amount"), 0.0),
+        "status": str(payload.get("status") or "draft"),
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }
+
+
+@router.post("/invoices")
+@router.post("/invoices/sales")
+@router.post("/invoices/purchase")
+async def create_invoice(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    company_id = int(payload.get("company_id") or 1)
+    invoice_id = await _seq_id("mb_invoices", tenant_id, app_key, company_id)
+    doc = _invoice_doc(payload, tenant_id, app_key, company_id, invoice_id)
+    await get_collection("mb_invoices").insert_one(doc)
+    return doc
+
+
+@router.get("/invoices")
+@router.get("/invoices/sales")
+@router.get("/invoices/purchase")
+async def list_invoices(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), invoice_type: str | None = Query(default=None), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    filters: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id}
+    if invoice_type:
+        filters["invoice_type"] = invoice_type
+    rows = await get_collection("mb_invoices").find(filters).sort("created_at", -1).to_list(length=5000)
+    return _page(rows, page, page_size, "invoices")
+
+
+@router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return await get_collection("mb_invoices").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
+
+
+@router.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
+    patch["updated_at"] = _now_iso()
+    col = get_collection("mb_invoices")
+    await col.update_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id}, {"$set": patch})
+    return await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
+
+
+@router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    await get_collection("mb_invoices").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
+    return {"status": "deleted", "id": invoice_id}
+
+
+@router.post("/invoices/{invoice_id}/post")
+async def post_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await update_invoice(invoice_id, {"status": "posted"}, company_id, current_user, x_tenant_id, x_app_key)
+
+
+@router.post("/invoices/{invoice_id}/cancel")
+async def cancel_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    return await update_invoice(invoice_id, {"status": "cancelled"}, company_id, current_user, x_tenant_id, x_app_key)
+
+
+@router.post("/invoices/payments")
+async def create_invoice_payment(payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    payment_id = await _seq_id("mb_invoice_payments", tenant_id, app_key, company_id)
+    payment = {
+        "id": payment_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "invoice_id": int(payload.get("invoice_id") or 0),
+        "payment_date": str(payload.get("payment_date") or date.today().isoformat()),
+        "payment_amount": _as_float(payload.get("payment_amount"), 0.0),
+        "payment_mode": payload.get("payment_mode"),
+        "reference_number": payload.get("reference_number"),
+        "notes": payload.get("notes"),
+        "transaction_id": payload.get("transaction_id"),
+        "created_at": _now_iso(),
+    }
+    await get_collection("mb_invoice_payments").insert_one(payment)
+    return payment
+
+
+@router.get("/invoices/{invoice_id}/payments")
+async def list_invoice_payments(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return await get_collection("mb_invoice_payments").find({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "invoice_id": invoice_id}).sort("created_at", -1).to_list(length=1000)
+
+
+@router.get("/invoices/reports/outstanding")
+async def invoices_outstanding(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    rows = (await list_invoices(company_id, 1, 5000, None, current_user, x_tenant_id, x_app_key)).get("invoices", [])
+    invoices = []
+    total_outstanding = 0.0
+    for r in rows:
+        bal = _as_float(r.get("balance_amount"), _as_float(r.get("total_amount"), 0.0) - _as_float(r.get("paid_amount"), 0.0))
+        if bal > 0:
+            total_outstanding += bal
+            invoices.append({"invoice_id": r.get("id"), "invoice_number": r.get("invoice_number"), "invoice_date": r.get("invoice_date"), "due_date": r.get("due_date"), "party_id": r.get("customer_id") or r.get("vendor_id"), "party_name": r.get("customer_name") or r.get("vendor_name") or "Party", "total_amount": _as_float(r.get("total_amount"), 0.0), "paid_amount": _as_float(r.get("paid_amount"), 0.0), "balance_amount": bal, "days_overdue": 0, "status": r.get("status") or "draft"})
+    return {"invoices": invoices, "total_outstanding": total_outstanding, "total_overdue": total_outstanding}
+
+
+@router.get("/invoices/reports/ageing")
+async def invoices_ageing(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    out = await invoices_outstanding(company_id, current_user, x_tenant_id, x_app_key)
+    total = _as_float(out.get("total_outstanding"), 0.0)
+    return {"buckets": [{"bucket": "0-30", "count": len(out.get("invoices", [])), "amount": total}], "total_outstanding": total}
+
+
+@router.get("/invoices/statistics")
+async def invoices_statistics(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    rows = (await list_invoices(company_id, 1, 5000, None, current_user, x_tenant_id, x_app_key)).get("invoices", [])
+    by_status: dict[str, int] = {}
+    total_amount = 0.0
+    for r in rows:
+        s = str(r.get("status") or "draft")
+        by_status[s] = by_status.get(s, 0) + 1
+        total_amount += _as_float(r.get("total_amount"), 0.0)
+    return {"total_invoices": len(rows), "invoices_by_status": by_status, "total_amount": total_amount}
+
+
+@router.get("/invoices/lookup/number/{invoice_number}")
+async def invoice_lookup(invoice_number: str, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return await get_collection("mb_invoices").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "invoice_number": invoice_number})
+
+
+def _txn_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_id: int, txn_id: int) -> dict[str, Any]:
+    return {
+        "id": txn_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "voucher_type": str(payload.get("voucher_type") or payload.get("voucherType") or "journal"),
+        "voucher_number": str(payload.get("voucher_number") or payload.get("voucherNumber") or f"VCH-{txn_id:05d}"),
+        "voucher_date": str(payload.get("voucher_date") or payload.get("voucherDate") or date.today().isoformat()),
+        "financial_year": str(payload.get("financial_year") or payload.get("financialYear") or f"{datetime.now(timezone.utc).year}-{datetime.now(timezone.utc).year + 1}"),
+        "status": str(payload.get("status") or "draft"),
+        "total_debit": _as_float(payload.get("total_debit") or payload.get("totalDebit"), 0.0),
+        "total_credit": _as_float(payload.get("total_credit") or payload.get("totalCredit"), 0.0),
+        "lines": payload.get("lines") or [],
+        "description": str(payload.get("description") or payload.get("narration") or ""),
+        "narration": str(payload.get("narration") or payload.get("description") or ""),
+        "reference": str(payload.get("reference") or ""),
+        "received_from": str(payload.get("received_from") or payload.get("receivedFrom") or ""),
+        "amount": _as_float(payload.get("amount") or payload.get("total_amount") or payload.get("totalAmount"), 0.0),
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }
+
+
+@router.post("/transactions")
+@router.post("/transactions/payment")
+@router.post("/transactions/receipt")
+@router.post("/transactions/contra")
+@router.post("/transactions/journal")
+async def create_transaction(
+    payload: dict[str, Any],
+    request: Request,
+    voucher_type: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    company_id = int(payload.get("company_id") or 1)
+    txn_id = await _seq_id("mb_transactions", tenant_id, app_key, company_id)
+
+    import json
+    with open("payload_debug.json", "a") as f:
+        f.write(json.dumps(payload) + "\n")
+
+    # Detect voucher_type from URL path (e.g., /transactions/receipt -> "receipt")
+    path = str(request.url.path).lower()
+    path_voucher_type = None
+    for vtype in ("receipt", "payment", "journal", "contra", "transfer"):
+        if path.endswith(f"/{vtype}"):
+            path_voucher_type = vtype
+            break
+
+    # Auto-generate voucher_number if not provided
+    if not payload.get("voucher_number"):
+        # Priority: URL path > query param > payload > default
+        voucher_type = str(path_voucher_type or voucher_type or payload.get("voucher_type") or "journal")
+        financial_year = str(payload.get("financial_year") or f"{datetime.now(timezone.utc).year}-{datetime.now(timezone.utc).year + 1}")
+
+        # Prefix mapping
+        prefix_map = {
+            "receipt": "RV",
+            "payment": "PV",
+            "transfer": "TV",
+            "journal": "JV",
+            "contra": "CV",
+        }
+        prefix = prefix_map.get(voucher_type.lower(), "VCH")
+
+        # Get or initialize counter
+        counter_id = f"{tenant_id}:{app_key}:{company_id}:{voucher_type}:{financial_year}"
+        counter_coll = get_collection("mb_voucher_counters")
+        counter_doc = await counter_coll.find_one({"_id": counter_id})
+
+        if counter_doc:
+            seq = counter_doc.get("seq", 1)
+            # Increment counter
+            await counter_coll.update_one(
+                {"_id": counter_id},
+                {"$set": {"seq": seq + 1, "updated_at": _now_iso()}}
+            )
+        else:
+            # Initialize counter
+            seq = 1
+            await counter_coll.insert_one({
+                "_id": counter_id,
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "company_id": company_id,
+                "voucher_type": voucher_type,
+                "financial_year": financial_year,
+                "seq": 2,  # Next sequence will be 2
+                "created_at": _now_iso(),
+                "updated_at": _now_iso(),
+            })
+
+        payload["voucher_number"] = f"{prefix}-{seq:06d}"
+
+    # Ensure payload has the correct voucher_type (path takes priority)
+    if path_voucher_type:
+        payload["voucher_type"] = path_voucher_type
+    elif not payload.get("voucher_type"):
+        payload["voucher_type"] = voucher_type or "journal"
+
+    doc = _txn_doc(payload, tenant_id, app_key, company_id, txn_id)
+
+    # Build journal lines from payload (support multiple frontend formats)
+    journal_lines: list[JournalLineIn] = []
+    raw_lines = payload.get("lines") or doc.get("lines") or []
+
+    if raw_lines:
+        # Format 1: explicit lines array with account_id, debit, credit
+        for line in raw_lines:
+            try:
+                acc_id = int(line.get("account_id") or line.get("accountId") or 0)
+                if acc_id <= 0:
+                    continue
+                journal_lines.append(
+                    JournalLineIn(
+                        account_id=acc_id,
+                        debit=Decimal(str(line.get("debit") or line.get("debitAmount") or 0)),
+                        credit=Decimal(str(line.get("credit") or line.get("creditAmount") or 0)),
+                    )
+                )
+            except Exception:
+                continue
+    else:
+        # Format 2/3: simplified receipt/payment format
+        # Supports both numeric account IDs and string account codes (GruhaMitra style)
+        amount = _as_float(payload.get("amount") or payload.get("total_amount") or payload.get("totalAmount"), 0.0)
+
+        # Try numeric IDs first
+        debit_acc_id = payload.get("debit_account_id") or payload.get("bank_account_id") or payload.get("received_in_account_id") or payload.get("debitAccountId") or payload.get("bankAccountId") or payload.get("receivedInAccountId")
+        credit_acc_id = payload.get("credit_account_id") or payload.get("creditAccountId")
+
+        # Resolve account_code -> account_id (GruhaMitra sends "3020" / "1010" as strings)
+        path_lower = path.lower()
+        is_payment = "/payment" in path_lower
+        debit_code = payload.get("debit_account_code") or payload.get("debitAccountCode")
+        credit_code = payload.get("credit_account_code") or payload.get("creditAccountCode")
+        bank_code = payload.get("bank_account_code") or payload.get("bankAccountCode")
+        primary_code = payload.get("account_code") or payload.get("accountCode")
+
+        # For receipts: bank_account_code = debit (Bank), account_code = credit (Income/Reserve)
+        # For payments: bank_account_code = credit (Bank), account_code = debit (Expense)
+        if not debit_acc_id:
+            if is_payment:
+                lookup_code = debit_code or primary_code
+            else:
+                lookup_code = debit_code or bank_code
+            if lookup_code:
+                debit_acc_id = await _resolve_account_id_by_code(session, app_key, tenant_id, str(lookup_code))
+
+        if not credit_acc_id:
+            if is_payment:
+                lookup_code = credit_code or bank_code
+            else:
+                lookup_code = credit_code or primary_code
+            if lookup_code:
+                credit_acc_id = await _resolve_account_id_by_code(session, app_key, tenant_id, str(lookup_code))
+
+        if amount > 0 and debit_acc_id and credit_acc_id:
+            try:
+                journal_lines = [
+                    JournalLineIn(account_id=int(debit_acc_id), debit=Decimal(str(amount)), credit=Decimal("0")),
+                    JournalLineIn(account_id=int(credit_acc_id), debit=Decimal("0"), credit=Decimal(str(amount))),
+                ]
+                # Determine display codes for the lines (debit / credit)
+                if is_payment:
+                    debit_code_display = str(debit_code or primary_code or "")
+                    credit_code_display = str(credit_code or bank_code or "")
+                else:
+                    debit_code_display = str(debit_code or bank_code or "")
+                    credit_code_display = str(credit_code or primary_code or "")
+
+                line_description = str(payload.get("description") or payload.get("narration") or "")
+
+                # Update doc lines for storage consistency (include account_code & description for display)
+                doc["lines"] = [
+                    {"account_id": int(debit_acc_id), "account_code": debit_code_display, "description": line_description, "debit": amount, "credit": 0},
+                    {"account_id": int(credit_acc_id), "account_code": credit_code_display, "description": line_description, "debit": 0, "credit": amount},
+                ]
+                doc["total_debit"] = amount
+                doc["total_credit"] = amount
+            except Exception:
+                journal_lines = []
+
+    # Insert MongoDB transaction record first
+    await get_collection("mb_transactions").insert_one(doc)
+
+    # Auto-post to PostgreSQL journal_entries if we have valid balanced lines
+    if journal_lines and len(journal_lines) >= 2:
+        total_debit = sum((ln.debit for ln in journal_lines), Decimal("0"))
+        total_credit = sum((ln.credit for ln in journal_lines), Decimal("0"))
+        if total_debit > 0 and total_debit == total_credit:
+            try:
+                voucher_date_str = doc.get("voucher_date") or date.today().isoformat()
+                if isinstance(voucher_date_str, str):
+                    voucher_date_obj = datetime.fromisoformat(voucher_date_str).date()
+                else:
+                    voucher_date_obj = voucher_date_str
+
+                journal_payload = JournalPostRequest(
+                    entry_date=voucher_date_obj,
+                    description=str(payload.get("narration") or payload.get("description") or f"{doc.get('voucher_type')} {doc.get('voucher_number')}"),
+                    reference=str(doc.get("voucher_number")),
+                    lines=journal_lines,
+                )
+                journal_entry, _created = await post_journal_entry(
+                    session=session,
+                    app_key=app_key,
+                    tenant_id=tenant_id,
+                    created_by=str(current_user.get("user_id") or current_user.get("email") or "system"),
+                    payload=journal_payload,
+                    idempotency_key=f"txn_{str(doc['_id'])}_{app_key}",
+                )
+                je_id = int(journal_entry.id) if journal_entry else None
+                # Mark transaction as posted and link to journal_entry
+                update_fields = {"status": "posted", "updated_at": _now_iso()}
+                if je_id:
+                    update_fields["journal_entry_id"] = je_id
+                await get_collection("mb_transactions").update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": update_fields}
+                )
+                doc["status"] = "posted"
+                if je_id:
+                    doc["journal_entry_id"] = je_id
+            except Exception as exc:
+                # Don't fail the request - transaction is saved in MongoDB; log the error
+                doc["post_error"] = str(exc)
+
+    return _json_safe(doc)
+
+
+@router.get("/transactions")
+async def list_transactions(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), voucher_type: str | None = Query(default=None), status: str | None = Query(default=None), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    filters: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id}
+    if voucher_type:
+        filters["voucher_type"] = voucher_type
+    if status:
+        filters["status"] = status
+    rows = await get_collection("mb_transactions").find(filters).sort("created_at", -1).to_list(length=5000)
+    return _page(rows, page, page_size, "transactions")
+
+
+@router.get("/transactions/{txn_id}")
+async def get_transaction(txn_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    return _json_safe(await get_collection("mb_transactions").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}))
+
+
+@router.put("/transactions/{txn_id}")
+async def update_transaction(txn_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
+    patch["updated_at"] = _now_iso()
+    col = get_collection("mb_transactions")
+    await col.update_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}, {"$set": patch})
+    return _json_safe(await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}))
+
+
+@router.delete("/transactions/{txn_id}")
+async def delete_transaction(txn_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    await get_collection("mb_transactions").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id})
+    return {"status": "deleted", "id": txn_id}
+
+
+@router.post("/transactions/{txn_id}/post")
+async def post_transaction(
+    txn_id: int,
+    company_id: int = Query(default=1),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+
+    # Get transaction from MongoDB
+    txn = await get_collection("mb_transactions").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "id": txn_id
+    })
+
+    if not txn:
+        raise HTTPException(status_code=404, detail=f"Transaction {txn_id} not found")
+
+    # Skip if already posted
+    if txn.get("status") == "posted":
+        return _json_safe(txn)
+
+    # Convert transaction lines to JournalLineIn format
+    lines = txn.get("lines", [])
+    if not lines:
+        raise HTTPException(status_code=400, detail="Transaction has no line items")
+
+    journal_lines = []
+    for line in lines:
+        journal_lines.append(
+            JournalLineIn(
+                account_id=int(line.get("account_id") or line.get("accountId") or 0),
+                debit=Decimal(str(line.get("debit") or line.get("debitAmount") or 0)),
+                credit=Decimal(str(line.get("credit") or line.get("creditAmount") or 0)),
+            )
+        )
+
+    # Create journal entry in PostgreSQL
+    voucher_date = txn.get("voucher_date") or date.today().isoformat()
+    if isinstance(voucher_date, str):
+        voucher_date = datetime.fromisoformat(voucher_date).date()
+
+    journal_payload = JournalPostRequest(
+        entry_date=voucher_date,
+        description=txn.get("description", f"{txn.get('voucher_type', 'transaction')} {txn.get('voucher_number')}"),
+        reference=txn.get("voucher_number", f"TXN-{txn_id}"),
+        lines=journal_lines,
+    )
+
+    try:
+        await post_journal_entry(
+            session=session,
+            app_key=app_key,
+            tenant_id=tenant_id,
+            created_by=current_user.get("user_id", "system"),
+            payload=journal_payload,
+            idempotency_key=f"txn_{txn_id}_{app_key}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to post transaction to accounting: {str(exc)}"
+        ) from exc
+
+    # Update transaction status to "posted"
+    return await update_transaction(txn_id, {"status": "posted"}, company_id, current_user, x_tenant_id, x_app_key)
+
+
+@router.post("/transactions/{txn_id}/cancel")
+async def cancel_transaction(
+    txn_id: int,
+    payload: dict[str, Any] | None = None,
+    reason: str | None = Query(default=None),
+    company_id: int = Query(default=1),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    payload = payload or {}
+    cancel_reason = reason or payload.get("cancellation_reason") or payload.get("reason") or ""
+    return await update_transaction(
+        txn_id,
+        {"status": "cancelled", "cancellation_reason": cancel_reason},
+        company_id, current_user, x_tenant_id, x_app_key,
+    )
+
+
+@router.post("/transactions/{txn_id}/reverse")
+async def reverse_transaction(
+    txn_id: int,
+    payload: dict[str, Any] | None = None,
+    reason: str | None = Query(default=None),
+    company_id: int = Query(default=1),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Reverse a posted transaction by creating an inverse journal entry."""
+    payload = payload or {}
+    reversal_reason = reason or payload.get("reversal_reason") or payload.get("reason") or "Reversal"
+
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+
+    # Get the original transaction
+    coll = get_collection("mb_transactions")
+    txn = await coll.find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "id": txn_id,
+    })
+    if not txn:
+        raise HTTPException(status_code=404, detail=f"Transaction {txn_id} not found")
+
+    if txn.get("status") == "reversed":
+        return _json_safe(txn)
+
+    # Build reversing journal lines (swap debits and credits)
+    lines = txn.get("lines") or []
+    reversing_lines: list[JournalLineIn] = []
+    for line in lines:
+        try:
+            acc_id = int(line.get("account_id", 0))
+            if acc_id <= 0:
+                continue
+            # Swap: original debit -> credit, original credit -> debit
+            reversing_lines.append(
+                JournalLineIn(
+                    account_id=acc_id,
+                    debit=Decimal(str(line.get("credit", 0))),
+                    credit=Decimal(str(line.get("debit", 0))),
+                )
+            )
+        except Exception:
+            continue
+
+    # Post reversing journal entry to PostgreSQL if we have valid lines
+    reversing_je_id: int | None = None
+    if reversing_lines and len(reversing_lines) >= 2:
+        total_debit = sum((ln.debit for ln in reversing_lines), Decimal("0"))
+        total_credit = sum((ln.credit for ln in reversing_lines), Decimal("0"))
+        if total_debit > 0 and total_debit == total_credit:
+            try:
+                voucher_date_str = txn.get("voucher_date") or date.today().isoformat()
+                if isinstance(voucher_date_str, str):
+                    voucher_date_obj = datetime.fromisoformat(voucher_date_str).date()
+                else:
+                    voucher_date_obj = voucher_date_str
+
+                ref = f"REV-{txn.get('voucher_number', txn_id)}"
+                journal_payload = JournalPostRequest(
+                    entry_date=voucher_date_obj,
+                    description=f"Reversal of {txn.get('voucher_number', txn_id)}: {reversal_reason}",
+                    reference=ref,
+                    lines=reversing_lines,
+                )
+                je, _created = await post_journal_entry(
+                    session=session,
+                    app_key=app_key,
+                    tenant_id=tenant_id,
+                    created_by=str(current_user.get("user_id") or current_user.get("email") or "system"),
+                    payload=journal_payload,
+                    idempotency_key=f"rev_txn_{str(txn['_id'])}_{app_key}",
+                )
+                if je:
+                    reversing_je_id = int(je.id)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to post reversal journal entry: {exc}",
+                ) from exc
+
+    # Update original MongoDB record - mark as reversed
+    update_fields = {
+        "status": "reversed",
+        "reversal_reason": reversal_reason,
+        "updated_at": _now_iso(),
+    }
+    if reversing_je_id:
+        update_fields["reversing_journal_entry_id"] = reversing_je_id
+
+    await coll.update_one(
+        {"_id": txn["_id"]},
+        {"$set": update_fields},
+    )
+
+    # Also create a NEW MongoDB transaction for the reversal so it appears in Recent Receipts list
+    if reversing_je_id and lines:
+        try:
+            new_txn_id = await _seq_id("mb_transactions", tenant_id, app_key, company_id)
+            original_voucher = txn.get("voucher_number", f"TXN-{txn_id}")
+            reversal_voucher_number = f"REV-{original_voucher}"
+            voucher_type = txn.get("voucher_type", "receipt")
+            amount = _as_float(txn.get("total_debit") or txn.get("total_credit"), 0.0)
+
+            # Build the reversed lines for storage (swap debit/credit, preserve account info)
+            stored_reversal_lines = []
+            for line in lines:
+                stored_reversal_lines.append({
+                    "account_id": line.get("account_id"),
+                    "account_code": line.get("account_code", ""),
+                    "description": f"Reversal: {line.get('description') or ''}".strip(": "),
+                    "debit": _as_float(line.get("credit"), 0.0),
+                    "credit": _as_float(line.get("debit"), 0.0),
+                })
+
+            reversal_doc = {
+                "id": new_txn_id,
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "company_id": company_id,
+                "voucher_type": voucher_type,
+                "voucher_number": reversal_voucher_number,
+                "voucher_date": txn.get("voucher_date") or date.today().isoformat(),
+                "financial_year": txn.get("financial_year", ""),
+                "status": "posted",
+                "total_debit": amount,
+                "total_credit": amount,
+                "lines": stored_reversal_lines,
+                "description": f"Reversal of {original_voucher}: {reversal_reason}",
+                "narration": f"Reversal of {original_voucher}: {reversal_reason}",
+                "reference": reversal_voucher_number,
+                "received_from": txn.get("received_from", ""),
+                "amount": amount,
+                "journal_entry_id": reversing_je_id,
+                "reversal_of_txn_id": txn_id,
+                "reversal_of_voucher": original_voucher,
+                "created_at": _now_iso(),
+                "updated_at": _now_iso(),
+            }
+            await coll.insert_one(reversal_doc)
+        except Exception:
+            # Don't fail the reversal if list-row creation fails — the financial reversal already succeeded
+            pass
+
+    txn.update(update_fields)
+    return _json_safe(txn)
+
+
+@router.post("/transactions/{txn_id}/approve")
+async def approve_transaction(txn_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    next_status = "approved" if bool(payload.get("approved", True)) else "draft"
+    return await update_transaction(txn_id, {"status": next_status, "approval_comments": payload.get("comments")}, company_id, current_user, x_tenant_id, x_app_key)
+
+
+@router.get("/transactions/statistics")
+async def transactions_statistics(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    rows = (await list_transactions(company_id, 1, 5000, None, None, current_user, x_tenant_id, x_app_key)).get("transactions", [])
+    by_type: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    total_debit = 0.0
+    total_credit = 0.0
+    for r in rows:
+        t = str(r.get("voucher_type") or "journal")
+        s = str(r.get("status") or "draft")
+        by_type[t] = by_type.get(t, 0) + 1
+        by_status[s] = by_status.get(s, 0) + 1
+        total_debit += _as_float(r.get("total_debit"), 0.0)
+        total_credit += _as_float(r.get("total_credit"), 0.0)
+    return {"total_transactions": len(rows), "transactions_by_type": by_type, "transactions_by_status": by_status, "total_debit": total_debit, "total_credit": total_credit, "pending_approvals": by_status.get("draft", 0)}
+
+
+@router.get("/transactions/next-voucher-number")
+async def next_voucher_number(
+    company_id: int = Query(default=1),
+    voucher_type: str = Query(default="journal"),
+    financial_year: str = Query(default="2026-27"),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+
+    # Proper prefix mapping
+    prefix_map = {
+        "receipt": "RV",      # Receipt Voucher
+        "payment": "PV",      # Payment Voucher
+        "transfer": "TV",     # Transfer Voucher
+        "journal": "JV",      # Journal Voucher
+        "contra": "CV",       # Contra Voucher
+    }
+    prefix = prefix_map.get(voucher_type.lower(), "VCH")
+
+    # Get sequence from counter
+    counter_id = f"{tenant_id}:{app_key}:{company_id}:{voucher_type}:{financial_year}"
+    counter_doc = await get_collection("mb_voucher_counters").find_one({"_id": counter_id})
+
+    if counter_doc:
+        seq = counter_doc.get("seq", 1)
+    else:
+        # Fallback to counting if no counter exists
+        count = await get_collection("mb_transactions").count_documents({
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "company_id": company_id,
+            "voucher_type": voucher_type,
+            "financial_year": financial_year
+        })
+        seq = count + 1
+
+    return {
+        "voucher_type": voucher_type,
+        "next_number": f"{prefix}-{seq:06d}",
+        "financial_year": financial_year,
+        "seq": seq
+    }
+
+# --- Additional MitraBooks parity endpoints ---
+
+@router.get("/companies")
+async def list_companies(page: int = Query(default=1, ge=1), page_size: int = Query(default=10, ge=1, le=200), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    col = get_collection("mb_companies")
+    rows = await col.find({"tenant_id": tenant_id, "app_key": app_key}).sort("created_at", -1).to_list(length=1000)
+    if not rows:
+        rows = [await companies_me(current_user, x_tenant_id, x_app_key)]
+    return _page(rows, page, page_size, "companies")
+
+
+@router.get("/accounts")
+async def list_accounts(company_id: int = Query(default=1), page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=500), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    col = get_collection("mb_accounts")
+    rows = await col.find({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id}).sort("account_name", 1).to_list(length=5000)
+    return _page(rows, page, page_size, "accounts")
+
+
+@router.get("/accounts/hierarchy")
+async def account_hierarchy(company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
+    rows = (await list_accounts(company_id, 1, 5000, current_user, x_tenant_id, x_app_key)).get("accounts", [])
+    return {"company_id": company_id, "accounts": rows, "tree": []}
+
+
+@router.get("/accounts/templates")
+async def account_templates(_current_user: dict = Depends(get_current_user)):
+    return [
+        {"id": "basic-trading", "name": "Basic Trading", "description": "Starter chart of accounts"},
+        {"id": "services", "name": "Services", "description": "Service business template"},
+    ]
+
+
+@router.post("/accounts/templates/apply")
+async def apply_account_template(payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
+    return {"status": "ok", "applied_template": payload.get("template_id")}

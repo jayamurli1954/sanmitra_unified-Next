@@ -1,0 +1,53 @@
+{
+  "sevas": [
+    {
+      "name_english": "Daily Archana",
+      "name_kannada": "ದೈನಿಕ ಆರ್ಚನೆ",
+      "name_sanskrit": "दैनिक आरचना",
+      "category": "archana",
+      "description": "Daily morning archana seva"
+    },
+    {
+      "name_english": "Sarva Seva",
+      "name_kannada": "ಸರ್ವ ಸೇವೆ",
+      "name_sanskrit": "सर्व सेवा",
+      "category": "pooja",
+      "description": "A comprehensive, daily worship services performed on behalf of a devotee"
+    },
+    {
+      "name_english": "Mangala Arathi",
+      "name_kannada": "ಮಂಗಳ ಆರತಿ",
+      "name_sanskrit": "मंगल आरती",
+      "category": "pooja",
+      "description": "Mangala Arathi is done to the Diety as per the devotee's wishes"
+    },
+    {
+      "name_english": "Abhisheka",
+      "name_kannada": "ಅಭಿಷೇಕ",
+      "name_sanskrit": "अभिषेक",
+      "category": "abhisheka",
+      "description": "Sacred ritual bath of the deity"
+    },
+    {
+      "name_english": "Alankara",
+      "name_kannada": "ಅಲಂಕಾರ",
+      "name_sanskrit": "अलंकार",
+      "category": "alankara",
+      "description": "Decoration of the deity with ornaments and flowers"
+    },
+    {
+      "name_english": "Special Puja",
+      "name_kannada": "ವಿಶೇಷ ಪೂಜೆ",
+      "name_sanskrit": "विशेष पूजा",
+      "category": "pooja",
+      "description": "Special worship ceremony for specific occasions"
+    },
+    {
+      "name_english": "Vahana Seva",
+      "name_kannada": "ವಾಹನ ಸೇವೆ",
+      "name_sanskrit": "वाहन सेवा",
+      "category": "vahana_seva",
+      "description": "Procession of the deity on a decorated vehicle"
+    }
+  ]
+}

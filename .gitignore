@@ -1,0 +1,59 @@
+# Python virtual envs
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python cache / tooling
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime data / local artifacts
+logs/
+tmp/
+data/
+.pgdata/
+*.log
+
+# Frontend artifacts
+node_modules/
+npm-debug.log*
+
+# Nested legacy repos (managed independently)
+external-repos/
+
+# Bruno local environments may contain app keys or JWTs.
+api-tests/environments/local.bru
+api-tests/environments/*.local.bru
+!api-tests/environments/*.example.bru
+
+# Local planning/docs artifacts (not source-of-truth code)
+SanMitra_PRD.pdf
+SanMitra_Unified_Backend_PRD.docx
+SanMitra_eco_system-merging-note.txt
+START_LEGALMITRA_UNIFIED.bat
+
+
+# Keep tracked legacy COA payload for Mandir compat
+!app/modules/mandir_compat/data/
+!app/modules/mandir_compat/data/legacy_mandir_coa.json
+
+.vercel
+.gitnexus

@@ -1,0 +1,41 @@
+name: security-trivy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  schedule:
+    - cron: "15 3 * * 2"
+
+jobs:
+  filesystem-scan:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          scanners: vuln,secret,misconfig
+          skip-dirs: .venv,venv,external-repos,htmlcov,.gitnexus,data,logs,tmp
+          exit-code: "0"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
