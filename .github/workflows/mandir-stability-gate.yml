@@ -56,4 +56,18 @@ jobs:
 
       - name: Mandir Regression Suite
         run: |
-          python -m pytest tests/test_mandir_*.py tests/test_accounting_validation.py -k "not receipt_pdf"
+          python -m pytest \
+            tests/test_mandir_accounting_setup_stability.py \
+            tests/test_mandir_coa_edit_persistence.py \
+            tests/test_mandir_devotees_and_pincode.py \
+            tests/test_mandir_donation_cleanup.py \
+            tests/test_mandir_legacy_coa_import.py \
+            tests/test_mandir_onboarding_auth_flow.py \
+            tests/test_mandir_opening_balance_import.py \
+            tests/test_mandir_posting_guardrails.py \
+            tests/test_mandir_report_routes.py \
+            tests/test_mandir_reports.py \
+            tests/test_mandir_seva_import.py \
+            tests/test_mandir_temple_read_side_effects.py \
+            tests/test_accounting_validation.py \
+            -k "not receipt_pdf"
