@@ -437,6 +437,74 @@ async def post_journal_entry(
     return journal_entry, True
 
 
+async def reverse_journal_entry(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    journal_id: int,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+    created_by: str,
+    reversal_date: date | None = None,
+    reason: str | None = None,
+    idempotency_key: str | None = None,
+) -> tuple[JournalEntry, bool]:
+    reversal_key = (idempotency_key or f"journal-reversal:{journal_id}").strip()[:120]
+    if not reversal_key:
+        raise AccountingValidationError("Reversal idempotency key is required")
+
+    existing_stmt = (
+        select(JournalEntry)
+        .where(
+            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            JournalEntry.idempotency_key == reversal_key,
+        )
+        .options(selectinload(JournalEntry.lines))
+    )
+    existing = (await session.execute(existing_stmt)).scalar_one_or_none()
+    if existing is not None:
+        return existing, False
+
+    original_stmt = (
+        select(JournalEntry)
+        .where(
+            JournalEntry.id == journal_id,
+            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        )
+        .options(selectinload(JournalEntry.lines))
+    )
+    original = (await session.execute(original_stmt)).scalar_one_or_none()
+    if original is None:
+        raise AccountingNotFoundError(f"Journal entry {journal_id} not found")
+    if len(original.lines) < 2:
+        raise AccountingValidationError("Original journal entry does not have enough lines to reverse")
+
+    reason_text = (reason or "Reversal").strip() or "Reversal"
+    reference = f"REV-{original.id}"
+    if original.reference:
+        reference = f"{reference}-{original.reference}"[:120]
+
+    reversal_lines = [
+        JournalLineIn(account_id=line.account_id, debit=line.credit, credit=line.debit)
+        for line in original.lines
+    ]
+    reversal_payload = JournalPostRequest(
+        entry_date=reversal_date or date.today(),
+        description=f"Reversal of journal entry #{original.id}: {reason_text}",
+        reference=reference,
+        lines=reversal_lines,
+    )
+    return await post_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        created_by=created_by,
+        payload=reversal_payload,
+        idempotency_key=reversal_key,
+    )
+
+
 def _source_idempotency_key(source_system: str, idempotency_key: str | None) -> str | None:
     if not idempotency_key:
         return None

@@ -21,6 +21,8 @@ from app.accounting.schemas import (
     CoaSourceAccountResponse,
     JournalPostRequest,
     JournalPostResponse,
+    JournalReversalRequest,
+    JournalReversalResponse,
     LedgerLineResponse,
     MappingStatus,
     ProfitLossResponse,
@@ -50,6 +52,7 @@ from app.accounting.service import (
     list_source_accounts,
     post_journal_entry,
     post_source_journal_entry,
+    reverse_journal_entry,
     upsert_coa_mappings,
     upsert_source_accounts,
 )
@@ -348,6 +351,43 @@ async def post_journal_endpoint(
 
     return JournalPostResponse(
         id=entry.id,
+        tenant_id=accounting_context.tenant_id,
+        created=created,
+        total_debit=entry.total_debit,
+        total_credit=entry.total_credit,
+    )
+
+
+@router.post("/journal/{journal_id}/reverse", response_model=JournalReversalResponse)
+async def reverse_journal_endpoint(
+    journal_id: int,
+    payload: JournalReversalRequest,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    try:
+        entry, created = await reverse_journal_entry(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            created_by=accounting_context.user_id,
+            journal_id=journal_id,
+            reversal_date=payload.entry_date,
+            reason=payload.reason,
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Duplicate idempotency key")
+
+    return JournalReversalResponse(
+        id=entry.id,
+        original_journal_id=journal_id,
         tenant_id=accounting_context.tenant_id,
         created=created,
         total_debit=entry.total_debit,
