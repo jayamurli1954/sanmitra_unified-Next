@@ -36,6 +36,20 @@ Before a release tag is created, GitHub Actions must pass:
 
 The `release-tag` workflow runs these checks before it creates the tag.
 
+Bootstrap CI currently runs the supported foundation test suite explicitly. Some copied legacy tests still reference old `modules.*` import paths and are not part of the active gate until they are migrated or removed. Receipt PDF rendering tests are also excluded from the bootstrap gate until the rendering stack is validated consistently in CI.
+
+## Code Scanning Bootstrap
+
+`codeql-analysis` and `security-trivy` run on GitHub Actions. During repository bootstrap, SARIF upload can be non-blocking until GitHub code scanning is enabled for the repository.
+
+Enable it in GitHub:
+
+```text
+Settings -> Code security and analysis -> Code scanning
+```
+
+After code scanning is enabled and stable, the SARIF upload steps can be changed back to blocking gates if desired.
+
 ## Release Flow
 
 1. Merge the reviewed PR into `main`.
