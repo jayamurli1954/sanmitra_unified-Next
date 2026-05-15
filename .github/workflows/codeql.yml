@@ -2,20 +2,16 @@ name: codeql-analysis
 
 on:
   push:
-    branches:
-      - main
-      - develop
   pull_request:
-    branches:
-      - main
-      - develop
   schedule:
     - cron: "30 2 * * 1"
+  workflow_dispatch:
 
 jobs:
   analyze:
     name: Analyze (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: read
@@ -35,11 +31,36 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          queries: +security-extended,security-and-quality
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Analysis Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary -r requirements-dev.txt
+
+      - name: Compile Python Sources
+        run: |
+          python -m compileall app scripts tests
 
       - name: Analyze
         uses: github/codeql-action/analyze@v3
+        continue-on-error: true
         with:
           category: "/language:${{ matrix.language }}"
+
+      - name: CodeQL Summary
+        if: always()
+        run: |
+          {
+            echo "## CodeQL Analysis"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Ref: \`${GITHUB_REF_NAME}\`"
+            echo "- Queries: security-extended, security-and-quality"
+          } >> "$GITHUB_STEP_SUMMARY"

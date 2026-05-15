@@ -1,0 +1,79 @@
+name: release-tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version from VERSION, for example 1.2.3"
+        required: true
+        type: string
+      notes:
+        description: "Short release notes for the annotated tag"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  create-release-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Validate Version Input
+        run: |
+          VERSION_FILE="$(cat VERSION | tr -d '[:space:]')"
+          if [ "$VERSION_FILE" != "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION file ($VERSION_FILE) does not match requested version (${{ github.event.inputs.version }})"
+            exit 1
+          fi
+          if ! echo "${{ github.event.inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version must use MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary -r requirements-dev.txt
+
+      - name: Release Preflight
+        run: |
+          python scripts/release_preflight.py --target staging
+
+      - name: Create Annotated Tag
+        run: |
+          TAG="backend-v${{ github.event.inputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists: $TAG"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "${{ github.event.inputs.notes }}"
+          git push origin "$TAG"
+
+      - name: Release Summary
+        run: |
+          {
+            echo "## Release Tag Created"
+            echo ""
+            echo "- Tag: \`backend-v${{ github.event.inputs.version }}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Fallback target: previous \`backend-v*\` tag"
+          } >> "$GITHUB_STEP_SUMMARY"

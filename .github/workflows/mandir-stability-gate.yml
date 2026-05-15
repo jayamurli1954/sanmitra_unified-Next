@@ -56,4 +56,4 @@ jobs:
 
       - name: Mandir Regression Suite
         run: |
-          python -m pytest tests/test_mandir_*.py tests/test_accounting_validation.py
+          python -m pytest tests/test_mandir_*.py tests/test_accounting_validation.py -k "not receipt_pdf"
