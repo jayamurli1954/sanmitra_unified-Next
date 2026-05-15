@@ -419,15 +419,13 @@ async def post_journal_entry(
         created_by=created_by,
     )
     session.add(journal_entry)
-    await session.flush()
 
     for account_id, debit, credit in normalized_lines:
-        session.add(
+        journal_entry.lines.append(
             JournalLine(
                 app_key=app_key,
                 tenant_id=tenant_id,
                 accounting_entity_id=accounting_entity_id,
-                journal_id=journal_entry.id,
                 account_id=account_id,
                 debit=debit,
                 credit=credit,

@@ -1,10 +1,15 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, event, func, select
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 
 from app.accounting.models.base import Base
+
+
+class LedgerImmutabilityError(RuntimeError):
+    """Raised when posted ledger rows are changed instead of reversed."""
 
 
 class Account(Base):
@@ -189,3 +194,47 @@ class CoaMapping(Base):
         Index("ix_coa_mappings_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
         Index("ix_coa_mappings_app_tenant_entity_status", "app_key", "tenant_id", "accounting_entity_id", "status"),
     )
+
+
+def _is_new_parent_journal(target: JournalLine) -> bool:
+    if target.journal_entry is None:
+        return False
+    return bool(sa_inspect(target.journal_entry).pending)
+
+
+@event.listens_for(JournalEntry, "before_update")
+def _prevent_journal_entry_update(_mapper, _connection, target: JournalEntry) -> None:
+    session = object_session(target)
+    if session is not None and not session.is_modified(target, include_collections=False):
+        return
+    raise LedgerImmutabilityError("Posted journal entries are immutable; create a reversal or adjustment entry instead")
+
+
+@event.listens_for(JournalEntry, "before_delete")
+def _prevent_journal_entry_delete(_mapper, _connection, _target: JournalEntry) -> None:
+    raise LedgerImmutabilityError("Posted journal entries cannot be deleted; create a reversal entry instead")
+
+
+@event.listens_for(JournalLine, "before_insert")
+def _prevent_late_journal_line_insert(_mapper, connection, target: JournalLine) -> None:
+    if _is_new_parent_journal(target):
+        return
+    if target.journal_id is None:
+        return
+
+    existing = connection.execute(select(JournalEntry.id).where(JournalEntry.id == target.journal_id)).first()
+    if existing is not None:
+        raise LedgerImmutabilityError("Posted journal lines are immutable; create a reversal or adjustment entry instead")
+
+
+@event.listens_for(JournalLine, "before_update")
+def _prevent_journal_line_update(_mapper, _connection, target: JournalLine) -> None:
+    session = object_session(target)
+    if session is not None and not session.is_modified(target, include_collections=False):
+        return
+    raise LedgerImmutabilityError("Posted journal lines are immutable; create a reversal or adjustment entry instead")
+
+
+@event.listens_for(JournalLine, "before_delete")
+def _prevent_journal_line_delete(_mapper, _connection, _target: JournalLine) -> None:
+    raise LedgerImmutabilityError("Posted journal lines cannot be deleted; create a reversal entry instead")
