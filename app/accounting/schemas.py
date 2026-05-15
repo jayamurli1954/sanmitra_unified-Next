@@ -66,6 +66,20 @@ class JournalPostResponse(BaseModel):
     total_credit: Decimal
 
 
+class JournalReversalRequest(BaseModel):
+    entry_date: date | None = None
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class JournalReversalResponse(BaseModel):
+    id: int
+    original_journal_id: int
+    tenant_id: str
+    created: bool
+    total_debit: Decimal
+    total_credit: Decimal
+
+
 class LedgerLineResponse(BaseModel):
     journal_id: int
     entry_date: date
