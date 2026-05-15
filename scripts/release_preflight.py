@@ -9,21 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+from supported_tests import DEFAULT_PYTEST_KEYWORD, SUPPORTED_TESTS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_RE = re.compile(r"^backend-v\d+\.\d+\.\d+$")
-
-FOCUSED_TESTS = [
-    "tests/test_app_tenant_resolvers.py",
-    "tests/test_auth_tenant_policy.py",
-    "tests/test_accounting_app_key_isolation.py",
-    "tests/test_accounting_context_isolation.py",
-    "tests/test_mandir_reports.py",
-    "tests/test_mandir_posting_guardrails.py",
-    "tests/test_accounting_validation.py",
-]
 
 
 def run(command: list[str]) -> None:
@@ -108,9 +100,9 @@ def main() -> int:
     run([sys.executable, "scripts/check_repository_safety.py"])
 
     if not args.skip_tests:
-        tests = existing_tests(FOCUSED_TESTS)
+        tests = existing_tests(SUPPORTED_TESTS)
         if tests:
-            run([sys.executable, "-m", "pytest", *tests, "-q", "-k", "not receipt_pdf"])
+            run([sys.executable, "-m", "pytest", *tests, "-q", "-k", DEFAULT_PYTEST_KEYWORD])
 
     print(f"Release preflight passed for {args.target}: {expected_tag}")
     return 0

@@ -36,7 +36,23 @@ Before a release tag is created, GitHub Actions must pass:
 
 The `release-tag` workflow runs these checks before it creates the tag.
 
-Bootstrap CI currently runs the supported foundation test suite explicitly. Some copied legacy tests still reference old `modules.*` import paths and are not part of the active gate until they are migrated or removed. Receipt PDF rendering tests are also excluded from the bootstrap gate until the rendering stack is validated consistently in CI.
+Bootstrap CI currently runs the supported foundation test suite defined in `scripts/supported_tests.py`; the same list is used by `scripts/run_supported_tests.py` and `scripts/release_preflight.py`.
+
+Current state:
+
+- The active gate covers repository safety, compilation, text integrity, route-contract checks, tenant/app isolation, module access, accounting validation, MandirMitra reports, and posting guardrails.
+- Some copied legacy tests still reference old `modules.*` import paths and are marked as skipped until they are migrated or removed.
+- Receipt PDF rendering tests are excluded from the default pytest keyword expression until the native rendering stack is validated consistently in CI.
+
+Target state:
+
+- `python -m pytest -q` should eventually run all current tests without relying on copied legacy skips.
+- Receipt PDF tests should move back into the active gate after CI has deterministic WeasyPrint/native library support.
+
+Gap:
+
+- Migrate or delete the skipped legacy reference tests.
+- Add a dedicated rendering dependency check before re-enabling receipt PDF tests.
 
 ## Code Scanning Bootstrap
 

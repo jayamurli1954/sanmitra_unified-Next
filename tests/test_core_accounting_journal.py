@@ -9,6 +9,13 @@ from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = pytest.mark.legacy_reference
+pytest.skip(
+    "Legacy Phase 2 journal tests target the removed modules.core_accounting package; "
+    "current bootstrap coverage uses app.accounting tests.",
+    allow_module_level=True,
+)
+
 from modules.core_accounting.models.entities import (
     Account, JournalEntry, JournalLine
 )

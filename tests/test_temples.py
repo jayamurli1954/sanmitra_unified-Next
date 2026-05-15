@@ -13,6 +13,13 @@ from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = pytest.mark.legacy_reference
+pytest.skip(
+    "Legacy MandirMitra Phase 3 temple tests target the removed modules.mandir package; "
+    "current bootstrap coverage uses app.modules.mandir_compat tests.",
+    allow_module_level=True,
+)
+
 from modules.mandir.temples.models import Temple, BankAccount
 from modules.mandir.temples.service import (
     create_temple,

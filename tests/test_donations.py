@@ -14,6 +14,13 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = pytest.mark.legacy_reference
+pytest.skip(
+    "Legacy MandirMitra Phase 3 donation tests target the removed modules.mandir package; "
+    "current bootstrap coverage uses app.modules.mandir_compat tests.",
+    allow_module_level=True,
+)
+
 from modules.mandir.donations.models import Donation, DonationCategory
 from modules.mandir.donations.service import (
     create_donation,

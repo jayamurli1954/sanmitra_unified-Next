@@ -7,6 +7,13 @@ Tests CRUD operations on Chart of Accounts.
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = pytest.mark.legacy_reference
+pytest.skip(
+    "Legacy Phase 2 accounting service tests target the removed modules.core_accounting package; "
+    "current bootstrap coverage uses app.accounting tests.",
+    allow_module_level=True,
+)
+
 from modules.core_accounting.service import AccountService, get_trial_balance
 from modules.core_accounting.models.entities import Account
 from app.models.phase1_schemas import AccountCreate, AccountUpdate

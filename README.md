@@ -79,6 +79,17 @@ Before frontend merging starts, the platform needs a small foundation PR:
 - [Naming Conventions](docs/standards/NAMING_CONVENTIONS.md)
 - [Release and Rollback Runbook](docs/operations/RELEASE_AND_ROLLBACK.md)
 
+## Current Test Baseline
+
+Bootstrap CI uses the supported foundation suite in `scripts/supported_tests.py`.
+Run it locally with:
+
+```powershell
+python scripts/run_supported_tests.py
+```
+
+Full pytest collection is allowed, but copied legacy reference tests that still target removed `modules.*` packages are marked as skipped until migrated. Receipt PDF tests are excluded by default until native rendering dependencies are consistently validated in CI.
+
 ## CI/CD and Versioning
 
 - `backend-ci` runs repository safety checks, compile checks, route-contract checks, and pytest.

@@ -14,6 +14,13 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = pytest.mark.legacy_reference
+pytest.skip(
+    "Legacy MandirMitra Phase 3 seva tests target the removed modules.mandir package; "
+    "current bootstrap coverage uses app.modules.mandir_compat tests.",
+    allow_module_level=True,
+)
+
 from modules.mandir.sevas.models import Seva, SevaCategory, SevaBooking, SevaBookingStatus
 from modules.mandir.sevas.service import (
     create_seva_category, list_seva_categories,
