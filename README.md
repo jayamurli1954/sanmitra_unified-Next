@@ -77,6 +77,17 @@ Before frontend merging starts, the platform needs a small foundation PR:
 - [Frontend Merge Plan](docs/migration/FRONTEND_MERGE_PLAN.md)
 - [Foundation PR Plan](docs/migration/FOUNDATION_PR_PLAN.md)
 - [Naming Conventions](docs/standards/NAMING_CONVENTIONS.md)
+- [Release and Rollback Runbook](docs/operations/RELEASE_AND_ROLLBACK.md)
+
+## CI/CD and Versioning
+
+- `backend-ci` runs repository safety checks, compile checks, route-contract checks, and pytest.
+- `codeql-analysis` runs GitHub CodeQL static security analysis for Python.
+- `security-trivy` runs dependency, secret, and misconfiguration scanning.
+- `release-tag` creates versioned fallback points after release preflight passes.
+- `render-deploy` deploys manually to staging or production.
+
+Production releases must use tags like `backend-v1.2.3`, matching the `VERSION` file. Rollback should use the previous known-good `backend-v*` tag, not an arbitrary branch head.
 
 ## Non-Goals for First PR
 

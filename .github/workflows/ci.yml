@@ -2,14 +2,14 @@ name: backend-ci
 
 on:
   push:
-    branches:
-      - main
-      - develop
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -46,3 +46,14 @@ jobs:
         run: |
           python -m pytest
 
+      - name: CI Summary
+        if: always()
+        run: |
+          {
+            echo "## Backend CI"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Ref: \`${GITHUB_REF_NAME}\`"
+            echo "- Python: 3.11"
+            echo "- Checks: repository safety, compileall, text integrity, route contract, pytest"
+          } >> "$GITHUB_STEP_SUMMARY"

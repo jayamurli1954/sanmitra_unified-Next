@@ -558,3 +558,21 @@ Before reporting work complete:
 | --- | --- | --- |
 | 1.0 | 2026-05-15 | Initial workspace policy for SanMitra unified next foundation |
 | 1.1 | 2026-05-15 | Expanded with backend guardrails, module-specific policies, testing, security, and frontend merge rules |
+
+## 25. CI/CD and Release Discipline
+
+GitHub Actions is the source of truth for repository validation:
+
+- `backend-ci`: repository safety, compile checks, text integrity, route contracts, and pytest.
+- `codeql-analysis`: Python static security analysis using CodeQL.
+- `security-trivy`: dependency, secret, and misconfiguration scanning.
+- `release-tag`: creates reviewed fallback tags after release preflight passes.
+- `render-deploy`: manual staging and production deploys.
+
+Version rules:
+
+- `VERSION` must use `MAJOR.MINOR.PATCH`.
+- Production tags must use `backend-vMAJOR.MINOR.PATCH`.
+- Production deploys must reference an existing release tag.
+- Rollback must target the previous known-good `backend-v*` tag.
+- Do not roll back financial data by editing ledger rows; use reversal or adjustment entries.
