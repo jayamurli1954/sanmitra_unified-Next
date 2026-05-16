@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#121826">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="MitraBooks">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
+    <title>MitraBooks Unified ERP</title>
+    <link rel="stylesheet" href="../shared/app-shell.css">
+  </head>
+  <body>
+    <div class="app" id="app-root">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-logo" id="brand-logo" src="../assets/brand/mitrabooks-logo.jpg" alt="MitraBooks">
+          <div class="brand-text">
+            <h1 id="brand-title">MitraBooks ERP</h1>
+            <p id="brand-subtitle">Unified shell for accounting-heavy SanMitra modules</p>
+          </div>
+        </div>
+        <div class="module-switch" aria-label="Experience selector">
+          <button id="mode-mitrabooks" class="active" type="button">MitraBooks</button>
+          <button id="mode-mandir" type="button">MandirMitra</button>
+          <button id="mode-gruha" type="button">GruhaMitra</button>
+        </div>
+        <nav class="nav" id="nav"></nav>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h2>Local Frontend Wiring</h2>
+            <div class="muted">App key: <strong>mitrabooks</strong></div>
+          </div>
+          <span class="pill" id="health-pill">Not checked</span>
+        </header>
+        <section class="content">
+          <section class="card">
+            <div class="toolbar">
+              <div class="field">
+                <label for="api-base">Backend API base URL</label>
+                <input id="api-base" placeholder="http://127.0.0.1:8000">
+              </div>
+              <div class="field">
+                <label for="access-token">Access token for protected routes</label>
+                <input id="access-token" placeholder="Paste Bearer token value">
+              </div>
+              <button id="save-config">Save</button>
+              <button class="secondary" id="run-checks">Run checks</button>
+              <button class="danger" id="clear-token">Clear token</button>
+            </div>
+          </section>
+
+          <section class="grid">
+            <article class="card span-4">
+              <h3 id="scope-title">Current Scope</h3>
+              <p id="scope-copy">This shell is the target host for GruhaMitra housing, MandirMitra temple, and MitraBooks accounting/business workflows.</p>
+            </article>
+            <article class="card span-4">
+              <h3>Navigation Rule</h3>
+              <p>Menus should come from <code>/api/v1/modules/me</code>. The fallback shown here is only for local unauthenticated preview.</p>
+            </article>
+            <article class="card span-4">
+              <h3>Safety Rule</h3>
+              <p>The browser does not send <code>X-Tenant-ID</code>. Tenant context must come from the access token or backend policy.</p>
+            </article>
+          </section>
+
+          <section class="legacy-strip" id="legacy-strip">
+            <div>
+              <strong id="legacy-title">MitraBooks workspace</strong>
+              <span class="muted" id="legacy-copy">Business, GST, inventory, parties, vouchers, and financial reports.</span>
+            </div>
+            <video class="legacy-media" id="legacy-video" src="" muted playsinline loop hidden></video>
+            <img class="legacy-media" id="legacy-image" src="../assets/brand/mitrabooks-logo.jpg" alt="MitraBooks">
+            <span class="pill ok" id="legacy-pill">active layout</span>
+          </section>
+
+          <section class="grid">
+            <article class="card span-6">
+              <h3>Module Contract</h3>
+              <ul class="list" id="module-list"></ul>
+            </article>
+            <article class="card span-6">
+              <h3>Representative Backend Paths</h3>
+              <ul class="list">
+                <li><strong>Modules</strong><span class="muted">GET /api/v1/modules/me</span></li>
+                <li><strong>Accounting</strong><span class="muted">/api/v1/accounting</span></li>
+                <li><strong>Housing</strong><span class="muted">/api/v1/housing</span></li>
+                <li><strong>Temple</strong><span class="muted">/api/v1/temple</span></li>
+              </ul>
+            </article>
+          </section>
+
+          <section class="card">
+            <h3>Last API Response</h3>
+            <pre id="api-output">No request yet.</pre>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="../shared/pwa-shell.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

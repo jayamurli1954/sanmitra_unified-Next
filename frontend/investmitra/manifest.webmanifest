@@ -1,0 +1,20 @@
+{
+  "name": "InvestMitra",
+  "short_name": "InvestMitra",
+  "description": "Portfolio, analytics, and read-only investment research workspace.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#f7f8fb",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "../assets/brand/investmitra-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "MitraBooks Unified ERP",
+  "short_name": "MitraBooks",
+  "description": "Unified ERP shell for GruhaMitra, MandirMitra, and MitraBooks workflows.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#f7f8fb",
+  "theme_color": "#121826",
+  "icons": [
+    {
+      "src": "../assets/brand/mitrabooks-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

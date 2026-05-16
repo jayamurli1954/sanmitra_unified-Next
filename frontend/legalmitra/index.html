@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#241711">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="LegalMitra">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <title>LegalMitra</title>
+    <link rel="stylesheet" href="../shared/app-shell.css">
+  </head>
+  <body>
+    <div class="legal-top legal-theme">
+      <header class="legal-header">
+        <div class="legal-header-row">
+          <div class="legal-brand">
+            <img class="legal-logo" src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+            <div>
+              <h1>LegalMitra</h1>
+              <p>Indian legal research, drafting, diary, templates, and compliance</p>
+            </div>
+          </div>
+          <span class="pill" id="health-pill">Not checked</span>
+        </div>
+        <nav class="legal-nav" id="nav"></nav>
+      </header>
+
+      <main class="content">
+        <section class="card">
+          <div class="toolbar">
+            <div class="field">
+              <label for="api-base">Backend API base URL</label>
+              <input id="api-base" placeholder="http://127.0.0.1:8000">
+            </div>
+            <div class="field">
+              <label for="access-token">Access token for protected routes</label>
+              <input id="access-token" placeholder="Paste Bearer token value">
+            </div>
+            <button id="save-config">Save</button>
+            <button class="secondary" id="run-checks">Run checks</button>
+            <button class="danger" id="clear-token">Clear token</button>
+          </div>
+        </section>
+
+        <section class="legacy-strip">
+          <div>
+            <strong>Classic LegalMitra layout mode</strong>
+            <span class="muted">Top navigation, research-first workspace, template/document actions, and diary/compliance entry points are preserved for familiarity.</span>
+          </div>
+          <video class="legacy-media" src="../assets/brand/legalmitra-logo.mp4" muted playsinline loop autoplay></video>
+          <span class="pill ok">legalmitra</span>
+        </section>
+
+        <section class="grid">
+          <article class="card span-4">
+            <h3>Legal Research</h3>
+            <p>Responses must carry source attribution and current-date context where law may have changed.</p>
+          </article>
+          <article class="card span-4">
+            <h3>Document Drafting</h3>
+            <p>Templates and drafts remain lawyer-reviewed workflow aids, not final legal advice.</p>
+          </article>
+          <article class="card span-4">
+            <h3>Diary and Compliance</h3>
+            <p>Case diary, deadlines, and compliance actions stay separate from MitraBooks ERP.</p>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="card span-6">
+            <h3>Enabled Modules</h3>
+            <ul class="list" id="module-list"></ul>
+          </article>
+          <article class="card span-6">
+            <h3>Local Research Probe</h3>
+            <div class="toolbar">
+              <div class="field" style="flex: 1;">
+                <label for="query">Legal query</label>
+                <input id="query" value="consumer complaint limitation India">
+              </div>
+              <button id="probe-news">Check legal news endpoint</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="card">
+          <h3>Last API Response</h3>
+          <pre id="api-output">No request yet.</pre>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="../shared/pwa-shell.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
