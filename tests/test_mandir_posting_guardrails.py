@@ -1244,7 +1244,7 @@ def test_get_seva_receipt_pdf_backfills_devotee_name_and_address(mandir_compat_c
         }
     )
 
-    response = client.get("/api/v1/sevas/bookings/book-4/receipt/pdf")
+    response = client.get("/api/v1/sevas/bookings/book-4/receipt/pdf?lang=english")
 
     assert response.status_code == 200
     assert response.headers.get("content-type", "").startswith("application/pdf")
