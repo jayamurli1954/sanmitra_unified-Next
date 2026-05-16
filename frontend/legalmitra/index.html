@@ -10,7 +10,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
     <title>LegalMitra</title>
-    <link rel="stylesheet" href="../shared/app-shell.css">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legacy-layouts-v1">
   </head>
   <body>
     <div class="legal-top legal-theme">
@@ -54,6 +54,42 @@
           <span class="pill ok">legalmitra</span>
         </section>
 
+        <section class="legacy-dashboard legal-dashboard">
+          <div class="preview-heading">
+            <div>
+              <h3>Cost Tracking Dashboard</h3>
+              <p>Legacy LegalMitra pattern: period filters, AI usage stats, savings comparison, and tabular cost breakdowns.</p>
+            </div>
+            <div class="period-selector" aria-label="Cost period selector">
+              <button class="active" type="button">Last 30 Days</button>
+              <button type="button">Last 90 Days</button>
+            </div>
+          </div>
+          <div class="savings-card">
+            <span>Estimated Savings vs VIDUR</span>
+            <strong>$420/month</strong>
+            <small>LegalMitra research cost remains source-attributed and tenant-scoped.</small>
+          </div>
+          <div class="metric-grid three">
+            <article class="metric-tile"><span>Total Cost</span><strong>$38.20</strong><small>last 30 days</small></article>
+            <article class="metric-tile"><span>Total Queries</span><strong>284</strong><small>142K tokens</small></article>
+            <article class="metric-tile"><span>Average Cost</span><strong>$0.13</strong><small>per query</small></article>
+          </div>
+          <div class="table-preview">
+            <h4>Cost Breakdown by Query Type</h4>
+            <table>
+              <thead>
+                <tr><th>Query Type</th><th>Queries</th><th>Cost</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Legal Research</td><td>148</td><td>$18.70</td><td>Source required</td></tr>
+                <tr><td>Draft Review</td><td>82</td><td>$12.10</td><td>Human review</td></tr>
+                <tr><td>Compliance Diary</td><td>54</td><td>$7.40</td><td>Tenant scoped</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="grid">
           <article class="card span-4">
             <h3>Legal Research</h3>
@@ -92,7 +128,7 @@
         </section>
       </main>
     </div>
-    <script type="module" src="../shared/pwa-shell.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=legacy-layouts-v1"></script>
+    <script type="module" src="./app.js?v=legacy-layouts-v1"></script>
   </body>
 </html>

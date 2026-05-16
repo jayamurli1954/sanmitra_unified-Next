@@ -1,4 +1,4 @@
-const CACHE_NAME = "sanmitra-frontends-v6";
+const CACHE_NAME = "sanmitra-frontends-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -54,6 +54,17 @@ self.addEventListener("fetch", (event) => {
       status: 503,
       headers: { "Content-Type": "application/json" },
     })));
+    return;
+  }
+
+  if (request.mode === "navigate" || ["document", "script", "style", "worker"].includes(request.destination)) {
+    event.respondWith(
+      fetch(request).then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        return response;
+      }).catch(() => caches.match(request))
+    );
     return;
   }
 
