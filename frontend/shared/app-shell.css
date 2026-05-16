@@ -716,6 +716,29 @@ button.danger {
   color: var(--danger);
 }
 
+.module-state {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.module-state strong {
+  color: var(--text);
+}
+
+.module-state.ok strong {
+  color: var(--success);
+}
+
+.module-state.warn strong {
+  color: var(--warning);
+}
+
+.module-state.danger strong {
+  color: var(--danger);
+}
+
 .list {
   display: grid;
   gap: 10px;

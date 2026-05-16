@@ -1,4 +1,4 @@
-const CACHE_NAME = "sanmitra-frontends-v8";
+const CACHE_NAME = "sanmitra-frontends-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -50,10 +50,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.includes("/api/") || url.pathname.endsWith("/health")) {
-    event.respondWith(fetch(request).catch(() => new Response(JSON.stringify({ status: "offline" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    })));
+    event.respondWith(fetch(request));
     return;
   }
 
