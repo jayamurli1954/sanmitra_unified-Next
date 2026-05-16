@@ -10,7 +10,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
     <title>MitraBooks Unified ERP</title>
-    <link rel="stylesheet" href="../shared/app-shell.css">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legacy-layouts-v1">
   </head>
   <body>
     <div class="app" id="app-root">
@@ -79,6 +79,8 @@
             <span class="pill ok" id="legacy-pill">active layout</span>
           </section>
 
+          <section class="dashboard-preview" id="dashboard-preview"></section>
+
           <section class="grid">
             <article class="card span-6">
               <h3>Module Contract</h3>
@@ -102,7 +104,7 @@
         </section>
       </main>
     </div>
-    <script type="module" src="../shared/pwa-shell.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=legacy-layouts-v1"></script>
+    <script type="module" src="./app.js?v=legacy-layouts-v1"></script>
   </body>
 </html>
