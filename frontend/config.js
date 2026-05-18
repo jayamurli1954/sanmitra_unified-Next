@@ -1,4 +1,3 @@
-// Optional live deployment override.
-// Set this to the deployed SanMitra backend origin when the frontend is hosted
-// separately from the API. Leave it empty for local E2E or same-origin hosting.
-window.SANMITRA_API_BASE_URL = window.SANMITRA_API_BASE_URL || "";
+// LegalMitra is hosted separately from the SanMitra backend API.
+// Local development still overrides this with ?api=http://127.0.0.1:8000.
+window.SANMITRA_API_BASE_URL = window.SANMITRA_API_BASE_URL || "https://sanmitra-backend-staging-sg.onrender.com";
