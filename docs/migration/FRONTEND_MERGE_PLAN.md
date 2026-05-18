@@ -137,10 +137,25 @@ The frontend must treat `enabled_modules` as executable/visible and `available_m
 Migrate one module at a time:
 
 1. MitraBooks accounting/business base.
-2. GruhaMitra housing module.
-3. MandirMitra temple module.
+2. MandirMitra temple module.
+3. GruhaMitra housing module.
 
 Do not migrate all screens in one PR.
+
+## Staged E2E Gates
+
+E2E validation must be completed stage by stage so troubleshooting stays manageable for a one-person platform owner.
+
+Required order:
+
+1. LegalMitra baseline: confirm the tested and deployed live product has no regression.
+2. MitraBooks ERP core: validate accounting, tenant context, module registry, navigation, reports, RBAC, and idempotency.
+3. MandirMitra in MitraBooks ERP: validate donations, receipts, seva booking, devotees, and accounting posting.
+4. GruhaMitra in MitraBooks ERP: validate flats/residents, maintenance billing, collections, complaints where implemented, and accounting posting.
+5. Combined MitraBooks ERP regression: validate MitraBooks, MandirMitra, and GruhaMitra together with module access and accounting invariants.
+6. InvestMitra: validate portfolio, P&L, analytics, and read-only research integrations after ERP is stable.
+
+Do not expand to a later stage until the previous stage has a passing smoke/E2E checklist or a documented exception.
 
 ### Phase 4: Legacy Compatibility
 

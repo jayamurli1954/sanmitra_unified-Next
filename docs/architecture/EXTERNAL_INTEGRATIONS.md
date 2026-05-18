@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document captures planned integrations discussed for InvestMitra and LegalMitra so they are not lost during the unified-platform refactor.
+This document captures external integrations discussed for InvestMitra and LegalMitra so they are not lost during the unified-platform refactor.
 
-These are strategic integrations, not first-PR implementation tasks.
+Current state: LegalMitra now has a provider-gated Claude Legal Counsel call path in the legal research pipeline. InvestMitra external integrations remain planned.
 
 ## Summary
 
@@ -62,9 +62,11 @@ No external tool should be called directly from frontend code.
 - Explicitly disable or omit order placement tools.
 - Audit every access.
 
-### Claude for Legal POC
+### Claude Legal Counsel POC
 
-- Use a controlled legal document/research workflow.
+- Current implementation path: LegalMitra calls Claude Legal Counsel first when `CLAUDE_LEGAL_COUNSEL_ENABLED=true` and `ANTHROPIC_API_KEY` is configured.
+- Fallback path: if Claude is not configured or fails, LegalMitra falls back to Gemini and then narrow offline safeguards where available.
+- Current statutory verification guardrail: LegalMitra injects and enforces a canonical high-risk criminal-law crosswalk for the CrPC 482 inherent-powers route. Generated references to BNSS Section 504 or 538 for CrPC 482 are normalized to BNSS Section 528 with a caution note before the response leaves `/api/v1/legal-research`.
 - Preserve source citations.
 - Require human review before output is finalized.
 - Validate tenant isolation and confidentiality.
@@ -93,6 +95,11 @@ Add legal assistant screens:
 - Compliance checklist assistance.
 - Citation verification workflow.
 
+Current gap:
+
+- Claude Legal Counsel is wired as a backend provider path for `/api/v1/legal-research`.
+- Production readiness still requires tenant policy, API key configuration, confidentiality review, and live E2E pass/fail notes.
+
 ## Phase 4: Tenant/Plan Enablement
 
 Enable integrations only via module flags:
@@ -101,7 +108,7 @@ Enable integrations only via module flags:
 - `broker_research`
 - `legal_ai`
 
-Default should be off until each integration passes security, licensing, and workflow review.
+Default should be off at the module registry level until each integration passes security, licensing, and workflow review. The LegalMitra backend provider path can still be tested locally with explicit API key configuration before module-wide enablement.
 
 ## Non-Negotiable Guardrails
 

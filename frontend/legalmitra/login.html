@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>LegalMitra Login</title>
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v34">
+  </head>
+  <body class="legal-auth-page">
+    <main class="legal-auth-card">
+      <section class="legal-auth-hero">
+        <h1>LegalMitra</h1>
+        <p>Unified auth for Email and Google sign-in.</p>
+        <p>Register once by email activation link, then continue with secure login.</p>
+      </section>
+
+      <section class="legal-auth-forms">
+        <a class="legal-auth-brand" href="./">
+          <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+          <span>Legal<span>Mitra</span></span>
+        </a>
+
+        <div id="login-status" class="legal-auth-status" role="status"></div>
+
+        <div id="existing-session-actions" class="legal-auth-session" hidden>
+          <button class="primary" id="continue-session-btn" type="button">Continue</button>
+          <a href="./chat.html">Open Chat</a>
+          <button id="logout-session-btn" type="button">Logout</button>
+        </div>
+
+        <div id="action-panel" class="legal-auth-panel" hidden>
+          <h2 id="action-title">Set Password</h2>
+          <label for="action-password">Password</label>
+          <input id="action-password" type="password" autocomplete="new-password" placeholder="Enter password">
+          <label for="action-confirm-password">Confirm Password</label>
+          <input id="action-confirm-password" type="password" autocomplete="new-password" placeholder="Confirm password">
+          <button class="primary" id="action-submit-btn" type="button">Submit</button>
+          <p><a href="./login.html">Back to Login</a></p>
+        </div>
+
+        <div id="login-panel">
+          <label for="login-email">Email</label>
+          <input id="login-email" type="email" autocomplete="username" placeholder="you@example.com">
+
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="Enter password">
+
+          <button class="primary" id="email-login-btn" type="button">Login With Email</button>
+
+          <div class="legal-auth-row">
+            <button class="link-btn" id="open-register-btn" type="button">New user? Register here</button>
+            <button class="link-btn" id="open-forgot-btn" type="button">Forgot password?</button>
+          </div>
+
+          <div class="legal-auth-google">
+            <p>Continue with Google sign-in.</p>
+            <div id="google-signin-button"></div>
+            <button class="ghost" id="google-login-btn" type="button">Login With Google</button>
+          </div>
+        </div>
+
+        <div id="register-panel" class="legal-auth-panel" hidden>
+          <h2>Self Registration</h2>
+          <p>Enter your details. We will send an email activation link.</p>
+          <label for="reg-full-name">Full Name</label>
+          <input id="reg-full-name" type="text" placeholder="Your full name">
+          <label for="reg-email">Email</label>
+          <input id="reg-email" type="email" placeholder="you@example.com">
+          <button class="primary" id="register-send-btn" type="button">Send Activation Link</button>
+          <div class="legal-auth-row">
+            <span>Already have an account?</span>
+            <button class="link-btn" id="close-register-btn" type="button">Back to Login</button>
+          </div>
+        </div>
+
+        <div id="forgot-panel" class="legal-auth-panel" hidden>
+          <h2>Forgot Password</h2>
+          <p>Enter your registered email. We will send a reset link.</p>
+          <label for="forgot-email">Email</label>
+          <input id="forgot-email" type="email" placeholder="you@example.com">
+          <button class="primary" id="forgot-send-btn" type="button">Send Reset Link</button>
+          <div class="legal-auth-row">
+            <span>Remembered your password?</span>
+            <button class="link-btn" id="close-forgot-btn" type="button">Back to Login</button>
+          </div>
+        </div>
+
+        <p class="legal-auth-home"><a href="./">Open LegalMitra Home</a></p>
+      </section>
+    </main>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script type="module" src="./login.js?v=legalmitra-ai-v34"></script>
+  </body>
+</html>

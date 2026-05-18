@@ -406,6 +406,9 @@ async def register_official_form(
     department: str,
     form_code: str | None = None,
     description: str | None = None,
+    user_id: str | None = None,
+    retention_days: int | None = None,
+    expires_at: datetime | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     max_upload_mb = max(1, int(settings.LEGAL_OFFICIAL_FORM_MAX_UPLOAD_MB))
@@ -451,6 +454,7 @@ async def register_official_form(
         "form_id": form_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
+        "user_id": user_id,
         "form_name": form_name,
         "purpose": purpose,
         "department": department,
@@ -467,6 +471,8 @@ async def register_official_form(
         "has_embedded_fields": bool(profile.get("has_embedded_fields", False)),
         "embedded_field_names": profile.get("embedded_field_names") or [],
         "suggested_labels": profile.get("suggested_labels") or [],
+        "retention_days": retention_days,
+        "expires_at": expires_at,
         "created_at": now,
         "updated_at": now,
     }
@@ -500,11 +506,13 @@ async def list_official_forms(
     *,
     tenant_id: str,
     app_key: str,
+    user_id: str | None = None,
     department: str | None = None,
     search: str | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    query["user_id"] = str(user_id or "__public__")
     if (department or "").strip():
         query["department"] = {"$regex": f"^{re.escape(department.strip())}$", "$options": "i"}
     if (search or "").strip():
@@ -527,9 +535,10 @@ async def get_official_form(
     tenant_id: str,
     app_key: str,
     form_id: str,
+    user_id: str | None = None,
 ) -> dict[str, Any] | None:
     collection = get_collection(_FORM_BANK_COLLECTION)
-    doc = await collection.find_one({"tenant_id": tenant_id, "app_key": app_key, "form_id": form_id})
+    doc = await collection.find_one({"tenant_id": tenant_id, "app_key": app_key, "form_id": form_id, "user_id": str(user_id or "__public__")})
     return _public_doc(doc) if doc else None
 
 
@@ -539,9 +548,10 @@ async def render_official_form_pdf(
     app_key: str,
     form_id: str,
     fields: dict[str, Any],
+    user_id: str | None = None,
 ) -> BytesIO | None:
     collection = get_collection(_FORM_BANK_COLLECTION)
-    doc = await collection.find_one({"tenant_id": tenant_id, "app_key": app_key, "form_id": form_id})
+    doc = await collection.find_one({"tenant_id": tenant_id, "app_key": app_key, "form_id": form_id, "user_id": str(user_id or "__public__")})
     if not doc:
         return None
 

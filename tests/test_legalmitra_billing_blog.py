@@ -40,9 +40,15 @@ def test_paid_tier_limits_are_json_safe_and_match_pricing() -> None:
     free_limits = get_tier_limits("free")
 
     assert free_limits["monthly_templates"] == 5
+    assert free_limits["chat_history_retention_days"] == 30
+    assert free_limits["uploaded_document_retention_days"] == 30
     assert basic_limits["monthly_templates"] == 30
+    assert basic_limits["chat_history_retention_days"] == 150
+    assert basic_limits["uploaded_document_retention_days"] == 150
     assert pro_limits["daily_research_queries"] is None
     assert pro_limits["monthly_templates"] == 200
+    assert pro_limits["chat_history_retention_days"] == 300
+    assert pro_limits["uploaded_document_retention_days"] == 300
     json.dumps(pro_limits)
 
 

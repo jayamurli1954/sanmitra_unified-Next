@@ -59,12 +59,14 @@ export async function apiRequest(appKey, path, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
   try {
     const response = await fetch(`${baseUrl}${normalizedPath}`, {
-      ...options,
-      signal: options.signal || controller.signal,
-      headers: buildHeaders(appKey, options.headers || {}),
+      ...fetchOptions,
+      signal: fetchOptions.signal || controller.signal,
+      headers: buildHeaders(appKey, fetchOptions.headers || {}),
     });
 
     const contentType = response.headers.get("content-type") || "";
@@ -79,7 +81,7 @@ export async function apiRequest(appKey, path, options = {}) {
     };
   } catch (error) {
     const detail = error instanceof Error && error.name === "AbortError"
-      ? `Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`
+      ? `Request timed out after ${timeoutMs / 1000} seconds`
       : error instanceof Error ? error.message : "Network request failed";
     return {
       ok: false,

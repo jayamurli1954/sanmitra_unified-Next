@@ -37,9 +37,17 @@ from app.modules.legal_compat.official_form_bank import (
     register_official_form,
     render_official_form_pdf,
 )
+from app.modules.legal_compat.retention import (
+    cleanup_expired_legal_retention_records,
+    list_legal_chat_history,
+    list_legal_upload_records,
+    retention_expiry,
+    save_legal_chat_history,
+    save_review_upload_record,
+)
 from app.modules.rag.schemas import RagLegalFilter, RagQueryRequest
 from app.modules.rag.service import query_knowledge
-from app.core.billing.usage import check_and_increment_usage, ensure_terms_accepted
+from app.core.billing.usage import check_and_increment_usage, ensure_terms_accepted, get_usage_limits_for_user
 
 router = APIRouter(tags=["legal-compat"])
 
@@ -48,6 +56,37 @@ _DEFAULT_APP_KEY = "legalmitra"
 
 # Minimum role required to call any LegalMitra endpoint.
 _any_authenticated = require_roles([Role.viewer, Role.operator, Role.accountant, Role.tenant_admin, Role.super_admin])
+
+
+def _format_upload_size(limit_bytes: int) -> str:
+    if limit_bytes >= 1024 * 1024:
+        size = limit_bytes / (1024 * 1024)
+        return f"{size:g} MB"
+    if limit_bytes >= 1024:
+        size = limit_bytes / 1024
+        return f"{size:g} KB"
+    return f"{limit_bytes} bytes"
+
+
+async def _read_upload_with_size_limit(file: UploadFile, limit_bytes: int, feature_name: str) -> bytes:
+    if limit_bytes <= 0:
+        raise HTTPException(status_code=413, detail=f"{feature_name} is not available for this plan.")
+
+    data = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > limit_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"{feature_name} exceeds the plan upload limit of {_format_upload_size(limit_bytes)}.",
+            )
+
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    return bytes(data)
 
 
 def _safe_content_disposition(filename: str) -> str:
@@ -489,6 +528,132 @@ def _merge_news_items(*sources: list[dict[str, Any]], limit: int = 10) -> list[d
 
 _STATIC_TEMPLATE_LIBRARY: list[dict[str, Any]] = get_template_library()
 _OFFICIAL_TEMPLATE_PREFIX = "official_form::"
+
+_LEGALMITRA_LAUNCH_TEMPLATES: list[dict[str, Any]] = [
+    {
+        "template_id": "consultant_agreement",
+        "title": "Professional Consultancy Agreement",
+        "status": "structured_renderer_available",
+        "priority": 1,
+        "users": ["freelancers", "agencies", "SaaS consultants", "IT firms", "legal consultants", "financial consultants"],
+        "variants": ["IT consulting", "marketing consulting", "financial consulting", "legal consulting", "freelance consultant", "retainer consulting"],
+        "critical_inputs": ["project-based or monthly", "fixed fee or milestone", "IP ownership", "remote or on-site", "confidentiality level"],
+        "required_clauses": [
+            "parties",
+            "scope of services",
+            "deliverables",
+            "timelines",
+            "payment terms",
+            "GST",
+            "confidentiality",
+            "IP ownership",
+            "non-solicitation",
+            "limitation of liability",
+            "termination",
+            "dispute resolution",
+            "governing law",
+        ],
+    },
+    {
+        "template_id": "software_development_agreement",
+        "title": "Software Development Agreement",
+        "status": "structured_renderer_available",
+        "priority": 2,
+        "users": ["Indian startups", "developers", "software vendors", "SaaS teams"],
+        "variants": ["fixed-price", "milestone", "retainer", "maintenance-support"],
+        "critical_inputs": ["technical scope", "milestones", "acceptance testing", "source-code ownership", "open-source usage", "SLA"],
+        "required_clauses": [
+            "project scope",
+            "technical specifications",
+            "milestones",
+            "acceptance testing",
+            "source code ownership",
+            "open-source licensing",
+            "change requests",
+            "warranty",
+            "maintenance support",
+            "SLA",
+            "data protection",
+            "confidentiality",
+            "limitation of liability",
+        ],
+    },
+    {
+        "template_id": "nda_agreement",
+        "title": "Non-Disclosure Agreement",
+        "status": "planned_launch_grade_renderer",
+        "priority": 3,
+        "users": ["startups", "vendors", "investors", "employees", "consultants"],
+        "variants": ["mutual NDA", "one-way NDA", "employee NDA", "startup investor NDA", "vendor NDA"],
+        "critical_inputs": ["one-way or mutual", "industry", "duration", "permitted disclosures", "return/destruction"],
+        "required_clauses": [
+            "confidential information definition",
+            "exclusions",
+            "permitted disclosures",
+            "duration",
+            "return or destruction",
+            "injunction rights",
+            "survival",
+        ],
+    },
+    {
+        "template_id": "employment_agreement",
+        "title": "Employment Agreement",
+        "status": "planned_launch_grade_renderer",
+        "priority": 4,
+        "users": ["startups", "MSMEs", "professional offices"],
+        "variants": ["full-time", "probation", "remote", "state-aware", "startup/MSME"],
+        "critical_inputs": ["state", "role", "compensation", "probation", "notice period", "remote work"],
+        "required_clauses": [
+            "job role",
+            "compensation",
+            "probation",
+            "leave policy",
+            "confidentiality",
+            "IP assignment",
+            "reasonable restrictive covenants",
+            "code of conduct",
+            "data protection",
+            "termination",
+            "notice period",
+            "statutory references",
+        ],
+    },
+    {
+        "template_id": "website_terms_privacy_bundle",
+        "title": "Website Terms and Privacy Policy Bundle",
+        "status": "planned_launch_grade_renderer",
+        "priority": 5,
+        "users": ["SaaS platforms", "marketplaces", "AI apps", "service businesses"],
+        "variants": ["DPDP-ready SaaS", "AI disclosure", "analytics/cloud/API integrations"],
+        "critical_inputs": ["business model", "data categories", "cookies", "third-party services", "grievance officer", "payment/refund"],
+        "required_clauses": [
+            "terms of use",
+            "user obligations",
+            "prohibited activities",
+            "account suspension",
+            "payment and refund",
+            "DPDP Act readiness",
+            "cookies",
+            "user rights",
+            "data retention",
+            "third-party services",
+            "grievance officer",
+            "AI usage disclosure",
+        ],
+    },
+]
+
+_LEGALMITRA_TEMPLATE_QUALITY_GATE: list[str] = [
+    "numbered clauses and defined terms",
+    "clear party obligations and responsibilities",
+    "commercial payment and tax language where relevant",
+    "confidentiality, IP, termination, liability, indemnity, governing law, and dispute resolution where relevant",
+    "survival clauses for confidentiality, IP, payment, dispute resolution, and liability",
+    "Indian compliance references where applicable",
+    "signature and witness blocks where appropriate",
+    "human-review disclaimer and execution-readiness questions",
+]
 
 
 def _is_official_template_id(template_id: str) -> bool:
@@ -935,6 +1100,102 @@ async def public_legal_news():
     return {"news": news[:10]}
 
 
+@router.get("/legalmitra/landing-content")
+async def legalmitra_landing_content():
+    """Public LegalMitra landing copy and navigation content.
+
+    Keeps public marketing sections backed by the API without exposing
+    tenant data or requiring authentication.
+    """
+    return {
+        "solutions": [
+            {
+                "key": "legal_research",
+                "title": "Legal Research",
+                "summary": "Source-aware Indian law research with statutory context, leading cases, and practical next steps.",
+            },
+            {
+                "key": "document_drafting",
+                "title": "Document Drafting",
+                "summary": "Review-ready notices, pleadings, contracts, compliance replies, and professional drafts.",
+            },
+            {
+                "key": "template_marketplace",
+                "title": "Template Marketplace",
+                "summary": "Curated legal, tax, company law, criminal, civil, and professional workflow templates that produce complete review-ready drafts.",
+            },
+            {
+                "key": "compliance_tracker",
+                "title": "Compliance Tracker",
+                "summary": "Matter, client, case, deadline, filing, and recurring professional-work tracking.",
+            },
+        ],
+        "faq": [
+            {
+                "question": "Does LegalMitra give final legal advice?",
+                "answer": "No. LegalMitra assists research, drafting, and workflow preparation. A qualified professional must review before filing or final advice.",
+            },
+            {
+                "question": "Will AI answers include sources?",
+                "answer": "LegalMitra is designed to preserve source attribution and flags uncertain or changing law where applicable.",
+            },
+            {
+                "question": "Can CAs and company secretaries use it?",
+                "answer": "Yes. The tracker and templates support GST, tax, company law, client compliance, and professional follow-up workflows.",
+            },
+        ],
+        "about": {
+            "title": "LegalMitra is the dedicated legal product in the SanMitra platform.",
+            "summary": "It remains separate from MitraBooks ERP and focuses on legal research, drafting, templates, compliance, and professional workflow review.",
+        },
+        "contact": {
+            "title": "Speak to the LegalMitra team.",
+            "summary": "Use the dedicated contact page for product queries, enterprise plans, professional workflows, and support.",
+            "email": "legalmitra@sanmitratech.in",
+        },
+        "footer": {
+            "summary": "LegalMitra AI supports Indian legal research, drafting, compliance, and professional workflow review. It is not final legal advice.",
+            "links": [
+                {"label": "About Us", "href": "#about"},
+                {"label": "Contact", "href": "#contact"},
+                {"label": "Privacy Policy", "href": "./legal/privacy.html"},
+                {"label": "Terms of Service", "href": "./legal/terms.html"},
+            ],
+        },
+        "policy": {
+            "privacy": "LegalMitra must not expose passwords, tokens, payment details, sensitive legal documents, or personal financial data in logs or public views.",
+            "terms": "LegalMitra output is for research, drafting, and workflow assistance only and requires professional human review before filing or final advice.",
+        },
+        "template_marketplace": {
+            "positioning": "Quality-first launch catalog: fewer lawyer-grade, clause-driven documents instead of a large placeholder library.",
+            "launch_templates": _LEGALMITRA_LAUNCH_TEMPLATES,
+            "quality_gate": _LEGALMITRA_TEMPLATE_QUALITY_GATE,
+        },
+    }
+
+
+@router.get("/legalmitra/template-strategy")
+async def legalmitra_template_strategy():
+    """Public LegalMitra template-marketplace strategy for E2E review."""
+    return {
+        "current_state": "Legacy catalog exists, but only upgraded templates should be treated as launch-grade.",
+        "target_state": "Clause-driven, lawyer-grade Indian legal templates with guided inputs, quality checks, and professional PDF/DOCX rendering.",
+        "gap": [
+            "Convert legacy plain-text templates into structured clause specs.",
+            "Add renderer and quality tests for each launch-grade template.",
+            "Add DOCX export and improved A4 PDF rendering.",
+            "Do not claim the entire legacy catalog is lawyer-grade until upgraded.",
+        ],
+        "launch_templates": _LEGALMITRA_LAUNCH_TEMPLATES,
+        "quality_gate": _LEGALMITRA_TEMPLATE_QUALITY_GATE,
+        "deferred_scope": [
+            "No auto-filing or auto-execution.",
+            "No final legal advice without professional human review.",
+            "No confidential tenant documents to external providers without tenant policy and user authorization.",
+        ],
+    }
+
+
 @router.post("/legal-research")
 async def legal_research(
     payload: LegacyLegalResearchRequest,
@@ -984,7 +1245,7 @@ async def legal_research(
             "context": None,
         }
 
-    return await build_hybrid_legal_response(
+    response = await build_hybrid_legal_response(
         tenant_id=tenant_id,
         app_key=app_key,
         query=current_query,
@@ -992,6 +1253,20 @@ async def legal_research(
         rag_result=result,
         background_tasks=background_tasks,
     )
+    if user_id:
+        limits = await get_usage_limits_for_user(user_id, actor=current_user)
+        record_id = await save_legal_chat_history(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            user_id=str(user_id),
+            query=current_query,
+            query_type=payload.query_type,
+            response=response,
+            retention_days=int(limits.get("chat_history_retention_days") or 30),
+        )
+        response["history_record_id"] = record_id
+        response["retention_days"] = int(limits.get("chat_history_retention_days") or 30)
+    return response
 
 
 @router.get("/legal-sync/queue")
@@ -1008,6 +1283,41 @@ async def legal_sync_queue(
 
     items = await list_sync_queue(tenant_id=tenant_id, app_key=app_key, status=status, limit=limit)
     return {"items": items, "count": len(items)}
+
+
+@router.get("/legalmitra/history")
+async def legalmitra_history(
+    limit: int = Query(default=50, ge=1, le=100),
+    current_user: dict = Depends(_any_authenticated),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
+    items = await list_legal_chat_history(tenant_id=tenant_id, app_key=app_key, user_id=user_id, limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/legalmitra/uploads")
+async def legalmitra_uploads(
+    limit: int = Query(default=50, ge=1, le=100),
+    current_user: dict = Depends(_any_authenticated),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
+    items = await list_legal_upload_records(tenant_id=tenant_id, app_key=app_key, user_id=user_id, limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/legalmitra/retention/cleanup")
+async def legalmitra_retention_cleanup(
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+):
+    return await cleanup_expired_legal_retention_records()
 
 
 
@@ -1147,8 +1457,28 @@ async def draft_document(
 async def review_document(
     file: UploadFile = File(...),
     query: str | None = Form(default=None),
+    current_user: dict = Depends(_any_authenticated),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    content = await file.read()
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
+    limits = await get_usage_limits_for_user(user_id, actor=current_user)
+    content = await _read_upload_with_size_limit(
+        file=file,
+        limit_bytes=int(limits.get("max_document_upload_bytes") or 0),
+        feature_name="Document review upload",
+    )
+    upload_record = await save_review_upload_record(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=user_id,
+        file_name=file.filename or "uploaded-document",
+        content_type=file.content_type,
+        payload=content,
+        retention_days=int(limits.get("uploaded_document_retention_days") or 30),
+    )
     preview = content[:3000].decode("utf-8", errors="ignore") if content else ""
     analysis = [
         f"Document: {file.filename}",
@@ -1163,7 +1493,12 @@ async def review_document(
         analysis.append("")
         analysis.append("Document preview:")
         analysis.append(preview[:1200])
-    return {"analysis": "\n".join(analysis)}
+    return {
+        "analysis": "\n".join(analysis),
+        "upload_id": upload_record["upload_id"],
+        "retention_days": upload_record["retention_days"],
+        "expires_at": upload_record["expires_at"],
+    }
 
 
 @router.get("/v2/templates")
@@ -1285,7 +1620,7 @@ async def v2_template_render(
 
     if _is_official_template_id(payload.template_id):
         form_id = _extract_official_form_id(payload.template_id)
-        item = await get_official_form(tenant_id=tenant_id, app_key=app_key, form_id=form_id)
+        item = await get_official_form(tenant_id=tenant_id, app_key=app_key, form_id=form_id, user_id=str(user_id or ""))
         if not item:
             raise HTTPException(status_code=404, detail="Template not found")
 
@@ -1355,11 +1690,13 @@ async def v2_template_render(
 @router.post("/v2/templates/render-pdf")
 async def v2_template_render_pdf(
     payload: LegacyTemplateRenderRequest,
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     tenant_id = _resolve_compat_tenant_id(x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
+    user_id = current_user.get("sub")
 
     if _is_official_template_id(payload.template_id):
         form_id = _extract_official_form_id(payload.template_id)
@@ -1368,6 +1705,7 @@ async def v2_template_render_pdf(
             app_key=app_key,
             form_id=form_id,
             fields=payload.fields,
+            user_id=str(user_id or ""),
         )
         if not file_bytes:
             raise HTTPException(status_code=404, detail="Template not found")
@@ -1418,11 +1756,15 @@ async def v2_official_forms_upload(
     if user_id:
         await check_and_increment_usage(user_id, "can_upload_official_forms", actor=current_user)
 
-    payload = await file.read()
-    if not payload:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    limits = await get_usage_limits_for_user(user_id, actor=current_user)
+    payload = await _read_upload_with_size_limit(
+        file=file,
+        limit_bytes=int(limits.get("max_official_form_upload_bytes") or 0),
+        feature_name="Official government PDF upload",
+    )
 
     try:
+        retention_days = int(limits.get("uploaded_document_retention_days") or 30)
         item = await register_official_form(
             tenant_id=tenant_id,
             app_key=app_key,
@@ -1434,6 +1776,9 @@ async def v2_official_forms_upload(
             department=department,
             form_code=form_code,
             description=description,
+            user_id=str(user_id or ""),
+            retention_days=retention_days,
+            expires_at=retention_expiry(retention_days),
         )
     except OfficialFormValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.as_detail()) from exc
@@ -1448,15 +1793,18 @@ async def v2_official_forms_list(
     department: str | None = Query(default=None, max_length=120),
     search: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     tenant_id = _resolve_compat_tenant_id(x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
     items = await list_official_forms(
         tenant_id=tenant_id,
         app_key=app_key,
+        user_id=user_id,
         department=department,
         search=search,
         limit=limit,
@@ -1467,13 +1815,15 @@ async def v2_official_forms_list(
 @router.get("/v2/official-forms/{form_id}")
 async def v2_official_forms_detail(
     form_id: str,
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     tenant_id = _resolve_compat_tenant_id(x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
-    item = await get_official_form(tenant_id=tenant_id, app_key=app_key, form_id=form_id)
+    item = await get_official_form(tenant_id=tenant_id, app_key=app_key, form_id=form_id, user_id=user_id)
     if not item:
         raise HTTPException(status_code=404, detail="Official form not found")
     return item
@@ -1483,11 +1833,13 @@ async def v2_official_forms_detail(
 async def v2_official_forms_render_pdf(
     form_id: str,
     payload: OfficialFormRenderRequest,
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     tenant_id = _resolve_compat_tenant_id(x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
     try:
         file_bytes = await render_official_form_pdf(
@@ -1495,6 +1847,7 @@ async def v2_official_forms_render_pdf(
             app_key=app_key,
             form_id=form_id,
             fields=payload.fields,
+            user_id=user_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Failed to render official form PDF: {str(exc)}") from exc

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Contact | LegalMitra</title>
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v31">
+  </head>
+  <body class="legal-editorial-page">
+    <header class="legal-navbar">
+      <a class="legal-wordmark" href="./">
+        <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+        <span>LegalMitra</span>
+      </a>
+      <nav class="legal-page-nav" aria-label="LegalMitra sections">
+        <a href="./">Home</a>
+        <a href="./#features">Solutions</a>
+        <a href="./pricing.html">Pricing</a>
+        <a href="./insights.html">Insights</a>
+        <a href="./faq.html">FAQ</a>
+        <a href="./about.html">About</a>
+        <a href="./contact.html" aria-current="page">Contact</a>
+      </nav>
+      <div class="legal-header-actions">
+        <a href="./login.html?return=./chat.html">Sign In</a>
+        <a class="button" href="./#pricing">Start Free</a>
+      </div>
+    </header>
+
+    <main class="legal-contact-page">
+      <section class="legal-contact-copy">
+        <h1>Let's build the future of law.</h1>
+        <p>Have questions about LegalMitra, enterprise plans, custom AI model integration, or the E2E rollout? Reach out to the SanMitra team.</p>
+
+        <div class="legal-contact-methods">
+          <article>
+            <span>Email Support</span>
+            <strong>legalmitra@sanmitratech.in</strong>
+          </article>
+          <article>
+            <span>Headquarters</span>
+            <strong>Flat No. 201, Sarjagil Heights<br>Apartment, Gottigere<br>Bengaluru 560083</strong>
+          </article>
+          <article>
+            <span>WhatsApp Support</span>
+            <strong>+91 7904942915</strong>
+          </article>
+          <article>
+            <span>Working Hours</span>
+            <strong>Mon - Fri: 10:00 AM - 6:00 PM</strong>
+          </article>
+        </div>
+      </section>
+
+      <form class="legal-contact-form" id="contact-form">
+        <label>
+          <span>Full Name</span>
+          <input id="contact-name" name="name" placeholder="Adv. Rajesh Kumar">
+        </label>
+        <label>
+          <span>Work Email</span>
+          <input id="contact-email" name="email" type="email" placeholder="rajesh@legalchamber.co.in">
+        </label>
+        <label>
+          <span>Organization / Firm</span>
+          <input id="contact-org" name="organization" placeholder="High Court of Delhi">
+        </label>
+        <label>
+          <span>Message</span>
+          <textarea id="contact-message" name="message" rows="5" placeholder="Tell us about your requirements..."></textarea>
+        </label>
+        <button type="submit">Send Message</button>
+        <p id="contact-status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+
+    <script>
+      document.getElementById("contact-form")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const name = document.getElementById("contact-name").value.trim();
+        const email = document.getElementById("contact-email").value.trim();
+        const org = document.getElementById("contact-org").value.trim();
+        const message = document.getElementById("contact-message").value.trim();
+        const body = [
+          "Hello LegalMitra Team,",
+          "",
+          "I would like to share the following query:",
+          "",
+          message || "(Please describe your requirement here.)",
+          "",
+          "Name: " + (name || "-"),
+          "Work Email: " + (email || "-"),
+          "Organization / Firm: " + (org || "-"),
+        ].join("\n");
+        window.location.href = "mailto:legalmitra@sanmitratech.in?subject=" + encodeURIComponent("LegalMitra Contact Request") + "&body=" + encodeURIComponent(body);
+        document.getElementById("contact-status").textContent = "Opening your mail application. The email will be sent from your account.";
+      });
+    </script>
+  </body>
+</html>

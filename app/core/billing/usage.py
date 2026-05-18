@@ -42,6 +42,18 @@ async def ensure_terms_accepted(user_id: str | None):
         )
     return True
 
+
+async def get_usage_limits_for_user(user_id: str | None, actor: dict | None = None) -> dict:
+    tier = str((actor or {}).get("subscription_tier") or "free").lower()
+
+    if user_id:
+        users_col = get_collection("core_users")
+        user = await users_col.find_one({"user_id": user_id})
+        if user:
+            tier = str(user.get("subscription_tier") or tier).lower()
+
+    return get_tier_limits(tier)
+
 async def check_and_increment_usage(user_id: str, feature: str, actor: dict | None = None):
     """
     Checks if a user has reached their tier limit for a specific feature and increments the counter.

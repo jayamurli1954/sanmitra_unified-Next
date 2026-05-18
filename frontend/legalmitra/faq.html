@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>FAQ | LegalMitra</title>
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v31">
+  </head>
+  <body class="legal-editorial-page">
+    <header class="legal-navbar">
+      <a class="legal-wordmark" href="./">
+        <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+        <span>LegalMitra</span>
+      </a>
+      <nav class="legal-page-nav" aria-label="LegalMitra sections">
+        <a href="./">Home</a>
+        <a href="./#features">Solutions</a>
+        <a href="./pricing.html">Pricing</a>
+        <a href="./insights.html">Insights</a>
+        <a href="./faq.html" aria-current="page">FAQ</a>
+        <a href="./about.html">About</a>
+        <a href="./contact.html">Contact</a>
+      </nav>
+      <div class="legal-header-actions">
+        <a href="./login.html?return=./chat.html">Sign In</a>
+        <a class="button" href="./#pricing">Start Free</a>
+      </div>
+    </header>
+
+    <main class="legal-faq-page">
+      <section class="legal-faq-hero">
+        <h1>Frequently Asked Questions</h1>
+        <p>Find answers to common questions about LegalMitra.</p>
+        <label class="legal-faq-search">
+          <input id="faq-search" placeholder="Search FAQs... e.g., 'pricing', 'templates', 'security'">
+          <span aria-hidden="true">⌕</span>
+        </label>
+      </section>
+
+      <section class="legal-faq-categories" aria-label="FAQ categories">
+        <button class="active" type="button" data-faq-category="getting-started">Getting Started</button>
+        <button type="button" data-faq-category="features">Features</button>
+        <button type="button" data-faq-category="pricing">Pricing</button>
+        <button type="button" data-faq-category="legal-compliance">Legal & Compliance</button>
+        <button type="button" data-faq-category="technical-support">Technical Support</button>
+        <button type="button" data-faq-category="research-accuracy">Research & Accuracy</button>
+      </section>
+
+      <section class="legal-faq-list standalone" id="faq-results" aria-live="polite"></section>
+    </main>
+
+    <script type="module" src="./faq.js?v=legalmitra-ai-v31"></script>
+  </body>
+</html>

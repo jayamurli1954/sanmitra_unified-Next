@@ -60,6 +60,8 @@ class Settings:
         "http://127.0.0.1:3200",
         "http://localhost:3201",
         "http://127.0.0.1:3201",
+        "http://localhost:3300",
+        "http://127.0.0.1:3300",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "null",
@@ -139,6 +141,10 @@ class Settings:
     # while the RAG corpus (semantic embeddings + authoritative legal documents) is
     # being rebuilt locally.  Re-enable once local RAG testing is satisfactory.
     LEGAL_RAG_ENABLED = os.getenv("LEGAL_RAG_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    CLAUDE_LEGAL_COUNSEL_ENABLED = os.getenv("CLAUDE_LEGAL_COUNSEL_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    CLAUDE_LEGAL_COUNSEL_MODEL = os.getenv("CLAUDE_LEGAL_COUNSEL_MODEL", "claude-3-5-sonnet-latest").strip()
+    ANTHROPIC_API_BASE = os.getenv("ANTHROPIC_API_BASE", "https://api.anthropic.com/v1").strip()
     LEGAL_FALLBACK_GEMINI_MODEL = os.getenv("LEGAL_FALLBACK_GEMINI_MODEL", "gemini-2.5-flash").strip()
     # Raised from 900 — Gemini fallback answers were truncating mid-sentence
     # because the prompt requests 5-6 structured sections (Quick Answer,

@@ -341,9 +341,15 @@ RAG rules:
 
 LegalMitra may integrate with accounting for billing, but it should not become part of the MitraBooks unified ERP frontend unless explicitly decided later.
 
-### Claude for Legal Integration
+### Claude Legal Counsel Integration
 
-Claude for Legal is a planned LegalMitra enhancement, not first-PR scope.
+Claude Legal Counsel is part of the LegalMitra-first E2E completion scope by explicit platform-owner decision.
+
+Current state:
+
+- LegalMitra has a provider-gated Claude Legal Counsel backend path for legal research.
+- It must fall back safely when provider configuration is missing or the provider fails.
+- Production enablement is not automatic.
 
 Rules:
 
@@ -353,6 +359,7 @@ Rules:
 - Require human review for drafting, research, and filing workflows.
 - Do not send confidential tenant documents to external providers unless tenant policy and user authorization allow it.
 - Store prompts/responses only according to tenant retention and confidentiality policy.
+- Do not enable production tenants until LegalMitra E2E, tenant policy, API key handling, logging, and source-attribution checks pass.
 
 ## 14. InvestMitra Guardrails
 
@@ -459,6 +466,21 @@ python -m pytest -q
 
 If this workspace does not yet have runnable code, document that tests are not available rather than pretending validation passed.
 
+### Staged E2E Policy
+
+E2E must be completed stage by stage so a one-person maintainer can isolate failures and avoid troubleshooting the full platform at once.
+
+Required order:
+
+1. LegalMitra baseline, because it is already tested and deployed live.
+2. MitraBooks ERP core.
+3. MandirMitra workflows inside MitraBooks ERP.
+4. GruhaMitra workflows inside MitraBooks ERP.
+5. Combined MitraBooks ERP regression across MitraBooks, MandirMitra, and GruhaMitra.
+6. InvestMitra last.
+
+Do not expand to a later E2E stage until the previous stage has a passing smoke/E2E checklist or an explicitly documented exception.
+
 ## 19. Documentation Standards
 
 Docs must be practical and implementation-ready.
@@ -491,9 +513,11 @@ Sequence:
 2. MitraBooks unified shell.
 3. Shared accounting dashboard.
 4. Migrate MitraBooks business workflows.
-5. Migrate GruhaMitra housing workflows.
-6. Migrate MandirMitra temple workflows.
+5. Migrate MandirMitra temple workflows.
+6. Migrate GruhaMitra housing workflows.
 7. Keep LegalMitra and InvestMitra separate.
+
+E2E sequence must follow the staged E2E policy: LegalMitra baseline first, MitraBooks ERP core second, MandirMitra third, GruhaMitra fourth, combined ERP regression fifth, InvestMitra last.
 
 Frontend rule:
 
