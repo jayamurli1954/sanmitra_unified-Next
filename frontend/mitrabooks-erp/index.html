@@ -10,7 +10,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
     <title>MitraBooks Unified ERP</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legacy-layouts-v1">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=module-state-v1">
   </head>
   <body>
     <div class="app" id="app-root">
@@ -67,6 +67,10 @@
               <h3>Safety Rule</h3>
               <p>The browser does not send <code>X-Tenant-ID</code>. Tenant context must come from the access token or backend policy.</p>
             </article>
+            <article class="card span-4">
+              <h3>Module State</h3>
+              <p class="module-state" id="module-state">Run checks to load tenant module access.</p>
+            </article>
           </section>
 
           <section class="legacy-strip" id="legacy-strip">
@@ -104,7 +108,7 @@
         </section>
       </main>
     </div>
-    <script type="module" src="../shared/pwa-shell.js?v=legacy-layouts-v1"></script>
-    <script type="module" src="./app.js?v=legacy-layouts-v1"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=module-state-v1"></script>
+    <script type="module" src="./app.js?v=module-state-v1"></script>
   </body>
 </html>

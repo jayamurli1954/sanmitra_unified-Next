@@ -462,6 +462,18 @@ _FAMILY_LAW_MARKERS = re.compile(
     r"custody|maintenance|restitution of conjugal rights)\b",
     re.IGNORECASE,
 )
+_PROCEDURE_GUIDE_MARKERS = re.compile(
+    r"\b(procedure|process|steps?|step-by-step|filing|file\s+(a|an)?|"
+    r"complaint|petition|application|jurisdiction|limitation|deadline|"
+    r"checklist|documents?|format|how\s+to|where\s+to\s+file|"
+    r"notice|reply|compliance|tracker|case\s+diary|client\s+work)\b",
+    re.IGNORECASE,
+)
+_NI_ACT_MARKERS = re.compile(
+    r"\b(section\s+138|cheque|check|dishonou?r|bounce|ni act|negotiable instruments|"
+    r"142\(2\)|142a|demand notice|payee bank|drawee bank)\b",
+    re.IGNORECASE,
+)
 
 
 def _detect_format_mode(query: str, query_type: str) -> str:
@@ -469,12 +481,26 @@ def _detect_format_mode(query: str, query_type: str) -> str:
     q = extract_current_legal_query(query)
     qt = (query_type or "research").strip().lower()
 
+    if qt == "explain":
+        return "legal_advisor"
+    if qt in {"advocate_research", "research"}:
+        if _PROCEDURE_GUIDE_MARKERS.search(q) or _NI_ACT_MARKERS.search(q):
+            return "procedure_guide"
+        return "cheat_sheet" if _CRIMINAL_MARKERS.search(q) else "legal_advisor"
+    if qt in {"court_strategy", "strategy"}:
+        return "court_strategy"
+    if qt == "compliance":
+        return "compliance"
     if qt == "drafting" or _DRAFTING_MARKERS.search(q):
         return "drafting"
     if qt == "case_prep" or _CASE_PREP_MARKERS.search(q):
         return "argument_note"
+    if qt in {"procedure", "procedure_guide", "workflow"} or _PROCEDURE_GUIDE_MARKERS.search(q):
+        return "procedure_guide"
     if _FAMILY_LAW_MARKERS.search(q):
         return "legal_advisor"
+    if _NI_ACT_MARKERS.search(q):
+        return "procedure_guide"
     if _CRIMINAL_MARKERS.search(q):
         return "cheat_sheet"
     if qt in {"section_lookup", "interpretation"} or _SECTION_LOOKUP_MARKERS.search(q):
@@ -613,7 +639,182 @@ OUTPUT FORMAT — PRACTICAL LEGAL ADVISOR
 
 **Legal Position:** ✅ Settled Law / ⚖️ Divergent Views / 🆕 Res Integra
 """,
+
+    "procedure_guide": """\
+OUTPUT FORMAT - PRACTICAL LEGAL PROCEDURE GUIDE
+
+Start with a direct title. Then use this structure where relevant:
+
+1. Present Legal Position
+   - State the current law in plain professional language.
+   - Cite exact sections and leading cases.
+
+2. Court / Authority / Jurisdiction
+   - Explain where the matter can be filed, heard, replied to, or tracked.
+   - If the query involves cheque dishonour, cover NI Act Sections 142(2) and 142A.
+   - If the query involves tax, company law, labour, consumer, family, criminal, arbitration, or compliance work, name the proper forum/authority and practical filing route.
+
+3. Step-by-Step Procedure
+   - Number each statutory step in filing order.
+   - Include limitation periods and trigger dates.
+
+4. Essential Ingredients
+   - List what must be pleaded/proved.
+
+5. Burden of Proof / Presumptions
+   - Include statutory presumptions and rebuttal standard where relevant.
+
+6. Practical Checklist
+   - List documents, evidence, notices, tracking proof, and filing checks.
+
+7. Next Actions
+   - Offer concrete follow-up outputs such as draft notice, complaint format, jurisdiction checklist, or filing guide.
+
+8. Advanced Litigation Notes
+   - Where relevant, include common defences, common drafting errors, and evidentiary traps.
+   - For NI Act Section 138 matters, discuss Sections 143 and 145 where relevant, including summary trial and affidavit evidence.
+   - For security cheque queries, analyze whether liability had crystallized, post-dated/security cheque distinction, and cases such as Sampelly Satyanarayana Rao where applicable.
+
+End with: **Legal Position:** Settled Law / Divergent Views / Res Integra.
+Do not invent citations. Prefer SCC citations where available.
+""",
+
+    "court_strategy": """\
+OUTPUT FORMAT - COURT STRATEGY MODE
+
+Start with "**Court Strategy:**".
+
+1. Core Position
+   - State the best arguable legal position in 2-3 lines.
+
+2. Leading Authorities
+   - Give case names, preferred SCC/SCC OnLine citations where available, and the ratio in one line each.
+
+3. Arguments for Petitioner / Applicant
+   - Numbered submissions with statutory anchors and precedent support.
+
+4. Counter-Arguments
+   - State the strongest likely opposition points.
+
+5. Rebuttal Strategy
+   - Give practical answers to the counter-arguments.
+
+6. Evidence / Documents Needed
+   - List documents, pleadings, notices, timelines, and proof gaps.
+
+7. Drafting Watchpoints
+   - List common drafting errors and factual traps.
+
+8. Suggested Prayer / Relief
+   - Give a concise prayer structure, not a full pleading unless asked.
+
+End with: **Legal Position:** Settled Law / Divergent Views / Res Integra.
+""",
+
+    "compliance": """\
+OUTPUT FORMAT - COMPLIANCE MODE
+
+Start with "**Compliance Action Plan:**".
+
+1. Applicability
+   - Identify who must comply and when.
+
+2. Legal Requirements
+   - List governing statutes, rules, notifications, and deadlines.
+
+3. Workflow Checklist
+   - Give owner, document, due date/trigger, and evidence to retain.
+
+4. Risk / Penalty
+   - Explain consequences of non-compliance without exaggeration.
+
+5. Client / Internal Follow-up
+   - Provide questions, missing data points, and next professional actions.
+
+End with: **Legal Position:** Settled Law / Divergent Views / Res Integra.
+""",
 }
+
+
+_CANONICAL_STATUTE_CROSSWALK = """\
+CANONICAL STATUTE CROSSWALK - MUST VERIFY BEFORE FINAL ANSWER
+1. CrPC Section 482 (saving of inherent powers of High Court; FIR/proceeding quashing) maps to BNSS Section 528.
+   - Do NOT map CrPC Section 482 to BNSS Section 504, 538, or any other BNSS section.
+2. IPC Section 420 (cheating and dishonestly inducing delivery of property) maps broadly to BNS Section 318.
+3. If the answer discusses FIR quashing, inherent powers, civil dispute dressed as cheating, matrimonial settlement quashing, or abuse of process, use BNSS Section 528 for the inherent-powers route.
+4. If unsure about a new-code section number, say verification is required instead of inventing a number.
+5. NI Act Section 138 territorial jurisdiction:
+   - If the cheque is delivered for collection through an account, apply NI Act Section 142(2)(a): jurisdiction is generally where the payee/holder's bank branch is situated.
+   - If the cheque is presented otherwise than through an account, apply NI Act Section 142(2)(b): jurisdiction is generally where the drawee bank branch is situated.
+   - Do NOT state a blanket drawee-bank-only rule after the 2015 amendment.
+"""
+
+_WRONG_BNSS_482_PATTERNS = [
+    re.compile(r"\bSection\s+504\s+BNSS\b", re.IGNORECASE),
+    re.compile(r"\bBNSS\s+Section\s+504\b", re.IGNORECASE),
+    re.compile(r"\bSection\s+538\s+BNSS\b", re.IGNORECASE),
+    re.compile(r"\bBNSS\s+Section\s+538\b", re.IGNORECASE),
+]
+_SECTION_138_EXCLUSIVE_DRAWEE_BANK_PATTERN = re.compile(
+    r"(must|shall|only|exclusively).{0,80}(filed|jurisdiction|court).{0,120}drawee\s+bank",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _references_crpc_482_or_inherent_quashing(text: str) -> bool:
+    lower = (text or "").lower()
+    return (
+        "section 482" in lower
+        or "crpc 482" in lower
+        or ("inherent power" in lower and ("quash" in lower or "quashing" in lower))
+        or ("saving of inherent powers" in lower and "high court" in lower)
+    )
+
+
+def normalize_verified_statute_mappings(response_text: str, query: str = "") -> str:
+    """Apply deterministic high-risk statute crosswalk corrections.
+
+    LegalMitra cannot allow model/RAG drift on well-known replacement mappings.
+    The corrected text keeps the user's answer usable while explicitly flagging
+    that a statutory citation was normalized by the verification layer.
+    """
+    if not response_text:
+        return response_text
+
+    haystack = f"{query}\n{response_text}"
+
+    corrected = response_text
+    changed = False
+
+    if _references_crpc_482_or_inherent_quashing(haystack):
+        for pattern in _WRONG_BNSS_482_PATTERNS:
+            corrected, count = pattern.subn("Section 528 BNSS", corrected)
+            changed = changed or count > 0
+
+    if changed and "CrPC Section 482 maps to BNSS Section 528" not in corrected:
+        corrected += (
+            "\n\n> [!CAUTION]\n"
+            "> **Statute Verification:** CrPC Section 482 maps to BNSS Section 528 "
+            "for saving of inherent powers of the High Court. Any generated reference "
+            "to BNSS Section 504 or 538 for this route has been normalized."
+        )
+
+    lower_haystack = haystack.lower()
+    if (
+        ("section 138" in lower_haystack or "cheque" in lower_haystack or "dishonour" in lower_haystack)
+        and _SECTION_138_EXCLUSIVE_DRAWEE_BANK_PATTERN.search(corrected)
+        and "NI Act Section 138 territorial jurisdiction" not in corrected
+    ):
+        corrected += (
+            "\n\n> [!CAUTION]\n"
+            "> **Statute Verification:** NI Act Section 142(2) distinguishes cheque "
+            "delivery through an account from direct presentation. For collection "
+            "through the payee/holder's account, jurisdiction is generally where the "
+            "payee/holder's bank branch is situated; drawee-bank jurisdiction applies "
+            "where the cheque is presented otherwise than through an account."
+        )
+
+    return corrected
 
 
 def _build_rag_context_block(citations: list[dict[str, Any]]) -> str:
@@ -652,6 +853,7 @@ def _build_senior_counsel_prompt(
     sections: list[str] = [
         _SENIOR_COUNSEL_PERSONA,
         f"Date (IST): {today_ist}",
+        _CANONICAL_STATUTE_CROSSWALK,
     ]
     if rag_context:
         sections.append(rag_context)
@@ -811,6 +1013,69 @@ async def _call_gemini_text(*, prompt: str, max_tokens: int, temperature: float 
         return None
 
 
+async def _call_claude_legal_counsel_text(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+    settings = get_settings()
+    if not settings.CLAUDE_LEGAL_COUNSEL_ENABLED:
+        return None
+
+    api_key = settings.ANTHROPIC_API_KEY
+    if not api_key:
+        _logger.warning("claude_legal_counsel skipped: ANTHROPIC_API_KEY not configured")
+        return None
+
+    api_base = settings.ANTHROPIC_API_BASE.rstrip("/")
+    model = settings.CLAUDE_LEGAL_COUNSEL_MODEL
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "system": (
+            "You are Claude Legal Counsel operating inside LegalMitra for Indian legal research, "
+            "drafting, and compliance support. Preserve client confidentiality, provide source-aware "
+            "answers, avoid hallucinated citations, and require human advocate review before filing "
+            "or final legal advice."
+        ),
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
+    _logger.info(
+        "claude_legal_counsel start model=%s prompt_len=%d max_tokens=%d temperature=%.2f",
+        model, len(prompt), max_tokens, temperature,
+    )
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f"{api_base}/messages", headers=headers, json=payload)
+
+        if response.status_code >= 400:
+            body_excerpt = (response.text or "")[:500]
+            _logger.error(
+                "claude_legal_counsel http_error status=%d model=%s body=%s",
+                response.status_code, model, body_excerpt,
+            )
+            return None
+
+        body = response.json()
+        content = body.get("content") or []
+        text = "\n".join(
+            str(part.get("text") or "") for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ).strip()
+        if not text:
+            _logger.warning("claude_legal_counsel empty_text model=%s", model)
+            return None
+
+        _logger.info("claude_legal_counsel ok model=%s response_len=%d", model, len(text))
+        return text
+    except Exception as exc:
+        _logger.exception("claude_legal_counsel exception model=%s err=%s", model, exc)
+        return None
+
+
 def validate_legal_hallucinations(response_text: str) -> str:
     """
     Checks for common legal hallucinations (like IT Act being replaced by BNSS)
@@ -896,6 +1161,29 @@ async def build_hybrid_legal_response(
         today_ist=today_ist,
     )
 
+    claude_answer = await _call_claude_legal_counsel_text(
+        prompt=prompt,
+        max_tokens=max(settings.LEGAL_FALLBACK_MAX_TOKENS, 4000),
+        temperature=0.12,
+    )
+
+    if claude_answer and claude_answer.strip():
+        response_text = validate_legal_hallucinations(claude_answer.strip())
+        response_text = normalize_verified_statute_mappings(response_text, current_query)
+        response_text += _CLOSING_DISCLAIMER
+        _logger.info(
+            "hybrid_response path=claude_legal_counsel tenant=%s app=%s format=%s response_len=%d",
+            tenant_id, app_key, format_mode, len(response_text),
+        )
+        return {
+            "response": response_text,
+            "citations": relevant_citations,
+            "strategy": f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
+            "provider": "claude_legal_counsel",
+            "note": None,
+            "dropped_citation_count": len(dropped_citations),
+        }
+
     gemini_answer = await _call_gemini_text(
         prompt=prompt,
         max_tokens=max(settings.LEGAL_FALLBACK_MAX_TOKENS, 4000),
@@ -905,6 +1193,7 @@ async def build_hybrid_legal_response(
     if gemini_answer and gemini_answer.strip():
         # Apply Hallucination Guardrail
         response_text = validate_legal_hallucinations(gemini_answer.strip())
+        response_text = normalize_verified_statute_mappings(response_text, current_query)
 
         response_text += _CLOSING_DISCLAIMER
         _logger.info(
@@ -915,6 +1204,7 @@ async def build_hybrid_legal_response(
             "response": response_text,
             "citations": relevant_citations,
             "strategy": f"{str(rag_result.get('strategy') or 'rag')}_gemini",
+            "provider": "gemini",
             "note": None,
             "dropped_citation_count": len(dropped_citations),
         }

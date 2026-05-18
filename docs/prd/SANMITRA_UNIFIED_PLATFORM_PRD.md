@@ -51,6 +51,7 @@ The unified MitraBooks frontend should dynamically show modules based on organiz
 - Allow each organization to activate only relevant modules.
 - Preserve brand-specific terminology where it improves user experience.
 - Keep LegalMitra and InvestMitra separate because their workflows are not primarily accounting ERP workflows.
+- Validate E2E stage by stage: LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, combined ERP regression, then InvestMitra.
 
 ## Organization Types
 
@@ -158,7 +159,7 @@ Traditional golden rules:
 - Legal documents.
 - RAG with source attribution.
 - Compliance calendar.
-- Claude for Legal integration readiness.
+- Claude Legal Counsel provider-gated research/drafting support, with human review and source attribution.
 - Client billing integration where needed.
 
 ### InvestMitra
@@ -192,7 +193,7 @@ InvestMitra integrations are for investment research only. They must not place, 
 - Do not change live app repositories.
 - Do not implement FinceptTerminal production integration.
 - Do not implement Zerodha Kite MCP production integration.
-- Do not implement Claude for Legal production integration.
+- Do not enable Claude Legal Counsel for production tenants without confidentiality, retention, source-attribution, and human-review approval.
 
 ## Strategic Integration Roadmap
 
@@ -226,11 +227,11 @@ Boundary:
 - No financial advice framed as guaranteed outcome.
 - Broker credentials and tokens must never be logged.
 
-### LegalMitra: Claude for Legal
+### LegalMitra: Claude Legal Counsel
 
 Purpose:
 
-- Evaluate Claude for Legal as an optional LegalMitra assistant layer for legal drafting, review, research workflow, summarization, and document analysis.
+- Use Claude Legal Counsel as an optional LegalMitra assistant layer for legal drafting, review, research workflow, summarization, and document analysis.
 
 Boundary:
 
@@ -239,6 +240,7 @@ Boundary:
 - Do not replace lawyer/user review.
 - Clearly distinguish retrieved legal source material from AI-generated analysis.
 - Support Indian legal workflow and jurisdiction metadata before production use.
+- Current implementation status: backend provider path is implemented for `/api/v1/legal-research`; production use remains gated by environment configuration and E2E approval.
 
 ## Integration Sequence
 

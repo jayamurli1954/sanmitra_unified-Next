@@ -4,6 +4,8 @@ import {
   getConfiguredApiBaseUrl,
   loadHealth,
   loadModules,
+  moduleItemsFromPayload,
+  renderModuleState,
   renderJson,
   setAccessToken,
   setConfiguredApiBaseUrl,
@@ -130,11 +132,13 @@ const nav = document.getElementById("nav");
 const moduleList = document.getElementById("module-list");
 const apiOutput = document.getElementById("api-output");
 const healthPill = document.getElementById("health-pill");
+const moduleState = document.getElementById("module-state");
 const apiBaseInput = document.getElementById("api-base");
 const tokenInput = document.getElementById("access-token");
 
-function renderModules(modules = experienceConfig[currentExperience].modules) {
+function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
+  const preview = options.preview !== false;
   appRoot.className = `app ${config.theme}`.trim();
   brandLogo.src = config.logo;
   brandLogo.alt = config.title;
@@ -167,6 +171,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules) {
     const link = document.createElement("a");
     link.href = "#";
     link.className = module.enabled ? "" : "locked";
+    link.setAttribute("aria-disabled", module.enabled ? "false" : "true");
     link.textContent = `${module.nav_group || "Module"}: ${module.display_name}`;
     nav.appendChild(link);
 
@@ -174,7 +179,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules) {
     item.innerHTML = `
       <strong>${module.display_name}</strong>
       <span class="muted">${module.module_key} -> ${module.frontend_path || "no frontend path yet"}</span>
-      <span class="pill ${module.enabled ? "ok" : "warn"}">${module.enabled ? "enabled" : "available or planned"}</span>
+      <span class="pill ${module.enabled ? "ok" : "warn"}">${module.enabled ? "enabled" : preview ? "preview only" : "available or planned"}</span>
     `;
     moduleList.appendChild(item);
   });
@@ -293,9 +298,10 @@ async function runChecks() {
 
   const modules = await loadModules(APP_KEY);
   renderJson(apiOutput, { health, modules });
+  renderModuleState(moduleState, modules);
 
-  if (modules.ok && modules.payload.enabled_modules && currentExperience === "mitrabooks") {
-    renderModules([...(modules.payload.enabled_modules || []), ...(modules.payload.available_modules || [])]);
+  if (modules.ok && currentExperience === "mitrabooks") {
+    renderModules(moduleItemsFromPayload(modules.payload), { preview: false });
   } else {
     renderModules();
   }
@@ -327,4 +333,5 @@ document.getElementById("mode-gruha").addEventListener("click", () => setExperie
 apiBaseInput.value = getConfiguredApiBaseUrl();
 tokenInput.value = getAccessToken();
 renderModules();
+renderModuleState(moduleState);
 runChecks();

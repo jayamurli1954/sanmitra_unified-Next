@@ -27,6 +27,7 @@ from app.modules.housing_compat.service import ensure_housing_compat_indexes
 from app.modules.investment.service import ensure_investment_indexes
 from app.modules.legal.service import ensure_legal_indexes
 from app.modules.legal_compat.service import ensure_legal_compat_indexes
+from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
 from app.modules.legal_compat.sync_worker import start_legal_sync_worker, stop_legal_sync_worker
 from app.modules.mandir_compat.reminder_worker import start_seva_reminder_worker, stop_seva_reminder_worker
 from app.modules.mandir_compat.service import ensure_demo_mandir_bootstrap, ensure_parlathaya_public_config, ensure_temple_upi_config
@@ -118,6 +119,8 @@ async def on_startup() -> None:
         await ensure_housing_compat_indexes()
         await ensure_legal_indexes()
         await ensure_legal_compat_indexes()
+        await ensure_legal_retention_indexes()
+        await cleanup_expired_legal_retention_records()
         await ensure_investment_indexes()
         await ensure_onboarding_indexes()
         await ensure_rag_indexes()

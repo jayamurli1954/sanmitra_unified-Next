@@ -92,14 +92,12 @@ async def ensure_tenant_exists(
         explicit_modules=enabled_modules,
     )
 
+    default_app_keys = [str(key).strip().lower() for key in (app_keys or []) if str(key).strip()]
+    default_subscription_plan = str(subscription_plan or "free").strip().lower() or "free"
     update: dict = {
         "$setOnInsert": {
             "tenant_id": normalized_tenant_id,
             "status": "active",
-            "organization_type": normalized_org_type,
-            "enabled_modules": derived_modules,
-            "app_keys": [str(key).strip().lower() for key in (app_keys or []) if str(key).strip()],
-            "subscription_plan": str(subscription_plan or "free").strip().lower() or "free",
             "created_at": now,
         },
         "$set": {
@@ -112,12 +110,20 @@ async def ensure_tenant_exists(
         update["$set"]["display_name"] = display_name.strip()
     if organization_type:
         update["$set"]["organization_type"] = normalized_org_type
+    else:
+        update["$setOnInsert"]["organization_type"] = normalized_org_type
     if enabled_modules is not None:
         update["$set"]["enabled_modules"] = derived_modules
+    else:
+        update["$setOnInsert"]["enabled_modules"] = derived_modules
     if app_keys is not None:
-        update["$set"]["app_keys"] = [str(key).strip().lower() for key in app_keys if str(key).strip()]
+        update["$set"]["app_keys"] = default_app_keys
+    else:
+        update["$setOnInsert"]["app_keys"] = default_app_keys
     if subscription_plan:
         update["$set"]["subscription_plan"] = str(subscription_plan).strip().lower()
+    else:
+        update["$setOnInsert"]["subscription_plan"] = default_subscription_plan
 
     await tenants.update_one({"tenant_id": normalized_tenant_id}, update, upsert=True)
     doc = await tenants.find_one({"tenant_id": normalized_tenant_id})

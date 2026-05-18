@@ -10,7 +10,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/investmitra-logo.png" type="image/png">
     <title>InvestMitra</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legacy-layouts-v1">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=module-state-v1">
   </head>
   <body>
     <div class="app invest-theme">
@@ -65,10 +65,11 @@
           </section>
 
           <section class="grid">
-            <article class="card span-6">
-              <h3>Enabled Modules</h3>
-              <ul class="list" id="module-list"></ul>
-            </article>
+          <article class="card span-6">
+            <h3>Enabled Modules</h3>
+            <p class="module-state" id="module-state">Run checks to load tenant module access.</p>
+            <ul class="list" id="module-list"></ul>
+          </article>
             <article class="card span-6">
               <h3>Representative Backend Paths</h3>
               <ul class="list">
@@ -86,7 +87,7 @@
         </section>
       </main>
     </div>
-    <script type="module" src="../shared/pwa-shell.js?v=legacy-layouts-v1"></script>
-    <script type="module" src="./app.js?v=legacy-layouts-v1"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=module-state-v1"></script>
+    <script type="module" src="./app.js?v=module-state-v1"></script>
   </body>
 </html>

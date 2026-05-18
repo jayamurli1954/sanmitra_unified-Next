@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Pricing & Plan Limits | LegalMitra</title>
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v31">
+  </head>
+  <body class="legal-editorial-page">
+    <header class="legal-navbar">
+      <a class="legal-wordmark" href="./">
+        <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+        <span>LegalMitra</span>
+      </a>
+      <nav class="legal-page-nav" aria-label="LegalMitra sections">
+        <a href="./">Home</a>
+        <a href="./#features">Solutions</a>
+        <a href="./pricing.html" aria-current="page">Pricing</a>
+        <a href="./insights.html">Insights</a>
+        <a href="./faq.html">FAQ</a>
+        <a href="./about.html">About</a>
+        <a href="./contact.html">Contact</a>
+      </nav>
+      <div class="legal-header-actions">
+        <a href="./login.html?return=./chat.html">Sign In</a>
+        <a class="button" href="#starter">Start Free</a>
+      </div>
+    </header>
+
+    <main class="legal-plan-page">
+      <section class="legal-plan-hero">
+        <span>Pricing and eligibility</span>
+        <h1>Know exactly what each LegalMitra plan allows.</h1>
+        <p>Use this page as the working eligibility sheet for E2E testing, free-tier restrictions, upgrade prompts, and production pricing communication.</p>
+      </section>
+
+      <section class="legal-plan-summary" aria-label="Plan summary">
+        <article id="starter">
+          <span>Starter</span>
+          <strong>For evaluation and light professional use</strong>
+          <p>Useful for trying LegalMitra research, basic tools, and a small number of documents before upgrading.</p>
+          <ul>
+            <li>5 AI legal research queries per day</li>
+            <li>5 template drafts per month</li>
+            <li>10 compliance tracker records</li>
+            <li>Chat and uploaded document retention for 30 days</li>
+            <li>GST Rate Finder and Limitation Calculator</li>
+          </ul>
+        </article>
+        <article id="growth">
+          <span>Growth</span>
+          <strong>For regular advocates, CAs, and consultants</strong>
+          <p>Designed for daily research, drafting, tracker use, and all standard Legal Tools.</p>
+          <ul>
+            <li>50 AI legal research queries per day</li>
+            <li>30 template drafts per month</li>
+            <li>100 compliance tracker records</li>
+            <li>Chat and uploaded document retention for 150 days</li>
+            <li>All Legal Tools and response workspace actions</li>
+          </ul>
+        </article>
+        <article id="professional">
+          <span>Professional</span>
+          <strong>For chambers, advisory teams, and heavy workflow users</strong>
+          <p>Unlocks the high-volume workflow path, government form auto-fill, and full tracker capacity.</p>
+          <ul>
+            <li>Unlimited AI legal research queries</li>
+            <li>200 template drafts per month</li>
+            <li>Unlimited compliance tracker records</li>
+            <li>Chat and uploaded document retention for 300 days</li>
+            <li>Official PDF upload and auto-fill workflow up to 25 MB</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="legal-plan-matrix-section">
+        <div class="legal-section-heading">
+          <span>Feature-by-feature limits</span>
+          <h2>Plan eligibility matrix</h2>
+          <p>These limits mirror the current backend billing configuration. Upgrade prompts should appear whenever a user attempts a feature outside the active plan.</p>
+        </div>
+
+        <div class="legal-plan-table-wrap">
+          <table class="legal-plan-table">
+            <thead>
+              <tr>
+                <th scope="col">Feature / Limit</th>
+                <th scope="col">Starter</th>
+                <th scope="col">Growth</th>
+                <th scope="col">Professional</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">AI legal research queries</th>
+                <td><strong>5 / day</strong><small>Upgrade prompt after daily limit.</small></td>
+                <td><strong>50 / day</strong><small>For active daily practice.</small></td>
+                <td><strong>Unlimited</strong><small>Subject to fair use and provider availability.</small></td>
+              </tr>
+              <tr>
+                <th scope="row">AI model route</th>
+                <td>Gemini Flash path</td>
+                <td>Gemini Pro path</td>
+                <td>Gemini Pro path with priority workflow capacity</td>
+              </tr>
+              <tr>
+                <th scope="row">Claude Legal Counsel path</th>
+                <td>Not enabled by default</td>
+                <td>Not enabled by default</td>
+                <td>Provider-gated; requires tenant policy and provider key</td>
+              </tr>
+              <tr>
+                <th scope="row">Legal response actions</th>
+                <td>Feedback and copy</td>
+                <td>Feedback, copy, share, save, and download</td>
+                <td>Feedback, copy, share, save, download, and priority workspace use</td>
+              </tr>
+              <tr>
+                <th scope="row">Template drafts</th>
+                <td><strong>5 / month</strong></td>
+                <td><strong>30 / month</strong></td>
+                <td><strong>200 / month</strong></td>
+              </tr>
+              <tr>
+                <th scope="row">Launch-grade templates</th>
+                <td>Preview and limited generation</td>
+                <td>Regular generation</td>
+                <td>High-volume generation and review workflow</td>
+              </tr>
+              <tr>
+                <th scope="row">Official government PDF upload</th>
+                <td><span class="legal-plan-no">Not available</span></td>
+                <td><span class="legal-plan-no">Not available</span></td>
+                <td><span class="legal-plan-yes">Available</span><small>25 MB per official PDF upload.</small></td>
+              </tr>
+              <tr>
+                <th scope="row">Official form auto-fill</th>
+                <td>Locked</td>
+                <td>Locked</td>
+                <td>Available for supported official PDF workflows</td>
+              </tr>
+              <tr>
+                <th scope="row">Compliance tracker records</th>
+                <td><strong>10 records</strong></td>
+                <td><strong>100 records</strong></td>
+                <td><strong>Unlimited records</strong></td>
+              </tr>
+              <tr>
+                <th scope="row">Compliance tracker roles</th>
+                <td>Advocate / CA / CS preview workflow</td>
+                <td>Advocate / CA / CS operational workflow</td>
+                <td>Full professional register capacity</td>
+              </tr>
+              <tr>
+                <th scope="row">Legal Tools</th>
+                <td>GST Rate Finder, Limitation Calculator</td>
+                <td>All tools: Court Fee, GST, Notice Drafting, Limitation, Stamp Duty, HSN</td>
+                <td>All tools plus high-volume use</td>
+              </tr>
+              <tr>
+                <th scope="row">Document review upload</th>
+                <td><strong>2 MB / file</strong><small>For short notices and lightweight documents.</small></td>
+                <td><strong>10 MB / file</strong><small>For regular professional review files.</small></td>
+                <td><strong>25 MB / file</strong><small>For heavier professional document review.</small></td>
+              </tr>
+              <tr>
+                <th scope="row">Chat history availability</th>
+                <td><strong>30 days</strong><small>Auto-deleted after retention period.</small></td>
+                <td><strong>150 days</strong><small>Auto-deleted after retention period.</small></td>
+                <td><strong>300 days</strong><small>Auto-deleted after retention period.</small></td>
+              </tr>
+              <tr>
+                <th scope="row">Uploaded document availability</th>
+                <td><strong>30 days</strong><small>Uploaded document records and stored files are retention-bound.</small></td>
+                <td><strong>150 days</strong><small>Uploaded document records and stored files are retention-bound.</small></td>
+                <td><strong>300 days</strong><small>Uploaded document records and stored files are retention-bound.</small></td>
+              </tr>
+              <tr>
+                <th scope="row">Source attribution requirement</th>
+                <td>Required</td>
+                <td>Required</td>
+                <td>Required</td>
+              </tr>
+              <tr>
+                <th scope="row">Human review disclaimer</th>
+                <td>Required</td>
+                <td>Required</td>
+                <td>Required</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="legal-plan-notes">
+        <article>
+          <span>Upgrade behavior</span>
+          <h2>What should happen when a user exceeds a plan?</h2>
+          <p>LegalMitra should show a clear upgrade prompt explaining the blocked feature, the user's current plan, and the minimum plan required. This applies to AI query limits, template generation, tracker limits, official PDF upload, and Growth-only response actions.</p>
+        </article>
+        <article>
+          <span>Deployment note</span>
+          <h2>Upload and history retention is capped by plan.</h2>
+          <p>The backend now rejects oversized uploads and stores retained chat/upload records with an expiry date. Final deployment hardening should still add file-type validation, malware scanning, and tenant-level confidentiality controls before production use.</p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

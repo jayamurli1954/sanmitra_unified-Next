@@ -10,31 +10,412 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
     <title>LegalMitra</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legacy-layouts-v1">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v33">
   </head>
   <body>
-    <div class="legal-top legal-theme">
-      <header class="legal-header">
-        <div class="legal-header-row">
-          <div class="legal-brand">
-            <img class="legal-logo" src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
-            <div>
-              <h1>LegalMitra</h1>
-              <p>Indian legal research, drafting, diary, templates, and compliance</p>
+    <div class="legal-landing legal-theme">
+      <header class="legal-navbar">
+        <a class="legal-wordmark" href="./">
+          <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+          <span>LegalMitra</span>
+        </a>
+        <nav class="legal-page-nav" aria-label="LegalMitra sections">
+          <a href="#assistant">Home</a>
+          <div class="legal-nav-menu" id="solutions-menu">
+            <a href="#features" id="solutions-toggle" aria-haspopup="true" aria-expanded="false">Solutions</a>
+            <div class="legal-dropdown" aria-label="Solutions">
+              <a href="#features">Key Features</a>
+              <a href="#legal-tools">Legal Tools</a>
+              <a href="./templates.html">Template Marketplace</a>
+              <a href="./tracker.html">Compliance Tracker</a>
             </div>
           </div>
-          <span class="pill" id="health-pill">Not checked</span>
+          <a href="./pricing.html">Pricing</a>
+          <a href="./insights.html">Insights</a>
+          <a href="./faq.html">FAQ</a>
+          <a href="./about.html">About</a>
+          <a href="./contact.html">Contact</a>
+        </nav>
+        <div class="legal-header-actions">
+          <a id="auth-sign-in" href="./login.html?return=./chat.html">Sign In</a>
+          <div class="legal-user-menu" id="legal-user-menu" hidden>
+            <span id="auth-user-label">Signed in</span>
+            <button type="button" id="logout-legalmitra">Logout</button>
+          </div>
+          <a class="button" href="#pricing">Start Free</a>
         </div>
-        <nav class="legal-nav" id="nav"></nav>
       </header>
 
-      <main class="content">
-        <section class="card">
+      <div class="legal-workspace-shell" id="legal-workspace-shell">
+        <aside class="legal-history-sidebar" aria-label="Personal LegalMitra chat history">
+          <div class="legal-history-head">
+            <span>My Chats</span>
+            <button type="button" id="refresh-history" title="Refresh chat history" aria-label="Refresh chat history">Refresh</button>
+          </div>
+          <p id="history-status">Sign in to load your personal chat history.</p>
+          <div class="legal-history-list" id="history-list"></div>
+          <div class="legal-history-head secondary">
+            <span>My Uploads</span>
+          </div>
+          <p id="upload-history-status">Uploaded documents you retain will appear here.</p>
+          <div class="legal-history-list uploads" id="upload-history-list"></div>
+        </aside>
+
+      <main>
+        <section class="legal-ai-hero" id="assistant">
+          <div class="legal-hero-copy">
+            <span class="legal-badge">Indian legal research and drafting assistant</span>
+            <h1>Empower Your Practice with India's Smartest AI Legal Assistant</h1>
+            <p class="legal-hero-lede">Research, draft, search cases, and manage professional compliance with source-aware AI assistance for Indian legal workflows.</p>
+            <p class="legal-greeting">Namaste. I am your LegalMitra AI. How can I assist your practice today?</p>
+            <div class="legal-mode-selector" aria-label="LegalMitra output mode">
+              <label>
+                <span>Mode</span>
+                <select id="legal-output-mode">
+                  <option value="explain">Explain</option>
+                  <option value="advocate_research" selected>Advocate Research</option>
+                  <option value="drafting">Drafting</option>
+                  <option value="court_strategy">Court Strategy</option>
+                  <option value="compliance">Compliance</option>
+                </select>
+              </label>
+            </div>
+            <div class="legal-query-box">
+              <input id="query" value="Quash FIR under BNSS and relevant Indian case law">
+              <button id="ask-legalmitra">Ask AI</button>
+            </div>
+            <div class="legal-answer-panel" id="legal-answer-panel" aria-live="polite">
+              <div class="legal-answer-empty">Ask a question to see the LegalMitra response here.</div>
+            </div>
+            <div class="legal-followup-box" aria-label="Continue LegalMitra conversation">
+              <div class="legal-followup-tools" aria-label="LegalMitra conversation tools">
+                <button type="button" title="Attach document" aria-label="Attach document">Attach</button>
+                <button type="button" title="Adjust response mode" aria-label="Adjust response mode">Tune</button>
+                <span id="usage-counter" title="Free tier research usage">0/10</span>
+              </div>
+              <input id="follow-up-query" placeholder="Continue the conversation...">
+              <button id="voice-input" type="button" title="Voice input" aria-label="Voice input">Voice</button>
+              <button id="ask-follow-up" type="button">Ask</button>
+            </div>
+            <div class="legal-action-row" aria-label="LegalMitra quick workflows">
+              <button type="button" data-mode="advocate_research" data-query="Section 138 NI Act limitation and territorial jurisdiction">Legal Research</button>
+              <button type="button" data-mode="drafting" data-query="Draft a legal notice for cheque dishonour under Indian law">Document Drafting</button>
+              <button type="button" data-mode="court_strategy" data-query="Search leading Indian judgments on FIR quashing and inherent powers">Case Search</button>
+              <button type="button" data-mode="compliance" data-query="Create a compliance checklist for a consumer complaint filing">Compliance Checklist</button>
+              <button type="button" data-mode="advocate_research" data-query="Find current statutory references after BNS BNSS BSA transition">Statute Check</button>
+            </div>
+          </div>
+          <div class="legal-hero-media" aria-label="LegalMitra brand preview">
+            <img src="../assets/brand/legalmitra-advocate-chamber.png" alt="Advocate chamber with LegalMitra AI workspace">
+            <div class="legal-source-note">
+              <strong>Source-aware by policy</strong>
+              <span>Legal research output must carry citations, retrieval context, and human-review warnings.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="legal-metrics" aria-label="LegalMitra platform metrics">
+          <div><strong>Curated</strong><span>Lawyer-grade Templates</span></div>
+          <div><strong>50+</strong><span>Legal Workflows</span></div>
+          <div><strong>BNS/BNSS</strong><span>Current statute awareness</span></div>
+          <div><strong>99.9%</strong><span>Platform uptime target</span></div>
+        </section>
+
+        <section class="legal-intelligence" id="intelligence">
+          <div class="legal-section-heading">
+            <span>Live legal intelligence</span>
+            <h2>Recent judgments and official legal updates in one professional scan.</h2>
+            <p>Use this section to validate that the landing page supports daily legal discovery before moving into authenticated workflows.</p>
+          </div>
+          <div class="legal-intel-grid">
+            <button type="button" data-query="Section 138 NI Act territorial jurisdiction and cheque dishonour complaint procedure">
+              <span>Cheque dishonour</span>
+              <strong>Section 138 NI Act jurisdiction and limitation checks.</strong>
+              <small>Useful for complaint drafting, proof of notice, and forum selection.</small>
+            </button>
+            <button type="button" data-query="FIR quashing under BNSS and current Indian criminal procedure">
+              <span>Criminal procedure</span>
+              <strong>FIR quashing after the BNSS transition.</strong>
+              <small>Map older CrPC references to current provisions before drafting.</small>
+            </button>
+            <button type="button" data-query="Arbitration Section 9 interim relief Commercial Court India">
+              <span>Commercial disputes</span>
+              <strong>Section 9 interim relief and arbitration clause risk.</strong>
+              <small>Check seat, emergency relief, maintainability, and enforcement.</small>
+            </button>
+            <button type="button" data-query="DPDP Act compliance checklist for SaaS platform India">
+              <span>Technology law</span>
+              <strong>DPDP and IT compliance action planning.</strong>
+              <small>Convert legal updates into policy, consent, retention, and incident tasks.</small>
+            </button>
+          </div>
+        </section>
+
+        <section class="legal-workflows" id="workflows">
+          <div>
+            <span>Research</span>
+            <strong>Case law, statutes, notifications, and legal updates.</strong>
+          </div>
+          <div>
+            <span>Drafting</span>
+            <strong>Notices, pleadings, forms, and review-ready drafts.</strong>
+          </div>
+          <div>
+            <span>Diary</span>
+            <strong>Compliance dates, task tracking, and matter follow-ups.</strong>
+          </div>
+        </section>
+
+        <section class="legal-feature-section" id="features">
+          <div class="legal-section-heading">
+            <span>Solutions</span>
+            <h2>Key features, legal tools, templates, and tracker workflows.</h2>
+            <p>Solutions navigation points here because these product areas are validated together during LegalMitra E2E.</p>
+          </div>
+          <div class="legal-feature-grid" id="solutions-list">
+            <article>
+              <span>01</span>
+              <h3>Legal Research</h3>
+              <p>Ask Indian law questions and require citations, current statutory context, and source dates where law may have changed.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Document Drafting</h3>
+              <p>Prepare notices, pleadings, and forms as review-ready drafts with explicit human-review guardrails.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Template Marketplace</h3>
+              <p>Use curated legal and government form templates that produce complete, review-ready drafts instead of thin placeholders.</p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>Compliance Tracker</h3>
+              <p>Track deadlines, matter actions, compliance notes, and diary items without mixing LegalMitra into ERP screens.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="legal-feature-section legal-tools-section" id="legal-tools">
+          <div class="legal-section-heading">
+            <span>Legal Tools</span>
+            <h2>Free professional utilities for everyday Indian legal and compliance work.</h2>
+            <p>Use these quick tools for filing cost orientation, GST classification, legal notice preparation, limitation checks, stamp duty estimates, and HSN code review before moving into deeper LegalMitra research or drafting.</p>
+          </div>
+          <div class="legal-tool-grid">
+            <button type="button" data-tool="court-fee" data-query="Calculate court fee for a civil suit in India and explain state-wise caveats">
+              <span>Court Fee Calculator</span>
+              <strong>Civil suit filing cost orientation</strong>
+              <small>Indicative court-fee workflow before final state-specific verification.</small>
+            </button>
+            <button type="button" data-tool="gst-finder" data-query="Find GST rate and HSN or SAC code checklist for an Indian business transaction">
+              <span>GST Rate Finder</span>
+              <strong>GST rate and HSN/SAC lookup</strong>
+              <small>Useful for CAs, businesses, and compliance teams before invoice review.</small>
+            </button>
+            <button type="button" data-tool="notice-drafter" data-query="Draft a legal notice checklist for money recovery under Indian law">
+              <span>Legal Notice Drafter</span>
+              <strong>Recovery, eviction, and cheque notices</strong>
+              <small>Routes users into drafting mode with human-review guardrails.</small>
+            </button>
+            <button type="button" data-tool="limitation" data-query="Calculate limitation period and filing deadline checklist under Indian law">
+              <span>Limitation Calculator</span>
+              <strong>Filing deadline discipline</strong>
+              <small>Supports appeal, suit, complaint, and professional diary workflows.</small>
+            </button>
+            <button type="button" data-tool="stamp-duty" data-query="Explain stamp duty and registration charge checklist for an Indian property transaction">
+              <span>Stamp Duty Estimator</span>
+              <strong>Property document cost orientation</strong>
+              <small>Useful before agreement drafting and jurisdiction-specific verification.</small>
+            </button>
+            <button type="button" data-tool="hsn-search" data-query="Find HSN code search checklist and GST invoice classification risks">
+              <span>HSN Code Search</span>
+              <strong>Invoice classification support</strong>
+              <small>Helps businesses and CAs frame classification questions clearly.</small>
+            </button>
+          </div>
+          <article class="legal-tool-panel" id="legal-tool-panel" aria-live="polite">
+            <span>Select a tool</span>
+            <h3>Choose any legal tool above.</h3>
+            <p>The selected tool will open here with quick inputs and a LegalMitra AI handoff.</p>
+          </article>
+        </section>
+
+        <section class="legal-audience-section" id="who-should-use">
+          <div class="legal-section-heading">
+            <span>Who should use LegalMitra</span>
+            <h2>Built for professionals and citizens who need Indian legal clarity.</h2>
+          </div>
+          <div class="legal-audience-grid">
+            <article><strong>Legal Counsel</strong><span>Research notes, issue framing, drafting support, and source-aware review.</span></article>
+            <article><strong>Corporate Legal Advisors</strong><span>Contract review, compliance mapping, risk notes, and internal legal memos.</span></article>
+            <article><strong>Individual Citizens</strong><span>Plain-language orientation before consulting an advocate or professional.</span></article>
+            <article><strong>Law Students</strong><span>Case concepts, statutory transitions, research outlines, and drafting practice.</span></article>
+            <article><strong>Chartered Accountants</strong><span>GST, income tax, notices, appeal preparation, compliance calendars, and client follow-up.</span></article>
+            <article><strong>Practicing Company Secretaries</strong><span>Companies Act workflows, board compliance, filings, and governance tracking.</span></article>
+          </div>
+        </section>
+
+        <section class="legal-market-section" id="marketplace">
+          <div class="legal-section-heading">
+            <span>Unified legal dashboard</span>
+            <h2>Template Marketplace and Compliance Tracker.</h2>
+            <p>Two core landing promises for advocates, CAs, company secretaries, and professional teams.</p>
+          </div>
+          <div class="legal-market-grid">
+            <article>
+              <span>Template Marketplace</span>
+              <h3>Fewer, stronger, structured legal documents.</h3>
+              <p>Contract, notice, GST, company law, criminal/civil, and professional workflow templates with clauses, checklists, and review guardrails.</p>
+              <a href="./templates.html">Browse Library</a>
+            </article>
+            <article id="tracker">
+              <span>Compliance Tracker</span>
+              <h3>Cases, clients, deadlines, and work follow-up.</h3>
+              <p>Designed for advocates, chartered accountants, company secretaries, and consultants managing recurring professional obligations.</p>
+              <a href="./tracker.html">Open Tracker</a>
+            </article>
+          </div>
+        </section>
+
+        <section class="legal-use-cases" id="use-cases">
+          <div class="legal-section-heading centered">
+            <span>Indian legal workflows</span>
+            <h2>What can LegalMitra help you with?</h2>
+            <p>Real workflows for legal, tax, company law, and compliance users.</p>
+          </div>
+          <div class="legal-use-case-grid">
+            <button type="button" data-query="FIR quashing legal research India">FIR Quashing</button>
+            <button type="button" data-query="GST notice reply drafting India">GST Notices</button>
+            <button type="button" data-query="contract review risk clauses Indian law">Contract Review</button>
+            <button type="button" data-query="labour compliance checklist India">Labour Compliance</button>
+            <button type="button" data-query="legal notice drafting cheque dishonour India">Legal Notice</button>
+            <button type="button" data-query="case diary limitation checklist India">Diary and Limitation</button>
+          </div>
+        </section>
+
+        <section class="legal-pricing-section" id="pricing">
+          <div class="legal-section-heading centered">
+            <span>Pricing</span>
+            <h2>Choose the LegalMitra plan by actual usage need.</h2>
+            <p>Starter is for light testing and occasional research. Growth is for active professionals. Professional is for full LegalMitra practice workflows.</p>
+          </div>
+          <p class="legal-launch-note"><strong>Launch note:</strong> Payment collection may remain paused during testing, but feature limits are defined now so E2E behavior is clear.</p>
+          <div class="legal-pricing-grid">
+            <article>
+              <span>Starter</span>
+              <strong>Free</strong>
+              <p>For citizens, law students, and light professional testing.</p>
+              <ul>
+                <li>5 AI legal research queries per day</li>
+                <li>5 template drafts per month</li>
+                <li>10 compliance tracker records</li>
+                <li>GST Rate Finder and Limitation Calculator</li>
+                <li>Copy and feedback on AI responses</li>
+              </ul>
+              <a href="./login.html?return=./chat.html">Start Free</a>
+            </article>
+            <article>
+              <span>Growth</span>
+              <strong>Growth</strong>
+              <p>For advocates, CAs, CS professionals, and consultants managing active client work.</p>
+              <ul>
+                <li>50 AI legal research queries per day</li>
+                <li>30 template drafts per month</li>
+                <li>100 compliance tracker records</li>
+                <li>All Legal Tools</li>
+                <li>Save, share, and download response workspaces</li>
+              </ul>
+              <a href="#pricing" data-upgrade-plan="growth">Upgrade to Growth</a>
+            </article>
+            <article>
+              <span>Professional</span>
+              <strong>Professional</strong>
+              <p>For serious chambers, professional offices, and teams that need the full LegalMitra workflow.</p>
+              <ul>
+                <li>Unlimited AI legal research queries</li>
+                <li>200 template drafts per month</li>
+                <li>Unlimited compliance tracker records</li>
+                <li>Government/official PDF form auto-fill</li>
+                <li>Priority support and professional workflow capacity</li>
+              </ul>
+              <a href="#pricing" data-upgrade-plan="professional">Upgrade to Professional</a>
+            </article>
+          </div>
+        </section>
+
+        <section class="legal-insights-section" id="insights">
+          <div class="legal-section-heading">
+            <span>Insights</span>
+            <h2>Blogs and practical notes for Indian legal workflows.</h2>
+          </div>
+          <div class="legal-insights-grid" id="insights-list">
+            <article role="button" tabindex="0" data-article-id="gst-appeal-limitation"><img src="../assets/brand/legalmitra-gst-appeal.svg?v=legalmitra-ai-v6" alt="GST appeal limitation tracker"><strong>GST Appeal Limitation: A Practical Note for Businesses and Advisors</strong><span>A source-credited note on limitation discipline, documentation, and filing readiness.</span></article>
+            <article role="button" tabindex="0" data-article-id="bnss-transition-guide"><img src="../assets/brand/legalmitra-bnss-transition.svg?v=legalmitra-ai-v6" alt="BNSS transition statute mapping"><strong>BNSS Transition Guide: What Lawyers Should Recheck Before Filing</strong><span>A practical transition guide for criminal-law filings and chamber review.</span></article>
+            <article role="button" tabindex="0" data-article-id="llp-annual-compliance-2026"><img src="../assets/brand/legalmitra-llp-compliance.svg?v=legalmitra-ai-v6" alt="LLP annual compliance checklist"><strong>LLP Annual Compliance in India: 2026 Practical Checklist</strong><span>A filing-readiness checklist for Form 11, Form 8, books, and partner records.</span></article>
+          </div>
+          <a class="legal-insights-more" href="./insights.html">Open all insights</a>
+        </section>
+
+        <section class="legal-faq-section" id="faq">
+          <div class="legal-section-heading centered">
+            <span>FAQ</span>
+            <h2>Questions to clear before E2E sign-off.</h2>
+          </div>
+          <div class="legal-faq-list" id="faq-list">
+            <details open>
+              <summary>Does LegalMitra give final legal advice?</summary>
+              <p>No. LegalMitra assists research, drafting, and workflow preparation. A qualified professional must review before filing or final advice.</p>
+            </details>
+            <details>
+              <summary>Will AI answers include sources?</summary>
+              <p>LegalMitra is designed to preserve source attribution and flags uncertain or changing law where applicable.</p>
+            </details>
+            <details>
+              <summary>Can CAs and company secretaries use it?</summary>
+              <p>Yes. The tracker and templates support GST, tax, company law, client compliance, and professional follow-up workflows.</p>
+            </details>
+          </div>
+        </section>
+
+        <section class="legal-about-contact" id="about">
+          <div>
+            <span>About</span>
+            <h2 id="about-title">LegalMitra is the dedicated legal product in the SanMitra platform.</h2>
+            <p id="about-summary">It remains separate from MitraBooks ERP and focuses on legal research, drafting, templates, compliance, and professional workflow review.</p>
+          </div>
+          <div id="contact">
+            <span>Contact</span>
+            <h2 id="contact-title">Speak to the LegalMitra team.</h2>
+            <p id="contact-summary">Use the dedicated contact page for product queries, enterprise plans, professional workflows, and support.</p>
+            <p class="legal-contact-line" id="contact-email">legalmitra@sanmitratech.in</p>
+            <a class="button" href="./contact.html">Contact LegalMitra</a>
+          </div>
+        </section>
+
+        <section class="legal-e2e-panel legal-local-only" id="e2e" aria-hidden="true">
+          <div class="legal-e2e-header">
+            <div>
+              <h2>LegalMitra Baseline E2E</h2>
+              <p>Use this panel only to connect the local shell to the unified backend and confirm tenant/module access.</p>
+            </div>
+            <nav class="legal-nav" id="nav"></nav>
+          </div>
           <div class="toolbar">
             <div class="field">
               <label for="api-base">Backend API base URL</label>
               <input id="api-base" placeholder="http://127.0.0.1:8000">
             </div>
+            <div class="field">
+              <label for="login-email">LegalMitra login email</label>
+              <input id="login-email" placeholder="superadmin@sanmitra.local" autocomplete="username">
+            </div>
+            <div class="field">
+              <label for="login-password">Password</label>
+              <input id="login-password" type="password" placeholder="Enter password" autocomplete="current-password">
+            </div>
+            <button id="login-legalmitra">Login</button>
+            <button class="secondary" id="accept-terms">Accept terms</button>
             <div class="field">
               <label for="access-token">Access token for protected routes</label>
               <input id="access-token" placeholder="Paste Bearer token value">
@@ -43,92 +424,34 @@
             <button class="secondary" id="run-checks">Run checks</button>
             <button class="danger" id="clear-token">Clear token</button>
           </div>
-        </section>
-
-        <section class="legacy-strip">
-          <div>
-            <strong>Classic LegalMitra layout mode</strong>
-            <span class="muted">Top navigation, research-first workspace, template/document actions, and diary/compliance entry points are preserved for familiarity.</span>
-          </div>
-          <video class="legacy-media" src="../assets/brand/legalmitra-logo.mp4" muted playsinline loop autoplay></video>
-          <span class="pill ok">legalmitra</span>
-        </section>
-
-        <section class="legacy-dashboard legal-dashboard">
-          <div class="preview-heading">
-            <div>
-              <h3>Cost Tracking Dashboard</h3>
-              <p>Legacy LegalMitra pattern: period filters, AI usage stats, savings comparison, and tabular cost breakdowns.</p>
-            </div>
-            <div class="period-selector" aria-label="Cost period selector">
-              <button class="active" type="button">Last 30 Days</button>
-              <button type="button">Last 90 Days</button>
-            </div>
-          </div>
-          <div class="savings-card">
-            <span>Estimated Savings vs VIDUR</span>
-            <strong>$420/month</strong>
-            <small>LegalMitra research cost remains source-attributed and tenant-scoped.</small>
-          </div>
-          <div class="metric-grid three">
-            <article class="metric-tile"><span>Total Cost</span><strong>$38.20</strong><small>last 30 days</small></article>
-            <article class="metric-tile"><span>Total Queries</span><strong>284</strong><small>142K tokens</small></article>
-            <article class="metric-tile"><span>Average Cost</span><strong>$0.13</strong><small>per query</small></article>
-          </div>
-          <div class="table-preview">
-            <h4>Cost Breakdown by Query Type</h4>
-            <table>
-              <thead>
-                <tr><th>Query Type</th><th>Queries</th><th>Cost</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>Legal Research</td><td>148</td><td>$18.70</td><td>Source required</td></tr>
-                <tr><td>Draft Review</td><td>82</td><td>$12.10</td><td>Human review</td></tr>
-                <tr><td>Compliance Diary</td><td>54</td><td>$7.40</td><td>Tenant scoped</td></tr>
-              </tbody>
-            </table>
+          <div class="legal-e2e-grid">
+            <article>
+              <h3>Enabled Modules</h3>
+              <p class="module-state" id="module-state">Run checks to load tenant module access.</p>
+              <ul class="list" id="module-list"></ul>
+            </article>
+            <article>
+              <h3>Last API Response</h3>
+              <pre id="api-output">No request yet.</pre>
+            </article>
           </div>
         </section>
 
-        <section class="grid">
-          <article class="card span-4">
-            <h3>Legal Research</h3>
-            <p>Responses must carry source attribution and current-date context where law may have changed.</p>
-          </article>
-          <article class="card span-4">
-            <h3>Document Drafting</h3>
-            <p>Templates and drafts remain lawyer-reviewed workflow aids, not final legal advice.</p>
-          </article>
-          <article class="card span-4">
-            <h3>Diary and Compliance</h3>
-            <p>Case diary, deadlines, and compliance actions stay separate from MitraBooks ERP.</p>
-          </article>
-        </section>
-
-        <section class="grid">
-          <article class="card span-6">
-            <h3>Enabled Modules</h3>
-            <ul class="list" id="module-list"></ul>
-          </article>
-          <article class="card span-6">
-            <h3>Local Research Probe</h3>
-            <div class="toolbar">
-              <div class="field" style="flex: 1;">
-                <label for="query">Legal query</label>
-                <input id="query" value="consumer complaint limitation India">
-              </div>
-              <button id="probe-news">Check legal news endpoint</button>
-            </div>
-          </article>
-        </section>
-
-        <section class="card">
-          <h3>Last API Response</h3>
-          <pre id="api-output">No request yet.</pre>
-        </section>
+        <footer class="legal-footer">
+          <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+          <p id="footer-summary">LegalMitra AI supports Indian legal research, drafting, compliance, and professional workflow review. It is not final legal advice.</p>
+          <div id="footer-links">
+            <a href="./about.html">About Us</a>
+            <a href="./contact.html">Contact</a>
+            <a href="./legal/privacy.html">Privacy Policy</a>
+            <a href="./legal/terms.html">Terms of Service</a>
+          </div>
+        </footer>
       </main>
+      </div>
     </div>
-    <script type="module" src="../shared/pwa-shell.js?v=legacy-layouts-v1"></script>
-    <script type="module" src="./app.js?v=legacy-layouts-v1"></script>
+    <script src="../config.js?v=legalmitra-ai-v41"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=legalmitra-ai-v33"></script>
+    <script type="module" src="./app.js?v=legalmitra-ai-v33"></script>
   </body>
 </html>

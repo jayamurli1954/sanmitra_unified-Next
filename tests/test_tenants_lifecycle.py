@@ -24,6 +24,12 @@ class FakeCollection:
         return dict(doc)
 
     async def update_one(self, filters, update, upsert=False):
+        set_on_insert_keys = set(update.get("$setOnInsert", {}))
+        set_keys = set(update.get("$set", {}))
+        overlap = set_on_insert_keys & set_keys
+        if overlap:
+            raise AssertionError(f"Mongo update path conflict: {sorted(overlap)}")
+
         tenant_id = filters.get("tenant_id")
         doc = self.docs.get(tenant_id)
 

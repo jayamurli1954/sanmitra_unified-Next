@@ -76,6 +76,7 @@ Before frontend merging starts, the platform needs a small foundation PR:
 - [Module Registry](docs/architecture/MODULE_REGISTRY.md)
 - [Frontend Merge Plan](docs/migration/FRONTEND_MERGE_PLAN.md)
 - [Foundation PR Plan](docs/migration/FOUNDATION_PR_PLAN.md)
+- [Staged E2E Plan](docs/operations/STAGED_E2E_PLAN.md)
 - [Naming Conventions](docs/standards/NAMING_CONVENTIONS.md)
 - [Release and Rollback Runbook](docs/operations/RELEASE_AND_ROLLBACK.md)
 

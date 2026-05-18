@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <title>LegalMitra - Template Marketplace</title>
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v40">
+  </head>
+  <body>
+    <div class="legal-editorial-page legal-theme">
+      <header class="legal-navbar">
+        <a class="legal-wordmark" href="./">
+          <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+          <span>LegalMitra</span>
+        </a>
+        <nav class="legal-page-nav" aria-label="LegalMitra sections">
+          <a href="./">Home</a>
+          <a href="./#features">Solutions</a>
+          <a href="./pricing.html">Pricing</a>
+          <a href="./insights.html">Insights</a>
+          <a href="./faq.html">FAQ</a>
+          <a href="./about.html">About</a>
+          <a href="./contact.html">Contact</a>
+        </nav>
+        <div class="legal-header-actions">
+          <a href="./login.html?return=./chat.html">Sign In</a>
+          <a class="button" href="./#pricing">Start Free</a>
+        </div>
+      </header>
+
+      <main class="legal-template-page">
+        <section class="legal-template-hero">
+          <span>Template Marketplace</span>
+          <h1>Browse launch-grade and legacy LegalMitra templates.</h1>
+          <p>Use structured document workflows for contracts, notices, GST, company law, criminal/civil drafting, and professional review guardrails.</p>
+        </section>
+
+        <section class="legal-govt-form-panel" aria-label="Professional government form auto-fill">
+          <div>
+            <span>Professional plan feature</span>
+            <h2>Government form auto-fill</h2>
+            <p>Upload an official PDF form such as GST REG-01, ITR support forms, or professional compliance forms. LegalMitra will identify fields, guide simplified entry, and prepare a high-fidelity filled document for review.</p>
+            <ul>
+              <li>25 MB per official PDF upload</li>
+              <li>Automatic field recognition</li>
+              <li>Simplified conversational entry</li>
+              <li>High-fidelity PDF export</li>
+            </ul>
+          </div>
+          <div class="legal-govt-upload">
+            <strong>PDF</strong>
+            <h3>Upload Government PDF</h3>
+            <p>Professional users only. Starter and Growth plans can preview this feature but cannot process forms.</p>
+            <button type="button" id="govt-form-upload">Professional feature locked</button>
+          </div>
+        </section>
+
+        <section class="legal-template-browser-section">
+          <div class="legal-section-heading">
+            <span>Template Library</span>
+            <h2>Fewer, stronger, structured legal documents.</h2>
+            <p>Launch-grade templates are shown first. Legacy templates remain visible for E2E verification but should be upgraded before production reliance.</p>
+          </div>
+          <div class="legal-template-browser">
+            <aside>
+              <div class="legal-template-browser-head">
+                <strong>Templates</strong>
+                <button type="button" id="reload-templates">Reload</button>
+              </div>
+              <div class="legal-template-status" id="template-library-status">Loading templates from backend...</div>
+              <div class="legal-template-list" id="template-list"></div>
+            </aside>
+            <article class="legal-template-detail" id="template-detail">
+              <span>Select a template</span>
+              <h3>Template details will appear here.</h3>
+              <p>Click a template to view description, category, tags, fields, and launch-grade status.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="../config.js?v=legalmitra-ai-v41"></script>
+    <script type="module" src="./templates.js?v=legalmitra-ai-v40"></script>
+  </body>
+</html>

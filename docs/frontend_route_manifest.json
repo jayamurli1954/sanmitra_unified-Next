@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-16T00:00:00+00:00",
+  "route_count": 2,
+  "routes": [
+    {
+      "app": "SanMitraStaticShell",
+      "method": "GET",
+      "path": "/api/v1/modules/me",
+      "sources": [
+        {
+          "file": "frontend/shared/api-client.js",
+          "line": 59
+        }
+      ]
+    },
+    {
+      "app": "SanMitraStaticShell",
+      "method": "GET",
+      "path": "/health",
+      "sources": [
+        {
+          "file": "frontend/shared/api-client.js",
+          "line": 55
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,7 @@ async def get_my_usage(current_user: dict = Depends(get_current_user)):
     """Retrieve current usage statistics and tier limits for the logged-in user."""
     from app.db.mongo import get_collection
     from app.core.billing.limits import get_tier_limits
+    from app.core.billing.usage import _has_privileged_usage_access
     
     user_id = current_user.get("sub")
     users = get_collection("core_users")
@@ -35,10 +36,15 @@ async def get_my_usage(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
         
     tier = user.get("subscription_tier", "free").lower()
-    limits = get_tier_limits(tier)
+    privileged_usage_access = _has_privileged_usage_access(current_user) or _has_privileged_usage_access(user)
+    effective_tier = "pro" if privileged_usage_access else tier
+    limits = get_tier_limits(effective_tier)
     
     return {
         "tier": tier,
+        "effective_tier": effective_tier,
+        "role": user.get("role") or current_user.get("role"),
+        "privileged_usage_access": privileged_usage_access,
         "limits": limits,
         "usage": {
             "daily_research": {

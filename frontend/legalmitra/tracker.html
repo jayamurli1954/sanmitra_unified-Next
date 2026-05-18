@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Professional Compliance Tracker | LegalMitra</title>
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v31">
+  </head>
+  <body class="legal-editorial-page">
+    <header class="legal-navbar">
+      <a class="legal-wordmark" href="./">
+        <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+        <span>LegalMitra</span>
+      </a>
+      <nav class="legal-page-nav" aria-label="LegalMitra sections">
+        <a href="./">Home</a>
+        <a href="./#features">Solutions</a>
+        <a href="./pricing.html">Pricing</a>
+        <a href="./insights.html">Insights</a>
+        <a href="./faq.html">FAQ</a>
+        <a href="./about.html">About</a>
+        <a href="./contact.html">Contact</a>
+      </nav>
+      <div class="legal-header-actions">
+        <a href="./login.html?return=./chat.html">Sign In</a>
+        <a class="button" href="./#pricing">Start Free</a>
+      </div>
+    </header>
+
+    <main class="legal-diary-page">
+      <section class="legal-diary-hero">
+        <div>
+          <span>Professional Compliance Tracker</span>
+          <h1>Master your deadlines, clients, cases, filings, and fee records in one intelligent space.</h1>
+          <p>Built for advocates, chartered accountants, company secretaries, tax consultants, and professional teams managing recurring client obligations.</p>
+        </div>
+        <div class="legal-role-switch" aria-label="Professional role">
+          <button class="active" type="button" data-tracker-role="advocate">Advocate</button>
+          <button type="button" data-tracker-role="ca">Chartered Accountant</button>
+          <button type="button" data-tracker-role="cs">Company Secretary</button>
+        </div>
+      </section>
+
+      <section class="legal-diary-metrics" aria-label="Tracker summary">
+        <article><span id="metric-label-1">Today's hearings</span><strong id="metric-value-1">0</strong></article>
+        <article><span id="metric-label-2">Pending tasks</span><strong id="metric-value-2">12</strong></article>
+        <article><span id="metric-label-3">Active cases</span><strong id="metric-value-3">48</strong></article>
+        <article><span id="metric-label-4">Fees outstanding</span><strong id="metric-value-4">Rs. 1,24,500</strong></article>
+      </section>
+
+      <section class="legal-diary-tabs" aria-label="Tracker sections">
+        <a class="active" href="#daily-board">Daily Board</a>
+        <a href="#case-master">Case Master</a>
+        <a href="#clients">Clients</a>
+        <a href="#fee-ledger">Fee Ledger</a>
+      </section>
+
+      <section class="legal-diary-panel" id="daily-board">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Daily Board</span>
+            <h2>Upcoming Deadlines and Hearings</h2>
+          </div>
+          <button type="button">+ Log Engagement</button>
+        </div>
+        <div class="legal-diary-table-wrap">
+          <table class="legal-diary-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Reference / Case No</th>
+                <th>Authority / Court</th>
+                <th>Purpose</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tracker-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="legal-diary-grid">
+        <article id="case-master" role="button" tabindex="0" data-tracker-card="case-master">
+          <span>Case Master</span>
+          <h2 id="register-title-1">Case and matter register</h2>
+          <p id="register-copy-1">Maintain case number, client, court, next date, filing stage, limitation status, documents, and responsible owner.</p>
+        </article>
+        <article id="clients" role="button" tabindex="0" data-tracker-card="clients">
+          <span>Clients</span>
+          <h2 id="register-title-2">Client follow-up register</h2>
+          <p id="register-copy-2">Track contact person, document requests, pending approvals, billing status, and last communication.</p>
+        </article>
+        <article id="fee-ledger" role="button" tabindex="0" data-tracker-card="fee-ledger">
+          <span>Fee Ledger</span>
+          <h2 id="register-title-3">Fees and receivables</h2>
+          <p id="register-copy-3">Record professional fees, retainers, invoices, collections, pending dues, and matter-wise billing notes.</p>
+        </article>
+      </section>
+
+      <section class="legal-diary-detail-panel" id="tracker-detail" aria-live="polite">
+        <div>
+          <span id="tracker-detail-kicker">Case Master</span>
+          <h2 id="tracker-detail-title">Case and matter register</h2>
+          <p id="tracker-detail-copy">Select a register card to review the working fields and sample records.</p>
+          <div class="legal-diary-detail-actions">
+            <button type="button" id="tracker-save">Save locally</button>
+            <button type="button" id="tracker-reset">Reset</button>
+          </div>
+          <p class="legal-diary-save-status" id="tracker-save-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
+      </section>
+    </main>
+    <script type="module" src="./tracker.js?v=legalmitra-ai-v31"></script>
+  </body>
+</html>

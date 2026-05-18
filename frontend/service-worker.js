@@ -1,10 +1,11 @@
-const CACHE_NAME = "sanmitra-frontends-v8";
+const CACHE_NAME = "sanmitra-frontends-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./shared/app-shell.css",
   "./shared/api-client.js",
   "./shared/pwa-shell.js",
+  "./config.js",
   "./mitrabooks-erp/",
   "./mitrabooks-erp/index.html",
   "./mitrabooks-erp/app.js",
@@ -50,10 +51,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.includes("/api/") || url.pathname.endsWith("/health")) {
-    event.respondWith(fetch(request).catch(() => new Response(JSON.stringify({ status: "offline" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    })));
+    event.respondWith(fetch(request));
     return;
   }
 

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
+    <title>LegalMitra Chat</title>
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v37">
+  </head>
+  <body data-legal-page="chat">
+    <div class="legal-landing legal-theme">
+      <header class="legal-navbar">
+        <a class="legal-wordmark" href="./">
+          <img src="../assets/brand/legalmitra-logo.png" alt="LegalMitra">
+          <span>LegalMitra</span>
+        </a>
+        <nav class="legal-page-nav" aria-label="LegalMitra sections">
+          <a href="./">Home</a>
+          <a href="./templates.html">Templates</a>
+          <a href="./tracker.html">Compliance Tracker</a>
+          <a href="./pricing.html">Pricing</a>
+          <a href="./insights.html">Insights</a>
+        </nav>
+        <div class="legal-header-actions">
+          <a id="auth-sign-in" href="./login.html?return=./chat.html">Sign In</a>
+          <div class="legal-user-menu" id="legal-user-menu" hidden>
+            <span id="auth-user-label">Signed in</span>
+            <button type="button" id="logout-legalmitra">Logout</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="legal-workspace-shell chat-active" id="legal-workspace-shell">
+        <aside class="legal-history-sidebar" aria-label="Personal LegalMitra chat history">
+          <div class="legal-history-head">
+            <span>My Chats</span>
+            <button type="button" id="refresh-history" title="Refresh chat history" aria-label="Refresh chat history">Refresh</button>
+          </div>
+          <p id="history-status">Loading your personal chat history...</p>
+          <div class="legal-history-list" id="history-list"></div>
+          <div class="legal-history-head secondary">
+            <span>My Uploads</span>
+          </div>
+          <p id="upload-history-status">Loading your uploaded documents...</p>
+          <div class="legal-history-list uploads" id="upload-history-list"></div>
+        </aside>
+
+        <main class="legal-chat-main">
+          <section class="legal-chat-panel" id="assistant">
+            <div class="legal-chat-heading">
+              <span>LegalMitra AI Workspace</span>
+              <h1>Ask Indian legal questions, draft, and continue your research.</h1>
+            </div>
+            <div class="legal-mode-selector" aria-label="LegalMitra output mode">
+              <label>
+                <span>Mode</span>
+                <select id="legal-output-mode">
+                  <option value="explain">Explain</option>
+                  <option value="advocate_research" selected>Advocate Research</option>
+                  <option value="drafting">Drafting</option>
+                  <option value="court_strategy">Court Strategy</option>
+                  <option value="compliance">Compliance</option>
+                </select>
+              </label>
+            </div>
+            <div class="legal-query-box">
+              <input id="query" value="Quash FIR under BNSS and relevant Indian case law">
+              <button id="ask-legalmitra">Ask AI</button>
+            </div>
+            <div class="legal-answer-panel" id="legal-answer-panel" aria-live="polite">
+              <div class="legal-answer-empty">Ask a question to see the LegalMitra response here.</div>
+            </div>
+            <div class="legal-followup-box" aria-label="Continue LegalMitra conversation">
+              <div class="legal-followup-tools" aria-label="LegalMitra conversation tools">
+                <button type="button" title="Attach document" aria-label="Attach document">Attach</button>
+                <button type="button" title="Adjust response mode" aria-label="Adjust response mode">Tune</button>
+                <span id="usage-counter" title="Plan research usage">0/10</span>
+              </div>
+              <input id="follow-up-query" placeholder="Continue the conversation...">
+              <button id="voice-input" type="button" title="Voice input" aria-label="Voice input">Voice</button>
+              <button id="ask-follow-up" type="button">Ask</button>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <section class="legal-e2e-panel legal-local-only" id="e2e" aria-hidden="true">
+        <div class="legal-e2e-header">
+          <div>
+            <h2>LegalMitra Local Diagnostics</h2>
+            <p>Hidden local-only controls for development checks.</p>
+          </div>
+          <nav class="legal-nav" id="nav"></nav>
+        </div>
+        <div class="toolbar">
+          <div class="field">
+            <label for="api-base">Backend API base URL</label>
+            <input id="api-base" placeholder="http://127.0.0.1:8000">
+          </div>
+          <div class="field">
+            <label for="login-email">LegalMitra login email</label>
+            <input id="login-email" placeholder="superadmin@sanmitra.local" autocomplete="username">
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input id="login-password" type="password" placeholder="Enter password" autocomplete="current-password">
+          </div>
+          <button id="login-legalmitra">Login</button>
+          <button class="secondary" id="accept-terms">Accept terms</button>
+          <div class="field">
+            <label for="access-token">Access token for protected routes</label>
+            <input id="access-token" placeholder="Paste Bearer token value">
+          </div>
+          <button id="save-config">Save</button>
+          <button class="secondary" id="run-checks">Run checks</button>
+          <button class="danger" id="clear-token">Clear token</button>
+        </div>
+        <div class="legal-e2e-grid">
+          <article>
+            <h3>Enabled Modules</h3>
+            <p class="module-state" id="module-state">Run checks to load tenant module access.</p>
+            <ul class="list" id="module-list"></ul>
+          </article>
+          <article>
+            <h3>Last API Response</h3>
+            <pre id="api-output">No request yet.</pre>
+          </article>
+        </div>
+      </section>
+    </div>
+    <script src="../config.js?v=legalmitra-ai-v41"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=legalmitra-ai-v33"></script>
+    <script type="module" src="./app.js?v=legalmitra-ai-v40"></script>
+  </body>
+</html>

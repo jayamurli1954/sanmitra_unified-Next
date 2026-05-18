@@ -86,6 +86,34 @@ def test_family_law_query_uses_advisor_format_even_with_prior_bnss_context() -> 
 # ─── test: Gemini is called and its output is returned ────────────────────────
 
 @pytest.mark.asyncio
+async def test_hybrid_prefers_claude_legal_counsel_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claude Legal Counsel is the preferred LegalMitra provider when configured."""
+    async def _mock_claude(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+        return "Claude Legal Counsel answer"
+
+    async def _mock_gemini(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+        raise AssertionError("Gemini should not be called when Claude Legal Counsel succeeds")
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_claude)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
+
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="section 138 timeline",
+        rag_result=_make_rag_result("Grounded answer", [_rich_citation(1)]),
+        background_tasks=None,
+    )
+
+    assert "Claude Legal Counsel answer" in result["response"]
+    assert result["provider"] == "claude_legal_counsel"
+    assert result["strategy"] == "hybrid_hash_claude_legal_counsel"
+    assert "disclaimer" in result["response"].lower()
+
+
+@pytest.mark.asyncio
 async def test_hybrid_calls_gemini_and_returns_its_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

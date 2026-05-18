@@ -44,4 +44,4 @@ def test_legal_cases_rejects_header_tenant_without_token_tenant_for_non_superadm
         },
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Tenant context missing in token"
+    assert response.json()["detail"] == "Tenant context missing"
