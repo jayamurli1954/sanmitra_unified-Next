@@ -1,66 +1,67 @@
 {
-  "cleanUrls": true,
-  "trailingSlash": false,
-  "rewrites": [
+  "routes": [
     {
-      "source": "/",
-      "destination": "/legalmitra/index.html"
+      "src": "^/$",
+      "dest": "/legalmitra/index.html"
     },
     {
-      "source": "/index.html",
-      "destination": "/legalmitra/index.html"
+      "src": "^/index\\.html$",
+      "dest": "/legalmitra/index.html"
     },
     {
-      "source": "/about.html",
-      "destination": "/legalmitra/about.html"
+      "src": "^/about\\.html$",
+      "dest": "/legalmitra/about.html"
     },
     {
-      "source": "/article.html",
-      "destination": "/legalmitra/article.html"
+      "src": "^/article\\.html$",
+      "dest": "/legalmitra/article.html"
     },
     {
-      "source": "/chat.html",
-      "destination": "/legalmitra/chat.html"
+      "src": "^/chat\\.html$",
+      "dest": "/legalmitra/chat.html"
     },
     {
-      "source": "/contact.html",
-      "destination": "/legalmitra/contact.html"
+      "src": "^/contact\\.html$",
+      "dest": "/legalmitra/contact.html"
     },
     {
-      "source": "/faq.html",
-      "destination": "/legalmitra/faq.html"
+      "src": "^/faq\\.html$",
+      "dest": "/legalmitra/faq.html"
     },
     {
-      "source": "/insights.html",
-      "destination": "/legalmitra/insights.html"
+      "src": "^/insights\\.html$",
+      "dest": "/legalmitra/insights.html"
     },
     {
-      "source": "/login.html",
-      "destination": "/legalmitra/login.html"
+      "src": "^/login\\.html$",
+      "dest": "/legalmitra/login.html"
     },
     {
-      "source": "/pricing.html",
-      "destination": "/legalmitra/pricing.html"
+      "src": "^/pricing\\.html$",
+      "dest": "/legalmitra/pricing.html"
     },
     {
-      "source": "/templates.html",
-      "destination": "/legalmitra/templates.html"
+      "src": "^/templates\\.html$",
+      "dest": "/legalmitra/templates.html"
     },
     {
-      "source": "/tracker.html",
-      "destination": "/legalmitra/tracker.html"
+      "src": "^/tracker\\.html$",
+      "dest": "/legalmitra/tracker.html"
     },
     {
-      "source": "/legal/privacy.html",
-      "destination": "/legalmitra/legal/privacy.html"
+      "src": "^/legal/privacy\\.html$",
+      "dest": "/legalmitra/legal/privacy.html"
     },
     {
-      "source": "/legal/terms.html",
-      "destination": "/legalmitra/legal/terms.html"
+      "src": "^/legal/terms\\.html$",
+      "dest": "/legalmitra/legal/terms.html"
     },
     {
-      "source": "/manifest.webmanifest",
-      "destination": "/legalmitra/manifest.webmanifest"
+      "src": "^/manifest\\.webmanifest$",
+      "dest": "/legalmitra/manifest.webmanifest"
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
