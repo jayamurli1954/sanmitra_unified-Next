@@ -1,10 +1,11 @@
-const CACHE_NAME = "sanmitra-frontends-v10";
+const CACHE_NAME = "sanmitra-frontends-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./shared/app-shell.css",
   "./shared/api-client.js",
   "./shared/pwa-shell.js",
+  "./config.js",
   "./mitrabooks-erp/",
   "./mitrabooks-erp/index.html",
   "./mitrabooks-erp/app.js",

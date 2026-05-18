@@ -1,24 +1,44 @@
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
 const API_BASE_STORAGE_KEY = "sanmitra_frontend_api_base_url";
 const ACCESS_TOKEN_STORAGE_KEY = "sanmitra_frontend_access_token";
 const REQUEST_TIMEOUT_MS = 5000;
+
+function normalizeApiBaseUrl(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function isLocalFrontendHost() {
+  const host = String(window.location.hostname || "").toLowerCase();
+  return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function getRuntimeApiBaseUrl() {
+  const globalValue = normalizeApiBaseUrl(window.SANMITRA_API_BASE_URL);
+  if (globalValue) return globalValue;
+
+  const metaValue = normalizeApiBaseUrl(document.querySelector("meta[name='sanmitra-api-base-url']")?.content);
+  if (metaValue) return metaValue;
+
+  if (isLocalFrontendHost()) return LOCAL_API_BASE_URL;
+  return normalizeApiBaseUrl(window.location.origin) || LOCAL_API_BASE_URL;
+}
 
 export function getConfiguredApiBaseUrl() {
   const params = new URLSearchParams(window.location.search);
   const queryApi = String(params.get("api") || "").trim();
   if (queryApi) {
-    localStorage.setItem(API_BASE_STORAGE_KEY, queryApi.replace(/\/+$/, ""));
-    return queryApi.replace(/\/+$/, "");
+    localStorage.setItem(API_BASE_STORAGE_KEY, normalizeApiBaseUrl(queryApi));
+    return normalizeApiBaseUrl(queryApi);
   }
 
-  return String(localStorage.getItem(API_BASE_STORAGE_KEY) || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, "");
+  return normalizeApiBaseUrl(localStorage.getItem(API_BASE_STORAGE_KEY) || getRuntimeApiBaseUrl());
 }
 
 export function setConfiguredApiBaseUrl(value) {
-  const normalized = String(value || "").trim().replace(/\/+$/, "");
+  const normalized = normalizeApiBaseUrl(value);
   if (!normalized) {
     localStorage.removeItem(API_BASE_STORAGE_KEY);
-    return DEFAULT_API_BASE_URL;
+    return getRuntimeApiBaseUrl();
   }
   localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
   return normalized;
