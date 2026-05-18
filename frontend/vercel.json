@@ -1,0 +1,66 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/legalmitra/index.html"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/legalmitra/index.html"
+    },
+    {
+      "source": "/about.html",
+      "destination": "/legalmitra/about.html"
+    },
+    {
+      "source": "/article.html",
+      "destination": "/legalmitra/article.html"
+    },
+    {
+      "source": "/chat.html",
+      "destination": "/legalmitra/chat.html"
+    },
+    {
+      "source": "/contact.html",
+      "destination": "/legalmitra/contact.html"
+    },
+    {
+      "source": "/faq.html",
+      "destination": "/legalmitra/faq.html"
+    },
+    {
+      "source": "/insights.html",
+      "destination": "/legalmitra/insights.html"
+    },
+    {
+      "source": "/login.html",
+      "destination": "/legalmitra/login.html"
+    },
+    {
+      "source": "/pricing.html",
+      "destination": "/legalmitra/pricing.html"
+    },
+    {
+      "source": "/templates.html",
+      "destination": "/legalmitra/templates.html"
+    },
+    {
+      "source": "/tracker.html",
+      "destination": "/legalmitra/tracker.html"
+    },
+    {
+      "source": "/legal/privacy.html",
+      "destination": "/legalmitra/legal/privacy.html"
+    },
+    {
+      "source": "/legal/terms.html",
+      "destination": "/legalmitra/legal/terms.html"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/legalmitra/manifest.webmanifest"
+    }
+  ]
+}
