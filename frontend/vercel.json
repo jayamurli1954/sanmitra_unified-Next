@@ -62,7 +62,7 @@
     },
     {
       "src": "^/api/(.*)$",
-      "dest": "https://sanmitra-backend-staging-sg.onrender.com/api/$1"
+      "dest": "https://sanmitra-unified-next-staging-sg.onrender.com/api/$1"
     },
     {
       "src": "^/app\\.js$",
