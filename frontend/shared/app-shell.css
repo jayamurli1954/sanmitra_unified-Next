@@ -2083,6 +2083,85 @@ button.danger {
   line-height: 1.55;
 }
 
+.legal-live-scan {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.legal-live-scan article {
+  min-width: 0;
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.legal-live-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.legal-live-head span {
+  color: #e7c77c;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.legal-live-head button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(197, 160, 89, 0.45);
+  background: rgba(197, 160, 89, 0.1);
+  color: #e7c77c;
+  font-weight: 850;
+}
+
+.legal-live-list {
+  display: grid;
+  gap: 12px;
+}
+
+.legal-live-item {
+  display: grid;
+  gap: 7px;
+  min-height: 116px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(8, 13, 25, 0.58);
+  color: #f8fafc;
+  text-decoration: none;
+}
+
+.legal-live-item:hover {
+  border-color: rgba(197, 160, 89, 0.58);
+  background: rgba(197, 160, 89, 0.08);
+}
+
+.legal-live-item span {
+  color: #e7c77c;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.legal-live-item strong {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.legal-live-item small,
+.legal-live-empty {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
 .legal-feature-grid h3 {
   margin: 0;
   color: #fff;
@@ -4513,6 +4592,7 @@ pre {
   .legal-e2e-grid,
   .legal-workflows,
   .legal-intel-grid,
+  .legal-live-scan,
   .legal-feature-grid,
   .legal-tool-grid,
   .legal-template-browser,

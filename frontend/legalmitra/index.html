@@ -125,29 +125,27 @@
           <div class="legal-section-heading">
             <span>Live legal intelligence</span>
             <h2>Recent judgments and official legal updates in one professional scan.</h2>
-            <p>Use this section to validate that the landing page supports daily legal discovery before moving into authenticated workflows.</p>
+            <p>Fresh public legal updates are grouped for quick scanning before you move into research, drafting, templates, or tracker workflows.</p>
           </div>
-          <div class="legal-intel-grid">
-            <button type="button" data-query="Section 138 NI Act territorial jurisdiction and cheque dishonour complaint procedure">
-              <span>Cheque dishonour</span>
-              <strong>Section 138 NI Act jurisdiction and limitation checks.</strong>
-              <small>Useful for complaint drafting, proof of notice, and forum selection.</small>
-            </button>
-            <button type="button" data-query="FIR quashing under BNSS and current Indian criminal procedure">
-              <span>Criminal procedure</span>
-              <strong>FIR quashing after the BNSS transition.</strong>
-              <small>Map older CrPC references to current provisions before drafting.</small>
-            </button>
-            <button type="button" data-query="Arbitration Section 9 interim relief Commercial Court India">
-              <span>Commercial disputes</span>
-              <strong>Section 9 interim relief and arbitration clause risk.</strong>
-              <small>Check seat, emergency relief, maintainability, and enforcement.</small>
-            </button>
-            <button type="button" data-query="DPDP Act compliance checklist for SaaS platform India">
-              <span>Technology law</span>
-              <strong>DPDP and IT compliance action planning.</strong>
-              <small>Convert legal updates into policy, consent, retention, and incident tasks.</small>
-            </button>
+          <div class="legal-live-scan">
+            <article>
+              <div class="legal-live-head">
+                <span>Recent Judgments</span>
+                <button type="button" id="refresh-major-cases">Refresh</button>
+              </div>
+              <div class="legal-live-list" id="major-cases-list">
+                <p class="legal-live-empty">Loading recent judgments...</p>
+              </div>
+            </article>
+            <article>
+              <div class="legal-live-head">
+                <span>Official Legal Updates</span>
+                <button type="button" id="refresh-legal-news">Refresh</button>
+              </div>
+              <div class="legal-live-list" id="legal-news-list">
+                <p class="legal-live-empty">Loading legal updates...</p>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -452,6 +450,6 @@
     </div>
     <script src="../config.js?v=legalmitra-ai-v41"></script>
     <script type="module" src="../shared/pwa-shell.js?v=legalmitra-ai-v33"></script>
-    <script type="module" src="./app.js?v=legalmitra-ai-v33"></script>
+    <script type="module" src="./app.js?v=legalmitra-ai-v34"></script>
   </body>
 </html>

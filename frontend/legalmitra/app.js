@@ -56,7 +56,11 @@ const templateList = document.getElementById("template-list");
 const templateDetail = document.getElementById("template-detail");
 const templateLibraryStatus = document.getElementById("template-library-status");
 const reloadTemplatesButton = document.getElementById("reload-templates");
-  const legalToolPanel = document.getElementById("legal-tool-panel");
+const legalToolPanel = document.getElementById("legal-tool-panel");
+const majorCasesList = document.getElementById("major-cases-list");
+const legalNewsList = document.getElementById("legal-news-list");
+const refreshMajorCasesButton = document.getElementById("refresh-major-cases");
+const refreshLegalNewsButton = document.getElementById("refresh-legal-news");
 let lastAnswerText = "";
 let lastAnswerMeta = null;
 let templateStrategyById = new Map();
@@ -825,6 +829,60 @@ function renderLandingContent(payload) {
   }
 }
 
+function renderLiveItems(target, items, emptyText) {
+  if (!target) return;
+  if (!Array.isArray(items) || !items.length) {
+    target.innerHTML = `<p class="legal-live-empty">${escapeHtml(emptyText)}</p>`;
+    return;
+  }
+
+  target.innerHTML = items.slice(0, 5).map((item) => {
+    const title = String(item.title || "Legal update").trim();
+    const meta = [item.court || item.source, item.date || item.year].filter(Boolean).join(" - ");
+    const summary = String(item.summary || "Open LegalMitra AI to research this update with source checks.").trim();
+    const query = String(item.query || title).trim();
+    const href = item.url ? String(item.url) : `./login.html?return=${encodeURIComponent(`./chat.html?q=${encodeURIComponent(query)}`)}`;
+    const targetAttr = item.url ? ' target="_blank" rel="noopener noreferrer"' : "";
+    return `
+      <a class="legal-live-item" href="${escapeHtml(href)}"${targetAttr}>
+        <span>${escapeHtml(meta || "LegalMitra scan")}</span>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(summary)}</small>
+      </a>
+    `;
+  }).join("");
+}
+
+async function loadLiveLegalIntelligence(kind = "all") {
+  const tasks = [];
+  if ((kind === "all" || kind === "cases") && majorCasesList) {
+    majorCasesList.innerHTML = '<p class="legal-live-empty">Refreshing recent judgments...</p>';
+    tasks.push(
+      apiRequest(APP_KEY, "/api/v1/public-major-cases", { method: "GET", timeoutMs: 15000 }).then((result) => {
+        renderLiveItems(
+          majorCasesList,
+          result.ok ? result.payload?.cases : [],
+          result.ok ? "No recent judgments available right now." : `Could not load recent judgments: HTTP ${result.status}`,
+        );
+      })
+    );
+  }
+  if ((kind === "all" || kind === "news") && legalNewsList) {
+    legalNewsList.innerHTML = '<p class="legal-live-empty">Refreshing official legal updates...</p>';
+    tasks.push(
+      apiRequest(APP_KEY, "/api/v1/public-legal-news", { method: "GET", timeoutMs: 15000 }).then((result) => {
+        renderLiveItems(
+          legalNewsList,
+          result.ok ? result.payload?.news : [],
+          result.ok ? "No official legal updates available right now." : `Could not load legal updates: HTTP ${result.status}`,
+        );
+      })
+    );
+  }
+
+  await Promise.allSettled(tasks);
+}
+
 function renderTemplateDetail(template) {
   if (!templateDetail || !template) return;
   const strategy = templateStrategyById.get(template.template_id);
@@ -1441,6 +1499,8 @@ templateDetail?.addEventListener("click", (event) => {
 });
 
 reloadTemplatesButton?.addEventListener("click", loadTemplateLibrary);
+refreshMajorCasesButton?.addEventListener("click", () => loadLiveLegalIntelligence("cases"));
+refreshLegalNewsButton?.addEventListener("click", () => loadLiveLegalIntelligence("news"));
 
 document.getElementById("insights-list")?.addEventListener("click", (event) => {
   const target = event.target instanceof HTMLElement ? event.target.closest("[data-article-id]") : null;
@@ -1587,6 +1647,7 @@ runChecks();
 updateUsageCounter();
 loadPersonalHistory();
 loadLandingContent();
+loadLiveLegalIntelligence();
 loadTemplateLibrary();
 if (IS_CHAT_PAGE && chatParams.get("auto") === "1" && getAccessToken()) {
   askLegalMitra();

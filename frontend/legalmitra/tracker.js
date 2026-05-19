@@ -175,7 +175,7 @@ function saveCurrentDetail() {
   });
 
   localStorage.setItem(storageKey, JSON.stringify(drafts));
-  setSaveStatus("Saved in this browser for local E2E testing.");
+  setSaveStatus("Saved in this browser for this signed-in workspace preview. Backend sync will be enabled in the tracker persistence phase.");
 }
 
 function resetCurrentDetail() {
