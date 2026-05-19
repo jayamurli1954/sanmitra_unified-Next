@@ -34,6 +34,21 @@ export function getConfiguredApiBaseUrl() {
   return normalizeApiBaseUrl(localStorage.getItem(API_BASE_STORAGE_KEY) || getRuntimeApiBaseUrl());
 }
 
+function buildApiUrl(baseUrl, path) {
+  const normalizedBase = normalizeApiBaseUrl(baseUrl);
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (normalizedBase === "/api" && normalizedPath.startsWith("/api/")) {
+    return normalizedPath;
+  }
+
+  if (normalizedBase.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${normalizedBase.slice(0, -4)}${normalizedPath}`;
+  }
+
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 export function setConfiguredApiBaseUrl(value) {
   const normalized = normalizeApiBaseUrl(value);
   if (!normalized) {
@@ -77,13 +92,13 @@ export function buildHeaders(appKey, extraHeaders = {}) {
 
 export async function apiRequest(appKey, path, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const requestUrl = buildApiUrl(baseUrl, path);
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
   try {
-    const response = await fetch(`${baseUrl}${normalizedPath}`, {
+    const response = await fetch(requestUrl, {
       ...fetchOptions,
       signal: fetchOptions.signal || controller.signal,
       headers: buildHeaders(appKey, fetchOptions.headers || {}),
