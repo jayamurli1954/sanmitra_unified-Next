@@ -31,7 +31,20 @@ export function getConfiguredApiBaseUrl() {
     return normalizeApiBaseUrl(queryApi);
   }
 
-  return normalizeApiBaseUrl(localStorage.getItem(API_BASE_STORAGE_KEY) || getRuntimeApiBaseUrl());
+  const runtimeApi = getRuntimeApiBaseUrl();
+  const storedApi = normalizeApiBaseUrl(localStorage.getItem(API_BASE_STORAGE_KEY));
+  if (!storedApi) {
+    return runtimeApi;
+  }
+
+  const isProductionProxy = !isLocalFrontendHost() && runtimeApi === "/api";
+  const isExternalOverride = /^https?:\/\//i.test(storedApi);
+  if (isProductionProxy && isExternalOverride) {
+    localStorage.removeItem(API_BASE_STORAGE_KEY);
+    return runtimeApi;
+  }
+
+  return storedApi;
 }
 
 function buildApiUrl(baseUrl, path) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "sanmitra-frontends-v11";
+const CACHE_NAME = "sanmitra-frontends-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -46,6 +46,10 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return;
+  }
+
   if (request.method !== "GET") {
     return;
   }
@@ -58,8 +62,10 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate" || ["document", "script", "style", "worker"].includes(request.destination)) {
     event.respondWith(
       fetch(request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
         return response;
       }).catch(() => caches.match(request))
     );
@@ -68,8 +74,10 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      }
       return response;
     }))
   );

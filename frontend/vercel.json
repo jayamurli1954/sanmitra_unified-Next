@@ -61,6 +61,10 @@
       "dest": "/legalmitra/manifest.webmanifest"
     },
     {
+      "src": "^/api/health$",
+      "dest": "https://sanmitra-unified-next-staging-sg.onrender.com/health"
+    },
+    {
       "src": "^/api/(.*)$",
       "dest": "https://sanmitra-unified-next-staging-sg.onrender.com/api/$1"
     },
