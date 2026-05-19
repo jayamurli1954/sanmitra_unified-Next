@@ -61,6 +61,34 @@
       "dest": "/legalmitra/manifest.webmanifest"
     },
     {
+      "src": "^/app\\.js$",
+      "dest": "/legalmitra/app.js"
+    },
+    {
+      "src": "^/faq\\.js$",
+      "dest": "/legalmitra/faq.js"
+    },
+    {
+      "src": "^/insights\\.js$",
+      "dest": "/legalmitra/insights.js"
+    },
+    {
+      "src": "^/insights-data\\.js$",
+      "dest": "/legalmitra/insights-data.js"
+    },
+    {
+      "src": "^/login\\.js$",
+      "dest": "/legalmitra/login.js"
+    },
+    {
+      "src": "^/templates\\.js$",
+      "dest": "/legalmitra/templates.js"
+    },
+    {
+      "src": "^/tracker\\.js$",
+      "dest": "/legalmitra/tracker.js"
+    },
+    {
       "handle": "filesystem"
     }
   ]
