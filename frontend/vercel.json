@@ -61,6 +61,10 @@
       "dest": "/legalmitra/manifest.webmanifest"
     },
     {
+      "src": "^/api/(.*)$",
+      "dest": "https://sanmitra-backend-staging-sg.onrender.com/api/$1"
+    },
+    {
       "src": "^/app\\.js$",
       "dest": "/legalmitra/app.js"
     },
