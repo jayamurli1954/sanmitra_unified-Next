@@ -72,7 +72,19 @@ const trackerProfiles = {
 
 let currentRole = "advocate";
 let currentCard = "case-master";
+let editingRowIndex = null;
 const storageKey = "legalmitra-tracker-drafts";
+const rowStorageKey = "legalmitra-tracker-work-items";
+const registerCardOrder = ["case-master", "clients", "fee-ledger"];
+
+const rowEditor = document.getElementById("tracker-row-editor");
+const rowEditorKicker = document.getElementById("tracker-row-editor-kicker");
+const rowEditorTitle = document.getElementById("tracker-row-editor-title");
+const rowDateInput = document.getElementById("tracker-row-date");
+const rowReferenceInput = document.getElementById("tracker-row-reference");
+const rowAuthorityInput = document.getElementById("tracker-row-authority");
+const rowPurposeInput = document.getElementById("tracker-row-purpose");
+const rowStatusInput = document.getElementById("tracker-row-status");
 
 function escapeHtml(value) {
   return String(value || "")
@@ -83,36 +95,98 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function renderRows(rows) {
+function normalizeRow(row) {
+  if (Array.isArray(row)) {
+    return {
+      date: row[0] || "",
+      reference: row[1] || "",
+      authority: row[2] || "",
+      purpose: row[3] || "",
+      status: row[4] || "pending",
+    };
+  }
+  return {
+    date: String(row?.date || ""),
+    reference: String(row?.reference || ""),
+    authority: String(row?.authority || ""),
+    purpose: String(row?.purpose || ""),
+    status: String(row?.status || "pending").toLowerCase(),
+  };
+}
+
+function getStoredRows() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(rowStorageKey) || "{}");
+    return stored && typeof stored === "object" ? stored : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredRows(rowsByRole) {
+  localStorage.setItem(rowStorageKey, JSON.stringify(rowsByRole));
+}
+
+function getRoleRows(role = currentRole) {
+  const stored = getStoredRows();
+  const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
+  if (savedRows.length) return savedRows;
+  return (trackerProfiles[role]?.rows || trackerProfiles.advocate.rows).map(normalizeRow);
+}
+
+function persistRoleRows(rows, role = currentRole) {
+  const stored = getStoredRows();
+  stored[role] = rows.map(normalizeRow);
+  saveStoredRows(stored);
+}
+
+function renderRows(rows = getRoleRows()) {
   const target = document.getElementById("tracker-rows");
   if (!target) return;
-  target.innerHTML = rows.map(([date, reference, authority, purpose, status]) => `
+  const normalizedRows = rows.map(normalizeRow);
+  target.innerHTML = normalizedRows.map((row, index) => `
     <tr>
-      <td>${escapeHtml(date)}</td>
-      <td>${escapeHtml(reference)}</td>
-      <td>${escapeHtml(authority)}</td>
-      <td>${escapeHtml(purpose)}</td>
-      <td><span class="status ${escapeHtml(status)}">${escapeHtml(status)}</span></td>
-      <td><button type="button" aria-label="Open action menu">...</button></td>
+      <td>${escapeHtml(row.date)}</td>
+      <td>${escapeHtml(row.reference)}</td>
+      <td>${escapeHtml(row.authority)}</td>
+      <td>${escapeHtml(row.purpose)}</td>
+      <td><span class="status ${escapeHtml(row.status)}">${escapeHtml(row.status)}</span></td>
+      <td>
+        <div class="legal-diary-row-actions">
+          <button type="button" data-row-action="edit" data-row-index="${index}" aria-label="Edit work item">Edit</button>
+          <button type="button" data-row-action="delete" data-row-index="${index}" aria-label="Delete work item">Delete</button>
+        </div>
+      </td>
     </tr>
   `).join("");
+}
+
+function updateMetricsForRows() {
+  const profile = trackerProfiles[currentRole] || trackerProfiles.advocate;
+  const rows = getRoleRows();
+  const urgentCount = rows.filter((row) => row.status === "urgent").length;
+  const pendingCount = rows.filter((row) => row.status !== "done").length;
+  const metrics = [...profile.metrics];
+  metrics[0] = [metrics[0][0], String(urgentCount)];
+  metrics[1] = [metrics[1][0], String(pendingCount)];
+  metrics.forEach(([label, value], index) => {
+    document.getElementById(`metric-label-${index + 1}`).textContent = label;
+    document.getElementById(`metric-value-${index + 1}`).textContent = value;
+  });
 }
 
 function setRole(role) {
   const profile = trackerProfiles[role] || trackerProfiles.advocate;
   currentRole = role;
 
-  profile.metrics.forEach(([label, value], index) => {
-    document.getElementById(`metric-label-${index + 1}`).textContent = label;
-    document.getElementById(`metric-value-${index + 1}`).textContent = value;
-  });
+  updateMetricsForRows();
 
   profile.registers.forEach(([title, copy], index) => {
     document.getElementById(`register-title-${index + 1}`).textContent = title;
     document.getElementById(`register-copy-${index + 1}`).textContent = copy;
   });
 
-  renderRows(profile.rows);
+  renderRows(getRoleRows(role));
   renderDetail(currentCard);
 
   document.querySelectorAll("[data-tracker-role]").forEach((button) => {
@@ -122,10 +196,11 @@ function setRole(role) {
   });
 }
 
-function renderDetail(card) {
+function renderDetail(card, options = {}) {
+  const { scroll = true, syncTab = true } = options;
   currentCard = card || "case-master";
   const profile = trackerProfiles[currentRole] || trackerProfiles.advocate;
-  const cardIndex = ["case-master", "clients", "fee-ledger"].indexOf(currentCard);
+  const cardIndex = registerCardOrder.indexOf(currentCard);
   const safeIndex = cardIndex >= 0 ? cardIndex : 0;
   const [title, copy] = profile.registers[safeIndex];
   const labels = profile.details[currentCard] || profile.details["case-master"];
@@ -144,8 +219,21 @@ function renderDetail(card) {
   document.querySelectorAll("[data-tracker-card]").forEach((item) => {
     item.classList.toggle("active", item.getAttribute("data-tracker-card") === currentCard);
   });
+  if (syncTab) {
+    updateActiveTab(currentCard);
+  }
 
-  document.getElementById("tracker-detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (scroll) {
+    document.getElementById("tracker-detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function updateActiveTab(tab) {
+  document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
+    const active = button.getAttribute("data-tracker-tab") === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 }
 
 function getDrafts() {
@@ -178,13 +266,86 @@ function saveCurrentDetail() {
   setSaveStatus("Saved in this browser for this signed-in workspace preview. Backend sync will be enabled in the tracker persistence phase.");
 }
 
+function setRowEditorVisible(visible) {
+  if (!rowEditor) return;
+  rowEditor.hidden = !visible;
+  if (visible) {
+    rowEditor.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function openRowEditor(rowIndex = null) {
+  const rows = getRoleRows();
+  const row = rowIndex === null ? null : rows[rowIndex];
+  editingRowIndex = rowIndex;
+  if (rowEditorKicker) rowEditorKicker.textContent = row ? "Edit work item" : "New work item";
+  if (rowEditorTitle) rowEditorTitle.textContent = row ? "Update compliance work" : "Log compliance work";
+  if (rowDateInput) rowDateInput.value = row?.date || todayIso();
+  if (rowReferenceInput) rowReferenceInput.value = row?.reference || "";
+  if (rowAuthorityInput) rowAuthorityInput.value = row?.authority || "";
+  if (rowPurposeInput) rowPurposeInput.value = row?.purpose || "";
+  if (rowStatusInput) rowStatusInput.value = row?.status || "pending";
+  setRowEditorVisible(true);
+  rowReferenceInput?.focus();
+}
+
+function closeRowEditor() {
+  editingRowIndex = null;
+  rowEditor?.reset();
+  setRowEditorVisible(false);
+}
+
+function saveRowFromEditor(event) {
+  event.preventDefault();
+  const isEditing = editingRowIndex !== null;
+  const row = normalizeRow({
+    date: rowDateInput?.value || todayIso(),
+    reference: rowReferenceInput?.value,
+    authority: rowAuthorityInput?.value,
+    purpose: rowPurposeInput?.value,
+    status: rowStatusInput?.value || "pending",
+  });
+
+  if (!row.reference || !row.authority || !row.purpose) {
+    setSaveStatus("Please enter reference, authority/court, and purpose before saving the work item.");
+    return;
+  }
+
+  const rows = getRoleRows();
+  if (!isEditing) {
+    rows.unshift(row);
+  } else {
+    rows[editingRowIndex] = row;
+  }
+  persistRoleRows(rows);
+  renderRows(rows);
+  updateMetricsForRows();
+  closeRowEditor();
+  setSaveStatus(isEditing ? "Work item updated." : "Work item saved.");
+}
+
+function deleteRow(rowIndex) {
+  const rows = getRoleRows();
+  if (!rows[rowIndex]) return;
+  rows.splice(rowIndex, 1);
+  persistRoleRows(rows);
+  renderRows(rows);
+  updateMetricsForRows();
+  closeRowEditor();
+  setSaveStatus("Work item deleted.");
+}
+
 function resetCurrentDetail() {
   const drafts = getDrafts();
   if (drafts[currentRole]) {
     delete drafts[currentRole][currentCard];
   }
   localStorage.setItem(storageKey, JSON.stringify(drafts));
-  renderDetail(currentCard);
+  renderDetail(currentCard, { scroll: false, syncTab: false });
   setSaveStatus("Reset to sample fields.");
 }
 
@@ -212,5 +373,42 @@ document.querySelectorAll("[data-tracker-card]").forEach((card) => {
 
 document.getElementById("tracker-save")?.addEventListener("click", saveCurrentDetail);
 document.getElementById("tracker-reset")?.addEventListener("click", resetCurrentDetail);
+document.getElementById("tracker-add-row")?.addEventListener("click", () => openRowEditor(null));
+document.getElementById("tracker-row-cancel")?.addEventListener("click", closeRowEditor);
+rowEditor?.addEventListener("submit", saveRowFromEditor);
+document.getElementById("tracker-rows")?.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target.closest("[data-row-action]") : null;
+  if (!(target instanceof HTMLElement)) return;
+  const index = Number(target.getAttribute("data-row-index"));
+  if (!Number.isInteger(index)) return;
+  const action = target.getAttribute("data-row-action");
+  if (action === "edit") {
+    openRowEditor(index);
+  } else if (action === "delete") {
+    deleteRow(index);
+  }
+});
+
+document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const tab = button.getAttribute("data-tracker-tab") || "daily-board";
+    updateActiveTab(tab);
+    if (tab === "daily-board") {
+      document.getElementById("daily-board")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    renderDetail(tab);
+  });
+});
 
 setRole("advocate");
+updateActiveTab("daily-board");
+const initialTab = String(window.location.hash || "").replace("#", "");
+if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {
+  if (initialTab === "daily-board") {
+    updateActiveTab("daily-board");
+    document.getElementById("daily-board")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    renderDetail(initialTab);
+  }
+}

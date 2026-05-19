@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Professional Compliance Tracker | LegalMitra</title>
     <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v31">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v32">
   </head>
   <body class="legal-editorial-page">
     <header class="legal-navbar">
@@ -50,10 +50,10 @@
       </section>
 
       <section class="legal-diary-tabs" aria-label="Tracker sections">
-        <a class="active" href="#daily-board">Daily Board</a>
-        <a href="#case-master">Case Master</a>
-        <a href="#clients">Clients</a>
-        <a href="#fee-ledger">Fee Ledger</a>
+        <button class="active" type="button" data-tracker-tab="daily-board">Daily Board</button>
+        <button type="button" data-tracker-tab="case-master">Case Master</button>
+        <button type="button" data-tracker-tab="clients">Clients</button>
+        <button type="button" data-tracker-tab="fee-ledger">Fee Ledger</button>
       </section>
 
       <section class="legal-diary-panel" id="daily-board">
@@ -62,7 +62,7 @@
             <span>Daily Board</span>
             <h2>Upcoming Deadlines and Hearings</h2>
           </div>
-          <button type="button">+ Log Engagement</button>
+          <button type="button" id="tracker-add-row">+ Log Engagement</button>
         </div>
         <div class="legal-diary-table-wrap">
           <table class="legal-diary-table">
@@ -79,6 +79,41 @@
             <tbody id="tracker-rows"></tbody>
           </table>
         </div>
+        <form class="legal-diary-row-editor" id="tracker-row-editor" hidden>
+          <div class="legal-diary-row-editor-head">
+            <span id="tracker-row-editor-kicker">New work item</span>
+            <strong id="tracker-row-editor-title">Log compliance work</strong>
+          </div>
+          <label>
+            <span>Date</span>
+            <input id="tracker-row-date" type="date" required>
+          </label>
+          <label>
+            <span>Reference / Case No</span>
+            <input id="tracker-row-reference" required placeholder="OS/219-2024-25">
+          </label>
+          <label>
+            <span>Authority / Court</span>
+            <input id="tracker-row-authority" required placeholder="High Court / GST Portal / MCA">
+          </label>
+          <label>
+            <span>Purpose</span>
+            <input id="tracker-row-purpose" required placeholder="Notice reply filing">
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="tracker-row-status">
+              <option value="urgent">Urgent</option>
+              <option value="review">Review</option>
+              <option value="pending">Pending</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+          <div class="legal-diary-row-editor-actions">
+            <button type="submit" id="tracker-row-save">Save work item</button>
+            <button type="button" id="tracker-row-cancel">Cancel</button>
+          </div>
+        </form>
       </section>
 
       <section class="legal-diary-grid">
@@ -113,6 +148,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-ai-v32"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-ai-v33"></script>
   </body>
 </html>

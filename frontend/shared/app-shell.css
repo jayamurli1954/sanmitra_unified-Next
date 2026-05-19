@@ -2607,16 +2607,19 @@ button.danger {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.legal-diary-tabs a {
+.legal-diary-tabs button {
   padding: 0 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: #cbd5e1;
-  text-decoration: none;
   font-weight: 850;
 }
 
-.legal-diary-tabs a.active {
+.legal-diary-tabs button.active {
   color: #fff;
-  border-bottom: 2px solid #2563eb;
+  border-bottom-color: #2563eb;
 }
 
 .legal-diary-panel,
@@ -2703,6 +2706,97 @@ button.danger {
 .legal-diary-table .pending {
   color: #c4b5fd;
   border: 1px solid #8b5cf6;
+}
+
+.legal-diary-table .done {
+  color: #bbf7d0;
+  border: 1px solid #22c55e;
+}
+
+.legal-diary-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.legal-diary-row-actions button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(37, 99, 235, 0.18);
+}
+
+.legal-diary-row-actions button[data-row-action="delete"] {
+  background: rgba(185, 28, 28, 0.18);
+  color: #fecaca;
+}
+
+.legal-diary-row-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid rgba(231, 199, 124, 0.28);
+  border-radius: 14px;
+  background: rgba(8, 13, 25, 0.72);
+}
+
+.legal-diary-row-editor[hidden] {
+  display: none;
+}
+
+.legal-diary-row-editor-head {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+
+.legal-diary-row-editor-head span,
+.legal-diary-row-editor label span {
+  color: #e7c77c;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.legal-diary-row-editor-head strong {
+  color: #fff;
+  font-size: 22px;
+}
+
+.legal-diary-row-editor label {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-diary-row-editor input,
+.legal-diary-row-editor select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 750;
+}
+
+.legal-diary-row-editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.legal-diary-row-editor-actions button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid rgba(197, 160, 89, 0.42);
+  border-radius: 9px;
+  background: rgba(197, 160, 89, 0.15);
+  color: #e7c77c;
+  font-weight: 850;
 }
 
 .legal-diary-grid {
@@ -4619,7 +4713,8 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .legal-diary-detail-list {
+  .legal-diary-detail-list,
+  .legal-diary-row-editor {
     grid-template-columns: 1fr;
   }
 
