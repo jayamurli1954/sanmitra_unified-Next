@@ -1025,7 +1025,7 @@ function renderRecentTenantsTable(rows) {
 
 function formatCurrency(value) {
   const amount = Number(value || 0);
-  return `Rs. ${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  return `Rs. ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatCountLabel(count, singular, plural = `${singular}s`) {
