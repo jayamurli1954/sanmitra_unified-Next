@@ -171,6 +171,9 @@ let currentExperience = "mitrabooks";
 let lastMandirReceipt = null;
 let activeReceiptPreviewObjectUrl = "";
 let activeMandirWorkspace = "overview";
+let lastMandirPaymentAccounts = { cash_accounts: [], bank_accounts: [] };
+let lastMandirAccounts = [];
+let lastMandirFormResult = null;
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -1243,6 +1246,7 @@ function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
   const receipt = payload.receipt || null;
+  const formResult = payload.form_result || null;
   const recentReceipts = Array.isArray(payload.recent_receipts) ? payload.recent_receipts : [];
   const recentDonations = Array.isArray(payload.recent_donations) ? payload.recent_donations : [];
   const recentSevaBookings = Array.isArray(payload.recent_seva_bookings) ? payload.recent_seva_bookings : [];
@@ -1278,6 +1282,11 @@ function renderMandirDashboard(payload = {}) {
         <span class="pill ok">mandirmitra</span>
       </div>
       ${renderMandirWorkspaceTabs(activeMandirWorkspace)}
+      ${(showOverview || showDonations || showSevas || showAccounting) ? renderMandirCreateForms({
+        payment_accounts: payload.payment_accounts,
+        accounts: payload.accounts,
+        form_result: formResult,
+      }) : ""}
       ${(showOverview || activeMandirWorkspace === "donations") ? `
         <h4>Donations</h4>
         <div class="metric-grid three">${renderStatCards(donationCards)}</div>
@@ -1613,13 +1622,23 @@ async function loadMandirDashboard() {
   const paymentExceptions = await apiRequest("mandirmitra", mandirPublicPaymentExceptionsPath(), { method: "GET" });
   const donations = await apiRequest("mandirmitra", mandirListPath("donations"), { method: "GET" });
   const sevaBookings = await apiRequest("mandirmitra", mandirListPath("sevas"), { method: "GET" });
+  const paymentAccounts = await apiRequest("mandirmitra", "/api/v1/donations/payment-accounts", { method: "GET" });
+  const accounts = await apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
+  if (paymentAccounts.ok) {
+    lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
+  }
+  if (accounts.ok && Array.isArray(accounts.payload)) {
+    lastMandirAccounts = accounts.payload;
+  }
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
     mandir_pending_public_payments: pendingPayments,
     mandir_payment_exceptions: paymentExceptions,
     mandir_recent_donations: donations,
     mandir_recent_seva_bookings: sevaBookings,
+    mandir_payment_accounts: paymentAccounts,
+    mandir_accounts: accounts,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -1634,7 +1653,10 @@ async function loadMandirDashboard() {
       ),
       recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
       recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
+      payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
+      accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
+      form_result: lastMandirFormResult,
     });
     return;
   }
@@ -1661,6 +1683,173 @@ function renderBankAccountOptions(accounts = []) {
     options.push(`<option value="${escapeHtml(accountId)}">${escapeHtml(`${accountCode}${accountName}`)}</option>`);
   });
   return options.join("");
+}
+
+function mandirAccountOptionValue(account = {}) {
+  return account.account_id || account.id || account.account_code || "";
+}
+
+function mandirAccountOptionLabel(account = {}) {
+  const code = account.account_code ? `${account.account_code} - ` : "";
+  return `${code}${account.account_name || account.name || "Account"}`;
+}
+
+function renderMandirAccountOptions(accounts = [], placeholder = "Select account") {
+  const options = [`<option value="">${escapeHtml(placeholder)}</option>`];
+  accounts.forEach((account) => {
+    const value = mandirAccountOptionValue(account);
+    if (!value) {
+      return;
+    }
+    options.push(`<option value="${escapeHtml(value)}">${escapeHtml(mandirAccountOptionLabel(account))}</option>`);
+  });
+  return options.join("");
+}
+
+function mandirPaymentAccountOptions(paymentAccounts = lastMandirPaymentAccounts) {
+  return [
+    ...(Array.isArray(paymentAccounts.cash_accounts) ? paymentAccounts.cash_accounts : []),
+    ...(Array.isArray(paymentAccounts.bank_accounts) ? paymentAccounts.bank_accounts : []),
+  ];
+}
+
+function mandirExpenseAccountOptions(accounts = lastMandirAccounts) {
+  return accounts.filter((account) => {
+    const type = String(account.account_type || "").toLowerCase();
+    const name = String(account.account_name || account.name || "").toLowerCase();
+    return type === "expense" || name.includes("expense");
+  });
+}
+
+function renderMandirCreateForms(payload = {}) {
+  const paymentOptions = renderMandirAccountOptions(
+    mandirPaymentAccountOptions(payload.payment_accounts),
+    "Use default cash/bank"
+  );
+  const expenseOptions = renderMandirAccountOptions(
+    mandirExpenseAccountOptions(payload.accounts),
+    "Select expense account"
+  );
+  const today = todayIsoDate();
+  const result = payload.form_result || lastMandirFormResult;
+  return `
+    <div class="quick-entry-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Quick Entry</h4>
+          <p>Create test donations, seva bookings, and expenses without Postman.</p>
+        </div>
+        <span class="pill">local test entry</span>
+      </div>
+      ${result ? `
+        <div class="module-state ${result.ok ? "ok" : "warn"}">
+          <strong>${escapeHtml(result.title || (result.ok ? "Entry saved" : "Entry failed"))}</strong>
+          <span>${escapeHtml(result.detail || "")}</span>
+        </div>
+      ` : ""}
+      <div class="entry-form-grid">
+        <form class="entry-form" data-mandir-create-form="donation">
+          <h5>Donation</h5>
+          <label class="field">
+            <span>Devotee</span>
+            <input name="devotee_name" required maxlength="120" placeholder="Devotee name">
+          </label>
+          <label class="field">
+            <span>Phone</span>
+            <input name="devotee_phone" inputmode="numeric" maxlength="15" placeholder="Optional">
+          </label>
+          <label class="field">
+            <span>Amount</span>
+            <input name="amount" type="number" min="0.01" step="0.01" required placeholder="501">
+          </label>
+          <label class="field">
+            <span>Category</span>
+            <select name="category">
+              <option value="General Donation">General Donation</option>
+              <option value="Annadanam">Annadanam</option>
+              <option value="Construction Fund">Construction Fund</option>
+              <option value="Corpus Fund">Corpus Fund</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Payment mode</span>
+            <select name="payment_mode">
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Cash/bank account</span>
+            <select name="payment_account_id">${paymentOptions}</select>
+          </label>
+          <button type="submit">Create Donation</button>
+        </form>
+
+        <form class="entry-form" data-mandir-create-form="seva">
+          <h5>Seva Booking</h5>
+          <label class="field">
+            <span>Devotee</span>
+            <input name="devotee_name" required maxlength="120" placeholder="Devotee name">
+          </label>
+          <label class="field">
+            <span>Phone</span>
+            <input name="devotee_phone" inputmode="numeric" maxlength="15" placeholder="Optional">
+          </label>
+          <label class="field">
+            <span>Seva</span>
+            <input name="seva_name" required maxlength="160" placeholder="Archana">
+          </label>
+          <label class="field">
+            <span>Booking date</span>
+            <input name="booking_date" type="date" value="${escapeHtml(today)}" required>
+          </label>
+          <label class="field">
+            <span>Amount</span>
+            <input name="amount" type="number" min="0.01" step="0.01" required placeholder="301">
+          </label>
+          <label class="field">
+            <span>Payment mode</span>
+            <select name="payment_mode">
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Cash/bank account</span>
+            <select name="payment_account_id">${paymentOptions}</select>
+          </label>
+          <button type="submit">Create Seva Booking</button>
+        </form>
+
+        <form class="entry-form" data-mandir-create-form="expense">
+          <h5>Quick Expense</h5>
+          <label class="field">
+            <span>Narration</span>
+            <input name="narration" required maxlength="160" placeholder="Flowers and pooja material">
+          </label>
+          <label class="field">
+            <span>Entry date</span>
+            <input name="entry_date" type="date" value="${escapeHtml(today)}" required>
+          </label>
+          <label class="field">
+            <span>Amount</span>
+            <input name="amount" type="number" min="0.01" step="0.01" required placeholder="250">
+          </label>
+          <label class="field">
+            <span>Expense account</span>
+            <select name="expense_account_id" required>${expenseOptions}</select>
+          </label>
+          <label class="field">
+            <span>Paid from</span>
+            <select name="payment_account_id" required>${paymentOptions}</select>
+          </label>
+          <button type="submit">Create Expense</button>
+        </form>
+      </div>
+    </div>
+  `;
 }
 
 async function openMandirVerificationDialog(button) {
@@ -1845,6 +2034,164 @@ async function previewMandirReceipt(button) {
   receiptPreviewLabel.textContent = receiptLabel;
   receiptPreviewFrame.src = activeReceiptPreviewObjectUrl;
   receiptPreviewDialog.showModal();
+}
+
+function compactOptionalPhone(value) {
+  return String(value || "").replace(/\D/g, "").slice(-10);
+}
+
+function formNumber(formData, key) {
+  return Number(formData.get(key) || 0);
+}
+
+function formText(formData, key) {
+  return String(formData.get(key) || "").trim().replace(/\s+/g, " ");
+}
+
+function setMandirFormResult(ok, title, detail) {
+  lastMandirFormResult = { ok, title, detail };
+}
+
+function mandirReceiptFromCreatePayload(payload, fallbackType = "receipt") {
+  const receiptPdfUrl = String(payload?.receipt_pdf_url || "").trim();
+  if (!receiptPdfUrl) {
+    return null;
+  }
+  const receiptNumber = String(payload?.receipt_number || payload?.donation_id || payload?.id || fallbackType).trim();
+  const safeReceiptNumber = receiptNumber.replace(/[^a-z0-9_-]+/gi, "_") || fallbackType;
+  return {
+    receipt_pdf_url: receiptPdfUrl,
+    receipt_number: receiptNumber,
+    source_id: payload?.donation_id || payload?.id,
+    source_type: fallbackType,
+    filename: `${safeReceiptNumber}.pdf`,
+  };
+}
+
+async function submitMandirDonationForm(form) {
+  const formData = new FormData(form);
+  const amount = formNumber(formData, "amount");
+  const paymentAccountId = formText(formData, "payment_account_id");
+  const payload = {
+    devotee_name: formText(formData, "devotee_name"),
+    devotee_phone: compactOptionalPhone(formData.get("devotee_phone")),
+    amount,
+    category: formText(formData, "category") || "General Donation",
+    payment_mode: formText(formData, "payment_mode") || "Cash",
+  };
+  if (paymentAccountId) {
+    payload.payment_account_id = paymentAccountId;
+  }
+
+  const result = await apiRequest("mandirmitra", "/api/v1/donations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  renderJson(apiOutput, { create_mandir_donation: result });
+  if (result.ok) {
+    lastMandirReceipt = mandirReceiptFromCreatePayload(result.payload, "donation") || lastMandirReceipt;
+    setMandirFormResult(true, "Donation created", result.payload?.receipt_number || result.payload?.donation_id || "Receipt generated");
+    form.reset();
+  } else {
+    setMandirFormResult(false, "Donation failed", result.payload?.detail || "Unable to create donation");
+  }
+  await loadMandirDashboard();
+}
+
+async function submitMandirSevaForm(form) {
+  const formData = new FormData(form);
+  const paymentAccountId = formText(formData, "payment_account_id");
+  const payload = {
+    devotee_name: formText(formData, "devotee_name"),
+    devotee_phone: compactOptionalPhone(formData.get("devotee_phone")),
+    seva_name: formText(formData, "seva_name"),
+    booking_date: formText(formData, "booking_date") || todayIsoDate(),
+    amount_paid: formNumber(formData, "amount"),
+    payment_mode: formText(formData, "payment_mode") || "Cash",
+  };
+  if (paymentAccountId) {
+    payload.payment_account_id = paymentAccountId;
+  }
+
+  const result = await apiRequest("mandirmitra", "/api/v1/sevas/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  renderJson(apiOutput, { create_mandir_seva_booking: result });
+  if (result.ok) {
+    lastMandirReceipt = mandirReceiptFromCreatePayload(result.payload, "seva") || lastMandirReceipt;
+    setMandirFormResult(true, "Seva booking created", result.payload?.receipt_number || result.payload?.id || "Receipt generated");
+    form.reset();
+  } else {
+    setMandirFormResult(false, "Seva booking failed", result.payload?.detail || "Unable to create seva booking");
+  }
+  await loadMandirDashboard();
+}
+
+async function submitMandirExpenseForm(form) {
+  const formData = new FormData(form);
+  const amount = formNumber(formData, "amount");
+  const narration = formText(formData, "narration");
+  const expenseAccountId = formText(formData, "expense_account_id");
+  const paymentAccountId = formText(formData, "payment_account_id");
+  const entryPayload = {
+    entry_date: formText(formData, "entry_date") || todayIsoDate(),
+    narration,
+    reference_type: "expense",
+    journal_lines: [
+      {
+        account_id: expenseAccountId,
+        debit_amount: amount,
+        credit_amount: 0,
+        description: narration,
+      },
+      {
+        account_id: paymentAccountId,
+        debit_amount: 0,
+        credit_amount: amount,
+        description: narration,
+      },
+    ],
+  };
+
+  const createResult = await apiRequest("mandirmitra", "/api/v1/journal-entries", {
+    method: "POST",
+    body: JSON.stringify(entryPayload),
+  });
+  if (!createResult.ok) {
+    renderJson(apiOutput, { create_mandir_expense: createResult });
+    setMandirFormResult(false, "Expense failed", createResult.payload?.detail || "Unable to create expense draft");
+    await loadMandirDashboard();
+    return;
+  }
+
+  const entryId = createResult.payload?.id;
+  const postResult = await apiRequest("mandirmitra", `/api/v1/journal-entries/${encodeURIComponent(entryId)}/post`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  renderJson(apiOutput, { create_mandir_expense: createResult, post_mandir_expense: postResult });
+  if (postResult.ok) {
+    setMandirFormResult(true, "Expense posted", postResult.payload?.entry_number || entryId || "Journal entry posted");
+    form.reset();
+  } else {
+    setMandirFormResult(false, "Expense post failed", postResult.payload?.detail || "Expense draft was created but not posted");
+  }
+  await loadMandirDashboard();
+}
+
+async function submitMandirCreateForm(form) {
+  const formType = form.getAttribute("data-mandir-create-form") || "";
+  if (!form.reportValidity()) {
+    return;
+  }
+  if (formType === "donation") {
+    await submitMandirDonationForm(form);
+  } else if (formType === "seva") {
+    await submitMandirSevaForm(form);
+  } else if (formType === "expense") {
+    await submitMandirExpenseForm(form);
+  }
 }
 
 function readMandirListFilterValues(kind) {
@@ -2205,6 +2552,14 @@ dashboardPreview.addEventListener("keydown", (event) => {
   event.preventDefault();
   const panel = input.closest("[data-mandir-list]");
   applyMandirListFilter(panel?.getAttribute("data-mandir-list") || "");
+});
+dashboardPreview.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-mandir-create-form]");
+  if (!form) {
+    return;
+  }
+  event.preventDefault();
+  submitMandirCreateForm(form);
 });
 entitlementForm.addEventListener("submit", (event) => {
   event.preventDefault();
