@@ -177,6 +177,7 @@ let lastMandirFormResult = null;
 let lastMandirExpenses = [];
 let lastMandirTrialBalance = null;
 let lastMandirLedger = null;
+let lastMandirFinancialReports = {};
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -1421,6 +1422,213 @@ function renderMandirLedgerTrace(payload = lastMandirLedger) {
   `;
 }
 
+function reportUnavailable(title, payload) {
+  if (!payload || payload.ok !== false) {
+    return "";
+  }
+  const detail = payload.payload?.detail || "Report unavailable. Check backend accounting access and run checks again.";
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>${escapeHtml(title)}</h4>
+          <p>${escapeHtml(detail)}</p>
+        </div>
+        <span class="pill warn">unavailable</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderMandirIncomeExpenditureReport(payload) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.ok === false) {
+    return reportUnavailable("Income & Expenditure", payload);
+  }
+  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Income & Expenditure</h4>
+          <p>${escapeHtml(payload.from_date || accountingDrilldownState.from_date)} to ${escapeHtml(payload.to_date || accountingDrilldownState.to_date)}</p>
+        </div>
+        <span class="pill ${Number(payload.net_profit || 0) >= 0 ? "ok" : "warn"}">${escapeHtml(formatCurrency(payload.net_profit || 0))}</span>
+      </div>
+      <div class="metric-grid three">
+        ${renderStatCards([
+          ["Income", formatCurrency(payload.income_total || 0), "posted income"],
+          ["Expenditure", formatCurrency(payload.expense_total || 0), "posted expenses"],
+          ["Net", formatCurrency(payload.net_profit || 0), "income less expense"],
+        ])}
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th class="amount">Debit</th>
+              <th class="amount">Credit</th>
+              <th class="amount">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.length ? lines.map((line) => `
+              <tr>
+                <td>${escapeHtml(line.account_code || line.account_id || "")}</td>
+                <td>${escapeHtml(line.account_name || "")}</td>
+                <td>${escapeHtml(line.account_type || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.debit_total || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.credit_total || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.net_amount || 0))}</td>
+              </tr>
+            `).join("") : `
+              <tr>
+                <td colspan="6" class="muted">No income or expenditure rows found for this period.</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderMandirReceiptsPaymentsReport(payload) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.ok === false) {
+    return reportUnavailable("Receipts & Payments", payload);
+  }
+  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Receipts & Payments</h4>
+          <p>${escapeHtml(payload.from_date || accountingDrilldownState.from_date)} to ${escapeHtml(payload.to_date || accountingDrilldownState.to_date)}</p>
+        </div>
+        <span class="pill">${escapeHtml(formatCurrency(payload.net_receipts || 0))}</span>
+      </div>
+      <div class="metric-grid three">
+        ${renderStatCards([
+          ["Receipts", formatCurrency(payload.total_receipts || 0), "cash/bank debit"],
+          ["Payments", formatCurrency(payload.total_payments || 0), "cash/bank credit"],
+          ["Net Receipts", formatCurrency(payload.net_receipts || 0), "receipts less payments"],
+        ])}
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Name</th>
+              <th class="amount">Receipts</th>
+              <th class="amount">Payments</th>
+              <th class="amount">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.length ? lines.map((line) => `
+              <tr>
+                <td>${escapeHtml(line.account_code || line.account_id || "")}</td>
+                <td>${escapeHtml(line.account_name || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.receipts || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.payments || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.net_receipts || 0))}</td>
+              </tr>
+            `).join("") : `
+              <tr>
+                <td colspan="5" class="muted">No cash or bank movements found for this period.</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderBalanceSheetRows(rows = []) {
+  return rows.length ? rows.map((line) => `
+    <tr>
+      <td>${escapeHtml(line.account_code || line.account_id || "")}</td>
+      <td>${escapeHtml(line.account_name || "")}</td>
+      <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
+    </tr>
+  `).join("") : `
+    <tr>
+      <td colspan="3" class="muted">No rows.</td>
+    </tr>
+  `;
+}
+
+function renderMandirBalanceSheetReport(payload) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.ok === false) {
+    return reportUnavailable("Balance Sheet", payload);
+  }
+  const assets = Array.isArray(payload.assets) ? payload.assets : [];
+  const liabilities = Array.isArray(payload.liabilities) ? payload.liabilities : [];
+  const equity = Array.isArray(payload.equity) ? payload.equity : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Balance Sheet</h4>
+          <p>As of ${escapeHtml(payload.as_of || todayIsoDate())}. Assets should equal liabilities plus equity.</p>
+        </div>
+        <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
+      </div>
+      <div class="metric-grid three">
+        ${renderStatCards([
+          ["Assets", formatCurrency(payload.total_assets || 0), "resources"],
+          ["Liabilities", formatCurrency(payload.total_liabilities || 0), "obligations"],
+          ["Equity", formatCurrency(payload.total_equity || 0), "fund balance"],
+        ])}
+      </div>
+      <div class="dashboard-main-grid platform-grid">
+        ${[
+          ["Assets", assets],
+          ["Liabilities", liabilities],
+          ["Equity", equity],
+        ].map(([title, rows]) => `
+          <article>
+            <h4>${escapeHtml(title)}</h4>
+            <div class="table-preview compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Name</th>
+                    <th class="amount">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>${renderBalanceSheetRows(rows)}</tbody>
+              </table>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderMandirFinancialReports(reports = lastMandirFinancialReports) {
+  return `
+    ${renderMandirIncomeExpenditureReport(reports.income_expenditure)}
+    ${renderMandirReceiptsPaymentsReport(reports.receipts_payments)}
+    ${renderMandirBalanceSheetReport(reports.balance_sheet)}
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -1431,6 +1639,7 @@ function renderMandirDashboard(payload = {}) {
   const recentSevaBookings = Array.isArray(payload.recent_seva_bookings) ? payload.recent_seva_bookings : [];
   const recentExpenses = Array.isArray(payload.recent_expenses) ? payload.recent_expenses : [];
   const trialBalance = payload.trial_balance || lastMandirTrialBalance;
+  const financialReports = payload.financial_reports || lastMandirFinancialReports;
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
   const paymentExceptionSummary = payload.payment_exception_summary || {};
   const donations = stats.donations || {};
@@ -1559,6 +1768,7 @@ function renderMandirDashboard(payload = {}) {
       ` : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
       ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
+      ${showAccounting ? renderMandirFinancialReports(financialReports) : ""}
       ${(showOverview || showAccounting) ? renderMandirExpensesTable(recentExpenses) : ""}
     </div>
   `;
@@ -1809,6 +2019,13 @@ async function loadMandirDashboard() {
   const accounts = await apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" });
   const expenses = await apiRequest("mandirmitra", "/api/v1/journal-entries?reference_type=expense&limit=25", { method: "GET" });
   const trialBalance = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/trial-balance?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
+  const reportRangeQuery = buildQueryString({
+    from_date: accountingDrilldownState.from_date,
+    to_date: accountingDrilldownState.to_date,
+  });
+  const incomeExpenditure = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/income-expenditure?${reportRangeQuery}`, { method: "GET" });
+  const receiptsPayments = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" });
+  const balanceSheet = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
@@ -1820,6 +2037,11 @@ async function loadMandirDashboard() {
     lastMandirExpenses = expenses.payload;
   }
   lastMandirTrialBalance = trialBalance.ok ? trialBalance.payload : trialBalance;
+  lastMandirFinancialReports = {
+    income_expenditure: incomeExpenditure.ok ? incomeExpenditure.payload : incomeExpenditure,
+    receipts_payments: receiptsPayments.ok ? receiptsPayments.payload : receiptsPayments,
+    balance_sheet: balanceSheet.ok ? balanceSheet.payload : balanceSheet,
+  };
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
     mandir_pending_public_payments: pendingPayments,
@@ -1830,6 +2052,9 @@ async function loadMandirDashboard() {
     mandir_accounts: accounts,
     mandir_recent_expenses: expenses,
     mandir_trial_balance: trialBalance,
+    mandir_income_expenditure: incomeExpenditure,
+    mandir_receipts_payments: receiptsPayments,
+    mandir_balance_sheet: balanceSheet,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -1846,6 +2071,7 @@ async function loadMandirDashboard() {
       recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
       recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
       trial_balance: lastMandirTrialBalance,
+      financial_reports: lastMandirFinancialReports,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
