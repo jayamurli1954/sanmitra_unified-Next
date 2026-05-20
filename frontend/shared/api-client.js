@@ -143,6 +143,100 @@ export async function apiRequest(appKey, path, options = {}) {
   }
 }
 
+export async function downloadApiFile(appKey, path, filename, options = {}) {
+  const baseUrl = getConfiguredApiBaseUrl();
+  const requestUrl = buildApiUrl(baseUrl, path);
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
+  try {
+    const response = await fetch(requestUrl, {
+      ...fetchOptions,
+      method: fetchOptions.method || "GET",
+      signal: fetchOptions.signal || controller.signal,
+      headers: buildHeaders(appKey, fetchOptions.headers || {}),
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+      return { ok: false, status: response.status, payload };
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename || "receipt.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+    return { ok: true, status: response.status, payload: { filename: link.download } };
+  } catch (error) {
+    const detail = error instanceof Error && error.name === "AbortError"
+      ? `Request timed out after ${timeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : "File download failed";
+    return {
+      ok: false,
+      status: 0,
+      payload: { detail },
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function fetchApiFileObjectUrl(appKey, path, options = {}) {
+  const baseUrl = getConfiguredApiBaseUrl();
+  const requestUrl = buildApiUrl(baseUrl, path);
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
+  try {
+    const response = await fetch(requestUrl, {
+      ...fetchOptions,
+      method: fetchOptions.method || "GET",
+      signal: fetchOptions.signal || controller.signal,
+      headers: buildHeaders(appKey, fetchOptions.headers || {}),
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+      return { ok: false, status: response.status, payload };
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    return {
+      ok: true,
+      status: response.status,
+      payload: {
+        object_url: objectUrl,
+        content_type: blob.type || response.headers.get("content-type") || "application/octet-stream",
+      },
+    };
+  } catch (error) {
+    const detail = error instanceof Error && error.name === "AbortError"
+      ? `Request timed out after ${timeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : "File preview failed";
+    return {
+      ok: false,
+      status: 0,
+      payload: { detail },
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function loadHealth(appKey) {
   return apiRequest(appKey, "/health", { method: "GET" });
 }

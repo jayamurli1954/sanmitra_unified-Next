@@ -366,6 +366,10 @@ button.danger {
   gap: 16px;
 }
 
+.preview-heading.compact {
+  align-items: start;
+}
+
 .preview-heading h3,
 .society-header-preview h3,
 .legacy-dashboard h4 {
@@ -416,6 +420,21 @@ button.danger {
   border-color: #fed7aa;
 }
 
+.verification-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #138808;
+  border-radius: 8px;
+  background: #f7fef9;
+  padding: 14px;
+}
+
+.verification-panel .metric-tile {
+  background: #ffffff;
+  border-color: #bbf7d0;
+}
+
 .gruha-dashboard .metric-tile {
   background: #eff6ff;
   border-color: #bfdbfe;
@@ -425,6 +444,14 @@ button.danger {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 16px;
+}
+
+.dashboard-main-grid.platform-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+}
+
+.mandir-dashboard .dashboard-main-grid.platform-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .dashboard-main-grid > article,
@@ -607,6 +634,169 @@ button.danger {
 
 .table-preview th {
   background: var(--panel-2);
+}
+
+.compact-table table {
+  min-width: 560px;
+}
+
+.list-filter-panel {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.list-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.list-filter-bar .field {
+  min-width: 0;
+}
+
+.list-filter-actions,
+.paging-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.list-filter-actions button,
+.paging-row button {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.paging-row {
+  justify-content: flex-end;
+}
+
+.paging-row .muted {
+  margin-right: auto;
+}
+
+.status-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.status-list span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-row button {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.entitlement-dialog {
+  width: min(560px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text);
+}
+
+.entitlement-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.entitlement-dialog form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.receipt-preview-dialog {
+  width: min(920px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text);
+}
+
+.receipt-preview-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.receipt-preview-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 18px;
+}
+
+.receipt-preview-shell iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dialog-head,
+.dialog-actions {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-head h3 {
+  margin: 0 0 4px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff;
+}
+
+.checkbox-option input {
+  width: auto;
 }
 
 .workspace-tabs {
@@ -4632,6 +4822,8 @@ pre {
   .metric-grid.three,
   .metric-grid.four,
   .dashboard-main-grid,
+  .mandir-dashboard .dashboard-main-grid.platform-grid,
+  .list-filter-bar,
   .grouped-nav-preview {
     grid-template-columns: 1fr;
   }
