@@ -1367,12 +1367,26 @@ function renderMandirLedgerTrace(payload = lastMandirLedger) {
   if (!payload) {
     return "";
   }
+  if (payload.loading) {
+    return `
+      <div class="table-preview compact-table" id="mandir-ledger-trace">
+        <h4>Ledger Trace</h4>
+        <p class="muted">Loading posted voucher lines for ${escapeHtml(payload.account_label || "selected account")}...</p>
+      </div>
+    `;
+  }
   if (payload.ok === false) {
-    return `<p class="muted">Ledger trace unavailable for the selected account.</p>`;
+    const detail = payload.payload?.detail || payload.detail || "Ledger trace unavailable for the selected account.";
+    return `
+      <div class="table-preview compact-table" id="mandir-ledger-trace">
+        <h4>Ledger Trace</h4>
+        <p class="muted">${escapeHtml(detail)}</p>
+      </div>
+    `;
   }
   const entries = Array.isArray(payload.entries) ? payload.entries : Array.isArray(payload.transactions) ? payload.transactions : [];
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table" id="mandir-ledger-trace">
       <h4>Ledger Trace: ${escapeHtml(`${payload.account_code || payload.account_id || ""} ${payload.account_name || ""}`.trim())}</h4>
       <p class="muted">${escapeHtml(payload.from_date || "")} to ${escapeHtml(payload.to_date || "")}. Posted voucher lines for this account.</p>
       <table>
@@ -2539,8 +2553,14 @@ async function openAccountingVoucherDetail(button) {
 async function openMandirTrialBalanceLedger(button) {
   const accountId = button.getAttribute("data-account-id") || "";
   if (!accountId) {
+    lastMandirLedger = { ok: false, payload: { detail: "This Trial Balance row does not include an account reference." } };
+    await loadMandirDashboard();
     return;
   }
+  const accountLabel = button.closest("tr")?.querySelector("td:nth-child(2)")?.textContent?.trim() || accountId;
+  lastMandirLedger = { loading: true, account_label: accountLabel };
+  await loadMandirDashboard();
+  document.getElementById("mandir-ledger-trace")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const query = buildQueryString({
     from_date: accountingDrilldownState.from_date,
     to_date: accountingDrilldownState.to_date,
@@ -2553,6 +2573,7 @@ async function openMandirTrialBalanceLedger(button) {
   lastMandirLedger = result.ok ? result.payload : result;
   renderJson(apiOutput, { mandir_trial_balance_ledger: result });
   await loadMandirDashboard();
+  document.getElementById("mandir-ledger-trace")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function approveOnboardingRequest(requestId) {
