@@ -5209,6 +5209,9 @@ async def mandir_journal_entries(
             continue
         if to_date and entry_date > to_date:
             continue
+        fallback_reference_type = str(item.get("reference") or "").split("-", 1)[0].lower() or None
+        if reference_type and fallback_reference_type != str(reference_type).strip().lower():
+            continue
 
         fallback_rows.append(
             {
@@ -5216,7 +5219,7 @@ async def mandir_journal_entries(
                 "entry_number": f"JE-{item.get('id')}",
                 "entry_date": entry_date.isoformat(),
                 "narration": str(item.get("description") or "").strip(),
-                "reference_type": str(item.get("reference") or "").split("-", 1)[0].lower() or None,
+                "reference_type": fallback_reference_type,
                 "reference_id": None,
                 "status": "posted",
                 "total_amount": _safe_float(item.get("total_debit"), 0.0),

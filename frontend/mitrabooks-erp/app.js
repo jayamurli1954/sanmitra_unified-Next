@@ -1678,7 +1678,7 @@ async function loadMandirDashboard() {
   if (accounts.ok && Array.isArray(accounts.payload)) {
     lastMandirAccounts = accounts.payload;
   }
-  if (expenses.ok && Array.isArray(expenses.payload) && (expenses.payload.length || !lastMandirExpenses.length)) {
+  if (expenses.ok && Array.isArray(expenses.payload)) {
     lastMandirExpenses = expenses.payload;
   }
   renderJson(apiOutput, {
@@ -1704,7 +1704,7 @@ async function loadMandirDashboard() {
       ),
       recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
       recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
-      recent_expenses: expenses.ok && Array.isArray(expenses.payload) && expenses.payload.length ? expenses.payload : lastMandirExpenses,
+      recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,

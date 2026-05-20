@@ -1822,6 +1822,52 @@ def test_journal_entry_create_update_post_cancel_flow(mandir_compat_client, monk
     assert len(collections["mandir_journal_entries"].docs) == 1
 
 
+def test_journal_entry_fallback_honors_reference_type(mandir_compat_client, monkeypatch):
+    client, _collections = mandir_compat_client
+
+    async def fake_journal_entries_report(_session, *, tenant_id, limit=200):
+        assert tenant_id == "tenant-1"
+        assert limit == 500
+        return {
+            "items": [
+                {
+                    "id": 105,
+                    "entry_date": "2026-05-20",
+                    "description": "General Donation from Muralidhar rao",
+                    "reference": "DONATION-DON-0000001",
+                    "total_debit": 501,
+                    "total_credit": 501,
+                },
+                {
+                    "id": 106,
+                    "entry_date": "2026-05-20",
+                    "description": "Seva Booking (Archana) - Muralidhar Rao",
+                    "reference": "SEVA-SEV-0000001",
+                    "total_debit": 301,
+                    "total_credit": 301,
+                },
+                {
+                    "id": 107,
+                    "entry_date": "2026-05-20",
+                    "description": "Pooja materials",
+                    "reference": "EXPENSE-JE-0000001",
+                    "total_debit": 250,
+                    "total_credit": 250,
+                },
+            ]
+        }
+
+    monkeypatch.setattr(mandir_router, "journal_entries_report", fake_journal_entries_report)
+
+    listing = client.get("/api/v1/journal-entries", params={"reference_type": "expense"})
+
+    assert listing.status_code == 200
+    rows = listing.json()
+    assert [row["id"] for row in rows] == [107]
+    assert rows[0]["reference_type"] == "expense"
+    assert rows[0]["narration"] == "Pooja materials"
+
+
 def test_get_seva_receipt_pdf_backfills_devotee_name_and_address(mandir_compat_client):
     client, collections = mandir_compat_client
 
