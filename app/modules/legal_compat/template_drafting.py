@@ -11,6 +11,12 @@ _REQUIRED_NOTICE_KEYS = [
     "invoice_ref",
 ]
 
+_REQUIRED_FIELD_ALIASES = {
+    "project_name": ["engagement_name", "services_description"],
+    "deliverables": ["milestones"],
+    "acceptance_criteria": ["milestones", "deliverables", "technical_specifications"],
+}
+
 
 def _to_text(value: Any) -> str:
     if value is None:
@@ -83,7 +89,9 @@ def _template_missing_required_fields(template: dict[str, Any], fields: dict[str
         field_id = _to_text(field.get("id"))
         if not field_id:
             continue
-        if bool(field.get("required", False)) and _is_empty(fields.get(field_id)):
+        aliases = _REQUIRED_FIELD_ALIASES.get(field_id, [])
+        has_value = not _is_empty(fields.get(field_id)) or any(not _is_empty(fields.get(alias)) for alias in aliases)
+        if bool(field.get("required", False)) and not has_value:
             missing.append(
                 {
                     "id": field_id,

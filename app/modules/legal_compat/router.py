@@ -1503,10 +1503,11 @@ async def review_document(
 
 @router.get("/v2/templates")
 async def v2_templates(
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     templates = [
@@ -1540,10 +1541,11 @@ async def v2_templates(
 
 @router.get("/v2/templates/categories")
 async def v2_template_categories(
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     categories = _template_categories(_STATIC_TEMPLATE_LIBRARY)
@@ -1565,10 +1567,11 @@ async def v2_template_categories(
 @router.get("/v2/templates/{template_id}")
 async def v2_template_detail(
     template_id: str,
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     if _is_official_template_id(template_id):
@@ -1586,10 +1589,11 @@ async def v2_template_detail(
 @router.get("/v2/templates/{template_id}/fields")
 async def v2_template_fields(
     template_id: str,
+    current_user: dict = Depends(_any_authenticated),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     if _is_official_template_id(template_id):
@@ -1611,7 +1615,7 @@ async def v2_template_render(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     user_id = current_user.get("sub")
@@ -1694,7 +1698,7 @@ async def v2_template_render_pdf(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
     user_id = current_user.get("sub")
 
@@ -1748,7 +1752,7 @@ async def v2_official_forms_upload(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
 
     # Tier Check for Upload
@@ -1797,7 +1801,7 @@ async def v2_official_forms_list(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
     user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
@@ -1819,7 +1823,7 @@ async def v2_official_forms_detail(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
     user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
@@ -1837,7 +1841,7 @@ async def v2_official_forms_render_pdf(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = _resolve_compat_tenant_id(x_tenant_id)
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_compat_app_key(x_app_key)
     user_id = str(current_user.get("sub") or current_user.get("user_id") or "")
 
