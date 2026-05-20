@@ -174,6 +174,7 @@ let activeMandirWorkspace = "overview";
 let lastMandirPaymentAccounts = { cash_accounts: [], bank_accounts: [] };
 let lastMandirAccounts = [];
 let lastMandirFormResult = null;
+let lastMandirExpenses = [];
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -1242,6 +1243,49 @@ function renderAccountingDrilldownPanel(payload = lastAccountingDrilldown) {
   `;
 }
 
+function renderMandirExpensesTable(rows = lastMandirExpenses) {
+  const expenses = Array.isArray(rows) ? rows : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Recent Expenses</h4>
+          <p>Posted quick expenses created from the MandirMitra accounting form.</p>
+        </div>
+        <span class="pill">${expenses.length} shown</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Entry</th>
+              <th>Date</th>
+              <th>Narration</th>
+              <th>Amount</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${expenses.length ? expenses.map((expense) => `
+              <tr>
+                <td>${escapeHtml(expense.entry_number || expense.id || "")}</td>
+                <td>${escapeHtml(expense.entry_date || "")}</td>
+                <td>${escapeHtml(expense.narration || expense.description || "")}</td>
+                <td>${escapeHtml(formatCurrency(expense.total_amount || expense.total_debit || 0))}</td>
+                <td><span class="pill ${expense.status === "posted" ? "ok" : "warn"}">${escapeHtml(expense.status || "draft")}</span></td>
+              </tr>
+            `).join("") : `
+              <tr>
+                <td colspan="5" class="muted">No expense entries found for this tenant/app context.</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -1250,6 +1294,7 @@ function renderMandirDashboard(payload = {}) {
   const recentReceipts = Array.isArray(payload.recent_receipts) ? payload.recent_receipts : [];
   const recentDonations = Array.isArray(payload.recent_donations) ? payload.recent_donations : [];
   const recentSevaBookings = Array.isArray(payload.recent_seva_bookings) ? payload.recent_seva_bookings : [];
+  const recentExpenses = Array.isArray(payload.recent_expenses) ? payload.recent_expenses : [];
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
   const paymentExceptionSummary = payload.payment_exception_summary || {};
   const donations = stats.donations || {};
@@ -1377,6 +1422,7 @@ function renderMandirDashboard(payload = {}) {
         </div>
       ` : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
+      ${showAccounting ? renderMandirExpensesTable(recentExpenses) : ""}
     </div>
   `;
 }
@@ -1624,12 +1670,16 @@ async function loadMandirDashboard() {
   const sevaBookings = await apiRequest("mandirmitra", mandirListPath("sevas"), { method: "GET" });
   const paymentAccounts = await apiRequest("mandirmitra", "/api/v1/donations/payment-accounts", { method: "GET" });
   const accounts = await apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" });
+  const expenses = await apiRequest("mandirmitra", "/api/v1/journal-entries?reference_type=expense&limit=25", { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
   }
   if (accounts.ok && Array.isArray(accounts.payload)) {
     lastMandirAccounts = accounts.payload;
+  }
+  if (expenses.ok && Array.isArray(expenses.payload)) {
+    lastMandirExpenses = expenses.payload;
   }
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
@@ -1639,6 +1689,7 @@ async function loadMandirDashboard() {
     mandir_recent_seva_bookings: sevaBookings,
     mandir_payment_accounts: paymentAccounts,
     mandir_accounts: accounts,
+    mandir_recent_expenses: expenses,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -1653,6 +1704,7 @@ async function loadMandirDashboard() {
       ),
       recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
       recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
+      recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
