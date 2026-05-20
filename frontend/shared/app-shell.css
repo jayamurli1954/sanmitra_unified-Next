@@ -636,6 +636,13 @@ button.danger {
   background: var(--panel-2);
 }
 
+.table-preview th.amount,
+.table-preview td.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .compact-table table {
   min-width: 560px;
 }

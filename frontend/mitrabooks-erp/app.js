@@ -472,7 +472,7 @@ function renderMandirPublicPaymentsTable(rows) {
             <th>Payment</th>
             <th>Type</th>
             <th>Devotee</th>
-            <th>Amount</th>
+            <th class="amount">Amount</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -485,7 +485,7 @@ function renderMandirPublicPaymentsTable(rows) {
                 <td>${escapeHtml(shortId)}</td>
                 <td>${escapeHtml(row.payment_type || row.payment_purpose || "payment")}</td>
                 <td>${escapeHtml(row.devotee_name || row.name || "Devotee")}</td>
-                <td>${escapeHtml(formatCurrency(row.amount || row.amount_paid || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount || row.amount_paid || 0))}</td>
                 <td>
                   <button
                     class="secondary"
@@ -526,7 +526,7 @@ function renderMandirExceptionsTable(rows) {
             <th>Payment</th>
             <th>Reason</th>
             <th>Devotee</th>
-            <th>Amount</th>
+            <th class="amount">Amount</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -540,7 +540,7 @@ function renderMandirExceptionsTable(rows) {
                 <td>${escapeHtml(shortId)}</td>
                 <td>${escapeHtml(formatMandirExceptionReasons(row.exception_reasons))}</td>
                 <td>${escapeHtml(row.devotee_name || row.name || "Devotee")}</td>
-                <td>${escapeHtml(formatCurrency(row.amount || row.amount_paid || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount || row.amount_paid || 0))}</td>
                 <td>
                   <div class="action-row">
                     ${canVerify ? `
@@ -622,7 +622,7 @@ function renderMandirReceiptHistoryTable(rows) {
             <th>Receipt</th>
             <th>Type</th>
             <th>Devotee</th>
-            <th>Amount</th>
+            <th class="amount">Amount</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -635,7 +635,7 @@ function renderMandirReceiptHistoryTable(rows) {
                 <td>${escapeHtml(receiptLabel)}</td>
                 <td>${escapeHtml(row.type)}</td>
                 <td>${escapeHtml(row.party)}</td>
-                <td>${escapeHtml(formatCurrency(row.amount))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
                 <td>
                   <div class="action-row">
                     <button
@@ -699,7 +699,7 @@ function renderMandirDonationsTable(rows) {
             <th>Date</th>
             <th>Devotee</th>
             <th>Category</th>
-            <th>Amount</th>
+            <th class="amount">Amount</th>
             <th>Receipt</th>
           </tr>
         </thead>
@@ -711,7 +711,7 @@ function renderMandirDonationsTable(rows) {
                 <td>${escapeHtml(String(row.donation_date || row.created_at || "").slice(0, 10))}</td>
                 <td>${escapeHtml(row.devotee_name || row.donor_name || row.name || "Devotee")}</td>
                 <td>${escapeHtml(row.category || "Donation")}</td>
-                <td>${escapeHtml(formatCurrency(row.amount))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
                 <td>${renderMandirReceiptActions(row, receiptLabel)}</td>
               </tr>
             `;
@@ -734,7 +734,7 @@ function renderMandirSevaBookingsTable(rows) {
             <th>Date</th>
             <th>Devotee</th>
             <th>Seva</th>
-            <th>Amount</th>
+            <th class="amount">Amount</th>
             <th>Receipt</th>
           </tr>
         </thead>
@@ -746,7 +746,7 @@ function renderMandirSevaBookingsTable(rows) {
                 <td>${escapeHtml(String(row.booking_date || row.created_at || "").slice(0, 10))}</td>
                 <td>${escapeHtml(row.devotee_name || row.devotee_names || row.name || "Devotee")}</td>
                 <td>${escapeHtml(row.seva_name || row.seva || "Seva")}</td>
-                <td>${escapeHtml(formatCurrency(row.amount_paid || row.amount))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount_paid || row.amount))}</td>
                 <td>${renderMandirReceiptActions(row, receiptLabel)}</td>
               </tr>
             `;
@@ -1122,8 +1122,8 @@ function renderAccountingDrilldownRows(payload) {
           <tr>
             <th>Period / Voucher</th>
             <th>Vouchers</th>
-            <th>Debit</th>
-            <th>Credit</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
             <th>Last Voucher</th>
             <th>Action</th>
           </tr>
@@ -1137,8 +1137,8 @@ function renderAccountingDrilldownRows(payload) {
               <tr>
                 <td>${escapeHtml(row.label || period)}</td>
                 <td>${escapeHtml(row.voucher_count || 1)}</td>
-                <td>${escapeHtml(formatCurrency(row.total_debit))}</td>
-                <td>${escapeHtml(formatCurrency(row.total_credit))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.total_debit))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.total_credit))}</td>
                 <td>${escapeHtml(lastVoucher?.reference || lastVoucher?.idempotency_key || lastVoucher?.id || "")}</td>
                 <td>
                   ${nextLevel ? `
@@ -1186,8 +1186,8 @@ function renderAccountingVoucherDetail(detail = lastAccountingVoucherDetail) {
           <tr>
             <th>Account</th>
             <th>Type</th>
-            <th>Debit</th>
-            <th>Credit</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
           </tr>
         </thead>
         <tbody>
@@ -1195,8 +1195,8 @@ function renderAccountingVoucherDetail(detail = lastAccountingVoucherDetail) {
             <tr>
               <td>${escapeHtml(`${line.account_code || ""} ${line.account_name || ""}`.trim())}</td>
               <td>${escapeHtml(line.account_type || "")}</td>
-              <td>${escapeHtml(formatCurrency(line.debit))}</td>
-              <td>${escapeHtml(formatCurrency(line.credit))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.debit))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.credit))}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -1263,7 +1263,7 @@ function renderMandirExpensesTable(rows = lastMandirExpenses) {
               <th>Entry</th>
               <th>Date</th>
               <th>Narration</th>
-              <th>Amount</th>
+              <th class="amount">Amount</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -1273,7 +1273,7 @@ function renderMandirExpensesTable(rows = lastMandirExpenses) {
                 <td>${escapeHtml(expense.entry_number || expense.id || "")}</td>
                 <td>${escapeHtml(expense.entry_date || "")}</td>
                 <td>${escapeHtml(expense.narration || expense.description || "")}</td>
-                <td>${escapeHtml(formatCurrency(expense.total_amount || expense.total_debit || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(expense.total_amount || expense.total_debit || 0))}</td>
                 <td><span class="pill ${expense.status === "posted" ? "ok" : "warn"}">${escapeHtml(expense.status || "draft")}</span></td>
               </tr>
             `).join("") : `
@@ -1321,8 +1321,8 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
             <tr>
               <th>Account</th>
               <th>Name</th>
-              <th>Debit</th>
-              <th>Credit</th>
+              <th class="amount">Debit</th>
+              <th class="amount">Credit</th>
               <th>Trace</th>
             </tr>
           </thead>
@@ -1331,8 +1331,8 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
               <tr>
                 <td>${escapeHtml(row.account_code || row.account_id || "")}</td>
                 <td>${escapeHtml(row.account_name || row.name || "")}</td>
-                <td>${escapeHtml(formatCurrency(row.debit_total || row.debit || 0))}</td>
-                <td>${escapeHtml(formatCurrency(row.credit_total || row.credit || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.debit_total || row.debit || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.credit_total || row.credit || 0))}</td>
                 <td>
                   <button
                     class="secondary"
@@ -1351,8 +1351,8 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
           <tfoot>
             <tr>
               <th colspan="2">Total</th>
-              <th>${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
-              <th>${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
+              <th class="amount">${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
+              <th class="amount">${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
               <th></th>
             </tr>
           </tfoot>
@@ -1395,9 +1395,9 @@ function renderMandirLedgerTrace(payload = lastMandirLedger) {
             <th>Date</th>
             <th>Voucher</th>
             <th>Narration</th>
-            <th>Debit</th>
-            <th>Credit</th>
-            <th>Balance</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
+            <th class="amount">Balance</th>
           </tr>
         </thead>
         <tbody>
@@ -1406,9 +1406,9 @@ function renderMandirLedgerTrace(payload = lastMandirLedger) {
               <td>${escapeHtml(entry.date || entry.entry_date || "")}</td>
               <td>${escapeHtml(entry.entry_number || entry.reference || "")}</td>
               <td>${escapeHtml(entry.narration || entry.description || "")}</td>
-              <td>${escapeHtml(formatCurrency(entry.debit_amount || entry.debit || 0))}</td>
-              <td>${escapeHtml(formatCurrency(entry.credit_amount || entry.credit || 0))}</td>
-              <td>${escapeHtml(formatCurrency(entry.running_balance || entry.balance || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(entry.debit_amount || entry.debit || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(entry.credit_amount || entry.credit || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(entry.running_balance || entry.balance || 0))}</td>
             </tr>
           `).join("") : `
             <tr>
