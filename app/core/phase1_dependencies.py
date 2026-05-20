@@ -16,6 +16,7 @@ import logging
 
 from app.db.postgres import get_async_session
 from app.core.phase1_auth import get_current_user
+from app.core.tenants.context import resolve_tenant_id as resolve_trusted_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,11 @@ async def resolve_tenant_id(
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
 ) -> str:
     """
-    Resolve the tenant ID for the current request.
+    Resolve the tenant ID for the current request using trusted context rules.
 
-    Priority:
-    1. X-Tenant-ID header (override, for admin operations)
-    2. current_user["tenant_id"] (from JWT token)
-    3. Raise error if neither
-
-    This ensures multi-tenant isolation: requests only affect the resolved tenant.
+    This Phase 1 compatibility dependency delegates to the canonical tenant
+    resolver. The X-Tenant-ID header is accepted only for explicit super-admin
+    override; regular users are scoped to the tenant in their token.
 
     Args:
         current_user: Authenticated user (from get_current_user dependency)
@@ -44,16 +42,16 @@ async def resolve_tenant_id(
     Raises:
         HTTPException: If tenant cannot be resolved
     """
-    tenant_id = x_tenant_id or current_user.get("tenant_id")
-
-    if not tenant_id:
+    try:
+        return resolve_trusted_tenant_id(current_user, x_tenant_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.error("Could not resolve tenant ID from token or headers")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not resolve tenant ID",
-        )
-
-    return tenant_id
+        ) from exc
 
 
 async def get_current_tenant_id(
@@ -70,7 +68,7 @@ async def get_current_tenant_id(
     Returns:
         Tenant ID from token
     """
-    return current_user.get("tenant_id")
+    return resolve_trusted_tenant_id(current_user, None)
 
 
 async def get_current_user_id(

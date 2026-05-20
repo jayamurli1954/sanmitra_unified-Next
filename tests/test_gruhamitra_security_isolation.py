@@ -83,6 +83,7 @@ class TestMissingAppKeyFix:
             assert "app_key" in inserted_doc, "app_key field missing from document"
             assert inserted_doc["app_key"] == "gruhamitra", "app_key value incorrect"
             assert inserted_doc["tenant_id"] == "T123", "tenant_id value incorrect"
+            assert inserted_doc["amount"] == "5000.00"
 
     @pytest.mark.asyncio
     async def test_ensure_maintenance_indexes_includes_app_key(self):

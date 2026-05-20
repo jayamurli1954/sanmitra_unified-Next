@@ -35,6 +35,11 @@ SOCIETY_SETTINGS = "housing_society_settings"
 FLATS = "housing_flats"
 FINANCIAL_YEARS = "housing_financial_years"
 MEMBER_CHECKLISTS = "housing_member_checklists"
+MONEY_QUANT = Decimal("0.01")
+
+
+def _money(value: Decimal | str | int) -> Decimal:
+    return Decimal(str(value)).quantize(MONEY_QUANT)
 
 
 def _now() -> datetime:
@@ -637,14 +642,15 @@ async def transfer_to_arrears(*, tenant_id: str, app_key: str, payload: ArrearsT
 
     now = _now()
     flat_id = str(member.get("flat_number") or "UNKNOWN")
+    amount = _money(payload.amount)
     doc = {
         "id": str(uuid4()),
         "tenant_id": tenant_id,
         "app_key": str(app_key or "gruhamitra").strip(),
         "member_id": payload.member_id,
         "flat_id": flat_id,
-        "original_balance": float(payload.amount),
-        "current_balance": float(payload.amount),
+        "original_balance": str(amount),
+        "current_balance": str(amount),
         "status": "open",
         "notes": (payload.notes or "").strip() or None,
         "transfer_date": now,
@@ -708,18 +714,19 @@ async def calculate_final_bill(*, tenant_id: str, app_key: str, flat_id: str) ->
 
 async def raise_damage_claim(*, tenant_id: str, app_key: str, payload: DamageClaimCreate) -> dict:
     now = _now()
+    amount = _money(payload.amount)
     claim = {
         "id": str(uuid4()),
         "tenant_id": tenant_id,
         "app_key": str(app_key or "gruhamitra").strip(),
         "flat_id": payload.flat_id,
-        "amount": float(payload.amount),
+        "amount": str(amount),
         "description": (payload.description or "").strip() or "Damage/Misc Claim",
         "created_at": now,
     }
     await get_collection(DAMAGE_CLAIMS).insert_one(claim)
     bill_number = f"CLM-{payload.flat_id}-{now.strftime('%y%m%d%H%M')}"
-    return {"message": "Damage claim raised successfully", "bill_number": bill_number, "total_amount": float(payload.amount)}
+    return {"message": "Damage claim raised successfully", "bill_number": bill_number, "total_amount": str(amount)}
 
 
 async def complete_resident_registration(*, payload: CompleteResidentRegistrationRequest) -> dict:

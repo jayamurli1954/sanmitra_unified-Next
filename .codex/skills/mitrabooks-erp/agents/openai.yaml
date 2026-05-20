@@ -1,0 +1,4 @@
+interface:
+  display_name: "MitraBooks ERP"
+  short_description: "Guide MitraBooks ERP documents, accounting integration, reports, and compatibility APIs."
+  default_prompt: "Use this skill when changing MitraBooks ERP backend, frontend, financial documents, reports, or ERP route contracts."

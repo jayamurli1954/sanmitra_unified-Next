@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tenant Context Routing"
+  short_description: "Protect SanMitra tenant, app-key, module, and RBAC boundaries."
+  default_prompt: "Use this skill when changing SanMitra auth, tenant routing, module access, or tenant-owned data queries."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migration Safety"
+  short_description: "Keep SanMitra migrations, schemas, seeds, indexes, and backfills safe."
+  default_prompt: "Use this skill when creating or editing SanMitra migrations, schemas, indexes, seeders, or data transformations."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accounting Doctrine"
+  short_description: "Enforce double-entry accounting, precision, immutability, and auditability."
+  default_prompt: "Use this skill when changing SanMitra accounting, money, journals, reports, or financial posting workflows."

@@ -10,6 +10,11 @@ from app.db.mongo import get_collection
 from app.modules.housing.schemas import MaintenanceCollectionCreateRequest
 
 MAINTENANCE_COLLECTIONS = "housing_maintenance_collections"
+MONEY_QUANT = Decimal("0.01")
+
+
+def _money(value: Decimal | str | int) -> Decimal:
+    return Decimal(str(value)).quantize(MONEY_QUANT)
 
 
 async def ensure_maintenance_indexes() -> None:
@@ -29,11 +34,12 @@ async def record_maintenance_collection(
     collections = get_collection(MAINTENANCE_COLLECTIONS)
 
     collection_id = str(uuid4())
+    amount = _money(payload.amount)
     doc = {
         "collection_id": collection_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
-        "amount": float(payload.amount),
+        "amount": str(amount),
         "flat_number": payload.flat_number,
         "resident_name": payload.resident_name,
         "payment_mode": payload.payment_mode,
@@ -53,13 +59,13 @@ async def record_maintenance_collection(
             lines=[
                 JournalLineIn(
                     account_id=payload.bank_account_id,
-                    debit=Decimal(payload.amount),
+                    debit=amount,
                     credit=Decimal("0"),
                 ),
                 JournalLineIn(
                     account_id=payload.maintenance_income_account_id,
                     debit=Decimal("0"),
-                    credit=Decimal(payload.amount),
+                    credit=amount,
                 ),
             ],
         )

@@ -1,0 +1,4 @@
+interface:
+  display_name: "InvestMitra Portfolio"
+  short_description: "Protect portfolio data, market research, precision, and no-trade boundaries."
+  default_prompt: "Use this skill when changing InvestMitra holdings, transactions, analytics, broker context, or investment research integrations."

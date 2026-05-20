@@ -1,0 +1,4 @@
+interface:
+  display_name: "GruhaMitra Housing"
+  short_description: "Guide housing society units, residents, maintenance, complaints, vendors, and accounting integration."
+  default_prompt: "Use this skill when changing GruhaMitra housing society, maintenance billing, collections, resident, complaint, or accounting workflows."

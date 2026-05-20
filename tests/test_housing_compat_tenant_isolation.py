@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 
 from app.modules.housing_compat import router as housing_router
 from app.modules.housing_compat import service as housing_service
 from app.modules.housing_compat.schemas import (
+    ArrearsTransferRequest,
     CompleteResidentRegistrationRequest,
+    DamageClaimCreate,
     PublicJoinRequestCreate,
     SocietySettingsUpdate,
 )
@@ -248,6 +251,45 @@ async def test_join_request_profile_and_unit_reads_include_app_key(monkeypatch):
         "unit_label": {"$exists": True},
     }
     assert units == [{"id": "society-1:A-101", "unit_label": "A-101"}]
+
+
+@pytest.mark.asyncio
+async def test_arrears_and_damage_claim_store_money_without_float(monkeypatch):
+    members = _Collection(
+        "housing_members",
+        rows=[
+            {
+                "id": "member-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+            }
+        ],
+    )
+    arrears = _Collection("housing_personal_arrears")
+    claims = _Collection("housing_damage_claims")
+    collections = {
+        housing_service.MEMBERS: members,
+        housing_service.ARREARS: arrears,
+        housing_service.DAMAGE_CLAIMS: claims,
+    }
+    monkeypatch.setattr(housing_service, "get_collection", lambda name: collections[name])
+
+    arrears_doc = await housing_service.transfer_to_arrears(
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        payload=ArrearsTransferRequest(member_id="member-1", amount=Decimal("1234.50")),
+    )
+    claim_result = await housing_service.raise_damage_claim(
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        payload=DamageClaimCreate(flat_id="A-101", amount=Decimal("99.99"), description="Window damage"),
+    )
+
+    assert arrears_doc["original_balance"] == "1234.50"
+    assert arrears_doc["current_balance"] == "1234.50"
+    assert claims.inserted[0]["amount"] == "99.99"
+    assert claim_result["total_amount"] == "99.99"
 
 
 @pytest.mark.asyncio

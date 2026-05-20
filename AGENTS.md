@@ -576,14 +576,36 @@ Before reporting work complete:
 - Mention if no tests were run because this workspace has docs only.
 - Mention any remaining ambiguity or implementation risk.
 
-## 24. Version History
+## 24. Repo-Local Skills
+
+This workspace includes Codex skills under:
+
+```text
+D:\sanmitra_unified-Next\.codex\skills
+```
+
+Load the relevant skill before editing code or docs in that area:
+
+| Task type | Skill |
+| --- | --- |
+| Tenant context, auth, app key, module access, RBAC, protected data queries | `tenant-context-routing` |
+| Journals, ledgers, money, tax, payments, receipts, donations, collections, reports | `accounting-doctrine` |
+| LegalMitra cases, documents, templates, RAG, provider integrations, legal compliance | `legalmitra-compliance` |
+| InvestMitra holdings, transactions, market data, portfolio analytics, research integrations | `investmitra-portfolio` |
+| MitraBooks ERP documents, parties, vouchers, inventory, GST/TDS, reports, route contracts | `mitrabooks-erp` |
+| MandirMitra donations, sevas, receipts, devotees, trust/fund compliance | `mandirmitra-admin` |
+| GruhaMitra housing society units, residents, maintenance billing, complaints, vendors | `gruhamitra-housing` |
+| Migrations, schema changes, indexes, seeders, backfills, release/rollback notes | `migration-safety` |
+
+## 25. Version History
 
 | Version | Date | Changes |
 | --- | --- | --- |
 | 1.0 | 2026-05-15 | Initial workspace policy for SanMitra unified next foundation |
 | 1.1 | 2026-05-15 | Expanded with backend guardrails, module-specific policies, testing, security, and frontend merge rules |
+| 1.2 | 2026-05-20 | Added repo-local skill routing for SanMitra domain workflows |
 
-## 25. CI/CD and Release Discipline
+## 26. CI/CD and Release Discipline
 
 GitHub Actions is the source of truth for repository validation:
 

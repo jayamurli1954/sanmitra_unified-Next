@@ -1,0 +1,4 @@
+interface:
+  display_name: "MandirMitra Admin"
+  short_description: "Guide temple donations, sevas, receipts, devotees, trust compliance, and accounting integration."
+  default_prompt: "Use this skill when changing MandirMitra donation, seva, devotee, receipt, fund, trust, or accounting workflows."

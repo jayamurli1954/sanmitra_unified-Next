@@ -431,10 +431,6 @@ async def create_transaction(
     company_id = int(payload.get("company_id") or 1)
     txn_id = await _seq_id("mb_transactions", tenant_id, app_key, company_id)
 
-    import json
-    with open("payload_debug.json", "a") as f:
-        f.write(json.dumps(payload) + "\n")
-
     # Detect voucher_type from URL path (e.g., /transactions/receipt -> "receipt")
     path = str(request.url.path).lower()
     path_voucher_type = None
@@ -619,8 +615,11 @@ async def create_transaction(
                 if je_id:
                     doc["journal_entry_id"] = je_id
             except Exception as exc:
-                # Don't fail the request - transaction is saved in MongoDB; log the error
-                doc["post_error"] = str(exc)
+                await get_collection("mb_transactions").delete_one({"_id": doc["_id"]})
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to post transaction to accounting: {str(exc)}",
+                ) from exc
 
     return _json_safe(doc)
 
