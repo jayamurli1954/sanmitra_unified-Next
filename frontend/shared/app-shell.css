@@ -3938,6 +3938,64 @@ button.danger {
   text-decoration: none;
 }
 
+.legal-install-suggestion {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 210;
+  width: min(420px, calc(100vw - 28px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(231, 199, 124, 0.45);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  color: #f8fafc;
+  box-shadow: 0 20px 60px rgba(2, 6, 23, 0.35);
+}
+
+.legal-install-suggestion div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.legal-install-suggestion strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.legal-install-suggestion span {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-install-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.legal-install-actions button {
+  min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(231, 199, 124, 0.5);
+  background: #e7c77c;
+  color: #241711;
+  font-weight: 850;
+}
+
+.legal-install-actions button[data-install-dismiss] {
+  width: 38px;
+  padding: 0;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
 .legal-template-browser {
   display: grid;
   grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
