@@ -176,6 +176,7 @@ let lastMandirAccounts = [];
 let lastMandirFormResult = null;
 let lastMandirExpenses = [];
 let lastMandirTrialBalance = null;
+let lastMandirLedger = null;
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -1322,6 +1323,7 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
               <th>Name</th>
               <th>Debit</th>
               <th>Credit</th>
+              <th>Trace</th>
             </tr>
           </thead>
           <tbody>
@@ -1331,10 +1333,18 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
                 <td>${escapeHtml(row.account_name || row.name || "")}</td>
                 <td>${escapeHtml(formatCurrency(row.debit_total || row.debit || 0))}</td>
                 <td>${escapeHtml(formatCurrency(row.credit_total || row.credit || 0))}</td>
+                <td>
+                  <button
+                    class="secondary"
+                    type="button"
+                    data-accounting-action="tb-ledger"
+                    data-account-id="${escapeHtml(row.account_id || row.account_code || "")}"
+                  >Open</button>
+                </td>
               </tr>
             `).join("") : `
               <tr>
-                <td colspan="4" class="muted">No posted accounting balances found for this tenant/app context.</td>
+                <td colspan="5" class="muted">No posted accounting balances found for this tenant/app context.</td>
               </tr>
             `}
           </tbody>
@@ -1343,10 +1353,56 @@ function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
               <th colspan="2">Total</th>
               <th>${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
               <th>${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
+              <th></th>
             </tr>
           </tfoot>
         </table>
       </div>
+      ${renderMandirLedgerTrace()}
+    </div>
+  `;
+}
+
+function renderMandirLedgerTrace(payload = lastMandirLedger) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.ok === false) {
+    return `<p class="muted">Ledger trace unavailable for the selected account.</p>`;
+  }
+  const entries = Array.isArray(payload.entries) ? payload.entries : Array.isArray(payload.transactions) ? payload.transactions : [];
+  return `
+    <div class="table-preview compact-table">
+      <h4>Ledger Trace: ${escapeHtml(`${payload.account_code || payload.account_id || ""} ${payload.account_name || ""}`.trim())}</h4>
+      <p class="muted">${escapeHtml(payload.from_date || "")} to ${escapeHtml(payload.to_date || "")}. Posted voucher lines for this account.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Voucher</th>
+            <th>Narration</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.length ? entries.map((entry) => `
+            <tr>
+              <td>${escapeHtml(entry.date || entry.entry_date || "")}</td>
+              <td>${escapeHtml(entry.entry_number || entry.reference || "")}</td>
+              <td>${escapeHtml(entry.narration || entry.description || "")}</td>
+              <td>${escapeHtml(formatCurrency(entry.debit_amount || entry.debit || 0))}</td>
+              <td>${escapeHtml(formatCurrency(entry.credit_amount || entry.credit || 0))}</td>
+              <td>${escapeHtml(formatCurrency(entry.running_balance || entry.balance || 0))}</td>
+            </tr>
+          `).join("") : `
+            <tr>
+              <td colspan="6" class="muted">No posted voucher lines found for this account.</td>
+            </tr>
+          `}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -2480,6 +2536,25 @@ async function openAccountingVoucherDetail(button) {
   }
 }
 
+async function openMandirTrialBalanceLedger(button) {
+  const accountId = button.getAttribute("data-account-id") || "";
+  if (!accountId) {
+    return;
+  }
+  const query = buildQueryString({
+    from_date: accountingDrilldownState.from_date,
+    to_date: accountingDrilldownState.to_date,
+  });
+  const result = await apiRequest(
+    "mandirmitra",
+    `/api/v1/journal-entries/reports/ledger/${encodeURIComponent(accountId)}?${query}`,
+    { method: "GET" }
+  );
+  lastMandirLedger = result.ok ? result.payload : result;
+  renderJson(apiOutput, { mandir_trial_balance_ledger: result });
+  await loadMandirDashboard();
+}
+
 async function approveOnboardingRequest(requestId) {
   if (!requestId) {
     return;
@@ -2662,6 +2737,8 @@ dashboardPreview.addEventListener("click", (event) => {
     drillAccountingReport(button);
   } else if (accountingAction === "voucher-detail") {
     openAccountingVoucherDetail(button);
+  } else if (accountingAction === "tb-ledger") {
+    openMandirTrialBalanceLedger(button);
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {
