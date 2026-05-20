@@ -443,7 +443,9 @@ async def create_mandir_first_login_onboarding(
 ) -> dict:
     await ensure_mandir_compat_indexes()
 
-    resolved_app_key = resolve_app_key(app_key or "mandirmitra")
+    if not str(app_key or "").strip():
+        raise HTTPException(status_code=400, detail="X-App-Key header is required for MandirMitra onboarding")
+    resolved_app_key = resolve_app_key(str(app_key).strip())
     tenant_name = payload.temple_name or payload.trust_name or "Temple Trust"
     tenant_hint = payload.temple_slug or tenant_name
     tenant_id = await _allocate_tenant_id(tenant_hint)
@@ -472,7 +474,14 @@ async def create_mandir_first_login_onboarding(
             "method": "google",
         }
 
-    await ensure_tenant_exists(tenant_id, display_name=tenant_name, created_by="mandir-first-login")
+    await ensure_tenant_exists(
+        tenant_id,
+        display_name=tenant_name,
+        organization_type="TEMPLE",
+        enabled_modules=["temple", "accounting", "audit"],
+        app_keys=[resolved_app_key],
+        created_by="mandir-first-login",
+    )
 
     try:
         created_admin = await create_user(

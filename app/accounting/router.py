@@ -43,6 +43,8 @@ from app.accounting.service import (
     get_coa_mapping_gaps,
     get_coa_onboarding_status,
     get_ledger_lines,
+    get_journal_drilldown,
+    get_journal_voucher_detail,
     get_profit_loss,
     get_receipts_payments,
     get_trial_balance,
@@ -511,6 +513,54 @@ async def receipts_payments_endpoint(
         net_receipts=net_receipts,
         lines=lines,
     )
+
+
+@router.get("/reports/drilldown")
+async def reports_drilldown_endpoint(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    level: str = Query(default="month", pattern="^(month|week|day|voucher)$"),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    week_start: date | None = Query(default=None),
+    day: date | None = Query(default=None),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    try:
+        return await get_journal_drilldown(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            from_date=from_date,
+            to_date=to_date,
+            level=level,
+            month=month,
+            week_start=week_start,
+            day=day,
+            limit=limit,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/reports/vouchers/{journal_id}")
+async def reports_voucher_detail_endpoint(
+    journal_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    try:
+        return await get_journal_voucher_detail(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            journal_id=journal_id,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/reports/balance-sheet", response_model=BalanceSheetResponse)

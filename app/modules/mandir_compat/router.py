@@ -4,6 +4,7 @@ import calendar
 import json
 import logging
 import os
+import re
 from urllib.parse import urlencode
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO, StringIO
@@ -48,6 +49,7 @@ from app.accounting.service import (
     get_accounts_payable,
     get_accounts_receivable,
     get_balance_sheet,
+    get_journal_drilldown,
     get_ledger_lines,
     get_profit_loss,
     get_receipts_payments,
@@ -102,6 +104,7 @@ _MANDIR_RECEIPT_PREFIX_BY_KIND = {
     "donation": "DON",
     "seva": "SEV",
 }
+_MANDIR_UTR_REFERENCE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,79}$")
 _MANDIR_JOURNAL_ENTRY_PREFIX = "JE"
 _DEFAULT_PUBLIC_DONATION_CATEGORIES = [
     {"id": "general", "name": "General Donation", "description": "General donation to the temple"},
@@ -190,6 +193,18 @@ def _normalize_mandir_account_code(code: Any, *, account_name: Any = None) -> st
 
 def _normalize_income_category(value: Any) -> str:
     return ' '.join(str(value or '').strip().lower().split())
+
+
+def _normalize_public_payment_utr_reference(value: Any) -> str:
+    reference = " ".join(str(value or "").strip().split())
+    if not reference:
+        raise HTTPException(status_code=400, detail="UTR/reference is required before verifying a public payment")
+    if not _MANDIR_UTR_REFERENCE_PATTERN.fullmatch(reference):
+        raise HTTPException(
+            status_code=400,
+            detail="UTR/reference must be 4-80 characters and contain only letters, numbers, spaces, dot, slash, colon, underscore, or hyphen",
+        )
+    return reference
 
 
 def _mandir_income_bucket_for_account(name: Any, code: Any) -> str | None:
@@ -1147,6 +1162,45 @@ def _mandir_donation_view(doc: dict[str, Any]) -> dict[str, Any]:
     if not row.get("donation_date") and row.get("created_at"):
         row["donation_date"] = row.get("created_at")
     return row
+
+
+def _mandir_row_date_text(row: dict[str, Any], fields: tuple[str, ...]) -> str:
+    for field in fields:
+        value = str(row.get(field) or "").strip()
+        if value:
+            return value[:10]
+    return ""
+
+
+def _mandir_row_matches_search(row: dict[str, Any], query: str, fields: tuple[str, ...]) -> bool:
+    normalized_query = query.strip().lower()
+    if not normalized_query:
+        return True
+    return any(normalized_query in str(row.get(field) or "").lower() for field in fields)
+
+
+def _mandir_filter_rows(
+    rows: list[dict[str, Any]],
+    *,
+    q: str | None,
+    from_date: date | None,
+    to_date: date | None,
+    date_fields: tuple[str, ...],
+    search_fields: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    from_text = from_date.isoformat() if from_date else None
+    to_text = to_date.isoformat() if to_date else None
+    for row in rows:
+        row_date = _mandir_row_date_text(row, date_fields)
+        if from_text and row_date and row_date < from_text:
+            continue
+        if to_text and row_date and row_date > to_text:
+            continue
+        if q and not _mandir_row_matches_search(row, q, search_fields):
+            continue
+        filtered.append(row)
+    return filtered
 
 
 def _generate_donation_receipt_pdf_bytes(
@@ -3396,21 +3450,41 @@ async def donations_categories(_current_user: dict = Depends(get_current_user)):
 @router.get("/donations")
 async def list_donations(
     limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    payment_mode: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
 
     try:
         col = get_collection("mandir_donations")
-        rows = await col.find({"tenant_id": tenant_id, "app_key": app_key}).sort("created_at", -1).limit(limit).to_list(length=limit)
+        fetch_limit = 2000 if any([q, from_date, to_date, payment_mode]) else min(limit + offset, 2000)
+        rows = await col.find({"tenant_id": tenant_id, "app_key": app_key}).sort("created_at", -1).limit(fetch_limit).to_list(length=fetch_limit)
     except Exception as exc:
         logger.error("Failed to list donations for tenant=%s: %s", tenant_id, exc, exc_info=True)
         rows = []
 
-    return [_mandir_donation_view(row) for row in rows]
+    viewed = [_mandir_donation_view(row) for row in rows]
+    if payment_mode:
+        normalized_mode = str(payment_mode).strip().lower()
+        viewed = [row for row in viewed if str(row.get("payment_mode") or "").strip().lower() == normalized_mode]
+    filtered = _mandir_filter_rows(
+        viewed,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        date_fields=("donation_date", "created_at"),
+        search_fields=("receipt_number", "devotee_name", "donor_name", "name", "category", "upi_reference_number"),
+    )
+    return filtered[offset:offset + limit]
 
 
 @router.post("/donations")
@@ -5516,6 +5590,40 @@ async def mandir_journal_receipts_payments(
     return await receipts_payments_report(session, tenant_id=tenant_id, from_date=from_date, to_date=to_date)
 
 
+@router.get("/journal-entries/reports/drilldown")
+async def mandir_journal_drilldown(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    level: str = Query(default="month", pattern="^(month|week|day|voucher)$"),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    week_start: date | None = Query(default=None),
+    day: date | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    await _ensure_default_mandir_sql_accounts_safe(session, tenant_id)
+    return await get_journal_drilldown(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id="primary",
+        from_date=from_date,
+        to_date=to_date,
+        level=level,
+        month=month,
+        week_start=week_start,
+        day=day,
+        limit=limit,
+    )
+
+
 @router.get("/journal-entries/reports/balance-sheet")
 async def mandir_journal_balance_sheet(
     as_of: date = Query(...),
@@ -6567,7 +6675,9 @@ async def mandir_temples_onboard(
             "Onboarding endpoint called without secret enforcement (MANDIR_ONBOARDING_SECRET not set). "
             "Set this env var in production to protect this endpoint."
         )
-    app_key = resolve_app_key((x_app_key or "mandirmitra").strip())
+    if not str(x_app_key or "").strip():
+        raise HTTPException(status_code=400, detail="X-App-Key header is required")
+    app_key = resolve_app_key(str(x_app_key).strip())
     return await create_mandir_first_login_onboarding(payload, app_key=app_key)
 
 
@@ -7069,11 +7179,12 @@ async def mandir_public_create_seva_payment(
         cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
         existing = await get_collection("mandir_public_payments").find_one({
             "tenant_id": tenant_id,
+            "app_key": app_key,
             "idempotency_key": idempotency_key,
             "created_at": {"$gte": cutoff},
         })
         if existing:
-            temple_doc_i = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
+            temple_doc_i = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
             return {
                 "payment_id": existing["id"][:8].upper(),
                 "full_payment_id": existing["id"],
@@ -7202,7 +7313,7 @@ async def mandir_public_create_seva_payment(
         pass  # Audit is best-effort; never block the payment flow
 
     # Build WhatsApp message template
-    temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
+    temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
     admin_whatsapp = str(temple_doc.get("admin_whatsapp") or "").strip()
     upi_id = str(temple_doc.get("upi_id") or "").strip()
     amount_str = f"Rs.{payload.get('amount')}" if payload.get("amount") else ""
@@ -7221,7 +7332,7 @@ async def mandir_public_create_seva_payment(
 
     # Store whatsapp details on payment doc for idempotency replay
     await get_collection("mandir_public_payments").update_one(
-        {"id": payment_id},
+        {"id": payment_id, "tenant_id": tenant_id, "app_key": app_key},
         {"$set": {"whatsapp_link": whatsapp_link, "whatsapp_message_template": whatsapp_message}},
     )
 
@@ -7243,12 +7354,19 @@ async def mandir_public_create_seva_payment(
 
 
 @router.get("/public/payments/{payment_id}/status")
-async def mandir_public_payment_status(payment_id: str):
+async def mandir_public_payment_status(
+    payment_id: str,
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    app_key = resolve_app_key((x_app_key or "mandirmitra").strip())
     col = get_collection("mandir_public_payments")
-    doc = await col.find_one({"$or": [
-        {"id": payment_id},
-        {"id": {"$regex": f"^{payment_id[:8].lower()}"}},
-    ]})
+    doc = await col.find_one({
+        "app_key": app_key,
+        "$or": [
+            {"id": payment_id},
+            {"id": {"$regex": f"^{payment_id[:8].lower()}"}},
+        ],
+    })
     if not doc:
         raise HTTPException(status_code=404, detail="Payment not found")
     return {
@@ -7263,18 +7381,272 @@ async def mandir_public_payment_status(payment_id: str):
 @router.get("/public-payments")
 async def mandir_list_public_payments(
     status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None),
+    payment_type: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     temple_id: int | None = Query(default=None),
 ):
-    tenant_id = await _resolve_tenant_for_mandir_request(current_user, x_tenant_id, temple_id)
-    query: dict[str, Any] = {"tenant_id": tenant_id}
-    if status:
-        query["status"] = status
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_id = await _resolve_tenant_for_mandir_request(current_user, x_tenant_id, temple_id, app_key=app_key)
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status and normalized_status != "all":
+        query["status"] = normalized_status
 
     col = get_collection("mandir_public_payments")
-    docs = await col.find(query).sort("created_at", -1).limit(500).to_list(length=500)
-    return [_sanitize_mongo_doc(doc) for doc in docs]
+    normalized_q = str(q or "").strip().lower()
+    normalized_type = str(payment_type or "").strip().lower()
+    needs_in_memory_filter = any([normalized_q, normalized_type])
+    fetch_limit = 500 if needs_in_memory_filter else min(limit + offset, 500)
+    docs = await col.find(query).sort("created_at", -1).limit(fetch_limit).to_list(length=fetch_limit)
+    filtered: list[dict[str, Any]] = []
+    for doc in docs:
+        doc_type = str(doc.get("payment_type") or doc.get("payment_purpose") or "").strip().lower()
+        if normalized_type and doc_type != normalized_type:
+            continue
+        if normalized_q:
+            haystack = " ".join(
+                str(doc.get(key) or "")
+                for key in (
+                    "id",
+                    "payment_id",
+                    "devotee_name",
+                    "name",
+                    "devotee_phone",
+                    "phone",
+                    "seva_name",
+                    "payment_type",
+                    "payment_purpose",
+                    "status",
+                    "utr_reference",
+                )
+            ).lower()
+            if normalized_q not in haystack:
+                continue
+        filtered.append(_sanitize_mongo_doc(doc))
+    return filtered[offset:offset + limit]
+
+
+@router.get("/public-payments/exceptions")
+async def mandir_public_payment_exceptions(
+    older_than_hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None),
+    reason: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    payment_type: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    now = datetime.now(timezone.utc)
+    stale_cutoff = now - timedelta(hours=older_than_hours)
+    docs = await get_collection("mandir_public_payments").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).sort("created_at", -1).limit(500).to_list(length=500)
+
+    rows: list[dict[str, Any]] = []
+    reason_counts: dict[str, int] = {}
+    normalized_q = str(q or "").strip().lower()
+    normalized_reason = str(reason or "").strip().lower()
+    normalized_status = str(status or "").strip().lower()
+    normalized_type = str(payment_type or "").strip().lower()
+    for doc in docs:
+        doc_status = str(doc.get("status") or "pending").strip().lower()
+        amount = _safe_float(doc.get("amount"), 0.0)
+        created_at = _parse_iso_datetime(doc.get("created_at"))
+        reasons: list[str] = []
+
+        if doc_status in {"failed", "error", "rejected"}:
+            reasons.append(doc_status)
+        if doc_status == "pending" and created_at and created_at < stale_cutoff:
+            reasons.append("stale_pending")
+        if amount <= 0:
+            reasons.append("invalid_amount")
+        if not _normalize_phone(doc.get("devotee_phone")):
+            reasons.append("missing_phone")
+        doc_payment_type = str(doc.get("payment_type") or "").strip().lower()
+        if doc_payment_type not in {"donation", "seva"}:
+            reasons.append("invalid_payment_type")
+        if doc_payment_type == "seva" and not str(doc.get("seva_name") or "").strip():
+            reasons.append("missing_seva")
+        if doc_payment_type == "donation" and not str(doc.get("seva_name") or doc.get("category") or "").strip():
+            reasons.append("missing_donation_category")
+
+        if not reasons:
+            continue
+        if normalized_reason and normalized_reason not in reasons:
+            continue
+        if normalized_status and normalized_status != "all" and doc_status != normalized_status:
+            continue
+        if normalized_type and doc_payment_type != normalized_type:
+            continue
+        if normalized_q:
+            haystack = " ".join(
+                str(doc.get(key) or "")
+                for key in (
+                    "id",
+                    "payment_id",
+                    "devotee_name",
+                    "name",
+                    "devotee_phone",
+                    "phone",
+                    "seva_name",
+                    "payment_type",
+                    "payment_purpose",
+                    "status",
+                    "utr_reference",
+                )
+            ).lower()
+            if normalized_q not in haystack:
+                continue
+
+        for reason in reasons:
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+        row = _sanitize_mongo_doc(doc)
+        row["exception_reasons"] = reasons
+        row["age_hours"] = round(((now - created_at).total_seconds() / 3600), 2) if created_at else None
+        rows.append(row)
+
+    return {
+        "summary": {
+            "total": len(rows),
+            "by_reason": reason_counts,
+            "older_than_hours": older_than_hours,
+        },
+        "items": rows[offset:offset + limit],
+    }
+
+
+@router.patch("/public-payments/{payment_id}/reject")
+async def mandir_reject_public_payment(
+    payment_id: str,
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    reason = " ".join(str(payload.get("reason") or "").strip().split())
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+
+    col = get_collection("mandir_public_payments")
+    doc = await col.find_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if str(doc.get("status") or "").strip().lower() == "verified":
+        raise HTTPException(status_code=400, detail="Verified payment cannot be rejected")
+
+    now = datetime.now(timezone.utc).isoformat()
+    rejected_by = str(current_user.get("email") or current_user.get("sub") or current_user.get("id") or "admin")
+    update = {
+        "status": "rejected",
+        "rejection_reason": reason,
+        "rejected_at": now,
+        "rejected_by": rejected_by,
+        "updated_at": now,
+    }
+    await col.update_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key}, {"$set": update})
+
+    try:
+        await log_audit_event(
+            tenant_id=tenant_id,
+            user_id=rejected_by,
+            product="mandirmitra",
+            action="public_payment_rejected",
+            entity_type="mandir_public_payment",
+            entity_id=payment_id,
+            old_value={"status": doc.get("status")},
+            new_value={"status": "rejected", "reason": reason},
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "rejected",
+        "payment_id": payment_id[:8].upper(),
+        "reason": reason,
+        "rejected_at": now,
+    }
+
+
+@router.patch("/public-payments/{payment_id}/correction")
+async def mandir_correct_public_payment(
+    payment_id: str,
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    col = get_collection("mandir_public_payments")
+    doc = await col.find_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if str(doc.get("status") or "").strip().lower() == "verified":
+        raise HTTPException(status_code=400, detail="Verified payment cannot be corrected")
+
+    patch: dict[str, Any] = {}
+    if "amount" in payload:
+        amount = _safe_float(payload.get("amount"), 0.0)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+        patch["amount"] = amount
+    if "devotee_phone" in payload:
+        phone = _normalize_phone(payload.get("devotee_phone"))
+        if not phone:
+            raise HTTPException(status_code=400, detail="Valid mobile number is required")
+        patch["devotee_phone"] = phone
+    if "payment_type" in payload:
+        payment_type = str(payload.get("payment_type") or "").strip().lower()
+        if payment_type not in {"donation", "seva"}:
+            raise HTTPException(status_code=400, detail="payment_type must be donation or seva")
+        patch["payment_type"] = payment_type
+    if "seva_name" in payload:
+        purpose = " ".join(str(payload.get("seva_name") or "").strip().split())
+        if not purpose:
+            raise HTTPException(status_code=400, detail="Donation/seva purpose is required")
+        patch["seva_name"] = purpose
+
+    if not patch:
+        raise HTTPException(status_code=400, detail="No correction fields provided")
+
+    now = datetime.now(timezone.utc).isoformat()
+    corrected_by = str(current_user.get("email") or current_user.get("sub") or current_user.get("id") or "admin")
+    patch.update({
+        "corrected_at": now,
+        "corrected_by": corrected_by,
+        "updated_at": now,
+    })
+    await col.update_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key}, {"$set": patch})
+    updated = await col.find_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key}) or {**doc, **patch}
+
+    try:
+        await log_audit_event(
+            tenant_id=tenant_id,
+            user_id=corrected_by,
+            product="mandirmitra",
+            action="public_payment_corrected",
+            entity_type="mandir_public_payment",
+            entity_id=payment_id,
+            old_value={key: doc.get(key) for key in patch if key in doc},
+            new_value={key: patch.get(key) for key in patch},
+        )
+    except Exception:
+        pass
+
+    return _sanitize_mongo_doc(updated)
 
 
 @router.patch("/public-payments/{payment_id}/verify")
@@ -7287,15 +7659,18 @@ async def mandir_verify_public_payment(
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
     col = get_collection("mandir_public_payments")
-    doc = await col.find_one({"id": payment_id, "tenant_id": tenant_id})
+    doc = await col.find_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key})
     if not doc:
         raise HTTPException(status_code=404, detail="Payment not found")
 
     if doc.get("status") == "verified":
         raise HTTPException(status_code=400, detail="Payment already verified")
 
-    utr_reference = str(payload.get("utr_reference") or "").strip() or None
+    utr_reference = _normalize_public_payment_utr_reference(
+        payload.get("utr_reference") or doc.get("utr_reference") or doc.get("upi_reference_number")
+    )
     payment_date = str(
         payload.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
     ).strip()
@@ -7341,7 +7716,7 @@ async def mandir_verify_public_payment(
                 session=session,
                 current_user=current_user,
                 x_tenant_id=x_tenant_id,
-                x_app_key=x_app_key,
+                x_app_key=app_key,
             )
             source_type = "seva_booking"
             source_id = str(source_record.get("id") or "").strip() or None
@@ -7374,7 +7749,7 @@ async def mandir_verify_public_payment(
                 session=session,
                 current_user=current_user,
                 x_tenant_id=x_tenant_id,
-                x_app_key=x_app_key,
+                x_app_key=app_key,
             )
             source_type = "donation"
             source_id = str(source_record.get("donation_id") or source_record.get("id") or "").strip() or None
@@ -7392,15 +7767,23 @@ async def mandir_verify_public_payment(
         "source_type": source_type,
         "source_id": source_id,
     }
-    await col.update_one({"id": payment_id, "tenant_id": tenant_id}, {"$set": update})
+    await col.update_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key}, {"$set": update})
 
     receipt_number = str(source_record.get("receipt_number") or "").strip() or None
+    receipt_pdf_url = str(source_record.get("receipt_pdf_url") or "").strip() or None
+    if not receipt_pdf_url and source_id:
+        if source_type == "seva_booking":
+            receipt_pdf_url = f"/api/v1/sevas/bookings/{source_id}/receipt/pdf"
+        elif source_type == "donation":
+            receipt_pdf_url = f"/api/v1/donations/{source_id}/receipt/pdf"
+
     return {
         "status": "verified",
         "payment_id": payment_id[:8].upper(),
         "source_type": source_type,
         "source_id": source_id,
         "receipt_number": receipt_number,
+        "receipt_pdf_url": receipt_pdf_url,
         "message": "Payment verified and accounting entry posted successfully.",
     }
 
@@ -7883,15 +8266,35 @@ async def create_quick_ticket(
 @router.get("/sevas/bookings")
 async def mandir_seva_bookings(
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    status: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
     col = get_collection("mandir_seva_bookings")
-    docs = await col.find({"tenant_id": tenant_id, "app_key": app_key}).sort("booking_date", -1).limit(limit).to_list(length=limit)
-    return [_mandir_seva_booking_view(doc) for doc in docs]
+    fetch_limit = 500 if any([q, from_date, to_date, status]) else min(limit + offset, 500)
+    docs = await col.find({"tenant_id": tenant_id, "app_key": app_key}).sort("booking_date", -1).limit(fetch_limit).to_list(length=fetch_limit)
+    viewed = [_mandir_seva_booking_view(doc) for doc in docs]
+    if status:
+        normalized_status = str(status).strip().lower()
+        viewed = [row for row in viewed if str(row.get("status") or "").strip().lower() == normalized_status]
+    filtered = _mandir_filter_rows(
+        viewed,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+        date_fields=("booking_date", "created_at"),
+        search_fields=("receipt_number", "devotee_name", "devotee_names", "seva_name", "seva", "upi_reference_number"),
+    )
+    return filtered[offset:offset + limit]
 
 
 @router.get("/sevas/bookings/{booking_id}/receipt/pdf")

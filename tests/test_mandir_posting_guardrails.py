@@ -1083,6 +1083,614 @@ def test_public_upi_intent_is_temple_scoped(mandir_upi_client):
     assert blocked.status_code == 404
 
 
+def test_public_payments_listing_is_app_key_scoped(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.extend(
+        [
+            {
+                "id": "pay-mandir",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "donation",
+                "status": "pending",
+                "created_at": "2026-04-10T07:00:00+00:00",
+            },
+            {
+                "id": "pay-mitra",
+                "tenant_id": "tenant-1",
+                "app_key": "mitrabooks",
+                "payment_type": "donation",
+                "status": "pending",
+                "created_at": "2026-04-10T07:01:00+00:00",
+            },
+        ]
+    )
+
+    mandir_rows = client.get("/api/v1/public-payments", headers={"X-App-Key": "mandirmitra"})
+    assert mandir_rows.status_code == 200
+    assert [row["id"] for row in mandir_rows.json()] == ["pay-mandir"]
+
+    mitra_rows = client.get("/api/v1/public-payments", headers={"X-App-Key": "mitrabooks"})
+    assert mitra_rows.status_code == 200
+    assert [row["id"] for row in mitra_rows.json()] == ["pay-mitra"]
+
+
+def test_public_payments_listing_supports_filters_and_offset(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.extend(
+        [
+            {
+                "id": "pay-alpha",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "donation",
+                "devotee_name": "Alpha Devotee",
+                "status": "pending",
+                "created_at": "2026-04-10T07:00:00+00:00",
+            },
+            {
+                "id": "pay-beta",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "seva",
+                "seva_name": "Archana",
+                "devotee_name": "Beta Devotee",
+                "status": "verified",
+                "created_at": "2026-04-10T07:01:00+00:00",
+            },
+            {
+                "id": "pay-gamma",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "seva",
+                "seva_name": "Abhisheka",
+                "devotee_name": "Gamma Devotee",
+                "status": "pending",
+                "created_at": "2026-04-10T07:02:00+00:00",
+            },
+        ]
+    )
+
+    pending = client.get("/api/v1/public-payments?status=pending", headers={"X-App-Key": "mandirmitra"})
+    assert pending.status_code == 200
+    assert [row["id"] for row in pending.json()] == ["pay-alpha", "pay-gamma"]
+
+    seva = client.get("/api/v1/public-payments?status=all&payment_type=seva", headers={"X-App-Key": "mandirmitra"})
+    assert seva.status_code == 200
+    assert [row["id"] for row in seva.json()] == ["pay-beta", "pay-gamma"]
+
+    search = client.get("/api/v1/public-payments?status=all&q=archana", headers={"X-App-Key": "mandirmitra"})
+    assert search.status_code == 200
+    assert [row["id"] for row in search.json()] == ["pay-beta"]
+
+    offset = client.get("/api/v1/public-payments?status=all&limit=1&offset=1", headers={"X-App-Key": "mandirmitra"})
+    assert offset.status_code == 200
+    assert len(offset.json()) == 1
+    assert offset.json()[0]["id"] == "pay-beta"
+
+
+def test_public_payment_status_is_app_key_scoped(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-mitra-only",
+            "tenant_id": "tenant-1",
+            "app_key": "mitrabooks",
+            "seva_name": "Sarva Seve",
+            "amount": 501,
+            "status": "pending",
+        }
+    )
+
+    blocked = client.get("/api/v1/public/payments/pay-mitra-only/status")
+    assert blocked.status_code == 404
+
+    ok = client.get(
+        "/api/v1/public/payments/pay-mitra-only/status",
+        headers={"X-App-Key": "mitrabooks"},
+    )
+    assert ok.status_code == 200
+    assert ok.json()["status"] == "pending"
+
+
+def test_public_payment_verify_is_app_key_scoped(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-mitra-verify",
+            "tenant_id": "tenant-1",
+            "app_key": "mitrabooks",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_name": "Raghavan Iyer",
+            "devotee_phone": "9876512340",
+            "status": "pending",
+            "created_at": "2026-04-10T07:00:00+00:00",
+        }
+    )
+
+    blocked = client.patch(
+        "/api/v1/public-payments/pay-mitra-verify/verify",
+        json={"utr_reference": "UPI-MITRA-1"},
+    )
+
+    assert blocked.status_code == 404
+    assert collections["mandir_public_payments"].docs[0]["status"] == "pending"
+
+
+def test_public_payment_verify_returns_receipt_pdf_url(mandir_upi_client, monkeypatch):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-receipt-verify",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_name": "Raghavan Iyer",
+            "devotee_phone": "9876512340",
+            "status": "pending",
+            "created_at": "2026-04-10T07:00:00+00:00",
+        }
+    )
+
+    async def fake_create_donation(**_kwargs):
+        return {
+            "donation_id": "don-public-1",
+            "receipt_number": "DON-0000001",
+            "receipt_pdf_url": "/api/v1/donations/don-public-1/receipt/pdf",
+        }
+
+    monkeypatch.setattr(mandir_router, "create_donation", fake_create_donation)
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-receipt-verify/verify",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"utr_reference": "UPI-RECEIPT-1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_type"] == "donation"
+    assert payload["source_id"] == "don-public-1"
+    assert payload["receipt_number"] == "DON-0000001"
+    assert payload["receipt_pdf_url"] == "/api/v1/donations/don-public-1/receipt/pdf"
+
+
+def test_public_payment_verify_requires_utr_reference(mandir_upi_client, monkeypatch):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-missing-utr",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_name": "Raghavan Iyer",
+            "status": "pending",
+        }
+    )
+
+    async def fail_create_donation(**_kwargs):
+        raise AssertionError("Payment must not post without UTR/reference")
+
+    monkeypatch.setattr(mandir_router, "create_donation", fail_create_donation)
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-missing-utr/verify",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"utr_reference": ""},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "UTR/reference is required before verifying a public payment"
+    assert collections["mandir_public_payments"].docs[0]["status"] == "pending"
+
+
+def test_public_payment_verify_rejects_unsafe_utr_reference(mandir_upi_client, monkeypatch):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-unsafe-utr",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_name": "Raghavan Iyer",
+            "status": "pending",
+        }
+    )
+
+    async def fail_create_donation(**_kwargs):
+        raise AssertionError("Payment must not post with unsafe UTR/reference")
+
+    monkeypatch.setattr(mandir_router, "create_donation", fail_create_donation)
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-unsafe-utr/verify",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"utr_reference": "<script>"},
+    )
+
+    assert response.status_code == 400
+    assert "UTR/reference must be 4-80 characters" in response.json()["detail"]
+    assert collections["mandir_public_payments"].docs[0]["status"] == "pending"
+
+
+def test_public_payment_exceptions_are_tenant_and_app_scoped(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.extend(
+        [
+            {
+                "id": "pay-stale",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "donation",
+                "seva_name": "General Donation",
+                "amount": 501,
+                "devotee_name": "Raghavan Iyer",
+                "devotee_phone": "9876512340",
+                "status": "pending",
+                "created_at": "2026-04-10T07:00:00+00:00",
+            },
+            {
+                "id": "pay-invalid",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "seva",
+                "seva_name": "",
+                "amount": 0,
+                "devotee_name": "No Phone",
+                "devotee_phone": "",
+                "status": "pending",
+                "created_at": "2026-05-19T07:00:00+00:00",
+            },
+            {
+                "id": "pay-other-app",
+                "tenant_id": "tenant-1",
+                "app_key": "mitrabooks",
+                "payment_type": "donation",
+                "seva_name": "General Donation",
+                "amount": 501,
+                "devotee_phone": "",
+                "status": "failed",
+                "created_at": "2026-04-10T07:00:00+00:00",
+            },
+        ]
+    )
+
+    response = client.get(
+        "/api/v1/public-payments/exceptions?older_than_hours=1",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    ids = {row["id"] for row in payload["items"]}
+    assert ids == {"pay-stale", "pay-invalid"}
+    assert "pay-other-app" not in ids
+    assert payload["summary"]["by_reason"]["stale_pending"] >= 1
+    assert payload["summary"]["by_reason"]["invalid_amount"] == 1
+    assert payload["summary"]["by_reason"]["missing_phone"] == 1
+    assert payload["summary"]["by_reason"]["missing_seva"] == 1
+
+
+def test_public_payment_exceptions_support_filters_and_offset(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.extend(
+        [
+            {
+                "id": "pay-stale-one",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "donation",
+                "seva_name": "General Donation",
+                "amount": 501,
+                "devotee_name": "Alpha Devotee",
+                "devotee_phone": "9876512340",
+                "status": "pending",
+                "created_at": "2026-04-10T07:00:00+00:00",
+            },
+            {
+                "id": "pay-invalid-seva",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "seva",
+                "seva_name": "",
+                "amount": 0,
+                "devotee_name": "Beta Devotee",
+                "devotee_phone": "",
+                "status": "pending",
+                "created_at": "2026-05-19T07:00:00+00:00",
+            },
+            {
+                "id": "pay-rejected-one",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "payment_type": "donation",
+                "seva_name": "Annadanam",
+                "amount": 1001,
+                "devotee_name": "Gamma Devotee",
+                "devotee_phone": "9876512341",
+                "status": "rejected",
+                "created_at": "2026-05-19T08:00:00+00:00",
+            },
+        ]
+    )
+
+    reason = client.get(
+        "/api/v1/public-payments/exceptions?reason=missing_phone",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert reason.status_code == 200
+    assert [row["id"] for row in reason.json()["items"]] == ["pay-invalid-seva"]
+
+    searched = client.get(
+        "/api/v1/public-payments/exceptions?q=gamma&status=rejected&payment_type=donation",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert searched.status_code == 200
+    assert [row["id"] for row in searched.json()["items"]] == ["pay-rejected-one"]
+
+    offset = client.get(
+        "/api/v1/public-payments/exceptions?limit=1&offset=1",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert offset.status_code == 200
+    assert len(offset.json()["items"]) == 1
+    assert offset.json()["summary"]["total"] == 3
+
+
+def test_public_payment_reject_is_app_key_scoped_and_audited(mandir_upi_client, monkeypatch):
+    client, collections = mandir_upi_client
+    audit_calls = []
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-reject-1",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_name": "Raghavan Iyer",
+            "devotee_phone": "9876512340",
+            "status": "pending",
+            "created_at": "2026-04-10T07:00:00+00:00",
+        }
+    )
+
+    async def fake_log_audit_event(**kwargs):
+        audit_calls.append(kwargs)
+
+    monkeypatch.setattr(mandir_router, "log_audit_event", fake_log_audit_event)
+
+    blocked = client.patch(
+        "/api/v1/public-payments/pay-reject-1/reject",
+        headers={"X-App-Key": "mitrabooks"},
+        json={"reason": "Wrong app"},
+    )
+    assert blocked.status_code == 404
+    assert collections["mandir_public_payments"].docs[0]["status"] == "pending"
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-reject-1/reject",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"reason": "Duplicate UPI confirmation"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "rejected"
+    assert collections["mandir_public_payments"].docs[0]["status"] == "rejected"
+    assert collections["mandir_public_payments"].docs[0]["rejection_reason"] == "Duplicate UPI confirmation"
+    assert audit_calls[0]["action"] == "public_payment_rejected"
+
+
+def test_public_payment_reject_blocks_verified_payment(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-verified-reject",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_phone": "9876512340",
+            "status": "verified",
+        }
+    )
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-verified-reject/reject",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"reason": "Cannot reject now"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Verified payment cannot be rejected"
+    assert collections["mandir_public_payments"].docs[0]["status"] == "verified"
+
+
+def test_public_payment_correction_repairs_invalid_source_data(mandir_upi_client, monkeypatch):
+    client, collections = mandir_upi_client
+    audit_calls = []
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-correct-1",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "seva",
+            "seva_name": "",
+            "amount": 0,
+            "devotee_name": "No Phone",
+            "devotee_phone": "",
+            "status": "pending",
+        }
+    )
+
+    async def fake_log_audit_event(**kwargs):
+        audit_calls.append(kwargs)
+
+    monkeypatch.setattr(mandir_router, "log_audit_event", fake_log_audit_event)
+
+    blocked = client.patch(
+        "/api/v1/public-payments/pay-correct-1/correction",
+        headers={"X-App-Key": "mitrabooks"},
+        json={"amount": 301},
+    )
+    assert blocked.status_code == 404
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-correct-1/correction",
+        headers={"X-App-Key": "mandirmitra"},
+        json={
+            "amount": 301,
+            "devotee_phone": "98765 12340",
+            "payment_type": "seva",
+            "seva_name": "Sarva Seve",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["amount"] == 301
+    assert payload["devotee_phone"] == "9876512340"
+    assert payload["seva_name"] == "Sarva Seve"
+    assert collections["mandir_public_payments"].docs[0]["corrected_by"] == "user-1"
+    assert audit_calls[0]["action"] == "public_payment_corrected"
+
+
+def test_public_payment_correction_blocks_verified_payment(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_public_payments"].docs.append(
+        {
+            "id": "pay-verified-correct",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "payment_type": "donation",
+            "seva_name": "General Donation",
+            "amount": 501,
+            "devotee_phone": "9876512340",
+            "status": "verified",
+        }
+    )
+
+    response = client.patch(
+        "/api/v1/public-payments/pay-verified-correct/correction",
+        headers={"X-App-Key": "mandirmitra"},
+        json={"amount": 601},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Verified payment cannot be corrected"
+    assert collections["mandir_public_payments"].docs[0]["amount"] == 501
+
+
+def test_mandir_donations_list_supports_search_filters_and_offset(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_donations"].docs.extend(
+        [
+            {
+                "id": "don-1",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "devotee_name": "Raghavan Iyer",
+                "category": "General Donation",
+                "amount": 501,
+                "payment_mode": "UPI",
+                "donation_date": "2026-05-18",
+                "created_at": "2026-05-18T09:00:00+00:00",
+            },
+            {
+                "id": "don-2",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "devotee_name": "Meera Rao",
+                "category": "Annadanam",
+                "amount": 1001,
+                "payment_mode": "Cash",
+                "donation_date": "2026-05-19",
+                "created_at": "2026-05-19T09:00:00+00:00",
+            },
+            {
+                "id": "don-other-app",
+                "tenant_id": "tenant-1",
+                "app_key": "mitrabooks",
+                "devotee_name": "Raghavan Iyer",
+                "category": "General Donation",
+                "amount": 501,
+                "payment_mode": "UPI",
+                "donation_date": "2026-05-18",
+            },
+        ]
+    )
+
+    searched = client.get(
+        "/api/v1/donations?q=raghavan&payment_mode=UPI&from_date=2026-05-18&to_date=2026-05-18",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert searched.status_code == 200
+    assert [row["id"] for row in searched.json()] == ["don-1"]
+
+    offset = client.get(
+        "/api/v1/donations?limit=1&offset=1",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert offset.status_code == 200
+    assert len(offset.json()) == 1
+
+
+def test_mandir_seva_bookings_list_supports_search_status_and_date_filters(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_seva_bookings"].docs.extend(
+        [
+            {
+                "id": "book-1",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "devotee_name": "Raghavan Iyer",
+                "seva_name": "Sarva Seve",
+                "amount_paid": 301,
+                "status": "confirmed",
+                "booking_date": "2026-05-18",
+            },
+            {
+                "id": "book-2",
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "devotee_name": "Meera Rao",
+                "seva_name": "Archana",
+                "amount_paid": 101,
+                "status": "cancelled",
+                "booking_date": "2026-05-19",
+            },
+            {
+                "id": "book-other-app",
+                "tenant_id": "tenant-1",
+                "app_key": "mitrabooks",
+                "devotee_name": "Raghavan Iyer",
+                "seva_name": "Sarva Seve",
+                "amount_paid": 301,
+                "status": "confirmed",
+                "booking_date": "2026-05-18",
+            },
+        ]
+    )
+
+    response = client.get(
+        "/api/v1/sevas/bookings?q=sarva&status=confirmed&from_date=2026-05-18&to_date=2026-05-18",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == ["book-1"]
+
+
 def test_quick_ticket_uses_devotee_autofill_and_resolves_seva_name(mandir_upi_client, monkeypatch):
     client, collections = mandir_upi_client
 

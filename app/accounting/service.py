@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import Select, and_, func, select
@@ -24,6 +24,10 @@ class AccountingValidationError(ValueError):
 
 class AccountingNotFoundError(ValueError):
     pass
+
+
+def _money_float(value: Decimal | int | float | str | None) -> float:
+    return float(Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _default_account(
@@ -1350,6 +1354,186 @@ async def get_receipts_payments(
         )
 
     return lines, _q(total_receipts), _q(total_payments), _q(total_receipts - total_payments)
+
+
+def _journal_voucher_row(entry: JournalEntry) -> dict:
+    return {
+        "id": entry.id,
+        "entry_date": entry.entry_date.isoformat(),
+        "description": entry.description,
+        "reference": entry.reference,
+        "idempotency_key": entry.idempotency_key,
+        "total_debit": _money_float(entry.total_debit),
+        "total_credit": _money_float(entry.total_credit),
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+def _journal_drilldown_summary(rows: list[dict]) -> dict:
+    return {
+        "voucher_count": len(rows),
+        "total_debit": _money_float(sum((Decimal(str(row.get("total_debit") or 0)) for row in rows), Decimal("0"))),
+        "total_credit": _money_float(sum((Decimal(str(row.get("total_credit") or 0)) for row in rows), Decimal("0"))),
+        "last_voucher": rows[0] if rows else None,
+    }
+
+
+def _journal_week_start(value: date) -> date:
+    return value - timedelta(days=value.weekday())
+
+
+async def get_journal_drilldown(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    from_date: date,
+    to_date: date,
+    level: str = "month",
+    month: str | None = None,
+    week_start: date | None = None,
+    day: date | None = None,
+    limit: int = 1000,
+) -> dict:
+    normalized_level = str(level or "month").strip().lower()
+    if normalized_level not in {"month", "week", "day", "voucher"}:
+        raise AccountingValidationError("level must be month, week, day, or voucher")
+    if from_date > to_date:
+        raise AccountingValidationError("from_date cannot be greater than to_date")
+
+    stmt = (
+        select(JournalEntry)
+        .where(
+            JournalEntry.app_key == app_key,
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.accounting_entity_id == accounting_entity_id,
+            JournalEntry.entry_date >= from_date,
+            JournalEntry.entry_date <= to_date,
+        )
+        .order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
+        .limit(limit)
+    )
+    rows = [_journal_voucher_row(entry) for entry in (await session.execute(stmt)).scalars().all()]
+
+    if month:
+        rows = [row for row in rows if str(row["entry_date"])[:7] == month]
+    if week_start:
+        week_end = week_start + timedelta(days=6)
+        rows = [row for row in rows if week_start.isoformat() <= str(row["entry_date"])[:10] <= week_end.isoformat()]
+    if day:
+        rows = [row for row in rows if str(row["entry_date"])[:10] == day.isoformat()]
+
+    filters = {
+        "month": month,
+        "week_start": week_start.isoformat() if week_start else None,
+        "day": day.isoformat() if day else None,
+    }
+    if normalized_level == "voucher":
+        return {
+            "level": "voucher",
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "filters": filters,
+            "summary": _journal_drilldown_summary(rows),
+            "items": rows,
+        }
+
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        entry_date = date.fromisoformat(str(row["entry_date"])[:10])
+        if normalized_level == "month":
+            key = entry_date.strftime("%Y-%m")
+        elif normalized_level == "week":
+            key = _journal_week_start(entry_date).isoformat()
+        else:
+            key = entry_date.isoformat()
+        grouped.setdefault(key, []).append(row)
+
+    items: list[dict] = []
+    for key, group_rows in grouped.items():
+        if normalized_level == "month":
+            item = {"month": key, "label": date.fromisoformat(f"{key}-01").strftime("%B %Y")}
+        elif normalized_level == "week":
+            start = date.fromisoformat(key)
+            item = {"week_start": key, "week_end": (start + timedelta(days=6)).isoformat()}
+        else:
+            item = {"day": key}
+        item.update(_journal_drilldown_summary(group_rows))
+        items.append(item)
+
+    items.sort(key=lambda item: item.get("month") or item.get("week_start") or item.get("day") or "", reverse=True)
+    return {
+        "level": normalized_level,
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "filters": filters,
+        "summary": _journal_drilldown_summary(rows),
+        "items": items,
+    }
+
+
+async def get_journal_voucher_detail(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    journal_id: int,
+) -> dict:
+    entry = (
+        await session.execute(
+            select(JournalEntry).where(
+                JournalEntry.id == journal_id,
+                JournalEntry.app_key == app_key,
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.accounting_entity_id == accounting_entity_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if entry is None:
+        raise AccountingNotFoundError("Journal voucher not found")
+
+    line_rows = (
+        await session.execute(
+            select(JournalLine, Account)
+            .join(
+                Account,
+                and_(
+                    Account.id == JournalLine.account_id,
+                    Account.app_key == app_key,
+                    Account.tenant_id == tenant_id,
+                    Account.accounting_entity_id == accounting_entity_id,
+                ),
+            )
+            .where(
+                JournalLine.journal_id == entry.id,
+                JournalLine.app_key == app_key,
+                JournalLine.tenant_id == tenant_id,
+                JournalLine.accounting_entity_id == accounting_entity_id,
+            )
+            .order_by(JournalLine.id.asc())
+        )
+    ).all()
+    lines = [
+        {
+            "line_id": line.id,
+            "account_id": account.id,
+            "account_code": account.code,
+            "account_name": account.name,
+            "account_type": account.type,
+            "debit": _money_float(line.debit),
+            "credit": _money_float(line.credit),
+        }
+        for line, account in line_rows
+    ]
+    return {
+        **_journal_voucher_row(entry),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "lines": lines,
+    }
 
 
 async def get_balance_sheet(

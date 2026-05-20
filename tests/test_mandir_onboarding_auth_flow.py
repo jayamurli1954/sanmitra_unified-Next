@@ -127,6 +127,9 @@ async def test_first_login_onboarding_email_flow_creates_tenant_admin(monkeypatc
     async def fake_ensure_tenant_exists(tenant_id: str, **kwargs):
         ensured["tenant_id"] = tenant_id
         ensured["display_name"] = kwargs.get("display_name")
+        ensured["organization_type"] = kwargs.get("organization_type")
+        ensured["enabled_modules"] = kwargs.get("enabled_modules")
+        ensured["app_keys"] = kwargs.get("app_keys")
         return {"tenant_id": tenant_id, "status": "active"}
 
     created_user = {}
@@ -177,9 +180,75 @@ async def test_first_login_onboarding_email_flow_creates_tenant_admin(monkeypatc
     assert result["temple_name"] == "Sri Venkateswara Temple"
     assert result["access_token"] == "access-1"
     assert ensured["tenant_id"] == "sri-venkateswara-temple"
+    assert ensured["organization_type"] == "TEMPLE"
+    assert ensured["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert ensured["app_keys"] == ["mandirmitra"]
     assert created_user["role"] == "tenant_admin"
     assert fake_collections.temples.docs[0]["admin_email"] == "admin.temple@example.com"
     assert fake_collections.onboarding.docs[0]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_first_login_onboarding_preserves_mitrabooks_app_context(monkeypatch):
+    fake_collections = FakeCollections()
+    monkeypatch.setattr(mandir_service, "get_collection", fake_collections)
+
+    async def _noop_indexes():
+        return None
+
+    ensured = {}
+    created_user = {}
+
+    async def fake_get_tenant(_tenant_id: str):
+        return None
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **kwargs):
+        ensured.update({"tenant_id": tenant_id, **kwargs})
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    async def fake_create_user(**kwargs):
+        created_user.update(kwargs)
+        return {
+            "user_id": "admin-user-erp",
+            "email": kwargs["email"],
+            "full_name": kwargs["full_name"],
+            "tenant_id": kwargs["tenant_id"],
+            "role": kwargs["role"],
+        }
+
+    async def fake_get_user_by_email(_email: str):
+        return None
+
+    async def fake_login_user(*_args, **_kwargs):
+        return "access-erp", "refresh-erp"
+
+    monkeypatch.setattr(mandir_service, "ensure_mandir_compat_indexes", _noop_indexes)
+    monkeypatch.setattr(mandir_service, "get_tenant", fake_get_tenant)
+    monkeypatch.setattr(mandir_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+    monkeypatch.setattr(mandir_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(mandir_service, "create_user", fake_create_user)
+    monkeypatch.setattr(mandir_service, "login_user", fake_login_user)
+
+    payload = MandirFirstLoginOnboardingRequest(
+        login_method="email",
+        temple_name="ERP Temple",
+        temple_address="Temple Street",
+        temple_contact_number="9876543210",
+        admin_name="ERP Admin",
+        admin_mobile_number="9876543211",
+        admin_email="erp.admin@example.com",
+        admin_password="StrongPass123!",
+    )
+
+    result = await mandir_service.create_mandir_first_login_onboarding(payload, app_key="mitrabooks")
+
+    assert result["app_key"] == "mitrabooks"
+    assert ensured["organization_type"] == "TEMPLE"
+    assert ensured["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert ensured["app_keys"] == ["mitrabooks"]
+    assert created_user["app_key"] == "mitrabooks"
+    assert fake_collections.temples.docs[0]["app_key"] == "mitrabooks"
+    assert fake_collections.onboarding.docs[0]["app_key"] == "mitrabooks"
 
 
 def test_google_first_login_requires_google_id_token():
@@ -284,6 +353,7 @@ def test_temples_onboard_endpoint_is_public_and_returns_tokens(monkeypatch):
     client = TestClient(app)
     response = client.post(
         "/api/v1/temples/onboard",
+        headers={"X-App-Key": "mandirmitra"},
         json={
             "login_method": "email",
             "temple_name": "Demo Temple",
@@ -301,6 +371,31 @@ def test_temples_onboard_endpoint_is_public_and_returns_tokens(monkeypatch):
     assert data["tenant_id"] == "demo-tenant"
     assert data["temple_id"] == 7
     assert data["access_token"] == "a"
+
+
+def test_temples_onboard_endpoint_requires_app_key(monkeypatch):
+    async def fake_onboard(_payload, *, app_key: str):
+        raise AssertionError(f"Should not onboard without app key: {app_key}")
+
+    monkeypatch.setattr(mandir_router, "create_mandir_first_login_onboarding", fake_onboard)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/temples/onboard",
+        json={
+            "login_method": "email",
+            "temple_name": "Demo Temple",
+            "temple_address": "Address",
+            "temple_contact_number": "9876543210",
+            "admin_name": "Admin",
+            "admin_mobile_number": "9876543211",
+            "admin_email": "admin@example.com",
+            "admin_password": "StrongPass123!",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "X-App-Key header is required"
 
 def test_invalid_temple_email_is_ignored():
     payload = MandirFirstLoginOnboardingRequest(
