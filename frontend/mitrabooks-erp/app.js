@@ -175,6 +175,7 @@ let lastMandirPaymentAccounts = { cash_accounts: [], bank_accounts: [] };
 let lastMandirAccounts = [];
 let lastMandirFormResult = null;
 let lastMandirExpenses = [];
+let lastMandirTrialBalance = null;
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -1286,6 +1287,70 @@ function renderMandirExpensesTable(rows = lastMandirExpenses) {
   `;
 }
 
+function renderMandirTrialBalance(payload = lastMandirTrialBalance) {
+  if (!payload) {
+    return "";
+  }
+  if (payload.ok === false) {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Trial Balance</h4>
+            <p>Accounting report unavailable. Check backend accounting access and run checks again.</p>
+          </div>
+          <span class="pill warn">unavailable</span>
+        </div>
+      </div>
+    `;
+  }
+  const rows = Array.isArray(payload.lines) ? payload.lines : Array.isArray(payload.accounts) ? payload.accounts : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Trial Balance</h4>
+          <p>As of ${escapeHtml(payload.as_of || todayIsoDate())}. Debits and credits must match.</p>
+        </div>
+        <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Name</th>
+              <th>Debit</th>
+              <th>Credit</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.account_code || row.account_id || "")}</td>
+                <td>${escapeHtml(row.account_name || row.name || "")}</td>
+                <td>${escapeHtml(formatCurrency(row.debit_total || row.debit || 0))}</td>
+                <td>${escapeHtml(formatCurrency(row.credit_total || row.credit || 0))}</td>
+              </tr>
+            `).join("") : `
+              <tr>
+                <td colspan="4" class="muted">No posted accounting balances found for this tenant/app context.</td>
+              </tr>
+            `}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="2">Total</th>
+              <th>${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
+              <th>${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -1295,6 +1360,7 @@ function renderMandirDashboard(payload = {}) {
   const recentDonations = Array.isArray(payload.recent_donations) ? payload.recent_donations : [];
   const recentSevaBookings = Array.isArray(payload.recent_seva_bookings) ? payload.recent_seva_bookings : [];
   const recentExpenses = Array.isArray(payload.recent_expenses) ? payload.recent_expenses : [];
+  const trialBalance = payload.trial_balance || lastMandirTrialBalance;
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
   const paymentExceptionSummary = payload.payment_exception_summary || {};
   const donations = stats.donations || {};
@@ -1422,6 +1488,7 @@ function renderMandirDashboard(payload = {}) {
         </div>
       ` : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
+      ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
       ${(showOverview || showAccounting) ? renderMandirExpensesTable(recentExpenses) : ""}
     </div>
   `;
@@ -1671,6 +1738,7 @@ async function loadMandirDashboard() {
   const paymentAccounts = await apiRequest("mandirmitra", "/api/v1/donations/payment-accounts", { method: "GET" });
   const accounts = await apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" });
   const expenses = await apiRequest("mandirmitra", "/api/v1/journal-entries?reference_type=expense&limit=25", { method: "GET" });
+  const trialBalance = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/trial-balance?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
@@ -1681,6 +1749,7 @@ async function loadMandirDashboard() {
   if (expenses.ok && Array.isArray(expenses.payload)) {
     lastMandirExpenses = expenses.payload;
   }
+  lastMandirTrialBalance = trialBalance.ok ? trialBalance.payload : trialBalance;
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
     mandir_pending_public_payments: pendingPayments,
@@ -1690,6 +1759,7 @@ async function loadMandirDashboard() {
     mandir_payment_accounts: paymentAccounts,
     mandir_accounts: accounts,
     mandir_recent_expenses: expenses,
+    mandir_trial_balance: trialBalance,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -1705,6 +1775,7 @@ async function loadMandirDashboard() {
       recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
       recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
       recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
+      trial_balance: lastMandirTrialBalance,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
