@@ -1243,9 +1243,9 @@ def _generate_donation_receipt_pdf_bytes(
     payload = {
         **temple_profile,
         "receipt_title": "Donation Receipt",
-        "receipt_title_local": "ದಾನ / ಕಾಣಿಕೆ ರಸೀದಿ",
+        "receipt_title_local": "ದೇಣಿಗೆ ರಶೀದಿ",
         "line_item_header": "Donation Details",
-        "line_item_local": "ದಾನ / ಕಾಣಿಕೆ ವಿವರ",
+        "line_item_local": "ದೇಣಿಗೆ ವಿವರ",
         "service_date_label": "Donation Date",
         "receipt_number": receipt_number,
         "receipt_date": donation_date,
@@ -1877,6 +1877,8 @@ def _format_payment_mode_for_receipt(value: Any) -> str:
     lowered = mode.lower()
     if "cash" in lowered:
         return "Cash"
+    if "upi" in lowered:
+        return mode
     if any(token in lowered for token in ["upi", "bank", "cheque", "check", "online", "transfer", "neft", "rtgs", "card"]):
         return f"Bank ({mode})"
     return mode
@@ -2512,23 +2514,52 @@ def _build_receipt_pdf_bytes_pillow(
         if part
     )
 
-    y = p(34)
-    for text, font in [
-        (primary_header, font_header),
-        (secondary_header, font_body),
-        (address_line, font_small),
-        (_as_text(payload.get("email")), font_small),
-    ]:
+    margin = p(10)
+    left = margin
+    right = page_w - margin
+    outer_top = margin
+    outer_bottom = page_h - p(52)
+    line(left, outer_top, right, outer_top)
+    line(left, outer_top, left, outer_bottom)
+    line(right, outer_top, right, outer_bottom)
+    line(left, outer_bottom, right, outer_bottom)
+
+    header_top = outer_top
+    header_bottom = p(100)
+    title_bottom = p(120)
+    line(left, header_bottom, right, header_bottom)
+    line(left, title_bottom, right, title_bottom)
+
+    logo_source = _as_text(payload.get("logo"))
+    logo_box = (left + p(4), header_top + p(10), left + p(68), header_bottom - p(4))
+    if logo_source and Path(logo_source).exists():
+        try:
+            logo = PILImage.open(logo_source).convert("RGB")
+            logo.thumbnail((logo_box[2] - logo_box[0], logo_box[3] - logo_box[1]))
+            logo_x = logo_box[0] + ((logo_box[2] - logo_box[0]) - logo.width) // 2
+            logo_y = logo_box[1] + ((logo_box[3] - logo_box[1]) - logo.height) // 2
+            image.paste(logo, (logo_x, logo_y))
+        except Exception:
+            logo_source = ""
+
+    header_left = logo_box[2] + p(8) if logo_source and Path(logo_source).exists() else left
+    header_center_x = (header_left + right) // 2
+    y = header_top + p(14)
+    header_rows = [
+        (_as_text(payload.get("header_local_line")), font_title, latin_title),
+        (primary_header, font_header, latin_header),
+        (address_line, font_small, latin_small),
+        (_as_text(payload.get("website")), font_footer, latin_footer),
+        (_as_text(payload.get("email")), font_footer, latin_footer),
+        (f"Phone : {_as_text(payload.get('phone'))}" if _as_text(payload.get("phone")) else "", font_footer, latin_footer),
+    ]
+    for text, font, latin_font in header_rows:
         if not text:
             continue
-        latin_font = latin_header if font is font_header else latin_body if font is font_body else latin_small
-        _draw_receipt_text(draw, (page_w // 2, y), text, font, latin_font=latin_font, anchor="ma")
-        y += int(font.size * 1.25)
+        _draw_receipt_text(draw, (header_center_x, y), text, font, latin_font=latin_font, anchor="ma")
+        y += int(font.size * 1.05)
 
-    y += p(8)
-    left = p(28)
-    right = page_w - p(28)
-    top = y
+    top = title_bottom
     col1 = left + int((right - left) * 0.73)
     col2 = left + int((right - left) * 0.91)
 
@@ -2554,79 +2585,101 @@ def _build_receipt_pdf_bytes_pillow(
     line_item_header = bilingual("line_item", payload.get("line_item_header"), "line_item")
     total_label = _as_text(payload.get("total_label")) or labels["total"]
 
-    row_heights = [
-        p(22),
-        p(32),
-        p(24),
-        p(24),
-        p(30),
-        p(34),
-        p(24),
-        *[p(24) for _ in line_items],
-        p(28),
-        p(42),
-    ]
-    row_tops = [top]
-    for height in row_heights:
-        row_tops.append(row_tops[-1] + height)
-    bottom = row_tops[-1]
+    details_top = top
+    meta_top = p(417) if bool(payload.get("include_astro_row", True)) else p(395)
+    note_top = p(495) if bool(payload.get("include_astro_row", True)) else p(462)
+    bottom = outer_bottom
+    line(left, details_top, right, details_top)
+    line(left, meta_top, right, meta_top)
+    if bool(payload.get("include_astro_row", True)):
+        line(left, note_top, right, note_top)
 
-    for y_line in row_tops:
+    r1 = details_top + p(30)
+    r2 = r1 + p(22)
+    r3 = r2 + p(22)
+    r4 = r3 + p(30)
+    r5 = r4 + p(38)
+    item_header_top = r5
+    item_header_bottom = item_header_top + p(24)
+    total_top = meta_top - p(22)
+
+    for y_line in [r1, r2, r3, r4, r5, item_header_bottom, total_top]:
         line(left, y_line, right, y_line)
-    for x_line in [left, right]:
-        line(x_line, top, x_line, bottom)
-    line(col1, row_tops[1], col1, row_tops[2])
-    line(col1, row_tops[6], col1, row_tops[-2])
-    line(col2, row_tops[6], col2, row_tops[-2])
+    line(col1, item_header_top, col1, meta_top)
+    line(col2, item_header_bottom, col2, meta_top)
 
-    draw.rectangle((left + 1, top + 1, right - 1, row_tops[1] - 1), fill="#f2f2f2")
-    draw.rectangle((left + 1, row_tops[-2] + 1, right - 1, bottom - 1), fill="#f8f8f8")
-
-    r = row_tops
-    _draw_receipt_cell_text(draw, (left, r[0], right, r[1]), receipt_title, font_title, latin_font=latin_title, align="center")
+    _draw_receipt_cell_text(draw, (left, header_bottom, right, title_bottom), receipt_title, font_title, latin_font=latin_title, align="center")
     _draw_receipt_cell_text(
         draw,
-        (left, r[1], col1, r[2]),
+        (left, details_top, col1, r1),
         f"{receipt_no_label}: {_as_text(payload.get('receipt_number'), '-')}",
         font_body,
         latin_font=latin_body,
     )
     _draw_receipt_cell_text(
         draw,
-        (col1, r[1], right, r[2]),
+        (col1, details_top, right, r1),
         f"{date_label}: {_as_text(payload.get('receipt_date'), '-')}",
         font_body,
         latin_font=latin_body,
         align="right",
     )
-    _draw_receipt_cell_text(draw, (left, r[2], right, r[3]), f"{party_label}: {_as_text(payload.get('party_name'), '-')}", font_body, latin_font=latin_body)
-    _draw_receipt_cell_text(draw, (left, r[3], right, r[4]), f"{address_label}: {_as_text(payload.get('address_value'), '--')}", font_body, latin_font=latin_body)
-    _draw_receipt_cell_text(draw, (left, r[4], right, r[5]), _as_text(payload.get("amount_words_line"), "-"), font_body, latin_font=latin_body)
-    _draw_receipt_cell_text(draw, (left, r[5], right, r[6]), _as_text(payload.get("payment_line"), "-"), font_body, latin_font=latin_body)
-    _draw_receipt_cell_text(draw, (left, r[6], col1, r[7]), line_item_header, font_body, latin_font=latin_body)
-    _draw_receipt_cell_text(draw, (col1, r[6], col2, r[7]), "Rs", font_body, latin_font=latin_body, align="center")
-    _draw_receipt_cell_text(draw, (col2, r[6], right, r[7]), "-", font_body, latin_font=latin_body, align="center")
+    _draw_receipt_cell_text(draw, (left, r1, right, r2), f"{party_label}: {_as_text(payload.get('party_name'), '-')}", font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r2, right, r3), f"{address_label}: {_as_text(payload.get('address_value'), '--')}", font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r3, right, r4), _as_text(payload.get("amount_words_line"), "-"), font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r4, right, r5), _as_text(payload.get("payment_line"), "-"), font_body, latin_font=latin_body, max_lines=2)
+    _draw_receipt_cell_text(draw, (left, item_header_top, col1, item_header_bottom), line_item_header, font_body, latin_font=latin_body, align="center")
+    _draw_receipt_cell_text(draw, (col1, item_header_top, right, item_header_bottom), "ರೂ Rs", font_body, latin_font=latin_body, align="center")
 
-    row_index = 7
+    item_y = item_header_bottom
+    item_height = max(p(24), (total_top - item_header_bottom) // max(1, len(line_items)))
     for item in line_items:
         major, minor = _split_amount(item.get("amount"))
-        _draw_receipt_cell_text(draw, (left, r[row_index], col1, r[row_index + 1]), _as_text(item.get("description"), "-"), font_body, latin_font=latin_body)
-        _draw_receipt_cell_text(draw, (col1, r[row_index], col2, r[row_index + 1]), major, font_body, latin_font=latin_body, align="right")
-        _draw_receipt_cell_text(draw, (col2, r[row_index], right, r[row_index + 1]), minor, font_body, latin_font=latin_body, align="center")
-        row_index += 1
+        _draw_receipt_cell_text(draw, (left, item_y, col1, min(item_y + item_height, total_top)), _as_text(item.get("description"), "-"), font_body, latin_font=latin_body)
+        _draw_receipt_cell_text(draw, (col1, item_y, col2, min(item_y + item_height, total_top)), major, font_body, latin_font=latin_body, align="right")
+        _draw_receipt_cell_text(draw, (col2, item_y, right, min(item_y + item_height, total_top)), minor, font_body, latin_font=latin_body, align="center")
+        item_y += item_height
 
     total_major, total_minor = _split_amount(total_amount)
-    _draw_receipt_cell_text(draw, (left, r[row_index], col1, r[row_index + 1]), total_label, font_body, latin_font=latin_body, align="right")
-    _draw_receipt_cell_text(draw, (col1, r[row_index], col2, r[row_index + 1]), total_major, font_body, latin_font=latin_body, align="right")
-    _draw_receipt_cell_text(draw, (col2, r[row_index], right, r[row_index + 1]), total_minor, font_body, latin_font=latin_body, align="center")
+    _draw_receipt_cell_text(draw, (left, total_top, col1, meta_top), total_label, font_body, latin_font=latin_body, align="right")
+    _draw_receipt_cell_text(draw, (col1, total_top, col2, meta_top), total_major, font_body, latin_font=latin_body, align="right")
+    _draw_receipt_cell_text(draw, (col2, total_top, right, meta_top), total_minor, font_body, latin_font=latin_body, align="center")
+
+    if bool(payload.get("include_astro_row", True)):
+        meta_mid = meta_top + p(38)
+        gotra_label = _as_text(payload.get("gotra_label")) or labels["gotra"]
+        star_label = _as_text(payload.get("nakshatra_label")) or labels["nakshatra"]
+        rashi_label = _as_text(payload.get("rashi_label")) or labels["rashi"]
+        service_date_label = bilingual("service_date", payload.get("service_date_label"), "service_date")
+        meta_width = (right - left) // 3
+        for idx, (label, value) in enumerate([
+            (gotra_label, payload.get("gotra")),
+            (star_label, payload.get("nakshatra")),
+            (rashi_label, payload.get("rashi")),
+        ]):
+            x1 = left + (meta_width * idx)
+            x2 = right if idx == 2 else left + (meta_width * (idx + 1))
+            _draw_receipt_cell_text(draw, (x1, meta_top, x2, meta_mid), f"{label}: {_as_text(value, '--')}", font_small, latin_font=latin_small, max_lines=2)
+        _draw_receipt_cell_text(
+            draw,
+            (left, meta_mid, left + p(150), note_top),
+            f"{service_date_label}: {_as_text(payload.get('service_date'), '--')}",
+            font_small,
+            latin_font=latin_small,
+            max_lines=2,
+        )
+        _draw_receipt_cell_text(draw, (right - p(170), meta_mid, right, note_top), labels["cashier"], font_small, latin_font=latin_small, align="center")
 
     note_lines = [
         _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels else "",
         _as_text(payload.get("note_english"), ""),
     ]
     note_text = "\n".join(line for line in note_lines if line)
-    _draw_receipt_cell_text(draw, (left, r[row_index + 1], right, r[row_index + 2]), note_text, font_small, latin_font=latin_small, align="center", max_lines=3)
-    _draw_receipt_text(draw, (right, bottom + p(10)), _as_text(payload.get("powered_by_line"), ""), font_footer, latin_font=latin_footer, anchor="ra", fill="#333333")
+    note_rect = (left, note_top if bool(payload.get("include_astro_row", True)) else meta_top, right, bottom)
+    _draw_receipt_cell_text(draw, note_rect, note_text, font_small, latin_font=latin_small, align="center", max_lines=4)
+    system_line = _as_text(payload.get("system_generated_line"), "This is a system generated receipt and does not require any signature.")
+    _draw_receipt_text(draw, (page_w // 2, outer_bottom + p(8)), system_line, font_footer, latin_font=latin_footer, anchor="ma")
+    _draw_receipt_text(draw, (right, page_h - p(22)), _as_text(payload.get("powered_by_line"), ""), font_footer, latin_font=latin_footer, anchor="ra", fill="#333333")
 
     image_buffer = BytesIO()
     image.save(image_buffer, format="PNG")

@@ -30,6 +30,10 @@ def test_kannada_amount_words_for_receipts():
     )
 
 
+def test_upi_receipt_payment_mode_is_not_wrapped_as_bank():
+    assert mandir_router._format_payment_mode_for_receipt("UPI /Google Pay") == "UPI /Google Pay"
+
+
 def test_kannada_receipt_fallback_uses_bundled_font(monkeypatch, tmp_path):
     def fail_weasy(*_args, **_kwargs):
         raise RuntimeError("weasyprint is not available")
@@ -51,7 +55,7 @@ def test_kannada_receipt_fallback_uses_bundled_font(monkeypatch, tmp_path):
     output_path.write_bytes(pdf_bytes)
 
     extracted = PdfReader(str(output_path)).pages[0].extract_text() or ""
-    assert "ದಾನ / ಕಾಣಿಕೆ ರಸೀದಿ / Donation Receipt" in extracted
+    assert "ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt" in extracted
     assert "ರೂಪಾಯಿ ಐದು ನೂರು ಒಂದು ಮಾತ್ರ / Rupees Five Hundred One Only" in extracted
     assert "■" not in extracted
 
