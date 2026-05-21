@@ -51,7 +51,7 @@ def test_kannada_receipt_fallback_uses_bundled_font(monkeypatch, tmp_path):
     output_path.write_bytes(pdf_bytes)
 
     extracted = PdfReader(str(output_path)).pages[0].extract_text() or ""
-    assert "ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt" in extracted
+    assert "ದೇಣಿಗೆ ರಸೀದಿ / Donation Receipt" in extracted
     assert "ರೂಪಾಯಿ ಐದು ನೂರು ಒಂದು ಮಾತ್ರ / Rupees Five Hundred One Only" in extracted
     assert "■" not in extracted
 

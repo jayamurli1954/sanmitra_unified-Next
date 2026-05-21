@@ -1243,7 +1243,7 @@ def _generate_donation_receipt_pdf_bytes(
     payload = {
         **temple_profile,
         "receipt_title": "Donation Receipt",
-        "receipt_title_local": "ದೇಣಿಗೆ ರಶೀದಿ",
+        "receipt_title_local": "ದೇಣಿಗೆ ರಸೀದಿ",
         "line_item_header": "Donation Details",
         "line_item_local": "ದೇಣಿಗೆ ವಿವರ",
         "service_date_label": "Donation Date",
@@ -1252,7 +1252,11 @@ def _generate_donation_receipt_pdf_bytes(
         "party_name": devotee_name,
         "address_value": devotee_address,
         "amount_words_line": _amount_words_receipt_line(amount, local_language=temple_profile.get("local_language")),
-        "payment_line": f"Received with thanks for donation by {payment_mode}.",
+        "payment_line": _receipt_payment_line(
+            payment_mode=payment_mode,
+            local_language=temple_profile.get("local_language"),
+            purpose="donation",
+        ),
         "line_items": [{"description": category, "amount": amount}],
         "total_amount": amount,
         "include_astro_row": False,
@@ -1337,13 +1341,17 @@ def _generate_seva_receipt_pdf_bytes(
     payload = {
         **temple_profile,
         "receipt_title": "Seva Receipt",
-        "receipt_title_local": "ಸೇವಾ ರಶೀದಿ",
+        "receipt_title_local": "ಸೇವಾ ರಸೀದಿ",
         "receipt_number": receipt_number,
         "receipt_date": booking_date,
         "party_name": devotee_name,
         "address_value": devotee_address,
         "amount_words_line": _amount_words_receipt_line(total_amount, local_language=temple_profile.get("local_language")),
-        "payment_line": f"Received with thanks for the below mentioned seva by {payment_mode}.",
+        "payment_line": _receipt_payment_line(
+            payment_mode=payment_mode,
+            local_language=temple_profile.get("local_language"),
+            purpose="seva",
+        ),
         "line_items": line_items,
         "total_amount": total_amount,
         "include_astro_row": True,
@@ -1449,12 +1457,12 @@ _HTML_LANG_BY_LOCAL_LANGUAGE = {
 _LOCAL_LABELS = {
     "kannada": {
         "receipt_title": "ರಸೀದಿ",
-        "receipt_number": "ರಶೀದಿ ಸಂಖ್ಯೆ",
+        "receipt_number": "ರಸೀದಿ ಸಂಖ್ಯೆ",
         "date": "ದಿನಾಂಕ",
         "party": "ಭಕ್ತ/ದಾನಿ",
         "address": "ವಿಳಾಸ",
         "line_item": "ಸೇವಾ ವಿವರ",
-        "total": "ಮೊತ್ತ",
+        "total": "ಒಟ್ಟು ಮೊತ್ತ",
         "gotra": "ಗೋತ್ರ",
         "nakshatra": "ನಕ್ಷತ್ರ",
         "rashi": "ರಾಶಿ",
@@ -1871,6 +1879,38 @@ def _format_payment_mode_for_receipt(value: Any) -> str:
     if any(token in lowered for token in ["upi", "bank", "cheque", "check", "online", "transfer", "neft", "rtgs", "card"]):
         return f"Bank ({mode})"
     return mode
+
+
+def _format_payment_mode_local_for_receipt(value: Any, *, local_language: str | None = None) -> str:
+    if _normalize_local_language(local_language) != "kannada":
+        return _format_payment_mode_for_receipt(value)
+    mode = _as_text(value, "Cash")
+    lowered = mode.lower()
+    if "cash" in lowered:
+        return "ನಗದು"
+    if "cheque" in lowered or "check" in lowered:
+        return "ಚೆಕ್"
+    if "upi" in lowered:
+        return "ಯುಪಿಐ"
+    if any(token in lowered for token in ["online", "bank", "transfer", "neft", "rtgs", "card"]):
+        return "ಆನ್‌ಲೈನ್ / ಬ್ಯಾಂಕ್"
+    return mode
+
+
+def _receipt_payment_line(
+    *,
+    payment_mode: str,
+    local_language: str | None = None,
+    purpose: str = "donation",
+) -> str:
+    if _normalize_local_language(local_language) != "kannada":
+        if purpose == "seva":
+            return f"Received with thanks for the below mentioned seva by {payment_mode}."
+        return f"Received with thanks for donation by {payment_mode}."
+    local_mode = _format_payment_mode_local_for_receipt(payment_mode, local_language=local_language)
+    if purpose == "seva":
+        return f"ಧನ್ಯವಾದಗಳೊಂದಿಗೆ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಪಾವತಿ ವಿಧಾನ: {local_mode} / Received by {payment_mode}."
+    return f"ಧನ್ಯವಾದಗಳೊಂದಿಗೆ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಪಾವತಿ ವಿಧಾನ: {local_mode} / Received by {payment_mode}."
 
 
 
@@ -2515,7 +2555,7 @@ def _build_receipt_pdf_bytes_pillow(
         p(24),
         p(24),
         p(30),
-        p(24),
+        p(34),
         p(24),
         *[p(24) for _ in line_items],
         p(28),
