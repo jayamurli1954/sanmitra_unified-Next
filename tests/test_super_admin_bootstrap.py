@@ -65,6 +65,7 @@ async def test_ensure_super_admin_user_creates_account(monkeypatch):
 
     async def fake_ensure_tenant_exists(tenant_id: str, **_kwargs):
         ensured["tenant_id"] = tenant_id
+        ensured.update(_kwargs)
         return {"tenant_id": tenant_id, "status": "active"}
 
     monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
@@ -77,6 +78,36 @@ async def test_ensure_super_admin_user_creates_account(monkeypatch):
     assert created["tenant_id"] == "seed-tenant-1"
     assert created["is_active"] is True
     assert ensured["tenant_id"] == "seed-tenant-1"
+    assert ensured["organization_type"] == "TEMPLE"
+    assert ensured["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert ensured["app_keys"] == ["mandirmitra"]
+
+
+@pytest.mark.asyncio
+async def test_ensure_super_admin_user_uses_platform_context_for_separate_tenant(monkeypatch):
+    fake_users = FakeUsersCollection()
+
+    monkeypatch.setattr(users_service, "get_collection", lambda _name: fake_users)
+    monkeypatch.setattr(users_service, "get_settings", lambda: _settings(SUPER_ADMIN_TENANT_ID="platform-admin"))
+
+    ensured = {}
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **_kwargs):
+        ensured["tenant_id"] = tenant_id
+        ensured.update(_kwargs)
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+
+    await users_service.ensure_super_admin_user()
+
+    created = await fake_users.find_one({"email": "superadmin@sanmitra.local"})
+    assert created is not None
+    assert created["role"] == "super_admin"
+    assert created["tenant_id"] == "platform-admin"
+    assert ensured["tenant_id"] == "platform-admin"
+    assert ensured["organization_type"] == "BUSINESS"
+    assert ensured["app_keys"] == ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"]
 
 
 @pytest.mark.asyncio

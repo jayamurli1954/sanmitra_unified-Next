@@ -91,6 +91,7 @@ async def ensure_super_admin_user() -> None:
     password = str(settings.SUPER_ADMIN_PASSWORD or "").strip()
     full_name = str(settings.SUPER_ADMIN_FULL_NAME or "SanMitra Super Admin").strip() or "SanMitra Super Admin"
     tenant_id = str(settings.SUPER_ADMIN_TENANT_ID or "seed-tenant-1").strip() or "seed-tenant-1"
+    uses_shared_seed_tenant = tenant_id == "seed-tenant-1"
 
     if not email or "@" not in email:
         return
@@ -100,9 +101,10 @@ async def ensure_super_admin_user() -> None:
     await ensure_users_indexes()
     await ensure_tenant_exists(
         tenant_id,
-        display_name="SanMitra Platform",
-        organization_type="BUSINESS",
-        app_keys=["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"],
+        display_name="SanMitra Seed Tenant" if uses_shared_seed_tenant else "SanMitra Platform",
+        organization_type="TEMPLE" if uses_shared_seed_tenant else "BUSINESS",
+        enabled_modules=["temple", "accounting", "audit"] if uses_shared_seed_tenant else None,
+        app_keys=["mandirmitra"] if uses_shared_seed_tenant else ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"],
         created_by="system",
     )
 
