@@ -622,6 +622,35 @@ def test_get_donation_receipt_pdf_returns_pdf(mandir_posting_client):
     assert donations.docs[0]["id"] == "don-2"
 
 
+def test_get_donation_receipt_pdf_defaults_to_kannada_bilingual_profile(mandir_compat_client, monkeypatch):
+    client, collections = mandir_compat_client
+    captured: dict[str, dict] = {}
+    collections["mandir_donations"].docs.append(
+        {
+            "donation_id": "don-kannada",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "amount": 501,
+            "category": "General Donation",
+            "payment_mode": "Cash",
+            "devotee_name": "Muralidhar Rao",
+            "created_at": "2026-05-20T12:00:00+00:00",
+        }
+    )
+
+    def fake_generate_donation_receipt_pdf_bytes(_donation, *, temple_name="Temple", temple_profile=None):
+        captured["temple_profile"] = temple_profile or {}
+        captured["temple_name"] = temple_name
+        return b"%PDF-1.4\n%%EOF"
+
+    monkeypatch.setattr(mandir_router, "_generate_donation_receipt_pdf_bytes", fake_generate_donation_receipt_pdf_bytes)
+
+    response = client.get("/api/v1/donations/don-kannada/receipt/pdf")
+
+    assert response.status_code == 200
+    assert captured["temple_profile"]["local_language"] == "kannada"
+
+
 def test_list_seva_bookings_sanitizes_mongo_internal_id(mandir_posting_client):
     client, _donations, seva_bookings = mandir_posting_client
     seva_bookings.docs.append(
@@ -672,6 +701,43 @@ def test_get_seva_receipt_pdf_returns_pdf(mandir_posting_client):
     assert response.content.startswith(b"%PDF")
     assert seva_bookings.docs[0]["receipt_number"].startswith("SEV-")
     assert seva_bookings.docs[0]["receipt_pdf_url"] == "/api/v1/sevas/bookings/book-2/receipt/pdf"
+
+
+def test_get_seva_receipt_pdf_uses_kannada_receipt_setting(mandir_compat_client, monkeypatch):
+    client, collections = mandir_compat_client
+    captured: dict[str, dict] = {}
+    collections["mandir_panchang_settings"].docs.append(
+        {
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "receipt_local_language": "Kannada",
+        }
+    )
+    collections["mandir_seva_bookings"].docs.append(
+        {
+            "id": "book-kannada",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "seva_name": "Archana",
+            "amount_paid": 301,
+            "payment_mode": "Cash",
+            "devotee_names": "Muralidhar Rao",
+            "booking_date": "2026-05-20",
+            "created_at": "2026-05-20T12:00:00+00:00",
+        }
+    )
+
+    def fake_generate_seva_receipt_pdf_bytes(_booking, *, temple_name="Temple", temple_profile=None):
+        captured["temple_profile"] = temple_profile or {}
+        captured["temple_name"] = temple_name
+        return b"%PDF-1.4\n%%EOF"
+
+    monkeypatch.setattr(mandir_router, "_generate_seva_receipt_pdf_bytes", fake_generate_seva_receipt_pdf_bytes)
+
+    response = client.get("/api/v1/sevas/bookings/book-kannada/receipt/pdf")
+
+    assert response.status_code == 200
+    assert captured["temple_profile"]["local_language"] == "kannada"
 
 
 

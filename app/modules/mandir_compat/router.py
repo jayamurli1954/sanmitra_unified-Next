@@ -1951,6 +1951,42 @@ def _build_temple_receipt_profile(temple_doc: dict[str, Any] | None) -> dict[str
 
 
 
+async def _resolve_temple_receipt_profile(
+    *,
+    tenant_id: str,
+    app_key: str,
+    lang: str | None = None,
+) -> dict[str, str | None]:
+    temple_doc: dict[str, Any] = {}
+    try:
+        temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
+        if not temple_doc:
+            temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
+    except Exception as exc:
+        logger.warning("Mandir receipt temple profile lookup failed for tenant=%s app=%s: %s", tenant_id, app_key, exc)
+
+    lang_doc: dict[str, Any] = {}
+    try:
+        lang_doc = await get_collection("mandir_panchang_settings").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
+    except Exception as exc:
+        logger.warning("Mandir receipt language lookup failed for tenant=%s app=%s: %s", tenant_id, app_key, exc)
+
+    temple_profile = _build_temple_receipt_profile(temple_doc)
+    selected_language = _normalize_local_language(
+        lang
+        or lang_doc.get("receipt_local_language")
+        or temple_doc.get("receipt_local_language")
+        or lang_doc.get("local_language")
+        or temple_doc.get("local_language")
+        or lang_doc.get("primary_language")
+        or temple_doc.get("primary_language")
+        or temple_profile.get("local_language")
+        or "kannada"
+    )
+    temple_profile["local_language"] = selected_language or "kannada"
+    return temple_profile
+
+
 def _bilingual_label(local_label: str, english_label: str, use_local_labels: bool) -> str:
     if use_local_labels and local_label:
         return f"{local_label} / {english_label}"
@@ -2248,8 +2284,17 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
                 use_local_labels=use_local_labels,
             )
         except Exception as exc:
-            logger.error("Weasy bilingual receipt rendering failed; refusing ReportLab fallback for %s receipt: %s", local_language, exc, exc_info=True)
-            raise RuntimeError(f"Bilingual {local_language} receipt rendering requires WeasyPrint with embedded Indic fonts") from exc
+            logger.warning(
+                "Weasy bilingual receipt rendering failed for %s receipt; falling back to English-only PDF: %s",
+                local_language,
+                exc,
+                exc_info=True,
+            )
+            local_language = None
+            use_local_labels = False
+            labels = _default_labels(None, False)
+            local_labels = {}
+            font_name = "Helvetica"
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -3661,29 +3706,7 @@ async def get_donation_receipt_pdf(
         upsert=False,
     )
 
-    temple_doc: dict[str, Any] = {}
-    temple_profile = _build_temple_receipt_profile(None)
-    try:
-        temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
-        if not temple_doc:
-            temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
-        temple_profile = _build_temple_receipt_profile(temple_doc)
-
-        lang_doc = await get_collection("mandir_panchang_settings").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
-        selected_language = _normalize_local_language(
-            lang
-            or lang_doc.get("receipt_local_language")
-            or temple_doc.get("receipt_local_language")
-            or lang_doc.get("local_language")
-            or temple_doc.get("local_language")
-            or lang_doc.get("primary_language")
-            or temple_doc.get("primary_language")
-            or "kannada"
-        )
-        if selected_language:
-            temple_profile["local_language"] = selected_language
-    except Exception:
-        temple_profile = _build_temple_receipt_profile(None)
+    temple_profile = await _resolve_temple_receipt_profile(tenant_id=tenant_id, app_key=app_key, lang=lang)
 
     try:
         pdf_bytes = _generate_donation_receipt_pdf_bytes(
@@ -8417,29 +8440,7 @@ async def get_seva_receipt_pdf(
         upsert=False,
     )
 
-    temple_doc: dict[str, Any] = {}
-    temple_profile = _build_temple_receipt_profile(None)
-    try:
-        temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
-        if not temple_doc:
-            temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
-        temple_profile = _build_temple_receipt_profile(temple_doc)
-
-        lang_doc = await get_collection("mandir_panchang_settings").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
-        selected_language = _normalize_local_language(
-            lang
-            or lang_doc.get("receipt_local_language")
-            or temple_doc.get("receipt_local_language")
-            or lang_doc.get("local_language")
-            or temple_doc.get("local_language")
-            or lang_doc.get("primary_language")
-            or temple_doc.get("primary_language")
-            or "kannada"
-        )
-        if selected_language:
-            temple_profile["local_language"] = selected_language
-    except Exception:
-        temple_profile = _build_temple_receipt_profile(None)
+    temple_profile = await _resolve_temple_receipt_profile(tenant_id=tenant_id, app_key=app_key, lang=lang)
 
     try:
         pdf_bytes = _generate_seva_receipt_pdf_bytes(
