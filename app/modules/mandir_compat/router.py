@@ -29,7 +29,18 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.utils import ImageReader
+
+try:
+    from PIL import Image as PILImage
+    from PIL import ImageDraw, ImageFont, features as pil_features
+except Exception:
+    PILImage = None
+    ImageDraw = None
+    ImageFont = None
+    pil_features = None
 
 try:
     from weasyprint import HTML
@@ -2260,6 +2271,338 @@ def _build_receipt_pdf_bytes_weasy(
     return HTML(string=html, base_url=str(Path.cwd().resolve())).write_pdf()
 
 
+def _load_receipt_pillow_font(script_hint: str | None, size_px: int) -> Any:
+    if ImageFont is None:
+        raise RuntimeError("Pillow font support is not available")
+    for font_path in _font_candidate_paths(script_hint):
+        path = Path(font_path)
+        if not path.exists() or path.suffix.lower() not in {".ttf", ".otf", ".ttc"}:
+            continue
+        try:
+            return ImageFont.truetype(str(path), size_px)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _load_receipt_latin_pillow_font(size_px: int) -> Any:
+    if ImageFont is None:
+        raise RuntimeError("Pillow font support is not available")
+    for candidate in [
+        r"C:\Windows\Fonts\arial.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]:
+        if not Path(candidate).exists():
+            continue
+        try:
+            return ImageFont.truetype(candidate, size_px)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _receipt_text_runs(text: str) -> list[tuple[str, bool]]:
+    runs: list[tuple[str, bool]] = []
+    current: list[str] = []
+    current_is_latin: bool | None = None
+    for char in text:
+        is_latin = ord(char) < 128
+        if current_is_latin is None:
+            current_is_latin = is_latin
+        elif current_is_latin != is_latin:
+            runs.append(("".join(current), current_is_latin))
+            current = []
+            current_is_latin = is_latin
+        current.append(char)
+    if current:
+        runs.append(("".join(current), bool(current_is_latin)))
+    return runs
+
+
+def _draw_receipt_text(
+    draw: Any,
+    xy: tuple[int, int],
+    text: str,
+    font: Any,
+    *,
+    latin_font: Any | None = None,
+    fill: str = "#111111",
+    anchor: str | None = None,
+) -> None:
+    if latin_font is not None and text and anchor in {"la", "ma", "ra"}:
+        width = _receipt_text_width(draw, text, font, latin_font=latin_font)
+        x, y = xy
+        if anchor == "ma":
+            x -= width // 2
+        elif anchor == "ra":
+            x -= width
+        for run, is_latin in _receipt_text_runs(text):
+            run_font = latin_font if is_latin else font
+            draw.text((x, y), run, font=run_font, fill=fill)
+            x += _receipt_text_width(draw, run, run_font)
+        return
+    kwargs = {"font": font, "fill": fill}
+    if anchor:
+        kwargs["anchor"] = anchor
+    draw.text(xy, text, **kwargs)
+
+
+def _receipt_text_width(draw: Any, text: str, font: Any, *, latin_font: Any | None = None) -> int:
+    if latin_font is not None:
+        return sum(
+            _receipt_text_width(draw, run, latin_font if is_latin else font)
+            for run, is_latin in _receipt_text_runs(text)
+        )
+    try:
+        return int(draw.textlength(text, font=font))
+    except Exception:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return int(bbox[2] - bbox[0])
+
+
+def _wrap_receipt_text(draw: Any, text: str, font: Any, max_width: int, *, latin_font: Any | None = None) -> list[str]:
+    words = _as_text(text).split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if _receipt_text_width(draw, candidate, font, latin_font=latin_font) <= max_width:
+            current = candidate
+            continue
+        lines.append(current)
+        current = word
+    lines.append(current)
+    return lines
+
+
+def _draw_receipt_cell_text(
+    draw: Any,
+    rect: tuple[int, int, int, int],
+    text: str,
+    font: Any,
+    *,
+    latin_font: Any | None = None,
+    align: str = "left",
+    bold_font: Any | None = None,
+    max_lines: int = 2,
+) -> None:
+    x1, y1, x2, y2 = rect
+    pad = 10
+    selected_font = bold_font or font
+    selected_latin_font = latin_font
+    lines = _wrap_receipt_text(
+        draw,
+        _as_text(text, "-"),
+        selected_font,
+        max(10, x2 - x1 - (pad * 2)),
+        latin_font=selected_latin_font,
+    )[:max_lines]
+    line_height = int(selected_font.size * 1.25) if hasattr(selected_font, "size") else 18
+    total_height = line_height * len(lines)
+    y = y1 + max(0, ((y2 - y1) - total_height) // 2)
+    for line in lines:
+        if align == "right":
+            x = x2 - pad
+            anchor = "ra"
+        elif align == "center":
+            x = (x1 + x2) // 2
+            anchor = "ma"
+        else:
+            x = x1 + pad
+            anchor = "la"
+        _draw_receipt_text(draw, (x, y), line, selected_font, latin_font=selected_latin_font, anchor=anchor)
+        y += line_height
+
+
+def _build_receipt_pdf_bytes_pillow(
+    payload: dict[str, Any],
+    *,
+    local_language: str,
+    labels: dict[str, str],
+    local_labels: dict[str, str],
+    use_local_labels: bool,
+) -> bytes:
+    if PILImage is None or ImageDraw is None or ImageFont is None:
+        raise RuntimeError("Pillow is not available")
+    if pil_features is not None and not pil_features.check("raqm"):
+        raise RuntimeError("Pillow was built without RAQM/HarfBuzz shaping")
+
+    scale = 3
+    page_w_pt, page_h_pt = A5
+    page_w = int(page_w_pt * scale)
+    page_h = int(page_h_pt * scale)
+    image = PILImage.new("RGB", (page_w, page_h), "white")
+    draw = ImageDraw.Draw(image)
+
+    font_small = _load_receipt_pillow_font(local_language, 24)
+    font_body = _load_receipt_pillow_font(local_language, 28)
+    font_header = _load_receipt_pillow_font(local_language, 34)
+    font_title = _load_receipt_pillow_font(local_language, 30)
+    font_footer = _load_receipt_pillow_font(local_language, 20)
+    latin_small = _load_receipt_latin_pillow_font(24)
+    latin_body = _load_receipt_latin_pillow_font(28)
+    latin_header = _load_receipt_latin_pillow_font(34)
+    latin_title = _load_receipt_latin_pillow_font(30)
+    latin_footer = _load_receipt_latin_pillow_font(20)
+
+    def p(value: float) -> int:
+        return int(value * scale)
+
+    def line(x1: int, y1: int, x2: int, y2: int, width: int = 1) -> None:
+        draw.line((x1, y1, x2, y2), fill="#777777", width=max(1, width * scale))
+
+    trust_name = _as_text(payload.get("trust_name"))
+    temple_name = _as_text(payload.get("temple_name"), "Temple")
+    primary_header = trust_name or temple_name
+    secondary_header = temple_name if trust_name and temple_name and trust_name != temple_name else ""
+    address_line = " ".join(
+        part
+        for part in [
+            _as_text(payload.get("address")),
+            _as_text(payload.get("city")),
+            _as_text(payload.get("state")),
+            _as_text(payload.get("pincode")),
+        ]
+        if part
+    )
+
+    y = p(34)
+    for text, font in [
+        (primary_header, font_header),
+        (secondary_header, font_body),
+        (address_line, font_small),
+        (_as_text(payload.get("email")), font_small),
+    ]:
+        if not text:
+            continue
+        latin_font = latin_header if font is font_header else latin_body if font is font_body else latin_small
+        _draw_receipt_text(draw, (page_w // 2, y), text, font, latin_font=latin_font, anchor="ma")
+        y += int(font.size * 1.25)
+
+    y += p(8)
+    left = p(28)
+    right = page_w - p(28)
+    top = y
+    col1 = left + int((right - left) * 0.73)
+    col2 = left + int((right - left) * 0.91)
+
+    line_items = payload.get("line_items") or [{"description": "-", "amount": payload.get("total_amount", 0)}]
+    total_amount = payload.get("total_amount")
+    if total_amount is None:
+        total_amount = sum(_safe_float(item.get("amount"), 0.0) for item in line_items)
+
+    def bilingual(local_key: str, english_value: Any, fallback_key: str) -> str:
+        english = _as_text(english_value)
+        if not english:
+            return labels[fallback_key]
+        local = _as_text(payload.get(f"{local_key}_local")) or local_labels.get(local_key, "")
+        return _bilingual_label(local, english, use_local_labels)
+
+    receipt_title = bilingual("receipt_title", payload.get("receipt_title"), "receipt_title")
+    receipt_no_label = _as_text(payload.get("receipt_number_label")) or labels["receipt_number"]
+    date_label = _as_text(payload.get("date_label")) or labels["date"]
+    party_label = labels["party"] if payload.get("party_label") is None else _as_text(payload.get("party_label"), "")
+    address_label = _as_text(payload.get("address_label")) or labels["address"]
+    line_item_header = bilingual("line_item", payload.get("line_item_header"), "line_item")
+    total_label = _as_text(payload.get("total_label")) or labels["total"]
+
+    row_heights = [
+        p(22),
+        p(32),
+        p(24),
+        p(24),
+        p(30),
+        p(24),
+        p(24),
+        *[p(24) for _ in line_items],
+        p(28),
+        p(42),
+    ]
+    row_tops = [top]
+    for height in row_heights:
+        row_tops.append(row_tops[-1] + height)
+    bottom = row_tops[-1]
+
+    for y_line in row_tops:
+        line(left, y_line, right, y_line)
+    for x_line in [left, right]:
+        line(x_line, top, x_line, bottom)
+    line(col1, row_tops[1], col1, row_tops[2])
+    line(col1, row_tops[6], col1, row_tops[-2])
+    line(col2, row_tops[6], col2, row_tops[-2])
+
+    draw.rectangle((left + 1, top + 1, right - 1, row_tops[1] - 1), fill="#f2f2f2")
+    draw.rectangle((left + 1, row_tops[-2] + 1, right - 1, bottom - 1), fill="#f8f8f8")
+
+    r = row_tops
+    _draw_receipt_cell_text(draw, (left, r[0], right, r[1]), receipt_title, font_title, latin_font=latin_title, align="center")
+    _draw_receipt_cell_text(
+        draw,
+        (left, r[1], col1, r[2]),
+        f"{receipt_no_label}: {_as_text(payload.get('receipt_number'), '-')}",
+        font_body,
+        latin_font=latin_body,
+    )
+    _draw_receipt_cell_text(
+        draw,
+        (col1, r[1], right, r[2]),
+        f"{date_label}: {_as_text(payload.get('receipt_date'), '-')}",
+        font_body,
+        latin_font=latin_body,
+        align="right",
+    )
+    _draw_receipt_cell_text(draw, (left, r[2], right, r[3]), f"{party_label}: {_as_text(payload.get('party_name'), '-')}", font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r[3], right, r[4]), f"{address_label}: {_as_text(payload.get('address_value'), '--')}", font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r[4], right, r[5]), _as_text(payload.get("amount_words_line"), "-"), font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r[5], right, r[6]), _as_text(payload.get("payment_line"), "-"), font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (left, r[6], col1, r[7]), line_item_header, font_body, latin_font=latin_body)
+    _draw_receipt_cell_text(draw, (col1, r[6], col2, r[7]), "Rs", font_body, latin_font=latin_body, align="center")
+    _draw_receipt_cell_text(draw, (col2, r[6], right, r[7]), "-", font_body, latin_font=latin_body, align="center")
+
+    row_index = 7
+    for item in line_items:
+        major, minor = _split_amount(item.get("amount"))
+        _draw_receipt_cell_text(draw, (left, r[row_index], col1, r[row_index + 1]), _as_text(item.get("description"), "-"), font_body, latin_font=latin_body)
+        _draw_receipt_cell_text(draw, (col1, r[row_index], col2, r[row_index + 1]), major, font_body, latin_font=latin_body, align="right")
+        _draw_receipt_cell_text(draw, (col2, r[row_index], right, r[row_index + 1]), minor, font_body, latin_font=latin_body, align="center")
+        row_index += 1
+
+    total_major, total_minor = _split_amount(total_amount)
+    _draw_receipt_cell_text(draw, (left, r[row_index], col1, r[row_index + 1]), total_label, font_body, latin_font=latin_body, align="right")
+    _draw_receipt_cell_text(draw, (col1, r[row_index], col2, r[row_index + 1]), total_major, font_body, latin_font=latin_body, align="right")
+    _draw_receipt_cell_text(draw, (col2, r[row_index], right, r[row_index + 1]), total_minor, font_body, latin_font=latin_body, align="center")
+
+    note_lines = [
+        _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels else "",
+        _as_text(payload.get("note_english"), ""),
+    ]
+    note_text = "\n".join(line for line in note_lines if line)
+    _draw_receipt_cell_text(draw, (left, r[row_index + 1], right, r[row_index + 2]), note_text, font_small, latin_font=latin_small, align="center", max_lines=3)
+    _draw_receipt_text(draw, (right, bottom + p(10)), _as_text(payload.get("powered_by_line"), ""), font_footer, latin_font=latin_footer, anchor="ra", fill="#333333")
+
+    image_buffer = BytesIO()
+    image.save(image_buffer, format="PNG")
+    image_buffer.seek(0)
+
+    pdf_buffer = BytesIO()
+    canvas = pdf_canvas.Canvas(pdf_buffer, pagesize=A5)
+    canvas.drawImage(ImageReader(image_buffer), 0, 0, width=page_w_pt, height=page_h_pt)
+    try:
+        hidden_font = _resolve_font_name(local_language)
+        canvas.setFont(hidden_font, 1)
+        canvas.setFillColor(colors.white)
+        canvas.drawString(1, 1, receipt_title)
+        canvas.drawString(1, 2, _as_text(payload.get("amount_words_line"), ""))
+    except Exception:
+        pass
+    canvas.showPage()
+    canvas.save()
+    return pdf_buffer.getvalue()
+
+
 
 def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
     local_language = _normalize_local_language(payload.get("local_language"))
@@ -2285,7 +2628,22 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
             )
         except Exception as exc:
             logger.warning(
-                "Weasy bilingual receipt rendering failed for %s receipt; falling back to ReportLab with bundled fonts: %s",
+                "Weasy bilingual receipt rendering failed for %s receipt; trying shaped Pillow fallback: %s",
+                local_language,
+                exc,
+                exc_info=True,
+            )
+        try:
+            return _build_receipt_pdf_bytes_pillow(
+                payload,
+                local_language=local_language,
+                labels=labels,
+                local_labels=local_labels,
+                use_local_labels=use_local_labels,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Pillow bilingual receipt rendering failed for %s receipt; falling back to ReportLab with bundled fonts: %s",
                 local_language,
                 exc,
                 exc_info=True,
