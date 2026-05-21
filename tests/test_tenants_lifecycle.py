@@ -79,6 +79,27 @@ async def test_ensure_tenant_exists_sets_org_type_and_modules(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ensure_seed_tenant_repairs_mandirmitra_context(monkeypatch):
+    fake = FakeCollection()
+    fake.docs["seed-tenant-1"] = {
+        "tenant_id": "seed-tenant-1",
+        "display_name": "SanMitra Seed Tenant",
+        "status": "active",
+        "organization_type": "BUSINESS",
+        "enabled_modules": ["business", "accounting", "gst", "inventory", "audit"],
+        "app_keys": [],
+    }
+    monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
+
+    await tenant_service.ensure_seed_tenant()
+
+    tenant = await tenant_service.get_tenant("seed-tenant-1")
+    assert tenant["organization_type"] == "TEMPLE"
+    assert tenant["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert tenant["app_keys"] == ["mandirmitra"]
+
+
+@pytest.mark.asyncio
 async def test_ensure_tenant_exists_can_reserve_future_integration_flags(monkeypatch):
     fake = FakeCollection()
     monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)

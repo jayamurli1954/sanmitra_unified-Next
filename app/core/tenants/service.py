@@ -135,6 +135,9 @@ async def ensure_seed_tenant() -> None:
     await ensure_tenant_exists(
         "seed-tenant-1",
         display_name="SanMitra Seed Tenant",
+        organization_type="TEMPLE",
+        enabled_modules=["temple", "accounting", "audit"],
+        app_keys=["mandirmitra"],
         created_by="system",
     )
 
