@@ -19,6 +19,30 @@ Expected result:
 - Python compile checks pass for accounting, MandirMitra compatibility, tenant/module context, and scripts.
 - Focused pytest suites pass for MandirMitra posting, receipt terminology, report routes, accounting drill-down, app-key isolation, tenant lifecycle, modules/me, module access, and platform-owner dashboard where the test files exist.
 
+## Browser Smoke
+
+Install once if needed:
+
+```powershell
+pip install playwright
+python -m playwright install chromium
+```
+
+With the backend and frontend running, run from `D:\sanmitra_unified-Next`:
+
+```powershell
+python scripts\mandirmitra_stage3_browser_smoke.py
+```
+
+Expected result:
+
+- Local login succeeds with `X-App-Key: mandirmitra`.
+- `/api/v1/modules/me` returns `organization_type=TEMPLE` with `temple`, `accounting`, and `audit`.
+- The MitraBooks ERP shell opens in MandirMitra mode.
+- Visible UI includes MandirMitra, Donations, Sevas, Public Payments, Receipts, and Trial Balance.
+- The UI does not show access denied or MandirMitra live-data-unavailable state.
+- A screenshot is saved under `tmp\mandir-stage3-browser-smoke.png`.
+
 ## Local Services
 
 Backend:
