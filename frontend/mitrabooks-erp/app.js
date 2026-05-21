@@ -179,6 +179,7 @@ let lastMandirTrialBalance = null;
 let lastMandirLedger = null;
 let lastMandirFinancialReports = {};
 let lastMandirPanchang = null;
+let lastMandirOperationalReports = {};
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -365,7 +366,7 @@ function mandirWorkspaceFromModule(module = {}) {
     return "panchang";
   }
   if (path.includes("/reports") || displayName.includes("report")) {
-    return "receipts";
+    return "reports";
   }
   if (path.includes("/accounting") || displayName.includes("accounting")) {
     return "accounting";
@@ -771,6 +772,7 @@ function renderMandirWorkspaceTabs(activeWorkspace) {
     ["exceptions", "Exceptions"],
     ["receipts", "Receipts"],
     ["panchang", "Panchang"],
+    ["reports", "Reports"],
     ["accounting", "Accounting"],
   ];
   return `
@@ -1757,6 +1759,161 @@ function renderMandirPanchang(payload = lastMandirPanchang) {
   `;
 }
 
+function reportPayload(value, fallback = {}) {
+  if (!value) {
+    return fallback;
+  }
+  if (value.ok === false) {
+    return fallback;
+  }
+  return value;
+}
+
+function reportRows(value, key) {
+  const payload = reportPayload(value);
+  return Array.isArray(payload[key]) ? payload[key] : [];
+}
+
+function renderMandirOperationalReports(reports = lastMandirOperationalReports) {
+  const donationCategory = reportPayload(reports.donation_category);
+  const donationDetail = reportPayload(reports.donation_detail);
+  const sevaDetail = reportPayload(reports.seva_detail);
+  const sevaSchedule = reportPayload(reports.seva_schedule);
+  const devotees = Array.isArray(reports.devotees) ? reports.devotees : [];
+  const categoryRows = reportRows(donationCategory, "categories");
+  const donationRows = reportRows(donationDetail, "donations");
+  const sevaRows = reportRows(sevaDetail, "sevas");
+  const scheduleRows = reportRows(sevaSchedule, "schedule");
+  const totalDonation = donationDetail.total_amount ?? donationCategory.total_amount ?? 0;
+  const totalSeva = sevaDetail.total_amount ?? 0;
+
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>MandirMitra Reports</h4>
+          <p>Donation, seva, devotee, and schedule reports for the active temple tenant.</p>
+        </div>
+        <span class="pill">${escapeHtml(accountingDrilldownState.from_date)} to ${escapeHtml(accountingDrilldownState.to_date)}</span>
+      </div>
+      <div class="metric-grid four">${renderStatCards([
+        ["Donation Total", formatCurrency(totalDonation), formatCountLabel(donationRows.length, "receipt")],
+        ["Seva Total", formatCurrency(totalSeva), formatCountLabel(sevaRows.length, "booking")],
+        ["Devotees", devotees.length, "recent records"],
+        ["Schedule", scheduleRows.length, "upcoming sevas"],
+      ])}</div>
+      <div class="dashboard-main-grid platform-grid">
+        <article>
+          <h4>Donation Category Report</h4>
+          <div class="table-preview compact-table">
+            <table>
+              <thead>
+                <tr><th>Category</th><th class="amount">Amount</th><th>Count</th></tr>
+              </thead>
+              <tbody>
+                ${categoryRows.length ? categoryRows.slice(0, 8).map((row) => `
+                  <tr>
+                    <td>${escapeHtml(row.category || "Uncategorized")}</td>
+                    <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
+                    <td>${escapeHtml(row.count ?? row.transaction_count ?? 0)}</td>
+                  </tr>
+                `).join("") : `<tr><td colspan="3">No donation categories for this range.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article>
+          <h4>Detailed Donations</h4>
+          <div class="table-preview compact-table">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Receipt</th><th>Devotee</th><th class="amount">Amount</th></tr>
+              </thead>
+              <tbody>
+                ${donationRows.length ? donationRows.slice(0, 8).map((row) => `
+                  <tr>
+                    <td>${escapeHtml(String(row.date || row.receipt_date || "").slice(0, 10))}</td>
+                    <td>${escapeHtml(row.receipt_number || row.id || "")}</td>
+                    <td>${escapeHtml(row.devotee_name || "Devotee")}</td>
+                    <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
+                  </tr>
+                `).join("") : `<tr><td colspan="4">No donation receipts for this range.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article>
+          <h4>Detailed Sevas</h4>
+          <div class="table-preview compact-table">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Seva</th><th>Devotee</th><th class="amount">Amount</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                ${sevaRows.length ? sevaRows.slice(0, 8).map((row) => `
+                  <tr>
+                    <td>${escapeHtml(String(row.seva_date || row.booking_date || row.date || "").slice(0, 10))}</td>
+                    <td>${escapeHtml(row.seva_name || "Seva")}</td>
+                    <td>${escapeHtml(row.devotee_name || "Devotee")}</td>
+                    <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
+                    <td>${escapeHtml(row.status || "")}</td>
+                  </tr>
+                `).join("") : `<tr><td colspan="5">No seva bookings for this range.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article>
+          <h4>Seva Schedule</h4>
+          <div class="table-preview compact-table">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Seva</th><th>Devotee</th><th>Phone</th></tr>
+              </thead>
+              <tbody>
+                ${scheduleRows.length ? scheduleRows.slice(0, 8).map((row) => `
+                  <tr>
+                    <td>${escapeHtml(String(row.date || row.booking_date || "").slice(0, 10))}</td>
+                    <td>${escapeHtml(row.seva_name || "Seva")}</td>
+                    <td>${escapeHtml(row.devotee_name || "Devotee")}</td>
+                    <td>${escapeHtml(row.devotee_mobile || row.devotee_phone || "")}</td>
+                  </tr>
+                `).join("") : `<tr><td colspan="4">No upcoming seva schedule rows.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Recent Devotees</h4>
+            <p>Tenant-scoped devotee records captured from donations, sevas, and public payments.</p>
+          </div>
+          <span class="pill">${devotees.length} shown</span>
+        </div>
+        <div class="table-preview compact-table">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Phone</th><th>City</th><th>Updated</th></tr>
+            </thead>
+            <tbody>
+              ${devotees.length ? devotees.slice(0, 12).map((row) => `
+                <tr>
+                  <td>${escapeHtml(row.name || row.first_name || "Devotee")}</td>
+                  <td>${escapeHtml(row.phone || row.mobile || "")}</td>
+                  <td>${escapeHtml(row.city || "")}</td>
+                  <td>${escapeHtml(String(row.updated_at || row.created_at || "").slice(0, 10))}</td>
+                </tr>
+              `).join("") : `<tr><td colspan="4">No devotee records found.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -1769,6 +1926,7 @@ function renderMandirDashboard(payload = {}) {
   const trialBalance = payload.trial_balance || lastMandirTrialBalance;
   const financialReports = payload.financial_reports || lastMandirFinancialReports;
   const panchang = payload.panchang || lastMandirPanchang;
+  const operationalReports = payload.operational_reports || lastMandirOperationalReports;
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
   const paymentExceptionSummary = payload.payment_exception_summary || {};
   const donations = stats.donations || {};
@@ -1790,6 +1948,7 @@ function renderMandirDashboard(payload = {}) {
   const showExceptions = showOverview || activeMandirWorkspace === "exceptions";
   const showReceipts = showOverview || activeMandirWorkspace === "receipts";
   const showPanchang = showOverview || activeMandirWorkspace === "panchang";
+  const showReports = showOverview || activeMandirWorkspace === "reports";
   const showAccounting = showOverview || activeMandirWorkspace === "accounting";
 
   return `
@@ -1897,6 +2056,7 @@ function renderMandirDashboard(payload = {}) {
         </div>
       ` : ""}
       ${showPanchang ? renderMandirPanchang(panchang) : ""}
+      ${showReports ? renderMandirOperationalReports(operationalReports) : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
       ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
       ${showAccounting ? renderMandirFinancialReports(financialReports) : ""}
@@ -2158,6 +2318,11 @@ async function loadMandirDashboard() {
   const receiptsPayments = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" });
   const balanceSheet = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
   const panchang = await apiRequest("mandirmitra", "/api/v1/panchang/today", { method: "GET" });
+  const donationCategoryReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/category-wise?${reportRangeQuery}`, { method: "GET" });
+  const donationDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/detailed?${reportRangeQuery}`, { method: "GET" });
+  const sevaDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/sevas/detailed?${reportRangeQuery}`, { method: "GET" });
+  const sevaScheduleReport = await apiRequest("mandirmitra", "/api/v1/reports/sevas/schedule?days=30", { method: "GET" });
+  const devoteesReport = await apiRequest("mandirmitra", "/api/v1/devotees?limit=50", { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
@@ -2175,6 +2340,13 @@ async function loadMandirDashboard() {
     balance_sheet: balanceSheet.ok ? balanceSheet.payload : balanceSheet,
   };
   lastMandirPanchang = panchang.ok ? panchang.payload : panchang;
+  lastMandirOperationalReports = {
+    donation_category: donationCategoryReport.ok ? donationCategoryReport.payload : donationCategoryReport,
+    donation_detail: donationDetailReport.ok ? donationDetailReport.payload : donationDetailReport,
+    seva_detail: sevaDetailReport.ok ? sevaDetailReport.payload : sevaDetailReport,
+    seva_schedule: sevaScheduleReport.ok ? sevaScheduleReport.payload : sevaScheduleReport,
+    devotees: devoteesReport.ok && Array.isArray(devoteesReport.payload) ? devoteesReport.payload : [],
+  };
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
     mandir_pending_public_payments: pendingPayments,
@@ -2189,6 +2361,11 @@ async function loadMandirDashboard() {
     mandir_receipts_payments: receiptsPayments,
     mandir_balance_sheet: balanceSheet,
     mandir_panchang: panchang,
+    mandir_donation_category_report: donationCategoryReport,
+    mandir_donation_detail_report: donationDetailReport,
+    mandir_seva_detail_report: sevaDetailReport,
+    mandir_seva_schedule_report: sevaScheduleReport,
+    mandir_devotees_report: devoteesReport,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -2207,6 +2384,7 @@ async function loadMandirDashboard() {
       trial_balance: lastMandirTrialBalance,
       financial_reports: lastMandirFinancialReports,
       panchang: lastMandirPanchang,
+      operational_reports: lastMandirOperationalReports,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
@@ -2827,7 +3005,7 @@ async function pageMandirList(kind, direction) {
 }
 
 async function setMandirWorkspace(view) {
-  const allowedViews = new Set(["overview", "donations", "sevas", "payments", "exceptions", "receipts", "panchang", "accounting"]);
+  const allowedViews = new Set(["overview", "donations", "sevas", "payments", "exceptions", "receipts", "panchang", "reports", "accounting"]);
   if (!allowedViews.has(view)) {
     return;
   }

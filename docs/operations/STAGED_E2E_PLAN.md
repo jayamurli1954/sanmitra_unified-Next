@@ -118,6 +118,7 @@ Latest evidence:
 - 2026-05-21 `python scripts\mandirmitra_stage3_browser_smoke.py` passed against the local backend/frontend and saved a screenshot at `tmp\mandir-stage3-browser-smoke.png`.
 - 2026-05-22 Panchang was wired into the MandirMitra ERP shell as a rendered workspace backed by `/api/v1/panchang/today`; browser smoke now verifies Today Panchang and Tithi text, not only the navigation label.
 - 2026-05-22 deployment-readiness review was captured at `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md`.
+- 2026-05-22 Reports was split from Receipts in the MandirMitra ERP shell and now renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
 
 Remaining Stage 3 gaps:
 

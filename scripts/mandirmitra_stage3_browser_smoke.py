@@ -127,6 +127,7 @@ def main() -> int:
             "public payments": "Public Payments",
             "receipts": "Receipts",
             "panchang tab": "Panchang",
+            "reports tab": "Reports",
             "trial balance": "Trial Balance",
             "donations": "Donations",
             "sevas": "Sevas",
@@ -153,6 +154,24 @@ def main() -> int:
         except PlaywrightTimeoutError:
             page.screenshot(path=str(screenshot_path), full_page=True)
             fail("Timed out waiting for MandirMitra Panchang workspace")
+
+        page.locator('.mandir-workspace-tabs [data-workspace-view="reports"]').click()
+        try:
+            page.wait_for_function(
+                """() => {
+                    const active = document.querySelector('.mandir-workspace-tabs button.active');
+                    const text = document.body.innerText;
+                    return active?.textContent?.trim() === 'Reports'
+                        && text.includes('MandirMitra Reports')
+                        && text.includes('Donation Category Report')
+                        && text.includes('Detailed Sevas')
+                        && text.includes('Recent Devotees');
+                }""",
+                timeout=10000,
+            )
+        except PlaywrightTimeoutError:
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            fail("Timed out waiting for MandirMitra Reports workspace")
 
         page.screenshot(path=str(screenshot_path), full_page=True)
         browser.close()
