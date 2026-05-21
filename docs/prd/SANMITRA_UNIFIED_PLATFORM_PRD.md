@@ -31,6 +31,28 @@ The reference backend at `D:\sanmitra-backend` already provides a unified backen
 
 Current limitation: accounting-oriented frontends are still treated as separate product applications, creating duplicate UI and support effort.
 
+## Living Progress Rules
+
+This PRD is a living product contract for the unified platform. Update it together with `MITRABOOKS_ERP_GAP_MATRIX.md` whenever implementation changes the reliable current state, target scope, known gaps, or deferred scope.
+
+Rules:
+
+- Keep current state separate from target state.
+- Mark uncommitted or unreviewed local work as pending review, not implemented.
+- Record validation evidence when a workflow is considered verified.
+- Do not promote planned integrations or future module work into current state without passing tests or smoke checks.
+
+## Latest Progress
+
+| Date | Area | Status | Evidence | Remaining gap |
+| --- | --- | --- | --- | --- |
+| 2026-05-21 | MandirMitra in MitraBooks ERP | Receipt and accounting smoke verified locally | Donation receipt PDF, seva receipt PDF, expense posting, trial balance, voucher drill-down, Income and Expenditure, Receipts and Payments, and Balance Sheet were checked on the local backend and ERP shell | Convert this manual smoke into a repeatable Stage 3 checklist/script |
+| 2026-05-21 | Tenant/module context | Seed tenant context fixed and committed | Commit `73ebf0b` keeps `seed-tenant-1` as `TEMPLE` and `/api/v1/modules/me` returns `temple`, `accounting`, and `audit` for `mandirmitra` | Review remaining bootstrap/demo tenant assumptions before production seed policy |
+| 2026-05-21 | Execution priority | MandirMitra live-readiness first | Platform owner direction: complete MandirMitra to live parity after the minimum ERP/accounting foundation, then move to GruhaMitra because both legacy frontends are already live | Keep broad MitraBooks business work behind the MandirMitra live-ready gate |
+| 2026-05-21 | Prior planning recap | Captured in PRD workflow | Earlier planning sessions established MitraBooks as the accounting base, MandirMitra first, GruhaMitra second, and full MitraBooks business ERP after both are live | Keep this sequence visible in PRD, gap matrix, and E2E docs |
+| 2026-05-21 | Platform owner, audit, tenant entitlements | Pending review | Local source/tests/docs exist but remain uncommitted in the current working tree | Review and commit as a focused foundation batch if accepted |
+| 2026-05-21 | MitraBooks business parties and typed vouchers | Pending review | Local source/tests exist under `/api/v1/business` but remain uncommitted in the current working tree | Review separately as Phase 2 business work |
+
 ## Target State
 
 Move to three frontend experiences:
@@ -47,11 +69,29 @@ The unified MitraBooks frontend should dynamically show modules based on organiz
 
 - Reduce duplicated accounting UI.
 - Keep one shared accounting engine.
+- Treat MitraBooks as the shared accounting engine and ERP host first; full MitraBooks business ERP scope is a later expansion after MandirMitra and GruhaMitra are completed and deployed live.
 - Keep tenant and product isolation explicit.
 - Allow each organization to activate only relevant modules.
 - Preserve brand-specific terminology where it improves user experience.
 - Keep LegalMitra and InvestMitra separate because their workflows are not primarily accounting ERP workflows.
 - Validate E2E stage by stage: LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, combined ERP regression, then InvestMitra.
+- Current execution priority: after the minimum MitraBooks ERP/accounting foundation needed for tenant context, modules, and postings, finish MandirMitra to live-ready parity before expanding GruhaMitra. Broad MitraBooks business features must not distract from the MandirMitra live-ready gate.
+
+## Active Delivery Workflow
+
+This workflow preserves the project direction agreed in prior planning sessions:
+
+1. Keep LegalMitra stable because it is already live.
+2. Use MitraBooks as the base accounting engine, module shell, tenant/app-context layer, and financial reporting foundation.
+3. Complete MandirMitra inside that MitraBooks foundation and make it live-ready like LegalMitra.
+4. After MandirMitra is live-ready and deployment checks pass, complete GruhaMitra inside the same MitraBooks foundation.
+5. Only after MandirMitra and GruhaMitra are completed and deployed live, expand the larger MitraBooks business ERP roadmap: parties, vouchers, sales, purchases, GST, inventory, AR/AP, MIS, exports, and CA/bookkeeper workflows.
+
+Scope control:
+
+- MitraBooks accounting work is in scope now when it is needed by MandirMitra or later GruhaMitra.
+- MitraBooks business ERP work is deferred unless it fixes a shared accounting, reporting, tenant-context, audit, or route-contract gap needed for MandirMitra/GruhaMitra live readiness.
+- Do not let Phase 2 business modules become the active delivery track before MandirMitra and GruhaMitra are live.
 
 ## Organization Types
 
@@ -71,12 +111,43 @@ Use these canonical values:
 ### Shared Platform
 
 - Tenant onboarding and lifecycle.
+- Platform owner dashboard for cross-module onboarding status, pending approvals, subscription status, module enablement, and operational KPIs.
 - User and role management.
 - App-key validation.
 - Module registry.
 - Feature/module access enforcement.
 - Audit log.
 - Subscription and plan readiness.
+
+The platform owner dashboard is the review and control layer. It must not replace module-wise onboarding. MandirMitra, GruhaMitra, and MitraBooks users should start onboarding from their module context, while the platform owner can review, approve, reject, request correction, enable modules, and inspect subscription state centrally.
+
+Initial read-only API contract:
+
+- `GET /api/v1/platform-owner/dashboard`
+- Access: `super_admin` only.
+- Response sections: onboarding summary, tenant summary, subscription summary, app status, module status, pending approvals, recent onboarding requests, and recent tenants.
+
+Initial approval actions reuse existing super-admin onboarding endpoints:
+
+- `POST /api/v1/onboarding-requests/{request_id}/approve`
+- `POST /api/v1/onboarding-requests/{request_id}/reject`
+- UI action buttons must be shown only in the Platform Owner context and must refresh the dashboard after completion.
+- Approval must create or update tenants using the onboarding `app_key` to derive `organization_type`, default `enabled_modules`, and `app_keys`.
+
+Initial tenant entitlement action:
+
+- `PATCH /api/v1/tenants/{tenant_id}/entitlements`
+- Access: `super_admin` only.
+- Supported fields: `subscription_plan`, `enabled_modules`.
+- Module updates must validate module key, tenant `organization_type`, and tenant app keys.
+- Platform Owner UI may expose this as an entitlement action on tenant rows and must refresh the dashboard after completion.
+
+Initial tenant lifecycle action:
+
+- `PATCH /api/v1/tenants/{tenant_id}/status`
+- Access: `super_admin` only.
+- Supported statuses: `active`, `inactive`.
+- Platform Owner UI may expose this alongside entitlement controls so subscription, module enablement, and tenant lifecycle changes remain auditable and centralized.
 
 ### Accounting Engine
 
@@ -95,6 +166,7 @@ Use these canonical values:
 - Balance Sheet.
 - Income and Expenditure.
 - Receipts and Payments.
+- Report drill-down from month to week to day to voucher through shared accounting journals, app-scoped by `X-App-Key`.
 - GST/TDS readiness.
 - Idempotency for financial posting endpoints.
 
@@ -137,6 +209,7 @@ Traditional golden rules:
 
 ### MandirMitra Module
 
+- Module-wise temple/trust onboarding.
 - Donations and receipts.
 - Seva booking.
 - Hundi collection.
@@ -144,14 +217,71 @@ Traditional golden rules:
 - Trust/corpus/festival accounting.
 - 80G readiness where applicable.
 
+Active completion target:
+
+- MandirMitra must be completed to live-ready parity before GruhaMitra migration starts.
+- Live-ready means the legacy-live MandirMitra workflows work through the unified backend/ERP shell with tenant isolation, app-key isolation, receipt correctness, accounting correctness, auditability, and a repeatable smoke/E2E checklist.
+- Minimum supporting MitraBooks ERP work is allowed only where it is required for MandirMitra accounting, module access, reports, or shell navigation.
+- Broad MitraBooks business module work remains secondary until the MandirMitra live-ready gate is green.
+
+Initial MitraBooks ERP shell integration:
+
+- Mandir mode uses `X-App-Key: mandirmitra` for legacy-compatible MandirMitra routes while the unified ERP shell remains the host experience.
+- Live dashboard reads `GET /api/v1/dashboard/stats` for donation and seva summaries.
+- Public devotee payment must remain available without login.
+- Public devotee flow: select temple/trust, select donation or seva, enter amount/details, and pay using that temple/trust's configured UPI QR/payment instructions.
+- Parlathya Prathishtana remains a known working reference example for the public payment and temple/trust selection flow.
+- Pending public payment review reads `GET /api/v1/public-payments?status=pending`.
+- Verification action calls `PATCH /api/v1/public-payments/{payment_id}/verify`, which must create the donation or seva record, generate receipt data, and post the accounting entry only after staff verification.
+- Current shell verification captures UTR/reference, payment date, and optional bank account selection before posting.
+- Current shell receipt action downloads the protected receipt PDF returned by the verification response using the tenant access token and `X-App-Key: mandirmitra`.
+- Verification requires a UTR/reference before posting and rejects unsafe reference text.
+- Current shell receipt preview fetches the protected receipt PDF with the tenant access token and renders it in a modal preview before or alongside download.
+- Current shell receipt history reads recent donation and seva booking receipts from `GET /api/v1/donations?limit=8` and `GET /api/v1/sevas/bookings?limit=8`, with preview/download actions for each receipt.
+- Current shell donation and seva panels show recent donation rows and recent seva booking rows with receipt actions where available.
+- Current shell payment exception queue reads `GET /api/v1/public-payments/exceptions?older_than_hours=24` and flags stale pending payments, invalid amounts, missing phone data, invalid payment type, and missing donation/seva purpose data.
+- Current shell exception resolution supports rejecting an unverified public payment through a structured rejection dialog backed by `PATCH /api/v1/public-payments/{payment_id}/reject`, retaining rejection reason, actor, timestamp, and audit event.
+- Current shell exception correction supports repairing unverified public payment amount, phone, payment type, and donation/seva purpose through `PATCH /api/v1/public-payments/{payment_id}/correction`, retaining actor, timestamp, and audit event.
+- Current backend list groundwork supports `offset`, text search, and date filtering on donation/seva booking lists, plus `payment_mode` for donations and `status` for seva bookings.
+- Current shell donation and seva list panels expose lightweight search, date, mode/status filters, and previous/next paging over the existing backend list parameters.
+- Current shell exposes focused MandirMitra workspace views for overview, donations, sevas, public payments, exceptions, and receipts while reusing the same tenant/app-scoped live data.
+- Current shell MandirMitra side navigation switches supported module links into the focused workspace views and keeps the active navigation state aligned.
+- Current public payment list supports `limit`, `offset`, status, text search, and payment type filters; the shell exposes these controls in the public payment review panel.
+- Current public payment exception list supports `limit`, `offset`, reason, status, text search, and payment type filters; the shell exposes these controls in the exception review panel.
+- Current shared accounting report drill-down supports month, week, day, and voucher levels through `GET /api/v1/accounting/reports/drilldown`; voucher rows can open `GET /api/v1/accounting/reports/vouchers/{journal_id}` to inspect debit/credit lines. MitraBooks ERP uses the active `X-App-Key` so the same report panel applies to MitraBooks, MandirMitra, and GruhaMitra.
+- Gap: no major public payment verification shell gap remains in the initial MandirMitra dashboard slice; future work should expand these dashboard panels into dedicated routed full-list screens with stable URL state, exports, and richer audit drill-down.
+
 ### MitraBooks Business Module
 
-- Customers and vendors.
-- Sales and purchases.
-- GST invoices.
-- Inventory.
-- Payroll readiness.
-- Business reports and MIS.
+Current state:
+
+- Shared accounting APIs already support journal posting, reversal, ledger, trial balance, profit and loss, receipts/payments, balance sheet, and report drill-downs.
+- A small Phase 2 backend slice is being introduced under `/api/v1/business` for tenant/app-key scoped parties and typed vouchers.
+- Current party master work includes party creation, listing, lookup, profile update, and soft deactivation. Party profile updates do not mutate opening or current balances.
+- Current typed voucher work includes generated payment/receipt/contra/journal voucher numbers, idempotency-key reuse, voucher listing, voucher detail lookup, and reversal posting through the shared accounting reversal service.
+- Current party and voucher lifecycle actions write best-effort tenant-scoped audit events with old/new snapshots where applicable.
+- Current audit backend exposes `GET /api/v1/audit/events` for tenant-scoped, app-key scoped audit event listing with filters for entity type, entity id, and action.
+- Legacy compatibility routes still exist for older MitraBooks-style parties, invoices, and transactions, but they are not the target API surface for new business workflow work.
+
+Target state:
+
+- Customer/vendor/party master for `BUSINESS` tenants.
+- Typed payment, receipt, contra, and journal voucher APIs as facades over the shared accounting service.
+- Sales and purchase invoices with immutable GL posting links.
+- GST invoice setup and reporting readiness.
+- Inventory, AR/AP ageing, business reports, MIS, data health, and export workflows in later phases.
+
+Gap:
+
+- Party and typed voucher contracts have backend route-contract coverage, lifecycle audit events, and audit event query support; they still need frontend integration, frontend manifest coverage, audit UI expansion, voucher cancel/update policy, reversal UX, and browser E2E.
+- Invoice posting, GST, inventory, AR/AP, MIS, exports, and payroll readiness are planned but not yet implemented in the target `/api/v1/business` module.
+- Professional-services workflows may reuse the party/invoice engine with different labels, but that is not decided yet.
+
+Deferred scope:
+
+- Production GST filing integrations, e-invoice/e-way bill APIs, bank sync, OCR/AI auto-posting, desktop SQLite, and production data migration remain out of immediate scope.
+
+Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assumptions, and implementation phases are maintained in [MitraBooks ERP Gap Matrix](MITRABOOKS_ERP_GAP_MATRIX.md).
 
 ### LegalMitra
 
