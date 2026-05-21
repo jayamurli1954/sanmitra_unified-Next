@@ -126,6 +126,7 @@ def main() -> int:
             "mandir workspace": "MandirMitra",
             "public payments": "Public Payments",
             "receipts": "Receipts",
+            "panchang tab": "Panchang",
             "trial balance": "Trial Balance",
             "donations": "Donations",
             "sevas": "Sevas",
@@ -137,6 +138,21 @@ def main() -> int:
             fail("Frontend still reports MandirMitra live data unavailable")
         if "access denied" in text.lower():
             fail("Frontend contains access denied text")
+
+        page.locator('.mandir-workspace-tabs [data-workspace-view="panchang"]').click()
+        try:
+            page.wait_for_function(
+                """() => {
+                    const active = document.querySelector('.mandir-workspace-tabs button.active');
+                    return active?.textContent?.trim() === 'Panchang'
+                        && document.body.innerText.includes('Today Panchang')
+                        && document.body.innerText.includes('Tithi');
+                }""",
+                timeout=10000,
+            )
+        except PlaywrightTimeoutError:
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            fail("Timed out waiting for MandirMitra Panchang workspace")
 
         page.screenshot(path=str(screenshot_path), full_page=True)
         browser.close()

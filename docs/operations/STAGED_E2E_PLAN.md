@@ -116,6 +116,8 @@ Latest evidence:
 - 2026-05-21 `python scripts\mandirmitra_stage3_smoke.py` passed compile checks and 119 focused tests; manual/live checklist exists at `docs/operations/MANDIRMITRA_STAGE3_SMOKE_CHECKLIST.md`.
 - 2026-05-21 backend/API live smoke passed for public temple selection, public UPI config/intent, no-login public donation submission, staff verification, correction, rejection, audit trace, receipt PDF text, accounting reports, shared drill-down, and voucher detail.
 - 2026-05-21 `python scripts\mandirmitra_stage3_browser_smoke.py` passed against the local backend/frontend and saved a screenshot at `tmp\mandir-stage3-browser-smoke.png`.
+- 2026-05-22 Panchang was wired into the MandirMitra ERP shell as a rendered workspace backed by `/api/v1/panchang/today`; browser smoke now verifies Today Panchang and Tithi text, not only the navigation label.
+- 2026-05-22 deployment-readiness review was captured at `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md`.
 
 Remaining Stage 3 gaps:
 

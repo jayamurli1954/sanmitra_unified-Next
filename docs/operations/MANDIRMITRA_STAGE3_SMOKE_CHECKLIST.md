@@ -39,7 +39,8 @@ Expected result:
 - Local login succeeds with `X-App-Key: mandirmitra`.
 - `/api/v1/modules/me` returns `organization_type=TEMPLE` with `temple`, `accounting`, and `audit`.
 - The MitraBooks ERP shell opens in MandirMitra mode.
-- Visible UI includes MandirMitra, Donations, Sevas, Public Payments, Receipts, and Trial Balance.
+- Visible UI includes MandirMitra, Donations, Sevas, Public Payments, Receipts, Panchang, and Trial Balance.
+- The Panchang workspace opens and renders Today Panchang with Tithi data from `/api/v1/panchang/today`.
 - The UI does not show access denied or MandirMitra live-data-unavailable state.
 - A screenshot is saved under `tmp\mandir-stage3-browser-smoke.png`.
 

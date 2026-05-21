@@ -178,6 +178,7 @@ let lastMandirExpenses = [];
 let lastMandirTrialBalance = null;
 let lastMandirLedger = null;
 let lastMandirFinancialReports = {};
+let lastMandirPanchang = null;
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -359,6 +360,9 @@ function mandirWorkspaceFromModule(module = {}) {
   }
   if (path.includes("/sevas") || displayName.includes("seva")) {
     return "sevas";
+  }
+  if (path.includes("/panchang") || displayName.includes("panchang")) {
+    return "panchang";
   }
   if (path.includes("/reports") || displayName.includes("report")) {
     return "receipts";
@@ -766,6 +770,7 @@ function renderMandirWorkspaceTabs(activeWorkspace) {
     ["payments", "Public Payments"],
     ["exceptions", "Exceptions"],
     ["receipts", "Receipts"],
+    ["panchang", "Panchang"],
     ["accounting", "Accounting"],
   ];
   return `
@@ -1629,6 +1634,129 @@ function renderMandirFinancialReports(reports = lastMandirFinancialReports) {
   `;
 }
 
+function panchangTimeRange(value) {
+  if (!value || typeof value !== "object") {
+    return "--";
+  }
+  const start = value.start || value.start_time || "";
+  const end = value.end || value.end_time || "";
+  return start && end ? `${start} - ${end}` : start || end || "--";
+}
+
+function renderMandirPanchang(payload = lastMandirPanchang) {
+  if (!payload) {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Today Panchang</h4>
+            <p class="muted">Run checks to load temple-location Panchang for the active tenant.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  if (payload.ok === false) {
+    const detail = payload.payload?.detail || payload.detail || "Panchang is unavailable for the active temple tenant.";
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Today Panchang</h4>
+            <p class="muted">${escapeHtml(detail)}</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const date = payload.date || {};
+  const hinduDate = date.hindu || {};
+  const gregorianDate = date.gregorian || {};
+  const location = payload.location || {};
+  const panchang = payload.panchang || {};
+  const tithi = panchang.tithi || {};
+  const nakshatra = panchang.nakshatra || {};
+  const yoga = panchang.yoga || {};
+  const karana = panchang.karana || {};
+  const vara = panchang.vara || {};
+  const sunMoon = payload.sun_moon || {};
+  const kaala = payload.kaala || payload.inauspicious_times || {};
+  const muhurat = payload.muhurat || payload.auspicious_times || {};
+  const festivals = Array.isArray(payload.festivals) ? payload.festivals : [];
+  const specialNotes = payload.special_notes || {};
+
+  const limbCards = [
+    ["Tithi", tithi.full_name || tithi.name || "--", tithi.end_time_formatted ? `ends ${tithi.end_time_formatted}` : ""],
+    ["Nakshatra", nakshatra.name || "--", nakshatra.end_time_formatted ? `ends ${nakshatra.end_time_formatted}` : ""],
+    ["Yoga", yoga.name || "--", yoga.end_time_formatted ? `ends ${yoga.end_time_formatted}` : ""],
+    ["Karana", karana.current || karana.name || "--", karana.end_time_formatted ? `ends ${karana.end_time_formatted}` : ""],
+  ];
+  const timingRows = [
+    ["Sunrise", sunMoon.sunrise || "--", "Sunset", sunMoon.sunset || "--"],
+    ["Rahu Kaal", panchangTimeRange(kaala.rahu || kaala.rahu_kaal), "Yamaganda", panchangTimeRange(kaala.yamaganda)],
+    ["Gulika", panchangTimeRange(kaala.gulika), "Abhijit", panchangTimeRange(muhurat.abhijit || muhurat.abhijit_muhurat)],
+    ["Brahma Muhurat", panchangTimeRange(muhurat.brahma || muhurat.brahma_muhurat), "Amrita Kalam", panchangTimeRange(kaala.amrita || muhurat.amrita_kalam)],
+  ];
+
+  return `
+    <div class="verification-panel" id="mandir-panchang-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Today Panchang</h4>
+          <p>${escapeHtml(gregorianDate.formatted || gregorianDate.date || "")} | ${escapeHtml(location.city || "Temple location")}</p>
+        </div>
+        <span class="pill ok">${escapeHtml(vara.name || gregorianDate.day || "Today")}</span>
+      </div>
+      <div class="metric-grid four">${renderStatCards(limbCards)}</div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Timing</th>
+              <th>Value</th>
+              <th>Timing</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${timingRows.map(([leftLabel, leftValue, rightLabel, rightValue]) => `
+              <tr>
+                <td>${escapeHtml(leftLabel)}</td>
+                <td>${escapeHtml(leftValue)}</td>
+                <td>${escapeHtml(rightLabel)}</td>
+                <td>${escapeHtml(rightValue)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <tbody>
+            <tr>
+              <th>Samvatsara</th>
+              <td>${escapeHtml(hinduDate.samvatsara_name || payload.samvatsara?.name || "--")}</td>
+              <th>Paksha</th>
+              <td>${escapeHtml(hinduDate.paksha || tithi.paksha || "--")}</td>
+            </tr>
+            <tr>
+              <th>Lunar Month</th>
+              <td>${escapeHtml(hinduDate.month || hinduDate.lunar_month_purnimanta || "--")}</td>
+              <th>Festivals</th>
+              <td>${escapeHtml(festivals.map((item) => item.name || item.title).filter(Boolean).join(", ") || "None")}</td>
+            </tr>
+            <tr>
+              <th>Recommendation</th>
+              <td colspan="3">${escapeHtml(specialNotes.summary || "No special note for today.")}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -1640,6 +1768,7 @@ function renderMandirDashboard(payload = {}) {
   const recentExpenses = Array.isArray(payload.recent_expenses) ? payload.recent_expenses : [];
   const trialBalance = payload.trial_balance || lastMandirTrialBalance;
   const financialReports = payload.financial_reports || lastMandirFinancialReports;
+  const panchang = payload.panchang || lastMandirPanchang;
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
   const paymentExceptionSummary = payload.payment_exception_summary || {};
   const donations = stats.donations || {};
@@ -1660,6 +1789,7 @@ function renderMandirDashboard(payload = {}) {
   const showPayments = showOverview || activeMandirWorkspace === "payments";
   const showExceptions = showOverview || activeMandirWorkspace === "exceptions";
   const showReceipts = showOverview || activeMandirWorkspace === "receipts";
+  const showPanchang = showOverview || activeMandirWorkspace === "panchang";
   const showAccounting = showOverview || activeMandirWorkspace === "accounting";
 
   return `
@@ -1766,6 +1896,7 @@ function renderMandirDashboard(payload = {}) {
           </div>
         </div>
       ` : ""}
+      ${showPanchang ? renderMandirPanchang(panchang) : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
       ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
       ${showAccounting ? renderMandirFinancialReports(financialReports) : ""}
@@ -2026,6 +2157,7 @@ async function loadMandirDashboard() {
   const incomeExpenditure = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/income-expenditure?${reportRangeQuery}`, { method: "GET" });
   const receiptsPayments = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" });
   const balanceSheet = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
+  const panchang = await apiRequest("mandirmitra", "/api/v1/panchang/today", { method: "GET" });
   const accountingDrilldown = await loadAccountingDrilldownResult();
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
@@ -2042,6 +2174,7 @@ async function loadMandirDashboard() {
     receipts_payments: receiptsPayments.ok ? receiptsPayments.payload : receiptsPayments,
     balance_sheet: balanceSheet.ok ? balanceSheet.payload : balanceSheet,
   };
+  lastMandirPanchang = panchang.ok ? panchang.payload : panchang;
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
     mandir_pending_public_payments: pendingPayments,
@@ -2055,6 +2188,7 @@ async function loadMandirDashboard() {
     mandir_income_expenditure: incomeExpenditure,
     mandir_receipts_payments: receiptsPayments,
     mandir_balance_sheet: balanceSheet,
+    mandir_panchang: panchang,
     accounting_drilldown: accountingDrilldown,
   });
   if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
@@ -2072,6 +2206,7 @@ async function loadMandirDashboard() {
       recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
       trial_balance: lastMandirTrialBalance,
       financial_reports: lastMandirFinancialReports,
+      panchang: lastMandirPanchang,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
@@ -2692,7 +2827,7 @@ async function pageMandirList(kind, direction) {
 }
 
 async function setMandirWorkspace(view) {
-  const allowedViews = new Set(["overview", "donations", "sevas", "payments", "exceptions", "receipts", "accounting"]);
+  const allowedViews = new Set(["overview", "donations", "sevas", "payments", "exceptions", "receipts", "panchang", "accounting"]);
   if (!allowedViews.has(view)) {
     return;
   }
