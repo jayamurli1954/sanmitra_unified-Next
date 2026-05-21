@@ -1243,9 +1243,9 @@ def _generate_donation_receipt_pdf_bytes(
     payload = {
         **temple_profile,
         "receipt_title": "Donation Receipt",
-        "receipt_title_local": "ದೇಣಿಗೆ ರಸೀದಿ",
+        "receipt_title_local": "ದಾನ / ಕಾಣಿಕೆ ರಸೀದಿ",
         "line_item_header": "Donation Details",
-        "line_item_local": "ದೇಣಿಗೆ ವಿವರ",
+        "line_item_local": "ದಾನ / ಕಾಣಿಕೆ ವಿವರ",
         "service_date_label": "Donation Date",
         "receipt_number": receipt_number,
         "receipt_date": donation_date,
@@ -1459,7 +1459,8 @@ _LOCAL_LABELS = {
         "receipt_title": "ರಸೀದಿ",
         "receipt_number": "ರಸೀದಿ ಸಂಖ್ಯೆ",
         "date": "ದಿನಾಂಕ",
-        "party": "ಭಕ್ತ/ದಾನಿ",
+        "party": "ದಾನಿ / ಭಕ್ತ",
+        "donation_party": "ದಾನಿ",
         "address": "ವಿಳಾಸ",
         "line_item": "ಸೇವಾ ವಿವರ",
         "total": "ಒಟ್ಟು ಮೊತ್ತ",
@@ -2158,6 +2159,8 @@ def _build_receipt_pdf_bytes_weasy(
     receipt_no_label = _as_text(payload.get("receipt_number_label")) or labels["receipt_number"]
     date_label = _as_text(payload.get("date_label")) or labels["date"]
     party_label = labels["party"] if payload.get("party_label") is None else _as_text(payload.get("party_label"), "")
+    if _normalize_local_language(local_language) == "kannada" and payload.get("receipt_title") == "Donation Receipt":
+        party_label = _bilingual_label(local_labels.get("donation_party", ""), "Donor", use_local_labels)
     address_label = _as_text(payload.get("address_label")) or labels["address"]
     line_item_header = bilingual("line_item", payload.get("line_item_header"), "line_item")
     total_label = _as_text(payload.get("total_label")) or labels["total"]
@@ -2545,6 +2548,8 @@ def _build_receipt_pdf_bytes_pillow(
     receipt_no_label = _as_text(payload.get("receipt_number_label")) or labels["receipt_number"]
     date_label = _as_text(payload.get("date_label")) or labels["date"]
     party_label = labels["party"] if payload.get("party_label") is None else _as_text(payload.get("party_label"), "")
+    if _normalize_local_language(local_language) == "kannada" and payload.get("receipt_title") == "Donation Receipt":
+        party_label = _bilingual_label(local_labels.get("donation_party", ""), "Donor", use_local_labels)
     address_label = _as_text(payload.get("address_label")) or labels["address"]
     line_item_header = bilingual("line_item", payload.get("line_item_header"), "line_item")
     total_label = _as_text(payload.get("total_label")) or labels["total"]
@@ -2832,6 +2837,8 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
     date_label = _as_text(payload.get("date_label")) or labels["date"]
     party_label_raw = payload.get("party_label")
     party_label = labels["party"] if party_label_raw is None else _as_text(party_label_raw, "")
+    if _normalize_local_language(local_language) == "kannada" and payload.get("receipt_title") == "Donation Receipt":
+        party_label = _bilingual_label(local_labels.get("donation_party", ""), "Donor", use_local_labels)
     address_label = _as_text(payload.get("address_label")) or labels["address"]
     line_item_header_raw = _as_text(payload.get("line_item_header"))
     line_item_local = _as_text(payload.get("line_item_local")) or local_labels.get("line_item", "")
