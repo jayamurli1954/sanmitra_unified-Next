@@ -1459,7 +1459,7 @@ _LOCAL_LABELS = {
         "receipt_title": "ರಸೀದಿ",
         "receipt_number": "ರಸೀದಿ ಸಂಖ್ಯೆ",
         "date": "ದಿನಾಂಕ",
-        "party": "ದಾನಿ / ಭಕ್ತ",
+        "party": "ಭಕ್ತ",
         "donation_party": "ದಾನಿ",
         "address": "ವಿಳಾಸ",
         "line_item": "ಸೇವಾ ವಿವರ",
