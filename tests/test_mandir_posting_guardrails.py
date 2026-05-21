@@ -34,6 +34,23 @@ def test_upi_receipt_payment_mode_is_not_wrapped_as_bank():
     assert mandir_router._format_payment_mode_for_receipt("UPI /Google Pay") == "UPI /Google Pay"
 
 
+def test_kannada_seva_payment_line_uses_service_wording():
+    line = mandir_router._receipt_payment_line(
+        payment_mode="UPI /Google Pay",
+        local_language="kannada",
+        purpose="seva",
+    )
+    assert "ಈ ಕೆಳಗೆ ಕಾಣಿಸಿದ ಸೇವೆಯ ಸಲುವಾಗಿ ಸ್ವೀಕರಿಸಲಾಗಿದೆ" in line
+    assert "Received with thanks for the below mentioned seva by UPI /Google Pay" in line
+
+
+def test_kannada_receipt_profile_uses_devasthana_default():
+    profile = mandir_router._build_temple_receipt_profile({"local_language": "kannada"})
+
+    assert profile["temple_name"] == "ದೇವಸ್ಥಾನ"
+    assert profile["trust_name"] == "ದೇವಸ್ಥಾನ"
+
+
 def test_kannada_receipt_fallback_uses_bundled_font(monkeypatch, tmp_path):
     def fail_weasy(*_args, **_kwargs):
         raise RuntimeError("weasyprint is not available")

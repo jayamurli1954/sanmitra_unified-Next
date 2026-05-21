@@ -1261,8 +1261,9 @@ def _generate_donation_receipt_pdf_bytes(
         "total_amount": amount,
         "include_astro_row": False,
         "include_service_row": False,
+        "include_note_row": False,
         "service_date": donation_date,
-        "note_english": "This is a system generated receipt and does not require any signature.",
+        "note_english": "",
         "system_generated_line": "",
         "powered_by_line": "Powered by Sanmitra Tech Solutions.",
         "local_language": temple_profile.get("local_language"),
@@ -1341,7 +1342,7 @@ def _generate_seva_receipt_pdf_bytes(
     payload = {
         **temple_profile,
         "receipt_title": "Seva Receipt",
-        "receipt_title_local": "ಸೇವಾ ರಸೀದಿ",
+        "receipt_title_local": "ಸೇವಾ ರಶೀದಿ",
         "receipt_number": receipt_number,
         "receipt_date": booking_date,
         "party_name": devotee_name,
@@ -1456,8 +1457,8 @@ _HTML_LANG_BY_LOCAL_LANGUAGE = {
 
 _LOCAL_LABELS = {
     "kannada": {
-        "receipt_title": "ರಸೀದಿ",
-        "receipt_number": "ರಸೀದಿ ಸಂಖ್ಯೆ",
+        "receipt_title": "ರಶೀದಿ",
+        "receipt_number": "ರಶೀದಿ ಸಂಖ್ಯೆ",
         "date": "ದಿನಾಂಕ",
         "party": "ಭಕ್ತ",
         "donation_party": "ದಾನಿ",
@@ -1912,7 +1913,7 @@ def _receipt_payment_line(
         return f"Received with thanks for donation by {payment_mode}."
     local_mode = _format_payment_mode_local_for_receipt(payment_mode, local_language=local_language)
     if purpose == "seva":
-        return f"ಧನ್ಯವಾದಗಳೊಂದಿಗೆ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಪಾವತಿ ವಿಧಾನ: {local_mode} / Received by {payment_mode}."
+        return f"ಈ ಕೆಳಗೆ ಕಾಣಿಸಿದ ಸೇವೆಯ ಸಲುವಾಗಿ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಪಾವತಿ ವಿಧಾನ: {local_mode} / Received with thanks for the below mentioned seva by {payment_mode}."
     return f"ಧನ್ಯವಾದಗಳೊಂದಿಗೆ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಪಾವತಿ ವಿಧಾನ: {local_mode} / Received by {payment_mode}."
 
 
@@ -1989,6 +1990,10 @@ def _build_temple_receipt_profile(temple_doc: dict[str, Any] | None) -> dict[str
         or temple_doc.get("primary_language")
         or temple_doc.get("language")
     )
+    if local_language == "kannada" and temple_name == "Temple":
+        temple_name = "ದೇವಸ್ಥಾನ"
+        if trust_name == "Temple":
+            trust_name = temple_name
     return {
         "trust_name": trust_name,
         "temple_name": temple_name,
@@ -2222,9 +2227,10 @@ def _build_receipt_pdf_bytes_weasy(
         "</tr>"
     )
 
+    include_note_row = bool(payload.get("include_note_row", True))
     note_lines = [
-        _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels else "",
-        _as_text(payload.get("note_english"), ""),
+        _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels and include_note_row else "",
+        _as_text(payload.get("note_english"), "") if include_note_row else "",
     ]
     note_html = "<br/>".join(_receipt_html_mixed(line) for line in note_lines if line)
 
@@ -2304,7 +2310,7 @@ def _build_receipt_pdf_bytes_weasy(
           <td class="center total amt-minor"></td>
         </tr>
         {''.join(rows_html)}
-        <tr><td class="note" colspan="3">{note_html or '-'}</td></tr>
+        {f'<tr><td class="note" colspan="3">{note_html or "-"}</td></tr>' if include_note_row else ''}
       </table>
       {astro_html}
       {service_html}
@@ -2670,14 +2676,20 @@ def _build_receipt_pdf_bytes_pillow(
         )
         _draw_receipt_cell_text(draw, (right - p(170), meta_mid, right, note_top), labels["cashier"], font_small, latin_font=latin_small, align="center")
 
+    include_note_row = bool(payload.get("include_note_row", True))
     note_lines = [
-        _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels else "",
-        _as_text(payload.get("note_english"), ""),
+        _as_text(payload.get("note_local"), labels.get("note_local", "")) if use_local_labels and include_note_row else "",
+        _as_text(payload.get("note_english"), "") if include_note_row else "",
     ]
     note_text = "\n".join(line for line in note_lines if line)
-    note_rect = (left, note_top if bool(payload.get("include_astro_row", True)) else meta_top, right, bottom)
-    _draw_receipt_cell_text(draw, note_rect, note_text, font_small, latin_font=latin_small, align="center", max_lines=4)
-    system_line = _as_text(payload.get("system_generated_line"), "This is a system generated receipt and does not require any signature.")
+    if include_note_row:
+        note_rect = (left, note_top if bool(payload.get("include_astro_row", True)) else meta_top, right, bottom)
+        _draw_receipt_cell_text(draw, note_rect, note_text, font_small, latin_font=latin_small, align="center", max_lines=4)
+    system_line_raw = payload.get("system_generated_line")
+    if system_line_raw is None:
+        system_line = "This is a system generated receipt and does not require any signature."
+    else:
+        system_line = str(system_line_raw).strip()
     _draw_receipt_text(draw, (page_w // 2, outer_bottom + p(8)), system_line, font_footer, latin_font=latin_footer, anchor="ma")
     _draw_receipt_text(draw, (right, page_h - p(22)), _as_text(payload.get("powered_by_line"), ""), font_footer, latin_font=latin_footer, anchor="ra", fill="#333333")
 
@@ -2940,18 +2952,20 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
         _receipt_paragraph(total_minor, table_cell_right),
     ])
 
-    note_line_local = _as_text(payload.get('note_local'), labels['note_local'])
-    note_line_english = _as_text(payload.get('note_english'), '')
-    note_lines = [line for line in [note_line_local if use_local_labels else '', note_line_english] if line]
-    note_block = '\n'.join(note_lines)
-    rows.append([_receipt_paragraph(note_block or '-', table_cell_center), '', ''])
+    include_note_row = bool(payload.get("include_note_row", True))
+    if include_note_row:
+        note_line_local = _as_text(payload.get('note_local'), labels['note_local'])
+        note_line_english = _as_text(payload.get('note_english'), '')
+        note_lines = [line for line in [note_line_local if use_local_labels else '', note_line_english] if line]
+        note_block = '\n'.join(note_lines)
+        rows.append([_receipt_paragraph(note_block or '-', table_cell_center), '', ''])
 
     col1 = doc.width * 0.72
     col2 = doc.width * 0.20
     col3 = doc.width - col1 - col2
     table = Table(rows, colWidths=[col1, col2, col3])
 
-    note_row_index = len(rows) - 1
+    note_row_index = len(rows) - 1 if include_note_row else None
     table_style = [
         ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#808080')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#A0A0A0')),
@@ -2961,10 +2975,8 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
         ('SPAN', (0, 3), (2, 3)),
         ('SPAN', (0, 4), (2, 4)),
         ('SPAN', (0, 5), (2, 5)),
-        ('SPAN', (0, note_row_index), (2, note_row_index)),
         ('BACKGROUND', (0, 0), (2, 0), colors.HexColor('#F2F2F2')),
         ('BACKGROUND', (0, 6), (2, 6), colors.HexColor('#F8F8F8')),
-        ('BACKGROUND', (0, note_row_index), (2, note_row_index), colors.HexColor('#F8F8F8')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), 5),
         ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -2975,8 +2987,13 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
         ('LEFTPADDING', (0, 2), (0, 5), 6),
         ('TOPPADDING', (0, 6), (2, 6), 4),
         ('BOTTOMPADDING', (0, 6), (2, 6), 4),
-        ('BOTTOMPADDING', (0, note_row_index), (2, note_row_index), 5),
     ]
+    if note_row_index is not None:
+        table_style.extend([
+            ('SPAN', (0, note_row_index), (2, note_row_index)),
+            ('BACKGROUND', (0, note_row_index), (2, note_row_index), colors.HexColor('#F8F8F8')),
+            ('BOTTOMPADDING', (0, note_row_index), (2, note_row_index), 5),
+        ])
     table.setStyle(TableStyle(table_style))
 
     elements.append(table)
