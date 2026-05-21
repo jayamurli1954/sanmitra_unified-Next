@@ -2285,16 +2285,11 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
             )
         except Exception as exc:
             logger.warning(
-                "Weasy bilingual receipt rendering failed for %s receipt; falling back to English-only PDF: %s",
+                "Weasy bilingual receipt rendering failed for %s receipt; falling back to ReportLab with bundled fonts: %s",
                 local_language,
                 exc,
                 exc_info=True,
             )
-            local_language = None
-            use_local_labels = False
-            labels = _default_labels(None, False)
-            local_labels = {}
-            font_name = "Helvetica"
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(

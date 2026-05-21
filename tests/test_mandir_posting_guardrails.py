@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 
 import app.modules.mandir_compat.router as mandir_router
 import app.modules.mandir_compat.service as mandir_service
@@ -27,6 +28,32 @@ def test_kannada_amount_words_for_receipts():
         mandir_router._amount_words_receipt_line(50000, local_language="kannada")
         == "ರೂಪಾಯಿ ಐವತ್ತು ಸಾವಿರ ಮಾತ್ರ / Rupees Fifty Thousand Only"
     )
+
+
+def test_kannada_receipt_fallback_uses_bundled_font(monkeypatch, tmp_path):
+    def fail_weasy(*_args, **_kwargs):
+        raise RuntimeError("weasyprint is not available")
+
+    monkeypatch.setattr(mandir_router, "_build_receipt_pdf_bytes_weasy", fail_weasy)
+    pdf_bytes = mandir_router._generate_donation_receipt_pdf_bytes(
+        {
+            "donation_id": "don-local-font",
+            "receipt_number": "DON-LOCAL-FONT",
+            "amount": 501,
+            "category": "General Donation",
+            "payment_mode": "Cash",
+            "devotee_name": "Muralidhar Rao",
+            "created_at": "2026-05-20T12:00:00+00:00",
+        },
+        temple_profile={"temple_name": "Temple", "local_language": "kannada"},
+    )
+    output_path = tmp_path / "kannada-receipt.pdf"
+    output_path.write_bytes(pdf_bytes)
+
+    extracted = PdfReader(str(output_path)).pages[0].extract_text() or ""
+    assert "ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt" in extracted
+    assert "ರೂಪಾಯಿ ಐದು ನೂರು ಒಂದು ಮಾತ್ರ / Rupees Five Hundred One Only" in extracted
+    assert "■" not in extracted
 
 
 class FakeObjectId:
