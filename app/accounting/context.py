@@ -14,7 +14,7 @@ ACCOUNTING_APP_KEYS = {
     MITRABOOKS_ACCOUNTING_APP_KEY,
 }
 
-SHARED_ACCOUNTING_TENANTS = {"default", "demo_tenant", "seed-tenant-1"}
+SHARED_ACCOUNTING_TENANTS = {"default", "demo_tenant"}
 DEFAULT_ACCOUNTING_ENTITY_ID = "primary"
 
 

@@ -114,10 +114,11 @@ Latest evidence:
 - 2026-05-21 local smoke verified donation receipt PDF, seva receipt PDF, expense receipt, donation/seva/expense postings, trial balance, voucher drill-down, Income and Expenditure, Receipts and Payments, and Balance Sheet.
 - 2026-05-21 commit `73ebf0b` fixed seed tenant context so `seed-tenant-1` remains `TEMPLE` with `temple`, `accounting`, and `audit` enabled for `mandirmitra`.
 - 2026-05-21 `python scripts\mandirmitra_stage3_smoke.py` passed compile checks and 119 focused tests; manual/live checklist exists at `docs/operations/MANDIRMITRA_STAGE3_SMOKE_CHECKLIST.md`.
+- 2026-05-21 backend/API live smoke passed for public temple selection, public UPI config/intent, no-login public donation submission, staff verification, correction, rejection, audit trace, receipt PDF text, accounting reports, shared drill-down, and voucher detail.
 
 Remaining Stage 3 gaps:
 
-- Complete the manual/live checklist for public payment, exceptions, audit trace, tenant/app isolation in a running browser, and deployment readiness.
+- Complete the visual browser pass in the ERP shell and deployment-readiness review.
 - Complete a production-readiness review for environment configuration, seed/demo tenant assumptions, audit retention, backup/restore expectations, and deployment rollback notes.
 - Review any remaining MandirMitra legacy-live workflows not covered by the current smoke, especially hundi, festival/fund, devotee privacy, cancellation/refund, and 80G/FCRA tenant-configuration behavior where applicable.
 

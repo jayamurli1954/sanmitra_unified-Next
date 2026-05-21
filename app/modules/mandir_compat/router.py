@@ -8265,6 +8265,26 @@ async def mandir_verify_public_payment(
     }
     await col.update_one({"id": payment_id, "tenant_id": tenant_id, "app_key": app_key}, {"$set": update})
 
+    try:
+        await log_audit_event(
+            tenant_id=tenant_id,
+            user_id=update["verified_by"],
+            product="mandirmitra",
+            action="public_payment_verified",
+            entity_type="mandir_public_payment",
+            entity_id=payment_id,
+            old_value={"status": doc.get("status")},
+            new_value={
+                "status": "verified",
+                "utr_reference": utr_reference,
+                "source_type": source_type,
+                "source_id": source_id,
+                "receipt_number": str(source_record.get("receipt_number") or "").strip() or None,
+            },
+        )
+    except Exception:
+        pass
+
     receipt_number = str(source_record.get("receipt_number") or "").strip() or None
     receipt_pdf_url = str(source_record.get("receipt_pdf_url") or "").strip() or None
     if not receipt_pdf_url and source_id:

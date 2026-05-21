@@ -1335,6 +1335,7 @@ def test_public_payment_verify_is_app_key_scoped(mandir_upi_client):
 
 def test_public_payment_verify_returns_receipt_pdf_url(mandir_upi_client, monkeypatch):
     client, collections = mandir_upi_client
+    audit_calls = []
     collections["mandir_public_payments"].docs.append(
         {
             "id": "pay-receipt-verify",
@@ -1357,7 +1358,11 @@ def test_public_payment_verify_returns_receipt_pdf_url(mandir_upi_client, monkey
             "receipt_pdf_url": "/api/v1/donations/don-public-1/receipt/pdf",
         }
 
+    async def fake_log_audit_event(**kwargs):
+        audit_calls.append(kwargs)
+
     monkeypatch.setattr(mandir_router, "create_donation", fake_create_donation)
+    monkeypatch.setattr(mandir_router, "log_audit_event", fake_log_audit_event)
 
     response = client.patch(
         "/api/v1/public-payments/pay-receipt-verify/verify",
@@ -1371,6 +1376,9 @@ def test_public_payment_verify_returns_receipt_pdf_url(mandir_upi_client, monkey
     assert payload["source_id"] == "don-public-1"
     assert payload["receipt_number"] == "DON-0000001"
     assert payload["receipt_pdf_url"] == "/api/v1/donations/don-public-1/receipt/pdf"
+    assert audit_calls[0]["action"] == "public_payment_verified"
+    assert audit_calls[0]["new_value"]["source_id"] == "don-public-1"
+    assert audit_calls[0]["new_value"]["receipt_number"] == "DON-0000001"
 
 
 def test_public_payment_verify_requires_utr_reference(mandir_upi_client, monkeypatch):
