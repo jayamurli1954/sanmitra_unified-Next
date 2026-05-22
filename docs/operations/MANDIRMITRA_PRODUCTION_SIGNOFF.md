@@ -76,6 +76,7 @@ These areas are not blockers for the first live cut, but must remain disabled, h
 | Demo public payment E2E | Passed |
 | Receipt PDF smoke | Passed |
 | Accounting reports and drill-down | Passed |
+| Final local browser smoke | Passed on 2026-05-22 with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`; context returned `organization_type=TEMPLE` with `accounting`, `audit`, and `temple` modules. |
 | CI for latest docs/evidence commit | Confirmed green through `4ea3c52`; rerun/confirm for final signoff commit before production. |
 | Render deployment | Confirmed green through `4ea3c52`; rerun/confirm for final signoff commit before production. |
 | Production env checklist | Pending platform-owner confirmation |

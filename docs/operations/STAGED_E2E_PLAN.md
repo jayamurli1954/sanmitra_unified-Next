@@ -123,6 +123,7 @@ Latest evidence:
 - 2026-05-22 startup public-payment bootstrap was moved away from the real Parlathya trust record. Demo public UPI/config visibility now belongs to the explicit Mandir demo bootstrap tenant before destructive staging smoke can proceed.
 - 2026-05-22 demo public payment smoke passed end to end: public submission, ERP pending verification, posting with dummy UTR/reference, receipt download, report visibility, balanced Trial Balance, and voucher drill-down.
 - 2026-05-22 production signoff checklist was added at `docs/operations/MANDIRMITRA_PRODUCTION_SIGNOFF.md`; final go-live remains pending environment, backup/restore, rollback, and tenant seed policy confirmation.
+- 2026-05-22 final local MandirMitra browser smoke passed against `http://127.0.0.1:8001` with `organization_type=TEMPLE` and `accounting`, `audit`, and `temple` enabled.
 
 Remaining Stage 3 gaps:
 

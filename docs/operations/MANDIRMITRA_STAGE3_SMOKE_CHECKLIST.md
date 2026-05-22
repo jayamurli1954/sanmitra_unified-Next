@@ -65,6 +65,7 @@ Latest staging/non-destructive evidence on 2026-05-22:
 - Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `seed-tenant-1` for local ERP smoke) with demo UPI/config values.
 - Demo public payment submission is available from `/mandir-public/` only for demo/test tenants. It creates a pending public payment for ERP staff verification; live trust tenants remain visibility-only from this page.
 - Demo public payment end-to-end smoke passed on the safe demo path: pending payment appeared in ERP, verification posted successfully, receipt generated/downloaded, donation appeared in receipts/reports, Trial Balance remained balanced, and drill-down showed the posted voucher.
+- Final local browser smoke passed with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`, returning `organization_type=TEMPLE` and enabled modules `accounting`, `audit`, and `temple`.
 
 ## Local Services
 
