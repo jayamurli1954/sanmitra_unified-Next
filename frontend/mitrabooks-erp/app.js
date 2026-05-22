@@ -730,6 +730,18 @@ function renderMandirReceiptActions(row, label) {
   `;
 }
 
+function renderMandirOperationResult(result) {
+  if (!result) {
+    return "";
+  }
+  return `
+    <div class="module-state ${result.ok ? "ok" : "warn"}" id="mandir-operation-result">
+      <strong>${escapeHtml(result.title || (result.ok ? "Operation completed" : "Operation failed"))}</strong>
+      <span>${escapeHtml(result.detail || "")}</span>
+    </div>
+  `;
+}
+
 function renderMandirDonationsTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return `<p class="muted">No recent donations returned.</p>`;
@@ -2011,10 +2023,11 @@ function renderMandirDashboard(payload = {}) {
         <span class="pill ok">mandirmitra</span>
       </div>
       ${renderMandirWorkspaceTabs(activeMandirWorkspace)}
+      ${renderMandirOperationResult(formResult)}
       ${(showOverview || showDonations || showSevas || showAccounting) ? renderMandirCreateForms({
         payment_accounts: payload.payment_accounts,
         accounts: payload.accounts,
-        form_result: formResult,
+        form_result: null,
       }) : ""}
       ${(showOverview || activeMandirWorkspace === "donations") ? `
         <h4>Donations</h4>
@@ -2883,8 +2896,14 @@ async function cancelMandirReceipt(button) {
   const refundReference = refundMode
     ? String(window.prompt("Refund transaction reference, if any.") || "").trim().replace(/\s+/g, " ")
     : "";
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = "Cancelling...";
+  setMandirFormResult(null, "Cancelling receipt", receiptLabel);
+  await loadMandirDashboard();
   const result = await apiRequest("mandirmitra", cancelUrl, {
     method: "POST",
+    timeoutMs: 20000,
     body: JSON.stringify({
       reason,
       refund_mode: refundMode || null,
@@ -2897,7 +2916,11 @@ async function cancelMandirReceipt(button) {
     await loadMandirDashboard();
   } else {
     setMandirFormResult(false, "Receipt cancellation failed", result.payload?.detail || "Unable to cancel receipt");
+    await loadMandirDashboard();
   }
+  dashboardPreview.querySelector("#mandir-operation-result")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  button.disabled = false;
+  button.textContent = originalLabel;
 }
 
 function compactOptionalPhone(value) {
