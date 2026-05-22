@@ -675,16 +675,15 @@ function renderMandirReceiptHistoryTable(rows) {
                       data-receipt-url="${escapeHtml(row.receipt_pdf_url)}"
                       data-receipt-filename="${escapeHtml(filename)}"
                     >Download</button>
-                    ${row.cancel_url ? `
+                    ${row.cancel_url && !reversed ? `
                       <button
                         class="danger"
                         type="button"
                         data-mandir-action="cancel-receipt"
                         data-cancel-url="${escapeHtml(row.cancel_url)}"
                         data-receipt-label="${escapeHtml(receiptLabel)}"
-                        ${reversed ? "disabled" : ""}
                       >Cancel</button>
-                    ` : ""}
+                    ` : reversed ? `<button class="secondary" type="button" disabled>Reversed</button>` : ""}
                   </div>
                 </td>
               </tr>
@@ -724,16 +723,15 @@ function renderMandirReceiptActions(row, label) {
         data-receipt-url="${escapeHtml(row.receipt_pdf_url)}"
         data-receipt-filename="${escapeHtml(filename)}"
       >Download</button>
-      ${cancelUrl ? `
+      ${cancelUrl && !reversed ? `
         <button
           class="danger"
           type="button"
           data-mandir-action="cancel-receipt"
           data-cancel-url="${escapeHtml(cancelUrl)}"
           data-receipt-label="${escapeHtml(receiptLabel)}"
-          ${reversed ? "disabled" : ""}
         >Cancel</button>
-      ` : ""}
+      ` : reversed ? `<button class="secondary" type="button" disabled>Reversed</button>` : ""}
     </div>
   `;
 }
