@@ -119,12 +119,13 @@ Latest evidence:
 - 2026-05-22 Panchang was wired into the MandirMitra ERP shell as a rendered workspace backed by `/api/v1/panchang/today`; browser smoke now verifies Today Panchang and Tithi text, not only the navigation label.
 - 2026-05-22 deployment-readiness review was captured at `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md`.
 - 2026-05-22 Reports was split from Receipts in the MandirMitra ERP shell and now renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
+- 2026-05-22 first live-cut decisions were captured at `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`: donation, seva, public payment, receipt, Panchang, reports, and accounting are included; Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are deferred until their gates are implemented and tested.
 
 Remaining Stage 3 gaps:
 
 - Complete deployment-readiness review.
 - Complete a production-readiness review for environment configuration, seed/demo tenant assumptions, audit retention, backup/restore expectations, and deployment rollback notes.
-- Review any remaining MandirMitra legacy-live workflows not covered by the current smoke, especially hundi, festival/fund, devotee privacy, cancellation/refund, and 80G/FCRA tenant-configuration behavior where applicable.
+- Keep Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance out of the first live cut unless their documented gates are implemented and tested.
 
 ### Stage 4: GruhaMitra in MitraBooks ERP
 

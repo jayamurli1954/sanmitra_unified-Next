@@ -48,13 +48,13 @@ Live-ready means:
 | Audit retention | Define retention/export expectations for public payment events, receipt events, correction/rejection history, and platform-owner actions. |
 | Backup/restore | Confirm MongoDB and PostgreSQL backup schedule and restore test responsibility before production use. |
 | Rollback | Backend rollback must use previous release tag; financial data must not be rolled back by editing ledger rows. Use reversal/adjustment entries for accounting corrections. |
-| Hundi/festival/fund workflows | Review legacy-live coverage and decide whether these are required for this live cut or documented as post-live Phase 3 additions. |
-| Cancellation/refund | Receipt cancellation and financial reversal behavior need explicit live policy and focused tests before enabling operational cancellation/refund UI. |
-| 80G/FCRA configuration | Must remain tenant-configured. Do not default eligibility to true. Confirm whether this is required for the first live MandirMitra cut. |
+| Hundi/festival/fund workflows | Deferred from the first live cut. See `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`. |
+| Cancellation/refund | Deferred from the first live cut. Generic journal reversal exists, but receipt-domain cancellation/refund needs linked domain records, audit event, idempotency, and tests before UI exposure. |
+| 80G/FCRA configuration | Deferred from the first live cut. Must remain tenant-configured and default-off until registration, receipt text, category/date eligibility, and reports are implemented and tested. |
 | Devotee privacy | Confirm role-gated access, PII retention/anonymization policy, and logging rules for devotee phone/email/PAN if PAN is later enabled. |
 
 ## Release Recommendation
 
-MandirMitra can move to staging deployment review after the current Panchang/UI smoke commit is pushed and CI is green.
+MandirMitra can move to staging deployment review after the current MandirMitra commits are pushed and CI is green.
 
-Production live signoff should wait until environment configuration, backup/restore, rollback, seed/demo tenant assumptions, and the required-vs-deferred decision for hundi/fund/cancellation/80G-FCRA are recorded.
+Production live signoff should wait until environment configuration, backup/restore, rollback, and seed/demo tenant assumptions are confirmed. Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are explicitly deferred from the first live cut.
