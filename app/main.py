@@ -172,7 +172,7 @@ async def _ping_with_timeout(coro, timeout_seconds: float) -> tuple[bool, str]:
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """Root route — satisfies Render's HEAD / health check (returns 200 for both GET and HEAD)."""
-    return {"status": "ok", "service": "sanmitra-backend"}
+    return {"status": "ok", "service": "sanmitra-unified-next"}
 
 
 @app.get("/health")
