@@ -2,63 +2,15 @@
   "routes": [
     {
       "src": "^/$",
-      "dest": "/legalmitra/index.html"
+      "dest": "/mitrabooks-erp/index.html"
     },
     {
       "src": "^/index\\.html$",
-      "dest": "/legalmitra/index.html"
-    },
-    {
-      "src": "^/about\\.html$",
-      "dest": "/legalmitra/about.html"
-    },
-    {
-      "src": "^/article\\.html$",
-      "dest": "/legalmitra/article.html"
-    },
-    {
-      "src": "^/chat\\.html$",
-      "dest": "/legalmitra/chat.html"
-    },
-    {
-      "src": "^/contact\\.html$",
-      "dest": "/legalmitra/contact.html"
-    },
-    {
-      "src": "^/faq\\.html$",
-      "dest": "/legalmitra/faq.html"
-    },
-    {
-      "src": "^/insights\\.html$",
-      "dest": "/legalmitra/insights.html"
-    },
-    {
-      "src": "^/login\\.html$",
-      "dest": "/legalmitra/login.html"
-    },
-    {
-      "src": "^/pricing\\.html$",
-      "dest": "/legalmitra/pricing.html"
-    },
-    {
-      "src": "^/templates\\.html$",
-      "dest": "/legalmitra/templates.html"
-    },
-    {
-      "src": "^/tracker\\.html$",
-      "dest": "/legalmitra/tracker.html"
-    },
-    {
-      "src": "^/legal/privacy\\.html$",
-      "dest": "/legalmitra/legal/privacy.html"
-    },
-    {
-      "src": "^/legal/terms\\.html$",
-      "dest": "/legalmitra/legal/terms.html"
+      "dest": "/mitrabooks-erp/index.html"
     },
     {
       "src": "^/manifest\\.webmanifest$",
-      "dest": "/legalmitra/manifest.webmanifest"
+      "dest": "/mitrabooks-erp/manifest.webmanifest"
     },
     {
       "src": "^/api/health$",
@@ -70,31 +22,7 @@
     },
     {
       "src": "^/app\\.js$",
-      "dest": "/legalmitra/app.js"
-    },
-    {
-      "src": "^/faq\\.js$",
-      "dest": "/legalmitra/faq.js"
-    },
-    {
-      "src": "^/insights\\.js$",
-      "dest": "/legalmitra/insights.js"
-    },
-    {
-      "src": "^/insights-data\\.js$",
-      "dest": "/legalmitra/insights-data.js"
-    },
-    {
-      "src": "^/login\\.js$",
-      "dest": "/legalmitra/login.js"
-    },
-    {
-      "src": "^/templates\\.js$",
-      "dest": "/legalmitra/templates.js"
-    },
-    {
-      "src": "^/tracker\\.js$",
-      "dest": "/legalmitra/tracker.js"
+      "dest": "/mitrabooks-erp/app.js"
     },
     {
       "handle": "filesystem"
