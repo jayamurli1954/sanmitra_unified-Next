@@ -26,7 +26,8 @@ This document records the scope decision for making MandirMitra live inside the 
 | --- | --- | --- |
 | Hundi collections | Defer | Current backend has placeholder Hundi endpoints and `module_hundi_enabled` defaults to false. Do not expose as live until collection entry, counting, deposit, receipt/accounting rules, and audit tests exist. |
 | Festival/fund workflows | Defer | Sevas can mark festival-only availability, but full festival/fund accounting and corpus/fund-specific reporting are not complete enough for live signoff. |
-| Receipt cancellation/refund UI | Defer | Generic Mandir journal cancellation/reversal exists, but donation/seva receipt-domain cancellation and refund policy need explicit linked domain records, reversal journal reference, audit event, and tests. |
+| Receipt cancellation/reversal UI | Include | Donation and seva receipts can be marked reversed without editing the original receipt values; linked reversal journal, reason, actor, timestamp, refund mode/reference, idempotent replay, and focused tests are covered. |
+| Refund approval/settlement workflow | Defer | Basic cancellation captures refund metadata, but a richer refund approval queue, payout settlement workflow, and export/report pack are not complete enough for live signoff. |
 | 80G/FCRA issuance | Defer | Must be tenant-configured and compliance-reviewed. Do not default eligibility to true or print/claim 80G/FCRA treatment until tenant configuration, registration fields, receipt text, and tests exist. |
 
 ## Non-Negotiable Gates For Deferred Scope
@@ -63,15 +64,21 @@ Sponsorship and valued in-kind donations are included in the first live cut only
 - Zero-value in-kind acknowledgements may remain memo/domain records only and must not create a GL entry until a valuation is recorded.
 - Rich event/fund subledger reporting, stock issue/consumption, and restricted-fund reporting remain part of the festival/fund deferred scope above.
 
-### Cancellation And Refund
+### Cancellation, Reversal, And Refund
 
-Before enabling receipt cancellation/refund live:
+Included in first live cut:
 
 - Issued receipt records must remain immutable and be marked cancelled/reversed instead of edited.
 - The original journal must not be changed in place.
 - Reversal or adjustment journal must link to the original source document.
-- Refund payment mode, refund date, actor, reason, and approval metadata must be recorded.
+- Refund payment mode, refund date, actor, reason, and reference metadata must be recorded where provided.
 - Duplicate cancellation/refund requests must be idempotent.
+
+Deferred refund depth:
+
+- Refund approval queue.
+- Payout/settlement status tracking.
+- Refund export/report pack.
 
 ### 80G/FCRA
 

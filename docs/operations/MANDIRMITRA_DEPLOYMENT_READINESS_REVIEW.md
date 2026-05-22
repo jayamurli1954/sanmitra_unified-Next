@@ -38,6 +38,7 @@ Live-ready means:
 | Accounting | Passed locally | Donation, seva, and expense postings reconcile through Trial Balance, I&E, R&P, Balance Sheet, drill-down, and voucher detail. |
 | Sponsorship posting | Passed locally | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts to expense when inventory is off and inventory when it is on; precious articles classify to temple asset. |
 | Sponsorship UI/report fields | Passed syntax/focused tests | ERP quick-entry donation form captures cash/in-kind type, event/festival, item, quantity, and valuation basis; donation reports carry item metadata. |
+| Receipt cancellation/reversal | Passed focused tests | Donation and seva receipts can be cancelled from the ERP receipt list; backend posts linked reversal journals and stores reason, actor, timestamp, and refund reference metadata. |
 | Panchang | Passed locally | ERP shell renders Today Panchang with Tithi/Nakshatra/Yoga/Karana from `/api/v1/panchang/today`. |
 | Audit trace | Passed locally | Public payment submitted/verified/corrected/rejected events are covered in local smoke/tests. |
 | Browser smoke | Passed locally | Playwright verifies MandirMitra shell, module context, public payment/receipt/report UI, and Panchang workspace. |
@@ -53,7 +54,7 @@ Live-ready means:
 | Rollback | Backend rollback must use previous release tag; financial data must not be rolled back by editing ledger rows. Use reversal/adjustment entries for accounting corrections. |
 | Hundi/festival/fund workflows | Deferred from the first live cut. See `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`. |
 | Sponsorship approval/report depth | Basic UI/report fields are covered, but event/fund subledger reports, in-kind stock consumption for inventory-enabled temples, and valuation approval should be expanded after first live cut. |
-| Cancellation/refund | Deferred from the first live cut. Generic journal reversal exists, but receipt-domain cancellation/refund needs linked domain records, audit event, idempotency, and tests before UI exposure. |
+| Refund approval/settlement depth | Basic receipt reversal is covered, but a richer approval queue, refund settlement workflow, and refund report exports should be expanded after first live cut. |
 | 80G/FCRA configuration | Deferred from the first live cut. Must remain tenant-configured and default-off until registration, receipt text, category/date eligibility, and reports are implemented and tested. |
 | Devotee privacy | Confirm role-gated access, PII retention/anonymization policy, and logging rules for devotee phone/email/PAN if PAN is later enabled. |
 
@@ -61,4 +62,4 @@ Live-ready means:
 
 MandirMitra can move to staging deployment review after the current MandirMitra commits are pushed and CI is green.
 
-Production live signoff should wait until environment configuration, backup/restore, rollback, and seed/demo tenant assumptions are confirmed. Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are explicitly deferred from the first live cut.
+Production live signoff should wait until environment configuration, backup/restore, rollback, and seed/demo tenant assumptions are confirmed. Hundi/fund/festival, refund approval/settlement depth, and 80G/FCRA issuance are explicitly deferred from the first live cut.

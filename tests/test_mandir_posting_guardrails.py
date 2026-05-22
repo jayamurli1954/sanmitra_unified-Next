@@ -464,6 +464,101 @@ def test_create_donation_rolls_back_when_journal_post_fails(mandir_posting_clien
     assert donations.docs == []
 
 
+def test_cancel_donation_receipt_reverses_journal_and_is_idempotent(mandir_posting_client, monkeypatch):
+    client, donations, _seva_bookings = mandir_posting_client
+    donations.docs.append(
+        {
+            "donation_id": "don-1",
+            "id": "don-1",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "receipt_number": "DON-0000001",
+            "amount": 501,
+            "category": "General Donation",
+            "payment_mode": "Cash",
+            "devotee_name": "Receipt Donor",
+            "created_at": "2026-05-22T10:00:00+00:00",
+        }
+    )
+    seen: dict[str, object] = {"calls": 0}
+
+    async def fake_reverse(_session, *, tenant_id, app_key, source_key, reason, current_user):
+        seen.update(
+            {
+                "calls": int(seen["calls"]) + 1,
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "source_key": source_key,
+                "reason": reason,
+                "actor": current_user.get("role"),
+            }
+        )
+        return SimpleNamespace(id=9901), True
+
+    monkeypatch.setattr(mandir_router, "_reverse_mandir_source_journal", fake_reverse)
+
+    response = client.post(
+        "/api/v1/donations/don-1/cancel",
+        json={"reason": "Wrong amount", "refund_mode": "Cash", "refund_reference": "RF-1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "reversed"
+    assert payload["reversal_journal_id"] == 9901
+    assert payload["cancellation_reason"] == "Wrong amount"
+    assert payload["refund_mode"] == "Cash"
+    assert payload["refund_reference"] == "RF-1"
+    assert donations.docs[0]["status"] == "reversed"
+    assert donations.docs[0]["amount"] == 501
+    assert seen["source_key"] == "don_don-1"
+
+    second = client.post("/api/v1/donations/don-1/cancel", json={"reason": "Wrong amount"})
+
+    assert second.status_code == 200
+    assert second.json()["_idempotent"] is True
+    assert seen["calls"] == 1
+
+
+def test_cancel_seva_receipt_reverses_journal(mandir_posting_client, monkeypatch):
+    client, _donations, seva_bookings = mandir_posting_client
+    seva_bookings.docs.append(
+        {
+            "id": "sev-1",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "receipt_number": "SEV-0000001",
+            "amount_paid": 301,
+            "payment_mode": "Cash",
+            "seva_name": "Sarva Seve",
+            "devotee_names": "Seva Devotee",
+            "status": "confirmed",
+            "created_at": "2026-05-22T10:00:00+00:00",
+        }
+    )
+    seen: dict[str, object] = {}
+
+    async def fake_reverse(_session, *, tenant_id, app_key, source_key, reason, current_user):
+        seen.update({"tenant_id": tenant_id, "app_key": app_key, "source_key": source_key, "reason": reason})
+        return SimpleNamespace(id=9902), True
+
+    monkeypatch.setattr(mandir_router, "_reverse_mandir_source_journal", fake_reverse)
+
+    response = client.post(
+        "/api/v1/sevas/bookings/sev-1/cancel",
+        json={"cancellation_reason": "Devotee requested cancellation", "refund_mode": "UPI", "refund_reference": "UPI-REF"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "reversed"
+    assert payload["reversal_journal_id"] == 9902
+    assert payload["cancellation_reason"] == "Devotee requested cancellation"
+    assert seva_bookings.docs[0]["status"] == "reversed"
+    assert seva_bookings.docs[0]["amount_paid"] == 301
+    assert seen["source_key"] == "sev_sev-1"
+
+
 def test_cash_sponsorship_posts_to_sponsorship_income(mandir_posting_client, monkeypatch):
     client, donations, _seva_bookings = mandir_posting_client
     seen: dict[str, object] = {"income_categories": [], "payload": None}

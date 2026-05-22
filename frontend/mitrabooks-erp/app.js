@@ -601,6 +601,8 @@ function mandirReceiptRowsFromLists(donations = [], sevaBookings = []) {
     date: row.donation_date || row.created_at || "",
     amount: row.amount || 0,
     receipt_pdf_url: row.receipt_pdf_url,
+    status: row.status || "posted",
+    cancel_url: row.donation_id || row.id ? `/api/v1/donations/${encodeURIComponent(row.donation_id || row.id)}/cancel` : "",
   }));
   const sevaRows = sevaBookings.map((row) => ({
     type: "Seva",
@@ -610,6 +612,8 @@ function mandirReceiptRowsFromLists(donations = [], sevaBookings = []) {
     date: row.booking_date || row.created_at || "",
     amount: row.amount_paid || row.amount || 0,
     receipt_pdf_url: row.receipt_pdf_url,
+    status: row.status || "confirmed",
+    cancel_url: row.id || row.booking_id ? `/api/v1/sevas/bookings/${encodeURIComponent(row.id || row.booking_id)}/cancel` : "",
   }));
   return [...donationRows, ...sevaRows]
     .filter((row) => row.receipt_pdf_url)
@@ -637,9 +641,14 @@ function renderMandirReceiptHistoryTable(rows) {
           ${rows.map((row) => {
             const receiptLabel = row.receipt_number || row.id || "Receipt";
             const filename = `${String(receiptLabel).replace(/[^a-z0-9_-]+/gi, "_") || "receipt"}.pdf`;
+            const status = String(row.status || "posted").toLowerCase();
+            const reversed = status === "reversed" || status === "cancelled";
             return `
               <tr>
-                <td>${escapeHtml(receiptLabel)}</td>
+                <td>
+                  <strong>${escapeHtml(receiptLabel)}</strong>
+                  <small><span class="pill ${reversed ? "warn" : "ok"}">${escapeHtml(status)}</span></small>
+                </td>
                 <td>${escapeHtml(row.type)}</td>
                 <td>${escapeHtml(row.party)}</td>
                 <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
@@ -658,6 +667,16 @@ function renderMandirReceiptHistoryTable(rows) {
                       data-receipt-url="${escapeHtml(row.receipt_pdf_url)}"
                       data-receipt-filename="${escapeHtml(filename)}"
                     >Download</button>
+                    ${row.cancel_url ? `
+                      <button
+                        class="danger"
+                        type="button"
+                        data-mandir-action="cancel-receipt"
+                        data-cancel-url="${escapeHtml(row.cancel_url)}"
+                        data-receipt-label="${escapeHtml(receiptLabel)}"
+                        ${reversed ? "disabled" : ""}
+                      >Cancel</button>
+                    ` : ""}
                   </div>
                 </td>
               </tr>
@@ -675,6 +694,13 @@ function renderMandirReceiptActions(row, label) {
   }
   const receiptLabel = label || row.receipt_number || row.id || "Receipt";
   const filename = `${String(receiptLabel).replace(/[^a-z0-9_-]+/gi, "_") || "receipt"}.pdf`;
+  const status = String(row.status || "").toLowerCase();
+  const reversed = status === "reversed" || status === "cancelled";
+  const donationId = row.donation_id || (row.receipt_pdf_url?.includes("/donations/") ? row.id : "");
+  const bookingId = row.booking_id || (row.receipt_pdf_url?.includes("/sevas/bookings/") ? row.id : "");
+  const cancelUrl = donationId
+    ? `/api/v1/donations/${encodeURIComponent(donationId)}/cancel`
+    : (bookingId ? `/api/v1/sevas/bookings/${encodeURIComponent(bookingId)}/cancel` : "");
   return `
     <div class="action-row">
       <button
@@ -690,6 +716,16 @@ function renderMandirReceiptActions(row, label) {
         data-receipt-url="${escapeHtml(row.receipt_pdf_url)}"
         data-receipt-filename="${escapeHtml(filename)}"
       >Download</button>
+      ${cancelUrl ? `
+        <button
+          class="danger"
+          type="button"
+          data-mandir-action="cancel-receipt"
+          data-cancel-url="${escapeHtml(cancelUrl)}"
+          data-receipt-label="${escapeHtml(receiptLabel)}"
+          ${reversed ? "disabled" : ""}
+        >Cancel</button>
+      ` : ""}
     </div>
   `;
 }
@@ -2833,6 +2869,37 @@ async function previewMandirReceipt(button) {
   receiptPreviewDialog.showModal();
 }
 
+async function cancelMandirReceipt(button) {
+  const cancelUrl = button.getAttribute("data-cancel-url") || "";
+  if (!cancelUrl) {
+    return;
+  }
+  const receiptLabel = button.getAttribute("data-receipt-label") || "receipt";
+  const reason = String(window.prompt(`Reason for cancelling ${receiptLabel}`) || "").trim().replace(/\s+/g, " ");
+  if (reason.length < 3) {
+    return;
+  }
+  const refundMode = String(window.prompt("Refund mode, if any. Leave blank if no refund.") || "").trim().replace(/\s+/g, " ");
+  const refundReference = refundMode
+    ? String(window.prompt("Refund transaction reference, if any.") || "").trim().replace(/\s+/g, " ")
+    : "";
+  const result = await apiRequest("mandirmitra", cancelUrl, {
+    method: "POST",
+    body: JSON.stringify({
+      reason,
+      refund_mode: refundMode || null,
+      refund_reference: refundReference || null,
+    }),
+  });
+  renderJson(apiOutput, { cancel_mandir_receipt: result });
+  if (result.ok) {
+    setMandirFormResult(true, "Receipt cancelled", result.payload?.receipt_number || receiptLabel);
+    await loadMandirDashboard();
+  } else {
+    setMandirFormResult(false, "Receipt cancellation failed", result.payload?.detail || "Unable to cancel receipt");
+  }
+}
+
 function compactOptionalPhone(value) {
   return String(value || "").replace(/\D/g, "").slice(-10);
 }
@@ -3353,6 +3420,8 @@ dashboardPreview.addEventListener("click", (event) => {
     downloadMandirReceipt(button);
   } else if (mandirAction === "preview-receipt") {
     previewMandirReceipt(button);
+  } else if (mandirAction === "cancel-receipt") {
+    cancelMandirReceipt(button);
   } else if (mandirAction === "apply-list-filter") {
     applyMandirListFilter(button.getAttribute("data-list-kind") || "");
   } else if (mandirAction === "reset-list-filter") {

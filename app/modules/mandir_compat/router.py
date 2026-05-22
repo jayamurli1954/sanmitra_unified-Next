@@ -67,6 +67,7 @@ from app.accounting.service import (
     get_trial_balance,
     list_accounts,
     post_journal_entry,
+    reverse_journal_entry,
 )
 from app.accounting.schemas import JournalPostRequest, JournalLineIn
 from app.modules.mandir_compat.report_helpers import (
@@ -539,6 +540,148 @@ async def _resolve_mandir_payment_account_id(
             return int(acc.id)
 
     return None
+
+
+def _mandir_actor_id(current_user: dict[str, Any]) -> str:
+    return str(
+        current_user.get("sub")
+        or current_user.get("user_id")
+        or current_user.get("email")
+        or "mandir_compat_system"
+    )
+
+
+def _mandir_receipt_cancellation_metadata(payload: dict[str, Any] | None, current_user: dict[str, Any]) -> dict[str, Any]:
+    payload = payload if isinstance(payload, dict) else {}
+    reason = str(
+        payload.get("reason")
+        or payload.get("cancellation_reason")
+        or payload.get("refund_reason")
+        or ""
+    ).strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Cancellation reason is required")
+    now = datetime.now(timezone.utc).isoformat()
+    refund_mode = _safe_optional_str(payload.get("refund_mode") or payload.get("refund_payment_mode"))
+    refund_reference = _safe_optional_str(payload.get("refund_reference") or payload.get("refund_utr") or payload.get("refund_transaction_reference"))
+    refund_date = _safe_optional_str(payload.get("refund_date")) or now[:10]
+    return {
+        "status": "reversed",
+        "cancellation_reason": reason,
+        "refund_mode": refund_mode,
+        "refund_reference": refund_reference,
+        "refund_date": refund_date if refund_mode or refund_reference else None,
+        "reversed_at": now,
+        "cancelled_at": now,
+        "cancelled_by": _mandir_actor_id(current_user),
+        "updated_at": now,
+    }
+
+
+async def _reverse_mandir_source_journal(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    source_key: str,
+    reason: str,
+    current_user: dict[str, Any],
+) -> tuple[JournalEntry, bool]:
+    stmt = select(JournalEntry).where(
+        JournalEntry.tenant_id == tenant_id,
+        JournalEntry.app_key == app_key,
+        JournalEntry.accounting_entity_id == "primary",
+        JournalEntry.idempotency_key == source_key,
+    )
+    original = (await session.execute(stmt)).scalar_one_or_none()
+    if original is None:
+        raise HTTPException(status_code=404, detail="Original accounting journal was not found for this receipt")
+    try:
+        return await reverse_journal_entry(
+            session=session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id="primary",
+            journal_id=int(original.id),
+            created_by=_mandir_actor_id(current_user),
+            reason=reason,
+            idempotency_key=f"{source_key}_receipt_reversal",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to reverse receipt journal: {exc}") from exc
+
+
+async def _cancel_mandir_receipt_source(
+    *,
+    source_kind: str,
+    source_id: str,
+    collection_name: str,
+    id_field: str,
+    idempotency_prefix: str,
+    payload: dict[str, Any] | None,
+    session: AsyncSession,
+    current_user: dict[str, Any],
+    x_tenant_id: str | None,
+    x_app_key: str | None,
+) -> dict[str, Any]:
+    tenant_context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation=f"{source_kind} receipt cancellation",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    collection = get_collection(collection_name)
+    existing = await collection.find_one({id_field: str(source_id), "tenant_id": tenant_id, "app_key": app_key})
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"{source_kind.title()} receipt not found")
+
+    current_status = str(existing.get("status") or "").strip().lower()
+    if current_status in {"cancelled", "reversed"}:
+        view = _mandir_donation_view(existing) if source_kind == "donation" else _mandir_seva_booking_view(existing)
+        view["_idempotent"] = True
+        return view
+
+    patch = _mandir_receipt_cancellation_metadata(payload, current_user)
+    reversal_entry, _created = await _reverse_mandir_source_journal(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        source_key=f"{idempotency_prefix}{source_id}",
+        reason=str(patch["cancellation_reason"]),
+        current_user=current_user,
+    )
+    patch["reversal_journal_id"] = int(reversal_entry.id)
+    patch["reversal_idempotency_key"] = f"{idempotency_prefix}{source_id}_receipt_reversal"
+
+    await collection.update_one(
+        {id_field: str(source_id), "tenant_id": tenant_id, "app_key": app_key},
+        {"$set": patch},
+        upsert=False,
+    )
+    try:
+        await log_audit_event(
+            tenant_id=tenant_id,
+            user_id=_mandir_actor_id(current_user),
+            product=app_key,
+            action=f"{source_kind}_receipt_cancelled",
+            entity_type=f"mandir_{source_kind}_receipt",
+            entity_id=str(source_id),
+            old_value={"status": existing.get("status"), "receipt_number": existing.get("receipt_number")},
+            new_value={
+                "status": patch["status"],
+                "reason": patch["cancellation_reason"],
+                "reversal_journal_id": patch["reversal_journal_id"],
+                "refund_mode": patch.get("refund_mode"),
+                "refund_reference": patch.get("refund_reference"),
+            },
+        )
+    except Exception:
+        logger.warning("Failed to write audit event for %s receipt cancellation %s", source_kind, source_id, exc_info=True)
+
+    updated = {**existing, **patch}
+    return _mandir_donation_view(updated) if source_kind == "donation" else _mandir_seva_booking_view(updated)
 
 
 MANDIR_DEFAULT_ACCOUNTS: list[dict[str, Any]] = [
@@ -4347,6 +4490,29 @@ async def get_donation_receipt_pdf(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/donations/{donation_id}/cancel")
+async def cancel_donation_receipt(
+    donation_id: str,
+    payload: dict[str, Any] | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    return await _cancel_mandir_receipt_source(
+        source_kind="donation",
+        source_id=donation_id,
+        collection_name="mandir_donations",
+        id_field="donation_id",
+        idempotency_prefix="don_",
+        payload=payload,
+        session=session,
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
     )
 
 
@@ -9101,6 +9267,29 @@ async def get_seva_receipt_pdf(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/sevas/bookings/{booking_id}/cancel")
+async def cancel_seva_receipt(
+    booking_id: str,
+    payload: dict[str, Any] | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    return await _cancel_mandir_receipt_source(
+        source_kind="seva",
+        source_id=booking_id,
+        collection_name="mandir_seva_bookings",
+        id_field="id",
+        idempotency_prefix="sev_",
+        payload=payload,
+        session=session,
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
     )
 
 
