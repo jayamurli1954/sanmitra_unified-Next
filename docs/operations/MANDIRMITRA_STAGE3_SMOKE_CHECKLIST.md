@@ -40,6 +40,7 @@ Expected result:
 - `/api/v1/modules/me` returns `organization_type=TEMPLE` with `temple`, `accounting`, and `audit`.
 - The MitraBooks ERP shell opens in MandirMitra mode.
 - Visible UI includes MandirMitra, Donations, Sevas, Public Payments, Receipts, Panchang, Reports, and Trial Balance.
+- The Public Payments workspace exposes an `Open Public Page` link for non-auth devotee-facing visibility checks.
 - The Receipts workspace shows cancellation/reversal action for active receipts and opens the cancellation dialog without mutating data during smoke.
 - The Panchang workspace opens and renders Today Panchang with Tithi data from `/api/v1/panchang/today`.
 - The Reports workspace opens and renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
@@ -89,6 +90,7 @@ Record pass/fail evidence for each item.
 | Module context | Call or observe `/api/v1/modules/me` | `organization_type=TEMPLE`; enabled modules include `temple`, `accounting`, `audit`; active app key is `mandirmitra` |  |
 | Navigation | Open MandirMitra overview, donations, sevas, public payments, exceptions, receipts, accounting/reports | Tabs/panels load tenant-scoped data only |  |
 | Public payment | Open no-login public devotee flow | Devotee can select temple/trust, choose donation or seva, enter details/amount, and see the selected tenant's configured UPI/payment instructions |  |
+| Public page visibility | Open `/mandir-public/` or the ERP `Open Public Page` link | Page loads without login, lists public-enabled temples, and displays public UPI/config/seva/category visibility without creating a payment |  |
 | Staging tenant safety | Confirm whether the active tenant is demo/test or real trust data | Destructive tests such as donation creation, cancellation, refund, or reversal are allowed only on demo/test tenants; real temple/trust tenants are non-destructive verification only |  |
 | Donation | Create a donation | Donation record saves, receipt number is stable, accounting posting succeeds |  |
 | Donation PDF | Preview/download donation receipt | Title is `ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt`; donation term is `ದೇಣಿಗೆ`; receipt spelling is `ರಶೀದಿ`; temple label uses `ದೇವಸ್ಥಾನ`; no seva-only note/signature block |  |

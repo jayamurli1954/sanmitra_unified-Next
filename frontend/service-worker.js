@@ -1,4 +1,4 @@
-const CACHE_NAME = "sanmitra-frontends-v18";
+const CACHE_NAME = "sanmitra-frontends-v19";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,9 @@ const APP_SHELL = [
   "./mitrabooks-erp/",
   "./mitrabooks-erp/index.html",
   "./mitrabooks-erp/app.js",
+  "./mandir-public/",
+  "./mandir-public/index.html",
+  "./mandir-public/app.js",
   "./legalmitra/",
   "./legalmitra/index.html",
   "./legalmitra/app.js",

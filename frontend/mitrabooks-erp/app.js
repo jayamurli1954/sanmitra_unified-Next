@@ -736,6 +736,11 @@ function renderMandirReceiptActions(row, label) {
   `;
 }
 
+function mandirPublicPaymentPageUrl() {
+  const api = encodeURIComponent(getConfiguredApiBaseUrl());
+  return `../mandir-public/?api=${api}`;
+}
+
 function renderMandirOperationResult(result) {
   if (!result) {
     return "";
@@ -2068,7 +2073,10 @@ function renderMandirDashboard(payload = {}) {
             <h4>Public Payments Pending Verification</h4>
             <p>Verify UPI payments only after temple staff confirms the payment, then post receipt and accounting.</p>
           </div>
-          <span class="pill warn">${pendingPayments.length} pending</span>
+          <div class="action-row">
+            <a class="button secondary" href="${escapeHtml(mandirPublicPaymentPageUrl())}" target="_blank" rel="noopener">Open Public Page</a>
+            <span class="pill warn">${pendingPayments.length} pending</span>
+          </div>
         </div>
         ${renderMandirPublicPaymentFilters(pendingPayments.length)}
         ${renderMandirPublicPaymentsTable(pendingPayments)}

@@ -192,6 +192,11 @@ a {
   grid-template-rows: auto 1fr;
 }
 
+.public-main {
+  --accent: #f97316;
+  --accent-2: #138808;
+}
+
 .topbar {
   background: var(--panel);
   border-bottom: 1px solid var(--border);

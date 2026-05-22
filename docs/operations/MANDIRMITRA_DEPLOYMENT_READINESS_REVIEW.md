@@ -38,6 +38,7 @@ Live-ready means:
 | Donation receipt | Passed locally | Kannada title/terminology and no seva-only note were verified in prior receipt smoke. |
 | Seva receipt | Passed locally | Seva title, devotee label, and Kannada received sentence were verified by focused tests and user visual check. |
 | Public payments | Passed locally | Temple selector, UPI intent/config, no-login submission, verification, correction, rejection, and audit trace passed. |
+| Public payment page visibility | Passed local smoke | ERP Public Payments workspace links to `/mandir-public/`, which loads public-enabled temples and UPI/config/seva/category visibility without requiring login or creating a payment. |
 | Accounting | Passed locally | Donation, seva, and expense postings reconcile through Trial Balance, I&E, R&P, Balance Sheet, drill-down, and voucher detail. |
 | Sponsorship posting | Passed locally | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts to expense when inventory is off and inventory when it is on; precious articles classify to temple asset. |
 | Sponsorship UI/report fields | Passed syntax/focused tests | ERP quick-entry donation form captures cash/in-kind type, event/festival, item, quantity, and valuation basis; donation reports carry item metadata. |
