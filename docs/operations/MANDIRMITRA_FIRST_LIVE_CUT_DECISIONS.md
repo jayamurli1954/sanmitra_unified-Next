@@ -94,3 +94,11 @@ Before enabling 80G/FCRA live:
 MandirMitra first live cut can proceed for donation, seva, public payment, receipt, Panchang, reports, and accounting workflows after CI/staging pass.
 
 The deferred areas above must remain hidden, disabled, or clearly marked not-live until their gates are implemented and tested.
+
+## Staging And Production Signoff Discipline
+
+- GitHub CI and Render workflow deployment were green on 2026-05-22 after the MandirMitra receipt cancellation/reversal commits.
+- Local demo/seed receipt reversal was verified on 2026-05-22: the original receipt remained immutable, a linked `REV-*` voucher was created, Trial Balance stayed balanced, and I&E, R&P, and Balance Sheet remained consistent.
+- Staging destructive checks require a clearly marked demo/test temple tenant.
+- Real temple/trust tenants must not be used for donation creation, receipt cancellation, refund, reversal, or other destructive workflow tests.
+- If no staging demo tenant is available, staging signoff is limited to non-destructive checks and the demo-tenant gap must remain open before production mutation testing.

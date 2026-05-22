@@ -12,6 +12,9 @@ Latest local evidence:
 - `python scripts\mandirmitra_stage3_browser_smoke.py` passed and verified the active Panchang workspace.
 - `python scripts\mandirmitra_stage3_smoke.py` passed compile checks and 119 focused tests.
 - `python -m pytest tests\test_mandir_posting_guardrails.py -q` passed 54 tests.
+- GitHub CI was green and the Render workflow deployed green after the latest MandirMitra receipt cancellation/reversal commits.
+- Local browser smoke passed against the current backend on `http://127.0.0.1:8001` with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`.
+- Local demo/seed receipt reversal was verified: `DON-0000004` became `reversed`, `REV-112-DON-0000004` appeared in voucher drill-down, Trial Balance stayed balanced at `Rs. 1,715.00`, and I&E, R&P, and Balance Sheet remained consistent.
 
 ## Target State
 
@@ -60,6 +63,8 @@ Live-ready means:
 
 ## Release Recommendation
 
-MandirMitra can move to staging deployment review after the current MandirMitra commits are pushed and CI is green.
+MandirMitra can move to staging deployment review because the current MandirMitra commits are pushed, CI is green, and Render workflow deployment is green.
 
 Production live signoff should wait until environment configuration, backup/restore, rollback, and seed/demo tenant assumptions are confirmed. Hundi/fund/festival, refund approval/settlement depth, and 80G/FCRA issuance are explicitly deferred from the first live cut.
+
+Staging mutation checks must use a clearly marked demo/test temple tenant. Real temple/trust tenants, including Parlathya Prathishtana, must be limited to non-destructive verification such as login, module context, navigation, report viewing, receipt preview/download, and public no-login configuration checks.

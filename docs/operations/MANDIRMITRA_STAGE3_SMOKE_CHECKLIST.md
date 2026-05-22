@@ -40,10 +40,18 @@ Expected result:
 - `/api/v1/modules/me` returns `organization_type=TEMPLE` with `temple`, `accounting`, and `audit`.
 - The MitraBooks ERP shell opens in MandirMitra mode.
 - Visible UI includes MandirMitra, Donations, Sevas, Public Payments, Receipts, Panchang, Reports, and Trial Balance.
+- The Receipts workspace shows cancellation/reversal action for active receipts and opens the cancellation dialog without mutating data during smoke.
 - The Panchang workspace opens and renders Today Panchang with Tithi data from `/api/v1/panchang/today`.
 - The Reports workspace opens and renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
 - The UI does not show access denied or MandirMitra live-data-unavailable state.
 - A screenshot is saved under `tmp\mandir-stage3-browser-smoke.png`.
+
+Latest local evidence on 2026-05-22:
+
+- GitHub CI was green for the latest MandirMitra commits.
+- Render workflow deployed and was green.
+- Local browser/backend smoke passed with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`.
+- Local cancellation/reversal was verified on seed/demo local data only: `DON-0000004` was marked `reversed`, `REV-112-DON-0000004` appeared in drill-down, Trial Balance remained balanced at `Rs. 1,715.00`, and I&E, R&P, and Balance Sheet remained consistent.
 
 ## Local Services
 
@@ -81,7 +89,7 @@ Record pass/fail evidence for each item.
 | Module context | Call or observe `/api/v1/modules/me` | `organization_type=TEMPLE`; enabled modules include `temple`, `accounting`, `audit`; active app key is `mandirmitra` |  |
 | Navigation | Open MandirMitra overview, donations, sevas, public payments, exceptions, receipts, accounting/reports | Tabs/panels load tenant-scoped data only |  |
 | Public payment | Open no-login public devotee flow | Devotee can select temple/trust, choose donation or seva, enter details/amount, and see the selected tenant's configured UPI/payment instructions |  |
-| Reference tenant | Validate Parlathya Prathishtana public payment behavior if configured locally/staging | Temple/trust selection and payment instructions match known working behavior |  |
+| Staging tenant safety | Confirm whether the active tenant is demo/test or real trust data | Destructive tests such as donation creation, cancellation, refund, or reversal are allowed only on demo/test tenants; real temple/trust tenants are non-destructive verification only |  |
 | Donation | Create a donation | Donation record saves, receipt number is stable, accounting posting succeeds |  |
 | Donation PDF | Preview/download donation receipt | Title is `ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt`; donation term is `ದೇಣಿಗೆ`; receipt spelling is `ರಶೀದಿ`; temple label uses `ದೇವಸ್ಥಾನ`; no seva-only note/signature block |  |
 | Seva | Create a seva booking | Seva booking saves, receipt number is stable, accounting posting succeeds |  |
@@ -92,6 +100,7 @@ Record pass/fail evidence for each item.
 | Income and Expenditure | Open report | Donation/seva income and expenses match posted vouchers |  |
 | Receipts and Payments | Open report | Cash/bank receipts and payments match posted vouchers |  |
 | Balance Sheet | Open report | Report remains balanced and matches posted vouchers |  |
+| Receipt cancellation/reversal | Cancel a demo/test donation or seva receipt | Original receipt remains immutable; receipt status becomes `reversed`; linked `REV-*` journal appears in drill-down; repeated cancellation is idempotent or disabled in UI; Trial Balance remains balanced |  |
 | Exceptions | Verify, reject, and correct pending public payments where test data exists | Verification posts only after UTR/reference capture; rejection/correction retains audit trail |  |
 | Receipt history | Open donation/seva receipt history | Recent receipts list with preview/download actions |  |
 | Tenant isolation | Try MandirMitra data from GruhaMitra/MitraBooks app context | Cross-app access fails closed or returns only allowed scoped data |  |
@@ -109,3 +118,9 @@ MandirMitra is not live-ready until:
 - Receipt PDF terminology and layout are visually confirmed.
 - Public no-login payment flow is verified for at least one configured temple/trust.
 - Tenant/app isolation and accounting guardrails have no open blocker.
+
+## Staging Rule
+
+- Use non-destructive staging checks unless a clearly marked demo/test temple tenant is available.
+- Do not create, cancel, refund, reverse, or otherwise mutate receipts for real temple/trust tenants such as Parlathya Prathishtana.
+- If no staging demo tenant exists, mark mutation checks as blocked by seed/demo policy and complete only login, module context, navigation, report, PDF preview, and public no-login read/config checks.
