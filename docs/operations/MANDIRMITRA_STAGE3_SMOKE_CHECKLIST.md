@@ -63,6 +63,7 @@ Latest staging/non-destructive evidence on 2026-05-22:
 - Public no-login visibility passed through `/mandir-public/`: the page loaded without login, listed the public-enabled temple/trust, displayed public UPI/config visibility, showed donation purpose selection, and generated UPI intent preview without creating a payment.
 - The active visible public tenant was Parlathya Prathishtana, so the staging result is non-destructive/read-config-only. No donation creation, cancellation, refund, or reversal was performed on that real trust tenant.
 - Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `demo-mandir-tenant`) with demo UPI/config values.
+- Demo public payment submission is available from `/mandir-public/` only for demo/test tenants. It creates a pending public payment for ERP staff verification; live trust tenants remain visibility-only from this page.
 
 ## Local Services
 
@@ -100,7 +101,8 @@ Record pass/fail evidence for each item.
 | Module context | Call or observe `/api/v1/modules/me` | `organization_type=TEMPLE`; enabled modules include `temple`, `accounting`, `audit`; active app key is `mandirmitra` |  |
 | Navigation | Open MandirMitra overview, donations, sevas, public payments, exceptions, receipts, accounting/reports | Tabs/panels load tenant-scoped data only |  |
 | Public payment | Open no-login public devotee flow | Devotee can select temple/trust, choose donation or seva, enter details/amount, and see the selected tenant's configured UPI/payment instructions |  |
-| Public page visibility | Open `/mandir-public/` or the ERP `Open Public Page` link | Page loads without login, lists public-enabled temples, and displays public UPI/config/seva/category visibility without creating a payment |  |
+| Public page visibility | Open `/mandir-public/` or the ERP `Open Public Page` link | Page loads without login, lists public-enabled temples, and displays public UPI/config/seva/category visibility |  |
+| Demo public payment submission | Select the demo/test temple, enter devotee name/mobile/amount, and submit | Pending public payment is created only for the demo/test tenant and appears in ERP Public Payments for staff verification |  |
 | Staging tenant safety | Confirm whether the active tenant is demo/test or real trust data | Destructive tests such as donation creation, cancellation, refund, or reversal are allowed only on demo/test tenants; real temple/trust tenants are non-destructive verification only |  |
 | Donation | Create a donation | Donation record saves, receipt number is stable, accounting posting succeeds |  |
 | Donation PDF | Preview/download donation receipt | Title is `ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt`; donation term is `ದೇಣಿಗೆ`; receipt spelling is `ರಶೀದಿ`; temple label uses `ದೇವಸ್ಥಾನ`; no seva-only note/signature block |  |
@@ -138,3 +140,4 @@ MandirMitra is not live-ready until:
 - If no staging demo tenant exists, mark mutation checks as blocked by seed/demo policy and complete only login, module context, navigation, report, PDF preview, and public no-login read/config checks.
 - As of 2026-05-22, the staging smoke is passed for non-destructive checks; destructive mutation checks remain blocked until a clearly marked demo/test temple tenant is available.
 - Demo mutation checks require `DEMO_MANDIR_BOOTSTRAP=true` and a staging-only `DEMO_MANDIR_ADMIN_PASSWORD`. The demo tenant public page should show demo payee/UPI values, not a real trust account.
+- The public page must block submission for live trust records. Use live trust records only for read/config visibility.

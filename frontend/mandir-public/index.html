@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1f3d2b">
     <title>MandirMitra Public Payment</title>
     <link rel="icon" href="../assets/brand/mandirmitra-logo.jpeg" type="image/jpeg">
-    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-public-v3">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-public-v4">
   </head>
   <body>
     <main class="main public-main">
@@ -63,7 +63,16 @@
                   <span>Amount</span>
                   <input id="amount" type="number" min="1" step="0.01" value="101">
                 </label>
+                <label class="field">
+                  <span>Devotee name</span>
+                  <input id="devotee-name" value="Demo Devotee">
+                </label>
+                <label class="field">
+                  <span>Mobile</span>
+                  <input id="devotee-phone" inputmode="tel" value="9000000001">
+                </label>
                 <button id="preview-upi" type="button">Preview UPI Instructions</button>
+                <button id="submit-payment" type="button">Submit Demo Payment</button>
               </div>
             </div>
             <div id="payment-preview" class="module-state">Select a temple and preview payment instructions.</div>
@@ -76,6 +85,6 @@
         </section>
       </section>
     </main>
-    <script type="module" src="./app.js?v=mandir-public-v3"></script>
+    <script type="module" src="./app.js?v=mandir-public-v4"></script>
   </body>
 </html>

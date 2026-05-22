@@ -8,7 +8,10 @@ const templeInfo = document.getElementById("temple-info");
 const paymentType = document.getElementById("payment-type");
 const purposeSelect = document.getElementById("purpose-select");
 const amountInput = document.getElementById("amount");
+const devoteeNameInput = document.getElementById("devotee-name");
+const devoteePhoneInput = document.getElementById("devotee-phone");
 const previewUpiButton = document.getElementById("preview-upi");
+const submitPaymentButton = document.getElementById("submit-payment");
 const paymentPreview = document.getElementById("payment-preview");
 const apiOutput = document.getElementById("api-output");
 
@@ -65,10 +68,14 @@ function renderJson(value) {
   apiOutput.textContent = JSON.stringify(value, null, 2);
 }
 
-async function publicRequest(path) {
+async function publicRequest(path, options = {}) {
   const response = await fetch(buildApiUrl(path), {
-    method: "GET",
-    headers: { "X-App-Key": "mandirmitra" },
+    method: options.method || "GET",
+    headers: {
+      "X-App-Key": "mandirmitra",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : await response.text();
@@ -113,7 +120,9 @@ function renderTempleInfo() {
     return;
   }
   const enabled = Boolean(selectedTempleInfo.upi_public_enabled && selectedTempleInfo.upi_id);
-  const demoMarker = isDemoTemple(selectedTempleInfo) ? `<span class="pill ok">Demo/Test tenant</span>` : `<span class="pill warn">Live trust: visibility only in staging</span>`;
+  const isDemo = isDemoTemple(selectedTempleInfo);
+  submitPaymentButton.disabled = !isDemo;
+  const demoMarker = isDemo ? `<span class="pill ok">Demo/Test tenant</span>` : `<span class="pill warn">Live trust: visibility only in staging</span>`;
   templeInfo.className = `module-state ${enabled ? "ok" : "warn"}`;
   templeInfo.innerHTML = `
     <strong>${escapeHtml(selectedTempleInfo.temple_name || selectedTempleInfo.trust_name || "Temple")}</strong>
@@ -148,6 +157,7 @@ async function loadPublicTemples() {
   selectedTempleInfo = null;
   donationCategories = [];
   sevas = [];
+  submitPaymentButton.disabled = true;
   renderTempleInfo();
   renderPurposes();
 }
@@ -157,6 +167,7 @@ async function loadTempleDetails() {
   selectedTempleInfo = null;
   donationCategories = [];
   sevas = [];
+  submitPaymentButton.disabled = true;
   renderTempleInfo();
   renderPurposes();
   if (!templeId) {
@@ -198,9 +209,78 @@ async function previewUpiInstructions() {
   `;
 }
 
+function selectedPurposeRow() {
+  const isDonation = paymentType.value === "donation";
+  const rows = isDonation ? donationCategories : sevas;
+  const selectedName = String(purposeSelect.value || "").trim();
+  return rows.find((row) => String(isDonation ? row.name : row.seva_name).trim() === selectedName) || null;
+}
+
+async function submitDemoPayment() {
+  const templeId = templeSelect.value;
+  if (!selectedTempleInfo || !isDemoTemple(selectedTempleInfo)) {
+    paymentPreview.className = "module-state warn";
+    paymentPreview.innerHTML = "<strong>Demo tenant required</strong><span>This page submits only demo/test payments. Use live trusts for visibility only.</span>";
+    return;
+  }
+
+  const amount = Number(amountInput.value || 0);
+  const name = String(devoteeNameInput.value || "").trim();
+  const phone = String(devoteePhoneInput.value || "").trim();
+  if (!templeId || !amount || amount <= 0 || !name || !phone) {
+    paymentPreview.className = "module-state warn";
+    paymentPreview.innerHTML = "<strong>Missing details</strong><span>Select a demo temple, enter amount, devotee name, and mobile number.</span>";
+    return;
+  }
+
+  const isDonation = paymentType.value === "donation";
+  const purpose = String(purposeSelect.value || "").trim();
+  const row = selectedPurposeRow();
+  const payload = {
+    payment_type: isDonation ? "donation" : "seva",
+    amount,
+    name,
+    phone,
+    idempotency_key: `public-demo-${templeId}-${Date.now()}`,
+  };
+  if (isDonation) {
+    payload.category_id = row?.id || purpose.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "general";
+    payload.category_name = purpose || "General Donation";
+  } else {
+    payload.seva_id = row?.id || "";
+    payload.seva_name = purpose || "Seva";
+  }
+
+  submitPaymentButton.disabled = true;
+  submitPaymentButton.textContent = "Submitting...";
+  const result = await publicRequest(`/api/v1/public/temples/${encodeURIComponent(templeId)}/seva-payments`, {
+    method: "POST",
+    body: payload,
+  });
+  submitPaymentButton.textContent = "Submit Demo Payment";
+  submitPaymentButton.disabled = false;
+
+  if (!result.ok) {
+    paymentPreview.className = "module-state warn";
+    paymentPreview.innerHTML = `<strong>Payment submission failed</strong><span>${escapeHtml(result.payload?.detail || "Unable to create public payment.")}</span>`;
+    return;
+  }
+
+  paymentPreview.className = "module-state ok";
+  paymentPreview.innerHTML = `
+    <strong>Demo payment submitted</strong>
+    <span>Payment ID: ${escapeHtml(result.payload.payment_id || "")}</span>
+    <span>Status: ${escapeHtml(result.payload.status || "pending")}</span>
+    <span>Amount: Rs. ${escapeHtml(result.payload.amount || amount)}</span>
+    <span>Open ERP Public Payments and verify this pending demo payment after entering a dummy UTR/reference.</span>
+  `;
+}
+
 apiBaseInput.value = getRuntimeApiBaseUrl();
 loadTemplesButton.addEventListener("click", loadPublicTemples);
 templeSelect.addEventListener("change", loadTempleDetails);
 paymentType.addEventListener("change", renderPurposes);
 previewUpiButton.addEventListener("click", previewUpiInstructions);
+submitPaymentButton.addEventListener("click", submitDemoPayment);
+submitPaymentButton.disabled = true;
 loadPublicTemples();
