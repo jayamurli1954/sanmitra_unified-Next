@@ -256,7 +256,12 @@ def _mandir_in_kind_income_category(category_name: Any) -> str:
     return "In-Kind Sponsorship Income" if _is_mandir_sponsorship_category(category_name) else "In-Kind Donation Income"
 
 
-def _mandir_in_kind_debit_account_target(payload: dict[str, Any], category_name: Any) -> tuple[str, str, str]:
+def _mandir_in_kind_debit_account_target(
+    payload: dict[str, Any],
+    category_name: Any,
+    *,
+    inventory_accounting_enabled: bool = False,
+) -> tuple[str, str, str]:
     item_text = _normalize_income_category(
         payload.get("in_kind_item_type")
         or payload.get("asset_type")
@@ -268,10 +273,14 @@ def _mandir_in_kind_debit_account_target(payload: dict[str, Any], category_name:
     if any(marker in item_text for marker in ("gold", "silver", "ornament", "jewel", "idol", "vigraha", "precious")):
         return ("15010", "Temple Gold & Silver", "asset")
     if any(marker in item_text for marker in ("rice", "dal", "oil", "ghee", "prasadam", "annadan", "food")):
-        return ("14004", "Prasadam Inventory", "asset")
+        if inventory_accounting_enabled:
+            return ("14004", "Prasadam Inventory", "asset")
+        return ("54007", "Prasadam Expenses", "expense")
     if any(marker in item_text for marker in ("flower", "decoration", "lighting", "festival", "event", "service")):
         return ("54006", "Decoration Expenses", "expense")
-    return ("14003", "Pooja Materials Inventory", "asset")
+    if inventory_accounting_enabled:
+        return ("14003", "Pooja Materials Inventory", "asset")
+    return ("51004", "Pooja Materials Expenses", "expense")
 
 
 def _mandir_income_bucket_for_account(name: Any, code: Any) -> str | None:
@@ -425,13 +434,28 @@ async def _resolve_or_create_mandir_account(
     return int(new_acc.id)
 
 
+async def _mandir_inventory_accounting_enabled(tenant_id: str, app_key: str) -> bool:
+    query = {"tenant_id": tenant_id, "app_key": app_key}
+    doc = await get_collection("mandir_temples").find_one(query)
+    if doc is None:
+        doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
+    return bool(doc.get("module_inventory_enabled", False))
+
+
 async def _resolve_mandir_in_kind_debit_account(
     session: AsyncSession,
     tenant_id: str,
     payload: dict[str, Any],
     category_name: Any,
+    *,
+    app_key: str = "mandirmitra",
 ) -> int:
-    code, name, account_type = _mandir_in_kind_debit_account_target(payload, category_name)
+    inventory_enabled = await _mandir_inventory_accounting_enabled(tenant_id, app_key)
+    code, name, account_type = _mandir_in_kind_debit_account_target(
+        payload,
+        category_name,
+        inventory_accounting_enabled=inventory_enabled,
+    )
     classification = "nominal" if account_type == "expense" else "real"
     return await _resolve_or_create_mandir_account(
         session,
@@ -4196,7 +4220,13 @@ async def create_donation(
     if amount > 0:
         try:
             if donation_type == "in_kind":
-                debit_account_id = await _resolve_mandir_in_kind_debit_account(session, tenant_id, payload, category)
+                debit_account_id = await _resolve_mandir_in_kind_debit_account(
+                    session,
+                    tenant_id,
+                    payload,
+                    category,
+                    app_key=app_key,
+                )
                 income_category = _mandir_in_kind_income_category(category)
             else:
                 raw_account_id = payload.get("bank_account_id") or payload.get("payment_account_id")

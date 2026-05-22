@@ -11,7 +11,7 @@ This document records the scope decision for making MandirMitra live inside the 
 | Area | Decision | Evidence |
 | --- | --- | --- |
 | Donations | Include | Receipt generation, Kannada/English receipt text, public payment verification, and accounting posting are covered by smoke/tests. |
-| Sponsorship accounting | Include | Cash sponsorships post as sponsorship income; valued in-kind sponsorships post to inventory/expense/temple asset and in-kind sponsorship income. |
+| Sponsorship accounting | Include | Cash sponsorships post as sponsorship income; valued in-kind sponsorships post dynamically to expense or inventory based on temple inventory setting, with precious articles posted to temple assets. |
 | Sevas | Include | Booking, receipt generation, Kannada/English receipt text, and accounting posting are covered by smoke/tests. |
 | Expenses | Include | Quick expense posts through MandirMitra accounting and reconciles in reports. |
 | Public payments | Include | No-login public payment submission, correction, rejection, staff verification, and audit trace are covered locally. |
@@ -55,9 +55,10 @@ Before enabling festival/fund live:
 Sponsorship and valued in-kind donations are included in the first live cut only at the accounting-posting level.
 
 - Cash sponsorship for Annadanam, flower decoration, lighting, festival, vastra, or similar event support must debit cash/bank and credit Sponsorship Income.
-- Valued in-kind sponsorship for Annadanam consumables such as rice, dal, oil, ghee, or food must debit Prasadam Inventory and credit In-Kind Sponsorship Income.
+- Valued in-kind sponsorship for Annadanam consumables such as rice, dal, oil, ghee, or food must debit Prasadam Expenses when inventory accounting is disabled and Prasadam Inventory when inventory accounting is enabled, with credit to In-Kind Sponsorship Income.
 - Valued in-kind sponsorship that is directly consumed for flowers, decoration, lighting, festival, event, or service support must debit the relevant expense bucket and credit In-Kind Sponsorship Income.
 - Precious articles such as gold, silver, ornaments, idols, or ritual articles must debit the appropriate temple asset account and credit In-Kind Donation Income or In-Kind Sponsorship Income depending on purpose.
+- Inventory accounting is tenant-configured through the temple module setting; small temples can keep inventory off and expense consumable in-kind receipts immediately.
 - Zero-value in-kind acknowledgements may remain memo/domain records only and must not create a GL entry until a valuation is recorded.
 - Rich event/fund subledger reporting, stock issue/consumption, and restricted-fund reporting remain part of the festival/fund deferred scope above.
 

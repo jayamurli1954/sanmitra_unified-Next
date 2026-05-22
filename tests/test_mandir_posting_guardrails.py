@@ -508,7 +508,7 @@ def test_valued_in_kind_annadanam_posts_inventory_and_income(mandir_posting_clie
     client, donations, _seva_bookings = mandir_posting_client
     seen: dict[str, object] = {"income_categories": [], "debit_payload": None, "payload": None}
 
-    async def fake_debit_account(_session, _tenant_id, payload, category_name):
+    async def fake_debit_account(_session, _tenant_id, payload, category_name, **_kwargs):
         seen["debit_payload"] = {"payload": payload, "category_name": category_name}
         return 14004
 
@@ -560,6 +560,77 @@ def test_in_kind_account_target_classifies_precious_articles():
         {"in_kind_item_type": "flower decoration"},
         "Festival Sponsorship",
     ) == ("54006", "Decoration Expenses", "expense")
+    assert mandir_router._mandir_in_kind_debit_account_target(
+        {"in_kind_item_type": "rice"},
+        "Annadanam",
+        inventory_accounting_enabled=False,
+    ) == ("54007", "Prasadam Expenses", "expense")
+    assert mandir_router._mandir_in_kind_debit_account_target(
+        {"in_kind_item_type": "rice"},
+        "Annadanam",
+        inventory_accounting_enabled=True,
+    ) == ("14004", "Prasadam Inventory", "asset")
+
+
+@pytest.mark.asyncio
+async def test_in_kind_debit_account_uses_temple_inventory_setting(monkeypatch):
+    temples = FakeCollection(
+        [
+            {
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "module_inventory_enabled": False,
+            }
+        ]
+    )
+    seen: dict[str, object] = {}
+
+    def fake_get_collection(name: str):
+        if name == "mandir_temples":
+            return temples
+        raise AssertionError(f"Unexpected collection: {name}")
+
+    async def fake_resolve_account(_session, _tenant_id, *, code, name, account_type, classification):
+        seen.update({"code": code, "name": name, "account_type": account_type, "classification": classification})
+        return int(code)
+
+    monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
+    monkeypatch.setattr(mandir_router, "_resolve_or_create_mandir_account", fake_resolve_account)
+
+    account_id = await mandir_router._resolve_mandir_in_kind_debit_account(
+        DummySession(),
+        "tenant-1",
+        {"in_kind_item_type": "rice"},
+        "Annadanam",
+        app_key="mandirmitra",
+    )
+
+    assert account_id == 54007
+    assert seen == {
+        "code": "54007",
+        "name": "Prasadam Expenses",
+        "account_type": "expense",
+        "classification": "nominal",
+    }
+
+    temples.docs[0]["module_inventory_enabled"] = True
+    seen.clear()
+
+    account_id = await mandir_router._resolve_mandir_in_kind_debit_account(
+        DummySession(),
+        "tenant-1",
+        {"in_kind_item_type": "rice"},
+        "Annadanam",
+        app_key="mandirmitra",
+    )
+
+    assert account_id == 14004
+    assert seen == {
+        "code": "14004",
+        "name": "Prasadam Inventory",
+        "account_type": "asset",
+        "classification": "real",
+    }
 
 
 def test_create_seva_booking_uses_payment_method_fallback(mandir_posting_client, monkeypatch):

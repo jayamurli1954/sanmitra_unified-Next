@@ -36,7 +36,7 @@ Live-ready means:
 | Seva receipt | Passed locally | Seva title, devotee label, and Kannada received sentence were verified by focused tests and user visual check. |
 | Public payments | Passed locally | Temple selector, UPI intent/config, no-login submission, verification, correction, rejection, and audit trace passed. |
 | Accounting | Passed locally | Donation, seva, and expense postings reconcile through Trial Balance, I&E, R&P, Balance Sheet, drill-down, and voucher detail. |
-| Sponsorship posting | Passed locally | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts inventory and In-Kind Sponsorship Income; precious articles classify to temple asset. |
+| Sponsorship posting | Passed locally | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts to expense when inventory is off and inventory when it is on; precious articles classify to temple asset. |
 | Panchang | Passed locally | ERP shell renders Today Panchang with Tithi/Nakshatra/Yoga/Karana from `/api/v1/panchang/today`. |
 | Audit trace | Passed locally | Public payment submitted/verified/corrected/rejected events are covered in local smoke/tests. |
 | Browser smoke | Passed locally | Playwright verifies MandirMitra shell, module context, public payment/receipt/report UI, and Panchang workspace. |
@@ -51,7 +51,7 @@ Live-ready means:
 | Backup/restore | Confirm MongoDB and PostgreSQL backup schedule and restore test responsibility before production use. |
 | Rollback | Backend rollback must use previous release tag; financial data must not be rolled back by editing ledger rows. Use reversal/adjustment entries for accounting corrections. |
 | Hundi/festival/fund workflows | Deferred from the first live cut. See `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`. |
-| Sponsorship UI/report depth | Backend posting is covered, but richer UI fields, event/fund subledger reports, in-kind stock consumption, and valuation approval should be expanded after first live cut. |
+| Sponsorship UI/report depth | Backend posting is covered, but richer UI fields, event/fund subledger reports, in-kind stock consumption for inventory-enabled temples, and valuation approval should be expanded after first live cut. |
 | Cancellation/refund | Deferred from the first live cut. Generic journal reversal exists, but receipt-domain cancellation/refund needs linked domain records, audit event, idempotency, and tests before UI exposure. |
 | 80G/FCRA configuration | Deferred from the first live cut. Must remain tenant-configured and default-off until registration, receipt text, category/date eligibility, and reports are implemented and tested. |
 | Devotee privacy | Confirm role-gated access, PII retention/anonymization policy, and logging rules for devotee phone/email/PAN if PAN is later enabled. |
