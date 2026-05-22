@@ -260,6 +260,14 @@ const mandirVerificationBankAccount = document.getElementById("mandir-verificati
 const receiptPreviewDialog = document.getElementById("receipt-preview-dialog");
 const receiptPreviewFrame = document.getElementById("receipt-preview-frame");
 const receiptPreviewLabel = document.getElementById("receipt-preview-label");
+const mandirCancelReceiptDialog = document.getElementById("mandir-cancel-receipt-dialog");
+const mandirCancelReceiptForm = document.getElementById("mandir-cancel-receipt-form");
+const mandirCancelReceiptUrl = document.getElementById("mandir-cancel-receipt-url");
+const mandirCancelReceiptLabel = document.getElementById("mandir-cancel-receipt-label");
+const mandirCancelReceiptReason = document.getElementById("mandir-cancel-receipt-reason");
+const mandirCancelRefundMode = document.getElementById("mandir-cancel-refund-mode");
+const mandirCancelRefundReference = document.getElementById("mandir-cancel-refund-reference");
+const mandirCancelReceiptSubmit = document.getElementById("mandir-cancel-receipt-submit");
 const mandirRejectionDialog = document.getElementById("mandir-rejection-dialog");
 const mandirRejectionForm = document.getElementById("mandir-rejection-form");
 const mandirRejectionPaymentId = document.getElementById("mandir-rejection-payment-id");
@@ -2882,23 +2890,35 @@ async function previewMandirReceipt(button) {
   receiptPreviewDialog.showModal();
 }
 
-async function cancelMandirReceipt(button) {
+function openMandirCancelReceiptDialog(button) {
   const cancelUrl = button.getAttribute("data-cancel-url") || "";
   if (!cancelUrl) {
     return;
   }
   const receiptLabel = button.getAttribute("data-receipt-label") || "receipt";
-  const reason = String(window.prompt(`Reason for cancelling ${receiptLabel}`) || "").trim().replace(/\s+/g, " ");
+  mandirCancelReceiptUrl.value = cancelUrl;
+  mandirCancelReceiptLabel.textContent = `Reverse ${receiptLabel} without editing the original receipt.`;
+  mandirCancelReceiptReason.value = "";
+  mandirCancelRefundMode.value = "";
+  mandirCancelRefundReference.value = "";
+  mandirCancelReceiptSubmit.disabled = false;
+  mandirCancelReceiptSubmit.textContent = "Reverse Receipt";
+  mandirCancelReceiptDialog.showModal();
+  mandirCancelReceiptReason.focus();
+}
+
+async function submitMandirCancelReceipt() {
+  const cancelUrl = mandirCancelReceiptUrl.value;
+  const receiptLabel = mandirCancelReceiptLabel.textContent || "Receipt";
+  const reason = String(mandirCancelReceiptReason.value || "").trim().replace(/\s+/g, " ");
   if (reason.length < 3) {
     return;
   }
-  const refundMode = String(window.prompt("Refund mode, if any. Leave blank if no refund.") || "").trim().replace(/\s+/g, " ");
-  const refundReference = refundMode
-    ? String(window.prompt("Refund transaction reference, if any.") || "").trim().replace(/\s+/g, " ")
-    : "";
-  button.disabled = true;
-  const originalLabel = button.textContent;
-  button.textContent = "Cancelling...";
+  const refundMode = String(mandirCancelRefundMode.value || "").trim().replace(/\s+/g, " ");
+  const refundReference = String(mandirCancelRefundReference.value || "").trim().replace(/\s+/g, " ");
+  mandirCancelReceiptSubmit.disabled = true;
+  mandirCancelReceiptSubmit.textContent = "Reversing...";
+  mandirCancelReceiptDialog.close();
   setMandirFormResult(null, "Cancelling receipt", receiptLabel);
   await loadMandirDashboard();
   const result = await apiRequest("mandirmitra", cancelUrl, {
@@ -2919,8 +2939,8 @@ async function cancelMandirReceipt(button) {
     await loadMandirDashboard();
   }
   dashboardPreview.querySelector("#mandir-operation-result")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  button.disabled = false;
-  button.textContent = originalLabel;
+  mandirCancelReceiptSubmit.disabled = false;
+  mandirCancelReceiptSubmit.textContent = "Reverse Receipt";
 }
 
 function compactOptionalPhone(value) {
@@ -3444,7 +3464,7 @@ dashboardPreview.addEventListener("click", (event) => {
   } else if (mandirAction === "preview-receipt") {
     previewMandirReceipt(button);
   } else if (mandirAction === "cancel-receipt") {
-    cancelMandirReceipt(button);
+    openMandirCancelReceiptDialog(button);
   } else if (mandirAction === "apply-list-filter") {
     applyMandirListFilter(button.getAttribute("data-list-kind") || "");
   } else if (mandirAction === "reset-list-filter") {
@@ -3516,6 +3536,12 @@ document.getElementById("mandir-rejection-cancel").addEventListener("click", () 
 document.getElementById("mandir-correction-close").addEventListener("click", () => mandirCorrectionDialog.close());
 document.getElementById("mandir-correction-cancel").addEventListener("click", () => mandirCorrectionDialog.close());
 document.getElementById("receipt-preview-close").addEventListener("click", closeReceiptPreview);
+document.getElementById("mandir-cancel-receipt-close").addEventListener("click", () => mandirCancelReceiptDialog.close());
+document.getElementById("mandir-cancel-receipt-cancel").addEventListener("click", () => mandirCancelReceiptDialog.close());
+mandirCancelReceiptForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitMandirCancelReceipt();
+});
 receiptPreviewDialog.addEventListener("close", () => {
   receiptPreviewFrame.removeAttribute("src");
   if (activeReceiptPreviewObjectUrl) {

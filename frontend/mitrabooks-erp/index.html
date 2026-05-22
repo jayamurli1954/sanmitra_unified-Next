@@ -194,6 +194,34 @@
         <iframe id="receipt-preview-frame" title="Receipt preview"></iframe>
       </div>
     </dialog>
+    <dialog class="entitlement-dialog" id="mandir-cancel-receipt-dialog">
+      <form method="dialog" id="mandir-cancel-receipt-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Cancel Receipt</h3>
+            <p class="muted" id="mandir-cancel-receipt-label">Reverse the selected receipt without editing the original.</p>
+          </div>
+          <button class="secondary" type="button" id="mandir-cancel-receipt-close">Close</button>
+        </div>
+        <input id="mandir-cancel-receipt-url" type="hidden">
+        <div class="field">
+          <label for="mandir-cancel-receipt-reason">Cancellation reason</label>
+          <textarea id="mandir-cancel-receipt-reason" rows="4" required minlength="3" maxlength="240" placeholder="Reason for reversal"></textarea>
+        </div>
+        <div class="field">
+          <label for="mandir-cancel-refund-mode">Refund mode</label>
+          <input id="mandir-cancel-refund-mode" maxlength="40" placeholder="Optional: Cash, UPI, Bank transfer">
+        </div>
+        <div class="field">
+          <label for="mandir-cancel-refund-reference">Refund reference</label>
+          <input id="mandir-cancel-refund-reference" maxlength="80" placeholder="Optional transaction reference">
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="mandir-cancel-receipt-cancel">Cancel</button>
+          <button class="danger" type="submit" id="mandir-cancel-receipt-submit">Reverse Receipt</button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="entitlement-dialog" id="mandir-rejection-dialog">
       <form method="dialog" id="mandir-rejection-form">
         <div class="dialog-head">
@@ -249,7 +277,7 @@
         </div>
       </form>
     </dialog>
-    <script type="module" src="../shared/pwa-shell.js?v=mandir-reversal-v2"></script>
-    <script type="module" src="./app.js?v=mandir-reversal-v2"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=mandir-reversal-v3"></script>
+    <script type="module" src="./app.js?v=mandir-reversal-v3"></script>
   </body>
 </html>

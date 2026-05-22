@@ -158,6 +158,24 @@ def main() -> int:
             page.screenshot(path=str(screenshot_path), full_page=True)
             fail("Timed out waiting for MandirMitra Receipts workspace with cancellation action")
 
+        first_cancel = page.locator('[data-mandir-action="cancel-receipt"]').first
+        if first_cancel.count() > 0:
+            first_cancel.click()
+            try:
+                page.wait_for_function(
+                    """() => {
+                        const dialog = document.querySelector('#mandir-cancel-receipt-dialog');
+                        return dialog?.open
+                            && document.body.innerText.includes('Cancel Receipt')
+                            && document.body.innerText.includes('Reverse Receipt');
+                    }""",
+                    timeout=5000,
+                )
+            except PlaywrightTimeoutError:
+                page.screenshot(path=str(screenshot_path), full_page=True)
+                fail("Timed out waiting for MandirMitra receipt cancellation dialog")
+            page.locator("#mandir-cancel-receipt-cancel").click()
+
         page.locator('.mandir-workspace-tabs [data-workspace-view="panchang"]').click()
         try:
             page.wait_for_function(
