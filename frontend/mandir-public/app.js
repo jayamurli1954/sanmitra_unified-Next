@@ -83,6 +83,15 @@ function optionLabel(item) {
     .join(" - ");
 }
 
+function isDemoTemple(item) {
+  const text = [
+    item?.temple_name,
+    item?.trust_name,
+    item?.upi_payee_name,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return text.includes("demo") || text.includes("test");
+}
+
 function renderTempleOptions() {
   if (!temples.length) {
     templeSelect.innerHTML = `<option value="">No public temples configured</option>`;
@@ -90,7 +99,10 @@ function renderTempleOptions() {
   }
   templeSelect.innerHTML = [
     `<option value="">Select temple/trust</option>`,
-    ...temples.map((temple) => `<option value="${escapeHtml(temple.temple_id)}">${escapeHtml(optionLabel(temple))}</option>`),
+    ...temples.map((temple) => {
+      const marker = isDemoTemple(temple) ? "Demo/Test - " : "";
+      return `<option value="${escapeHtml(temple.temple_id)}">${escapeHtml(`${marker}${optionLabel(temple)}`)}</option>`;
+    }),
   ].join("");
 }
 
@@ -101,9 +113,11 @@ function renderTempleInfo() {
     return;
   }
   const enabled = Boolean(selectedTempleInfo.upi_public_enabled && selectedTempleInfo.upi_id);
+  const demoMarker = isDemoTemple(selectedTempleInfo) ? `<span class="pill ok">Demo/Test tenant</span>` : `<span class="pill warn">Live trust: visibility only in staging</span>`;
   templeInfo.className = `module-state ${enabled ? "ok" : "warn"}`;
   templeInfo.innerHTML = `
     <strong>${escapeHtml(selectedTempleInfo.temple_name || selectedTempleInfo.trust_name || "Temple")}</strong>
+    ${demoMarker}
     <span>${escapeHtml([selectedTempleInfo.trust_name, selectedTempleInfo.city, selectedTempleInfo.state].filter(Boolean).join(" - "))}</span>
     <span>UPI: ${escapeHtml(selectedTempleInfo.upi_id || "not configured")}</span>
     <span>Payee: ${escapeHtml(selectedTempleInfo.upi_payee_name || "not configured")}</span>
