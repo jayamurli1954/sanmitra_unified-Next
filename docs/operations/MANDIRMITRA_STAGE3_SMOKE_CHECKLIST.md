@@ -54,6 +54,15 @@ Latest local evidence on 2026-05-22:
 - Local browser/backend smoke passed with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`.
 - Local cancellation/reversal was verified on seed/demo local data only: `DON-0000004` was marked `reversed`, `REV-112-DON-0000004` appeared in drill-down, Trial Balance remained balanced at `Rs. 1,715.00`, and I&E, R&P, and Balance Sheet remained consistent.
 
+Latest staging/non-destructive evidence on 2026-05-22:
+
+- GitHub CI was green.
+- Render deployment completed green.
+- MandirMitra login/module context loaded with `organization_type=TEMPLE` and `temple`, `accounting`, and `audit`.
+- MandirMitra tabs loaded, receipt preview/download worked, Panchang opened, reports opened, and accounting reports opened and balanced.
+- Public no-login visibility passed through `/mandir-public/`: the page loaded without login, listed the public-enabled temple/trust, displayed public UPI/config visibility, showed donation purpose selection, and generated UPI intent preview without creating a payment.
+- The active visible public tenant was Parlathya Prathishtana, so the staging result is non-destructive/read-config-only. No donation creation, cancellation, refund, or reversal was performed on that real trust tenant.
+
 ## Local Services
 
 Backend:
@@ -126,3 +135,4 @@ MandirMitra is not live-ready until:
 - Use non-destructive staging checks unless a clearly marked demo/test temple tenant is available.
 - Do not create, cancel, refund, reverse, or otherwise mutate receipts for real temple/trust tenants such as Parlathya Prathishtana.
 - If no staging demo tenant exists, mark mutation checks as blocked by seed/demo policy and complete only login, module context, navigation, report, PDF preview, and public no-login read/config checks.
+- As of 2026-05-22, the staging smoke is passed for non-destructive checks; destructive mutation checks remain blocked until a clearly marked demo/test temple tenant is available.
