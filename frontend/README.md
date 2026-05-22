@@ -71,6 +71,22 @@ Open:
 
 If your backend is on another URL, add `?api=http://127.0.0.1:8010` to any frontend URL or set it in the on-screen API field.
 
+## Production URL Pattern
+
+When the `frontend/` directory is deployed as the production frontend root, the MitraBooks ERP production URL is:
+
+```text
+https://<frontend-domain>/mitrabooks-erp/
+```
+
+The MandirMitra public payment page is:
+
+```text
+https://<frontend-domain>/mandir-public/
+```
+
+After the frontend host/domain is finalized, add the exact origin, for example `https://<frontend-domain>`, to backend `ALLOWED_ORIGINS`.
+
 ## Non-Goals
 
 - No production UI redesign in this pass.

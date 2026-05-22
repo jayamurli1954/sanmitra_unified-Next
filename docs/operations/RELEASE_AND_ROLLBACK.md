@@ -63,6 +63,24 @@ After code scanning is enabled and stable, the SARIF upload steps can be changed
 
 Production deploy must always reference a version tag.
 
+## MandirMitra First-Live Candidate
+
+The MandirMitra first-live backend candidate should use a reviewed production release tag after CI passes.
+
+Recommended candidate version:
+
+```text
+backend-v1.3.0
+```
+
+Use this as the first MandirMitra production candidate only after:
+
+- The `VERSION` file is updated to `1.3.0`.
+- GitHub CI, CodeQL, Trivy, and release preflight are green.
+- The `release-tag` workflow creates `backend-v1.3.0`.
+- Staging is deployed and smoke-tested with non-destructive checks or a demo/test tenant.
+- Production deploy is manually triggered with `version_tag=backend-v1.3.0`.
+
 ## Rollback Rule
 
 Rollback means returning production to the last known good `backend-v*` tag. Do not roll back by guessing a branch head.

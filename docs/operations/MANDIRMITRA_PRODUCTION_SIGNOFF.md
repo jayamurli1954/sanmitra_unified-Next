@@ -81,12 +81,12 @@ These areas are not blockers for the first live cut, but must remain disabled, h
 | Render deployment | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
 | Production env checklist | Partially confirmed. MongoDB, Mongo DB name, PostgreSQL, JWT, allowed app keys, `mandirmitra` app-key behavior, demo bootstrap off, super-admin bootstrap off, and receipt PDF fallback are confirmed. MitraBooks ERP production frontend URL remains pending. |
 | Production access policy | Confirmed. No shared/default production password; no `.local` production admin accounts; platform-owner access must use a real email with activation/reset or one-time bootstrap followed by bootstrap disabled. |
-| Backup/restore confirmation | Pending. MongoDB and PostgreSQL backup schedule, retention, storage location, restore owner, and restore process must be confirmed before live financial use. |
+| Backup/restore confirmation | Policy documented in `docs/operations/BACKUP_RESTORE_RUNBOOK.md`; provider backup schedule, retention, storage location, and restore owner still need production confirmation before live financial use. |
 | Rollback tag/process | Pending execution. Policy is confirmed: production deploy should use a `backend-v*` tag, rollback redeploys the previous known-good tag, and financial corrections use reversal/adjustment entries rather than ledger edits. |
 | Tenant seed/demo policy | Confirmed. Production must not depend on `seed-tenant-1`; demo/test tenants must be clearly named; real trusts are not used for destructive smoke; 80G/FCRA is not default-on; demo UPI IDs are not used for real tenants. |
 
 ## Recommendation
 
-MandirMitra is ready for production signoff review, but not yet production-approved. Production approval remains blocked by the pending MitraBooks ERP production frontend URL, backup/restore setup, and release tag/rollback execution.
+MandirMitra is ready for production signoff review, but not yet production-approved. Production approval remains blocked by the pending MitraBooks ERP production frontend URL, production backup confirmation, and release tag/rollback execution.
 
 Do not start GruhaMitra production migration until the pending production checks above are marked confirmed or explicitly waived by the platform owner.
