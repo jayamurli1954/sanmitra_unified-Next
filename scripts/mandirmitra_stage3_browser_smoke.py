@@ -140,6 +140,24 @@ def main() -> int:
         if "access denied" in text.lower():
             fail("Frontend contains access denied text")
 
+        page.locator('.mandir-workspace-tabs [data-workspace-view="receipts"]').click()
+        try:
+            page.wait_for_function(
+                """() => {
+                    const active = document.querySelector('.mandir-workspace-tabs button.active');
+                    const text = document.body.innerText;
+                    const hasReceiptRows = text.includes('DON-') || text.includes('SEV-');
+                    const hasCancelAction = Boolean(document.querySelector('[data-mandir-action="cancel-receipt"]'));
+                    return active?.textContent?.trim() === 'Receipts'
+                        && text.includes('Recent Receipts')
+                        && (!hasReceiptRows || hasCancelAction);
+                }""",
+                timeout=10000,
+            )
+        except PlaywrightTimeoutError:
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            fail("Timed out waiting for MandirMitra Receipts workspace with cancellation action")
+
         page.locator('.mandir-workspace-tabs [data-workspace-view="panchang"]').click()
         try:
             page.wait_for_function(
