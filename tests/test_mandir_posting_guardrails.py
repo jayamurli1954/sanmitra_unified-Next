@@ -464,6 +464,104 @@ def test_create_donation_rolls_back_when_journal_post_fails(mandir_posting_clien
     assert donations.docs == []
 
 
+def test_cash_sponsorship_posts_to_sponsorship_income(mandir_posting_client, monkeypatch):
+    client, donations, _seva_bookings = mandir_posting_client
+    seen: dict[str, object] = {"income_categories": [], "payload": None}
+
+    async def fake_resolve_account(_session, _tenant_id, _raw_account_id, _payment_mode):
+        return 11001
+
+    async def fake_income_account(_session, _tenant_id, category_name):
+        seen["income_categories"].append(category_name)
+        return 45001
+
+    async def fake_post_journal_entry(**kwargs):
+        seen["payload"] = kwargs["payload"]
+        return object(), True
+
+    monkeypatch.setattr(mandir_router, "_resolve_mandir_payment_account_id", fake_resolve_account)
+    monkeypatch.setattr(mandir_router, "_resolve_mandir_income_account", fake_income_account)
+    monkeypatch.setattr(mandir_router, "post_journal_entry", fake_post_journal_entry)
+
+    response = client.post(
+        "/api/v1/donations/",
+        json={
+            "devotee_name": "Festival Sponsor",
+            "devotee_phone": "9876512340",
+            "amount": 10000,
+            "category": "Sponsorship",
+            "payment_mode": "Cash",
+        },
+    )
+
+    assert response.status_code == 200
+    assert donations.docs[0]["category"] == "Sponsorship"
+    assert seen["income_categories"] == ["Sponsorship Income"]
+    journal_payload = seen["payload"]
+    assert journal_payload.lines[0].account_id == 11001
+    assert journal_payload.lines[0].debit == Decimal("10000")
+    assert journal_payload.lines[1].account_id == 45001
+    assert journal_payload.lines[1].credit == Decimal("10000")
+
+
+def test_valued_in_kind_annadanam_posts_inventory_and_income(mandir_posting_client, monkeypatch):
+    client, donations, _seva_bookings = mandir_posting_client
+    seen: dict[str, object] = {"income_categories": [], "debit_payload": None, "payload": None}
+
+    async def fake_debit_account(_session, _tenant_id, payload, category_name):
+        seen["debit_payload"] = {"payload": payload, "category_name": category_name}
+        return 14004
+
+    async def fake_income_account(_session, _tenant_id, category_name):
+        seen["income_categories"].append(category_name)
+        return 45002
+
+    async def fake_post_journal_entry(**kwargs):
+        seen["payload"] = kwargs["payload"]
+        return object(), True
+
+    monkeypatch.setattr(mandir_router, "_resolve_mandir_in_kind_debit_account", fake_debit_account)
+    monkeypatch.setattr(mandir_router, "_resolve_mandir_income_account", fake_income_account)
+    monkeypatch.setattr(mandir_router, "post_journal_entry", fake_post_journal_entry)
+
+    response = client.post(
+        "/api/v1/donations/",
+        json={
+            "devotee_name": "Rice Sponsor",
+            "devotee_phone": "9876512341",
+            "amount": 2500,
+            "category": "Annadanam",
+            "donation_type": "in_kind",
+            "in_kind_item_name": "Rice bags",
+            "in_kind_item_type": "rice",
+            "in_kind_quantity": "50 kg",
+            "in_kind_valuation_basis": "market value declared by temple office",
+        },
+    )
+
+    assert response.status_code == 200
+    assert donations.docs[0]["donation_type"] == "in_kind"
+    assert donations.docs[0]["in_kind_item_name"] == "Rice bags"
+    assert seen["income_categories"] == ["In-Kind Sponsorship Income"]
+    assert seen["debit_payload"]["category_name"] == "Annadanam"
+    journal_payload = seen["payload"]
+    assert journal_payload.lines[0].account_id == 14004
+    assert journal_payload.lines[0].debit == Decimal("2500")
+    assert journal_payload.lines[1].account_id == 45002
+    assert journal_payload.lines[1].credit == Decimal("2500")
+
+
+def test_in_kind_account_target_classifies_precious_articles():
+    assert mandir_router._mandir_in_kind_debit_account_target(
+        {"in_kind_item_type": "gold ornament"},
+        "General Donation",
+    ) == ("15010", "Temple Gold & Silver", "asset")
+    assert mandir_router._mandir_in_kind_debit_account_target(
+        {"in_kind_item_type": "flower decoration"},
+        "Festival Sponsorship",
+    ) == ("54006", "Decoration Expenses", "expense")
+
+
 def test_create_seva_booking_uses_payment_method_fallback(mandir_posting_client, monkeypatch):
     client, _donations, seva_bookings = mandir_posting_client
     seen = {"mode": None}

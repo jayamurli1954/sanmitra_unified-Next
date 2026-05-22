@@ -159,10 +159,30 @@ _MANDIR_CANONICAL_INCOME_CODES: dict[str, tuple[str, str]] = {
     'general donation': ('44001', 'General Donations'),
     'donation income': ('44001', 'General Donations'),
     'general donations': ('44001', 'General Donations'),
+    'specific purpose donation': ('44003', 'Specific Purpose Donations'),
+    'specific purpose donations': ('44003', 'Specific Purpose Donations'),
+    'in-kind donation income': ('44004', 'In-Kind Donation Income'),
+    'in kind donation income': ('44004', 'In-Kind Donation Income'),
+    'sponsorship': ('45001', 'Sponsorship Income'),
+    'sponsorship income': ('45001', 'Sponsorship Income'),
+    'in-kind sponsorship income': ('45002', 'In-Kind Sponsorship Income'),
+    'in kind sponsorship income': ('45002', 'In-Kind Sponsorship Income'),
     'seva booking revenue': ('42002', 'Seva Income - General'),
     'pooja revenue': ('42002', 'Seva Income - General'),
     'seva income': ('42002', 'Seva Income - General'),
     'seva income - general': ('42002', 'Seva Income - General'),
+}
+
+_MANDIR_SPONSORSHIP_CATEGORY_MARKERS = {
+    "annadanam",
+    "annadana",
+    "sponsorship",
+    "flower",
+    "decoration",
+    "lighting",
+    "vastra",
+    "nitya puja",
+    "festival",
 }
 
 _MANDIR_INCOME_BUCKET_ALIASES: dict[str, set[str]] = {
@@ -216,6 +236,42 @@ def _normalize_public_payment_utr_reference(value: Any) -> str:
             detail="UTR/reference must be 4-80 characters and contain only letters, numbers, spaces, dot, slash, colon, underscore, or hyphen",
         )
     return reference
+
+
+def _is_mandir_sponsorship_category(value: Any) -> bool:
+    normalized = _normalize_income_category(value)
+    return any(marker in normalized for marker in _MANDIR_SPONSORSHIP_CATEGORY_MARKERS)
+
+
+def _mandir_cash_income_category(category_name: Any) -> str:
+    normalized = _normalize_income_category(category_name)
+    if _is_mandir_sponsorship_category(normalized):
+        return "Sponsorship Income"
+    if any(marker in normalized for marker in ("construction", "renovation", "corpus", "specific purpose")):
+        return "Specific Purpose Donations"
+    return "General Donations"
+
+
+def _mandir_in_kind_income_category(category_name: Any) -> str:
+    return "In-Kind Sponsorship Income" if _is_mandir_sponsorship_category(category_name) else "In-Kind Donation Income"
+
+
+def _mandir_in_kind_debit_account_target(payload: dict[str, Any], category_name: Any) -> tuple[str, str, str]:
+    item_text = _normalize_income_category(
+        payload.get("in_kind_item_type")
+        or payload.get("asset_type")
+        or payload.get("item_type")
+        or payload.get("item_name")
+        or payload.get("description")
+        or category_name
+    )
+    if any(marker in item_text for marker in ("gold", "silver", "ornament", "jewel", "idol", "vigraha", "precious")):
+        return ("15010", "Temple Gold & Silver", "asset")
+    if any(marker in item_text for marker in ("rice", "dal", "oil", "ghee", "prasadam", "annadan", "food")):
+        return ("14004", "Prasadam Inventory", "asset")
+    if any(marker in item_text for marker in ("flower", "decoration", "lighting", "festival", "event", "service")):
+        return ("54006", "Decoration Expenses", "expense")
+    return ("14003", "Pooja Materials Inventory", "asset")
 
 
 def _mandir_income_bucket_for_account(name: Any, code: Any) -> str | None:
@@ -340,6 +396,51 @@ async def _resolve_mandir_income_account(session: AsyncSession, tenant_id: str, 
         is_payable=False,
     )
     return int(new_acc.id)
+
+
+async def _resolve_or_create_mandir_account(
+    session: AsyncSession,
+    tenant_id: str,
+    *,
+    code: str,
+    name: str,
+    account_type: str,
+    classification: str,
+) -> int:
+    accounts = await list_accounts(session, tenant_id=tenant_id)
+    for acc in accounts:
+        if str(acc.code or "").strip() == str(code).strip():
+            return int(acc.id)
+    new_acc = await create_account(
+        session,
+        tenant_id=tenant_id,
+        code=code,
+        name=name,
+        account_type=account_type,
+        classification=classification,
+        is_cash_bank=False,
+        is_receivable=False,
+        is_payable=False,
+    )
+    return int(new_acc.id)
+
+
+async def _resolve_mandir_in_kind_debit_account(
+    session: AsyncSession,
+    tenant_id: str,
+    payload: dict[str, Any],
+    category_name: Any,
+) -> int:
+    code, name, account_type = _mandir_in_kind_debit_account_target(payload, category_name)
+    classification = "nominal" if account_type == "expense" else "real"
+    return await _resolve_or_create_mandir_account(
+        session,
+        tenant_id,
+        code=code,
+        name=name,
+        account_type=account_type,
+        classification=classification,
+    )
 
 
 async def _resolve_mandir_payment_account_id(
@@ -4047,6 +4148,12 @@ async def create_donation(
         "app_key": app_key,
         "amount": amount,
         "category": category,
+        "donation_type": str(payload.get("donation_type") or "cash").strip().lower() or "cash",
+        "in_kind_item_name": _safe_optional_str(payload.get("in_kind_item_name") or payload.get("item_name")),
+        "in_kind_item_type": _safe_optional_str(payload.get("in_kind_item_type") or payload.get("item_type") or payload.get("asset_type")),
+        "in_kind_quantity": _safe_optional_str(payload.get("in_kind_quantity") or payload.get("quantity")),
+        "in_kind_valuation_basis": _safe_optional_str(payload.get("in_kind_valuation_basis") or payload.get("valuation_basis")),
+        "event_name": _safe_optional_str(payload.get("event_name") or payload.get("festival_name")),
         "payment_mode": payload.get("payment_mode") or "Cash",
         "devotee_name": devotee_name,
         "devotee_phone": devotee_phone,
@@ -4083,27 +4190,34 @@ async def create_donation(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save donation: {exc}") from exc
 
-    # Monetary donations must also post into accounting; otherwise reports and TB diverge.
-    if payload.get("donation_type") != "in_kind" and amount > 0:
-        raw_account_id = payload.get("bank_account_id") or payload.get("payment_account_id")
-        resolved_account_id = await _resolve_mandir_payment_account_id(
-            session,
-            tenant_id,
-            raw_account_id,
-            payment_mode,
-        )
-        if not resolved_account_id:
-            await col.delete_one({"donation_id": donation_id, "tenant_id": tenant_id, "app_key": app_key})
-            raise HTTPException(status_code=400, detail="No valid cash/bank account is configured for donation posting")
+    donation_type = str(payload.get("donation_type") or "").strip().lower()
 
+    # Valued donations and sponsorships must post into accounting; otherwise reports and TB diverge.
+    if amount > 0:
         try:
-            income_acc_id = await _resolve_mandir_income_account(session, tenant_id, "General Donations")
+            if donation_type == "in_kind":
+                debit_account_id = await _resolve_mandir_in_kind_debit_account(session, tenant_id, payload, category)
+                income_category = _mandir_in_kind_income_category(category)
+            else:
+                raw_account_id = payload.get("bank_account_id") or payload.get("payment_account_id")
+                debit_account_id = await _resolve_mandir_payment_account_id(
+                    session,
+                    tenant_id,
+                    raw_account_id,
+                    payment_mode,
+                )
+                if not debit_account_id:
+                    await col.delete_one({"donation_id": donation_id, "tenant_id": tenant_id, "app_key": app_key})
+                    raise HTTPException(status_code=400, detail="No valid cash/bank account is configured for donation posting")
+                income_category = _mandir_cash_income_category(category)
+
+            income_acc_id = await _resolve_mandir_income_account(session, tenant_id, income_category)
             journal_payload = JournalPostRequest(
                 entry_date=datetime.now(timezone.utc).date(),
                 description=f"{category} from {donation['devotee']['name']}",
                 reference=donation["receipt_number"],
                 lines=[
-                    JournalLineIn(account_id=resolved_account_id, debit=Decimal(str(amount)), credit=Decimal("0")),
+                    JournalLineIn(account_id=debit_account_id, debit=Decimal(str(amount)), credit=Decimal("0")),
                     JournalLineIn(account_id=income_acc_id, debit=Decimal("0"), credit=Decimal(str(amount))),
                 ],
             )
@@ -4115,6 +4229,8 @@ async def create_donation(
                 payload=journal_payload,
                 idempotency_key=f"don_{donation_id}",
             )
+        except HTTPException:
+            raise
         except Exception as exc:
             await col.delete_one({"donation_id": donation_id, "tenant_id": tenant_id, "app_key": app_key})
             raise HTTPException(status_code=500, detail=f"Failed to post donation journal: {exc}") from exc

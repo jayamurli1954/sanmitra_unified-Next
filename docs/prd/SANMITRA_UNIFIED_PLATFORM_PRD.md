@@ -57,6 +57,7 @@ Rules:
 | 2026-05-22 | MandirMitra deployment-readiness review | Captured | Environment, seed/demo tenant, audit retention, backup/restore, rollback, hundi/fund/cancellation, 80G/FCRA, and devotee privacy gaps are listed in `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md` | Push current batch and review CI/staging before production signoff |
 | 2026-05-22 | MandirMitra Reports workspace | Wired in ERP shell | Reports is now separate from Receipts and renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data | Continue live workflow review for export/print and any legacy-only report variants |
 | 2026-05-22 | MandirMitra first live-cut decisions | Captured | Donation, seva, public payment, receipt, Panchang, reports, and accounting are included; Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are deferred until gates are implemented and tested | Confirm deployment environment, seed/demo policy, backup/restore, rollback, and CI/staging |
+| 2026-05-22 | MandirMitra sponsorship accounting | Backend posting covered | Cash sponsorship now credits Sponsorship Income; valued in-kind Annadanam credits In-Kind Sponsorship Income and debits inventory; precious articles classify to temple asset accounts; focused posting tests pass | Add richer UI fields, valuation approval, stock consumption, and event/fund subledger reports after first live cut |
 | 2026-05-21 | Platform owner, audit, tenant entitlements | Pending review | Local source/tests/docs exist but remain uncommitted in the current working tree | Review and commit as a focused foundation batch if accepted |
 | 2026-05-21 | MitraBooks business parties and typed vouchers | Pending review | Local source/tests exist under `/api/v1/business` but remain uncommitted in the current working tree | Review separately as Phase 2 business work |
 
@@ -218,6 +219,7 @@ Traditional golden rules:
 
 - Module-wise temple/trust onboarding.
 - Donations and receipts.
+- Cash and in-kind sponsorships for Annadanam, festivals, decoration, lighting, pooja/ritual articles, and other event purposes.
 - Seva booking.
 - Hundi collection.
 - Devotee database.
@@ -256,7 +258,9 @@ Initial MitraBooks ERP shell integration:
 - Current public payment list supports `limit`, `offset`, status, text search, and payment type filters; the shell exposes these controls in the public payment review panel.
 - Current public payment exception list supports `limit`, `offset`, reason, status, text search, and payment type filters; the shell exposes these controls in the exception review panel.
 - Current shared accounting report drill-down supports month, week, day, and voucher levels through `GET /api/v1/accounting/reports/drilldown`; voucher rows can open `GET /api/v1/accounting/reports/vouchers/{journal_id}` to inspect debit/credit lines. MitraBooks ERP uses the active `X-App-Key` so the same report panel applies to MitraBooks, MandirMitra, and GruhaMitra.
+- Current MandirMitra donation posting distinguishes cash sponsorship, valued in-kind sponsorship, in-kind donations, directly consumed event support, Annadanam consumables, and precious temple articles using tenant-scoped MitraBooks accounts.
 - Gap: no major public payment verification shell gap remains in the initial MandirMitra dashboard slice; future work should expand these dashboard panels into dedicated routed full-list screens with stable URL state, exports, and richer audit drill-down.
+- Gap: sponsorship UI fields, valuation approval, in-kind stock issue/consumption, and event/fund subledger reporting need a later dedicated slice before calling sponsorship management feature-complete.
 
 ### MitraBooks Business Module
 

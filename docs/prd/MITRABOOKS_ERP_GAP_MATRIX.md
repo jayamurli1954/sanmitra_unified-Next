@@ -63,6 +63,7 @@ Update this section as implementation and E2E checks progress. Do not move a pla
 | 2026-05-22 | MandirMitra deployment-readiness review | Captured | `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md` records environment, seed/demo tenant, audit retention, backup/restore, rollback, hundi/fund/cancellation, 80G/FCRA, and devotee privacy gaps | Push current batch and review CI/staging before production signoff |
 | 2026-05-22 | MandirMitra Reports workspace | Wired in ERP shell | Reports is now separate from Receipts and renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data | Continue live workflow review for export/print and any legacy-only report variants |
 | 2026-05-22 | MandirMitra first live-cut decisions | Captured | Donation, seva, public payment, receipt, Panchang, reports, and accounting are included; Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are deferred until gates are implemented and tested | Confirm deployment environment, seed/demo policy, backup/restore, rollback, and CI/staging |
+| 2026-05-22 | MandirMitra sponsorship accounting | Backend posting covered | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts to inventory and In-Kind Sponsorship Income; precious articles classify to temple asset accounts; focused tests pass | Add UI fields, valuation approval, stock consumption, and event/fund subledger reporting in a later slice |
 | 2026-05-21 | Platform owner dashboard and tenant entitlements | Pending review in working tree | Backend/router/docs/tests exist locally but are not yet committed in the current reviewed batch | Review scope, run focused tests, then commit as Phase 1 foundation work if accepted |
 | 2026-05-21 | Business parties and typed vouchers | Pending review in working tree | `/api/v1/business` source and tests exist locally but are not yet committed in the current reviewed batch | Treat as Phase 2; review separately from foundation/audit/platform-owner work |
 
@@ -96,6 +97,7 @@ Allowed before MandirMitra/GruhaMitra live:
 - Audit events and route contracts needed by MandirMitra/GruhaMitra.
 - Platform-owner controls needed to onboard, enable, and operate MandirMitra/GruhaMitra tenants.
 - MandirMitra public devotee payment, staff verification, receipt preview/download, exception correction/rejection, and donation/seva accounting flows.
+- MandirMitra sponsorship posting where cash support credits sponsorship income and valued in-kind support debits inventory, expense, or temple asset accounts through MitraBooks journals.
 - GruhaMitra accounting/reporting support only after the MandirMitra live-ready gate passes.
 
 Deferred before MandirMitra/GruhaMitra live:
@@ -149,6 +151,7 @@ Key modeling rule:
 | Area | Current state | Target state | Gap | Phase |
 | --- | --- | --- | --- | --- |
 | Accounting foundation | Journal posting, reversal, ledger, trial balance, P&L, receipts/payments, balance sheet exist | Stable accounting core for all ERP modules | Harden tests, route contracts, tenant/app-key coverage | Phase 1 |
+| MandirMitra sponsorship accounting | Backend donation posting handles cash sponsorship income, valued in-kind sponsorship income, Annadanam consumable inventory, directly consumed event support, and precious temple asset classification | Full sponsorship management by event/fund with valuation approvals, stock consumption, receipt/report polish, and drill-down reporting | Add dedicated UI, approval workflow, event/fund subledger, and stock issue/consumption tests | Phase 1 |
 | Chart of Accounts | Default accounts and source account mapping exist | Business-type COA templates for retail, trading, services, professional, temple, housing | Add template selection and migration-safe onboarding | Phase 1 |
 | MandirMitra onboarding | Module-wise temple first-login onboarding exists | Temple/trust onboarding remains module-wise, requires explicit `X-App-Key`, and creates a `TEMPLE` tenant with `temple`, `accounting`, and `audit` modules | Keep central onboarding as legacy/admin support, not the primary MandirMitra path | Phase 1 |
 | Platform owner dashboard | Backend contract exists at `GET /api/v1/platform-owner/dashboard`; UI preview can call existing super-admin approve/reject onboarding endpoints; approval derives tenant org/modules/app keys from onboarding `app_key`; tenant entitlement endpoint and structured UI action can update subscription plan and enabled modules | Cross-module owner dashboard for MandirMitra, GruhaMitra, and MitraBooks onboarding status, approvals, subscriptions, module enablement, and KPIs | Add full browser E2E after a super-admin login path is available in the current environment | Phase 1 |
