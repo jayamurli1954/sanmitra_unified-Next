@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -43,8 +44,13 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-    _env_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip() and o.strip() != "*"]
+    _env_origins = [
+        origin.strip()
+        for origin in re.split(r"[,\r\n]+", os.getenv("ALLOWED_ORIGINS", ""))
+        if origin.strip() and origin.strip() != "*"
+    ]
     ALLOWED_ORIGINS = list(set(_env_origins + [
+        "https://mitrabooks-erp.vercel.app",
         "https://mandirmitra.vercel.app",
         "https://mandir-mitra-alpha.vercel.app",
         "https://legalmitra.vercel.app",

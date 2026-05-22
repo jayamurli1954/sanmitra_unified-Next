@@ -46,7 +46,7 @@ app.add_middleware(
     # Restrict to known SanMitra Vercel apps only; the broad *.vercel.app wildcard
     # would allow any Vercel deployment to make credentialed cross-origin requests.
     allow_origin_regex=(
-        r"https://(mandirmitra|mandir-mitra-alpha|legalmitra|gruhamitra|invest-mitra)"
+        r"https://(mitrabooks-erp|mandirmitra|mandir-mitra-alpha|legalmitra|gruhamitra|invest-mitra)"
         r"(-[a-z0-9]+)?\.vercel\.app"
     ),
     allow_credentials=True,
