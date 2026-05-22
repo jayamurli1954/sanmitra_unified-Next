@@ -200,16 +200,16 @@ class Settings:
         "DEMO_MANDIR_BOOTSTRAP",
         "false" if _IS_PRODUCTION else "true",
     ).lower() in {"1", "true", "yes", "on"}
-    DEMO_MANDIR_TENANT_ID = os.getenv("DEMO_MANDIR_TENANT_ID", "demo-mandir-tenant")
-    DEMO_MANDIR_TEMPLE_NAME = os.getenv("DEMO_MANDIR_TEMPLE_NAME", "Demo Temple")
-    DEMO_MANDIR_TRUST_NAME = os.getenv("DEMO_MANDIR_TRUST_NAME", "Demo Temple Trust")
+    DEMO_MANDIR_TENANT_ID = os.getenv("DEMO_MANDIR_TENANT_ID", "seed-tenant-1")
+    DEMO_MANDIR_TEMPLE_NAME = os.getenv("DEMO_MANDIR_TEMPLE_NAME", "Local ERP Demo Temple")
+    DEMO_MANDIR_TRUST_NAME = os.getenv("DEMO_MANDIR_TRUST_NAME", "Local ERP Demo Temple Trust")
     DEMO_MANDIR_TEMPLE_ADDRESS = os.getenv("DEMO_MANDIR_TEMPLE_ADDRESS", "Demo Temple Address")
     DEMO_MANDIR_TEMPLE_CONTACT = os.getenv("DEMO_MANDIR_TEMPLE_CONTACT", "+91-9000000000")
     DEMO_MANDIR_TEMPLE_EMAIL = os.getenv("DEMO_MANDIR_TEMPLE_EMAIL", "temple.demo@sanmitra.local")
     DEMO_MANDIR_CITY = os.getenv("DEMO_MANDIR_CITY", "Bengaluru")
     DEMO_MANDIR_STATE = os.getenv("DEMO_MANDIR_STATE", "Karnataka")
     DEMO_MANDIR_UPI_ID = os.getenv("DEMO_MANDIR_UPI_ID", "demo-temple@sanmitra")
-    DEMO_MANDIR_UPI_PAYEE_NAME = os.getenv("DEMO_MANDIR_UPI_PAYEE_NAME", "Demo Temple Trust")
+    DEMO_MANDIR_UPI_PAYEE_NAME = os.getenv("DEMO_MANDIR_UPI_PAYEE_NAME", "Local ERP Demo Temple Trust")
     DEMO_MANDIR_ADMIN_FULL_NAME = os.getenv("DEMO_MANDIR_ADMIN_FULL_NAME", "Demo Temple Admin")
     DEMO_MANDIR_ADMIN_EMAIL = os.getenv("DEMO_MANDIR_ADMIN_EMAIL", "demo.admin@sanmitra.local")
     # No default password — must be set explicitly when DEMO_MANDIR_BOOTSTRAP=true.

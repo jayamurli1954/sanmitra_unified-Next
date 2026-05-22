@@ -62,7 +62,7 @@ Latest staging/non-destructive evidence on 2026-05-22:
 - MandirMitra tabs loaded, receipt preview/download worked, Panchang opened, reports opened, and accounting reports opened and balanced.
 - Public no-login visibility passed through `/mandir-public/`: the page loaded without login, listed the public-enabled temple/trust, displayed public UPI/config visibility, showed donation purpose selection, and generated UPI intent preview without creating a payment.
 - The active visible public tenant was Parlathya Prathishtana, so the staging result is non-destructive/read-config-only. No donation creation, cancellation, refund, or reversal was performed on that real trust tenant.
-- Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `demo-mandir-tenant`) with demo UPI/config values.
+- Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `seed-tenant-1` for local ERP smoke) with demo UPI/config values.
 - Demo public payment submission is available from `/mandir-public/` only for demo/test tenants. It creates a pending public payment for ERP staff verification; live trust tenants remain visibility-only from this page.
 
 ## Local Services
@@ -141,3 +141,4 @@ MandirMitra is not live-ready until:
 - As of 2026-05-22, the staging smoke is passed for non-destructive checks; destructive mutation checks remain blocked until a clearly marked demo/test temple tenant is available.
 - Demo mutation checks require `DEMO_MANDIR_BOOTSTRAP=true` and a staging-only `DEMO_MANDIR_ADMIN_PASSWORD`. The demo tenant public page should show demo payee/UPI values, not a real trust account.
 - The public page must block submission for live trust records. Use live trust records only for read/config visibility.
+- Protected ERP verification is tenant-scoped. For the default local smoke login (`admin@sanmitra.local / admin123`), select `Demo/Test - Local ERP Demo Temple` so the pending payment belongs to `seed-tenant-1` and appears in ERP Public Payments.
