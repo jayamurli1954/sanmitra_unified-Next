@@ -64,6 +64,7 @@ Latest staging/non-destructive evidence on 2026-05-22:
 - The active visible public tenant was Parlathya Prathishtana, so the staging result is non-destructive/read-config-only. No donation creation, cancellation, refund, or reversal was performed on that real trust tenant.
 - Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `seed-tenant-1` for local ERP smoke) with demo UPI/config values.
 - Demo public payment submission is available from `/mandir-public/` only for demo/test tenants. It creates a pending public payment for ERP staff verification; live trust tenants remain visibility-only from this page.
+- Demo public payment end-to-end smoke passed on the safe demo path: pending payment appeared in ERP, verification posted successfully, receipt generated/downloaded, donation appeared in receipts/reports, Trial Balance remained balanced, and drill-down showed the posted voucher.
 
 ## Local Services
 
@@ -102,7 +103,7 @@ Record pass/fail evidence for each item.
 | Navigation | Open MandirMitra overview, donations, sevas, public payments, exceptions, receipts, accounting/reports | Tabs/panels load tenant-scoped data only |  |
 | Public payment | Open no-login public devotee flow | Devotee can select temple/trust, choose donation or seva, enter details/amount, and see the selected tenant's configured UPI/payment instructions |  |
 | Public page visibility | Open `/mandir-public/` or the ERP `Open Public Page` link | Page loads without login, lists public-enabled temples, and displays public UPI/config/seva/category visibility |  |
-| Demo public payment submission | Select the demo/test temple, enter devotee name/mobile/amount, and submit | Pending public payment is created only for the demo/test tenant and appears in ERP Public Payments for staff verification |  |
+| Demo public payment submission | Select the demo/test temple, enter devotee name/mobile/amount, and submit | Pending public payment is created only for the demo/test tenant and appears in ERP Public Payments for staff verification | Passed on demo path; pending payment appeared in ERP Public Payments. |
 | Staging tenant safety | Confirm whether the active tenant is demo/test or real trust data | Destructive tests such as donation creation, cancellation, refund, or reversal are allowed only on demo/test tenants; real temple/trust tenants are non-destructive verification only |  |
 | Donation | Create a donation | Donation record saves, receipt number is stable, accounting posting succeeds |  |
 | Donation PDF | Preview/download donation receipt | Title is `ದೇಣಿಗೆ ರಶೀದಿ / Donation Receipt`; donation term is `ದೇಣಿಗೆ`; receipt spelling is `ರಶೀದಿ`; temple label uses `ದೇವಸ್ಥಾನ`; no seva-only note/signature block |  |
@@ -115,7 +116,7 @@ Record pass/fail evidence for each item.
 | Receipts and Payments | Open report | Cash/bank receipts and payments match posted vouchers |  |
 | Balance Sheet | Open report | Report remains balanced and matches posted vouchers |  |
 | Receipt cancellation/reversal | Cancel a demo/test donation or seva receipt | Original receipt remains immutable; receipt status becomes `reversed`; linked `REV-*` journal appears in drill-down; repeated cancellation is idempotent or disabled in UI; Trial Balance remains balanced |  |
-| Exceptions | Verify, reject, and correct pending public payments where test data exists | Verification posts only after UTR/reference capture; rejection/correction retains audit trail |  |
+| Exceptions | Verify, reject, and correct pending public payments where test data exists | Verification posts only after UTR/reference capture; rejection/correction retains audit trail | Verification passed on demo pending payment; receipt/accounting posted. |
 | Receipt history | Open donation/seva receipt history | Recent receipts list with preview/download actions |  |
 | Tenant isolation | Try MandirMitra data from GruhaMitra/MitraBooks app context | Cross-app access fails closed or returns only allowed scoped data |  |
 | Accounting guardrail | Review posting path for created records | No direct ledger/balance mutation; posting goes through shared accounting service |  |

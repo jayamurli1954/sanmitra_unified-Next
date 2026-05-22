@@ -121,6 +121,7 @@ Latest evidence:
 - 2026-05-22 Reports was split from Receipts in the MandirMitra ERP shell and now renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
 - 2026-05-22 first live-cut decisions were captured at `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`: donation, seva, public payment, receipt, Panchang, reports, and accounting are included; Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are deferred until their gates are implemented and tested.
 - 2026-05-22 startup public-payment bootstrap was moved away from the real Parlathya trust record. Demo public UPI/config visibility now belongs to the explicit Mandir demo bootstrap tenant before destructive staging smoke can proceed.
+- 2026-05-22 demo public payment smoke passed end to end: public submission, ERP pending verification, posting with dummy UTR/reference, receipt download, report visibility, balanced Trial Balance, and voucher drill-down.
 
 Remaining Stage 3 gaps:
 

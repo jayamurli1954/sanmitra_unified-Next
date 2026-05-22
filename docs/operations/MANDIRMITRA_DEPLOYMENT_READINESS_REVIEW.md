@@ -18,6 +18,7 @@ Latest local evidence:
 - Staging non-destructive smoke passed: login/module context, MandirMitra tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and `/mandir-public/` public UPI/config visibility all worked. No destructive test was performed on the visible real trust tenant.
 - Startup public-payment bootstrap is now demo-tenant oriented: the real Parlathya trust record is not auto-seeded for public UPI/config, and destructive staging tests require a clearly named demo tenant.
 - `/mandir-public/` now supports demo-only public payment submission, creating a pending payment for ERP verification while keeping live trust records visibility-only.
+- Demo public payment end-to-end smoke passed: the pending payment appeared in ERP Public Payments, verification posted successfully, receipt generated/downloaded, donation appeared in receipts/reports, Trial Balance remained balanced, and drill-down showed the posted voucher.
 
 ## Target State
 
@@ -40,8 +41,8 @@ Live-ready means:
 | Tenant/app context | Passed locally | Browser/API smoke confirms `organization_type=TEMPLE` with `temple`, `accounting`, and `audit` for `mandirmitra`. |
 | Donation receipt | Passed locally | Kannada title/terminology and no seva-only note were verified in prior receipt smoke. |
 | Seva receipt | Passed locally | Seva title, devotee label, and Kannada received sentence were verified by focused tests and user visual check. |
-| Public payments | Passed locally | Temple selector, UPI intent/config, no-login submission, verification, correction, rejection, and audit trace passed. |
-| Public payment page visibility | Passed local smoke | ERP Public Payments workspace links to `/mandir-public/`, which loads public-enabled temples and UPI/config/seva/category visibility without requiring login or creating a payment. |
+| Public payments | Passed demo smoke | Temple selector, UPI intent/config, demo no-login submission, protected staff verification, receipt generation, reports, balanced accounting, and voucher drill-down passed. |
+| Public payment page visibility | Passed local smoke | ERP Public Payments workspace links to `/mandir-public/`, which loads public-enabled temples and UPI/config/seva/category visibility without requiring login; submission is guarded to demo/test tenants. |
 | Accounting | Passed locally | Donation, seva, and expense postings reconcile through Trial Balance, I&E, R&P, Balance Sheet, drill-down, and voucher detail. |
 | Sponsorship posting | Passed locally | Cash sponsorship posts to Sponsorship Income; valued in-kind Annadanam posts to expense when inventory is off and inventory when it is on; precious articles classify to temple asset. |
 | Sponsorship UI/report fields | Passed syntax/focused tests | ERP quick-entry donation form captures cash/in-kind type, event/festival, item, quantity, and valuation basis; donation reports carry item metadata. |
@@ -50,6 +51,7 @@ Live-ready means:
 | Audit trace | Passed locally | Public payment submitted/verified/corrected/rejected events are covered in local smoke/tests. |
 | Browser smoke | Passed locally | Playwright verifies MandirMitra shell, module context, public payment/receipt/report UI, and Panchang workspace. |
 | Staging non-destructive smoke | Passed staging | Login/module context, tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and public no-login visibility were checked without mutating real trust data. |
+| Demo mutation smoke | Passed demo path | Public no-login demo payment was submitted, shown pending in ERP, verified with a dummy UTR/reference, posted to receipt/accounting, and reconciled through reports and drill-down. |
 
 ## Remaining Gaps Before Live Signoff
 
