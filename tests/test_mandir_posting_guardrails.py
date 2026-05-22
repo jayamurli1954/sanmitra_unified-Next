@@ -344,6 +344,75 @@ async def test_parlathaya_public_config_is_tenant_specific(monkeypatch):
     assert sevas.docs[2]["is_active"] is True
 
 
+@pytest.mark.asyncio
+async def test_demo_mandir_bootstrap_seeds_public_demo_without_touching_real_tenant(monkeypatch):
+    temples = FakeCollection(
+        [
+            {
+                "tenant_id": "real-trust",
+                "temple_id": 3,
+                "app_key": "mandirmitra",
+                "temple_name": "Parlathya Prathishtana",
+                "upi_public_enabled": False,
+            }
+        ]
+    )
+    sevas = FakeCollection()
+    empty = FakeCollection()
+
+    class FakeSettings:
+        DEMO_MANDIR_BOOTSTRAP = True
+        DEMO_MANDIR_TENANT_ID = "demo-mandir-tenant"
+        DEMO_MANDIR_TEMPLE_NAME = "Demo Temple"
+        DEMO_MANDIR_TRUST_NAME = "Demo Temple Trust"
+        DEMO_MANDIR_TEMPLE_ADDRESS = "Demo Address"
+        DEMO_MANDIR_TEMPLE_CONTACT = "+91-9000000000"
+        DEMO_MANDIR_TEMPLE_EMAIL = "demo.temple@sanmitra.local"
+        DEMO_MANDIR_CITY = "Bengaluru"
+        DEMO_MANDIR_STATE = "Karnataka"
+        DEMO_MANDIR_UPI_ID = "demo-temple@sanmitra"
+        DEMO_MANDIR_UPI_PAYEE_NAME = "Demo Temple Trust"
+        DEMO_MANDIR_ADMIN_EMAIL = "demo.admin@sanmitra.local"
+        DEMO_MANDIR_ADMIN_PASSWORD = "demo12345"
+        DEMO_MANDIR_ADMIN_FULL_NAME = "Demo Admin"
+        DEMO_MANDIR_ADMIN_PHONE = "+91-9000000001"
+
+    def fake_get_collection(name):
+        return {
+            "mandir_temples": temples,
+            "mandir_sevas": sevas,
+        }.get(name, empty)
+
+    monkeypatch.setattr(mandir_service, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(mandir_service, "get_collection", fake_get_collection)
+    async def fake_noop(*_args, **_kwargs):
+        return None
+
+    async def fake_get_user_by_email(*_args, **_kwargs):
+        return {"id": "existing-admin"}
+
+    async def fake_temple_numeric_id(*_args, **_kwargs):
+        return 77
+
+    monkeypatch.setattr(mandir_service, "ensure_mandir_compat_indexes", fake_noop)
+    monkeypatch.setattr(mandir_service, "ensure_tenant_exists", fake_noop)
+    monkeypatch.setattr(mandir_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(mandir_service, "ensure_temple_numeric_id", fake_temple_numeric_id)
+
+    await mandir_service.ensure_demo_mandir_bootstrap()
+
+    real_tenant = next(doc for doc in temples.docs if doc["tenant_id"] == "real-trust")
+    demo_tenant = next(doc for doc in temples.docs if doc["tenant_id"] == "demo-mandir-tenant")
+
+    assert real_tenant["upi_public_enabled"] is False
+    assert demo_tenant["temple_id"] == 77
+    assert demo_tenant["upi_public_enabled"] is True
+    assert demo_tenant["upi_id"] == "demo-temple@sanmitra"
+    assert demo_tenant["donation_categories"][1]["id"] == "annadanam"
+    assert {row["name"] for row in sevas.docs} == {"Archana", "Annadanam Seva", "Deepotsava Seva"}
+    assert all(row["tenant_id"] == "demo-mandir-tenant" for row in sevas.docs)
+
+
 class DummySession:
     async def execute(self, *_args, **_kwargs):
         raise AssertionError("execute() should not be called in these tests")

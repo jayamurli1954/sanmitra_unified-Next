@@ -16,6 +16,7 @@ Latest local evidence:
 - Local browser smoke passed against the current backend on `http://127.0.0.1:8001` with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`.
 - Local demo/seed receipt reversal was verified: `DON-0000004` became `reversed`, `REV-112-DON-0000004` appeared in voucher drill-down, Trial Balance stayed balanced at `Rs. 1,715.00`, and I&E, R&P, and Balance Sheet remained consistent.
 - Staging non-destructive smoke passed: login/module context, MandirMitra tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and `/mandir-public/` public UPI/config visibility all worked. No destructive test was performed on the visible real trust tenant.
+- Startup public-payment bootstrap is now demo-tenant oriented: the real Parlathya trust record is not auto-seeded for public UPI/config, and destructive staging tests require a clearly named demo tenant.
 
 ## Target State
 
@@ -70,4 +71,4 @@ MandirMitra can move to staging deployment review because the current MandirMitr
 
 Production live signoff should wait until environment configuration, backup/restore, rollback, and seed/demo tenant assumptions are confirmed. Hundi/fund/festival, refund approval/settlement depth, and 80G/FCRA issuance are explicitly deferred from the first live cut.
 
-Staging mutation checks must use a clearly marked demo/test temple tenant. Real temple/trust tenants, including Parlathya Prathishtana, must be limited to non-destructive verification such as login, module context, navigation, report viewing, receipt preview/download, and public no-login configuration checks. As of 2026-05-22, this non-destructive staging smoke has passed; destructive staging checks remain blocked by demo-tenant availability.
+Staging mutation checks must use a clearly marked demo/test temple tenant. Real temple/trust tenants, including Parlathya Prathishtana, must be limited to non-destructive verification such as login, module context, navigation, report viewing, receipt preview/download, and public no-login configuration checks. As of 2026-05-22, this non-destructive staging smoke has passed. Destructive staging checks require `DEMO_MANDIR_BOOTSTRAP=true`, a staging-only `DEMO_MANDIR_ADMIN_PASSWORD`, and demo public UPI/config values.

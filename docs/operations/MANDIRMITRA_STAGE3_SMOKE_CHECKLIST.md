@@ -62,6 +62,7 @@ Latest staging/non-destructive evidence on 2026-05-22:
 - MandirMitra tabs loaded, receipt preview/download worked, Panchang opened, reports opened, and accounting reports opened and balanced.
 - Public no-login visibility passed through `/mandir-public/`: the page loaded without login, listed the public-enabled temple/trust, displayed public UPI/config visibility, showed donation purpose selection, and generated UPI intent preview without creating a payment.
 - The active visible public tenant was Parlathya Prathishtana, so the staging result is non-destructive/read-config-only. No donation creation, cancellation, refund, or reversal was performed on that real trust tenant.
+- Follow-up code removes automatic startup public-UPI seeding for the real Parlathya record. Destructive staging checks must use the explicit demo Mandir bootstrap tenant (`DEMO_MANDIR_TENANT_ID`, default `demo-mandir-tenant`) with demo UPI/config values.
 
 ## Local Services
 
@@ -136,3 +137,4 @@ MandirMitra is not live-ready until:
 - Do not create, cancel, refund, reverse, or otherwise mutate receipts for real temple/trust tenants such as Parlathya Prathishtana.
 - If no staging demo tenant exists, mark mutation checks as blocked by seed/demo policy and complete only login, module context, navigation, report, PDF preview, and public no-login read/config checks.
 - As of 2026-05-22, the staging smoke is passed for non-destructive checks; destructive mutation checks remain blocked until a clearly marked demo/test temple tenant is available.
+- Demo mutation checks require `DEMO_MANDIR_BOOTSTRAP=true` and a staging-only `DEMO_MANDIR_ADMIN_PASSWORD`. The demo tenant public page should show demo payee/UPI values, not a real trust account.

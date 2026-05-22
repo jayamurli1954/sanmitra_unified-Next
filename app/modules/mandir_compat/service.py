@@ -641,7 +641,7 @@ async def ensure_temple_upi_config(
     if patch:
         patch["updated_at"] = now
         await temples.update_one(
-            {"$or": [{"temple_id": temple_id}, {"id": temple_id}]},
+            {"$or": [{"temple_id": temple_id}, {"id": temple_id}], "app_key": app_key},
             {"$set": patch},
         )
 
@@ -825,9 +825,16 @@ async def ensure_demo_mandir_bootstrap(app_key: str = "mandirmitra") -> None:
                 "temple_name": temple_name,
                 "trust_name": trust_name,
                 "address": str(settings.DEMO_MANDIR_TEMPLE_ADDRESS or "").strip() or None,
+                "city": str(settings.DEMO_MANDIR_CITY or "").strip() or None,
+                "state": str(settings.DEMO_MANDIR_STATE or "").strip() or None,
                 "phone": str(settings.DEMO_MANDIR_TEMPLE_CONTACT or "").strip() or None,
                 "contact_number": str(settings.DEMO_MANDIR_TEMPLE_CONTACT or "").strip() or None,
                 "email": str(settings.DEMO_MANDIR_TEMPLE_EMAIL or "").strip().lower() or None,
+                "donation_categories": [
+                    {"id": "general", "name": "General Donation", "description": "Demo general donation"},
+                    {"id": "annadanam", "name": "Annadanam", "description": "Demo food sponsorship"},
+                    {"id": "festival", "name": "Festival Sponsorship", "description": "Demo festival/event support"},
+                ],
                 "admin_name": admin_name,
                 "admin_mobile_number": str(settings.DEMO_MANDIR_ADMIN_PHONE or "").strip() or None,
                 "admin_email": admin_email,
@@ -842,5 +849,48 @@ async def ensure_demo_mandir_bootstrap(app_key: str = "mandirmitra") -> None:
         },
         upsert=True,
     )
+
+    await ensure_temple_upi_config(
+        temple_id=temple_id,
+        app_key=app_key,
+        upi_id=str(settings.DEMO_MANDIR_UPI_ID or "").strip(),
+        upi_payee_name=str(settings.DEMO_MANDIR_UPI_PAYEE_NAME or trust_name).strip(),
+        trust_name=trust_name,
+        temple_name=temple_name,
+        city=str(settings.DEMO_MANDIR_CITY or "").strip() or None,
+        state=str(settings.DEMO_MANDIR_STATE or "").strip() or None,
+    )
+
+    sevas = get_collection("mandir_sevas")
+    existing_seva = await sevas.find_one({"tenant_id": tenant_id, "app_key": app_key})
+    if not existing_seva:
+        base_sevas = [
+            {"name": "Archana", "category": "pooja", "amount": 101},
+            {"name": "Annadanam Seva", "category": "annadanam", "amount": 1001},
+            {"name": "Deepotsava Seva", "category": "festival", "amount": 501},
+        ]
+        for row in base_sevas:
+            seva_name = row["name"]
+            await sevas.insert_one(
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "app_key": app_key,
+                    "temple_id": temple_id,
+                    "name": seva_name,
+                    "name_english": seva_name,
+                    "seva_name": seva_name,
+                    "description": f"Demo {seva_name}",
+                    "category": row["category"],
+                    "amount": row["amount"],
+                    "availability": "daily",
+                    "time_slot": "whole_day",
+                    "advance_booking_days": 30,
+                    "requires_approval": False,
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
 
 

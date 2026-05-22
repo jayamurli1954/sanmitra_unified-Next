@@ -61,7 +61,7 @@ Rules:
 | 2026-05-22 | MandirMitra receipt cancellation/reversal | Backend and ERP action covered | Donation and seva receipts can be reversed from the ERP receipt list; backend keeps original values, creates linked reversal journal, records reason/actor/timestamp/refund metadata, and focused tests pass | Add richer refund approval queue, payout settlement status, and refund exports after first live cut |
 | 2026-05-22 | MandirMitra CI/staging gate | CI and Render green | GitHub CI and Render workflow deployment are green; local demo receipt reversal produced `REV-*`, Trial Balance stayed balanced, and I&E/R&P/Balance Sheet remained consistent | Run staging smoke non-destructively unless a clearly marked demo/test temple tenant is available |
 | 2026-05-22 | MandirMitra public payment visibility | Public page linked | ERP Public Payments workspace links to `/mandir-public/` for no-login temple selector, public UPI/config, seva, and donation-category visibility without creating a payment | Add full devotee submission UX only after demo/staging tenant policy is clear |
-| 2026-05-22 | MandirMitra staging smoke | Non-destructive checks passed | Login/module context, tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and public no-login UPI/config visibility were checked successfully; no mutation was performed on real trust data | Provision a clearly marked staging demo/test tenant before destructive staging checks |
+| 2026-05-22 | MandirMitra staging smoke | Non-destructive checks passed | Login/module context, tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and public no-login UPI/config visibility were checked successfully; no mutation was performed on real trust data | Enable the explicit Mandir demo bootstrap tenant with demo UPI/config before destructive staging checks |
 | 2026-05-21 | Platform owner, audit, tenant entitlements | Pending review | Local source/tests/docs exist but remain uncommitted in the current working tree | Review and commit as a focused foundation batch if accepted |
 | 2026-05-21 | MitraBooks business parties and typed vouchers | Pending review | Local source/tests exist under `/api/v1/business` but remain uncommitted in the current working tree | Review separately as Phase 2 business work |
 
@@ -243,7 +243,7 @@ Initial MitraBooks ERP shell integration:
 - Live dashboard reads `GET /api/v1/dashboard/stats` for donation and seva summaries.
 - Public devotee payment must remain available without login.
 - Public devotee flow: select temple/trust, select donation or seva, enter amount/details, and pay using that temple/trust's configured UPI QR/payment instructions.
-- Parlathya Prathishtana remains a known working reference example for the public payment and temple/trust selection flow.
+- Real public-enabled trusts may be used only for non-destructive public payment visibility checks. Public payment mutation tests must use a clearly marked demo/test temple tenant with demo UPI/config values.
 - Pending public payment review reads `GET /api/v1/public-payments?status=pending`.
 - Verification action calls `PATCH /api/v1/public-payments/{payment_id}/verify`, which must create the donation or seva record, generate receipt data, and post the accounting entry only after staff verification.
 - Current shell verification captures UTR/reference, payment date, and optional bank account selection before posting.

@@ -83,7 +83,7 @@ Validate:
 - MandirMitra navigation works for overview, donations, sevas, public payments, exceptions, receipts, and accounting/report panels where implemented.
 - Public devotee payment works without login.
 - Public devotee flow allows temple/trust selection, donation or seva selection, amount/details entry, and payment through the selected temple/trust's configured UPI QR/payment instructions.
-- Parlathya Prathishtana remains a known reference tenant/example for validating public payment behavior.
+- Public payment behavior may be viewed non-destructively on real public-enabled trusts, but create/verify/reject/correct/cancel/reverse checks must use a clearly marked demo/test temple tenant.
 - Devotee management.
 - Donation creation.
 - Donation receipt generation is mandatory and stable.
@@ -120,6 +120,7 @@ Latest evidence:
 - 2026-05-22 deployment-readiness review was captured at `docs/operations/MANDIRMITRA_DEPLOYMENT_READINESS_REVIEW.md`.
 - 2026-05-22 Reports was split from Receipts in the MandirMitra ERP shell and now renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
 - 2026-05-22 first live-cut decisions were captured at `docs/operations/MANDIRMITRA_FIRST_LIVE_CUT_DECISIONS.md`: donation, seva, public payment, receipt, Panchang, reports, and accounting are included; Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance are deferred until their gates are implemented and tested.
+- 2026-05-22 startup public-payment bootstrap was moved away from the real Parlathya trust record. Demo public UPI/config visibility now belongs to the explicit Mandir demo bootstrap tenant before destructive staging smoke can proceed.
 
 Remaining Stage 3 gaps:
 

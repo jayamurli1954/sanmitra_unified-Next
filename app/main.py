@@ -30,7 +30,7 @@ from app.modules.legal_compat.service import ensure_legal_compat_indexes
 from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
 from app.modules.legal_compat.sync_worker import start_legal_sync_worker, stop_legal_sync_worker
 from app.modules.mandir_compat.reminder_worker import start_seva_reminder_worker, stop_seva_reminder_worker
-from app.modules.mandir_compat.service import ensure_demo_mandir_bootstrap, ensure_parlathaya_public_config, ensure_temple_upi_config
+from app.modules.mandir_compat.service import ensure_demo_mandir_bootstrap
 from app.modules.rag.service import ensure_rag_indexes
 from app.modules.temple.service import ensure_donations_indexes
 
@@ -101,18 +101,6 @@ async def on_startup() -> None:
         await ensure_seed_user()
         await ensure_super_admin_user()
         await ensure_demo_mandir_bootstrap()
-        await ensure_temple_upi_config(
-            temple_id=3,
-            upi_id="PARLATHAYAPRATHISHTANA@kbl",
-            upi_payee_name="PARLATHAYA PRATHISHTANA (R)",
-            trust_name="PARLATHAYA PRATHISHTANA (R)",
-            temple_name="Parlathaya Prathishtana (R)",
-            qr_code_image_url="https://mandir-mitra-alpha.vercel.app/qr/temple_3.png",
-            admin_whatsapp="919880044567",
-            city="Udupi",
-            state="Karnataka",
-        )
-        await ensure_parlathaya_public_config()
         await ensure_audit_indexes()
         await ensure_donations_indexes()
         await ensure_maintenance_indexes()
