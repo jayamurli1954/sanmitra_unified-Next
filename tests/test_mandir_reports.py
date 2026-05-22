@@ -62,6 +62,12 @@ def report_collections(monkeypatch):
                     'created_at': datetime.combine(today, datetime.min.time()).isoformat(),
                     'receipt_number': 'RCPT-1',
                     'category': 'General Donation',
+                    'donation_type': 'in_kind',
+                    'in_kind_item_name': 'Rice bags',
+                    'in_kind_item_type': 'rice',
+                    'in_kind_quantity': '50 kg',
+                    'in_kind_valuation_basis': 'Trustee valuation',
+                    'event_name': 'Annadanam',
                     'payment_mode': 'Cash',
                     'amount': 25000,
                     'devotee': {
@@ -158,6 +164,11 @@ async def test_donation_reports_include_only_posted_rows(report_collections):
     assert detailed_report['total_count'] == 1
     assert detailed_report['total_amount'] == 25000.0
     assert detailed_report['donations'][0]['receipt_number'] == 'RCPT-1'
+    assert detailed_report['donations'][0]['donation_type'] == 'in_kind'
+    assert detailed_report['donations'][0]['in_kind_item_name'] == 'Rice bags'
+    assert detailed_report['donations'][0]['in_kind_quantity'] == '50 kg'
+    assert detailed_report['donations'][0]['in_kind_valuation_basis'] == 'Trustee valuation'
+    assert detailed_report['donations'][0]['event_name'] == 'Annadanam'
     assert detailed_report['donations'][0]['devotee_mobile'] == '9876512340'
     assert detailed_report['donations'][0]['date']
 

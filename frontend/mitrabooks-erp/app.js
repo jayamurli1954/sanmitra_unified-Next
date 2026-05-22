@@ -180,6 +180,7 @@ let lastMandirLedger = null;
 let lastMandirFinancialReports = {};
 let lastMandirPanchang = null;
 let lastMandirOperationalReports = {};
+let lastMandirModuleConfig = {};
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -712,11 +713,16 @@ function renderMandirDonationsTable(rows) {
         <tbody>
           ${rows.slice(0, 8).map((row) => {
             const receiptLabel = row.receipt_number || row.donation_id || row.id || "Receipt";
+            const itemParts = [row.in_kind_item_name, row.in_kind_quantity].filter(Boolean).join(" / ");
+            const typeLabel = row.donation_type === "in_kind" ? `In-kind${itemParts ? `: ${itemParts}` : ""}` : "Cash";
             return `
               <tr>
                 <td>${escapeHtml(String(row.donation_date || row.created_at || "").slice(0, 10))}</td>
                 <td>${escapeHtml(row.devotee_name || row.donor_name || row.name || "Devotee")}</td>
-                <td>${escapeHtml(row.category || "Donation")}</td>
+                <td>
+                  <strong>${escapeHtml(row.category || "Donation")}</strong>
+                  <small>${escapeHtml(typeLabel)}</small>
+                </td>
                 <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
                 <td>${renderMandirReceiptActions(row, receiptLabel)}</td>
               </tr>
@@ -1827,17 +1833,25 @@ function renderMandirOperationalReports(reports = lastMandirOperationalReports) 
           <div class="table-preview compact-table">
             <table>
               <thead>
-                <tr><th>Date</th><th>Receipt</th><th>Devotee</th><th class="amount">Amount</th></tr>
+                <tr><th>Date</th><th>Receipt</th><th>Devotee</th><th>Purpose</th><th class="amount">Amount</th></tr>
               </thead>
               <tbody>
-                ${donationRows.length ? donationRows.slice(0, 8).map((row) => `
-                  <tr>
-                    <td>${escapeHtml(String(row.date || row.receipt_date || "").slice(0, 10))}</td>
-                    <td>${escapeHtml(row.receipt_number || row.id || "")}</td>
-                    <td>${escapeHtml(row.devotee_name || "Devotee")}</td>
-                    <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
-                  </tr>
-                `).join("") : `<tr><td colspan="4">No donation receipts for this range.</td></tr>`}
+                ${donationRows.length ? donationRows.slice(0, 8).map((row) => {
+                  const itemParts = [row.in_kind_item_name, row.in_kind_quantity].filter(Boolean).join(" / ");
+                  const purposeDetail = row.donation_type === "in_kind" ? itemParts || "In-kind" : row.payment_mode || "Cash";
+                  return `
+                    <tr>
+                      <td>${escapeHtml(String(row.date || row.receipt_date || "").slice(0, 10))}</td>
+                      <td>${escapeHtml(row.receipt_number || row.id || "")}</td>
+                      <td>${escapeHtml(row.devotee_name || "Devotee")}</td>
+                      <td>
+                        <strong>${escapeHtml(row.category || "Donation")}</strong>
+                        <small>${escapeHtml(purposeDetail)}</small>
+                      </td>
+                      <td class="amount">${escapeHtml(formatCurrency(row.amount))}</td>
+                    </tr>
+                  `;
+                }).join("") : `<tr><td colspan="5">No donation receipts for this range.</td></tr>`}
               </tbody>
             </table>
           </div>
@@ -2318,6 +2332,7 @@ async function loadMandirDashboard() {
   const receiptsPayments = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" });
   const balanceSheet = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
   const panchang = await apiRequest("mandirmitra", "/api/v1/panchang/today", { method: "GET" });
+  const moduleConfig = await apiRequest("mandirmitra", "/api/v1/temples/modules/config", { method: "GET" });
   const donationCategoryReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/category-wise?${reportRangeQuery}`, { method: "GET" });
   const donationDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/detailed?${reportRangeQuery}`, { method: "GET" });
   const sevaDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/sevas/detailed?${reportRangeQuery}`, { method: "GET" });
@@ -2340,6 +2355,7 @@ async function loadMandirDashboard() {
     balance_sheet: balanceSheet.ok ? balanceSheet.payload : balanceSheet,
   };
   lastMandirPanchang = panchang.ok ? panchang.payload : panchang;
+  lastMandirModuleConfig = moduleConfig.ok ? moduleConfig.payload : lastMandirModuleConfig;
   lastMandirOperationalReports = {
     donation_category: donationCategoryReport.ok ? donationCategoryReport.payload : donationCategoryReport,
     donation_detail: donationDetailReport.ok ? donationDetailReport.payload : donationDetailReport,
@@ -2361,6 +2377,7 @@ async function loadMandirDashboard() {
     mandir_receipts_payments: receiptsPayments,
     mandir_balance_sheet: balanceSheet,
     mandir_panchang: panchang,
+    mandir_module_config: moduleConfig,
     mandir_donation_category_report: donationCategoryReport,
     mandir_donation_detail_report: donationDetailReport,
     mandir_seva_detail_report: sevaDetailReport,
@@ -2385,6 +2402,7 @@ async function loadMandirDashboard() {
       financial_reports: lastMandirFinancialReports,
       panchang: lastMandirPanchang,
       operational_reports: lastMandirOperationalReports,
+      module_config: lastMandirModuleConfig,
       payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
       accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
       receipt: lastMandirReceipt,
@@ -2464,6 +2482,10 @@ function renderMandirCreateForms(payload = {}) {
   );
   const today = todayIsoDate();
   const result = payload.form_result || lastMandirFormResult;
+  const inventoryEnabled = Boolean(payload.module_config?.module_inventory_enabled);
+  const inKindAccountingLabel = inventoryEnabled
+    ? "In-kind consumables debit inventory"
+    : "In-kind consumables debit expense";
   return `
     <div class="quick-entry-panel">
       <div class="preview-heading compact">
@@ -2471,7 +2493,7 @@ function renderMandirCreateForms(payload = {}) {
           <h4>Quick Entry</h4>
           <p>Create test donations, seva bookings, and expenses without Postman.</p>
         </div>
-        <span class="pill">local test entry</span>
+        <span class="pill">${escapeHtml(inKindAccountingLabel)}</span>
       </div>
       ${result ? `
         <div class="module-state ${result.ok ? "ok" : "warn"}">
@@ -2498,10 +2520,53 @@ function renderMandirCreateForms(payload = {}) {
             <span>Category</span>
             <select name="category">
               <option value="General Donation">General Donation</option>
+              <option value="Sponsorship">Sponsorship</option>
               <option value="Annadanam">Annadanam</option>
+              <option value="Flower Decoration">Flower Decoration</option>
+              <option value="Lighting Sponsorship">Lighting Sponsorship</option>
+              <option value="Vastra Seva">Vastra Seva</option>
+              <option value="Nitya Puja">Nitya Puja</option>
               <option value="Construction Fund">Construction Fund</option>
               <option value="Corpus Fund">Corpus Fund</option>
             </select>
+          </label>
+          <label class="field">
+            <span>Donation type</span>
+            <select name="donation_type">
+              <option value="cash">Cash / bank</option>
+              <option value="in_kind">In-kind valued</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Event / festival</span>
+            <input name="event_name" maxlength="160" placeholder="Annadanam, Deepotsava">
+          </label>
+          <label class="field">
+            <span>Item name</span>
+            <input name="in_kind_item_name" maxlength="160" placeholder="Rice bags, gold ornament">
+          </label>
+          <label class="field">
+            <span>Item type</span>
+            <select name="in_kind_item_type">
+              <option value="">Not applicable</option>
+              <option value="rice">Rice / food grains</option>
+              <option value="dal">Dal</option>
+              <option value="oil">Oil / ghee</option>
+              <option value="flower decoration">Flower decoration</option>
+              <option value="lighting">Lighting</option>
+              <option value="gold ornament">Gold ornament</option>
+              <option value="silver article">Silver article</option>
+              <option value="idol">Idol / vigraha</option>
+              <option value="pooja material">Pooja material</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Quantity</span>
+            <input name="in_kind_quantity" maxlength="80" placeholder="50 kg, 2 bags, 1 item">
+          </label>
+          <label class="field">
+            <span>Valuation basis</span>
+            <input name="in_kind_valuation_basis" maxlength="180" placeholder="Market value, invoice, trustee valuation">
           </label>
           <label class="field">
             <span>Payment mode</span>
@@ -2809,8 +2874,15 @@ async function submitMandirDonationForm(form) {
     devotee_phone: compactOptionalPhone(formData.get("devotee_phone")),
     amount,
     category: formText(formData, "category") || "General Donation",
+    donation_type: formText(formData, "donation_type") || "cash",
     payment_mode: formText(formData, "payment_mode") || "Cash",
   };
+  ["event_name", "in_kind_item_name", "in_kind_item_type", "in_kind_quantity", "in_kind_valuation_basis"].forEach((key) => {
+    const value = formText(formData, key);
+    if (value) {
+      payload[key] = value;
+    }
+  });
   if (paymentAccountId) {
     payload.payment_account_id = paymentAccountId;
   }

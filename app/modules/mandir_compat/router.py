@@ -1364,6 +1364,14 @@ def _generate_donation_receipt_pdf_bytes(
     receipt_number = _receipt_number_for_donation(donation)
     donation_date = _format_receipt_date(donation.get("donation_date") or donation.get("created_at"))
     category = str(donation.get("category") or "General Donation").strip() or "General Donation"
+    item_parts = [
+        str(donation.get("in_kind_item_name") or "").strip(),
+        str(donation.get("in_kind_quantity") or "").strip(),
+    ]
+    item_text = " - ".join(part for part in item_parts if part)
+    line_description = category
+    if str(donation.get("donation_type") or "").strip().lower() == "in_kind" and item_text:
+        line_description = f"{category} ({item_text})"
     devotee_address = _compose_receipt_address_line(address_source, devotee, fallback="--")
     payload = {
         **temple_profile,
@@ -1382,7 +1390,7 @@ def _generate_donation_receipt_pdf_bytes(
             local_language=temple_profile.get("local_language"),
             purpose="donation",
         ),
-        "line_items": [{"description": category, "amount": amount}],
+        "line_items": [{"description": line_description, "amount": amount}],
         "total_amount": amount,
         "include_astro_row": False,
         "include_service_row": False,

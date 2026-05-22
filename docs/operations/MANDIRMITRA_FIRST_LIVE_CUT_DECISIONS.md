@@ -59,6 +59,7 @@ Sponsorship and valued in-kind donations are included in the first live cut only
 - Valued in-kind sponsorship that is directly consumed for flowers, decoration, lighting, festival, event, or service support must debit the relevant expense bucket and credit In-Kind Sponsorship Income.
 - Precious articles such as gold, silver, ornaments, idols, or ritual articles must debit the appropriate temple asset account and credit In-Kind Donation Income or In-Kind Sponsorship Income depending on purpose.
 - Inventory accounting is tenant-configured through the temple module setting; small temples can keep inventory off and expense consumable in-kind receipts immediately.
+- The ERP quick-entry donation form may capture cash/in-kind type, event/festival, item name, item type, quantity, and valuation basis for operational traceability.
 - Zero-value in-kind acknowledgements may remain memo/domain records only and must not create a GL entry until a valuation is recorded.
 - Rich event/fund subledger reporting, stock issue/consumption, and restricted-fund reporting remain part of the festival/fund deferred scope above.
 
