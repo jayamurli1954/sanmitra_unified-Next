@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
     <title>MitraBooks Unified ERP</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-live-ui-v1">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-live-ui-v2">
   </head>
   <body>
     <div class="app" id="app-root">
@@ -36,6 +36,13 @@
           <div>
             <h2 id="topbar-title">MitraBooks ERP</h2>
             <div class="muted" id="topbar-subtitle">Unified SanMitra workspace</div>
+          </div>
+          <div class="topbar-actions" id="topbar-actions">
+            <button class="secondary mandir-language" type="button">English</button>
+            <span class="topbar-current" id="topbar-current">Dashboard</span>
+            <span class="topbar-user" id="topbar-user">Signed in</span>
+            <span class="topbar-avatar" id="topbar-avatar">S</span>
+            <button class="secondary" id="topbar-logout" type="button">Logout</button>
           </div>
           <span class="pill" id="health-pill">Not checked</span>
         </header>
@@ -300,7 +307,7 @@
         </div>
       </form>
     </dialog>
-    <script type="module" src="../shared/pwa-shell.js?v=mandir-live-ui-v1"></script>
-    <script type="module" src="./app.js?v=mandir-live-ui-v1"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=mandir-live-ui-v2"></script>
+    <script type="module" src="./app.js?v=mandir-live-ui-v2"></script>
   </body>
 </html>

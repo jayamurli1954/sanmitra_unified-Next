@@ -62,6 +62,10 @@ a {
   display: none;
 }
 
+.topbar-actions {
+  display: none;
+}
+
 .app.mandir-domain {
   grid-template-columns: 248px 1fr;
   background: #f5f5f5;
@@ -131,6 +135,37 @@ a {
   color: #5b2a00;
 }
 
+.app.mandir-domain.signed-in .topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.app.mandir-domain .topbar-actions button {
+  min-height: 40px;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.app.mandir-domain .topbar-current,
+.app.mandir-domain .topbar-user {
+  font-weight: 800;
+}
+
+.app.mandir-domain .topbar-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: #138808;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
 .app.mandir-domain .content {
   background: #f5f5f5;
 }
@@ -172,6 +207,42 @@ a {
 
 .app.production-shell .topbar h2 {
   font-size: 22px;
+}
+
+.app.production-shell .access-panel.signed-in {
+  display: none;
+}
+
+.app.production-shell.mandir-domain.signed-out {
+  grid-template-columns: 1fr;
+}
+
+.app.production-shell.mandir-domain.signed-out .sidebar {
+  display: none;
+}
+
+.app.production-shell.mandir-domain.signed-out .content {
+  min-height: calc(var(--app-height) - 72px);
+  align-content: center;
+}
+
+.app.production-shell.mandir-domain.signed-out .access-panel {
+  width: min(760px, 100%);
+  justify-self: center;
+  border-top: 4px solid #ff9226;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.app.production-shell.mandir-domain.signed-out .access-panel .toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
+  align-items: end;
+}
+
+.app.production-shell.mandir-domain.signed-out #context-cards,
+.app.production-shell.mandir-domain.signed-out .legacy-strip,
+.app.production-shell.mandir-domain.signed-out .dashboard-preview {
+  display: none;
 }
 
 .app.production-shell .access-panel.signed-in {
@@ -557,6 +628,10 @@ button.danger {
 
 .metric-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .metric-grid.four {
@@ -5080,6 +5155,14 @@ pre {
     position: static;
   }
 
+  .app.mandir-domain.signed-in .topbar-actions,
+  .app.production-shell.mandir-domain.signed-out .access-panel .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
   .preview-heading,
   .society-header-preview,
   .legacy-strip {
@@ -5088,6 +5171,7 @@ pre {
   }
 
   .metric-grid.three,
+  .metric-grid.two,
   .metric-grid.four,
   .dashboard-main-grid,
   .mandir-dashboard .dashboard-main-grid.platform-grid,

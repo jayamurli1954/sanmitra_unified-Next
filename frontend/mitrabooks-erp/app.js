@@ -17,6 +17,7 @@ import {
 
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
+const LOGIN_EMAIL_STORAGE_KEY = "sanmitra_mitrabooks_login_email";
 const EXPERIENCE_APP_KEYS = {
   mitrabooks: "mitrabooks",
   platform: "mitrabooks",
@@ -142,12 +143,15 @@ const experienceConfig = {
     },
     modules: [
       { module_key: "temple", display_name: "Dashboard", frontend_path: "/temple/dashboard", nav_group: "Operations", enabled: true },
+      { module_key: "temple", display_name: "Sevas", frontend_path: "/temple/sevas", nav_group: "Operations", enabled: true },
       { module_key: "temple", display_name: "Donations", frontend_path: "/temple/donations", nav_group: "Operations", enabled: true },
       { module_key: "temple", display_name: "Devotees", frontend_path: "/temple/devotees", nav_group: "Operations", enabled: true },
-      { module_key: "temple", display_name: "Sevas", frontend_path: "/temple/sevas", nav_group: "Operations", enabled: true },
-      { module_key: "temple", display_name: "Panchang", frontend_path: "/temple/panchang", nav_group: "Operations", enabled: true },
-      { module_key: "accounting", display_name: "Accounting", frontend_path: "/accounting", nav_group: "Finance", enabled: true },
       { module_key: "audit", display_name: "Reports", frontend_path: "/temple/reports", nav_group: "Administration", enabled: true },
+      { module_key: "temple", display_name: "Panchang", frontend_path: "/temple/panchang", nav_group: "Operations", enabled: true },
+      { module_key: "temple", display_name: "Settings", frontend_path: "/temple/settings", nav_group: "Administration", enabled: true },
+      { module_key: "audit", display_name: "Implementation Checks", frontend_path: "/temple/implementation-checks", nav_group: "Administration", enabled: true },
+      { module_key: "platform_owner", display_name: "Platform Owners", frontend_path: "/platform-owner/dashboard", nav_group: "Administration", enabled: true },
+      { module_key: "accounting", display_name: "Accounting", frontend_path: "/accounting", nav_group: "Finance", enabled: true },
     ],
   },
   gruha: {
@@ -252,6 +256,9 @@ const sessionPill = document.getElementById("session-pill");
 const loginStatus = document.getElementById("login-status");
 const loginEmail = document.getElementById("login-email");
 const loginPassword = document.getElementById("login-password");
+const topbarCurrent = document.getElementById("topbar-current");
+const topbarUser = document.getElementById("topbar-user");
+const topbarAvatar = document.getElementById("topbar-avatar");
 const scopeTitle = document.getElementById("scope-title");
 const scopeCopy = document.getElementById("scope-copy");
 const legacyTitle = document.getElementById("legacy-title");
@@ -309,6 +316,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   const config = experienceConfig[currentExperience];
   const preview = options.preview !== false;
   appRoot.className = `app ${config.theme} ${isProductionShell() ? "production-shell" : ""} ${isMandirHost() ? "mandir-domain" : ""}`.trim();
+  updateSessionUi();
   if (appKeyLabel) {
     appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
   }
@@ -358,7 +366,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     if (mandirWorkspace) {
       link.dataset.mandirWorkspace = mandirWorkspace;
     }
-    link.textContent = `${module.nav_group || "Module"}: ${module.display_name}`;
+    link.textContent = currentExperience === "mandir"
+      ? module.display_name
+      : `${module.nav_group || "Module"}: ${module.display_name}`;
     nav.appendChild(link);
 
     const item = document.createElement("li");
@@ -410,6 +420,15 @@ function mandirWorkspaceFromModule(module = {}) {
   if (path.includes("/reports") || displayName.includes("report")) {
     return "reports";
   }
+  if (path.includes("/settings") || displayName.includes("setting")) {
+    return "settings";
+  }
+  if (path.includes("/implementation") || displayName.includes("implementation")) {
+    return "implementation";
+  }
+  if (path.includes("/platform-owner") || displayName.includes("platform owner")) {
+    return "platform-owners";
+  }
   if (path.includes("/accounting") || displayName.includes("accounting")) {
     return "accounting";
   }
@@ -425,6 +444,25 @@ function syncMandirNavActiveState() {
     const isActive = currentExperience === "mandir" && workspace && workspace === activeMandirWorkspace;
     link.classList.toggle("active", isActive);
   });
+  if (topbarCurrent) {
+    const labels = {
+      overview: "Dashboard",
+      donations: "Donations",
+      sevas: "Sevas",
+      payments: "Public Payments",
+      exceptions: "Exceptions",
+      receipts: "Receipts",
+      panchang: "Panchang",
+      reports: "Reports",
+      accounting: "Accounting",
+      settings: "Settings",
+      implementation: "Implementation Checks",
+      "platform-owners": "Platform Owners",
+    };
+    topbarCurrent.textContent = currentExperience === "mandir"
+      ? labels[activeMandirWorkspace] || "Dashboard"
+      : "Dashboard";
+  }
 }
 
 function escapeHtml(value) {
@@ -798,10 +836,23 @@ function setLoginStatus(kind, title, detail = "") {
 
 function updateSessionUi() {
   const signedIn = Boolean(getAccessToken());
+  appRoot.classList.toggle("signed-in", signedIn);
+  appRoot.classList.toggle("signed-out", !signedIn);
   document.getElementById("access-panel")?.classList.toggle("signed-in", signedIn);
+  document.getElementById("access-panel")?.classList.toggle("signed-out", !signedIn);
   if (sessionPill) {
     sessionPill.textContent = signedIn ? "Signed in" : "Not signed in";
     sessionPill.className = `pill ${signedIn ? "ok" : "warn"}`;
+  }
+  const savedEmail = window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || "";
+  if (topbarUser) {
+    topbarUser.textContent = savedEmail || "Signed in";
+  }
+  if (topbarAvatar) {
+    topbarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
+  }
+  if (loginEmail && !loginEmail.value && savedEmail) {
+    loginEmail.value = savedEmail;
   }
   if (tokenInput) {
     tokenInput.value = getAccessToken();
@@ -833,6 +884,7 @@ async function signInWithPassword() {
   }
 
   setAccessToken(result.payload?.access_token || "");
+  window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
   if (loginPassword) {
     loginPassword.value = "";
   }
@@ -2112,6 +2164,9 @@ function renderMandirDashboard(payload = {}) {
   const showPanchang = showOverview || activeMandirWorkspace === "panchang";
   const showReports = showOverview || activeMandirWorkspace === "reports";
   const showAccounting = showOverview || activeMandirWorkspace === "accounting";
+  const showSettings = activeMandirWorkspace === "settings";
+  const showImplementation = activeMandirWorkspace === "implementation";
+  const showPlatformOwners = activeMandirWorkspace === "platform-owners";
 
   return `
     <div class="legacy-dashboard mandir-dashboard">
@@ -2223,10 +2278,94 @@ function renderMandirDashboard(payload = {}) {
       ` : ""}
       ${showPanchang ? renderMandirPanchang(panchang) : ""}
       ${showReports ? renderMandirOperationalReports(operationalReports) : ""}
+      ${showSettings ? renderMandirSettings(payload.module_config || {}) : ""}
+      ${showImplementation ? renderMandirImplementationChecks() : ""}
+      ${showPlatformOwners ? renderMandirPlatformOwnerShortcut() : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
       ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
       ${showAccounting ? renderMandirFinancialReports(financialReports) : ""}
       ${(showOverview || showAccounting) ? renderMandirExpensesTable(recentExpenses) : ""}
+    </div>
+  `;
+}
+
+function renderMandirSettings(moduleConfig = {}) {
+  const inventoryEnabled = Boolean(moduleConfig.inventory_enabled);
+  const flags = [
+    ["Inventory accounting", inventoryEnabled ? "Enabled" : "Disabled", inventoryEnabled ? "In-kind consumables can debit inventory where configured." : "In-kind consumables debit expense unless the tenant enables inventory."],
+    ["80G", moduleConfig.enable_80g ? "Enabled" : "Off", "Tenant-configured only; never default-on."],
+    ["FCRA", moduleConfig.enable_fcra ? "Enabled" : "Off", "Tenant-configured only; never default-on."],
+    ["Receipt reversal", "Enabled", "Corrections are handled by linked reversal journals."],
+  ];
+  return `
+    <div class="dashboard-main-grid platform-grid">
+      <article>
+        <h4>Settings</h4>
+        <div class="metric-grid two">
+          ${flags.map(([label, value, subtext]) => `
+            <article class="metric-tile">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+              <small>${escapeHtml(subtext)}</small>
+            </article>
+          `).join("")}
+        </div>
+      </article>
+      <article>
+        <h4>Tenant Controls</h4>
+        <ul class="activity-list">
+          ${renderActivity([
+            "UPI/payee visibility comes from temple configuration.",
+            "Donation, seva, and expense postings go through MitraBooks accounting.",
+            "Public payments remain pending until staff verification.",
+            "Real trusts must not be used for destructive smoke tests.",
+          ])}
+        </ul>
+      </article>
+    </div>
+  `;
+}
+
+function renderMandirImplementationChecks() {
+  return `
+    <div class="dashboard-main-grid platform-grid">
+      <article>
+        <h4>Implementation Checks</h4>
+        <ul class="activity-list">
+          ${renderActivity([
+            "Donation and seva receipt PDFs are generated and downloadable.",
+            "Donation, seva, expense, sponsorship, and reversal postings use double-entry journals.",
+            "Trial Balance, Income & Expenditure, Receipts & Payments, and Balance Sheet remain balanced.",
+            "Tenant and app context come from the access token and X-App-Key.",
+            "Public payment page is no-login, but posting requires staff verification.",
+          ])}
+        </ul>
+      </article>
+      <article>
+        <h4>First-live Pending Areas</h4>
+        <ul class="activity-list">
+          ${renderActivity([
+            "Full legacy screen-by-screen UI migration is still incremental.",
+            "Production backup/restore and release rollback runbook must stay current.",
+            "Panchang needs the next feature-complete pass after first-live shell stabilization.",
+          ])}
+        </ul>
+      </article>
+    </div>
+  `;
+}
+
+function renderMandirPlatformOwnerShortcut() {
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Platform Owners</h4>
+          <p>Platform-owner administration remains a separate privileged workspace.</p>
+        </div>
+        <button type="button" class="secondary" data-platform-action="open-platform-owner">Open Platform Owner</button>
+      </div>
+      <p class="muted">Use this only with a super-admin token. Tenant admins should stay inside the MandirMitra workspace.</p>
     </div>
   `;
 }
@@ -3539,6 +3678,18 @@ document.getElementById("clear-token").addEventListener("click", () => {
   setLoginStatus("", "", "");
   runChecks();
 });
+document.getElementById("topbar-logout")?.addEventListener("click", () => {
+  clearAccessToken();
+  if (tokenInput) {
+    tokenInput.value = "";
+  }
+  if (loginPassword) {
+    loginPassword.value = "";
+  }
+  updateSessionUi();
+  setLoginStatus("", "", "");
+  runChecks();
+});
 nav.addEventListener("click", (event) => {
   const link = event.target.closest("a[data-mandir-workspace]");
   if (!link || currentExperience !== "mandir") {
@@ -3565,6 +3716,8 @@ dashboardPreview.addEventListener("click", (event) => {
     rejectOnboardingRequest(requestId);
   } else if (action === "entitlements") {
     openTenantEntitlementsDialog(button);
+  } else if (action === "open-platform-owner") {
+    setExperience("platform");
   } else if (mandirAction === "verify-public-payment") {
     openMandirVerificationDialog(button);
   } else if (mandirAction === "reject-public-payment") {
