@@ -313,7 +313,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
   }
   if (topbarTitle) {
-    topbarTitle.textContent = currentExperience === "mandir" ? "MandirMitra Admin" : config.title;
+    topbarTitle.textContent = currentExperience === "mandir" ? "MandirMitra" : config.title;
   }
   if (topbarSubtitle) {
     topbarSubtitle.textContent = currentExperience === "mandir"
@@ -798,6 +798,7 @@ function setLoginStatus(kind, title, detail = "") {
 
 function updateSessionUi() {
   const signedIn = Boolean(getAccessToken());
+  document.getElementById("access-panel")?.classList.toggle("signed-in", signedIn);
   if (sessionPill) {
     sessionPill.textContent = signedIn ? "Signed in" : "Not signed in";
     sessionPill.className = `pill ${signedIn ? "ok" : "warn"}`;
@@ -2119,7 +2120,7 @@ function renderMandirDashboard(payload = {}) {
           <h3>MandirMitra Dashboard</h3>
           <p>Donation, seva, and public UPI payment verification for the active temple tenant.</p>
         </div>
-        <span class="pill ok">mandirmitra</span>
+        <span class="pill ok technical-context">mandirmitra</span>
       </div>
       ${renderMandirWorkspaceTabs(activeMandirWorkspace)}
       ${renderMandirOperationResult(formResult)}
@@ -2648,10 +2649,10 @@ function renderMandirCreateForms(payload = {}) {
     <div class="quick-entry-panel">
       <div class="preview-heading compact">
         <div>
-          <h4>Quick Entry</h4>
-          <p>Create test donations, seva bookings, and expenses without Postman.</p>
+          <h4>Daily Entry</h4>
+          <p>Record donations, seva bookings, and temple expenses for the active temple tenant.</p>
         </div>
-        <span class="pill">${escapeHtml(inKindAccountingLabel)}</span>
+        <span class="pill technical-context">${escapeHtml(inKindAccountingLabel)}</span>
       </div>
       ${result ? `
         <div class="module-state ${result.ok ? "ok" : "warn"}">

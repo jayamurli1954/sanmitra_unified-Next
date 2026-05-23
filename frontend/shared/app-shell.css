@@ -66,8 +66,24 @@ a {
   display: none;
 }
 
+.app.production-shell #context-cards,
+.app.production-shell .legacy-strip,
+.app.production-shell #health-pill {
+  display: none;
+}
+
 .app.production-shell .topbar h2 {
   font-size: 22px;
+}
+
+.app.production-shell .access-panel.signed-in {
+  padding: 12px 16px;
+}
+
+.app.production-shell .access-panel.signed-in .toolbar,
+.app.production-shell .access-panel.signed-in .advanced-connection,
+.app.production-shell .access-panel.signed-in #login-status {
+  display: none;
 }
 
 .access-panel {
