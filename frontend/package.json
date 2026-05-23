@@ -1,0 +1,65 @@
+{
+  "name": "MandirMitra-frontend",
+  "version": "1.2.0",
+  "description": "MandirMitra Temple Management System - Frontend",
+  "private": true,
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "node scripts/build.js",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "serve:e2e": "python scripts/serve_build.py --port 3200",
+    "start:e2e": "npm run build && npm run serve:e2e"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "@mui/system": "^5.18.0",
+    "@mui/x-date-pickers": "^6.20.2",
+    "@tanstack/react-query": "^5.12.2",
+    "axios": "^1.6.2",
+    "date-fns": "^2.30.0",
+    "i18next": "^23.16.8",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.48.2",
+    "react-i18next": "^13.5.0",
+    "react-router-dom": "^6.20.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "axios-mock-adapter": "^2.1.0",
+    "react-scripts": "^5.0.1",
+    "yaml": "^2.8.2"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:8000"
+}

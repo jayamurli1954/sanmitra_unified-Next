@@ -2,13 +2,14 @@
 
 ## Current State
 
-This workspace contains clean local browser frontends for the three target SanMitra experiences:
+This workspace contains browser frontends for the three target SanMitra experiences:
 
-- `mitrabooks-erp`: planned unified ERP shell for GruhaMitra, MandirMitra, and MitraBooks workflows.
+- `src` / `public`: MandirMitra React/MUI production frontend restored from the legacy MandirMitra layout and wired to the unified backend.
+- `mitrabooks-erp`: static validation shell retained as a local/reference harness for GruhaMitra, MandirMitra, and MitraBooks workflow testing.
 - `legalmitra`: separate LegalMitra experience.
 - `investmitra`: separate InvestMitra experience.
 
-These apps are intentionally lightweight static frontends. They do not copy legacy frontend repositories, backend folders, `.env` files, `node_modules`, build output, or deployment artifacts.
+The live MandirMitra frontend is no longer the lightweight static validation shell. It uses the legacy React/MUI MandirMitra user experience while calling the unified SanMitra backend with the `mandirmitra` app context. Do not copy legacy `.env` files, `node_modules`, build output, or deployment artifacts into this workspace.
 
 Each app includes PWA fit basics:
 
@@ -47,7 +48,7 @@ The target frontend model remains:
 
 ## Gap
 
-The legacy frontends under `D:\sanmitra-backend\external-repos` still need module-by-module migration. They should be used as reference only. Do not bulk-copy them into this workspace.
+The legacy frontends under `D:\sanmitra-backend\external-repos` still need module-by-module migration for the broader ERP target. MandirMitra is the current exception because the live domain needed the original React/MUI user experience restored before the next production-readiness pass.
 
 ## Local Run
 
@@ -69,20 +70,29 @@ Open:
 - `http://127.0.0.1:3300/legalmitra/`
 - `http://127.0.0.1:3300/investmitra/`
 
+For the restored MandirMitra React frontend:
+
+```powershell
+cd frontend
+npm install
+npm run build
+npm start
+```
+
 If your backend is on another URL, add `?api=http://127.0.0.1:8010` to any frontend URL or set it in the on-screen API field.
 
 ## Production URL Pattern
 
-When the `frontend/` directory is deployed as the production frontend root, the MitraBooks ERP production URL is:
+When the `frontend/` directory is deployed as the production frontend root, the MandirMitra production URL is:
 
 ```text
-https://<frontend-domain>/mitrabooks-erp/
+https://<frontend-domain>/
 ```
 
 The MandirMitra public payment page is:
 
 ```text
-https://<frontend-domain>/mandir-public/
+https://<frontend-domain>/pay
 ```
 
 After the frontend host/domain is finalized, add the exact origin, for example `https://<frontend-domain>`, to backend `ALLOWED_ORIGINS`.
