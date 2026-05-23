@@ -110,13 +110,13 @@ a {
 
 .app.mandir-domain .nav a,
 .app.mandir-domain .nav button {
-  min-height: 58px;
+  min-height: 56px;
   border: 0;
   border-radius: 0;
   color: #2b2b2b;
-  padding: 12px 24px 12px 36px;
-  font-size: 18px;
-  gap: 18px;
+  padding: 12px 18px;
+  font-size: 17px;
+  gap: 16px;
 }
 
 .app.mandir-domain .nav a::before,
@@ -127,13 +127,26 @@ a {
   width: 28px;
   min-width: 28px;
   height: 28px;
-  color: #2b2b2b;
-  font-size: 16px;
+  color: #242424;
+  font-size: 18px;
   font-weight: 900;
 }
 
-.app.mandir-domain .nav a:nth-child(5),
-.app.mandir-domain .nav a:nth-child(10) {
+.app.mandir-domain .nav a.child {
+  min-height: 50px;
+  padding-left: 38px;
+  font-size: 15px;
+  color: #333333;
+}
+
+.app.mandir-domain .nav a.child::before {
+  font-size: 15px;
+  color: #333333;
+}
+
+.app.mandir-domain .nav a:nth-child(7),
+.app.mandir-domain .nav a:nth-child(9),
+.app.mandir-domain .nav a:nth-child(17) {
   border-top: 1px solid #e5e5e5;
 }
 
@@ -143,6 +156,10 @@ a {
   border-left: 4px solid #ff9226;
   color: #111827;
   font-weight: 800;
+}
+
+.app.mandir-domain .nav a.child.active {
+  border-left-width: 3px;
 }
 
 .app.mandir-domain .topbar {
@@ -214,6 +231,34 @@ a {
 .app.mandir-domain .table-preview,
 .app.mandir-domain .entry-panel {
   background: #ffffff;
+}
+
+.app.mandir-domain .mandir-home-grid {
+  margin-top: 28px;
+}
+
+.app.mandir-domain .mandir-home-grid article {
+  min-height: 180px;
+}
+
+.app.mandir-domain .mandir-home-grid .panchang-card {
+  background: #fff8df;
+}
+
+.app.mandir-domain .mandir-home-grid dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  margin: 18px 0;
+}
+
+.app.mandir-domain .mandir-home-grid dt {
+  font-weight: 800;
+}
+
+.app.mandir-domain .mandir-home-grid dd {
+  margin: 0;
+  color: var(--muted);
 }
 
 .app.mandir-domain .preview-heading h3 {

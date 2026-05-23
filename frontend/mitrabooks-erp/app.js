@@ -359,23 +359,32 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   moduleList.innerHTML = "";
   dashboardPreview.innerHTML = renderDashboardPreview(config);
 
-  modules.forEach((module) => {
+  const navItems = currentExperience === "mandir"
+    ? mandirNavigationItems()
+    : modules.map((module) => ({
+      label: `${module.nav_group || "Module"}: ${module.display_name}`,
+      module,
+      workspace: mandirWorkspaceFromModule(module),
+    }));
+
+  navItems.forEach((item) => {
+    const module = item.module || {};
     const link = document.createElement("a");
     link.href = "#";
-    link.className = module.enabled ? "" : "locked";
+    link.className = `${module.enabled === false ? "locked" : ""} ${item.child ? "child" : ""}`.trim();
     link.setAttribute("aria-disabled", module.enabled ? "false" : "true");
     link.dataset.moduleKey = module.module_key || "";
     link.dataset.frontendPath = module.frontend_path || "";
-    const mandirWorkspace = mandirWorkspaceFromModule(module);
+    const mandirWorkspace = item.workspace || mandirWorkspaceFromModule(module);
     if (mandirWorkspace) {
       link.dataset.mandirWorkspace = mandirWorkspace;
     }
-    link.dataset.navIcon = navIconForMandirWorkspace(mandirWorkspace);
-    link.textContent = currentExperience === "mandir"
-      ? module.display_name
-      : `${module.nav_group || "Module"}: ${module.display_name}`;
+    link.dataset.navIcon = item.icon || navIconForMandirWorkspace(mandirWorkspace);
+    link.textContent = item.label;
     nav.appendChild(link);
+  });
 
+  modules.forEach((module) => {
     const item = document.createElement("li");
     item.innerHTML = `
       <strong>${module.display_name}</strong>
@@ -385,6 +394,35 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     moduleList.appendChild(item);
   });
   syncMandirNavActiveState();
+}
+
+function mandirNavigationItems() {
+  return [
+    { label: "Dashboard", workspace: "overview", icon: "▦", module: { module_key: "temple", frontend_path: "/temple/dashboard", enabled: true } },
+    { label: "Sevas", workspace: "sevas", icon: "♜", module: { module_key: "temple", frontend_path: "/temple/sevas", enabled: true } },
+    { label: "Book Sevas", workspace: "book-sevas", icon: "♜", child: true, module: { module_key: "temple", frontend_path: "/temple/sevas/book", enabled: true } },
+    { label: "Seva Bookings / Reschedule", workspace: "seva-bookings", icon: "▤", child: true, module: { module_key: "temple", frontend_path: "/temple/sevas/bookings", enabled: true } },
+    { label: "Seva Management", workspace: "seva-management", icon: "▤", child: true, module: { module_key: "temple", frontend_path: "/temple/sevas/manage", enabled: true } },
+    { label: "Reschedule Approval", workspace: "reschedule-approval", icon: "✓", child: true, module: { module_key: "temple", frontend_path: "/temple/sevas/reschedule", enabled: true } },
+    { label: "Donations", workspace: "donations", icon: "▰", module: { module_key: "temple", frontend_path: "/temple/donations", enabled: true } },
+    { label: "Devotees", workspace: "devotees", icon: "●●", module: { module_key: "temple", frontend_path: "/temple/devotees", enabled: true } },
+    { label: "Public Payments", workspace: "payments", icon: "▣", module: { module_key: "temple", frontend_path: "/temple/public-payments", enabled: true } },
+    { label: "Payment Exceptions", workspace: "exceptions", icon: "!", child: true, module: { module_key: "temple", frontend_path: "/temple/payment-exceptions", enabled: true } },
+    { label: "Receipts", workspace: "receipts", icon: "▤", module: { module_key: "temple", frontend_path: "/temple/receipts", enabled: true } },
+    { label: "Reports", workspace: "reports", icon: "▥", module: { module_key: "audit", frontend_path: "/temple/reports", enabled: true } },
+    { label: "Panchang", workspace: "panchang", icon: "□", module: { module_key: "temple", frontend_path: "/temple/panchang", enabled: true } },
+    { label: "Settings", workspace: "settings", icon: "⚙", module: { module_key: "temple", frontend_path: "/temple/settings", enabled: true } },
+    { label: "Implementation Checks", workspace: "implementation", icon: "☑", module: { module_key: "audit", frontend_path: "/temple/implementation-checks", enabled: true } },
+    { label: "Platform Owners", workspace: "platform-owners", icon: "♜", module: { module_key: "platform_owner", frontend_path: "/platform-owner/dashboard", enabled: true } },
+    { label: "Accounting", workspace: "accounting", icon: "▣", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
+    { label: "Chart of Accounts", workspace: "accounting", icon: "▥", child: true, module: { module_key: "accounting", frontend_path: "/accounting/accounts", enabled: true } },
+    { label: "Quick Expense", workspace: "accounting", icon: "₹", child: true, module: { module_key: "accounting", frontend_path: "/accounting/expenses", enabled: true } },
+    { label: "Journal Entries", workspace: "accounting", icon: "▤", child: true, module: { module_key: "accounting", frontend_path: "/accounting/journals", enabled: true } },
+    { label: "Bank Reconciliation", workspace: "accounting", icon: "▰", child: true, module: { module_key: "accounting", frontend_path: "/accounting/bank", enabled: true } },
+    { label: "Financial Closing", workspace: "accounting", icon: "▣", child: true, module: { module_key: "accounting", frontend_path: "/accounting/closing", enabled: true } },
+    { label: "UPI Payments", workspace: "payments", icon: "▭", child: true, module: { module_key: "temple", frontend_path: "/temple/upi-payments", enabled: true } },
+    { label: "Accounting Reports", workspace: "accounting", icon: "▥", child: true, module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: true } },
+  ];
 }
 
 function renderStatCards(stats) {
@@ -415,6 +453,9 @@ function mandirWorkspaceFromModule(module = {}) {
   const displayName = String(module.display_name || "").toLowerCase();
   if (path.includes("/donations") || displayName.includes("donation")) {
     return "donations";
+  }
+  if (path.includes("/devotees") || displayName.includes("devotee")) {
+    return "devotees";
   }
   if (path.includes("/sevas") || displayName.includes("seva")) {
     return "sevas";
@@ -451,18 +492,22 @@ function mandirWorkspaceFromModule(module = {}) {
 
 function navIconForMandirWorkspace(workspace) {
   return ({
-    overview: "DB",
-    sevas: "SV",
-    donations: "DN",
-    devotees: "DV",
-    payments: "UP",
-    receipts: "RC",
-    reports: "RP",
-    panchang: "PN",
-    settings: "ST",
-    implementation: "IC",
-    "platform-owners": "PO",
-    accounting: "AC",
+    overview: "▦",
+    sevas: "♜",
+    "book-sevas": "♜",
+    "seva-bookings": "▤",
+    "seva-management": "▤",
+    "reschedule-approval": "✓",
+    donations: "▰",
+    devotees: "●●",
+    payments: "▣",
+    receipts: "▤",
+    reports: "▥",
+    panchang: "□",
+    settings: "⚙",
+    implementation: "☑",
+    "platform-owners": "♜",
+    accounting: "▣",
   }[workspace] || "");
 }
 
@@ -2190,6 +2235,86 @@ function renderMandirOperationalReports(reports = lastMandirOperationalReports) 
   `;
 }
 
+function renderMandirDevoteesView(reports = lastMandirOperationalReports) {
+  const devotees = Array.isArray(reports.devotees) ? reports.devotees : [];
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Devotees</h4>
+          <p>Tenant-scoped devotee records captured from donations, sevas, and public payments.</p>
+        </div>
+        <span class="pill">${devotees.length} shown</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Phone</th><th>City</th><th>Updated</th></tr>
+          </thead>
+          <tbody>
+            ${devotees.length ? devotees.slice(0, 20).map((row) => `
+              <tr>
+                <td>${escapeHtml(row.name || row.first_name || "Devotee")}</td>
+                <td>${escapeHtml(row.phone || row.mobile || "")}</td>
+                <td>${escapeHtml(row.city || "")}</td>
+                <td>${escapeHtml(String(row.updated_at || row.created_at || "").slice(0, 10))}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="4">No devotee records found.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderMandirDashboardHome(payload = {}) {
+  const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
+  const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
+  const recentReceipts = Array.isArray(payload.recent_receipts) ? payload.recent_receipts : [];
+  const panchang = payload.panchang || null;
+  const panchangPayload = panchang && panchang.ok !== false ? panchang : {};
+  const gregorianDate = panchangPayload.date?.gregorian || {};
+  const panchangData = panchangPayload.panchang || {};
+  const sunMoon = panchangPayload.sun_moon || {};
+  return `
+    <div class="dashboard-main-grid platform-grid mandir-home-grid">
+      <article>
+        <h4>Quick Donation Entry</h4>
+        <p class="muted">Use Donations for full receipt entry and sponsorship details.</p>
+        <button type="button" data-workspace-view="donations">Open Donations</button>
+      </article>
+      <article class="panchang-card">
+        <h4>Today's Panchang</h4>
+        <p>${escapeHtml(gregorianDate.formatted || gregorianDate.date || "Today")}</p>
+        <dl>
+          <dt>Tithi</dt>
+          <dd>${escapeHtml(panchangData.tithi?.full_name || panchangData.tithi?.name || "--")}</dd>
+          <dt>Nakshatra</dt>
+          <dd>${escapeHtml(panchangData.nakshatra?.name || "--")}</dd>
+          <dt>Sunrise</dt>
+          <dd>${escapeHtml(sunMoon.sunrise || "--")}</dd>
+          <dt>Sunset</dt>
+          <dd>${escapeHtml(sunMoon.sunset || "--")}</dd>
+        </dl>
+        <button type="button" class="secondary" data-workspace-view="panchang">View Full Panchang</button>
+      </article>
+      <article>
+        <h4>Public Payment Review</h4>
+        <div class="metric-grid two">${renderStatCards([
+          ["Pending", pendingPayments.length, "UPI payments"],
+          ["Exceptions", paymentExceptions.length, "need review"],
+        ])}</div>
+        <button type="button" class="secondary" data-workspace-view="payments">Open Public Payments</button>
+      </article>
+      <article>
+        <h4>Recent Receipts</h4>
+        <p class="muted">${formatCountLabel(recentReceipts.length, "receipt")} available in receipt history.</p>
+        <button type="button" class="secondary" data-workspace-view="receipts">Open Receipts</button>
+      </article>
+    </div>
+  `;
+}
+
 function renderMandirDashboard(payload = {}) {
   const stats = payload.stats || {};
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
@@ -2218,21 +2343,27 @@ function renderMandirDashboard(payload = {}) {
     ["Cumulative for Year", formatCurrency(sevas.year?.amount), formatCountLabel(sevas.year?.count, "booking")],
   ];
   const showOverview = activeMandirWorkspace === "overview";
-  const showDonations = showOverview || activeMandirWorkspace === "donations";
-  const showSevas = showOverview || activeMandirWorkspace === "sevas";
-  const showPayments = showOverview || activeMandirWorkspace === "payments";
-  const showExceptions = showOverview || activeMandirWorkspace === "exceptions";
-  const showReceipts = showOverview || activeMandirWorkspace === "receipts";
-  const showPanchang = showOverview || activeMandirWorkspace === "panchang";
-  const showReports = showOverview || activeMandirWorkspace === "reports";
-  const showAccounting = showOverview || activeMandirWorkspace === "accounting";
+  const showDonations = activeMandirWorkspace === "donations";
+  const showSevas = ["sevas", "book-sevas", "seva-bookings", "seva-management", "reschedule-approval"].includes(activeMandirWorkspace);
+  const showDevotees = activeMandirWorkspace === "devotees";
+  const showPayments = activeMandirWorkspace === "payments";
+  const showExceptions = activeMandirWorkspace === "exceptions";
+  const showReceipts = activeMandirWorkspace === "receipts";
+  const showPanchang = activeMandirWorkspace === "panchang";
+  const showReports = activeMandirWorkspace === "reports";
+  const showAccounting = activeMandirWorkspace === "accounting";
   const showSettings = activeMandirWorkspace === "settings";
   const showImplementation = activeMandirWorkspace === "implementation";
   const showPlatformOwners = activeMandirWorkspace === "platform-owners";
   const pageMeta = {
-    overview: ["Dashboard", "Donation, seva, public payment, panchang, reports, and accounting summary for the active temple tenant."],
+    overview: ["Dashboard", "Donation, seva, public payment review, and today's panchang for the active temple tenant."],
     donations: ["Donations", "Record and review donation receipts for the active temple tenant."],
     sevas: ["Sevas", "Book and review seva receipts for the active temple tenant."],
+    "book-sevas": ["Book Sevas", "Create seva bookings for devotees."],
+    "seva-bookings": ["Seva Bookings / Reschedule", "Review bookings and reschedule requests."],
+    "seva-management": ["Seva Management", "Manage seva definitions and temple service workflows."],
+    "reschedule-approval": ["Reschedule Approval", "Approve or reject seva reschedule requests."],
+    devotees: ["Devotees", "Tenant-scoped devotee records captured from donations, sevas, and public payments."],
     payments: ["Public Payments", "Verify no-login UPI payments before posting receipts and accounting."],
     exceptions: ["Payment Exceptions", "Review public payment records that need correction or rejection."],
     receipts: ["Receipts", "Preview, download, and reverse donation or seva receipts."],
@@ -2259,11 +2390,17 @@ function renderMandirDashboard(payload = {}) {
         <h4>Donations</h4>
         <div class="metric-grid three">${renderStatCards(donationCards)}</div>
       ` : ""}
-      ${(showOverview || activeMandirWorkspace === "sevas") ? `
+      ${(showOverview || showSevas) ? `
         <h4>Sevas</h4>
         <div class="metric-grid three">${renderStatCards(sevaCards)}</div>
       ` : ""}
-      ${(!showOverview && (showDonations || showSevas)) ? `
+      ${showOverview ? renderMandirDashboardHome({
+        pending_payments: pendingPayments,
+        payment_exceptions: paymentExceptions,
+        recent_receipts: recentReceipts,
+        panchang,
+      }) : ""}
+      ${(showDonations || showSevas) ? `
         ${renderMandirCreateForms({
           payment_accounts: payload.payment_accounts,
           accounts: payload.accounts,
@@ -2286,6 +2423,7 @@ function renderMandirDashboard(payload = {}) {
           ` : ""}
         </div>
       ` : ""}
+      ${showDevotees ? renderMandirDevoteesView(operationalReports) : ""}
       ${showPayments ? `
       <div class="verification-panel">
         <div class="preview-heading compact">
@@ -2327,7 +2465,7 @@ function renderMandirDashboard(payload = {}) {
         ${renderMandirReceiptHistoryTable(recentReceipts)}
       </div>
       ` : ""}
-      ${(showOverview || showReceipts) && receipt ? `
+      ${showReceipts && receipt ? `
         <div class="verification-panel">
           <div class="preview-heading compact">
             <div>
@@ -2358,9 +2496,9 @@ function renderMandirDashboard(payload = {}) {
       ${showImplementation ? renderMandirImplementationChecks() : ""}
       ${showPlatformOwners ? renderMandirPlatformOwnerShortcut() : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
-      ${(showOverview || showAccounting) ? renderMandirTrialBalance(trialBalance) : ""}
+      ${showAccounting ? renderMandirTrialBalance(trialBalance) : ""}
       ${showAccounting ? renderMandirFinancialReports(financialReports) : ""}
-      ${(showOverview || showAccounting) ? renderMandirExpensesTable(recentExpenses) : ""}
+      ${showAccounting ? renderMandirExpensesTable(recentExpenses) : ""}
     </div>
   `;
 }
@@ -3502,6 +3640,11 @@ async function setMandirWorkspace(view) {
     "overview",
     "donations",
     "sevas",
+    "book-sevas",
+    "seva-bookings",
+    "seva-management",
+    "reschedule-approval",
+    "devotees",
     "payments",
     "exceptions",
     "receipts",
