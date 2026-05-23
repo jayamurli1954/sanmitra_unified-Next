@@ -16,12 +16,29 @@ import {
 } from "../shared/api-client.js";
 
 const APP_KEY = "mitrabooks";
+const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const EXPERIENCE_APP_KEYS = {
   mitrabooks: "mitrabooks",
   platform: "mitrabooks",
   mandir: "mandirmitra",
   gruha: "gruhamitra",
 };
+
+function isMandirHost() {
+  const host = String(window.location.hostname || "").toLowerCase();
+  return host === "mandirmitra.sanmitratech.in"
+    || host === "www.mandirmitra.sanmitratech.in"
+    || host.includes("mandirmitra");
+}
+
+function isProductionShell() {
+  const host = String(window.location.hostname || "").toLowerCase();
+  return host && host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+}
+
+function initialExperience() {
+  return isMandirHost() ? "mandir" : "mitrabooks";
+}
 const entitlementModulesByOrgType = {
   TEMPLE: ["temple", "accounting", "audit"],
   HOUSING: ["housing", "accounting", "audit"],
@@ -167,7 +184,7 @@ const experienceConfig = {
   },
 };
 
-let currentExperience = "mitrabooks";
+let currentExperience = initialExperience();
 let lastMandirReceipt = null;
 let activeReceiptPreviewObjectUrl = "";
 let activeMandirWorkspace = "overview";
@@ -228,7 +245,13 @@ const appRoot = document.getElementById("app-root");
 const brandLogo = document.getElementById("brand-logo");
 const brandTitle = document.getElementById("brand-title");
 const brandSubtitle = document.getElementById("brand-subtitle");
+const topbarTitle = document.getElementById("topbar-title");
+const topbarSubtitle = document.getElementById("topbar-subtitle");
 const appKeyLabel = document.getElementById("app-key-label");
+const sessionPill = document.getElementById("session-pill");
+const loginStatus = document.getElementById("login-status");
+const loginEmail = document.getElementById("login-email");
+const loginPassword = document.getElementById("login-password");
 const scopeTitle = document.getElementById("scope-title");
 const scopeCopy = document.getElementById("scope-copy");
 const legacyTitle = document.getElementById("legacy-title");
@@ -285,8 +308,18 @@ const mandirCorrectionPurpose = document.getElementById("mandir-correction-purpo
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
   const preview = options.preview !== false;
-  appRoot.className = `app ${config.theme}`.trim();
-  appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  appRoot.className = `app ${config.theme} ${isProductionShell() ? "production-shell" : ""} ${isMandirHost() ? "mandir-domain" : ""}`.trim();
+  if (appKeyLabel) {
+    appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  }
+  if (topbarTitle) {
+    topbarTitle.textContent = currentExperience === "mandir" ? "MandirMitra Admin" : config.title;
+  }
+  if (topbarSubtitle) {
+    topbarSubtitle.textContent = currentExperience === "mandir"
+      ? "Temple operations, receipts, public payments, reports, and accounting"
+      : config.subtitle;
+  }
   brandLogo.src = config.logo;
   brandLogo.alt = config.title;
   brandTitle.textContent = config.title;
@@ -751,6 +784,61 @@ function renderMandirOperationResult(result) {
       <span>${escapeHtml(result.detail || "")}</span>
     </div>
   `;
+}
+
+function setLoginStatus(kind, title, detail = "") {
+  if (!loginStatus) {
+    return;
+  }
+  loginStatus.className = `module-state ${kind || ""}`.trim();
+  loginStatus.innerHTML = title
+    ? `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`
+    : "";
+}
+
+function updateSessionUi() {
+  const signedIn = Boolean(getAccessToken());
+  if (sessionPill) {
+    sessionPill.textContent = signedIn ? "Signed in" : "Not signed in";
+    sessionPill.className = `pill ${signedIn ? "ok" : "warn"}`;
+  }
+  if (tokenInput) {
+    tokenInput.value = getAccessToken();
+  }
+}
+
+async function signInWithPassword() {
+  const email = String(loginEmail?.value || "").trim();
+  const password = String(loginPassword?.value || "");
+  if (!email || !password) {
+    setLoginStatus("warn", "Email and password required", "Enter your MandirMitra tenant admin login.");
+    return;
+  }
+
+  setLoginStatus("", "Signing in", "Checking your tenant access...");
+  const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  const result = await apiRequest(appKey, "/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!result.ok) {
+    clearAccessToken();
+    updateSessionUi();
+    const detail = result.payload?.detail || "Unable to sign in with these credentials.";
+    setLoginStatus("danger", "Sign in failed", detail);
+    renderJson(apiOutput, { login: { ok: result.ok, status: result.status, detail } });
+    return;
+  }
+
+  setAccessToken(result.payload?.access_token || "");
+  if (loginPassword) {
+    loginPassword.value = "";
+  }
+  updateSessionUi();
+  setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
+  renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
+  await runChecks();
 }
 
 function renderMandirDonationsTable(rows) {
@@ -2265,6 +2353,13 @@ async function runChecks() {
   renderJson(apiOutput, { health, modules });
   renderModuleState(moduleState, modules);
 
+  if (!modules.ok && modules.status === 401) {
+    renderModules();
+    setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
+    updateSessionUi();
+    return;
+  }
+
   if (modules.ok && currentExperience === "mitrabooks") {
     renderModules(moduleItemsFromPayload(modules.payload), { preview: false });
   } else {
@@ -3408,7 +3503,7 @@ async function submitTenantEntitlements() {
 function setExperience(nextExperience) {
   currentExperience = nextExperience;
   document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
-  document.getElementById(`mode-${nextExperience}`).classList.add("active");
+  document.getElementById(`mode-${nextExperience}`)?.classList.add("active");
   renderModules();
   if (nextExperience === "platform") {
     loadPlatformOwnerDashboard();
@@ -3424,13 +3519,23 @@ function setExperience(nextExperience) {
 document.getElementById("save-config").addEventListener("click", () => {
   setConfiguredApiBaseUrl(apiBaseInput.value);
   setAccessToken(tokenInput.value);
+  updateSessionUi();
   runChecks();
 });
 
+document.getElementById("login-submit").addEventListener("click", signInWithPassword);
+loginPassword?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    signInWithPassword();
+  }
+});
 document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
   clearAccessToken();
   tokenInput.value = "";
+  updateSessionUi();
+  setLoginStatus("", "", "");
   runChecks();
 });
 nav.addEventListener("click", (event) => {
@@ -3560,8 +3665,20 @@ document.getElementById("mode-platform").addEventListener("click", () => setExpe
 document.getElementById("mode-mandir").addEventListener("click", () => setExperience("mandir"));
 document.getElementById("mode-gruha").addEventListener("click", () => setExperience("gruha"));
 
+if (isProductionShell()) {
+  const configuredApiBase = getConfiguredApiBaseUrl();
+  const currentOrigin = String(window.location.origin || "").replace(/\/+$/, "");
+  const pointsAtFrontend = configuredApiBase === currentOrigin
+    || /mitrabooks-erp\.vercel\.app|mandirmitra\.sanmitratech\.in/i.test(configuredApiBase);
+  if (!configuredApiBase || pointsAtFrontend) {
+    setConfiguredApiBaseUrl(DEFAULT_DEPLOYED_API_BASE_URL);
+  }
+}
 apiBaseInput.value = getConfiguredApiBaseUrl();
 tokenInput.value = getAccessToken();
+document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
+document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
+updateSessionUi();
 renderModules();
 renderModuleState(moduleState);
 runChecks();

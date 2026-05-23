@@ -51,6 +51,8 @@ class Settings:
     ]
     ALLOWED_ORIGINS = list(set(_env_origins + [
         "https://mitrabooks-erp.vercel.app",
+        "https://mandirmitra.sanmitratech.in",
+        "https://www.mandirmitra.sanmitratech.in",
         "https://mandirmitra.vercel.app",
         "https://mandir-mitra-alpha.vercel.app",
         "https://legalmitra.vercel.app",

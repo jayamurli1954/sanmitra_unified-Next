@@ -58,6 +58,55 @@ a {
   --accent-2: #138808;
 }
 
+.app.mandir-domain .module-switch {
+  display: none;
+}
+
+.app.production-shell .technical-context {
+  display: none;
+}
+
+.app.production-shell .topbar h2 {
+  font-size: 22px;
+}
+
+.access-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.access-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.access-panel-head h3,
+.access-panel-head p {
+  margin: 0;
+}
+
+.access-panel-head p {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.advanced-connection {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.advanced-connection summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.advanced-connection .toolbar {
+  margin-top: 12px;
+}
+
 .app.gruha-theme {
   --accent: #2563eb;
   --accent-2: #0f766e;
