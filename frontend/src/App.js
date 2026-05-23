@@ -430,6 +430,8 @@ function App() {
                     )}
                   />
                   <Route path="/pay" element={<PublicSevaPayment />} />
+                  <Route path="/mandir-public/*" element={<Navigate to="/pay" replace />} />
+                  <Route path="/mitrabooks-erp/*" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </Suspense>

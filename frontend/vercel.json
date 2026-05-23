@@ -1,5 +1,37 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/mitrabooks-erp",
+      "destination": "/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/mitrabooks-erp/",
+      "destination": "/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/mitrabooks-erp/:path*",
+      "destination": "/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/mandir-public",
+      "destination": "/pay",
+      "permanent": false
+    },
+    {
+      "source": "/mandir-public/",
+      "destination": "/pay",
+      "permanent": false
+    },
+    {
+      "source": "/mandir-public/:path*",
+      "destination": "/pay",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/:path*",
