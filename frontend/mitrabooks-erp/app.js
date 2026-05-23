@@ -2255,11 +2255,6 @@ function renderMandirDashboard(payload = {}) {
       </div>
       ${isProductionShell() && isMandirHost() ? "" : renderMandirWorkspaceTabs(activeMandirWorkspace)}
       ${renderMandirOperationResult(formResult)}
-      ${showOverview ? renderMandirCreateForms({
-        payment_accounts: payload.payment_accounts,
-        accounts: payload.accounts,
-        form_result: null,
-      }) : ""}
       ${(showOverview || activeMandirWorkspace === "donations") ? `
         <h4>Donations</h4>
         <div class="metric-grid three">${renderStatCards(donationCards)}</div>
@@ -2268,7 +2263,12 @@ function renderMandirDashboard(payload = {}) {
         <h4>Sevas</h4>
         <div class="metric-grid three">${renderStatCards(sevaCards)}</div>
       ` : ""}
-      ${(showDonations || showSevas) ? `
+      ${(!showOverview && (showDonations || showSevas)) ? `
+        ${renderMandirCreateForms({
+          payment_accounts: payload.payment_accounts,
+          accounts: payload.accounts,
+          form_result: null,
+        })}
         <div class="dashboard-main-grid ${showOverview ? "platform-grid" : ""}">
           ${showDonations ? `
         <article>
