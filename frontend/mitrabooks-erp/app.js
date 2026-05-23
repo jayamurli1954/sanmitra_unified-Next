@@ -313,6 +313,8 @@ const mandirCorrectionAmount = document.getElementById("mandir-correction-amount
 const mandirCorrectionPhone = document.getElementById("mandir-correction-phone");
 const mandirCorrectionType = document.getElementById("mandir-correction-type");
 const mandirCorrectionPurpose = document.getElementById("mandir-correction-purpose");
+const mandirSplash = document.getElementById("mandir-splash");
+const mandirSplashVideo = document.getElementById("mandir-splash-video");
 
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
@@ -323,11 +325,11 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
   }
   if (topbarTitle) {
-    topbarTitle.textContent = currentExperience === "mandir" ? "MandirMitra" : config.title;
+    topbarTitle.textContent = currentExperience === "mandir" ? "MandirMitra Temple" : config.title;
   }
   if (topbarSubtitle) {
     topbarSubtitle.textContent = currentExperience === "mandir"
-      ? "Temple operations, seva, donations, reports, and accounting"
+      ? "Temple / Trust Management & Accounting System"
       : config.subtitle;
   }
   brandLogo.src = config.logo;
@@ -368,6 +370,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     if (mandirWorkspace) {
       link.dataset.mandirWorkspace = mandirWorkspace;
     }
+    link.dataset.navIcon = navIconForMandirWorkspace(mandirWorkspace);
     link.textContent = currentExperience === "mandir"
       ? module.display_name
       : `${module.nav_group || "Module"}: ${module.display_name}`;
@@ -444,6 +447,23 @@ function mandirWorkspaceFromModule(module = {}) {
     return "overview";
   }
   return "";
+}
+
+function navIconForMandirWorkspace(workspace) {
+  return ({
+    overview: "DB",
+    sevas: "SV",
+    donations: "DN",
+    devotees: "DV",
+    payments: "UP",
+    receipts: "RC",
+    reports: "RP",
+    panchang: "PN",
+    settings: "ST",
+    implementation: "IC",
+    "platform-owners": "PO",
+    accounting: "AC",
+  }[workspace] || "");
 }
 
 function syncMandirNavActiveState() {
@@ -842,6 +862,31 @@ function setLoginStatus(kind, title, detail = "") {
     : "";
 }
 
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function showMandirSplash() {
+  if (!isMandirHost() || !mandirSplash) {
+    return;
+  }
+  mandirSplash.classList.add("show");
+  mandirSplash.setAttribute("aria-hidden", "false");
+  if (mandirSplashVideo) {
+    mandirSplashVideo.currentTime = 0;
+    await mandirSplashVideo.play().catch(() => {});
+  }
+}
+
+function hideMandirSplash() {
+  if (!mandirSplash) {
+    return;
+  }
+  mandirSplash.classList.remove("show");
+  mandirSplash.setAttribute("aria-hidden", "true");
+  mandirSplashVideo?.pause();
+}
+
 function updateSessionUi() {
   const signedIn = Boolean(getAccessToken());
   appRoot.classList.toggle("signed-in", signedIn);
@@ -864,6 +909,10 @@ function updateSessionUi() {
   }
   if (tokenInput) {
     tokenInput.value = getAccessToken();
+  }
+  const publicLink = document.getElementById("mandir-public-link");
+  if (publicLink) {
+    publicLink.href = mandirPublicPaymentPageUrl();
   }
 }
 
@@ -899,7 +948,12 @@ async function signInWithPassword() {
   updateSessionUi();
   setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
   renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
-  await runChecks();
+  await showMandirSplash();
+  try {
+    await Promise.all([runChecks(), delay(1400)]);
+  } finally {
+    hideMandirSplash();
+  }
 }
 
 function renderMandirDonationsTable(rows) {
@@ -2705,36 +2759,30 @@ async function loadMandirDashboard() {
     mandir_devotees_report: devoteesReport,
     accounting_drilldown: accountingDrilldown,
   });
-  if (stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok) {
-    dashboardPreview.innerHTML = renderMandirDashboard({
-      stats: stats.ok ? stats.payload : {},
-      pending_payments: pendingPayments.ok && Array.isArray(pendingPayments.payload) ? pendingPayments.payload : [],
-      payment_exceptions: paymentExceptions.ok && Array.isArray(paymentExceptions.payload?.items) ? paymentExceptions.payload.items : [],
-      payment_exception_summary: paymentExceptions.ok ? paymentExceptions.payload?.summary : {},
-      recent_receipts: mandirReceiptRowsFromLists(
-        donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
-        sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : []
-      ),
-      recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
-      recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
-      recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
-      trial_balance: lastMandirTrialBalance,
-      financial_reports: lastMandirFinancialReports,
-      panchang: lastMandirPanchang,
-      operational_reports: lastMandirOperationalReports,
-      module_config: lastMandirModuleConfig,
-      payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
-      accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
-      receipt: lastMandirReceipt,
-      form_result: lastMandirFormResult,
-    });
-    return;
-  }
-
-  dashboardPreview.insertAdjacentHTML(
-    "afterbegin",
-    `<div class="module-state warn"><strong>MandirMitra live data unavailable</strong><span>Provide a tenant-scoped MandirMitra access token and run checks to load donations, sevas, and public payments.</span></div>`
-  );
+  const hasLiveData = stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok;
+  dashboardPreview.innerHTML = renderMandirDashboard({
+    stats: stats.ok ? stats.payload : {},
+    pending_payments: pendingPayments.ok && Array.isArray(pendingPayments.payload) ? pendingPayments.payload : [],
+    payment_exceptions: paymentExceptions.ok && Array.isArray(paymentExceptions.payload?.items) ? paymentExceptions.payload.items : [],
+    payment_exception_summary: paymentExceptions.ok ? paymentExceptions.payload?.summary : {},
+    recent_receipts: mandirReceiptRowsFromLists(
+      donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
+      sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : []
+    ),
+    recent_donations: donations.ok && Array.isArray(donations.payload) ? donations.payload : [],
+    recent_seva_bookings: sevaBookings.ok && Array.isArray(sevaBookings.payload) ? sevaBookings.payload : [],
+    recent_expenses: expenses.ok && Array.isArray(expenses.payload) ? expenses.payload : lastMandirExpenses,
+    trial_balance: lastMandirTrialBalance,
+    financial_reports: lastMandirFinancialReports,
+    panchang: lastMandirPanchang,
+    operational_reports: lastMandirOperationalReports,
+    module_config: lastMandirModuleConfig,
+    payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
+    accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
+    receipt: lastMandirReceipt,
+    form_result: lastMandirFormResult,
+    live_data_available: hasLiveData,
+  });
 }
 
 function todayIsoDate() {
@@ -3450,13 +3498,27 @@ async function pageMandirList(kind, direction) {
 }
 
 async function setMandirWorkspace(view) {
-  const allowedViews = new Set(["overview", "donations", "sevas", "payments", "exceptions", "receipts", "panchang", "reports", "accounting"]);
+  const allowedViews = new Set([
+    "overview",
+    "donations",
+    "sevas",
+    "payments",
+    "exceptions",
+    "receipts",
+    "panchang",
+    "reports",
+    "accounting",
+    "settings",
+    "implementation",
+    "platform-owners",
+  ]);
   if (!allowedViews.has(view)) {
     return;
   }
   activeMandirWorkspace = view;
   syncMandirNavActiveState();
   await loadMandirDashboard();
+  document.querySelector(".content")?.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function readAccountingDrilldownFilterValues() {

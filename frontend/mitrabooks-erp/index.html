@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
     <title>MitraBooks Unified ERP</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-live-ui-v2">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-live-ui-v3">
   </head>
   <body>
     <div class="app" id="app-root">
@@ -48,6 +48,12 @@
         </header>
         <section class="content">
           <section class="card access-panel" id="access-panel">
+            <div class="mandir-login-brand">
+              <span class="mandir-login-lock" aria-hidden="true"></span>
+              <img src="../assets/brand/mandirmitra-logo.jpeg" alt="MandirMitra">
+              <strong>MandirMitra</strong>
+              <span>Temple Management System</span>
+            </div>
             <div class="access-panel-head">
               <div>
                 <h3 id="access-title">Sign in</h3>
@@ -67,6 +73,9 @@
               <button id="login-submit" type="button">Sign in</button>
               <button class="secondary" id="run-checks" type="button">Refresh</button>
               <button class="danger" id="clear-token" type="button">Sign out</button>
+            </div>
+            <div class="mandir-login-links">
+              <a href="../mandir-public/" id="mandir-public-link">Book a Seva / Make a Donation</a>
             </div>
             <p class="module-state" id="login-status"></p>
             <details class="advanced-connection">
@@ -138,6 +147,13 @@
           </section>
         </section>
       </main>
+    </div>
+    <div class="mandir-splash" id="mandir-splash" aria-hidden="true">
+      <div class="mandir-splash-frame">
+        <video id="mandir-splash-video" src="../assets/brand/mandirmitra-logo.mp4" muted playsinline></video>
+        <img id="mandir-splash-image" src="../assets/brand/mandirmitra-logo.jpeg" alt="MandirMitra">
+        <p>Loading dashboard...</p>
+      </div>
     </div>
     <dialog class="entitlement-dialog" id="entitlement-dialog">
       <form method="dialog" id="entitlement-form">
@@ -307,7 +323,7 @@
         </div>
       </form>
     </dialog>
-    <script type="module" src="../shared/pwa-shell.js?v=mandir-live-ui-v2"></script>
-    <script type="module" src="./app.js?v=mandir-live-ui-v2"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=mandir-live-ui-v3"></script>
+    <script type="module" src="./app.js?v=mandir-live-ui-v3"></script>
   </body>
 </html>

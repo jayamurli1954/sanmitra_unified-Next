@@ -67,7 +67,7 @@ a {
 }
 
 .app.mandir-domain {
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: 300px 1fr;
   background: #f5f5f5;
 }
 
@@ -80,26 +80,27 @@ a {
 }
 
 .app.mandir-domain .brand {
-  min-height: 72px;
-  grid-template-columns: 52px 1fr;
-  padding: 12px 18px;
+  min-height: 96px;
+  grid-template-columns: 58px 1fr;
+  padding: 16px 22px;
   background: #ff9226;
   color: #ffffff;
 }
 
 .app.mandir-domain .brand-logo {
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
   border-radius: 4px;
 }
 
 .app.mandir-domain .brand h1 {
-  font-size: 17px;
+  font-size: 20px;
 }
 
 .app.mandir-domain .brand p {
   color: #fff4e5;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .app.mandir-domain .nav {
@@ -109,11 +110,31 @@ a {
 
 .app.mandir-domain .nav a,
 .app.mandir-domain .nav button {
-  min-height: 52px;
+  min-height: 58px;
   border: 0;
   border-radius: 0;
   color: #2b2b2b;
-  padding: 12px 22px;
+  padding: 12px 24px 12px 36px;
+  font-size: 18px;
+  gap: 18px;
+}
+
+.app.mandir-domain .nav a::before,
+.app.mandir-domain .nav button::before {
+  content: attr(data-nav-icon);
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  color: #2b2b2b;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.app.mandir-domain .nav a:nth-child(5),
+.app.mandir-domain .nav a:nth-child(10) {
+  border-top: 1px solid #e5e5e5;
 }
 
 .app.mandir-domain .nav a.active,
@@ -125,10 +146,12 @@ a {
 }
 
 .app.mandir-domain .topbar {
-  min-height: 72px;
+  min-height: 96px;
   background: #ff9226;
   border-bottom: 0;
   color: #111827;
+  padding: 18px 32px;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18);
 }
 
 .app.mandir-domain .topbar .muted {
@@ -168,6 +191,7 @@ a {
 
 .app.mandir-domain .content {
   background: #f5f5f5;
+  padding: 28px 32px;
 }
 
 .app.mandir-domain .card,
@@ -178,10 +202,35 @@ a {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
+.app.mandir-domain .legacy-dashboard {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.app.mandir-domain .dashboard-main-grid > article,
+.app.mandir-domain .verification-panel,
+.app.mandir-domain .table-preview,
+.app.mandir-domain .entry-panel {
+  background: #ffffff;
+}
+
+.app.mandir-domain .preview-heading h3 {
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.app.mandir-domain .preview-heading p {
+  font-size: 17px;
+}
+
 .app.mandir-domain .mandir-dashboard .metric-tile {
   background: #ffffff;
   border-color: #e5e5e5;
   border-left: 4px solid #4caf50;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+  min-height: 136px;
 }
 
 .app.mandir-domain .workspace-tabs button {
@@ -222,26 +271,149 @@ a {
 }
 
 .app.production-shell.mandir-domain.signed-out .content {
-  min-height: calc(var(--app-height) - 72px);
+  min-height: calc(var(--app-height) - 96px);
   align-content: center;
 }
 
 .app.production-shell.mandir-domain.signed-out .access-panel {
-  width: min(760px, 100%);
+  width: min(480px, 100%);
   justify-self: center;
-  border-top: 4px solid #ff9226;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  border-top: 0;
+  padding: 36px 38px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
 }
 
 .app.production-shell.mandir-domain.signed-out .access-panel .toolbar {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
-  align-items: end;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.app.production-shell.mandir-domain.signed-out #run-checks,
+.app.production-shell.mandir-domain.signed-out #clear-token {
+  display: none;
+}
+
+.app.production-shell.mandir-domain.signed-out #login-submit {
+  width: 100%;
+  min-height: 58px;
+  text-transform: uppercase;
+}
+
+.app.production-shell.mandir-domain.signed-out .access-panel-head {
+  text-align: center;
+  display: block;
+}
+
+.app.production-shell.mandir-domain.signed-out .access-panel-head h3,
+.app.production-shell.mandir-domain.signed-out .access-panel-head p,
+.app.production-shell.mandir-domain.signed-out #session-pill {
+  display: none;
+}
+
+.mandir-login-brand {
+  display: none;
+}
+
+.app.mandir-domain.signed-out .mandir-login-brand {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mandir-login-brand img {
+  width: 138px;
+  height: 138px;
+  object-fit: contain;
+}
+
+.mandir-login-brand strong {
+  font-size: 20px;
+}
+
+.mandir-login-brand span {
+  color: var(--muted);
+}
+
+.mandir-login-lock {
+  width: 28px;
+  height: 24px;
+  border: 3px solid #ff9226;
+  border-radius: 4px;
+  position: relative;
+}
+
+.mandir-login-lock::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: -16px;
+  width: 12px;
+  height: 16px;
+  border: 3px solid #ff9226;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+
+.mandir-login-links {
+  display: none;
+}
+
+.app.mandir-domain.signed-out .mandir-login-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.app.mandir-domain.signed-out .mandir-login-links a {
+  border: 1px solid #ff9226;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #e65f00;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.app.mandir-domain.signed-out #login-status {
+  text-align: center;
 }
 
 .app.production-shell.mandir-domain.signed-out #context-cards,
 .app.production-shell.mandir-domain.signed-out .legacy-strip,
 .app.production-shell.mandir-domain.signed-out .dashboard-preview {
+  display: none;
+}
+
+.mandir-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  place-items: center;
+  background: #000000;
+  color: #ffffff;
+}
+
+.mandir-splash.show {
+  display: grid;
+}
+
+.mandir-splash-frame {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+
+.mandir-splash video,
+.mandir-splash img {
+  width: min(460px, 72vw);
+  max-height: 62vh;
+  object-fit: contain;
+}
+
+.mandir-splash img {
   display: none;
 }
 
