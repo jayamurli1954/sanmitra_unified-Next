@@ -317,7 +317,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   }
   if (topbarSubtitle) {
     topbarSubtitle.textContent = currentExperience === "mandir"
-      ? "Temple operations, receipts, public payments, reports, and accounting"
+      ? "Temple operations, seva, donations, reports, and accounting"
       : config.subtitle;
   }
   brandLogo.src = config.logo;
@@ -2117,7 +2117,7 @@ function renderMandirDashboard(payload = {}) {
     <div class="legacy-dashboard mandir-dashboard">
       <div class="preview-heading">
         <div>
-          <h3>MandirMitra Dashboard</h3>
+          <h3>Dashboard</h3>
           <p>Donation, seva, and public UPI payment verification for the active temple tenant.</p>
         </div>
         <span class="pill ok technical-context">mandirmitra</span>

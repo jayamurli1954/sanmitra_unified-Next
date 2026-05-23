@@ -62,6 +62,104 @@ a {
   display: none;
 }
 
+.app.mandir-domain {
+  grid-template-columns: 248px 1fr;
+  background: #f5f5f5;
+}
+
+.app.mandir-domain .sidebar {
+  background: #ffffff;
+  color: #202124;
+  border-right: 1px solid #e0e0e0;
+  padding: 0;
+  gap: 0;
+}
+
+.app.mandir-domain .brand {
+  min-height: 72px;
+  grid-template-columns: 52px 1fr;
+  padding: 12px 18px;
+  background: #ff9226;
+  color: #ffffff;
+}
+
+.app.mandir-domain .brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+}
+
+.app.mandir-domain .brand h1 {
+  font-size: 17px;
+}
+
+.app.mandir-domain .brand p {
+  color: #fff4e5;
+  font-size: 12px;
+}
+
+.app.mandir-domain .nav {
+  gap: 0;
+  padding: 0;
+}
+
+.app.mandir-domain .nav a,
+.app.mandir-domain .nav button {
+  min-height: 52px;
+  border: 0;
+  border-radius: 0;
+  color: #2b2b2b;
+  padding: 12px 22px;
+}
+
+.app.mandir-domain .nav a.active,
+.app.mandir-domain .nav button.active {
+  background: #fff3df;
+  border-left: 4px solid #ff9226;
+  color: #111827;
+  font-weight: 800;
+}
+
+.app.mandir-domain .topbar {
+  min-height: 72px;
+  background: #ff9226;
+  border-bottom: 0;
+  color: #111827;
+}
+
+.app.mandir-domain .topbar .muted {
+  color: #5b2a00;
+}
+
+.app.mandir-domain .content {
+  background: #f5f5f5;
+}
+
+.app.mandir-domain .card,
+.app.mandir-domain .legacy-dashboard,
+.app.mandir-domain .dashboard-main-grid > article,
+.app.mandir-domain .table-preview {
+  border-color: #e5e5e5;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.app.mandir-domain .mandir-dashboard .metric-tile {
+  background: #ffffff;
+  border-color: #e5e5e5;
+  border-left: 4px solid #4caf50;
+}
+
+.app.mandir-domain .workspace-tabs button {
+  background: #ffffff;
+  border-color: #ff9226;
+  color: #e65f00;
+}
+
+.app.mandir-domain .workspace-tabs button.active {
+  background: #ff9226;
+  color: #ffffff;
+}
+
 .app.production-shell .technical-context {
   display: none;
 }
