@@ -146,6 +146,8 @@ const experienceConfig = {
       { module_key: "temple", display_name: "Sevas", frontend_path: "/temple/sevas", nav_group: "Operations", enabled: true },
       { module_key: "temple", display_name: "Donations", frontend_path: "/temple/donations", nav_group: "Operations", enabled: true },
       { module_key: "temple", display_name: "Devotees", frontend_path: "/temple/devotees", nav_group: "Operations", enabled: true },
+      { module_key: "temple", display_name: "Public Payments", frontend_path: "/temple/public-payments", nav_group: "Operations", enabled: true },
+      { module_key: "temple", display_name: "Receipts", frontend_path: "/temple/receipts", nav_group: "Operations", enabled: true },
       { module_key: "audit", display_name: "Reports", frontend_path: "/temple/reports", nav_group: "Administration", enabled: true },
       { module_key: "temple", display_name: "Panchang", frontend_path: "/temple/panchang", nav_group: "Operations", enabled: true },
       { module_key: "temple", display_name: "Settings", frontend_path: "/temple/settings", nav_group: "Administration", enabled: true },
@@ -413,6 +415,12 @@ function mandirWorkspaceFromModule(module = {}) {
   }
   if (path.includes("/sevas") || displayName.includes("seva")) {
     return "sevas";
+  }
+  if (path.includes("/public-payments") || displayName.includes("public payment")) {
+    return "payments";
+  }
+  if (path.includes("/receipts") || displayName.includes("receipt")) {
+    return "receipts";
   }
   if (path.includes("/panchang") || displayName.includes("panchang")) {
     return "panchang";
@@ -2167,19 +2175,33 @@ function renderMandirDashboard(payload = {}) {
   const showSettings = activeMandirWorkspace === "settings";
   const showImplementation = activeMandirWorkspace === "implementation";
   const showPlatformOwners = activeMandirWorkspace === "platform-owners";
+  const pageMeta = {
+    overview: ["Dashboard", "Donation, seva, public payment, panchang, reports, and accounting summary for the active temple tenant."],
+    donations: ["Donations", "Record and review donation receipts for the active temple tenant."],
+    sevas: ["Sevas", "Book and review seva receipts for the active temple tenant."],
+    payments: ["Public Payments", "Verify no-login UPI payments before posting receipts and accounting."],
+    exceptions: ["Payment Exceptions", "Review public payment records that need correction or rejection."],
+    receipts: ["Receipts", "Preview, download, and reverse donation or seva receipts."],
+    panchang: ["Panchang", "Temple calendar and panchang visibility."],
+    reports: ["Reports", "Donation, seva, devotee, and operational reports."],
+    accounting: ["Accounting", "Trial Balance, drill-down, financial reports, and temple expenses."],
+    settings: ["Settings", "Tenant-level MandirMitra configuration and safety controls."],
+    implementation: ["Implementation Checks", "First-live checklist and deployment readiness tracking."],
+    "platform-owners": ["Platform Owners", "Privileged platform-owner administration shortcut."],
+  }[activeMandirWorkspace] || ["Dashboard", "MandirMitra temple workspace."];
 
   return `
     <div class="legacy-dashboard mandir-dashboard">
       <div class="preview-heading">
         <div>
-          <h3>Dashboard</h3>
-          <p>Donation, seva, and public UPI payment verification for the active temple tenant.</p>
+          <h3>${escapeHtml(pageMeta[0])}</h3>
+          <p>${escapeHtml(pageMeta[1])}</p>
         </div>
         <span class="pill ok technical-context">mandirmitra</span>
       </div>
-      ${renderMandirWorkspaceTabs(activeMandirWorkspace)}
+      ${isProductionShell() && isMandirHost() ? "" : renderMandirWorkspaceTabs(activeMandirWorkspace)}
       ${renderMandirOperationResult(formResult)}
-      ${(showOverview || showDonations || showSevas || showAccounting) ? renderMandirCreateForms({
+      ${showOverview ? renderMandirCreateForms({
         payment_accounts: payload.payment_accounts,
         accounts: payload.accounts,
         form_result: null,
