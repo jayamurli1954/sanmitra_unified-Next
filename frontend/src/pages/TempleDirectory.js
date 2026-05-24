@@ -228,17 +228,6 @@ function TempleDirectory() {
     }
   };
 
-  const handleOpenDashboard = (temple) => {
-    const resolvedTempleId = Number.parseInt(String(temple?.id || temple?.temple_id || ''), 10);
-    if (!Number.isInteger(resolvedTempleId) || resolvedTempleId <= 0) {
-      showError(t('templeDirectory.invalidTempleId'));
-      return;
-    }
-    setActiveTempleId(resolvedTempleId, temple?.tenant_id);
-    emitActiveTempleChanged(resolvedTempleId, temple?.tenant_id);
-    navigate('/dashboard');
-  };
-
   if (!isPlatformSuperAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -430,11 +419,11 @@ function TempleDirectory() {
                           const hasPlaceholderName = resolvedTempleName === 'temple' || resolvedTempleName === 'temple trust';
                           const hasContact = Boolean(temple?.phone || temple?.email);
                           const hasLocation = Boolean(temple?.city || temple?.state);
-                          const onboardingStatus = normalizeName(temple?.onboarding_status);
-                          const needsReview = !hasApprovedRequest || hasPlaceholderName || !hasContact || !hasLocation || onboardingStatus === 'completed';
+                          const needsReview = !hasApprovedRequest || hasPlaceholderName || !hasContact || !hasLocation;
                           const resendLabel = !linkedRequestId
-                            ? t('templeDirectory.noRequest')
+                            ? t('templeDirectory.noApprovedRequestAction')
                             : (resendLoadingRequestId === linkedRequestId ? t('templeDirectory.resending') : t('templeDirectory.resendEmail'));
+                          const canRemoveCompletely = Boolean(temple.platform_can_write);
                           return (
                             <TableRow key={temple.id} hover>
                               <TableCell>{temple.id}</TableCell>
@@ -454,20 +443,13 @@ function TempleDirectory() {
                               <TableCell>
                                 <Chip
                                   size="small"
-                                  color={needsReview ? 'warning' : 'success'}
-                                  label={needsReview ? t('templeDirectory.needsReview') : t('templeDirectory.verified')}
+                                  color={needsReview ? 'warning' : 'default'}
+                                  label={needsReview ? t('templeDirectory.needsReview') : t('templeDirectory.reviewed')}
                                   variant={needsReview ? 'filled' : 'outlined'}
                                 />
                               </TableCell>
                               <TableCell align="right">
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
-                                  <Button
-                                    size="small"
-                                    variant="contained"
-                                    onClick={() => handleOpenDashboard(temple)}
-                                  >
-                                    {t('templeDirectory.openDashboard')}
-                                  </Button>
                                   <Button
                                     size="small"
                                     variant="outlined"
@@ -501,10 +483,18 @@ function TempleDirectory() {
                                     size="small"
                                     variant="outlined"
                                     color="error"
-                                    disabled={tenantActionKey === `remove-${temple.id}`}
-                                    onClick={() => handleRemoveTemple(temple)}
+                                    disabled={!canRemoveCompletely || tenantActionKey === `remove-${temple.id}`}
+                                    onClick={() => {
+                                      if (canRemoveCompletely) {
+                                        handleRemoveTemple(temple);
+                                      }
+                                    }}
                                   >
-                                    {tenantActionKey === `remove-${temple.id}` ? t('templeDirectory.removing') : t('templeDirectory.removeCompletely')}
+                                    {tenantActionKey === `remove-${temple.id}`
+                                      ? t('templeDirectory.removing')
+                                      : canRemoveCompletely
+                                        ? t('templeDirectory.removeCompletely')
+                                        : t('templeDirectory.deleteRequestOnly')}
                                   </Button>
                                 </Stack>
                               </TableCell>
