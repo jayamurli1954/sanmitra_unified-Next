@@ -693,7 +693,7 @@ function Sevas() {
         await fetchSevas();
 
         if (createdBooking?.id) {
-          await handlePrintReceipt(createdBooking.id, createdBooking.receipt_number);
+          await handleDownloadReceipt(createdBooking.id, createdBooking.receipt_number);
         }
 
         setTimeout(() => {
@@ -1963,7 +1963,7 @@ function Sevas() {
               (!selectedSeva?.quick_ticket_enabled && !bookingForm.devotee_id)
             }
           >
-            {selectedSeva?.quick_ticket_enabled ? 'Book & Print' : 'Confirm Booking'}
+            {selectedSeva?.quick_ticket_enabled ? 'Book & Download Receipt' : 'Confirm Booking'}
           </Button>
         </DialogActions>
       </Dialog>
