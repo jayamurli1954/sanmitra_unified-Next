@@ -329,6 +329,25 @@ def test_pincode_lookup_returns_not_found_when_lookup_misses(mandir_client, monk
     assert payload["state"] is None
     assert payload["found"] is False
 
+
+def test_pincode_lookup_uses_local_fallback_when_external_lookup_fails(mandir_client, monkeypatch):
+    client, _collection = mandir_client
+
+    async def fake_lookup(pincode):
+        return mandir_router.MANDIR_PINCODE_FALLBACKS.get(pincode, (None, None))
+
+    monkeypatch.setattr(mandir_router, "_lookup_pincode_city_state", fake_lookup)
+
+    response = client.get("/api/v1/pincode/lookup?pincode=600004")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["pincode"] == "600004"
+    assert payload["city"] == "Chennai"
+    assert payload["state"] == "Tamil Nadu"
+    assert payload["found"] is True
+
+
 def test_devotee_autofill_returns_found_payload(mandir_client):
     client, collection = mandir_client
 
