@@ -167,6 +167,56 @@ def test_search_devotees_does_not_cross_tenant_scope(mandir_client):
     assert response.json() == []
 
 
+def test_search_devotees_does_not_cross_temple_scope(mandir_client):
+    client, collection = mandir_client
+
+    collection.docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "temple-2-devotee",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "temple_id": 2,
+            "name": "Temple Two Devotee",
+            "phone": "9876512340",
+        }
+    )
+
+    response = client.get(
+        "/api/v1/devotees/search/by-mobile/9876512340",
+        headers={"X-Temple-Id": "1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_search_devotees_matches_selected_temple_scope(mandir_client):
+    client, collection = mandir_client
+
+    collection.docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "temple-1-devotee",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "temple_id": 1,
+            "name": "Temple One Devotee",
+            "phone": "9876512340",
+        }
+    )
+
+    response = client.get(
+        "/api/v1/devotees/search/by-mobile/9876512340",
+        headers={"X-Temple-Id": "1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == "temple-1-devotee"
+
+
 def test_pincode_lookup_returns_found_for_autofill(mandir_client, monkeypatch):
     client, _collection = mandir_client
 

@@ -3856,19 +3856,28 @@ def _mandir_upi_payment_view(doc: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-async def _find_devotee_by_phone(tenant_id: str, app_key: str, phone: str) -> dict[str, Any] | None:
+async def _find_devotee_by_phone(
+    tenant_id: str,
+    app_key: str,
+    phone: str,
+    temple_id: int | None = None,
+) -> dict[str, Any] | None:
     normalized = _normalize_phone(phone)
     if not normalized:
         return None
 
+    scope_query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    if temple_id is not None and temple_id > 0:
+        scope_query["temple_id"] = temple_id
+
     devotee_col = get_collection("mandir_devotees")
-    docs = await devotee_col.find({"tenant_id": tenant_id, "app_key": app_key, "phone": normalized}).limit(1).to_list(length=1)
+    docs = await devotee_col.find({**scope_query, "phone": normalized}).limit(1).to_list(length=1)
     if docs:
         return _sanitize_mongo_doc(docs[0])
 
     donation_col = get_collection("mandir_donations")
     donation_docs = await (
-        donation_col.find({"tenant_id": tenant_id, "app_key": app_key, "devotee_phone": normalized})
+        donation_col.find({**scope_query, "devotee_phone": normalized})
         .sort("created_at", -1)
         .limit(1)
         .to_list(length=1)
@@ -3880,6 +3889,7 @@ async def _find_devotee_by_phone(tenant_id: str, app_key: str, phone: str) -> di
             "id": str(snapshot.get("id") or donation.get("devotee_id") or f"donation:{donation.get('donation_id') or donation.get('id')}"),
             "tenant_id": tenant_id,
             "app_key": app_key,
+            "temple_id": temple_id,
             "name_prefix": donation.get("devotee_prefix") or snapshot.get("name_prefix"),
             "name": donation.get("devotee_name") or snapshot.get("name") or "Devotee",
             "first_name": donation.get("devotee_name") or snapshot.get("first_name") or snapshot.get("name") or "Devotee",
@@ -3895,7 +3905,7 @@ async def _find_devotee_by_phone(tenant_id: str, app_key: str, phone: str) -> di
 
     seva_col = get_collection("mandir_seva_bookings")
     seva_docs = await (
-        seva_col.find({"tenant_id": tenant_id, "app_key": app_key, "devotee_phone": normalized})
+        seva_col.find({**scope_query, "devotee_phone": normalized})
         .sort("created_at", -1)
         .limit(1)
         .to_list(length=1)
@@ -3907,6 +3917,7 @@ async def _find_devotee_by_phone(tenant_id: str, app_key: str, phone: str) -> di
             "id": str(snapshot.get("id") or seva.get("devotee_id") or f"seva:{seva.get('booking_id') or seva.get('id')}"),
             "tenant_id": tenant_id,
             "app_key": app_key,
+            "temple_id": temple_id,
             "name_prefix": seva.get("devotee_prefix") or snapshot.get("name_prefix"),
             "name": seva.get("devotee_name") or seva.get("devotee_names") or snapshot.get("name") or "Devotee",
             "first_name": seva.get("devotee_name") or seva.get("devotee_names") or snapshot.get("first_name") or snapshot.get("name") or "Devotee",
@@ -3927,6 +3938,7 @@ async def _upsert_devotee_from_contribution(
     tenant_id: str,
     app_key: str,
     *,
+    temple_id: int | None = None,
     phone: str | None,
     name_prefix: str | None = None,
     name: str | None = None,
@@ -3942,6 +3954,8 @@ async def _upsert_devotee_from_contribution(
 
     now = datetime.now(timezone.utc).isoformat()
     devotee_patch: dict[str, Any] = {"updated_at": now}
+    if temple_id is not None and temple_id > 0:
+        devotee_patch["temple_id"] = temple_id
     for key, value in {
         "name_prefix": name_prefix,
         "name": name,
@@ -3956,16 +3970,24 @@ async def _upsert_devotee_from_contribution(
             devotee_patch[key] = value
 
     col = get_collection("mandir_devotees")
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "phone": normalized}
+    if temple_id is not None and temple_id > 0:
+        query["temple_id"] = temple_id
+
+    insert_doc: dict[str, Any] = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "phone": normalized,
+        "created_at": now,
+    }
+    if temple_id is not None and temple_id > 0:
+        insert_doc["temple_id"] = temple_id
+
     await col.update_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "phone": normalized},
+        query,
         {
-            "$setOnInsert": {
-                "id": str(uuid4()),
-                "tenant_id": tenant_id,
-                "app_key": app_key,
-                "phone": normalized,
-                "created_at": now,
-            },
+            "$setOnInsert": insert_doc,
             "$set": devotee_patch,
         },
         upsert=True,
@@ -4286,6 +4308,7 @@ async def create_donation(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
 ):
     tenant_context = resolve_mandir_tenant(
         current_user=current_user,
@@ -4295,6 +4318,7 @@ async def create_donation(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
+    temple_id = _to_positive_int(x_temple_id)
     await _ensure_default_mandir_sql_accounts_safe(session, tenant_id, raise_on_failure=True)
 
     donation_id = str(uuid4())
@@ -4321,6 +4345,7 @@ async def create_donation(
         "donation_id": donation_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
+        "temple_id": temple_id,
         "amount": amount,
         "category": category,
         "donation_type": str(payload.get("donation_type") or "cash").strip().lower() or "cash",
@@ -4420,6 +4445,7 @@ async def create_donation(
         await _upsert_devotee_from_contribution(
             tenant_id,
             app_key,
+            temple_id=temple_id,
             phone=devotee_phone,
             name_prefix=devotee_prefix,
             name=devotee_name,
@@ -4722,6 +4748,7 @@ async def list_devotees(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
 ):
     tenant_context = resolve_mandir_tenant(
         current_user=current_user,
@@ -4731,11 +4758,15 @@ async def list_devotees(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
+    temple_id = _to_positive_int(x_temple_id)
 
     try:
         col = get_collection("mandir_devotees")
+        query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+        if temple_id is not None:
+            query["temple_id"] = temple_id
         rows = await (
-            col.find({"tenant_id": tenant_id, "app_key": app_key})
+            col.find(query)
             .sort("created_at", -1)
             .skip(skip)
             .limit(limit)
@@ -4754,6 +4785,7 @@ async def create_devotee(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
 ):
     tenant_context = resolve_mandir_tenant(
         current_user=current_user,
@@ -4763,11 +4795,13 @@ async def create_devotee(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
+    temple_id = _to_positive_int(x_temple_id)
 
     devotee = {
         "id": str(uuid4()),
         "tenant_id": tenant_id,
         "app_key": app_key,
+        "temple_id": temple_id,
         "name": str(payload.get("name") or payload.get("first_name") or "Unnamed Devotee"),
         "first_name": str(payload.get("first_name") or ""),
         "last_name": str(payload.get("last_name") or ""),
@@ -4796,6 +4830,7 @@ async def search_devotee_by_mobile(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
 ):
     tenant_context = resolve_mandir_tenant(
         current_user=current_user,
@@ -4805,6 +4840,7 @@ async def search_devotee_by_mobile(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
+    temple_id = _to_positive_int(x_temple_id)
     normalized = _normalize_phone(phone)
 
     if not normalized:
@@ -4812,10 +4848,13 @@ async def search_devotee_by_mobile(
 
     try:
         col = get_collection("mandir_devotees")
-        docs = await col.find({"tenant_id": tenant_id, "app_key": app_key, "phone": normalized}).limit(5).to_list(length=5)
+        query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "phone": normalized}
+        if temple_id is not None:
+            query["temple_id"] = temple_id
+        docs = await col.find(query).limit(5).to_list(length=5)
         if docs:
             return [_sanitize_mongo_doc(doc) for doc in docs]
-        fallback = await _find_devotee_by_phone(tenant_id, app_key, normalized)
+        fallback = await _find_devotee_by_phone(tenant_id, app_key, normalized, temple_id=temple_id)
         return [fallback] if fallback else []
     except Exception as exc:
         logger.error("Failed to search devotees by mobile for tenant=%s: %s", tenant_id, exc, exc_info=True)
@@ -4827,6 +4866,7 @@ async def autofill_devotee_by_mobile(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
 ):
     tenant_context = resolve_mandir_tenant(
         current_user=current_user,
@@ -4836,12 +4876,13 @@ async def autofill_devotee_by_mobile(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
+    temple_id = _to_positive_int(x_temple_id)
     normalized = _normalize_phone(phone)
     if not normalized:
         return {"found": False, "phone": normalized, "devotee": None}
 
     try:
-        devotee = await _find_devotee_by_phone(tenant_id, app_key, normalized)
+        devotee = await _find_devotee_by_phone(tenant_id, app_key, normalized, temple_id=temple_id)
         if devotee is None:
             return {"found": False, "phone": normalized, "devotee": None}
         return {"found": True, "phone": normalized, "devotee": devotee}
