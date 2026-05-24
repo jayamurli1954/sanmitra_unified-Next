@@ -57,6 +57,7 @@ def mandir_client(monkeypatch):
         "mandir_donations": FakeDevoteeCollection(),
         "mandir_seva_bookings": FakeDevoteeCollection(),
     }
+    collection.related = empty_collections
 
     def fake_get_collection(name: str):
         if name == "mandir_devotees":
@@ -215,6 +216,82 @@ def test_search_devotees_matches_selected_temple_scope(mandir_client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["id"] == "temple-1-devotee"
+
+
+def test_search_devotees_matches_legacy_same_tenant_when_temple_id_missing(mandir_client):
+    client, collection = mandir_client
+
+    collection.docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "legacy-devotee",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "name": "Legacy Devotee",
+            "phone": "9876512340",
+        }
+    )
+
+    response = client.get(
+        "/api/v1/devotees/search/by-mobile/9876512340",
+        headers={"X-Temple-Id": "1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == "legacy-devotee"
+    assert payload[0]["temple_id"] == 1
+
+
+def test_search_devotees_matches_legacy_donation_for_selected_temple(mandir_client):
+    client, collection = mandir_client
+    collection.related["mandir_donations"].docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "donation-1",
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "devotee_phone": "9876512340",
+            "devotee_name": "Raghavan Iyer",
+            "devotee_email": "raghavan.iyer01@gmail.com",
+        }
+    )
+
+    response = client.get(
+        "/api/v1/devotees/search/by-mobile/9876512340",
+        headers={"X-Temple-Id": "1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["source"] == "donation"
+    assert payload[0]["temple_id"] == 1
+    assert payload[0]["name"] == "Raghavan Iyer"
+
+
+def test_search_devotees_does_not_match_legacy_other_tenant(mandir_client):
+    client, collection = mandir_client
+
+    collection.docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "tenant-2-legacy-devotee",
+            "tenant_id": "tenant-2",
+            "app_key": "mandirmitra",
+            "name": "Tenant Two Legacy Devotee",
+            "phone": "9876512340",
+        }
+    )
+
+    response = client.get(
+        "/api/v1/devotees/search/by-mobile/9876512340",
+        headers={"X-Temple-Id": "1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_pincode_lookup_returns_found_for_autofill(mandir_client, monkeypatch):

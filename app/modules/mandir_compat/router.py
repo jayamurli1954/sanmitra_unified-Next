@@ -3870,10 +3870,23 @@ async def _find_devotee_by_phone(
     if temple_id is not None and temple_id > 0:
         scope_query["temple_id"] = temple_id
 
+    legacy_scope_query: dict[str, Any] | None = None
+    if temple_id is not None and temple_id > 0:
+        # Older MandirMitra donation/seva-derived devotee data was tenant-scoped
+        # but did not persist temple_id. Keep this fallback inside the resolved
+        # tenant/app and only match records with no explicit temple assignment.
+        legacy_scope_query = {"tenant_id": tenant_id, "app_key": app_key, "temple_id": None}
+
     devotee_col = get_collection("mandir_devotees")
     docs = await devotee_col.find({**scope_query, "phone": normalized}).limit(1).to_list(length=1)
     if docs:
         return _sanitize_mongo_doc(docs[0])
+    if legacy_scope_query is not None:
+        docs = await devotee_col.find({**legacy_scope_query, "phone": normalized}).limit(1).to_list(length=1)
+        if docs:
+            devotee = _sanitize_mongo_doc(docs[0])
+            devotee["temple_id"] = temple_id
+            return devotee
 
     donation_col = get_collection("mandir_donations")
     donation_docs = await (
@@ -3902,6 +3915,33 @@ async def _find_devotee_by_phone(
             "pincode": donation.get("devotee_pincode") or snapshot.get("pincode"),
             "source": "donation",
         }
+    if legacy_scope_query is not None:
+        donation_docs = await (
+            donation_col.find({**legacy_scope_query, "devotee_phone": normalized})
+            .sort("created_at", -1)
+            .limit(1)
+            .to_list(length=1)
+        )
+        if donation_docs:
+            donation = _sanitize_mongo_doc(donation_docs[0])
+            snapshot = donation.get("devotee") if isinstance(donation.get("devotee"), dict) else {}
+            return {
+                "id": str(snapshot.get("id") or donation.get("devotee_id") or f"donation:{donation.get('donation_id') or donation.get('id')}"),
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "temple_id": temple_id,
+                "name_prefix": donation.get("devotee_prefix") or snapshot.get("name_prefix"),
+                "name": donation.get("devotee_name") or snapshot.get("name") or "Devotee",
+                "first_name": donation.get("devotee_name") or snapshot.get("first_name") or snapshot.get("name") or "Devotee",
+                "last_name": snapshot.get("last_name") or "",
+                "phone": normalized,
+                "email": donation.get("devotee_email") or snapshot.get("email"),
+                "address": donation.get("devotee_address") or snapshot.get("address"),
+                "city": donation.get("devotee_city") or snapshot.get("city"),
+                "state": donation.get("devotee_state") or snapshot.get("state"),
+                "pincode": donation.get("devotee_pincode") or snapshot.get("pincode"),
+                "source": "donation",
+            }
 
     seva_col = get_collection("mandir_seva_bookings")
     seva_docs = await (
@@ -3930,6 +3970,33 @@ async def _find_devotee_by_phone(
             "pincode": seva.get("devotee_pincode") or seva.get("pincode") or snapshot.get("pincode"),
             "source": "seva",
         }
+    if legacy_scope_query is not None:
+        seva_docs = await (
+            seva_col.find({**legacy_scope_query, "devotee_phone": normalized})
+            .sort("created_at", -1)
+            .limit(1)
+            .to_list(length=1)
+        )
+        if seva_docs:
+            seva = _sanitize_mongo_doc(seva_docs[0])
+            snapshot = seva.get("devotee") if isinstance(seva.get("devotee"), dict) else {}
+            return {
+                "id": str(snapshot.get("id") or seva.get("devotee_id") or f"seva:{seva.get('booking_id') or seva.get('id')}"),
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "temple_id": temple_id,
+                "name_prefix": seva.get("devotee_prefix") or snapshot.get("name_prefix"),
+                "name": seva.get("devotee_name") or seva.get("devotee_names") or snapshot.get("name") or "Devotee",
+                "first_name": seva.get("devotee_name") or seva.get("devotee_names") or snapshot.get("first_name") or snapshot.get("name") or "Devotee",
+                "last_name": snapshot.get("last_name") or "",
+                "phone": normalized,
+                "email": seva.get("devotee_email") or snapshot.get("email"),
+                "address": seva.get("devotee_address") or seva.get("address") or snapshot.get("address"),
+                "city": seva.get("devotee_city") or seva.get("city") or snapshot.get("city"),
+                "state": seva.get("devotee_state") or seva.get("state") or snapshot.get("state"),
+                "pincode": seva.get("devotee_pincode") or seva.get("pincode") or snapshot.get("pincode"),
+                "source": "seva",
+            }
 
     return None
 
