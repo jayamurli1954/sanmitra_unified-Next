@@ -357,7 +357,7 @@ function Dashboard() {
   const fetchDashboardActivity = async () => {
     try {
       const [donationsRes, sevasRes] = await Promise.allSettled([
-        api.get('/api/v1/donations', { params: { limit: 8 } }),
+        api.get('/api/v1/donations', { params: { limit: 2000 } }),
         api.get('/api/v1/sevas/bookings', { params: { limit: 8 } }),
       ]);
 
@@ -720,7 +720,50 @@ function Dashboard() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 4);
 
-  const maxBreakdownAmount = Math.max(...donationBreakdown.map((item) => item.value), 1);
+  const donationBreakdownTotal = donationBreakdown.reduce((sum, item) => sum + item.value, 0);
+
+  const monthlyDonationTrend = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (5 - index), 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return {
+      key,
+      label: date.toLocaleDateString('en-IN', { month: 'short' }),
+      amount: 0,
+    };
+  });
+
+  recentDonations.forEach((donation) => {
+    const rawDate = donation.donation_date || donation.created_at;
+    const date = rawDate ? new Date(rawDate) : null;
+    if (!date || Number.isNaN(date.getTime())) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const month = monthlyDonationTrend.find((item) => item.key === key);
+    if (month) {
+      month.amount += safeAmount(donation.amount);
+    }
+  });
+
+  const maxMonthlyDonation = Math.max(...monthlyDonationTrend.map((item) => item.amount), 1);
+  const chartWidth = 560;
+  const chartHeight = 260;
+  const chartPadding = { top: 26, right: 26, bottom: 38, left: 52 };
+  const chartInnerWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const chartInnerHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const trendPoints = monthlyDonationTrend.map((item, index) => {
+    const x = chartPadding.left + (monthlyDonationTrend.length === 1 ? 0 : (index / (monthlyDonationTrend.length - 1)) * chartInnerWidth);
+    const y = chartPadding.top + chartInnerHeight - ((item.amount / maxMonthlyDonation) * chartInnerHeight);
+    return { ...item, x, y };
+  });
+  const trendPath = trendPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const areaPath = trendPoints.length
+    ? `${trendPath} L ${trendPoints[trendPoints.length - 1].x} ${chartPadding.top + chartInnerHeight} L ${trendPoints[0].x} ${chartPadding.top + chartInnerHeight} Z`
+    : '';
+  const yAxisMarks = [1, 0.75, 0.5, 0.25, 0].map((ratio) => ({
+    ratio,
+    y: chartPadding.top + chartInnerHeight - (ratio * chartInnerHeight),
+    label: formatCompactCurrency(maxMonthlyDonation * ratio),
+  }));
 
   const paymentModes = ['Cash', 'Bank'];
   const canEditDevoteeDetails = mobileVerified && !searchingDevotee;
@@ -776,8 +819,6 @@ function Dashboard() {
       color: '#c2410c',
     },
   ];
-
-  const maxPerformanceAmount = Math.max(...performanceRows.map((row) => safeAmount(row.year)), 1);
 
   if (loading) {
     return (
@@ -897,55 +938,144 @@ function Dashboard() {
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <TrendingUpIcon sx={{ color: '#0f766e' }} />
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Collection Performance
+                Monthly Donation Trend
               </Typography>
             </Stack>
-            <Grid container spacing={2}>
+            <Box sx={{ width: '100%', overflowX: 'auto' }}>
+              <Box
+                component="svg"
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                role="img"
+                aria-label="Monthly donation trend for last six months"
+                sx={{ width: '100%', minWidth: 420, display: 'block' }}
+              >
+                <defs>
+                  <linearGradient id="donationTrendFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#d49a1f" stopOpacity="0.46" />
+                    <stop offset="100%" stopColor="#d49a1f" stopOpacity="0.05" />
+                  </linearGradient>
+                </defs>
+                {yAxisMarks.map((mark) => (
+                  <g key={mark.ratio}>
+                    <line
+                      x1={chartPadding.left}
+                      x2={chartWidth - chartPadding.right}
+                      y1={mark.y}
+                      y2={mark.y}
+                      stroke="#e5e7eb"
+                      strokeWidth="1"
+                    />
+                    <text x={chartPadding.left - 10} y={mark.y + 4} textAnchor="end" fontSize="11" fill="#64748b">
+                      {mark.label}
+                    </text>
+                  </g>
+                ))}
+                {areaPath && <path d={areaPath} fill="url(#donationTrendFill)" />}
+                {trendPath && <path d={trendPath} fill="none" stroke="#b7791f" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
+                {trendPoints.map((point) => (
+                  <g key={point.key}>
+                    <circle cx={point.x} cy={point.y} r="5" fill="#fff" stroke="#b7791f" strokeWidth="3" />
+                    <text x={point.x} y={point.y - 12} textAnchor="middle" fontSize="12" fontWeight="700" fill="#173042">
+                      {formatCompactCurrency(point.amount)}
+                    </text>
+                    <text x={point.x} y={chartHeight - 12} textAnchor="middle" fontSize="12" fill="#334155">
+                      {point.label}
+                    </text>
+                  </g>
+                ))}
+              </Box>
+            </Box>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
               {performanceRows.map((row) => (
-                <Grid item xs={12} key={row.label}>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr 120px' }, gap: 1.5, alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {row.label}
-                    </Typography>
-                    <Box sx={{ height: 12, borderRadius: 999, bgcolor: '#f1f5f9', overflow: 'hidden' }}>
-                      <Box sx={{ width: `${Math.max(4, Math.round((safeAmount(row.year) / maxPerformanceAmount) * 100))}%`, height: '100%', bgcolor: row.color }} />
-                    </Box>
-                    <Typography variant="body2" align="right" sx={{ fontWeight: 700 }}>
-                      {formatCompactCurrency(row.year)}
-                    </Typography>
-                  </Box>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-                    <Chip size="small" label={`Today ${formatCompactCurrency(row.today)}`} />
-                    <Chip size="small" label={`Month ${formatCompactCurrency(row.month)}`} />
-                    <Chip size="small" label={`Year ${formatCompactCurrency(row.year)}`} />
-                  </Stack>
-                </Grid>
+                <Chip
+                  key={row.label}
+                  size="small"
+                  label={`${row.label} YTD ${formatCompactCurrency(row.year)}`}
+                  sx={{ bgcolor: row.label === 'Donations' ? '#e0f2f1' : '#fff1e6' }}
+                />
               ))}
-            </Grid>
+            </Stack>
           </Paper>
         </Grid>
         <Grid item xs={12} lg={5}>
           <Paper sx={{ p: 2.5, borderRadius: 2, boxShadow: 2, height: '100%' }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <VolunteerActivismIcon sx={{ color: '#b7791f' }} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Recent Donation Purpose
-              </Typography>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  Donation Distribution by Purpose
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Recent donation breakdown
+                </Typography>
+              </Box>
             </Stack>
             {donationBreakdown.length > 0 ? (
-              <Stack spacing={1.4}>
-                {donationBreakdown.map((item) => (
-                  <Box key={item.label}>
-                    <Stack direction="row" justifyContent="space-between" spacing={1}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label}</Typography>
-                      <Typography variant="body2">{formatCompactCurrency(item.value)}</Typography>
-                    </Stack>
-                    <Box sx={{ mt: 0.75, height: 8, borderRadius: 999, bgcolor: '#f3ead7', overflow: 'hidden' }}>
-                      <Box sx={{ width: `${Math.max(6, Math.round((item.value / maxBreakdownAmount) * 100))}%`, height: '100%', bgcolor: '#b7791f' }} />
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '190px 1fr' }, alignItems: 'center', gap: 2 }}>
+                <Box sx={{ position: 'relative', width: 190, height: 190, mx: 'auto' }}>
+                  <Box
+                    component="svg"
+                    viewBox="0 0 120 120"
+                    role="img"
+                    aria-label="Donation distribution donut chart"
+                    sx={{ width: 190, height: 190, transform: 'rotate(-90deg)' }}
+                  >
+                    <circle cx="60" cy="60" r="42" fill="none" stroke="#f3ead7" strokeWidth="18" />
+                    {donationBreakdown.map((item, index) => {
+                      const circumference = 2 * Math.PI * 42;
+                      const previous = donationBreakdown
+                        .slice(0, index)
+                        .reduce((sum, segment) => sum + segment.value, 0);
+                      const segment = donationBreakdownTotal > 0 ? item.value / donationBreakdownTotal : 0;
+                      const offset = donationBreakdownTotal > 0
+                        ? circumference * (1 - (previous / donationBreakdownTotal))
+                        : 0;
+                      const colors = ['#a16207', '#d49a1f', '#e9c46a', '#f3dfa2'];
+                      return (
+                        <circle
+                          key={item.label}
+                          cx="60"
+                          cy="60"
+                          r="42"
+                          fill="none"
+                          stroke={colors[index % colors.length]}
+                          strokeWidth="18"
+                          strokeDasharray={`${segment * circumference} ${circumference}`}
+                          strokeDashoffset={offset}
+                          strokeLinecap="butt"
+                        />
+                      );
+                    })}
+                  </Box>
+                  <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                        {formatCompactCurrency(donationBreakdownTotal)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        total
+                      </Typography>
                     </Box>
                   </Box>
-                ))}
-              </Stack>
+                </Box>
+                <Stack spacing={1.25}>
+                  {donationBreakdown.map((item, index) => {
+                    const colors = ['#a16207', '#d49a1f', '#e9c46a', '#f3dfa2'];
+                    const percent = donationBreakdownTotal ? Math.round((item.value / donationBreakdownTotal) * 100) : 0;
+                    return (
+                      <Stack key={item.label} direction="row" spacing={1.2} alignItems="center" justifyContent="space-between">
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                          <Box sx={{ width: 12, height: 12, borderRadius: 0.75, bgcolor: colors[index % colors.length], flex: '0 0 auto' }} />
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{item.label}</Typography>
+                        </Stack>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {percent}%
+                        </Typography>
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              </Box>
             ) : (
               <Typography variant="body2" color="text.secondary">
                 Recent donation purpose mix will appear after donations are recorded.
