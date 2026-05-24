@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -22,6 +22,7 @@ import {
   Snackbar,
   Chip,
   Stack,
+  Autocomplete,
 } from '@mui/material';
 import Layout from '../../components/Layout';
 import MoneyOffIcon from '@mui/icons-material/MoneyOff';
@@ -93,6 +94,43 @@ function QuickExpense() {
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [postingEntryId, setPostingEntryId] = useState(null);
   const [reversingEntryId, setReversingEntryId] = useState(null);
+
+  const expenseAccountOptions = useMemo(() => {
+    const accountOptions = accounts
+      .filter((acc) => {
+        const type = String(acc.account_type || acc.type || '').toLowerCase();
+        const code = String(acc.account_code || acc.code || '').trim();
+        return type === 'expense' && code;
+      })
+      .map((acc) => ({
+        id: acc.id,
+        account_code: String(acc.account_code || acc.code || '').trim(),
+        account_name: String(acc.account_name || acc.name || '').trim(),
+        label: String(acc.account_name || acc.name || '').trim(),
+        category: String(acc.account_subtype || acc.subtype || acc.category || 'Expense').trim(),
+      }));
+
+    const presetOptions = EXPENSE_TYPES.map((exp) => ({
+      ...exp,
+      account_name: exp.label,
+      id: null,
+    }));
+
+    const byCode = new Map();
+    [...accountOptions, ...presetOptions].forEach((option) => {
+      const code = String(option.account_code || '').trim();
+      if (!code || byCode.has(code)) return;
+      byCode.set(code, option);
+    });
+
+    return Array.from(byCode.values()).sort((a, b) => (
+      String(a.account_code).localeCompare(String(b.account_code))
+    ));
+  }, [accounts]);
+
+  const selectedExpenseAccount = expenseAccountOptions.find((option) => (
+    String(option.account_code) === String(expenseType)
+  )) || null;
 
   useEffect(() => {
     fetchAccounts();
@@ -203,7 +241,7 @@ function QuickExpense() {
       return;
     }
 
-    const selectedExpense = EXPENSE_TYPES.find((exp) => exp.account_code === expenseType);
+    const selectedExpense = selectedExpenseAccount || EXPENSE_TYPES.find((exp) => exp.account_code === expenseType);
     const selectablePaymentAccounts = paymentMode === 'Cash'
       ? paymentAccounts.cash_accounts
       : paymentAccounts.bank_accounts;
@@ -211,7 +249,7 @@ function QuickExpense() {
       (acc) => String(acc.account_id) === String(paymentAccountId)
     );
 
-    const expenseAccountId = getAccountIdByCode(expenseType, { allowLegacyExpenseFormat: true }) || String(expenseType);
+    const expenseAccountId = selectedExpense?.id || getAccountIdByCode(expenseType, { allowLegacyExpenseFormat: true }) || String(expenseType);
     const selectedPaymentAccountId = selectedPayment ? selectedPayment.account_id : null;
 
     if (!expenseAccountId || !selectedPaymentAccountId || !selectedExpense) {
@@ -224,7 +262,7 @@ function QuickExpense() {
       const entryDateTime = String(expenseDate).includes('T') ? expenseDate : `${expenseDate}T00:00:00`;
       const payload = {
         entry_date: entryDateTime,
-        narration: `${selectedExpense.label} - ${description}`,
+        narration: `${selectedExpense.label || selectedExpense.account_name} - ${description}`,
         reference_type: 'expense',
         reference_id: referenceNumber ? Number(referenceNumber) : undefined,
         journal_lines: [
@@ -379,11 +417,12 @@ function QuickExpense() {
       debitLine.account_code || accounts.find((acc) => acc.id === debitLine.account_id)?.account_code || ''
     );
 
-    const matchedExpenseType = EXPENSE_TYPES.find((exp) => exp.account_code === expenseAccountCode);
+    const matchedExpenseType = expenseAccountOptions.find((exp) => exp.account_code === expenseAccountCode)
+      || EXPENSE_TYPES.find((exp) => exp.account_code === expenseAccountCode);
     if (!matchedExpenseType) {
       setSnackbar({
         open: true,
-        message: `Entry uses account code ${expenseAccountCode}, not configured in Quick Expense presets.`,
+        message: `Entry uses account code ${expenseAccountCode}, which is not available in expense accounts.`,
         severity: 'warning',
       });
       return;
@@ -523,20 +562,37 @@ function QuickExpense() {
               <form onSubmit={handleSubmit}>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <FormControl fullWidth required>
-                      <InputLabel>Expense Type</InputLabel>
-                      <Select
-                        value={expenseType}
-                        onChange={(e) => setExpenseType(e.target.value)}
-                        label="Expense Type"
-                      >
-                        {EXPENSE_TYPES.map((exp) => (
-                          <MenuItem key={exp.account_code} value={exp.account_code}>
-                            {exp.label} ({exp.category})
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      value={selectedExpenseAccount}
+                      options={expenseAccountOptions}
+                      onChange={(_event, option) => setExpenseType(option?.account_code || '')}
+                      getOptionLabel={(option) => (
+                        option
+                          ? `${option.account_code} - ${option.label || option.account_name} (${option.category || 'Expense'})`
+                          : ''
+                      )}
+                      isOptionEqualToValue={(option, value) => (
+                        String(option.account_code) === String(value.account_code)
+                      )}
+                      filterOptions={(options, state) => {
+                        const query = String(state.inputValue || '').trim().toLowerCase();
+                        if (!query) return options.slice(0, 25);
+                        return options.filter((option) => (
+                          String(option.account_code || '').toLowerCase().includes(query)
+                          || String(option.label || option.account_name || '').toLowerCase().includes(query)
+                          || String(option.category || '').toLowerCase().includes(query)
+                        )).slice(0, 25);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Expense Account"
+                          required
+                          placeholder="Type code/name, e.g. 530 or electricity"
+                          helperText="Type 3-4 characters to search expense account code or name"
+                        />
+                      )}
+                    />
                   </Grid>
 
                   <Grid item xs={12}>
