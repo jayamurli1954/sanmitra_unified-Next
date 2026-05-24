@@ -6,10 +6,11 @@ import pytest
 
 import app.accounting.service as accounting_service
 from app.accounting.models import Account
-from app.accounting.schemas import JournalLineIn, SourceJournalLineIn
+from app.accounting.schemas import JournalLineIn, JournalPostRequest, SourceJournalLineIn
 from app.accounting.service import (
     AccountingValidationError,
     _net_profit_from_rows,
+    post_journal_entry,
     suggest_canonical_account,
     validate_journal_lines,
     validate_source_journal_lines,
@@ -182,3 +183,83 @@ async def test_get_balance_sheet_includes_unclosed_earnings(monkeypatch) -> None
     assert total_liabilities == Decimal("0.00")
     assert total_equity == Decimal("15500.00")
     assert any(line["account_id"] == 0 and line["balance"] == Decimal("15500.00") for line in equity)
+
+
+@pytest.mark.asyncio
+async def test_post_journal_entry_blocks_negative_cash_balance(async_session) -> None:
+    tenant_id = "tenant-cash-negative-guard"
+    cash = Account(
+        app_key="mandirmitra",
+        tenant_id=tenant_id,
+        accounting_entity_id="primary",
+        code="11001",
+        name="Cash in Hand - Counter",
+        type="asset",
+        classification="real",
+        is_cash_bank=True,
+        is_receivable=False,
+        is_payable=False,
+    )
+    bank = Account(
+        app_key="mandirmitra",
+        tenant_id=tenant_id,
+        accounting_entity_id="primary",
+        code="12001",
+        name="Bank - Current Account",
+        type="asset",
+        classification="real",
+        is_cash_bank=True,
+        is_receivable=False,
+        is_payable=False,
+    )
+    income = Account(
+        app_key="mandirmitra",
+        tenant_id=tenant_id,
+        accounting_entity_id="primary",
+        code="44001",
+        name="General Donations",
+        type="income",
+        classification="nominal",
+        is_cash_bank=False,
+        is_receivable=False,
+        is_payable=False,
+    )
+    async_session.add_all([cash, bank, income])
+    await async_session.commit()
+
+    await post_journal_entry(
+        async_session,
+        tenant_id=tenant_id,
+        app_key="mandirmitra",
+        accounting_entity_id="primary",
+        created_by="test-user",
+        idempotency_key="cash-negative-opening",
+        payload=JournalPostRequest(
+            entry_date=date(2026, 5, 24),
+            description="Cash donation",
+            reference="DON-001",
+            lines=[
+                JournalLineIn(account_id=cash.id, debit=Decimal("7839.00"), credit=Decimal("0.00")),
+                JournalLineIn(account_id=income.id, debit=Decimal("0.00"), credit=Decimal("7839.00")),
+            ],
+        ),
+    )
+
+    with pytest.raises(AccountingValidationError, match="Insufficient cash balance"):
+        await post_journal_entry(
+            async_session,
+            tenant_id=tenant_id,
+            app_key="mandirmitra",
+            accounting_entity_id="primary",
+            created_by="test-user",
+            idempotency_key="cash-negative-transfer",
+            payload=JournalPostRequest(
+                entry_date=date(2026, 5, 24),
+                description="Cash transferred to bank",
+                reference="TRF-001",
+                lines=[
+                    JournalLineIn(account_id=bank.id, debit=Decimal("8000.00"), credit=Decimal("0.00")),
+                    JournalLineIn(account_id=cash.id, debit=Decimal("0.00"), credit=Decimal("8000.00")),
+                ],
+            ),
+        )

@@ -6,6 +6,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
 
@@ -2221,8 +2222,12 @@ def test_journal_entry_create_update_post_cancel_flow(mandir_compat_client, monk
     async def fake_post_journal_entry(**_kwargs):
         return SimpleNamespace(id=next(posted_ids)), True
 
+    async def fake_validate_cash_balance(*_args, **_kwargs):
+        return None
+
     monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts_safe", noop_ensure_sql_accounts_safe)
     monkeypatch.setattr(mandir_router, "_normalize_mandir_journal_lines", fake_normalize_lines)
+    monkeypatch.setattr(mandir_router, "_validate_mandir_journal_cash_balance", fake_validate_cash_balance)
     monkeypatch.setattr(mandir_router, "post_journal_entry", fake_post_journal_entry)
 
     created = client.post(
@@ -2277,6 +2282,63 @@ def test_journal_entry_create_update_post_cancel_flow(mandir_compat_client, monk
     assert "_id" not in rows[0]
 
     assert len(collections["mandir_journal_entries"].docs) == 1
+
+
+def test_journal_entry_create_blocks_insufficient_cash_draft(mandir_compat_client, monkeypatch):
+    client, collections = mandir_compat_client
+
+    async def noop_ensure_sql_accounts_safe(_session, _tenant_id, raise_on_failure=False):
+        return None
+
+    async def fake_normalize_lines(_session, *, tenant_id, raw_lines):
+        return (
+            [
+                {
+                    "account_id": 53002,
+                    "account_code": "53002",
+                    "account_name": "Electricity",
+                    "ledger_account_id": 202,
+                    "debit_amount": 8000.0,
+                    "credit_amount": 0.0,
+                    "description": "Expense debit",
+                },
+                {
+                    "account_id": 11001,
+                    "account_code": "11001",
+                    "account_name": "Cash in Hand - Counter",
+                    "ledger_account_id": 101,
+                    "debit_amount": 0.0,
+                    "credit_amount": 8000.0,
+                    "description": "Cash payment",
+                },
+            ],
+            Decimal("8000.00"),
+            Decimal("8000.00"),
+        )
+
+    async def fake_validate_cash_balance(*_args, **_kwargs):
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient cash balance in 11001 - Cash in Hand - Counter. Available 7839.00, payment 8000.00.",
+        )
+
+    monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts_safe", noop_ensure_sql_accounts_safe)
+    monkeypatch.setattr(mandir_router, "_normalize_mandir_journal_lines", fake_normalize_lines)
+    monkeypatch.setattr(mandir_router, "_validate_mandir_journal_cash_balance", fake_validate_cash_balance)
+
+    created = client.post(
+        "/api/v1/journal-entries/",
+        json={
+            "entry_date": "2026-05-24",
+            "narration": "Cash expense over available balance",
+            "reference_type": "expense",
+            "journal_lines": [{"account_id": "53002"}, {"account_id": "11001"}],
+        },
+    )
+
+    assert created.status_code == 400
+    assert "Insufficient cash balance" in created.json()["detail"]
+    assert collections["mandir_journal_entries"].docs == []
 
 
 def test_journal_entry_fallback_honors_reference_type(mandir_compat_client, monkeypatch):

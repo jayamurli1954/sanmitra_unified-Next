@@ -30,6 +30,100 @@ def _money_float(value: Decimal | int | float | str | None) -> float:
     return float(Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def _is_cash_account(account: Account) -> bool:
+    if not bool(account.is_cash_bank) or str(account.type or "").lower() != "asset":
+        return False
+    name = str(account.name or "").lower()
+    code = str(account.code or "").strip()
+    return "cash" in name or code in {"1000", "1001", "11001"}
+
+
+async def _cash_account_balance(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    account_id: int,
+) -> Decimal:
+    stmt = (
+        select(
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .where(
+            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            JournalLine.account_id == account_id,
+        )
+    )
+    debit_total, credit_total = (await session.execute(stmt)).one()
+    return Decimal(debit_total or 0) - Decimal(credit_total or 0)
+
+
+async def _validate_cash_accounts_do_not_go_negative(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    accounts_by_id: dict[int, Account],
+    normalized_lines: list[tuple[int, Decimal, Decimal]],
+) -> None:
+    net_changes: dict[int, Decimal] = {}
+    for account_id, debit, credit in normalized_lines:
+        account = accounts_by_id.get(account_id)
+        if account is None or not _is_cash_account(account):
+            continue
+        net_changes[account_id] = net_changes.get(account_id, Decimal("0")) + debit - credit
+
+    for account_id, net_change in net_changes.items():
+        if net_change >= 0:
+            continue
+        current_balance = await _cash_account_balance(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            account_id=account_id,
+        )
+        projected_balance = current_balance + net_change
+        if projected_balance < 0:
+            account = accounts_by_id[account_id]
+            raise AccountingValidationError(
+                f"Insufficient cash balance in {account.code or account.id} - {account.name}. "
+                f"Available {current_balance.quantize(Decimal('0.01'))}, "
+                f"payment {abs(net_change).quantize(Decimal('0.01'))}."
+            )
+
+
+async def validate_cash_balance_for_journal_lines(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str = "primary",
+    normalized_lines: list[tuple[int, Decimal, Decimal]],
+) -> None:
+    account_ids = [line[0] for line in normalized_lines]
+    if not account_ids:
+        return
+    account_stmt = select(Account).where(
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        Account.id.in_(account_ids),
+    )
+    accounts_by_id = {int(account.id): account for account in (await session.execute(account_stmt)).scalars().all()}
+    await _validate_cash_accounts_do_not_go_negative(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        accounts_by_id=accounts_by_id,
+        normalized_lines=normalized_lines,
+    )
+
+
 def _default_account(
     code: str,
     name: str,
@@ -401,14 +495,22 @@ async def post_journal_entry(
             return existing, False
 
     account_ids = [line[0] for line in normalized_lines]
-    account_stmt = select(Account.id).where(
+    account_stmt = select(Account).where(
         *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
         Account.id.in_(account_ids),
     )
-    available_account_ids = set((await session.execute(account_stmt)).scalars().all())
+    accounts_by_id = {int(account.id): account for account in (await session.execute(account_stmt)).scalars().all()}
+    available_account_ids = set(accounts_by_id)
     missing_account_ids = sorted(set(account_ids) - available_account_ids)
     if missing_account_ids:
         raise AccountingNotFoundError(f"Accounts not found for tenant: {missing_account_ids}")
+    await validate_cash_balance_for_journal_lines(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        normalized_lines=normalized_lines,
+    )
 
     journal_entry = JournalEntry(
         app_key=app_key,

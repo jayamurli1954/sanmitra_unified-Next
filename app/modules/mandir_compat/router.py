@@ -56,6 +56,7 @@ from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 from app.accounting.models.entities import Account, JournalEntry, JournalLine
 from app.accounting.service import (
+    AccountingValidationError,
     create_account,
     get_accounts_payable,
     get_accounts_receivable,
@@ -68,6 +69,7 @@ from app.accounting.service import (
     list_accounts,
     post_journal_entry,
     reverse_journal_entry,
+    validate_cash_balance_for_journal_lines,
 )
 from app.accounting.schemas import JournalPostRequest, JournalLineIn
 from app.modules.mandir_compat.report_helpers import (
@@ -6099,6 +6101,38 @@ async def _normalize_mandir_journal_lines(
     return normalized_lines, total_debit, total_credit
 
 
+async def _validate_mandir_journal_cash_balance(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    normalized_lines: list[dict[str, Any]],
+) -> None:
+    accounting_lines: list[tuple[int, Decimal, Decimal]] = []
+    for line in normalized_lines:
+        ledger_account_id = _safe_optional_int(line.get("ledger_account_id"))
+        if ledger_account_id is None:
+            continue
+        accounting_lines.append(
+            (
+                ledger_account_id,
+                Decimal(str(line.get("debit_amount") or 0)).quantize(Decimal("0.01")),
+                Decimal(str(line.get("credit_amount") or 0)).quantize(Decimal("0.01")),
+            )
+        )
+
+    try:
+        await validate_cash_balance_for_journal_lines(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id="primary",
+            normalized_lines=accounting_lines,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _mandir_journal_entry_view(doc: dict[str, Any]) -> dict[str, Any]:
     row = _sanitize_mongo_doc(doc)
     row["entry_number"] = str(row.get("entry_number") or f"JE-{str(row.get('id') or '')[:8].upper()}")
@@ -6225,6 +6259,12 @@ async def mandir_create_journal_entry(
         tenant_id=tenant_id,
         raw_lines=payload.get("journal_lines"),
     )
+    await _validate_mandir_journal_cash_balance(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        normalized_lines=normalized_lines,
+    )
 
     entry_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -6286,6 +6326,12 @@ async def mandir_update_journal_entry(
         tenant_id=tenant_id,
         raw_lines=payload.get("journal_lines"),
     )
+    await _validate_mandir_journal_cash_balance(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        normalized_lines=normalized_lines,
+    )
 
     patch = {
         "entry_date": _parse_journal_entry_date(payload.get("entry_date") or existing.get("entry_date")).isoformat(),
@@ -6342,6 +6388,12 @@ async def mandir_post_journal_entry(
         session,
         tenant_id=tenant_id,
         raw_lines=existing.get("journal_lines"),
+    )
+    await _validate_mandir_journal_cash_balance(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        normalized_lines=normalized_lines,
     )
 
     post_lines: list[JournalLineIn] = []
