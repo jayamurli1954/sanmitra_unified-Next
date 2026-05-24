@@ -94,7 +94,7 @@ NAKSHATRA_THYAJYAM = {
     7:  (22, 23),   # Pushya
     8:  (8, 9),     # Ashlesha
     9:  (15, 16),   # Magha
-    10: (23, 24),   # Purva Phalguni
+    10: (20, 24),   # Purva Phalguni
     11: (4, 5),     # Uttara Phalguni
     12: (17, 18),   # Hasta
     13: (9, 10),    # Chitra

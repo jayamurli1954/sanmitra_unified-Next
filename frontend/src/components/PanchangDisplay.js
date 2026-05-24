@@ -305,17 +305,17 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
         `}
       </style>
 
-      {/* VERIFICATION BADGES HEADER */}
+      {/* CALCULATION BADGES HEADER */}
       <Paper sx={{ p: 2, mb: 2, bgcolor: '#E8F5E9', border: '2px solid #4CAF50' }} className="print-header">
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={8}>
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#2E7D32', mb: 1 }}>
-              📅 Today's Panchang - Verified & Accurate
+              📅 Today's Panchang
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 0.5 }}>
               <Chip
                 icon={<span>✓</span>}
-                label="Verified Against Swiss Ephemeris"
+                label="Calculated with Swiss Ephemeris"
                 size="small"
                 sx={{ bgcolor: '#4CAF50', color: '#fff', fontWeight: 600 }}
               />
@@ -360,13 +360,13 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
         {/* Accuracy Meter */}
         <Box sx={{ mt: 2, p: 1.5, bgcolor: '#fff', borderRadius: 1 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, color: '#2E7D32' }}>
-            Calculation Accuracy:
+            Calculation Method:
           </Typography>
           <Box sx={{ bgcolor: '#E8F5E9', height: 8, borderRadius: 1, mt: 0.5, overflow: 'hidden' }}>
-            <Box sx={{ bgcolor: '#4CAF50', height: '100%', width: '100%' }} />
+            <Box sx={{ bgcolor: '#4CAF50', height: '100%', width: '85%' }} />
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            ℹ️ 100% Accurate - Cross-verified with {data.calculation_metadata?.verified_against}
+            ℹ️ Calculated with {data.calculation_metadata?.verified_against}. Compare with the temple's preferred panchang before final muhurta use.
           </Typography>
         </Box>
       </Paper>
@@ -1199,8 +1199,8 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
           ⚠️ Important Note:
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          This panchang is calculated using Swiss Ephemeris with Lahiri Ayanamsa and verified against authoritative sources.
-          For specific religious ceremonies and personal muhurats, please consult with a qualified pandit or astrologer.
+          This panchang is calculated using Swiss Ephemeris with Lahiri Ayanamsa. For specific religious ceremonies
+          and personal muhurats, compare with the temple's preferred panchang source and consult a qualified pandit or astrologer.
         </Typography>
       </Paper>
     </Box>

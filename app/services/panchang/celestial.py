@@ -41,13 +41,10 @@ def get_moon_rise_set_data(dt: datetime, lat: float, lon: float) -> Dict:
     res_rise = swe.rise_trans(jd_start, swe.MOON, swe.CALC_RISE | swe.BIT_DISC_CENTER, geopos, 0, 0)
     rise_jd = res_rise[1][0] if res_rise[0] == 0 else None
 
-    set_jd = None
-    if rise_jd:
-        res_set = swe.rise_trans(rise_jd, swe.MOON, swe.CALC_SET | swe.BIT_DISC_CENTER, geopos, 0, 0)
-        if res_set[0] == 0: set_jd = res_set[1][0]
-    else:
-        res_set = swe.rise_trans(jd_start, swe.MOON, swe.CALC_SET | swe.BIT_DISC_CENTER, geopos, 0, 0)
-        if res_set[0] == 0: set_jd = res_set[1][0]
+    # Panchang displays the first moonset after local midnight for the
+    # selected civil date. Do not skip ahead to the moonset after moonrise.
+    res_set = swe.rise_trans(jd_start, swe.MOON, swe.CALC_SET | swe.BIT_DISC_CENTER, geopos, 0, 0)
+    set_jd = res_set[1][0] if res_set[0] == 0 else None
 
     def fmt(jd_val):
         if jd_val is None or jd_val <= 0: return "N/A"

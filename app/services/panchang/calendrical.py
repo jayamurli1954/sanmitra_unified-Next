@@ -8,6 +8,21 @@ from typing import Dict
 from .astro_utils import get_sidereal_position
 from .constants import RASHIS, RUTHUS, SAMVATSARAS
 
+LUNAR_MONTHS = [
+    "Chaitra",
+    "Vaishakha",
+    "Jyeshtha",
+    "Ashadha",
+    "Shravana",
+    "Bhadrapada",
+    "Ashvina",
+    "Kartika",
+    "Margashirsha",
+    "Pausha",
+    "Magha",
+    "Phalguni",
+]
+
 def get_moon_sign_data(jd: float) -> Dict:
     """Calculate Moon's Rashi"""
     moon_long = get_sidereal_position(jd, swe.MOON)
@@ -42,6 +57,63 @@ def get_ruthu_data(jd: float) -> str:
         return "Hemanta"
     else:
         return "Shishira"
+
+def _phase_angle(jd: float) -> float:
+    moon_long = get_sidereal_position(jd, swe.MOON)
+    sun_long = get_sidereal_position(jd, swe.SUN)
+    return (moon_long - sun_long) % 360
+
+def _find_new_moon(jd: float, forward: bool) -> float:
+    """Find previous/next conjunction by detecting the Moon-Sun phase wrap."""
+    step = 0.25 if forward else -0.25
+    prev_jd = jd
+    prev_phase = _phase_angle(prev_jd)
+
+    for _ in range(200):
+        curr_jd = prev_jd + step
+        curr_phase = _phase_angle(curr_jd)
+        wrapped = (forward and curr_phase < prev_phase) or ((not forward) and curr_phase > prev_phase)
+        if wrapped:
+            lo, hi = (prev_jd, curr_jd) if prev_jd < curr_jd else (curr_jd, prev_jd)
+            for _ in range(80):
+                mid = (lo + hi) / 2.0
+                mid_phase = _phase_angle(mid)
+                if mid_phase > 180:
+                    lo = mid
+                else:
+                    hi = mid
+            return (lo + hi) / 2.0
+        prev_jd, prev_phase = curr_jd, curr_phase
+
+    return jd
+
+def _has_sankranti_between(start_jd: float, end_jd: float) -> bool:
+    start_sign = int(get_sidereal_position(start_jd, swe.SUN) / 30)
+    end_sign = int(get_sidereal_position(end_jd, swe.SUN) / 30)
+    return start_sign != end_sign
+
+def _get_lunar_month(dt: datetime, jd: float) -> Dict:
+    """Return amanta/purnimanta lunar month with adhika detection."""
+    del dt
+    previous_new_moon = _find_new_moon(jd, forward=False)
+    next_new_moon = _find_new_moon(jd, forward=True)
+    next_solar_sign = int(get_sidereal_position(next_new_moon, swe.SUN) / 30)
+    month_name = LUNAR_MONTHS[(next_solar_sign + 1) % 12]
+    is_adhika = not _has_sankranti_between(previous_new_moon, next_new_moon)
+    display_name = f"Adhika {month_name}" if is_adhika else month_name
+
+    phase = _phase_angle(jd)
+    paksha = "Shukla" if phase < 180 else "Krishna"
+    purnimanta_name = display_name
+    if paksha == "Krishna":
+        purnimanta_name = LUNAR_MONTHS[next_solar_sign % 12]
+
+    return {
+        "amanta": display_name,
+        "purnimanta": purnimanta_name,
+        "display": display_name,
+        "is_adhika": is_adhika,
+    }
 
 def get_samvatsara_data(year: int) -> Dict:
     """Calculate Samvatsara name"""
@@ -89,36 +161,11 @@ def get_hindu_calendar_info_data(dt: datetime, jd: float) -> Dict:
     solar_month_idx = int(sun_long / 30)
     solar_month = RASHIS[solar_month_idx]
 
-    # Lunar month calculation
-    moon_long = get_sidereal_position(jd, swe.MOON)
-    diff = (moon_long - sun_long) % 360
-
-    # Lunar month index based on sun's position in zodiac
-    # Sun enters each zodiac sign ~30 days apart
-    lunar_month_index = int(sun_long / 30)
-
-    # Purnimanta: months named by full moon in that month
-    # Chaitra (Chaitra Purnima), Vaishakha (Vaishakha Purnima), etc.
-    # Starts from Chaitra
-    purnimanta_months = [
-        "Chaitra", "Vaishakha", "Jyeshtha", "Ashadha", "Shravana", "Bhadrapada",
-        "Ashvina", "Kartika", "Margashirsha", "Pausha", "Magha", "Phalguni"
-    ]
-
-    # Amanta: months named by new moon in that month (same names, different calendar)
-    # Amanta Chaitra ends on Chaitra Krishna Amavasya (one month after Purnimanta Phalguni)
-    # So Amanta is offset by -1 (wraps around)
-    amanta_months = [
-        "Phalguni", "Chaitra", "Vaishakha", "Jyeshtha", "Ashadha", "Shravana",
-        "Bhadrapada", "Ashvina", "Kartika", "Margashirsha", "Pausha", "Magha"
-    ]
-
-    purnimanta_index = (lunar_month_index + 11) % 12
-    amanta_index = (lunar_month_index + 10) % 12  # Offset by one month (different ending point)
+    diff = _phase_angle(jd)
+    lunar_month = _get_lunar_month(dt, jd)
 
     paksha = "Shukla" if diff < 180 else "Krishna"
-    ritu_idx = int(solar_month_idx / 2)
-    ritu = RUTHUS[ritu_idx % 6]
+    ritu = get_ruthu_data(jd)
 
     return {
         "vikram_samvat": f"{vikram_samvat} {vikram_name}",
@@ -129,8 +176,10 @@ def get_hindu_calendar_info_data(dt: datetime, jd: float) -> Dict:
         "vikram_samvatsara_name": vikram_name,
         "vikram_samvatsara_cycle_year": vikram_idx + 1,
         "solar_month": solar_month,
-        "lunar_month_purnimanta": purnimanta_months[purnimanta_index],
-        "lunar_month_amanta": amanta_months[amanta_index],
+        "lunar_month_purnimanta": lunar_month["purnimanta"],
+        "lunar_month_amanta": lunar_month["amanta"],
+        "lunar_month": lunar_month["display"],
+        "is_adhika_masa": lunar_month["is_adhika"],
         "paksha": paksha,
         "ritu": ritu,
     }

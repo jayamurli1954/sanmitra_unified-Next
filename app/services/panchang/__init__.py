@@ -610,7 +610,9 @@ class PanchangService:
                 f"{dt.strftime('%Y-%m-%d')} {sun_times['sunrise']}", "%Y-%m-%d %H:%M:%S"
             )
             day_end = day_start + timedelta(days=1)
-            varjyam = self._select_events_for_day_window(varjyam_events, day_start, day_end)
+            # Keep Varjyam aligned to the selected civil date; otherwise early
+            # next-day windows can appear on the previous day's display.
+            varjyam = self._select_events_for_date(varjyam_events, dt.date())
             amrita_selected = self._select_events_for_day_window(amrita_events, day_start, day_end)
         except (KeyError, TypeError, ValueError):
             varjyam = self._select_events_for_date(varjyam_events, dt.date())
@@ -664,7 +666,7 @@ class PanchangService:
             "samvat_vikram": calendar_info.get("vikram_samvat"),
             "samvat_shaka": calendar_info.get("shaka_samvat"),
             "shaka_year": calendar_info.get("shaka_year"),
-            "month": calendar_info.get("lunar_month_purnimanta"),
+            "month": calendar_info.get("lunar_month"),
             "samvatsara": samvatsara,
         }
 
