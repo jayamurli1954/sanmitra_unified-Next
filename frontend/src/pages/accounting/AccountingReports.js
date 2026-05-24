@@ -467,8 +467,12 @@ function AccountingReports() {
     }
   };
 
-  const fetchLedger = async (accountOverride = selectedAccount) => {
-    const accountId = accountOverride;
+  const fetchLedger = async (accountOverride = null) => {
+    const accountId = (
+      typeof accountOverride === 'string' || typeof accountOverride === 'number'
+    )
+      ? accountOverride
+      : selectedAccount;
     if (!accountId) {
       alert('Please select an account');
       return;
@@ -912,7 +916,7 @@ function AccountingReports() {
               <Grid item xs={12} md={2}>
                 <Button
                   variant="contained"
-                  onClick={fetchLedger}
+                  onClick={() => fetchLedger()}
                   disabled={loading || !selectedAccount}
                   fullWidth
                   sx={{ height: 56, bgcolor: '#FF9933', '&:hover': { bgcolor: '#E68A2E' } }}
