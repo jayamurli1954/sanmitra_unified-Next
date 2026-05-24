@@ -228,6 +228,23 @@ function TempleDirectory() {
     }
   };
 
+  const handleOpenDemoWorkspace = (temple) => {
+    if (!temple?.platform_can_write) {
+      showError(t('templeDirectory.demoWorkspaceOnly'));
+      return;
+    }
+
+    const resolvedTempleId = Number.parseInt(String(temple?.id || temple?.temple_id || ''), 10);
+    if (!Number.isInteger(resolvedTempleId) || resolvedTempleId <= 0) {
+      showError(t('templeDirectory.invalidTempleId'));
+      return;
+    }
+
+    setActiveTempleId(resolvedTempleId, temple?.tenant_id);
+    emitActiveTempleChanged(resolvedTempleId, temple?.tenant_id);
+    navigate('/dashboard');
+  };
+
   if (!isPlatformSuperAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -423,6 +440,7 @@ function TempleDirectory() {
                           const resendLabel = !linkedRequestId
                             ? t('templeDirectory.noApprovedRequestAction')
                             : (resendLoadingRequestId === linkedRequestId ? t('templeDirectory.resending') : t('templeDirectory.resendEmail'));
+                          const canOpenDemoWorkspace = Boolean(temple.platform_can_write) && temple.is_active !== false;
                           const canRemoveCompletely = Boolean(temple.platform_can_write);
                           return (
                             <TableRow key={temple.id} hover>
@@ -450,6 +468,15 @@ function TempleDirectory() {
                               </TableCell>
                               <TableCell align="right">
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
+                                  {canOpenDemoWorkspace && (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      onClick={() => handleOpenDemoWorkspace(temple)}
+                                    >
+                                      {t('templeDirectory.openDemoWorkspace')}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="small"
                                     variant="outlined"
