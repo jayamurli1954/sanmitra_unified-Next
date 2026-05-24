@@ -12,11 +12,20 @@ import {
   Alert,
   CircularProgress,
   InputAdornment,
+  Stack,
+  Chip,
+  Divider,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import EventIcon from '@mui/icons-material/Event';
 import SaveIcon from '@mui/icons-material/Save';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import CurrencyRupeeIcon from '@mui/icons-material/CurrencyRupee';
+import GroupsIcon from '@mui/icons-material/Groups';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import Layout from '../components/Layout';
 import PanchangDisplay from '../components/PanchangDisplay';
 import api from '../services/api';
@@ -83,6 +92,8 @@ function Dashboard() {
   const [categories, setCategories] = useState([]);
   const [paymentAccounts, setPaymentAccounts] = useState({ cash_accounts: [], bank_accounts: [] });
   const [paymentAccountsWarning, setPaymentAccountsWarning] = useState('');
+  const [recentDonations, setRecentDonations] = useState([]);
+  const [recentSevas, setRecentSevas] = useState([]);
   const [saving, setSaving] = useState(false);
   const [searchingDevotee, setSearchingDevotee] = useState(false);
   const [foundDevotee, setFoundDevotee] = useState(null);
@@ -157,6 +168,7 @@ function Dashboard() {
     fetchPanchangData();
     fetchCategories();
     fetchPaymentAccounts();
+    fetchDashboardActivity();
   }, []);
 
   useEffect(() => {
@@ -165,6 +177,7 @@ function Dashboard() {
       fetchPanchangData();
       fetchCategories();
       fetchPaymentAccounts();
+      fetchDashboardActivity();
     };
 
     window.addEventListener(ACTIVE_TEMPLE_EVENT, handleActiveTempleChanged);
@@ -339,6 +352,30 @@ function Dashboard() {
       firstName: parts[0],
       lastName: parts.slice(1).join(' '),
     };
+  };
+
+  const fetchDashboardActivity = async () => {
+    try {
+      const [donationsRes, sevasRes] = await Promise.allSettled([
+        api.get('/api/v1/donations', { params: { limit: 8 } }),
+        api.get('/api/v1/sevas/bookings', { params: { limit: 8 } }),
+      ]);
+
+      setRecentDonations(
+        donationsRes.status === 'fulfilled' && Array.isArray(donationsRes.value?.data)
+          ? donationsRes.value.data
+          : []
+      );
+      setRecentSevas(
+        sevasRes.status === 'fulfilled' && Array.isArray(sevasRes.value?.data)
+          ? sevasRes.value.data
+          : []
+      );
+    } catch (err) {
+      console.error('Error fetching dashboard activity:', err);
+      setRecentDonations([]);
+      setRecentSevas([]);
+    }
   };
 
   const isValidPan = (value) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(String(value || '').trim().toUpperCase());
@@ -624,60 +661,123 @@ function Dashboard() {
     }).format(amount);
   };
 
+  const safeAmount = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+  };
 
+  const formatCompactCurrency = (amount) => {
+    const value = safeAmount(amount);
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)}Cr`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`;
+    if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
+    return formatCurrency(value);
+  };
+
+  const formatShortDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10) || '-';
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  };
+
+  const getDonationDevoteeName = (donation) => (
+    donation?.devotee?.name
+    || donation?.devotee_name
+    || donation?.donor_name
+    || donation?.name
+    || 'Devotee'
+  );
+
+  const getDonationCategory = (donation) => (
+    donation?.category?.name
+    || donation?.category
+    || donation?.donation_category
+    || 'General'
+  );
+
+  const getSevaName = (booking) => (
+    booking?.seva_name
+    || booking?.seva
+    || booking?.seva_type
+    || 'Seva'
+  );
+
+  const activeDevotees = new Set(
+    recentDonations
+      .map((donation) => String(donation.devotee_phone || donation.phone || donation.devotee?.phone || '').trim())
+      .filter(Boolean)
+  ).size;
+
+  const donationBreakdown = Object.entries(
+    recentDonations.reduce((bucket, donation) => {
+      const category = getDonationCategory(donation);
+      bucket[category] = (bucket[category] || 0) + safeAmount(donation.amount);
+      return bucket;
+    }, {})
+  )
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 4);
+
+  const maxBreakdownAmount = Math.max(...donationBreakdown.map((item) => item.value), 1);
 
   const paymentModes = ['Cash', 'Bank'];
   const canEditDevoteeDetails = mobileVerified && !searchingDevotee;
 
-  // First row: Donations
-  const donationCards = [
+  const summaryCards = [
     {
-      title: 'Today\'s Donation',
+      title: 'Donations Today',
       value: formatCurrency(stats.donations.today.amount),
       subtitle: `${stats.donations.today.count} donations`,
-      icon: <AccountBalanceIcon />,
-      color: '#4CAF50'
+      icon: <CurrencyRupeeIcon />,
+      color: '#0f766e',
+      tone: '#e0f2f1',
     },
     {
-      title: 'Cumulative for Month',
+      title: 'Month Collection',
       value: formatCurrency(stats.donations.month.amount),
       subtitle: `${stats.donations.month.count} donations`,
-      icon: <AccountBalanceIcon />,
-      color: '#2196F3'
+      icon: <ReceiptLongIcon />,
+      color: '#b7791f',
+      tone: '#fff7e6',
     },
     {
-      title: 'Cumulative for Year',
-      value: formatCurrency(stats.donations.year.amount),
-      subtitle: `${stats.donations.year.count} donations`,
-      icon: <AccountBalanceIcon />,
-      color: '#9C27B0'
+      title: 'Recent Donors',
+      value: activeDevotees,
+      subtitle: activeDevotees ? 'unique recent mobile numbers' : 'no recent donor data',
+      icon: <GroupsIcon />,
+      color: '#2563eb',
+      tone: '#e8f1ff',
+    },
+    {
+      title: 'Sevas Today',
+      value: formatCurrency(stats.sevas.today.amount),
+      subtitle: `${stats.sevas.today.count} bookings`,
+      icon: <EventAvailableIcon />,
+      color: '#c2410c',
+      tone: '#fff1e6',
     },
   ];
 
-  // Second row: Sevas
-  const sevaCards = [
+  const performanceRows = [
     {
-      title: 'Today\'s Seva',
-      value: formatCurrency(stats.sevas.today.amount),
-      subtitle: `${stats.sevas.today.count} bookings`,
-      icon: <EventIcon />,
-      color: '#FF9800'
+      label: 'Donations',
+      today: stats.donations.today.amount,
+      month: stats.donations.month.amount,
+      year: stats.donations.year.amount,
+      color: '#0f766e',
     },
     {
-      title: 'Cumulative for Month',
-      value: formatCurrency(stats.sevas.month.amount),
-      subtitle: `${stats.sevas.month.count} bookings`,
-      icon: <EventIcon />,
-      color: '#FF6B35'
-    },
-    {
-      title: 'Cumulative for Year',
-      value: formatCurrency(stats.sevas.year.amount),
-      subtitle: `${stats.sevas.year.count} bookings`,
-      icon: <EventIcon />,
-      color: '#E91E63'
+      label: 'Sevas',
+      today: stats.sevas.today.amount,
+      month: stats.sevas.month.amount,
+      year: stats.sevas.year.amount,
+      color: '#c2410c',
     },
   ];
+
+  const maxPerformanceAmount = Math.max(...performanceRows.map((row) => safeAmount(row.year)), 1);
 
   if (loading) {
     return (
@@ -691,9 +791,61 @@ function Dashboard() {
 
   return (
     <Layout>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>
-        Dashboard
-      </Typography>
+      <Box
+        sx={{
+          borderRadius: 2,
+          p: { xs: 2.25, md: 3 },
+          mb: 3,
+          color: '#fff',
+          background: 'linear-gradient(135deg, #173042 0%, #0f766e 58%, #b7791f 100%)',
+          boxShadow: '0 10px 30px rgba(15, 48, 66, 0.18)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0.12,
+            backgroundImage:
+              'linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+        <Box sx={{ position: 'relative', display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <DashboardIcon fontSize="small" />
+              <Typography variant="overline" sx={{ letterSpacing: 0, fontWeight: 700, opacity: 0.85 }}>
+                MandirMitra Admin
+              </Typography>
+            </Stack>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 800, letterSpacing: 0 }}>
+              Temple Operations Dashboard
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.75, opacity: 0.9 }}>
+              Daily temple operations overview.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="contained"
+              onClick={() => navigate('/donations')}
+              sx={{ bgcolor: '#fff', color: '#173042', '&:hover': { bgcolor: '#f8fafc' } }}
+            >
+              Donations
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => navigate('/sevas')}
+              sx={{ borderColor: 'rgba(255,255,255,0.75)', color: '#fff', '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)' } }}
+            >
+              Book Seva
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -712,80 +864,155 @@ function Dashboard() {
         </Alert>
       )}
 
-      {/* Compact Stats Row: Donations & Sevas */}
-      <Box sx={{ mb: 3 }}>
-        <Grid container spacing={2}>
-          {/* Donations - Compact */}
-          <Grid item xs={12}>
-            <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 600, color: '#4CAF50' }}>
-              Donations
-            </Typography>
-            <Grid container spacing={2}>
-              {donationCards.map((stat, index) => (
-                <Grid item xs={12} sm={4} key={index}>
-                  <Card sx={{ boxShadow: 1, borderLeft: `4px solid ${stat.color}` }}>
-                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                            {stat.value}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
-                            {stat.title}
-                          </Typography>
-                          {stat.subtitle && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                              {stat.subtitle}
-                            </Typography>
-                          )}
-                        </Box>
-                        <Box sx={{ color: stat.color, fontSize: 32 }}>
-                          {stat.icon}
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+      <Grid container spacing={2.25} sx={{ mb: 3 }}>
+        {summaryCards.map((stat) => (
+          <Grid item xs={12} sm={6} lg={3} key={stat.title}>
+            <Card sx={{ height: '100%', borderRadius: 2, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)', border: '1px solid #eee7d8' }}>
+              <CardContent sx={{ p: 2.25, '&:last-child': { pb: 2.25 } }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                      {stat.title}
+                    </Typography>
+                    <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 800, letterSpacing: 0 }}>
+                      {stat.value}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {stat.subtitle}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ width: 44, height: 44, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: stat.tone, color: stat.color }}>
+                    {stat.icon}
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
           </Grid>
+        ))}
+      </Grid>
 
-          {/* Sevas - Compact */}
-          <Grid item xs={12} sx={{ mt: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 600, color: '#FF9800' }}>
-              Sevas
-            </Typography>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} lg={7}>
+          <Paper sx={{ p: 2.5, borderRadius: 2, boxShadow: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <TrendingUpIcon sx={{ color: '#0f766e' }} />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Collection Performance
+              </Typography>
+            </Stack>
             <Grid container spacing={2}>
-              {sevaCards.map((stat, index) => (
-                <Grid item xs={12} sm={4} key={index}>
-                  <Card sx={{ boxShadow: 1, borderLeft: `4px solid ${stat.color}` }}>
-                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                            {stat.value}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
-                            {stat.title}
-                          </Typography>
-                          {stat.subtitle && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                              {stat.subtitle}
-                            </Typography>
-                          )}
-                        </Box>
-                        <Box sx={{ color: stat.color, fontSize: 32 }}>
-                          {stat.icon}
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
+              {performanceRows.map((row) => (
+                <Grid item xs={12} key={row.label}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr 120px' }, gap: 1.5, alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {row.label}
+                    </Typography>
+                    <Box sx={{ height: 12, borderRadius: 999, bgcolor: '#f1f5f9', overflow: 'hidden' }}>
+                      <Box sx={{ width: `${Math.max(4, Math.round((safeAmount(row.year) / maxPerformanceAmount) * 100))}%`, height: '100%', bgcolor: row.color }} />
+                    </Box>
+                    <Typography variant="body2" align="right" sx={{ fontWeight: 700 }}>
+                      {formatCompactCurrency(row.year)}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                    <Chip size="small" label={`Today ${formatCompactCurrency(row.today)}`} />
+                    <Chip size="small" label={`Month ${formatCompactCurrency(row.month)}`} />
+                    <Chip size="small" label={`Year ${formatCompactCurrency(row.year)}`} />
+                  </Stack>
                 </Grid>
               ))}
             </Grid>
-          </Grid>
+          </Paper>
         </Grid>
-      </Box>
+        <Grid item xs={12} lg={5}>
+          <Paper sx={{ p: 2.5, borderRadius: 2, boxShadow: 2, height: '100%' }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+              <VolunteerActivismIcon sx={{ color: '#b7791f' }} />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Recent Donation Purpose
+              </Typography>
+            </Stack>
+            {donationBreakdown.length > 0 ? (
+              <Stack spacing={1.4}>
+                {donationBreakdown.map((item) => (
+                  <Box key={item.label}>
+                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label}</Typography>
+                      <Typography variant="body2">{formatCompactCurrency(item.value)}</Typography>
+                    </Stack>
+                    <Box sx={{ mt: 0.75, height: 8, borderRadius: 999, bgcolor: '#f3ead7', overflow: 'hidden' }}>
+                      <Box sx={{ width: `${Math.max(6, Math.round((item.value / maxBreakdownAmount) * 100))}%`, height: '100%', bgcolor: '#b7791f' }} />
+                    </Box>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Recent donation purpose mix will appear after donations are recorded.
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+        <Grid item xs={12} lg={7}>
+          <Paper sx={{ p: 2.5, borderRadius: 2, boxShadow: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Recent Donations
+              </Typography>
+              <Button size="small" onClick={() => navigate('/donations')}>View All</Button>
+            </Stack>
+            <Divider sx={{ mb: 1 }} />
+            {recentDonations.length > 0 ? (
+              <Stack spacing={0.75}>
+                {recentDonations.slice(0, 5).map((donation) => (
+                  <Box key={donation.id || donation.donation_id || donation.receipt_number} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '88px 1fr 110px' }, gap: 1.5, py: 1, alignItems: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">{formatShortDate(donation.donation_date || donation.created_at)}</Typography>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{getDonationDevoteeName(donation)}</Typography>
+                      <Typography variant="caption" color="text.secondary">{getDonationCategory(donation)} • {donation.payment_mode || 'Cash'}</Typography>
+                    </Box>
+                    <Typography variant="body2" align="right" sx={{ fontWeight: 800 }}>{formatCurrency(donation.amount)}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                No recent donations available.
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+        <Grid item xs={12} lg={5}>
+          <Paper sx={{ p: 2.5, borderRadius: 2, boxShadow: 2, height: '100%' }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Upcoming / Recent Sevas
+              </Typography>
+              <Button size="small" onClick={() => navigate('/sevas')}>Book</Button>
+            </Stack>
+            <Divider sx={{ mb: 1 }} />
+            {recentSevas.length > 0 ? (
+              <Stack spacing={1}>
+                {recentSevas.slice(0, 5).map((booking) => (
+                  <Box key={booking.id || booking.booking_id || booking.receipt_number} sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 1.5, py: 1 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{getSevaName(booking)}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {booking.devotee_name || booking.devotee_names || 'Devotee'}
+                      </Typography>
+                    </Box>
+                    <Chip size="small" icon={<EventIcon />} label={formatShortDate(booking.booking_date || booking.created_at)} />
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                No seva bookings available.
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
         {/* Donation Entry Form */}
