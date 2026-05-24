@@ -12,6 +12,7 @@ from pypdf import PdfReader
 import app.modules.mandir_compat.router as mandir_router
 import app.modules.mandir_compat.service as mandir_service
 from app.core.auth.dependencies import get_current_user
+from app.core.users import router as users_router
 from app.db.postgres import get_async_session
 from app.main import app
 
@@ -1166,6 +1167,7 @@ def mandir_compat_client(monkeypatch):
     monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
     monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts", noop_ensure_sql_accounts)
     monkeypatch.setattr(mandir_router, "resolve_tenant_by_temple_id", fake_resolve_tenant_by_temple_id)
+    monkeypatch.setattr(users_router, "get_collection", fake_get_collection)
 
     app.dependency_overrides[get_current_user] = lambda: {
         "tenant_id": "tenant-1",

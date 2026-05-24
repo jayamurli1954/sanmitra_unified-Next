@@ -1,23 +1,121 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth.dependencies import get_current_user
+from app.core.auth.security import hash_password, verify_password
 from app.core.tenants.service import get_tenant
 from app.core.users.schemas import UserCreateRequest, UserResponse
 from app.core.users.service import create_user
+from app.db.mongo import get_collection
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _validate_profile_email(email: str) -> None:
+    if (
+        not email
+        or "@" not in email
+        or email.startswith("@")
+        or email.endswith("@")
+        or any(ch.isspace() for ch in email)
+    ):
+        raise HTTPException(status_code=400, detail="Valid email is required")
 
 
 @router.get("/me")
 async def me(current_user: dict = Depends(get_current_user)):
     tenant_id = str(current_user.get("tenant_id") or "").strip()
     tenant = await get_tenant(tenant_id) if tenant_id else None
+    users = get_collection("core_users")
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
+    email = str(current_user.get("email") or "").strip().lower()
+    user_doc = None
+    if user_id:
+        user_doc = await users.find_one({"user_id": user_id})
+    if user_doc is None and email:
+        user_doc = await users.find_one({"email": email})
+    merged_user = {**current_user, **(user_doc or {})}
+    resolved_user_id = str(merged_user.get("user_id") or user_id or "").strip()
     return {
-        **current_user,
+        **merged_user,
+        "_id": None,
+        "id": resolved_user_id,
+        "user_id": resolved_user_id,
+        "system_role": merged_user.get("system_role") or merged_user.get("role"),
+        "is_superuser": bool(merged_user.get("is_superuser")) or str(merged_user.get("role") or "").strip() == "super_admin",
+        "is_active": bool(merged_user.get("is_active", True)),
         "tenant": tenant,
         "organization_type": (tenant or {}).get("organization_type"),
         "enabled_modules": (tenant or {}).get("enabled_modules", []),
         "subscription_plan": (tenant or {}).get("subscription_plan", "free"),
+    }
+
+
+@router.put("/{user_id}")
+async def update_user_profile(
+    user_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    actor_user_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
+    requested_user_id = str(user_id or "").strip()
+    if not requested_user_id:
+        raise HTTPException(status_code=400, detail="User ID is required")
+    if requested_user_id != actor_user_id:
+        raise HTTPException(status_code=403, detail="Users can update only their own profile")
+
+    users = get_collection("core_users")
+    existing = await users.find_one({"user_id": requested_user_id})
+    if existing is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    patch: dict = {"updated_at": datetime.now(timezone.utc)}
+    if "full_name" in payload:
+        full_name = str(payload.get("full_name") or "").strip()
+        if len(full_name) < 2:
+            raise HTTPException(status_code=400, detail="Full name must be at least 2 characters")
+        patch["full_name"] = full_name
+    if "email" in payload:
+        email = str(payload.get("email") or "").strip().lower()
+        _validate_profile_email(email)
+        duplicate = await users.find_one({"email": email, "user_id": {"$ne": requested_user_id}})
+        if duplicate is not None:
+            raise HTTPException(status_code=409, detail="User with this email already exists")
+        patch["email"] = email
+        patch["provider_subject"] = f"password:{email}"
+    if "phone" in payload:
+        phone = str(payload.get("phone") or "").strip()
+        patch["phone"] = phone or None
+    if "password" in payload:
+        new_password = str(payload.get("password") or "")
+        if len(new_password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        current_password = str(payload.get("current_password") or "")
+        if not current_password:
+            raise HTTPException(status_code=400, detail="Current password is required")
+        if not existing.get("hashed_password") or not verify_password(current_password, str(existing["hashed_password"])):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        patch["hashed_password"] = hash_password(new_password)
+        patch["must_change_password"] = False
+
+    await users.update_one({"user_id": requested_user_id}, {"$set": patch})
+    doc = await users.find_one({"user_id": requested_user_id}) or {**existing, **patch}
+    return {
+        "id": str(doc.get("user_id") or requested_user_id),
+        "user_id": str(doc.get("user_id") or requested_user_id),
+        "email": str(doc.get("email") or ""),
+        "full_name": str(doc.get("full_name") or ""),
+        "phone": doc.get("phone"),
+        "role": doc.get("role"),
+        "system_role": doc.get("system_role") or doc.get("role"),
+        "role_key": doc.get("role_key"),
+        "role_label": doc.get("role_label"),
+        "module_permissions": doc.get("module_permissions") or {},
+        "action_permissions": doc.get("action_permissions") or {},
+        "is_superuser": bool(doc.get("is_superuser")) or str(doc.get("role") or "").strip() == "super_admin",
+        "is_active": bool(doc.get("is_active", True)),
+        "must_change_password": bool(doc.get("must_change_password", False)),
     }
 
 
