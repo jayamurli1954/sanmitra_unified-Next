@@ -20,6 +20,10 @@ import {
   Select,
   MenuItem,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import Layout from '../../components/Layout';
 import SummarizeIcon from '@mui/icons-material/Summarize';
@@ -56,6 +60,10 @@ function AccountingReports() {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [reportError, setReportError] = useState('');
+  const [voucherDetail, setVoucherDetail] = useState(null);
+  const [voucherDialogOpen, setVoucherDialogOpen] = useState(false);
+  const [voucherLoadingId, setVoucherLoadingId] = useState(null);
+  const [voucherError, setVoucherError] = useState('');
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), 3, 1)); // April 1st
   const [toDate, setToDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
@@ -69,6 +77,24 @@ function AccountingReports() {
   const safeArray = (value) => (Array.isArray(value) ? value : []);
   const safeNumber = (value) => Number(value || 0);
   const safeAmount = (value) => safeNumber(value).toFixed(2);
+  const ledgerEntryDate = (txn) => (
+    txn?.entry_date || txn?.date || txn?.posting_date || txn?.transaction_date || ''
+  );
+  const ledgerEntryNumber = (txn) => (
+    txn?.entry_number || txn?.voucher_no || txn?.reference || (txn?.journal_id ? `JE-${txn.journal_id}` : '')
+  );
+  const ledgerEntryDescription = (txn) => (
+    txn?.narration || txn?.description || txn?.memo || txn?.reference || ''
+  );
+  const ledgerJournalId = (txn) => {
+    const directId = txn?.journal_id ?? txn?.journalId ?? txn?.id;
+    if (directId !== null && directId !== undefined && String(directId).trim() !== '') {
+      return String(directId).trim();
+    }
+    const entryNumber = String(ledgerEntryNumber(txn) || '').trim();
+    const match = entryNumber.match(/(?:JE|REV)-(\d+)/i);
+    return match ? match[1] : '';
+  };
   const formatDisplayDate = (value) => {
     if (!value) return '-';
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -108,9 +134,9 @@ function AccountingReports() {
           rows.push({
             'Account Code': accountLedger.account_code || '',
             'Account Name': accountLedger.account_name || '',
-            'Date': formatDisplayDate(txn.entry_date),
-            'Entry #': txn.entry_number || '',
-            'Description': txn.narration || txn.description || '',
+            'Date': formatDisplayDate(ledgerEntryDate(txn)),
+            'Entry #': ledgerEntryNumber(txn),
+            'Description': ledgerEntryDescription(txn),
             'Debit': safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '',
             'Credit': safeNumber(txn.credit_amount) > 0 ? safeAmount(txn.credit_amount) : '',
             'Balance': safeAmount(txn.running_balance),
@@ -145,9 +171,9 @@ function AccountingReports() {
         rows.push({
           'Account Code': ledger.account_code || '',
           'Account Name': ledger.account_name || '',
-          'Date': formatDisplayDate(txn.entry_date),
-          'Entry #': txn.entry_number || '',
-          'Description': txn.narration || txn.description || '',
+          'Date': formatDisplayDate(ledgerEntryDate(txn)),
+          'Entry #': ledgerEntryNumber(txn),
+          'Description': ledgerEntryDescription(txn),
           'Debit': safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '',
           'Credit': safeNumber(txn.credit_amount) > 0 ? safeAmount(txn.credit_amount) : '',
           'Balance': safeAmount(txn.running_balance),
@@ -441,8 +467,9 @@ function AccountingReports() {
     }
   };
 
-  const fetchLedger = async () => {
-    if (!selectedAccount) {
+  const fetchLedger = async (accountOverride = selectedAccount) => {
+    const accountId = accountOverride;
+    if (!accountId) {
       alert('Please select an account');
       return;
     }
@@ -458,7 +485,7 @@ function AccountingReports() {
       const fromDateStr = fromDate.toISOString().split('T')[0];
       const toDateStr = toDate.toISOString().split('T')[0];
 
-      if (selectedAccount === ALL_GT_ZERO_OPTION) {
+      if (accountId === ALL_GT_ZERO_OPTION) {
         setLedgerErrors([]);
 
         // Keep account scope aligned with Trial Balance non-zero listing.
@@ -553,13 +580,13 @@ function AccountingReports() {
         setLedger(null);
       } else {
         setLedgerErrors([]);
-        if (!isNumericAccountId(selectedAccount)) {
+        if (!isNumericAccountId(accountId)) {
           alert('Selected account cannot be resolved for ledger. Please refresh accounts and try again.');
           setLoading(false);
           return;
         }
         const response = await fetchWithApiFallback(
-          `/api/v1/journal-entries/reports/ledger/${selectedAccount}?from_date=${fromDateStr}&to_date=${toDateStr}`,
+          `/api/v1/journal-entries/reports/ledger/${accountId}?from_date=${fromDateStr}&to_date=${toDateStr}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -576,6 +603,55 @@ function AccountingReports() {
       setBulkLedgers([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openLedgerFromTrialBalance = async (account) => {
+    const accountId = account?.account_id ?? account?.id;
+    if (!isNumericAccountId(accountId)) {
+      alert('This Trial Balance row cannot be resolved to a ledger account.');
+      return;
+    }
+    setSelectedAccount(String(accountId));
+    setActiveTab(1);
+    setLedger(null);
+    setBulkLedgers([]);
+    await fetchLedger(String(accountId));
+  };
+
+  const openVoucherDetail = async (txn) => {
+    const journalId = ledgerJournalId(txn);
+    if (!journalId) {
+      setVoucherError('This ledger row does not include a posted journal id.');
+      setVoucherDetail(null);
+      setVoucherDialogOpen(true);
+      return;
+    }
+
+    setVoucherError('');
+    setVoucherDetail(null);
+    setVoucherDialogOpen(true);
+    setVoucherLoadingId(journalId);
+    try {
+      const token = getAccessToken();
+      const response = await fetchWithApiFallback(
+        `/api/v1/accounting/reports/vouchers/${journalId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Unable to load voucher detail (${response.status})`);
+      }
+      const data = await response.json();
+      setVoucherDetail(data);
+    } catch (error) {
+      setVoucherError(error?.message || 'Unable to load voucher detail.');
+    } finally {
+      setVoucherLoadingId(null);
     }
   };
 
@@ -737,6 +813,7 @@ function AccountingReports() {
                           <TableCell><strong>Account Name</strong></TableCell>
                           <TableCell align="right"><strong>Debit (₹)</strong></TableCell>
                           <TableCell align="right"><strong>Credit (₹)</strong></TableCell>
+                          <TableCell align="center"><strong>Trace</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -750,6 +827,16 @@ function AccountingReports() {
                             <TableCell align="right">
                               {safeNumber(account.credit_total ?? account.credit_balance) > 0 ? safeAmount(account.credit_total ?? account.credit_balance) : '-'}
                             </TableCell>
+                            <TableCell align="center">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => openLedgerFromTrialBalance(account)}
+                                disabled={loading}
+                              >
+                                Ledger
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                         <TableRow sx={{ bgcolor: '#FFF3E0', fontWeight: 'bold' }}>
@@ -760,6 +847,7 @@ function AccountingReports() {
                           <TableCell align="right">
                             <strong>₹{safeAmount(trialBalance.total_credit ?? trialBalance.total_credits)}</strong>
                           </TableCell>
+                          <TableCell />
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -881,9 +969,19 @@ function AccountingReports() {
                         {/* Transactions */}
                         {getLedgerEntries(ledger).map((txn, index) => (
                           <TableRow key={index}>
-                            <TableCell>{formatDisplayDate(txn.entry_date)}</TableCell>
-                            <TableCell>{txn.entry_number}</TableCell>
-                            <TableCell>{txn.narration || txn.description}</TableCell>
+                            <TableCell>{formatDisplayDate(ledgerEntryDate(txn))}</TableCell>
+                            <TableCell>
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => openVoucherDetail(txn)}
+                                disabled={voucherLoadingId === ledgerJournalId(txn)}
+                                sx={{ minWidth: 0, p: 0, textTransform: 'none' }}
+                              >
+                                {ledgerEntryNumber(txn)}
+                              </Button>
+                            </TableCell>
+                            <TableCell>{ledgerEntryDescription(txn)}</TableCell>
                             <TableCell align="right">
                               {safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '-'}
                             </TableCell>
@@ -966,9 +1064,19 @@ function AccountingReports() {
 
                             {getLedgerEntries(accountLedger).map((txn, index) => (
                               <TableRow key={`${accountLedger.account_id}-${index}`}>
-                                <TableCell>{formatDisplayDate(txn.entry_date)}</TableCell>
-                                <TableCell>{txn.entry_number}</TableCell>
-                                <TableCell>{txn.narration || txn.description}</TableCell>
+                                <TableCell>{formatDisplayDate(ledgerEntryDate(txn))}</TableCell>
+                                <TableCell>
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={() => openVoucherDetail(txn)}
+                                    disabled={voucherLoadingId === ledgerJournalId(txn)}
+                                    sx={{ minWidth: 0, p: 0, textTransform: 'none' }}
+                                  >
+                                    {ledgerEntryNumber(txn)}
+                                  </Button>
+                                </TableCell>
+                                <TableCell>{ledgerEntryDescription(txn)}</TableCell>
                                 <TableCell align="right">
                                   {safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '-'}
                                 </TableCell>
@@ -1451,6 +1559,78 @@ function AccountingReports() {
           </TabPanel>
 
         </Paper>
+        <Dialog
+          open={voucherDialogOpen}
+          onClose={() => setVoucherDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            Voucher Detail
+            {voucherDetail?.reference ? ` - ${voucherDetail.reference}` : ''}
+          </DialogTitle>
+          <DialogContent dividers>
+            {voucherLoadingId && (
+              <Typography color="text.secondary">Loading voucher {voucherLoadingId}...</Typography>
+            )}
+            {voucherError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {voucherError}
+              </Alert>
+            )}
+            {voucherDetail && (
+              <>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="body2" color="text.secondary">Date</Typography>
+                    <Typography>{formatDisplayDate(voucherDetail.entry_date)}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="body2" color="text.secondary">Reference</Typography>
+                    <Typography>{voucherDetail.reference || '-'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Typography variant="body2" color="text.secondary">Status</Typography>
+                    <Typography>{voucherDetail.status || '-'}</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary">Description</Typography>
+                    <Typography>{voucherDetail.description || '-'}</Typography>
+                  </Grid>
+                </Grid>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                        <TableCell><strong>Account</strong></TableCell>
+                        <TableCell><strong>Name</strong></TableCell>
+                        <TableCell align="right"><strong>Debit (₹)</strong></TableCell>
+                        <TableCell align="right"><strong>Credit (₹)</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {safeArray(voucherDetail.lines).map((line) => (
+                        <TableRow key={line.line_id || `${line.account_code}-${line.account_name}`}>
+                          <TableCell>{line.account_code}</TableCell>
+                          <TableCell>{line.account_name}</TableCell>
+                          <TableCell align="right">
+                            {safeNumber(line.debit) > 0 ? safeAmount(line.debit) : '-'}
+                          </TableCell>
+                          <TableCell align="right">
+                            {safeNumber(line.credit) > 0 ? safeAmount(line.credit) : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setVoucherDialogOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Layout>
   );
