@@ -149,11 +149,9 @@ def get_hindu_calendar_info_data(dt: datetime, jd: float) -> Dict:
     shaka_idx = (shaka_year - base_shaka_year + base_samvatsara_index) % 60
     shaka_name = SAMVATSARAS[shaka_idx]
 
-    # Vikram Samvatsara: Vikram year is 135 years ahead of Shaka
-    # Vikram Samvatsara advances at the same rate but with different alignment
-    # Base: Vikram 1948 (2082 CE) = Kalayukta; therefore Vikram 1949 = Siddharthi, etc.
-    # For proper alignment: use Shaka index but account for Vikram offset
-    vikram_idx = shaka_idx
+    # Vikram Samvatsara has a separate traditional alignment from Shaka.
+    # For 2026-05-24: Shaka 1948 is Parabhava, while Vikram 2083 is Siddharthi.
+    vikram_idx = (shaka_idx + 13) % 60
     vikram_name = SAMVATSARAS[vikram_idx]
 
     # Solar position (for solar month/ritu)

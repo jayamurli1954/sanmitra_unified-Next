@@ -14,6 +14,8 @@ def test_bengaluru_panchang_reference_2026_05_24():
     assert panchang["date"]["hindu"]["month"] == "Adhika Jyeshtha"
     assert panchang["date"]["hindu"]["is_adhika_masa"] is True
     assert panchang["date"]["hindu"]["ritu"] == "Grishma"
+    assert panchang["date"]["hindu"]["samvat_vikram"] == "2083 Siddharthi"
+    assert panchang["date"]["hindu"]["samvat_shaka"] == "1948 Parabhava"
 
     assert panchang["sun_moon"]["moonrise"] == "1:06 PM"
     assert panchang["sun_moon"]["moonset"] == "12:54 AM"
