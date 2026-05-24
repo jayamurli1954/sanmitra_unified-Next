@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException
 
-from app.core.tenants.context import resolve_app_key, resolve_tenant_id
+from app.core.tenants.context import get_tenant_id, resolve_app_key, resolve_tenant_id
 
 
 UNSAFE_BUSINESS_TENANTS = {"default", ""}
@@ -52,9 +52,10 @@ def resolve_mandir_tenant(
     operation: str = "write",
     block_default_tenant: bool = True,
 ) -> AppTenantContext:
+    context_tenant_id = get_tenant_id()
     return resolve_business_app_tenant(
         current_user=current_user,
-        x_tenant_id=x_tenant_id,
+        x_tenant_id=context_tenant_id or x_tenant_id,
         x_app_key=x_app_key,
         expected_app_key="mandirmitra",
         operation=operation,

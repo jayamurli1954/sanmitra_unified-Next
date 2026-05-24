@@ -43,7 +43,7 @@ beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     delete window.location;
-    window.location = { href: '' };
+    window.location = { href: '', pathname: '/', assign: jest.fn() };
 });
 
 describe('API Service - Request Interceptor', () => {
@@ -62,6 +62,18 @@ describe('API Service - Request Interceptor', () => {
         const config = { headers: {} };
         const result = requestInterceptor(config);
         expect(result.headers['Authorization']).toBeUndefined();
+    });
+
+    it('adds active tenant and temple headers for tenant-scoped requests', () => {
+        localStorage.setItem('active_temple_id_v1', '1');
+        localStorage.setItem('active_tenant_id_v1', 'tenant-1');
+
+        const config = { headers: {} };
+        const result = requestInterceptor(config);
+
+        expect(result.headers['X-Temple-Id']).toBe('1');
+        expect(result.headers['X-Tenant-ID']).toBe('tenant-1');
+        expect(result.headers['X-App-Key']).toBe('mandirmitra');
     });
 });
 
@@ -85,7 +97,7 @@ describe('API Service - Response Interceptor', () => {
 
         expect(sessionStorage.getItem('mm_access_token_v1')).toBeNull();
         expect(sessionStorage.getItem('mm_current_user_v1')).toBeNull();
-        expect(window.location.href).toBe('/login');
+        expect(window.location.assign).toHaveBeenCalledWith('/login');
     });
 
     it('error handler attaches userMessage from response.data.detail', async () => {

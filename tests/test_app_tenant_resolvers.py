@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.core.tenants.app_resolvers import resolve_gruha_tenant, resolve_mandir_tenant
+from app.core.tenants.context import set_tenant_id
 
 
 def test_mandir_write_blocks_superadmin_default_without_explicit_tenant() -> None:
@@ -27,6 +28,22 @@ def test_mandir_write_allows_superadmin_explicit_tenant() -> None:
 
     assert context.app_key == "mandirmitra"
     assert context.tenant_id == "demo-mandir-tenant"
+
+
+def test_mandir_resolver_prefers_middleware_temple_context_over_stale_header() -> None:
+    set_tenant_id("tenant-from-selected-temple")
+    try:
+        context = resolve_mandir_tenant(
+            current_user={"role": "super_admin", "tenant_id": "default", "app_key": "mandirmitra"},
+            x_tenant_id="stale-tenant-from-local-storage",
+            x_app_key="mandirmitra",
+            operation="devotee mobile search",
+        )
+    finally:
+        set_tenant_id(None)
+
+    assert context.app_key == "mandirmitra"
+    assert context.tenant_id == "tenant-from-selected-temple"
 
 
 def test_mandir_write_rejects_wrong_app_key() -> None:

@@ -31,6 +31,8 @@ export function setActiveTempleId(templeId, tenantId = null) {
   localStorage.setItem(ACTIVE_TEMPLE_STORAGE_KEY, String(templeId));
   if (tenantId) {
     localStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, String(tenantId));
+  } else {
+    localStorage.removeItem(ACTIVE_TENANT_STORAGE_KEY);
   }
 }
 
