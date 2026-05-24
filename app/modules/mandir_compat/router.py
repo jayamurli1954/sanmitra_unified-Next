@@ -4723,8 +4723,14 @@ async def list_devotees(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="devotee list",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
 
     try:
         col = get_collection("mandir_devotees")
@@ -4749,8 +4755,14 @@ async def create_devotee(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="devotee create",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
 
     devotee = {
         "id": str(uuid4()),
@@ -4785,8 +4797,14 @@ async def search_devotee_by_mobile(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="devotee mobile search",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
     normalized = _normalize_phone(phone)
 
     if not normalized:
@@ -4810,8 +4828,14 @@ async def autofill_devotee_by_mobile(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    tenant_context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="devotee mobile autofill",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
     normalized = _normalize_phone(phone)
     if not normalized:
         return {"found": False, "phone": normalized, "devotee": None}

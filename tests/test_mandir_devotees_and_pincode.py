@@ -53,11 +53,17 @@ class FakeDevoteeCollection:
 @pytest.fixture()
 def mandir_client(monkeypatch):
     collection = FakeDevoteeCollection()
+    empty_collections = {
+        "mandir_donations": FakeDevoteeCollection(),
+        "mandir_seva_bookings": FakeDevoteeCollection(),
+    }
 
     def fake_get_collection(name: str):
-        if name != "mandir_devotees":
-            raise AssertionError(f"Unexpected collection: {name}")
-        return collection
+        if name == "mandir_devotees":
+            return collection
+        if name in empty_collections:
+            return empty_collections[name]
+        raise AssertionError(f"Unexpected collection: {name}")
 
     monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
     app.dependency_overrides[get_current_user] = lambda: {
@@ -139,6 +145,26 @@ def test_search_devotees_response_omits_mongo_internal_id(mandir_client):
     assert len(payload) == 1
     assert payload[0]["id"] == "dev-2"
     assert "_id" not in payload[0]
+
+
+def test_search_devotees_does_not_cross_tenant_scope(mandir_client):
+    client, collection = mandir_client
+
+    collection.docs.append(
+        {
+            "_id": FakeObjectId(),
+            "id": "tenant-2-devotee",
+            "tenant_id": "tenant-2",
+            "app_key": "mandirmitra",
+            "name": "Tenant Two Devotee",
+            "phone": "9876512340",
+        }
+    )
+
+    response = client.get("/api/v1/devotees/search/by-mobile/9876512340")
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_pincode_lookup_returns_found_for_autofill(mandir_client, monkeypatch):

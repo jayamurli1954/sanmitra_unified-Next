@@ -3,6 +3,7 @@ export const ACTIVE_TENANT_STORAGE_KEY = "active_tenant_id_v1";
 export const ACTIVE_TEMPLE_EVENT = "active-temple-changed";
 export const ACTIVE_TEMPLE_HEADER = "X-Temple-Id";
 export const ACTIVE_APP_KEY_HEADER = "X-App-Key";
+export const ACTIVE_TENANT_HEADER = "X-Tenant-ID";
 
 function getAppKey() {
   return (process.env.REACT_APP_APP_KEY || "mandirmitra").trim();
@@ -42,6 +43,7 @@ export function emitActiveTempleChanged(templeId, tenantId = null) {
 export function buildActiveTempleHeaders(headers = {}) {
   const appKey = getAppKey();
   const templeId = getActiveTempleId();
+  const tenantId = getActiveTenantId();
   const merged = { ...headers };
 
   if (appKey && !merged[ACTIVE_APP_KEY_HEADER]) {
@@ -50,6 +52,10 @@ export function buildActiveTempleHeaders(headers = {}) {
 
   if (templeId && !merged[ACTIVE_TEMPLE_HEADER]) {
     merged[ACTIVE_TEMPLE_HEADER] = String(templeId);
+  }
+
+  if (tenantId && !merged[ACTIVE_TENANT_HEADER]) {
+    merged[ACTIVE_TENANT_HEADER] = tenantId;
   }
 
   return merged;
