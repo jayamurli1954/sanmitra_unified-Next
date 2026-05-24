@@ -151,6 +151,7 @@ function Layout({ children }) {
   const [sevasOpen, setSevasOpen] = useState(true);
   const [moduleConfig, setModuleConfig] = useState(DEFAULT_MODULE_CONFIG);
   const [temples, setTemples] = useState([]);
+  const [hasPlatformOwnerAccess, setHasPlatformOwnerAccess] = useState(false);
   const [activeTempleId, setActiveTempleState] = useState(() => getActiveTempleId());
   const navigate = useNavigate();
   const location = useLocation();
@@ -161,6 +162,7 @@ function Layout({ children }) {
   const actionPermissions = userInfo.action_permissions || {};
   const hasResolvedCurrentUser = Boolean(userInfo.id || userInfo.email || userInfo.role || userInfo.system_role || userInfo.is_superuser);
   const isPlatformSuperAdmin = Boolean(userInfo.is_superuser) || PLATFORM_ADMIN_ROLES.has(String(systemRole || '').toLowerCase());
+  const hasPlatformAccess = isPlatformSuperAdmin || hasPlatformOwnerAccess;
 
   const hasModuleAccess = (permissionKey) => {
     if ((currentUserLoading && hasAccessToken()) || (!hasResolvedCurrentUser && hasAccessToken())) {
@@ -295,6 +297,31 @@ function Layout({ children }) {
   }, [activeTempleId, isPlatformSuperAdmin]);
 
   useEffect(() => {
+    const verifyPlatformOwnerAccess = async () => {
+      const token = getAccessToken();
+      if (!token) {
+        setHasPlatformOwnerAccess(false);
+        return;
+      }
+      if (isPlatformSuperAdmin) {
+        setHasPlatformOwnerAccess(true);
+        return;
+      }
+
+      try {
+        const response = await fetchWithApiFallback('/api/v1/platform-owner/dashboard?limit=1', {
+          headers: { Authorization: `Bearer ${token}` },
+        }, { timeoutMs: 8000, maxAttemptsPerOrigin: 1 });
+        setHasPlatformOwnerAccess(response.ok);
+      } catch (_error) {
+        setHasPlatformOwnerAccess(false);
+      }
+    };
+
+    verifyPlatformOwnerAccess();
+  }, [isPlatformSuperAdmin, systemRole, userInfo.email]);
+
+  useEffect(() => {
     const handleModuleConfigUpdated = (event) => {
       if (event?.detail && typeof event.detail === 'object') {
         setModuleConfig((prev) => {
@@ -343,9 +370,9 @@ function Layout({ children }) {
     navigate('/login');
   };
 
-  const isPlatformConsole = isPlatformSuperAdmin && !activeTempleId;
+  const isPlatformConsole = hasPlatformAccess && !activeTempleId;
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.superAdminOnly && !isPlatformSuperAdmin) {
+    if (item.superAdminOnly && !hasPlatformAccess) {
       return false;
     }
     if (isPlatformConsole && item.id !== 'dashboard' && item.id !== 'platformOperations' && item.id !== 'implementationChecks') {
@@ -357,7 +384,7 @@ function Layout({ children }) {
   const showAccountingSection = !isPlatformConsole && isFeatureEnabled('module_accounting_enabled') && hasModuleAccess('accounting');
 
   const navigateTo = (path) => {
-    const destination = path === '/dashboard' && isPlatformSuperAdmin && !activeTempleId ? '/platform/operations' : path;
+    const destination = path === '/dashboard' && hasPlatformAccess && !activeTempleId ? '/platform/operations' : path;
     navigate(destination);
     setMobileOpen(false);
   };
