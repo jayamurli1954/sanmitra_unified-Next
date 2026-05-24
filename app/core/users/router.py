@@ -27,14 +27,18 @@ def _validate_profile_email(email: str) -> None:
 async def me(current_user: dict = Depends(get_current_user)):
     tenant_id = str(current_user.get("tenant_id") or "").strip()
     tenant = await get_tenant(tenant_id) if tenant_id else None
-    users = get_collection("core_users")
     user_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
     email = str(current_user.get("email") or "").strip().lower()
     user_doc = None
-    if user_id:
-        user_doc = await users.find_one({"user_id": user_id})
-    if user_doc is None and email:
-        user_doc = await users.find_one({"email": email})
+    try:
+        users = get_collection("core_users")
+        if user_id:
+            user_doc = await users.find_one({"user_id": user_id})
+        if user_doc is None and email:
+            user_doc = await users.find_one({"email": email})
+    except RuntimeError as exc:
+        if "MongoDB is not initialized" not in str(exc):
+            raise
     merged_user = {**current_user, **(user_doc or {})}
     resolved_user_id = str(merged_user.get("user_id") or user_id or "").strip()
     return {
