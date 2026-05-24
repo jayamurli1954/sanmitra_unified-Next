@@ -75,6 +75,22 @@ export const getRefreshToken = () => {
 
 export const hasAccessToken = () => Boolean(getAccessToken());
 
+export const decodeJwtPayload = (token) => {
+  try {
+    const [, payloadSegment] = String(token || '').split('.');
+    if (!payloadSegment) return null;
+
+    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
+    const decoded = window.atob(normalized + padding);
+    return JSON.parse(decoded);
+  } catch (error) {
+    return null;
+  }
+};
+
+export const readAccessTokenClaims = () => decodeJwtPayload(getAccessToken());
+
 export const setAccessToken = (token) => {
   writeValueToStores(ACCESS_TOKEN_KEY, token);
   removeFromStores(LEGACY_TOKEN_KEY);

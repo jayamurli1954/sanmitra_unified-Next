@@ -9,6 +9,7 @@ import {
   readStoredUser,
   writeStoredUser,
   clearStoredUser,
+  readAccessTokenClaims,
 } from '../utils/authStorage';
 
 const LAYOUT_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -16,6 +17,7 @@ const USER_PROFILE_CACHE_KEY = 'layout_user_profile_cache_v1';
 const AUTH_REFRESH_ENDPOINTS = ['/api/v1/auth/refresh', '/api/auth/refresh'];
 
 const isAuthFailureStatus = (status) => status === 401;
+const PLATFORM_ADMIN_ROLES = new Set(['super_admin', 'superadmin', 'platform_owner', 'platform_admin']);
 
 const CurrentUserContext = createContext({
   user: {},
@@ -63,22 +65,29 @@ const writeCachedProfile = (value, ttlMs = LAYOUT_CACHE_TTL_MS) => {
   }
 };
 
-const normalizeCurrentUser = (userData, fallbackUser = {}) => ({
-  ...fallbackUser,
-  id: userData?.id ?? fallbackUser.id,
-  email: userData?.email ?? fallbackUser.email,
-  full_name: userData?.full_name ?? fallbackUser.full_name,
-  name: userData?.full_name || userData?.email || fallbackUser.name,
-  role: userData?.system_role || userData?.role || fallbackUser.role,
-  system_role: userData?.system_role || userData?.role || fallbackUser.system_role,
-  role_key: userData?.role_key ?? fallbackUser.role_key,
-  role_label: userData?.role_label ?? fallbackUser.role_label,
-  phone: userData?.phone ?? fallbackUser.phone ?? '',
-  module_permissions: userData?.module_permissions || fallbackUser.module_permissions || {},
-  action_permissions: userData?.action_permissions || fallbackUser.action_permissions || {},
-  is_superuser: Boolean(userData?.is_superuser ?? fallbackUser.is_superuser),
-  must_change_password: Boolean(userData?.must_change_password ?? fallbackUser.must_change_password),
-});
+const normalizeCurrentUser = (userData, fallbackUser = {}) => {
+  const tokenClaims = readAccessTokenClaims() || {};
+  const tokenRole = String(tokenClaims.system_role || tokenClaims.role || '').toLowerCase();
+  const profileRole = userData?.system_role || userData?.role || fallbackUser.system_role || fallbackUser.role;
+  const resolvedRole = PLATFORM_ADMIN_ROLES.has(tokenRole) ? tokenRole : profileRole;
+
+  return {
+    ...fallbackUser,
+    id: userData?.id ?? fallbackUser.id ?? tokenClaims.sub,
+    email: userData?.email ?? fallbackUser.email ?? tokenClaims.email,
+    full_name: userData?.full_name ?? fallbackUser.full_name,
+    name: userData?.full_name || userData?.email || fallbackUser.name || tokenClaims.email,
+    role: resolvedRole,
+    system_role: resolvedRole,
+    role_key: userData?.role_key ?? fallbackUser.role_key,
+    role_label: userData?.role_label ?? fallbackUser.role_label,
+    phone: userData?.phone ?? fallbackUser.phone ?? '',
+    module_permissions: userData?.module_permissions || fallbackUser.module_permissions || {},
+    action_permissions: userData?.action_permissions || fallbackUser.action_permissions || {},
+    is_superuser: Boolean(userData?.is_superuser ?? fallbackUser.is_superuser ?? ['super_admin', 'superadmin'].includes(tokenRole)),
+    must_change_password: Boolean(userData?.must_change_password ?? fallbackUser.must_change_password),
+  };
+};
 
 export function CurrentUserProvider({ children }) {
   const [user, setUser] = useState(() => {

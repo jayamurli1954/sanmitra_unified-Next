@@ -64,6 +64,7 @@ const menuItems = [
   { id: 'dashboard', labelKey: 'layout.nav.dashboard', defaultLabel: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', permissionKey: 'dashboard' },
   { id: 'donations', labelKey: 'layout.nav.donations', defaultLabel: 'Donations', icon: <AccountBalanceIcon />, path: '/donations', moduleFlag: 'module_donations_enabled', permissionKey: 'donations' },
   { id: 'devotees', labelKey: 'layout.nav.devotees', defaultLabel: 'Devotees', icon: <PeopleIcon />, path: '/devotees', permissionKey: 'devotees' },
+  { id: 'publicPayments', labelKey: 'layout.nav.accounting.publicPayments', defaultLabel: 'Public Payments', icon: <AccountBalanceWalletIcon />, path: '/accounting/public-payments', permissionKey: 'accounting' },
   { id: 'inventory', labelKey: 'layout.nav.inventory', defaultLabel: 'Inventory', icon: <InventoryIcon />, path: '/inventory', moduleFlag: 'module_inventory_enabled', permissionKey: 'inventory' },
   { id: 'assets', labelKey: 'layout.nav.templeAssets', defaultLabel: 'Temple Assets', icon: <EngineeringIcon />, path: '/assets', moduleFlag: 'module_assets_enabled', permissionKey: 'assets' },
   { id: 'hr', labelKey: 'layout.nav.hrSalary', defaultLabel: 'HR & Salary', icon: <BadgeIcon />, path: '/hr', moduleFlag: 'module_hr_enabled', permissionKey: 'hr' },
@@ -87,7 +88,6 @@ const accountingMenuItems = [
   { id: 'bankReconciliation', labelKey: 'layout.nav.accounting.bankReconciliation', defaultLabel: 'Bank Reconciliation', icon: <AccountBalanceIcon />, path: '/accounting/bank-reconciliation' },
   { id: 'financialClosing', labelKey: 'layout.nav.accounting.financialClosing', defaultLabel: 'Financial Closing', icon: <LockIcon />, path: '/accounting/financial-closing' },
   { id: 'upiPayments', labelKey: 'layout.nav.accounting.upiPayments', defaultLabel: 'UPI Payments', icon: <PaymentIcon />, path: '/accounting/upi-payments' },
-  { id: 'publicPayments', labelKey: 'layout.nav.accounting.publicPayments', defaultLabel: 'Public Payments', icon: <AccountBalanceWalletIcon />, path: '/accounting/public-payments' },
   { id: 'sevaReminders', labelKey: 'layout.nav.accounting.sevaReminders', defaultLabel: 'Seva Reminders', icon: <NotificationsActiveIcon />, path: '/accounting/seva-reminders' },
   { id: 'accountingReports', labelKey: 'layout.nav.accounting.reports', defaultLabel: 'Accounting Reports', icon: <SummarizeIcon />, path: '/accounting/reports' },
 ];
@@ -374,6 +374,9 @@ function Layout({ children }) {
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.superAdminOnly && !hasPlatformAccess) {
       return false;
+    }
+    if (item.superAdminOnly && hasPlatformAccess) {
+      return true;
     }
     if (isPlatformConsole && item.id !== 'dashboard' && item.id !== 'platformOperations' && item.id !== 'implementationChecks') {
       return false;

@@ -18,7 +18,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { IconButton, InputAdornment } from '@mui/material';
 import { fetchWithApiFallback } from '../utils/apiBaseUrl';
-import { setAccessToken, setRefreshToken, writeStoredUser } from '../utils/authStorage';
+import { decodeJwtPayload, setAccessToken, setRefreshToken, writeStoredUser } from '../utils/authStorage';
 import { clearTenantInactiveReason } from '../utils/tenantInactive';
 import { emitActiveTempleChanged, getActiveTempleId, setActiveTempleId } from '../utils/activeTemple';
 import AppInstallButton from '../components/AppInstallButton';
@@ -55,20 +55,6 @@ const parseErrorMessage = async (response, fallbackMessage) => {
     // ignore parse failures, fallback message below
   }
   return fallbackMessage;
-};
-
-const decodeJwtPayload = (token) => {
-  try {
-    const [, payloadSegment] = String(token || '').split('.');
-    if (!payloadSegment) return null;
-
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
-    const decoded = window.atob(normalized + padding);
-    return JSON.parse(decoded);
-  } catch (_error) {
-    return null;
-  }
 };
 
 function Login() {
@@ -117,11 +103,15 @@ function Login() {
       },
     }, { timeoutMs: 12000 });
 
+    const tokenClaims = decodeJwtPayload(tokenData.access_token) || {};
+    const tokenRole = tokenClaims.system_role || tokenClaims.role || 'temple_manager';
     let currentUser = {
-      email: fallbackEmail || '',
-      name: fallbackEmail ? fallbackEmail.split('@')[0] : 'user',
-      role: 'temple_manager',
-      system_role: 'temple_manager',
+      email: fallbackEmail || tokenClaims.email || '',
+      name: fallbackEmail ? fallbackEmail.split('@')[0] : (tokenClaims.email || tokenClaims.sub || 'user'),
+      role: tokenRole,
+      system_role: tokenRole,
+      tenant_id: tokenClaims.tenant_id,
+      app_key: tokenClaims.app_key,
       is_superuser: false,
       module_permissions: {},
       action_permissions: {},
