@@ -88,11 +88,11 @@ const theme = createTheme({
 });
 
 function App() {
-  const shouldRouteToGruhaShell = isGruhaShellHost() && !window.location.pathname.startsWith('/mitrabooks-erp');
+  const shouldRouteToGruhaShell = isGruhaShellHost() && !window.location.pathname.startsWith('/gruhamitra');
 
   useEffect(() => {
     if (shouldRouteToGruhaShell) {
-      window.location.replace('/mitrabooks-erp/');
+      window.location.replace('/gruhamitra/');
       return undefined;
     }
 

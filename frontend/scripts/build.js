@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { build: viteBuild } = require('vite');
 
 // Keep CRA production builds from failing on pre-existing lint warnings in CI.
 process.env.CI = 'false';
@@ -33,6 +34,20 @@ if (buildResult.status !== 0) {
   process.exit(buildResult.status || 1);
 }
 
-copyStaticDir('assets');
-copyStaticDir('shared');
-copyStaticDir('mitrabooks-erp');
+async function run() {
+  try {
+    await viteBuild({
+      configFile: path.join(repoRoot, 'gruhamitra/vite.config.js'),
+      logLevel: 'info',
+    });
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+
+  copyStaticDir('assets');
+  copyStaticDir('shared');
+  copyStaticDir('mitrabooks-erp');
+}
+
+run();
