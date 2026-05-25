@@ -64,6 +64,12 @@ function AccountingReports() {
   const [voucherDialogOpen, setVoucherDialogOpen] = useState(false);
   const [voucherLoadingId, setVoucherLoadingId] = useState(null);
   const [voucherError, setVoucherError] = useState('');
+  const [ledgerDrilldown, setLedgerDrilldown] = useState({
+    level: 'month',
+    monthKey: '',
+    weekKey: '',
+    dayKey: '',
+  });
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), 3, 1)); // April 1st
   const [toDate, setToDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
@@ -114,6 +120,102 @@ function AccountingReports() {
       return value;
     }
     return '-';
+  };
+
+  const resetLedgerDrilldown = () => {
+    setLedgerDrilldown({
+      level: 'month',
+      monthKey: '',
+      weekKey: '',
+      dayKey: '',
+    });
+  };
+
+  const parseLedgerDate = (txn) => {
+    const value = ledgerEntryDate(txn);
+    if (!value) return null;
+    const parsed = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const ledgerDateKey = (date) => (
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  );
+
+  const ledgerMonthKey = (date) => (
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  );
+
+  const ledgerMonthLabel = (monthKey) => {
+    const [year, month] = String(monthKey).split('-').map(Number);
+    if (!year || !month) return monthKey || 'Undated';
+    return new Date(year, month - 1, 1).toLocaleDateString('en-IN', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const startOfLedgerWeek = (date) => {
+    const weekStart = new Date(date);
+    const day = weekStart.getDay();
+    const offset = day === 0 ? -6 : 1 - day;
+    weekStart.setDate(weekStart.getDate() + offset);
+    weekStart.setHours(0, 0, 0, 0);
+    return weekStart;
+  };
+
+  const ledgerWeekKey = (date) => ledgerDateKey(startOfLedgerWeek(date));
+
+  const ledgerWeekLabel = (weekKey) => {
+    const start = new Date(`${weekKey}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return weekKey || 'Undated';
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${formatDisplayDate(start)} to ${formatDisplayDate(end)}`;
+  };
+
+  const buildLedgerGroups = (entries, level, filters = {}) => {
+    const groups = new Map();
+
+    entries.forEach((txn) => {
+      const date = parseLedgerDate(txn);
+      const monthKey = date ? ledgerMonthKey(date) : 'undated';
+      const weekKey = date ? ledgerWeekKey(date) : 'undated';
+      const dayKey = date ? ledgerDateKey(date) : 'undated';
+
+      if (filters.monthKey && monthKey !== filters.monthKey) return;
+      if (filters.weekKey && weekKey !== filters.weekKey) return;
+      if (filters.dayKey && dayKey !== filters.dayKey) return;
+
+      let groupKey = monthKey;
+      let label = ledgerMonthLabel(monthKey);
+      if (level === 'week') {
+        groupKey = weekKey;
+        label = ledgerWeekLabel(weekKey);
+      } else if (level === 'day') {
+        groupKey = dayKey;
+        label = date ? formatDisplayDate(date) : 'Undated';
+      }
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          key: groupKey,
+          label,
+          debit: 0,
+          credit: 0,
+          count: 0,
+          entries: [],
+        });
+      }
+
+      const group = groups.get(groupKey);
+      group.debit += safeNumber(txn.debit_amount);
+      group.credit += safeNumber(txn.credit_amount);
+      group.count += 1;
+      group.entries.push(txn);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
   };
 
   const buildLedgerExportRows = () => {
@@ -600,6 +702,7 @@ function AccountingReports() {
         const data = await response.json();
         setLedger(data);
         setBulkLedgers([]);
+        resetLedgerDrilldown();
       }
     } catch (error) {
       console.error('Error fetching ledger:', error);
@@ -620,6 +723,7 @@ function AccountingReports() {
     setActiveTab(1);
     setLedger(null);
     setBulkLedgers([]);
+    resetLedgerDrilldown();
     await fetchLedger(String(accountId));
   };
 
@@ -657,6 +761,163 @@ function AccountingReports() {
     } finally {
       setVoucherLoadingId(null);
     }
+  };
+
+  const drilldownTitle = () => {
+    if (ledgerDrilldown.level === 'month') return 'Monthly Summary';
+    if (ledgerDrilldown.level === 'week') return `Weekly Summary - ${ledgerMonthLabel(ledgerDrilldown.monthKey)}`;
+    if (ledgerDrilldown.level === 'day') return `Daily Summary - ${ledgerWeekLabel(ledgerDrilldown.weekKey)}`;
+    return `Voucher Details - ${formatDisplayDate(ledgerDrilldown.dayKey)}`;
+  };
+
+  const drilldownBack = () => {
+    if (ledgerDrilldown.level === 'voucher') {
+      setLedgerDrilldown((current) => ({ ...current, level: 'day', dayKey: '' }));
+    } else if (ledgerDrilldown.level === 'day') {
+      setLedgerDrilldown((current) => ({ ...current, level: 'week', weekKey: '', dayKey: '' }));
+    } else if (ledgerDrilldown.level === 'week') {
+      setLedgerDrilldown({ level: 'month', monthKey: '', weekKey: '', dayKey: '' });
+    }
+  };
+
+  const renderLedgerVoucherRows = (entries, keyPrefix = 'ledger') => (
+    entries.map((txn, index) => (
+      <TableRow key={`${keyPrefix}-${index}`}>
+        <TableCell>{formatDisplayDate(ledgerEntryDate(txn))}</TableCell>
+        <TableCell>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => openVoucherDetail(txn)}
+            disabled={voucherLoadingId === ledgerJournalId(txn)}
+            sx={{ minWidth: 0, p: 0, textTransform: 'none' }}
+          >
+            {ledgerEntryNumber(txn)}
+          </Button>
+        </TableCell>
+        <TableCell>{ledgerEntryDescription(txn)}</TableCell>
+        <TableCell align="right">
+          {safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '-'}
+        </TableCell>
+        <TableCell align="right">
+          {safeNumber(txn.credit_amount) > 0 ? safeAmount(txn.credit_amount) : '-'}
+        </TableCell>
+        <TableCell align="right">{safeAmount(txn.running_balance)}</TableCell>
+      </TableRow>
+    ))
+  );
+
+  const renderLedgerDrilldownTable = (ledgerData) => {
+    const entries = getLedgerEntries(ledgerData);
+    const visibleEntries = entries.filter((txn) => {
+      const date = parseLedgerDate(txn);
+      if (!date) return ledgerDrilldown.dayKey === 'undated';
+      return ledgerDateKey(date) === ledgerDrilldown.dayKey;
+    });
+
+    const groupLevel = ledgerDrilldown.level;
+    const groups = groupLevel === 'voucher'
+      ? []
+      : buildLedgerGroups(entries, groupLevel, ledgerDrilldown);
+
+    return (
+      <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            {drilldownTitle()}
+          </Typography>
+          {ledgerDrilldown.level !== 'month' && (
+            <Button size="small" variant="outlined" onClick={drilldownBack}>
+              Back
+            </Button>
+          )}
+        </Box>
+
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                {ledgerDrilldown.level === 'voucher' ? (
+                  <>
+                    <TableCell><strong>Date</strong></TableCell>
+                    <TableCell><strong>Entry #</strong></TableCell>
+                    <TableCell><strong>Description</strong></TableCell>
+                    <TableCell align="right"><strong>Debit (₹)</strong></TableCell>
+                    <TableCell align="right"><strong>Credit (₹)</strong></TableCell>
+                    <TableCell align="right"><strong>Balance (₹)</strong></TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell><strong>Period</strong></TableCell>
+                    <TableCell align="right"><strong>Debit (₹)</strong></TableCell>
+                    <TableCell align="right"><strong>Credit (₹)</strong></TableCell>
+                    <TableCell align="right"><strong>Transactions</strong></TableCell>
+                    <TableCell align="center"><strong>Drilldown</strong></TableCell>
+                  </>
+                )}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {ledgerDrilldown.level === 'month' && (
+                <TableRow sx={{ bgcolor: '#FFF3E0' }}>
+                  <TableCell><strong>Opening Balance</strong></TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">
+                    <strong>₹{safeAmount(ledgerData.opening_balance)}</strong>
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {ledgerDrilldown.level === 'voucher'
+                ? renderLedgerVoucherRows(visibleEntries, ledgerDrilldown.dayKey)
+                : groups.map((group) => (
+                  <TableRow key={group.key}>
+                    <TableCell>{group.label}</TableCell>
+                    <TableCell align="right">
+                      {group.debit > 0 ? safeAmount(group.debit) : '-'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {group.credit > 0 ? safeAmount(group.credit) : '-'}
+                    </TableCell>
+                    <TableCell align="right">{group.count}</TableCell>
+                    <TableCell align="center">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          if (ledgerDrilldown.level === 'month') {
+                            setLedgerDrilldown({ level: 'week', monthKey: group.key, weekKey: '', dayKey: '' });
+                          } else if (ledgerDrilldown.level === 'week') {
+                            setLedgerDrilldown((current) => ({ ...current, level: 'day', weekKey: group.key, dayKey: '' }));
+                          } else {
+                            setLedgerDrilldown((current) => ({ ...current, level: 'voucher', dayKey: group.key }));
+                          }
+                        }}
+                      >
+                        Open
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {ledgerDrilldown.level === 'month' && (
+                <TableRow sx={{ bgcolor: '#FFF3E0' }}>
+                  <TableCell><strong>Closing Balance</strong></TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">-</TableCell>
+                  <TableCell align="right">
+                    <strong>₹{safeAmount(ledgerData.closing_balance)}</strong>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </>
+    );
   };
 
   const fetchProfitLoss = async () => {
@@ -879,6 +1140,7 @@ function AccountingReports() {
                       setSelectedAccount(e.target.value);
                       setLedger(null);
                       setBulkLedgers([]);
+                      resetLedgerDrilldown();
                     }}
                     label="Select Account"
                   >
@@ -949,63 +1211,7 @@ function AccountingReports() {
                 </Box>
 
                 <Box id="account-ledger-print">
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                          <TableCell><strong>Date</strong></TableCell>
-                          <TableCell><strong>Entry #</strong></TableCell>
-                          <TableCell><strong>Description</strong></TableCell>
-                          <TableCell align="right"><strong>Debit (₹)</strong></TableCell>
-                          <TableCell align="right"><strong>Credit (₹)</strong></TableCell>
-                          <TableCell align="right"><strong>Balance (₹)</strong></TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {/* Opening Balance */}
-                        <TableRow sx={{ bgcolor: '#FFF3E0' }}>
-                          <TableCell colSpan={5}><strong>Opening Balance</strong></TableCell>
-                          <TableCell align="right">
-                            <strong>₹{safeAmount(ledger.opening_balance)}</strong>
-                          </TableCell>
-                        </TableRow>
-
-                        {/* Transactions */}
-                        {getLedgerEntries(ledger).map((txn, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{formatDisplayDate(ledgerEntryDate(txn))}</TableCell>
-                            <TableCell>
-                              <Button
-                                size="small"
-                                variant="text"
-                                onClick={() => openVoucherDetail(txn)}
-                                disabled={voucherLoadingId === ledgerJournalId(txn)}
-                                sx={{ minWidth: 0, p: 0, textTransform: 'none' }}
-                              >
-                                {ledgerEntryNumber(txn)}
-                              </Button>
-                            </TableCell>
-                            <TableCell>{ledgerEntryDescription(txn)}</TableCell>
-                            <TableCell align="right">
-                              {safeNumber(txn.debit_amount) > 0 ? safeAmount(txn.debit_amount) : '-'}
-                            </TableCell>
-                            <TableCell align="right">
-                              {safeNumber(txn.credit_amount) > 0 ? safeAmount(txn.credit_amount) : '-'}
-                            </TableCell>
-                            <TableCell align="right">{safeAmount(txn.running_balance)}</TableCell>
-                          </TableRow>
-                        ))}
-
-                        {/* Closing Balance */}
-                        <TableRow sx={{ bgcolor: '#FFF3E0' }}>
-                          <TableCell colSpan={5}><strong>Closing Balance</strong></TableCell>
-                          <TableCell align="right">
-                            <strong>₹{safeAmount(ledger.closing_balance)}</strong>
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  {renderLedgerDrilldownTable(ledger)}
                 </Box>
               </>
             )}

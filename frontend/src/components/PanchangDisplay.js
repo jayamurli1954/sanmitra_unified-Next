@@ -25,6 +25,51 @@ import PrintIcon from '@mui/icons-material/Print';
 import ShareIcon from '@mui/icons-material/Share';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 
+const TITHI_NAMES = [
+  'Pratipada',
+  'Dwitiya',
+  'Tritiya',
+  'Chaturthi',
+  'Panchami',
+  'Shashthi',
+  'Saptami',
+  'Ashtami',
+  'Navami',
+  'Dashami',
+  'Ekadashi',
+  'Dwadashi',
+  'Trayodashi',
+  'Chaturdashi',
+];
+
+const getNextTithiName = (tithi = {}) => {
+  const number = Number(tithi.number);
+  const paksha = tithi.paksha || '';
+  if (!number || number < 1 || number > 15) return 'Next tithi';
+  if (number < 14) return `${paksha} ${TITHI_NAMES[number]}`.trim();
+  if (number === 14) return paksha === 'Shukla' ? 'Shukla Purnima' : 'Krishna Amavasya';
+  return paksha === 'Shukla' ? 'Krishna Pratipada' : 'Shukla Pratipada';
+};
+
+const formatTransitionTime = (value, fallback) => {
+  if (fallback) return fallback;
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const formatCountdown = (diff) => {
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+  return `${hours}h ${minutes}m ${seconds}s`;
+};
+
 /**
  * Enhanced Panchang Display Component
  * Features: Verification badges, live countdown, quality indicators, 8-period breakdown, print support
@@ -75,31 +120,30 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
 
       // Tithi countdown
       if (data.panchang?.tithi?.end_time) {
-        const tithiEnd = new Date(data.panchang.tithi.end_time);
+        const tithi = data.panchang.tithi;
+        const tithiEnd = new Date(tithi.end_time);
         const diff = tithiEnd - now;
+        const endTime = formatTransitionTime(tithi.end_time, tithi.end_time_formatted);
+        const nextTithi = getNextTithiName(tithi);
 
         if (diff > 0) {
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-          calculations.tithi = `${hours}h ${minutes}m ${seconds}s`;
+          calculations.tithi = `Ends ${endTime} -> ${nextTithi} (${formatCountdown(diff)})`;
         } else {
-          calculations.tithi = 'Transitioning now...';
+          calculations.tithi = `Ended ${endTime}; ${nextTithi} active now`;
         }
       }
 
       // Nakshatra countdown
       if (data.panchang?.nakshatra?.end_time) {
-        const nakshatraEnd = new Date(data.panchang.nakshatra.end_time);
+        const nakshatra = data.panchang.nakshatra;
+        const nakshatraEnd = new Date(nakshatra.end_time);
         const diff = nakshatraEnd - now;
+        const endTime = formatTransitionTime(nakshatra.end_time, nakshatra.end_time_formatted);
 
         if (diff > 0) {
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-          calculations.nakshatra = `${hours}h ${minutes}m ${seconds}s`;
+          calculations.nakshatra = `Ends ${endTime} (${formatCountdown(diff)})`;
         } else {
-          calculations.nakshatra = 'Transitioning now...';
+          calculations.nakshatra = `Ended ${endTime}`;
         }
       }
 
