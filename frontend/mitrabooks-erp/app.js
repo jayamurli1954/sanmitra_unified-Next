@@ -534,6 +534,13 @@ function renderStatusBlock(title, result) {
   return `<div class="module-state warn"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail || "Unable to load this GruhaMitra compatibility endpoint.")}</span></div>`;
 }
 
+function currentBillingPeriodQuery() {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  return `month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+}
+
 function renderSimpleTable(rows, columns, emptyText) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return `<p class="muted">${escapeHtml(emptyText)}</p>`;
@@ -3127,6 +3134,7 @@ async function loadAccountingVoucherDetail(journalId) {
 }
 
 async function loadGruhaDashboard() {
+  const billingPeriodQuery = currentBillingPeriodQuery();
   const [
     settings,
     flats,
@@ -3143,7 +3151,7 @@ async function loadGruhaDashboard() {
     apiRequest("gruhamitra", "/api/v1/flats", { method: "GET" }),
     apiRequest("gruhamitra", "/api/v1/member-onboarding", { method: "GET" }),
     apiRequest("gruhamitra", "/api/v1/complaints/", { method: "GET" }),
-    apiRequest("gruhamitra", "/api/v1/maintenance/bills", { method: "GET" }),
+    apiRequest("gruhamitra", `/api/v1/maintenance/bills?${billingPeriodQuery}`, { method: "GET" }),
     apiRequest("gruhamitra", "/api/v1/messages/rooms", { method: "GET" }),
     apiRequest("gruhamitra", "/api/v1/meetings", { method: "GET" }),
     apiRequest("gruhamitra", "/api/v1/assets", { method: "GET" }),
