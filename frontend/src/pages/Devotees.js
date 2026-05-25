@@ -284,18 +284,45 @@ function Devotees() {
     ].some((value) => String(value || '').toLowerCase().includes(query));
   });
 
+  const reportRows = filteredDevotees.map((devotee, index) => ({
+    name: devoteeDisplayName(devotee),
+    devotee_id: devoteeDisplayId(devotee, index),
+    phone: devotee.phone || 'N/A',
+    email: devotee.email || 'N/A',
+    address: devoteeLocation(devotee) || 'N/A',
+    category: devotee.category || (devotee.is_vip ? 'VIP' : 'General'),
+    donations: devotee.donation_count || 0,
+    total_donated: formatCurrency(devotee.total_donations ?? devotee.total_donated ?? 0),
+    sevas: devotee.booking_count || 0,
+    total_seva: formatCurrency(devotee.total_seva_amount || 0),
+  }));
+
+  const reportColumns = [
+    { field: 'name', label: 'Name' },
+    { field: 'devotee_id', label: 'Devotee ID' },
+    { field: 'phone', label: 'Phone' },
+    { field: 'email', label: 'Email' },
+    { field: 'address', label: 'Address' },
+    { field: 'category', label: 'Category' },
+    { field: 'donations', label: 'Donations' },
+    { field: 'total_donated', label: 'Total Donated' },
+    { field: 'sevas', label: 'Sevas' },
+    { field: 'total_seva', label: 'Total Seva' },
+  ];
+
   const handleExport = (format) => {
-    if (!filteredDevotees.length) return;
-    const exportData = filteredDevotees.map((devotee) => ({
-      Name: `${devotee.name_prefix ? `${devotee.name_prefix} ` : ''}${devotee.name || devotee.full_name || 'N/A'}`.trim(),
-      Phone: devotee.phone || 'N/A',
-      Email: devotee.email || 'N/A',
-      Address: devotee.address || 'N/A',
-      Category: devotee.category || (devotee.is_vip ? 'VIP' : 'General'),
-      Donations: devotee.donation_count || 0,
-      'Total Donated': devotee.total_donations ?? devotee.total_donated ?? 0,
-      Sevas: devotee.booking_count || 0,
-      'Total Seva': devotee.total_seva_amount || 0,
+    if (!reportRows.length) return;
+    const exportData = reportRows.map((row) => ({
+      Name: row.name,
+      'Devotee ID': row.devotee_id,
+      Phone: row.phone,
+      Email: row.email,
+      Address: row.address,
+      Category: row.category,
+      Donations: row.donations,
+      'Total Donated': row.total_donated,
+      Sevas: row.sevas,
+      'Total Seva': row.total_seva,
     }));
 
     if (format === 'csv') {
@@ -434,7 +461,8 @@ function Devotees() {
             </Button>
             <ExportButton onExport={handleExport} />
             <PrintButton
-              elementId="devotees-report-content"
+              data={reportRows}
+              columns={reportColumns}
               title="Devotees Report"
               reportContext={{
                 period: contributionFilter === 'all' ? 'All Time' : (contributionFilter === 'donation' ? 'Donation Contributors' : 'Seva Contributors'),
