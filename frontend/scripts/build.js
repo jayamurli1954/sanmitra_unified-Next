@@ -1,15 +1,38 @@
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
 // Keep CRA production builds from failing on pre-existing lint warnings in CI.
 process.env.CI = 'false';
+process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --no-deprecation`.trim();
 
-// CRA 5 pulls react-dev-utils, which still accesses fs.F_OK on newer Node versions.
-// Suppress that one upstream deprecation so build and E2E output stays actionable.
-const originalEmitWarning = process.emitWarning.bind(process);
-process.emitWarning = (warning, ...args) => {
-  const warningCode = typeof warning === 'object' && warning ? warning.code : undefined;
-  if (warningCode === 'DEP0176' || args.includes('DEP0176')) {
+const repoRoot = path.resolve(__dirname, '..');
+const buildDir = path.join(repoRoot, 'build');
+
+function copyStaticDir(name) {
+  const source = path.join(repoRoot, name);
+  const destination = path.join(buildDir, name);
+  if (!fs.existsSync(source)) {
     return;
   }
-  return originalEmitWarning(warning, ...args);
-};
+  fs.rmSync(destination, { recursive: true, force: true });
+  fs.cpSync(source, destination, { recursive: true });
+}
 
-require('react-scripts/scripts/build');
+const buildResult = spawnSync(
+  process.execPath,
+  [require.resolve('react-scripts/scripts/build')],
+  {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: 'inherit',
+  },
+);
+
+if (buildResult.status !== 0) {
+  process.exit(buildResult.status || 1);
+}
+
+copyStaticDir('assets');
+copyStaticDir('shared');
+copyStaticDir('mitrabooks-erp');

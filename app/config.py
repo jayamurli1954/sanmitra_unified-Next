@@ -53,6 +53,8 @@ class Settings:
         "https://mitrabooks-erp.vercel.app",
         "https://mandirmitra.sanmitratech.in",
         "https://www.mandirmitra.sanmitratech.in",
+        "https://gruhamitra.sanmitratech.in",
+        "https://www.gruhamitra.sanmitratech.in",
         "https://mandirmitra.vercel.app",
         "https://mandir-mitra-alpha.vercel.app",
         "https://legalmitra.vercel.app",

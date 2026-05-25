@@ -32,13 +32,26 @@ function isMandirHost() {
     || host.includes("mandirmitra");
 }
 
+function isGruhaHost() {
+  const host = String(window.location.hostname || "").toLowerCase();
+  return host === "gruhamitra.sanmitratech.in"
+    || host === "www.gruhamitra.sanmitratech.in"
+    || host.includes("gruhamitra");
+}
+
 function isProductionShell() {
   const host = String(window.location.hostname || "").toLowerCase();
   return host && host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
 }
 
 function initialExperience() {
-  return isMandirHost() ? "mandir" : "mitrabooks";
+  if (isMandirHost()) {
+    return "mandir";
+  }
+  if (isGruhaHost()) {
+    return "gruha";
+  }
+  return "mitrabooks";
 }
 const entitlementModulesByOrgType = {
   TEMPLE: ["temple", "accounting", "audit"],
@@ -194,6 +207,7 @@ let currentExperience = initialExperience();
 let lastMandirReceipt = null;
 let activeReceiptPreviewObjectUrl = "";
 let activeMandirWorkspace = "overview";
+let activeGruhaWorkspace = "overview";
 let lastMandirPaymentAccounts = { cash_accounts: [], bank_accounts: [] };
 let lastMandirAccounts = [];
 let lastMandirFormResult = null;
@@ -246,6 +260,7 @@ let accountingDrilldownState = {
 };
 let lastAccountingDrilldown = null;
 let lastAccountingVoucherDetail = null;
+let lastGruhaData = null;
 
 const appRoot = document.getElementById("app-root");
 const brandLogo = document.getElementById("brand-logo");
@@ -361,11 +376,13 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
 
   const navItems = currentExperience === "mandir"
     ? mandirNavigationItems()
-    : modules.map((module) => ({
+    : currentExperience === "gruha"
+      ? gruhaNavigationItems()
+      : modules.map((module) => ({
       label: `${module.nav_group || "Module"}: ${module.display_name}`,
       module,
       workspace: mandirWorkspaceFromModule(module),
-    }));
+      }));
 
   navItems.forEach((item) => {
     const module = item.module || {};
@@ -378,6 +395,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     const mandirWorkspace = item.workspace || mandirWorkspaceFromModule(module);
     if (mandirWorkspace) {
       link.dataset.mandirWorkspace = mandirWorkspace;
+    }
+    if (item.gruhaWorkspace) {
+      link.dataset.gruhaWorkspace = item.gruhaWorkspace;
     }
     link.dataset.navIcon = item.icon || navIconForMandirWorkspace(mandirWorkspace);
     link.textContent = item.label;
@@ -394,6 +414,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     moduleList.appendChild(item);
   });
   syncMandirNavActiveState();
+  syncGruhaNavActiveState();
 }
 
 function mandirNavigationItems() {
@@ -425,6 +446,22 @@ function mandirNavigationItems() {
   ];
 }
 
+function gruhaNavigationItems() {
+  return [
+    { label: "Dashboard", gruhaWorkspace: "overview", icon: "D", module: { module_key: "housing", frontend_path: "/housing/dashboard", enabled: true } },
+    { label: "Maintenance", gruhaWorkspace: "maintenance", icon: "M", module: { module_key: "housing", frontend_path: "/housing/maintenance", enabled: true } },
+    { label: "Members", gruhaWorkspace: "members", icon: "U", module: { module_key: "housing", frontend_path: "/housing/members", enabled: true } },
+    { label: "Flats", gruhaWorkspace: "flats", icon: "F", child: true, module: { module_key: "housing", frontend_path: "/housing/flats", enabled: true } },
+    { label: "Complaints", gruhaWorkspace: "complaints", icon: "C", module: { module_key: "housing", frontend_path: "/housing/complaints", enabled: true } },
+    { label: "Messages", gruhaWorkspace: "messages", icon: "N", module: { module_key: "housing", frontend_path: "/housing/messages", enabled: true } },
+    { label: "Meetings", gruhaWorkspace: "meetings", icon: "G", module: { module_key: "housing", frontend_path: "/housing/meetings", enabled: true } },
+    { label: "Assets", gruhaWorkspace: "assets", icon: "A", module: { module_key: "housing", frontend_path: "/housing/assets", enabled: true } },
+    { label: "Accounting", gruhaWorkspace: "accounting", icon: "L", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
+    { label: "Reports", gruhaWorkspace: "reports", icon: "R", module: { module_key: "housing", frontend_path: "/housing/reports", enabled: true } },
+    { label: "Settings", gruhaWorkspace: "settings", icon: "S", module: { module_key: "audit", frontend_path: "/housing/settings", enabled: true } },
+  ];
+}
+
 function renderStatCards(stats) {
   return stats.map(([label, value, subtext]) => `
     <article class="metric-tile">
@@ -446,6 +483,54 @@ function renderActionTiles(actions) {
 
 function renderActivity(items) {
   return items.map((item) => `<li><span class="activity-dot"></span><span>${item}</span></li>`).join("");
+}
+
+function resultPayload(result, fallback) {
+  return result && result.ok ? result.payload : fallback;
+}
+
+function resultRows(result) {
+  const payload = resultPayload(result, []);
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+  if (Array.isArray(payload?.rows)) {
+    return payload.rows;
+  }
+  return [];
+}
+
+function renderStatusBlock(title, result) {
+  if (!result || result.ok) {
+    return "";
+  }
+  const detail = typeof result.payload === "string" ? result.payload : result.payload?.detail;
+  return `<div class="module-state warn"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail || "Unable to load this GruhaMitra compatibility endpoint.")}</span></div>`;
+}
+
+function renderSimpleTable(rows, columns, emptyText) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `<p class="muted">${escapeHtml(emptyText)}</p>`;
+  }
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0, 12).map((row) => `
+            <tr>
+              ${columns.map((column) => `<td>${escapeHtml(column.value(row))}</td>`).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function mandirWorkspaceFromModule(module = {}) {
@@ -532,9 +617,48 @@ function syncMandirNavActiveState() {
       implementation: "Implementation Checks",
       "platform-owners": "Platform Owners",
     };
+    const gruhaLabels = {
+      overview: "Dashboard",
+      maintenance: "Maintenance",
+      members: "Members",
+      flats: "Flats",
+      complaints: "Complaints",
+      messages: "Messages",
+      meetings: "Meetings",
+      assets: "Assets",
+      accounting: "Accounting",
+      reports: "Reports",
+      settings: "Settings",
+    };
     topbarCurrent.textContent = currentExperience === "mandir"
       ? labels[activeMandirWorkspace] || "Dashboard"
-      : "Dashboard";
+      : currentExperience === "gruha"
+        ? gruhaLabels[activeGruhaWorkspace] || "Dashboard"
+        : "Dashboard";
+  }
+}
+
+function syncGruhaNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.gruhaWorkspace || "";
+    const isActive = currentExperience === "gruha" && workspace && workspace === activeGruhaWorkspace;
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent && currentExperience === "gruha") {
+    const labels = {
+      overview: "Dashboard",
+      maintenance: "Maintenance",
+      members: "Members",
+      flats: "Flats",
+      complaints: "Complaints",
+      messages: "Messages",
+      meetings: "Meetings",
+      assets: "Assets",
+      accounting: "Accounting",
+      reports: "Reports",
+      settings: "Settings",
+    };
+    topbarCurrent.textContent = labels[activeGruhaWorkspace] || "Dashboard";
   }
 }
 
@@ -2640,36 +2764,7 @@ function renderDashboardPreview(config) {
   }
 
   if (dashboard.type === "gruha") {
-    return `
-      <div class="legacy-dashboard gruha-dashboard">
-        <div class="society-header-preview">
-          <img src="${config.logo}" alt="GruhaMitra">
-          <div>
-            <h3>GruhaMitra Demo Society</h3>
-            <p>Your Society, Digitally Simplified</p>
-          </div>
-          <span class="pill">Admin</span>
-        </div>
-        <div class="metric-grid four">${renderStatCards(dashboard.stats)}</div>
-        <div class="dashboard-main-grid">
-          <article>
-            <h4>Quick Actions</h4>
-            <div class="quick-grid">${renderActionTiles(dashboard.actions)}</div>
-          </article>
-          <article>
-            <h4>Recent Activity</h4>
-            <ul class="activity-list">${renderActivity(dashboard.activity)}</ul>
-          </article>
-        </div>
-        <article class="trend-panel">
-          <h4>Monthly Collection Trend</h4>
-          <div class="trend-bars">
-            ${dashboard.trend.map((month, index) => `<span style="height: ${42 + index * 10}px"><em>${month}</em></span>`).join("")}
-          </div>
-        </article>
-        ${renderAccountingDrilldownPanel()}
-      </div>
-    `;
+    return renderGruhaDashboard(config, lastGruhaData);
   }
 
   return `
@@ -2694,6 +2789,186 @@ function renderDashboardPreview(config) {
       </div>
       ${renderAccountingDrilldownPanel()}
     </div>
+  `;
+}
+
+function renderGruhaDashboard(config, payload) {
+  const data = payload || {};
+  const flats = resultRows(data.flats);
+  const members = resultRows(data.members);
+  const complaints = resultRows(data.complaints);
+  const bills = resultRows(data.bills);
+  const rooms = resultRows(data.rooms);
+  const meetings = resultRows(data.meetings);
+  const assets = resultRows(data.assets);
+  const financialYears = resultRows(data.financialYears);
+  const settings = resultPayload(data.settings, {});
+  const openComplaints = complaints.filter((row) => !["closed", "resolved", "completed"].includes(String(row.status || "").toLowerCase())).length;
+  const pendingBills = bills.filter((row) => !["paid", "posted", "closed"].includes(String(row.status || "").toLowerCase()));
+  const pendingDues = pendingBills.reduce((sum, row) => sum + Number(row.balance_due || row.due_amount || row.total_amount || row.amount || 0), 0);
+  const stats = [
+    ["Flats", flats.length, "tenant-scoped units"],
+    ["Members", members.length, "owners and residents"],
+    ["Pending Dues", formatCurrency(pendingDues), `${pendingBills.length} bills`],
+    ["Complaints Open", openComplaints, "service desk"],
+  ];
+  const societyName = settings?.society_name || settings?.name || "GruhaMitra Society";
+
+  return `
+    <div class="legacy-dashboard gruha-dashboard">
+      <div class="society-header-preview">
+        <img src="${config.logo}" alt="GruhaMitra">
+        <div>
+          <h3>${escapeHtml(societyName)}</h3>
+          <p>Housing operations inside MitraBooks Unified ERP</p>
+        </div>
+        <span class="pill">HOUSING</span>
+      </div>
+      ${renderStatusBlock("GruhaMitra data", data.summary)}
+      <div class="metric-grid four">${renderStatCards(stats)}</div>
+      ${renderGruhaWorkspace({
+        flats,
+        members,
+        complaints,
+        bills,
+        rooms,
+        meetings,
+        assets,
+        financialYears,
+        settings,
+        config,
+      })}
+    </div>
+  `;
+}
+
+function renderGruhaWorkspace(data) {
+  if (activeGruhaWorkspace === "maintenance") {
+    return `
+      <div class="dashboard-main-grid">
+        <article>
+          <h4>Maintenance Bills</h4>
+          ${renderSimpleTable(data.bills, [
+            { label: "Bill", value: (row) => row.bill_number || row.id || row.bill_id || "-" },
+            { label: "Flat", value: (row) => row.flat_number || row.flat_id || "-" },
+            { label: "Amount", value: (row) => formatCurrency(row.total_amount || row.amount || row.balance_due) },
+            { label: "Status", value: (row) => row.status || "-" },
+          ], "No maintenance bills returned by the compatibility API.")}
+        </article>
+        <article>
+          <h4>Accounting Boundary</h4>
+          <p class="muted">Maintenance collections use the unified `/api/v1/housing/maintenance-collections` route, which posts through the MitraBooks accounting service with tenant and app-key context.</p>
+          <div class="grouped-nav-preview">
+            <article><strong>Billing</strong><span>Use legacy bill generation endpoints for existing GruhaMitra behavior.</span></article>
+            <article><strong>Collections</strong><span>Post through MitraBooks accounting; do not duplicate ledger logic in housing.</span></article>
+          </div>
+        </article>
+      </div>
+    `;
+  }
+  if (activeGruhaWorkspace === "members") {
+    return renderSimpleTable(data.members, [
+      { label: "Name", value: (row) => row.name || row.full_name || "-" },
+      { label: "Flat", value: (row) => row.flat_number || row.unit_label || "-" },
+      { label: "Type", value: (row) => row.member_type || row.role || "-" },
+      { label: "Status", value: (row) => row.status || "-" },
+    ], "No members found for this tenant/app context.");
+  }
+  if (activeGruhaWorkspace === "flats") {
+    return renderSimpleTable(data.flats, [
+      { label: "Flat", value: (row) => row.flat_number || row.id || "-" },
+      { label: "Block", value: (row) => row.block || "-" },
+      { label: "Floor", value: (row) => row.floor ?? "-" },
+      { label: "Status", value: (row) => row.status || "-" },
+    ], "No flats found. Configure society blocks or import flats.");
+  }
+  if (activeGruhaWorkspace === "complaints") {
+    return renderSimpleTable(data.complaints, [
+      { label: "Complaint", value: (row) => row.title || row.subject || row.id || "-" },
+      { label: "Flat", value: (row) => row.flat_number || row.flat_id || "-" },
+      { label: "Category", value: (row) => row.category || "-" },
+      { label: "Status", value: (row) => row.status || "-" },
+    ], "No complaints found for this society.");
+  }
+  if (activeGruhaWorkspace === "messages") {
+    return renderSimpleTable(data.rooms, [
+      { label: "Room", value: (row) => row.name || row.id || "-" },
+      { label: "Type", value: (row) => row.type || "-" },
+      { label: "Audience", value: (row) => row.audience_type || "public" },
+      { label: "Updated", value: (row) => row.last_message_at || row.updated_at || "-" },
+    ], "No message rooms found.");
+  }
+  if (activeGruhaWorkspace === "meetings") {
+    return renderSimpleTable(data.meetings, [
+      { label: "Meeting", value: (row) => row.meeting_title || row.title || row.id || "-" },
+      { label: "Date", value: (row) => row.meeting_date || "-" },
+      { label: "Type", value: (row) => row.meeting_type || "-" },
+      { label: "Status", value: (row) => row.status || "-" },
+    ], "No meetings found.");
+  }
+  if (activeGruhaWorkspace === "assets") {
+    return renderSimpleTable(data.assets, [
+      { label: "Asset", value: (row) => row.name || row.asset_code || "-" },
+      { label: "Category", value: (row) => row.category || "-" },
+      { label: "Location", value: (row) => row.location || "-" },
+      { label: "Accounting", value: (row) => row.accounting_posting_status || "not_posted" },
+    ], "No society assets found.");
+  }
+  if (activeGruhaWorkspace === "accounting" || activeGruhaWorkspace === "reports") {
+    return renderAccountingDrilldownPanel();
+  }
+  if (activeGruhaWorkspace === "settings") {
+    const blocks = Array.isArray(data.settings?.blocks_config) ? data.settings.blocks_config : [];
+    return `
+      <div class="dashboard-main-grid">
+        <article>
+          <h4>Society Settings</h4>
+          ${renderSimpleTable(blocks, [
+            { label: "Block", value: (row) => row.name || "-" },
+            { label: "Floors", value: (row) => row.floors ?? "-" },
+            { label: "Flats/Floor", value: (row) => row.flatsPerFloor ?? "-" },
+          ], "No block configuration found.")}
+        </article>
+        <article>
+          <h4>Financial Years</h4>
+          ${renderSimpleTable(data.financialYears, [
+            { label: "Year", value: (row) => row.year_name || row.id || "-" },
+            { label: "Start", value: (row) => row.start_date || "-" },
+            { label: "End", value: (row) => row.end_date || "-" },
+            { label: "Status", value: (row) => row.status || "-" },
+          ], "No financial years found.")}
+        </article>
+      </div>
+    `;
+  }
+  return `
+    <div class="dashboard-main-grid">
+      <article>
+        <h4>Quick Actions</h4>
+        <div class="quick-grid">
+          ${gruhaNavigationItems().filter((item) => item.gruhaWorkspace !== "overview").map((item) => `
+            <button class="quick-tile" type="button" data-gruha-action="workspace-view" data-workspace-view="${escapeHtml(item.gruhaWorkspace)}">
+              <span class="quick-icon">${escapeHtml(item.icon)}</span>
+              <span>${escapeHtml(item.label)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </article>
+      <article>
+        <h4>Integration Status</h4>
+        <ul class="activity-list">
+          ${renderActivity([
+            "Legacy GruhaMitra compatibility routes are mounted under /api/v1",
+            "Tenant, app-key, and module registry checks stay in the unified backend",
+            "Accounting remains delegated to MitraBooks shared journal posting",
+          ])}
+        </ul>
+      </article>
+    </div>
+    <article class="trend-panel">
+      <h4>Reports</h4>
+      ${renderAccountingDrilldownPanel()}
+    </article>
   `;
 }
 
@@ -2724,7 +2999,9 @@ async function runChecks() {
     await loadPlatformOwnerDashboard();
   } else if (currentExperience === "mandir") {
     await loadMandirDashboard();
-  } else if (currentExperience === "mitrabooks" || currentExperience === "gruha") {
+  } else if (currentExperience === "gruha") {
+    await loadGruhaDashboard();
+  } else if (currentExperience === "mitrabooks") {
     const accountingDrilldown = await loadAccountingDrilldownResult();
     renderJson(apiOutput, { health, modules, accounting_drilldown: accountingDrilldown });
     dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
@@ -2824,6 +3101,48 @@ async function loadAccountingVoucherDetail(journalId) {
   const result = await apiRequest(activeAppKey, `/api/v1/accounting/reports/vouchers/${encodeURIComponent(journalId)}`, { method: "GET" });
   lastAccountingVoucherDetail = result.ok ? result.payload : result;
   return result;
+}
+
+async function loadGruhaDashboard() {
+  const [
+    settings,
+    flats,
+    members,
+    complaints,
+    bills,
+    rooms,
+    meetings,
+    assets,
+    financialYears,
+    accountingDrilldown,
+  ] = await Promise.all([
+    apiRequest("gruhamitra", "/api/v1/settings/society", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/flats", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/member-onboarding", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/complaints/", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/maintenance/bills", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/messages/rooms", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/meetings", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/assets", { method: "GET" }),
+    apiRequest("gruhamitra", "/api/v1/financial-years/", { method: "GET" }),
+    loadAccountingDrilldownResult(),
+  ]);
+  lastGruhaData = {
+    settings,
+    flats,
+    members,
+    complaints,
+    bills,
+    rooms,
+    meetings,
+    assets,
+    financialYears,
+    accountingDrilldown,
+    summary: [settings, flats, members, complaints, bills, rooms, meetings, assets, financialYears].find((result) => !result.ok) || null,
+  };
+  renderJson(apiOutput, { gruhamitra: lastGruhaData });
+  dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.gruha);
+  syncGruhaNavActiveState();
 }
 
 async function loadMandirDashboard() {
@@ -3664,6 +3983,33 @@ async function setMandirWorkspace(view) {
   document.querySelector(".content")?.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+async function setGruhaWorkspace(view) {
+  const allowedViews = new Set([
+    "overview",
+    "maintenance",
+    "members",
+    "flats",
+    "complaints",
+    "messages",
+    "meetings",
+    "assets",
+    "accounting",
+    "reports",
+    "settings",
+  ]);
+  if (!allowedViews.has(view)) {
+    return;
+  }
+  activeGruhaWorkspace = view;
+  syncGruhaNavActiveState();
+  if (!lastGruhaData) {
+    await loadGruhaDashboard();
+  } else {
+    dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.gruha);
+  }
+  document.querySelector(".content")?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function readAccountingDrilldownFilterValues() {
   const panel = dashboardPreview.querySelector("[data-accounting-drilldown]");
   if (!panel) {
@@ -3876,7 +4222,9 @@ function setExperience(nextExperience) {
     loadPlatformOwnerDashboard();
   } else if (nextExperience === "mandir") {
     loadMandirDashboard();
-  } else if (nextExperience === "mitrabooks" || nextExperience === "gruha") {
+  } else if (nextExperience === "gruha") {
+    loadGruhaDashboard();
+  } else if (nextExperience === "mitrabooks") {
     loadAccountingDrilldownResult().then(() => {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
     });
@@ -3928,14 +4276,26 @@ nav.addEventListener("click", (event) => {
   }
   setMandirWorkspace(link.dataset.mandirWorkspace || "overview");
 });
+nav.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-gruha-workspace]");
+  if (!link || currentExperience !== "gruha") {
+    return;
+  }
+  event.preventDefault();
+  if (link.getAttribute("aria-disabled") === "true") {
+    return;
+  }
+  setGruhaWorkspace(link.dataset.gruhaWorkspace || "overview");
+});
 dashboardPreview.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-accounting-action]");
+  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action]");
   if (!button) {
     return;
   }
   const requestId = button.getAttribute("data-request-id") || "";
   const action = button.getAttribute("data-platform-action");
   const mandirAction = button.getAttribute("data-mandir-action");
+  const gruhaAction = button.getAttribute("data-gruha-action");
   const accountingAction = button.getAttribute("data-accounting-action");
   if (action === "approve") {
     approveOnboardingRequest(requestId);
@@ -3965,6 +4325,8 @@ dashboardPreview.addEventListener("click", (event) => {
     pageMandirList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
   } else if (mandirAction === "workspace-view") {
     setMandirWorkspace(button.getAttribute("data-workspace-view") || "overview");
+  } else if (gruhaAction === "workspace-view") {
+    setGruhaWorkspace(button.getAttribute("data-workspace-view") || "overview");
   } else if (accountingAction === "apply-drilldown") {
     applyAccountingDrilldownFilters();
   } else if (accountingAction === "reset-drilldown") {
@@ -4050,7 +4412,7 @@ if (isProductionShell()) {
   const configuredApiBase = getConfiguredApiBaseUrl();
   const currentOrigin = String(window.location.origin || "").replace(/\/+$/, "");
   const pointsAtFrontend = configuredApiBase === currentOrigin
-    || /mitrabooks-erp\.vercel\.app|mandirmitra\.sanmitratech\.in/i.test(configuredApiBase);
+    || /mitrabooks-erp\.vercel\.app|mandirmitra\.sanmitratech\.in|gruhamitra\.sanmitratech\.in/i.test(configuredApiBase);
   if (!configuredApiBase || pointsAtFrontend) {
     setConfiguredApiBaseUrl(DEFAULT_DEPLOYED_API_BASE_URL);
   }

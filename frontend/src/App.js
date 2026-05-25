@@ -52,6 +52,12 @@ const PublicSevaPayment = lazy(() => import('./pages/PublicSevaPayment'));
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const IDLE_CHECK_INTERVAL_MS = 15000;
 
+function isGruhaShellHost() {
+  const host = String(window.location.hostname || '').toLowerCase();
+  return host === 'gruhamitra.sanmitratech.in'
+    || host === 'www.gruhamitra.sanmitratech.in';
+}
+
 const theme = createTheme({
   typography: {
     fontFamily: [
@@ -82,7 +88,14 @@ const theme = createTheme({
 });
 
 function App() {
+  const shouldRouteToGruhaShell = isGruhaShellHost() && !window.location.pathname.startsWith('/mitrabooks-erp');
+
   useEffect(() => {
+    if (shouldRouteToGruhaShell) {
+      window.location.replace('/mitrabooks-erp/');
+      return undefined;
+    }
+
     let lastActivityAt = Date.now();
 
     const recordActivity = () => {
@@ -135,7 +148,12 @@ function App() {
       });
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [shouldRouteToGruhaShell]);
+
+  if (shouldRouteToGruhaShell) {
+    return null;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

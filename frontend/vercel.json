@@ -7,17 +7,23 @@
   "redirects": [
     {
       "source": "/mitrabooks-erp",
-      "destination": "/dashboard",
+      "destination": "/mitrabooks-erp/",
       "permanent": false
     },
     {
-      "source": "/mitrabooks-erp/",
-      "destination": "/dashboard",
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "www.gruhamitra.sanmitratech.in" }
+      ],
+      "destination": "/mitrabooks-erp/",
       "permanent": false
     },
     {
-      "source": "/mitrabooks-erp/:path*",
-      "destination": "/dashboard",
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "gruhamitra.sanmitratech.in" }
+      ],
+      "destination": "/mitrabooks-erp/",
       "permanent": false
     },
     {

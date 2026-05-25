@@ -95,7 +95,20 @@ The MandirMitra public payment page is:
 https://<frontend-domain>/pay
 ```
 
-After the frontend host/domain is finalized, add the exact origin, for example `https://<frontend-domain>`, to backend `ALLOWED_ORIGINS`.
+The MitraBooks Unified ERP static shell can also serve GruhaMitra when the host is:
+
+```text
+https://gruhamitra.sanmitratech.in/mitrabooks-erp/
+https://www.gruhamitra.sanmitratech.in/mitrabooks-erp/
+```
+
+For the GruhaMitra custom domain:
+
+- Add `gruhamitra.sanmitratech.in` and `www.gruhamitra.sanmitratech.in` to the Vercel frontend project that serves `frontend/`.
+- In Hostinger DNS, create or update the GruhaMitra CNAME records to the exact targets shown by Vercel for those domains.
+- Add both `https://gruhamitra.sanmitratech.in` and `https://www.gruhamitra.sanmitratech.in` to the backend Render `ALLOWED_ORIGINS` value before production smoke/E2E.
+
+After each frontend host/domain is finalized, add the exact origin, for example `https://<frontend-domain>`, to backend `ALLOWED_ORIGINS`.
 
 ## Non-Goals
 
