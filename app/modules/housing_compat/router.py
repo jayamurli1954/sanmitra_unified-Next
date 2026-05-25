@@ -3209,6 +3209,7 @@ async def meetings_send_notice(
     }
 
 
+@router.post("/member-onboarding", response_model=MemberResponse)
 @router.post("/member-onboarding/", response_model=MemberResponse)
 async def member_onboarding_create(
     payload: MemberCreateRequest,
