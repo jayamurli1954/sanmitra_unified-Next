@@ -1,0 +1,76 @@
+name: global-e2e-playwright
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Safe staging/demo URL to test"
+        required: true
+        default: "https://mitrabooks-erp.vercel.app"
+      run_authenticated:
+        description: "Run authenticated smoke when E2E_USER_EMAIL/PASSWORD secrets are configured"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  playwright-smoke:
+    name: Global Playwright smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run public global smoke
+        if: ${{ github.event.inputs.run_authenticated != 'true' }}
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ github.event.inputs.base_url }}
+        run: npx playwright test e2e/global-smoke.spec.js
+
+      - name: Run authenticated global smoke
+        if: ${{ github.event.inputs.run_authenticated == 'true' }}
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ github.event.inputs.base_url }}
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: global-e2e-playwright-report
+          path: frontend/playwright-report/
+          retention-days: 10
+
+      - name: Upload Playwright test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: global-e2e-playwright-artifacts
+          path: frontend/test-results/
+          retention-days: 10
+          if-no-files-found: ignore
