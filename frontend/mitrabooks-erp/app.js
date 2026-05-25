@@ -503,11 +503,34 @@ function resultRows(result) {
   return [];
 }
 
+function statusDetailText(payload) {
+  if (!payload) {
+    return "";
+  }
+  if (typeof payload === "string") {
+    return payload;
+  }
+  if (Array.isArray(payload)) {
+    return payload.map(statusDetailText).filter(Boolean).join("; ");
+  }
+  if (typeof payload === "object") {
+    const direct = payload.detail || payload.message || payload.error;
+    if (direct) {
+      return statusDetailText(direct);
+    }
+    const textValues = Object.values(payload)
+      .map((value) => statusDetailText(value))
+      .filter(Boolean);
+    return textValues.slice(0, 3).join("; ");
+  }
+  return String(payload);
+}
+
 function renderStatusBlock(title, result) {
   if (!result || result.ok) {
     return "";
   }
-  const detail = typeof result.payload === "string" ? result.payload : result.payload?.detail;
+  const detail = statusDetailText(result.payload);
   return `<div class="module-state warn"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail || "Unable to load this GruhaMitra compatibility endpoint.")}</span></div>`;
 }
 
