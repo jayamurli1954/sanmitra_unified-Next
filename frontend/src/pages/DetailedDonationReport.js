@@ -51,6 +51,28 @@ function DetailedDonationReport() {
   const donationRows = getDonationRows(reportData);
   const totalCount = reportData?.total_count ?? donationRows.length;
   const totalAmount = reportData?.total_amount ?? donationRows.reduce((sum, donation) => sum + (Number(donation?.amount) || 0), 0);
+  const reportRows = donationRows.map((donation) => ({
+    date: donation.date ? new Date(donation.date).toLocaleDateString() : 'N/A',
+    receipt_number: donation.receipt_number || 'N/A',
+    devotee_name: donation.devotee_name || 'N/A',
+    mobile: donation.phone || donation.devotee_phone || donation.mobile || 'N/A',
+    category: donation.category || 'N/A',
+    payment_mode: donation.payment_mode || 'N/A',
+    amount: new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(donation.amount || 0),
+  }));
+  const reportColumns = [
+    { field: 'date', label: 'Date' },
+    { field: 'receipt_number', label: 'Receipt #' },
+    { field: 'devotee_name', label: 'Devotee Name' },
+    { field: 'mobile', label: 'Mobile' },
+    { field: 'category', label: 'Category' },
+    { field: 'payment_mode', label: 'Payment Mode' },
+    { field: 'amount', label: 'Amount' },
+  ];
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -239,7 +261,8 @@ function DetailedDonationReport() {
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <ExportButton onExport={handleExport} />
                 <PrintButton
-                  elementId="detailed-donation-report-content"
+                  data={reportRows}
+                  columns={reportColumns}
                   title="Detailed Donation Report"
                   reportContext={{
                     period: {

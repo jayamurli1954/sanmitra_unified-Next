@@ -3,6 +3,47 @@
  */
 import { buildReportHeaderHtml, reportBaseStyles, formatReportPeriod, tryExtractPeriodFromText } from './reportBranding';
 
+const removeActionColumns = (root) => {
+  root.querySelectorAll('table').forEach((table) => {
+    const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th, thead tr:first-child td'));
+    const actionIndexes = headerCells
+      .map((cell, index) => ({ index, text: (cell.textContent || '').trim().toLowerCase() }))
+      .filter(({ text }) => ['action', 'actions', 'quick actions'].includes(text))
+      .map(({ index }) => index);
+
+    if (!actionIndexes.length) return;
+
+    Array.from(table.rows).forEach((row) => {
+      actionIndexes
+        .slice()
+        .sort((a, b) => b - a)
+        .forEach((index) => {
+          if (row.cells[index]) row.deleteCell(index);
+        });
+    });
+  });
+};
+
+const sanitizePrintContent = (element) => {
+  const clone = element.cloneNode(true);
+
+  clone.querySelectorAll([
+    '.no-print',
+    'button',
+    'input',
+    'select',
+    'textarea',
+    'label',
+    'svg',
+    '[role="button"]',
+    '[aria-label*="print" i]',
+    '[aria-label*="export" i]',
+  ].join(',')).forEach((node) => node.remove());
+
+  removeActionColumns(clone);
+  return clone.innerHTML;
+};
+
 /**
  * Print a specific element by ID
  */
@@ -15,7 +56,7 @@ export const printElement = (elementId, title = 'Print', options = {}) => {
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
-  const printContent = element.innerHTML;
+  const printContent = sanitizePrintContent(element);
   const derivedPeriod = options.period || tryExtractPeriodFromText(element.innerText || '');
   const headerHtml = buildReportHeaderHtml({ title, period: formatReportPeriod(derivedPeriod) });
   
