@@ -35,7 +35,7 @@ Initial Playwright foundation added after this runbook:
 - `frontend/e2e/authenticated-smoke.spec.js`
 - `.github/workflows/global-e2e-playwright.yml`
 
-The first workflow is manual and accepts a `base_url` input. Use the URL that serves the React app shell for the target environment. At the time of setup, `https://mitrabooks-erp.vercel.app` served the unified frontend app shell, while `https://mandirmitra.sanmitratech.in` resolved to a SanMitra corporate page in Playwright and was therefore not a valid E2E target for this suite.
+The first workflow is manual and accepts a `base_url` input. Use the URL that serves the React app shell for the target environment. At the time of setup, `https://www.mandirmitra.sanmitratech.in` served the MandirMitra React app shell and passed public smoke, while `https://mandirmitra.sanmitratech.in` resolved to a SanMitra corporate page in Playwright and was therefore not a valid E2E target for this suite.
 
 ## Target State
 

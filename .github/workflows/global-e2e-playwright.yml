@@ -6,7 +6,7 @@ on:
       base_url:
         description: "Safe staging/demo URL to test"
         required: true
-        default: "https://mitrabooks-erp.vercel.app"
+        default: "https://www.mandirmitra.sanmitratech.in"
       run_authenticated:
         description: "Run authenticated smoke when E2E_USER_EMAIL/PASSWORD secrets are configured"
         required: true
