@@ -181,6 +181,75 @@ async def test_maintenance_generation_bills_only_member_assigned_flats(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_maintenance_generation_uses_exact_water_rate_fixed_expenses_and_settings(monkeypatch):
+    bills = _Collection("housing_maintenance_bills")
+    flat_numbers = ["A-101", "A-102", "A-103", "A-201", "A-202", "A-203", "A-301", "A-302", "A-303"]
+    occupants = {
+        "A-101": 5,
+        "A-102": 6,
+        "A-103": 6,
+        "A-201": 6,
+        "A-202": 6,
+        "A-203": 6,
+        "A-301": 6,
+        "A-302": 6,
+        "A-303": 5,
+    }
+
+    async def nine_flats(**_kwargs):
+        return [
+            {"id": f"flat-{idx}", "flat_number": flat_number, "area_sqft": 1000}
+            for idx, flat_number in enumerate(flat_numbers, start=1)
+        ]
+
+    async def occupant_counts(**_kwargs):
+        return occupants
+
+    async def period_expenses(*_args, **_kwargs):
+        return [
+            {"account_code": "5060", "account_name": "Water Supply Expense", "total_amount": 15000, "is_water": True},
+            {"account_code": "5010", "account_name": "Electricity Expense", "total_amount": 7256, "is_water": False},
+            {"account_code": "5020", "account_name": "Watchman Salary", "total_amount": 15000, "is_water": False},
+        ]
+
+    async def billing_settings(**_kwargs):
+        return {
+            "sinking_fund_rate": 100,
+            "repair_fund_rate": 200,
+            "association_fund_rate": 50,
+            "corpus_fund_rate": 25,
+        }
+
+    monkeypatch.setattr(housing_router, "list_flats", nine_flats)
+    monkeypatch.setattr(housing_router, "_flat_occupants_map", occupant_counts)
+    monkeypatch.setattr(housing_router, "_expense_accounts_for_period", period_expenses)
+    monkeypatch.setattr(housing_router, "get_society_settings", billing_settings)
+    monkeypatch.setattr(housing_router, "_maintenance_collections", lambda: (bills, _Collection("reversals")))
+
+    result = await housing_router._build_maintenance_bills(
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        payload={"month": 4, "year": 2026, "selected_fixed_expense_codes": []},
+        current_user={"sub": "admin"},
+        session=object(),
+    )
+
+    first_bill = bills.inserted[0]
+    assert result["total_bills_generated"] == 9
+    assert result["ledger_water_total"] == 15000
+    assert result["selected_fixed_expenses_total"] == 22256
+    assert first_bill["flat_number"] == "A-101"
+    assert first_bill["water_amount"] == 1442.31
+    assert first_bill["fixed_amount"] == 2472.89
+    assert first_bill["sinking_fund_amount"] == 100
+    assert first_bill["repair_fund_amount"] == 200
+    assert first_bill["association_fund_amount"] == 50
+    assert first_bill["corpus_fund_amount"] == 25
+    assert first_bill["breakdown"]["total_inmates"] == 52
+    assert first_bill["breakdown"]["water_per_person_rate"] == 288.4615
+
+
+@pytest.mark.asyncio
 async def test_maintenance_posting_rejects_bills_without_active_members(monkeypatch):
     bills = _Collection(
         "housing_maintenance_bills",
@@ -227,6 +296,44 @@ async def test_maintenance_posting_rejects_bills_without_active_members(monkeypa
     assert "without active onboarded members" in str(exc_info.value.detail)
     assert posted == []
     assert bills.update_queries == []
+
+
+@pytest.mark.asyncio
+async def test_society_settings_routes_use_gruhamitra_header_context(monkeypatch):
+    calls: list[dict] = []
+
+    async def fake_get_society_settings(**kwargs):
+        calls.append({"op": "get", **kwargs})
+        return {"tenant_id": kwargs["tenant_id"], "app_key": kwargs["app_key"], "blocks_config": []}
+
+    async def fake_save_society_settings(**kwargs):
+        calls.append({"op": "save", **kwargs})
+        return {
+            "tenant_id": kwargs["tenant_id"],
+            "app_key": kwargs["app_key"],
+            "blocks_config": [],
+            "sinking_fund_rate": 100,
+        }
+
+    monkeypatch.setattr(housing_router, "get_society_settings", fake_get_society_settings)
+    monkeypatch.setattr(housing_router, "save_society_settings", fake_save_society_settings)
+
+    await housing_router.society_settings_get(
+        current_user={"tenant_id": "default", "app_key": "mitrabooks", "role": "super_admin"},
+        x_tenant_id="society-1",
+        x_app_key="gruhamitra",
+    )
+    await housing_router.society_settings_patch(
+        payload=SocietySettingsUpdate(sinking_fund_rate=100),
+        current_user={"tenant_id": "default", "app_key": "mitrabooks", "role": "super_admin"},
+        x_tenant_id="society-1",
+        x_app_key="gruhamitra",
+    )
+
+    assert calls[0]["tenant_id"] == "society-1"
+    assert calls[0]["app_key"] == "gruhamitra"
+    assert calls[1]["tenant_id"] == "society-1"
+    assert calls[1]["app_key"] == "gruhamitra"
 
 
 def _matches(row: dict, query: dict) -> bool:

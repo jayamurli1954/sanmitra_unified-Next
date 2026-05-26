@@ -104,7 +104,9 @@ const MaintenanceScreen = () => {
       const fixedCodes = new Set(accounts.filter(acc => !acc.is_water).map(acc => acc.account_code));
       setBillForm(prev => ({
         ...prev,
-        selected_fixed_expense_codes: prev.selected_fixed_expense_codes.filter(code => fixedCodes.has(code))
+        selected_fixed_expense_codes: prev.selected_fixed_expense_codes.length > 0
+          ? prev.selected_fixed_expense_codes.filter(code => fixedCodes.has(code))
+          : Array.from(fixedCodes)
       }));
     } catch (err) {
       console.error('Error loading expense accounts for period:', err);

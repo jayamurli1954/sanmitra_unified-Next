@@ -826,7 +826,13 @@ async def _build_maintenance_bills(
     ]
     total_inmates = sum(inmate_counts) or count
 
-    sqft_rate = _safe_float(payload.get("override_sqft_rate"))
+    settings = await get_society_settings(tenant_id=tenant_id, app_key=app_key)
+    sqft_rate = (
+        _safe_float(payload.get("override_sqft_rate"))
+        if payload.get("override_sqft_rate") not in (None, "")
+        else _safe_float(settings.get("maintenance_rate_sqft"))
+    )
+    flat_maintenance_rate = _safe_float(settings.get("maintenance_rate_flat"))
     expense_accounts = await _expense_accounts_for_period(
         session,
         tenant_id=tenant_id,
@@ -835,7 +841,14 @@ async def _build_maintenance_bills(
         year=year,
     )
     expense_by_code = {str(row.get("account_code")): row for row in expense_accounts}
+    non_water_expense_codes = [
+        str(row.get("account_code"))
+        for row in expense_accounts
+        if row.get("account_code") and not row.get("is_water")
+    ]
     selected_fixed_codes = [str(code) for code in (payload.get("selected_fixed_expense_codes") or [])]
+    if not selected_fixed_codes:
+        selected_fixed_codes = non_water_expense_codes
     ledger_water_total = _round_money(
         sum(_safe_float(row.get("total_amount")) for row in expense_accounts if row.get("is_water"))
     )
@@ -852,13 +865,13 @@ async def _build_maintenance_bills(
         if payload.get("override_water_charges") not in (None, "")
         else ledger_water_total
     )
-    water_rate_per_person = _round_money(total_water / total_inmates) if total_water and total_inmates else 0.0
+    water_rate_per_person_exact = (total_water / total_inmates) if total_water and total_inmates else 0.0
+    water_rate_per_person = round(water_rate_per_person_exact, 4)
     total_fixed = (
         _safe_float(payload.get("override_fixed_expenses"))
         if payload.get("override_fixed_expenses") not in (None, "")
         else selected_fixed_total
     )
-    settings = await get_society_settings(tenant_id=tenant_id, app_key=app_key)
     sinking_rate = _safe_float(settings.get("sinking_fund_rate"))
     repair_rate = _safe_float(settings.get("repair_fund_rate"))
     association_rate = _safe_float(settings.get("association_fund_rate"))
@@ -889,8 +902,8 @@ async def _build_maintenance_bills(
     for idx, flat in enumerate(billable_flats):
         flat_area = _safe_float(flat.get("area_sqft"))
         inmates = inmate_counts[idx]
-        maintenance = _round_money(flat_area * sqft_rate) if sqft_rate > 0 else 0.0
-        water = _round_money(water_rate_per_person * inmates)
+        maintenance = _round_money((flat_area * sqft_rate if sqft_rate > 0 else 0.0) + flat_maintenance_rate)
+        water = _round_money(water_rate_per_person_exact * inmates)
 
         def fund_share(total: float, method: str) -> float:
             use_area = method in {"sqft", "area", "area_sqft"}
@@ -927,14 +940,19 @@ async def _build_maintenance_bills(
             "auto_post_requested": bool(payload.get("auto_post_to_accounting")),
             "breakdown": {
                 "maintenance_sqft": maintenance,
-                "sqft_calculation": f"{flat_area:g} sq.ft x {sqft_rate:g}" if maintenance else "",
+                "sqft_calculation": (
+                    f"{flat_area:g} sq.ft x {sqft_rate:g}"
+                    + (f" + flat charge {flat_maintenance_rate:,.2f}" if flat_maintenance_rate else "")
+                    if maintenance
+                    else ""
+                ),
                 "water_charges": water,
                 "water_per_person_rate": water_rate_per_person,
                 "inmates_used": inmates,
                 "total_inmates": total_inmates,
                 "water_calculation": (
                     f"Water expenses {total_water:,.2f} / {total_inmates} residents = "
-                    f"{water_rate_per_person:,.2f} x {inmates} resident(s)"
+                    f"{water_rate_per_person:,.4f} x {inmates} resident(s)"
                     if water and total_inmates
                     else ""
                 ),
@@ -3492,9 +3510,16 @@ async def member_onboarding_checklist_update(
 async def society_settings_get(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = str(current_user.get("app_key") or "gruhamitra")
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="society settings read",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
     row = await get_society_settings(tenant_id=tenant_id, app_key=app_key)
     return SocietySettingsResponse(**row)
 
@@ -3504,9 +3529,16 @@ async def society_settings_patch(
     payload: SocietySettingsUpdate,
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = str(current_user.get("app_key") or "gruhamitra")
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="society settings update",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
     row = await save_society_settings(tenant_id=tenant_id, app_key=app_key, payload=payload)
     return SocietySettingsResponse(**row)
 
