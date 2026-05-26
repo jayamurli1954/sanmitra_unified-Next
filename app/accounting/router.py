@@ -9,6 +9,7 @@ from app.accounting.schemas import (
     ARApResponse,
     AccountCreateRequest,
     AccountResponse,
+    AccountUpdateRequest,
     BalanceSheetResponse,
     ChartOfAccountsInitializeResponse,
     CoaMappingApproveRequest,
@@ -55,6 +56,7 @@ from app.accounting.service import (
     post_journal_entry,
     post_source_journal_entry,
     reverse_journal_entry,
+    update_account,
     upsert_coa_mappings,
     upsert_source_accounts,
 )
@@ -142,6 +144,39 @@ async def list_accounts_endpoint(
         )
         for a in accounts
     ]
+
+
+@router.patch("/accounts/{code}", response_model=AccountResponse)
+async def update_account_endpoint(
+    code: str,
+    payload: AccountUpdateRequest,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    try:
+        account = await update_account(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            code=code,
+            name=payload.name or "",
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return AccountResponse(
+        id=account.id,
+        code=account.code,
+        name=account.name,
+        type=account.type,
+        classification=account.classification,
+        is_cash_bank=account.is_cash_bank,
+        is_receivable=account.is_receivable,
+        is_payable=account.is_payable,
+    )
 
 
 @router.post("/initialize-chart-of-accounts", response_model=ChartOfAccountsInitializeResponse)

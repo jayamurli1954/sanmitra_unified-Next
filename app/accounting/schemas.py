@@ -21,6 +21,10 @@ class AccountCreateRequest(BaseModel):
     is_payable: bool = False
 
 
+class AccountUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+
+
 class AccountResponse(BaseModel):
     id: int
     code: str | None

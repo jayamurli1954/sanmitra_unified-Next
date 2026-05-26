@@ -425,6 +425,36 @@ async def list_accounts(
     return list(rows.scalars().all())
 
 
+async def update_account(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str = "primary",
+    code: str,
+    name: str,
+) -> Account:
+    normalized_code = str(code or "").strip()
+    normalized_name = str(name or "").strip()
+    if not normalized_code:
+        raise AccountingValidationError("Account code is required")
+    if len(normalized_name) < 2:
+        raise AccountingValidationError("Account name must be at least 2 characters")
+
+    stmt = select(Account).where(
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        Account.code == normalized_code,
+    )
+    account = (await session.execute(stmt)).scalar_one_or_none()
+    if account is None:
+        raise AccountingNotFoundError("Account not found")
+
+    account.name = normalized_name
+    await session.commit()
+    await session.refresh(account)
+    return account
+
+
 async def initialize_default_chart_of_accounts(
     session: AsyncSession,
     *,
