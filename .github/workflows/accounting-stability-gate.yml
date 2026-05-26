@@ -1,4 +1,4 @@
-﻿name: mandir-stability-gate
+name: accounting-stability-gate
 
 on:
   push:
@@ -6,25 +6,27 @@ on:
       - main
     paths:
       - app/modules/mandir_compat/**
+      - app/modules/housing_compat/**
       - app/accounting/**
       - tests/test_mandir_*.py
-      - tests/test_accounting_validation.py
+      - tests/test_accounting_*.py
       - scripts/check_repository_safety.py
       - scripts/check_text_integrity.py
-      - .github/workflows/mandir-stability-gate.yml
+      - .github/workflows/accounting-stability-gate.yml
   pull_request:
     paths:
       - app/modules/mandir_compat/**
+      - app/modules/housing_compat/**
       - app/accounting/**
       - tests/test_mandir_*.py
-      - tests/test_accounting_validation.py
+      - tests/test_accounting_*.py
       - scripts/check_repository_safety.py
       - scripts/check_text_integrity.py
-      - .github/workflows/mandir-stability-gate.yml
+      - .github/workflows/accounting-stability-gate.yml
   workflow_dispatch:
 
 jobs:
-  mandir-stability:
+  accounting-stability:
     runs-on: ubuntu-latest
 
     steps:
@@ -54,20 +56,20 @@ jobs:
         run: |
           python scripts/check_text_integrity.py app scripts .github/workflows
 
-      - name: Mandir Regression Suite
+      - name: Accounting Regression Suite
         run: |
           python -m pytest \
+            tests/test_accounting_account_update.py \
+            tests/test_accounting_app_key_isolation.py \
+            tests/test_accounting_context_isolation.py \
+            tests/test_accounting_immutability.py \
+            tests/test_accounting_report_drilldown.py \
+            tests/test_accounting_report_verification.py \
+            tests/test_accounting_reversal.py \
+            tests/test_accounting_validation.py \
             tests/test_mandir_accounting_setup_stability.py \
             tests/test_mandir_coa_edit_persistence.py \
-            tests/test_mandir_devotees_and_pincode.py \
-            tests/test_mandir_donation_cleanup.py \
-            tests/test_mandir_legacy_coa_import.py \
-            tests/test_mandir_onboarding_auth_flow.py \
-            tests/test_mandir_opening_balance_import.py \
             tests/test_mandir_posting_guardrails.py \
             tests/test_mandir_report_routes.py \
             tests/test_mandir_reports.py \
-            tests/test_mandir_seva_import.py \
-            tests/test_mandir_temple_read_side_effects.py \
-            tests/test_accounting_validation.py \
             -k "not receipt_pdf"
