@@ -97,12 +97,12 @@ const LoginScreen = ({ onLoginSuccess }) => {
               preload="metadata"
               className="login-logo-video"
             >
-              <source src="/GruhaMitra_Logo.mp4" type="video/mp4" />
+              <source src="/gruhamitra/GruhaMitra_Logo.mp4" type="video/mp4" />
               Your browser does not support the video tag.
             </video>
           ) : (
             <img
-              src="/GruhaMitra_Logo.png"
+              src="/gruhamitra/GruhaMitra_Logo.png"
               alt="GruhaMitra Logo"
               className="login-logo"
               width={120}

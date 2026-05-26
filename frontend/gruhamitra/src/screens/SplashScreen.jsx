@@ -73,7 +73,7 @@ const SplashScreen = () => {
           muted
           playsInline
         >
-          <source src="/GruhaMitra_Logo.mp4" type="video/mp4" />
+          <source src="/gruhamitra/GruhaMitra_Logo.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
       </div>

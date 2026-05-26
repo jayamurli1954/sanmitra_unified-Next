@@ -104,7 +104,7 @@ const ComplaintsScreen = () => {
             {/* Header */}
             <div className="dashboard-header">
                 <div className="dashboard-header-left" onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}>
-                    <img src="/GruhaMitra_Logo.png" alt="GruhaMitra Logo" className="dashboard-logo" />
+                    <img src="/gruhamitra/GruhaMitra_Logo.png" alt="GruhaMitra Logo" className="dashboard-logo" />
                     <div className="dashboard-header-text">
                         <div className="dashboard-society-name">{user?.society_name || 'GruhaMitra'}</div>
                         <div className="dashboard-tagline">Complaint Management</div>

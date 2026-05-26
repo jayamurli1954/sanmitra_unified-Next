@@ -68,7 +68,7 @@ const DashboardScreen = () => {
   const [recentActivity, setRecentActivity] = useState(() => cachedDashboardRef.current?.recentActivity || []);
   const [collectionTrend, setCollectionTrend] = useState(() => cachedDashboardRef.current?.collectionTrend || []);
   const [societyInfo, setSocietyInfo] = useState(null);
-  const [societyLogoSrc, setSocietyLogoSrc] = useState('/GruhaMitra_Logo.png');
+  const [societyLogoSrc, setSocietyLogoSrc] = useState('/gruhamitra/GruhaMitra_Logo.png');
   const [newMessageNotice, setNewMessageNotice] = useState(null);
   const objectUrlRef = useRef(null);
 
@@ -122,7 +122,7 @@ const DashboardScreen = () => {
   const resolveSocietyLogo = async (rawLogoUrl) => {
     if (!rawLogoUrl) {
       clearExistingLogoObjectUrl();
-      setSocietyLogoSrc('/GruhaMitra_Logo.png');
+      setSocietyLogoSrc('/gruhamitra/GruhaMitra_Logo.png');
       return;
     }
 
@@ -148,7 +148,7 @@ const DashboardScreen = () => {
 
       if (!endpoint) {
         clearExistingLogoObjectUrl();
-        setSocietyLogoSrc('/GruhaMitra_Logo.png');
+        setSocietyLogoSrc('/gruhamitra/GruhaMitra_Logo.png');
         return;
       }
 
@@ -162,7 +162,7 @@ const DashboardScreen = () => {
     } catch (error) {
       console.warn('Could not load society logo from backend path:', error);
       clearExistingLogoObjectUrl();
-      setSocietyLogoSrc('/GruhaMitra_Logo.png');
+      setSocietyLogoSrc('/gruhamitra/GruhaMitra_Logo.png');
     }
   };
 
@@ -300,7 +300,7 @@ const DashboardScreen = () => {
       <div className="dashboard-header">
         <div className="dashboard-header-left">
           <img
-            src="/GruhaMitra_Logo.png"
+            src="/gruhamitra/GruhaMitra_Logo.png"
             alt="GruhaMitra System"
             className="dashboard-logo"
             style={{ pointerEvents: 'none', userSelect: 'none' }}

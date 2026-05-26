@@ -74,7 +74,7 @@ const SocietyOnboardingScreen = ({ onRegisterSuccess }) => {
       <div className="login-card" style={{ maxWidth: '520px' }}>
         <div className="login-logo-container">
           <img
-            src="/GruhaMitra_Logo.png"
+            src="/gruhamitra/GruhaMitra_Logo.png"
             alt="GruhaMitra Logo"
             className="login-logo"
             style={{ width: '120px', height: '120px', borderRadius: '20px' }}

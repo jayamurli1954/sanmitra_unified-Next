@@ -512,7 +512,7 @@ const MaintenanceScreen = () => {
       <div className="dashboard-header">
         <div className="dashboard-header-left">
           <img
-            src="/GruhaMitra_Logo.png"
+            src="/gruhamitra/GruhaMitra_Logo.png"
             alt="GruhaMitra Logo"
             className="dashboard-logo"
             onClick={() => navigate('/dashboard')}
