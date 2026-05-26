@@ -212,7 +212,13 @@ api.interceptors.request.use(
       if (token) {
         const tokenPayload = decodeJwtPayload(token);
         const tokenTenant = String(tokenPayload?.tenant_id || '').trim();
-        if (APP_KEY === 'gruhamitra' && (isAccountingRequest || SHARED_ACCOUNTING_TENANTS.has(tokenTenant)) && !config.headers['X-Tenant-ID']) {
+        const tokenRole = String(tokenPayload?.role || '').trim();
+        const shouldUseGruhaTenantHeader =
+          APP_KEY === 'gruhamitra' &&
+          !isAuthCredentialRequest &&
+          !config.headers['X-Tenant-ID'] &&
+          (isAccountingRequest || SHARED_ACCOUNTING_TENANTS.has(tokenTenant) || tokenRole === 'super_admin');
+        if (shouldUseGruhaTenantHeader) {
           const tenantId = await getStoredGruhaTenantId();
           if (tenantId) {
             config.headers['X-Tenant-ID'] = tenantId;
