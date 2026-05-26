@@ -180,6 +180,55 @@ async def test_maintenance_generation_bills_only_member_assigned_flats(monkeypat
     assert bills.inserted[0]["breakdown"]["inmates_used"] == 3
 
 
+@pytest.mark.asyncio
+async def test_maintenance_posting_rejects_bills_without_active_members(monkeypatch):
+    bills = _Collection(
+        "housing_maintenance_bills",
+        rows=[
+            {
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "id": "bill-1",
+                "month": 4,
+                "year": 2026,
+                "flat_number": "A-101",
+                "status": "generated",
+                "is_posted": False,
+                "amount": 1000,
+            }
+        ],
+    )
+    posted: list[dict] = []
+
+    async def no_occupants(**_kwargs):
+        return {}
+
+    async def fake_post(**kwargs):
+        posted.append(kwargs)
+        return 1
+
+    monkeypatch.setattr(
+        housing_router,
+        "resolve_gruha_tenant",
+        lambda **_kwargs: type("TenantContext", (), {"tenant_id": "society-1", "app_key": "gruhamitra"})(),
+    )
+    monkeypatch.setattr(housing_router, "_maintenance_collections", lambda: (bills, _Collection("reversals")))
+    monkeypatch.setattr(housing_router, "_flat_occupants_map", no_occupants)
+    monkeypatch.setattr(housing_router, "_post_maintenance_bill_to_accounting", fake_post)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await housing_router.maintenance_post_bills(
+            {"month": 4, "year": 2026},
+            session=object(),
+            current_user={"sub": "admin"},
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "without active onboarded members" in str(exc_info.value.detail)
+    assert posted == []
+    assert bills.update_queries == []
+
+
 def _matches(row: dict, query: dict) -> bool:
     for key, expected in query.items():
         if key == "$or":

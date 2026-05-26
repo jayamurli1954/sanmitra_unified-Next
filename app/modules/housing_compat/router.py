@@ -1716,6 +1716,23 @@ async def maintenance_post_bills(
     if not bills:
         return {"month": month, "year": year, "total_bills_generated": 0, "posted_journal_entries": []}
 
+    flat_occupants = await _flat_occupants_map(tenant_id=tenant_id, app_key=app_key)
+    unassigned_flats = sorted(
+        {
+            str(bill.get("flat_number") or "").strip()
+            for bill in bills
+            if str(bill.get("flat_number") or "").strip().upper() not in flat_occupants
+        }
+    )
+    if unassigned_flats:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot post maintenance bills for flats without active onboarded members: "
+                + ", ".join(unassigned_flats)
+            ),
+        )
+
     now = datetime.now(timezone.utc).isoformat()
     posted_entries: list[int] = []
     for bill in bills:
