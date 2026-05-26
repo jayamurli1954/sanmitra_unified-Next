@@ -76,6 +76,16 @@ def _money_text(value: Any) -> str:
         return "0.00"
 
 
+def _voucher_period(value: dict[str, Any]) -> str:
+    return str(
+        value.get("expense_month")
+        or value.get("expense_for_month")
+        or value.get("period")
+        or value.get("billing_month")
+        or ""
+    ).strip()
+
+
 def _voucher_pdf_bytes(voucher: dict[str, Any], *, branding: dict[str, Any] | None = None) -> bytes:
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -90,6 +100,10 @@ def _voucher_pdf_bytes(voucher: dict[str, Any], *, branding: dict[str, Any] | No
     y -= 16
     pdf.drawString(left, y, _pdf_text(f"Reference: {voucher.get('reference') or '-'}")[:95])
     y -= 16
+    period = _voucher_period(voucher)
+    if period:
+        pdf.drawString(left, y, _pdf_text(f"For Month: {period}")[:95])
+        y -= 16
     pdf.drawString(left, y, _pdf_text(f"Description: {voucher.get('description') or '-'}")[:115])
     y -= 22
 
@@ -151,6 +165,7 @@ def _voucher_from_transaction_doc(txn: dict[str, Any], *, tenant_id: str, app_ke
         "entry_date": txn.get("voucher_date") or txn.get("entry_date") or txn.get("created_at"),
         "description": txn.get("narration") or txn.get("description"),
         "reference": txn.get("voucher_number") or txn.get("reference"),
+        "expense_month": _voucher_period(txn) or None,
         "total_debit": _as_float(txn.get("total_debit") or txn.get("amount"), 0.0),
         "total_credit": _as_float(txn.get("total_credit") or txn.get("amount"), 0.0),
         "tenant_id": tenant_id,
@@ -1101,6 +1116,22 @@ async def transaction_voucher_pdf(
             accounting_entity_id="primary",
             journal_id=journal_entry_id,
         )
+        txn = await get_collection("mb_transactions").find_one(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "$or": [
+                    {"journal_entry_id": journal_entry_id},
+                    {"journal_entry_id": str(journal_entry_id)},
+                    {"reversing_journal_entry_id": journal_entry_id},
+                    {"reversing_journal_entry_id": str(journal_entry_id)},
+                ],
+            }
+        )
+        if txn:
+            period = _voucher_period(txn)
+            if period:
+                voucher["expense_month"] = period
     except AccountingNotFoundError as exc:
         txn = await get_collection("mb_transactions").find_one(
             {

@@ -1105,9 +1105,14 @@ const getVoucherDescription = (txn) => {
   return txn?.description || txn?.narration || txn?.lines?.find?.(line => line?.description)?.description || '';
 };
 
+const getVoucherPeriod = (txn) => {
+  return txn?.expense_month || txn?.expense_for_month || txn?.period || txn?.billing_month || '';
+};
+
 const VoucherViewModal = ({ voucher, onClose, onPrint }) => {
   if (!voucher) return null;
   const lines = Array.isArray(voucher.lines) ? voucher.lines : [];
+  const voucherPeriod = getVoucherPeriod(voucher);
   return (
     <div className="modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200 }}>
       <div className="modal-content" style={{ backgroundColor: '#fff', borderRadius: '10px', width: '760px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto', padding: '22px' }}>
@@ -1126,6 +1131,7 @@ const VoucherViewModal = ({ voucher, onClose, onPrint }) => {
           <div><strong>Amount:</strong> {formatAmount(getVoucherAmount(voucher))}</div>
           <div><strong>Reference:</strong> {voucher.reference || '-'}</div>
           <div><strong>Journal ID:</strong> {voucher.journal_entry_id || '-'}</div>
+          {voucherPeriod ? <div><strong>For Month:</strong> {voucherPeriod}</div> : null}
         </div>
 
         <div style={{ marginBottom: '18px' }}>
