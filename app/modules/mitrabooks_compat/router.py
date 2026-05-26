@@ -507,6 +507,18 @@ def _txn_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_id: 
         "narration": str(payload.get("narration") or payload.get("description") or ""),
         "reference": str(payload.get("reference") or ""),
         "received_from": str(payload.get("received_from") or payload.get("receivedFrom") or ""),
+        "expense_month": str(
+            payload.get("expense_month")
+            or payload.get("expenseMonth")
+            or payload.get("expense_for_month")
+            or payload.get("expenseForMonth")
+            or payload.get("for_month")
+            or payload.get("forMonth")
+            or payload.get("period")
+            or payload.get("billing_month")
+            or payload.get("billingMonth")
+            or ""
+        ).strip(),
         "amount": _as_float(payload.get("amount") or payload.get("total_amount") or payload.get("totalAmount"), 0.0),
         "created_at": _now_iso(),
         "updated_at": _now_iso(),

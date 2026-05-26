@@ -615,6 +615,7 @@ def _month_date_range(month: int, year: int) -> tuple[date, date]:
 def _expense_period_labels(month: int, year: int) -> set[str]:
     full = calendar.month_name[month]
     short = calendar.month_abbr[month]
+    short_year = f"{year % 100:02d}"
     return {
         f"{full} {year}".lower(),
         f"{full}, {year}".lower(),
@@ -624,6 +625,15 @@ def _expense_period_labels(month: int, year: int) -> set[str]:
         f"{month:02d}-{year}".lower(),
         f"{year}-{month:02d}".lower(),
         f"{month:02d}/{year}".lower(),
+        f"{full} {short_year}".lower(),
+        f"{full}, {short_year}".lower(),
+        f"{full}-{short_year}".lower(),
+        f"{short} {short_year}".lower(),
+        f"{short}. {short_year}".lower(),
+        f"{short}, {short_year}".lower(),
+        f"{short}-{short_year}".lower(),
+        f"{month:02d}-{short_year}".lower(),
+        f"{month:02d}/{short_year}".lower(),
     }
 
 

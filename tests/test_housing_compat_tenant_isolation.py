@@ -72,6 +72,29 @@ class _Collection:
         return type("Result", (), {"inserted_ids": list(range(len(docs)))})()
 
 
+def test_expense_period_matching_accepts_explicit_month_and_two_digit_year_narration():
+    assert housing_router._matches_expense_period(
+        {"expense_month": "April, 2026", "narration": "Posted on 26 May"},
+        month=4,
+        year=2026,
+    )
+    assert housing_router._matches_expense_period(
+        {"narration": "Electricity charges paid for the month of April 26"},
+        month=4,
+        year=2026,
+    )
+    assert housing_router._matches_expense_period(
+        {"description": "Salary paid to watchman for Apr. 26"},
+        month=4,
+        year=2026,
+    )
+    assert not housing_router._matches_expense_period(
+        {"expense_month": "May, 2026", "narration": "Electricity charges paid for the month of May 26"},
+        month=4,
+        year=2026,
+    )
+
+
 def _matches(row: dict, query: dict) -> bool:
     for key, expected in query.items():
         if key == "$or":

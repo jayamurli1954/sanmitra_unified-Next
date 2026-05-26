@@ -4,7 +4,7 @@ from pypdf import PdfReader
 
 from app.accounting.report_alias_router import _report_pdf_bytes
 from app.main import app
-from app.modules.mitrabooks_compat.router import _voucher_pdf_bytes
+from app.modules.mitrabooks_compat.router import _txn_doc, _voucher_pdf_bytes
 
 
 def _route_keys() -> set[tuple[str, str]]:
@@ -159,3 +159,23 @@ def test_gruhamitra_accounting_report_pdf_uses_society_branding():
     assert "Green Heights RWA" in text
     assert "Trial Balance" in text
     assert "12 Lake Road" in text
+
+
+def test_gruhamitra_payment_transaction_preserves_explicit_expense_month():
+    doc = _txn_doc(
+        {
+            "voucher_type": "payment",
+            "voucher_number": "PV-000003",
+            "voucher_date": "2026-05-26",
+            "expense_month": "April, 2026",
+            "description": "Salary paid to watchman",
+            "amount": 15000,
+        },
+        tenant_id="tenant-housing",
+        app_key="gruhamitra",
+        company_id=1,
+        txn_id=3,
+    )
+
+    assert doc["expense_month"] == "April, 2026"
+    assert doc["voucher_date"] == "2026-05-26"
