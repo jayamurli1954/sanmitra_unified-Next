@@ -151,6 +151,8 @@ const LoginScreen = ({ onLoginSuccess }) => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
                 style={{
                   position: 'absolute',
                   right: '10px',
@@ -159,11 +161,11 @@ const LoginScreen = ({ onLoginSuccess }) => {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
+                  fontSize: '16px',
                   color: '#666'
                 }}
               >
-                {showPassword ? '' : ''}
+                {showPassword ? '🙈' : '👁'}
               </button>
             </div>
             <div className="login-inline-action">
