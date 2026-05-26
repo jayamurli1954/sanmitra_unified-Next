@@ -785,6 +785,18 @@ async def _build_maintenance_bills(
     if not flats:
         raise HTTPException(status_code=400, detail="No flats found. Please add flats before generating bills.")
 
+    flat_occupants = await _flat_occupants_map(tenant_id=tenant_id, app_key=app_key)
+    billable_flats = [
+        flat
+        for flat in flats
+        if str(flat.get("flat_number") or "").strip().upper() in flat_occupants
+    ]
+    if not billable_flats:
+        raise HTTPException(
+            status_code=400,
+            detail="No active onboarded members are assigned to flats. Onboard or assign members before generating bills.",
+        )
+
     bills_col, _ = _maintenance_collections()
     if replace_existing:
         existing_posted = await bills_col.count_documents(
@@ -797,9 +809,8 @@ async def _build_maintenance_bills(
             )
         await bills_col.delete_many({"tenant_id": tenant_id, "app_key": app_key, "month": month, "year": year})
 
-    count = len(flats)
-    total_area = sum(_safe_float(flat.get("area_sqft")) for flat in flats)
-    flat_occupants = await _flat_occupants_map(tenant_id=tenant_id, app_key=app_key)
+    count = len(billable_flats)
+    total_area = sum(_safe_float(flat.get("area_sqft")) for flat in billable_flats)
     adjusted_inmates = payload.get("adjusted_inmates") or {}
     inmate_counts = [
         max(
@@ -807,12 +818,11 @@ async def _build_maintenance_bills(
             _safe_int(
                 adjusted_inmates.get(str(flat.get("id")))
                 or adjusted_inmates.get(str(flat.get("flat_number")))
-                or flat_occupants.get(str(flat.get("flat_number") or "").strip().upper())
-                or 1,
-                1,
+                or flat_occupants.get(str(flat.get("flat_number") or "").strip().upper()),
+                0,
             ),
         )
-        for flat in flats
+        for flat in billable_flats
     ]
     total_inmates = sum(inmate_counts) or count
 
@@ -876,7 +886,7 @@ async def _build_maintenance_bills(
 
     now = datetime.now(timezone.utc).isoformat()
     docs: list[dict[str, Any]] = []
-    for idx, flat in enumerate(flats):
+    for idx, flat in enumerate(billable_flats):
         flat_area = _safe_float(flat.get("area_sqft"))
         inmates = inmate_counts[idx]
         maintenance = _round_money(flat_area * sqft_rate) if sqft_rate > 0 else 0.0

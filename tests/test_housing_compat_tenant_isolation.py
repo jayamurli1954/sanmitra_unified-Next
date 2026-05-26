@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from fastapi import HTTPException
 
 from app.modules.housing_compat import router as housing_router
 from app.modules.housing_compat import service as housing_service
@@ -61,6 +62,9 @@ class _Collection:
         self.rows = [row for row in self.rows if not _matches(row, query)]
         return type("Result", (), {"deleted_count": 0})()
 
+    async def count_documents(self, query):
+        return sum(1 for row in self.rows if _matches(row, query))
+
     async def insert_one(self, doc):
         self.inserted.append(doc)
         self.rows.append(doc)
@@ -93,6 +97,87 @@ def test_expense_period_matching_accepts_explicit_month_and_two_digit_year_narra
         month=4,
         year=2026,
     )
+
+
+@pytest.mark.asyncio
+async def test_maintenance_generation_requires_active_members_before_replacing_bills(monkeypatch):
+    bills = _Collection(
+        "housing_maintenance_bills",
+        rows=[
+            {
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "month": 4,
+                "year": 2026,
+                "flat_number": "A-101",
+            }
+        ],
+    )
+
+    async def flats_without_members(**_kwargs):
+        return [
+            {"id": "flat-1", "flat_number": "A-101", "area_sqft": 1000},
+            {"id": "flat-2", "flat_number": "A-102", "area_sqft": 1000},
+        ]
+
+    monkeypatch.setattr(housing_router, "list_flats", flats_without_members)
+
+    async def no_occupants(**_kwargs):
+        return {}
+
+    monkeypatch.setattr(housing_router, "_flat_occupants_map", no_occupants)
+    monkeypatch.setattr(housing_router, "_maintenance_collections", lambda: (bills, _Collection("reversals")))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await housing_router._build_maintenance_bills(
+            tenant_id="society-1",
+            app_key="gruhamitra",
+            payload={"month": 4, "year": 2026},
+            current_user={"sub": "admin"},
+            session=object(),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "active onboarded members" in str(exc_info.value.detail)
+    assert bills.delete_queries == []
+
+
+@pytest.mark.asyncio
+async def test_maintenance_generation_bills_only_member_assigned_flats(monkeypatch):
+    bills = _Collection("housing_maintenance_bills")
+    async def mixed_flats(**_kwargs):
+        return [
+            {"id": "flat-1", "flat_number": "A-101", "area_sqft": 1000},
+            {"id": "flat-2", "flat_number": "A-102", "area_sqft": 1000},
+        ]
+
+    monkeypatch.setattr(housing_router, "list_flats", mixed_flats)
+
+    async def one_occupied_flat(**_kwargs):
+        return {"A-101": 3}
+
+    async def no_expenses(*_args, **_kwargs):
+        return []
+
+    async def empty_settings(**_kwargs):
+        return {}
+
+    monkeypatch.setattr(housing_router, "_flat_occupants_map", one_occupied_flat)
+    monkeypatch.setattr(housing_router, "_expense_accounts_for_period", no_expenses)
+    monkeypatch.setattr(housing_router, "get_society_settings", empty_settings)
+    monkeypatch.setattr(housing_router, "_maintenance_collections", lambda: (bills, _Collection("reversals")))
+
+    result = await housing_router._build_maintenance_bills(
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        payload={"month": 4, "year": 2026, "override_sqft_rate": 2},
+        current_user={"sub": "admin"},
+        session=object(),
+    )
+
+    assert result["total_bills_generated"] == 1
+    assert bills.inserted[0]["flat_number"] == "A-101"
+    assert bills.inserted[0]["breakdown"]["inmates_used"] == 3
 
 
 def _matches(row: dict, query: dict) -> bool:
