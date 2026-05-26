@@ -1022,17 +1022,8 @@ async def _account_ids_by_code(
 
 
 def _bill_credit_components(bill: dict[str, Any]) -> list[tuple[str, Decimal]]:
-    maintenance = _as_decimal_money(bill.get("maintenance_amount")) + _as_decimal_money(bill.get("fixed_amount"))
-    extra_charges = _as_decimal_money(bill.get("extra_charges_amount"))
-    components = [
-        ("41001", maintenance + extra_charges),
-        ("41004", _as_decimal_money(bill.get("water_amount"))),
-        ("31011", _as_decimal_money(bill.get("sinking_fund_amount"))),
-        ("31012", _as_decimal_money(bill.get("repair_fund_amount"))),
-        ("31010", _as_decimal_money(bill.get("association_fund_amount"))),
-        ("31004", _as_decimal_money(bill.get("corpus_fund_amount"))),
-    ]
-    return [(code, amount) for code, amount in components if amount > 0]
+    total = _as_decimal_money(bill.get("amount"))
+    return [("4000", total)] if total > 0 else []
 
 
 async def _post_maintenance_bill_to_accounting(
@@ -1055,9 +1046,9 @@ async def _post_maintenance_bill_to_accounting(
     if total != credit_total:
         total = credit_total
 
-    required_codes = {"13001", *(code for code, _amount in credit_components)}
+    required_codes = {"1100", *(code for code, _amount in credit_components)}
     account_ids = await _account_ids_by_code(session, tenant_id=tenant_id, app_key=app_key, codes=required_codes)
-    lines = [JournalLineIn(account_id=account_ids["13001"], debit=total, credit=Decimal("0.00"))]
+    lines = [JournalLineIn(account_id=account_ids["1100"], debit=total, credit=Decimal("0.00"))]
     lines.extend(
         JournalLineIn(account_id=account_ids[code], debit=Decimal("0.00"), credit=amount)
         for code, amount in credit_components

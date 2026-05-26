@@ -365,6 +365,55 @@ async def test_maintenance_posting_rejects_bills_without_active_members(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_maintenance_bill_posts_total_to_member_dues_income(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_account_ids(_session, *, tenant_id, app_key, codes):
+        captured["tenant_id"] = tenant_id
+        captured["app_key"] = app_key
+        captured["codes"] = set(codes)
+        return {"1100": 1, "4000": 2}
+
+    async def fake_post_journal_entry(_session, **kwargs):
+        captured["payload"] = kwargs["payload"]
+        captured["idempotency_key"] = kwargs["idempotency_key"]
+        return type("Entry", (), {"id": 99})(), True
+
+    monkeypatch.setattr(housing_router, "_account_ids_by_code", fake_account_ids)
+    monkeypatch.setattr(housing_router, "post_journal_entry", fake_post_journal_entry)
+
+    journal_id = await housing_router._post_maintenance_bill_to_accounting(
+        object(),
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        bill={
+            "id": "bill-1",
+            "flat_number": "A-101",
+            "month": 4,
+            "year": 2026,
+            "amount": 5415.20,
+            "fixed_amount": 2472.89,
+            "water_amount": 1442.31,
+            "sinking_fund_amount": 500,
+            "repair_fund_amount": 500,
+            "association_fund_amount": 500,
+        },
+        current_user={"sub": "admin-1"},
+    )
+
+    lines = captured["payload"].lines
+    assert journal_id == 99
+    assert captured["codes"] == {"1100", "4000"}
+    assert lines[0].account_id == 1
+    assert lines[0].debit == Decimal("5415.20")
+    assert lines[0].credit == Decimal("0.00")
+    assert lines[1].account_id == 2
+    assert lines[1].debit == Decimal("0.00")
+    assert lines[1].credit == Decimal("5415.20")
+    assert captured["idempotency_key"] == "gruhamitra:society-1:gruhamitra:maintenance-bill:bill-1"
+
+
+@pytest.mark.asyncio
 async def test_society_settings_routes_use_gruhamitra_header_context(monkeypatch):
     calls: list[dict] = []
 
