@@ -1098,7 +1098,9 @@ async def transaction_voucher_pdf(
                 "app_key": app_key,
                 "$or": [
                     {"journal_entry_id": journal_entry_id},
+                    {"journal_entry_id": str(journal_entry_id)},
                     {"reversing_journal_entry_id": journal_entry_id},
+                    {"reversing_journal_entry_id": str(journal_entry_id)},
                 ],
             }
         )
