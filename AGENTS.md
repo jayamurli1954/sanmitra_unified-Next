@@ -597,19 +597,39 @@ Load the relevant skill before editing code or docs in that area:
 | GruhaMitra housing society units, residents, maintenance billing, complaints, vendors | `gruhamitra-housing` |
 | Migrations, schema changes, indexes, seeders, backfills, release/rollback notes | `migration-safety` |
 
-## 25. Version History
+## 25. PR Acceptance Checklist
+
+Every PR must explicitly confirm the AGENTS.md acceptance standard before merge.
+
+Required checklist:
+
+- Tenant isolation: changed reads, writes, updates, deletes, reports, exports, and background jobs remain tenant-scoped.
+- App-key and module access: protected module routes validate the trusted `app_key`, enabled module, role, and permission before returning tenant data.
+- Accounting invariants: financial changes preserve double-entry integrity, fixed-precision money, idempotency where applicable, append-only posted entries, and no direct balance mutation.
+- Cross-database consistency: workflows touching MongoDB and PostgreSQL document the completion boundary and do not leave a domain transaction completed when accounting posting fails.
+- Current state vs target state: docs, comments, and release notes distinguish what exists now from planned target behavior, known gaps, and deferred scope.
+- Frontend migration discipline: changes avoid broad frontend merger, preserve LegalMitra and InvestMitra separation, and do not disturb stable MandirMitra/GruhaMitra behavior without scoped tests.
+- Security and privacy: no secrets, tokens, payment data, broker credentials, legal documents, PII exports, or database dumps are committed or logged.
+- Release and rollback: schema, migration, accounting, or tenant-risk changes include rollback/reversal notes or an explicit reason they are not needed.
+- Tests: CI-relevant tests are added or updated for the changed risk area, or the PR states why tests are not applicable.
+
+The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains present and wired into repository validation. It is a policy-presence gate, not a substitute for code review or domain-specific tests.
+
+## 26. Version History
 
 | Version | Date | Changes |
 | --- | --- | --- |
 | 1.0 | 2026-05-15 | Initial workspace policy for SanMitra unified next foundation |
 | 1.1 | 2026-05-15 | Expanded with backend guardrails, module-specific policies, testing, security, and frontend merge rules |
 | 1.2 | 2026-05-20 | Added repo-local skill routing for SanMitra domain workflows |
+| 1.3 | 2026-05-26 | Added PR acceptance checklist and AGENTS compliance gate |
 
-## 26. CI/CD and Release Discipline
+## 27. CI/CD and Release Discipline
 
 GitHub Actions is the source of truth for repository validation:
 
 - `backend-ci`: repository safety, compile checks, text integrity, route contracts, and pytest.
+- `AGENTS compliance`: verifies the PR acceptance checklist remains present and wired into CI/release preflight.
 - `codeql-analysis`: Python static security analysis using CodeQL.
 - `security-trivy`: dependency, secret, and misconfiguration scanning.
 - `release-tag`: creates reviewed fallback tags after release preflight passes.

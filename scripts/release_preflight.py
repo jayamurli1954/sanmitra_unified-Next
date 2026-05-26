@@ -106,6 +106,7 @@ def main() -> int:
     run([sys.executable, "-m", "compileall", "app", "scripts", "tests"])
     run([sys.executable, "scripts/check_text_integrity.py", "app", "scripts", ".github/workflows"])
     run([sys.executable, "scripts/check_repository_safety.py"])
+    run([sys.executable, "scripts/check_agents_compliance.py"])
 
     if not args.skip_tests:
         tests = existing_tests(FOCUSED_TESTS)
