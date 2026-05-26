@@ -1,4 +1,10 @@
+from io import BytesIO
+
+from pypdf import PdfReader
+
+from app.accounting.report_alias_router import _report_pdf_bytes
 from app.main import app
+from app.modules.mitrabooks_compat.router import _voucher_pdf_bytes
 
 
 def _route_keys() -> set[tuple[str, str]]:
@@ -84,3 +90,72 @@ def test_gruhamitra_voucher_pdf_route_is_registered():
     routes = _route_keys()
 
     assert ("GET", "/api/v1/transactions/vouchers/{journal_entry_id}/pdf") in routes
+
+
+def _pdf_text(content: bytes) -> str:
+    reader = PdfReader(BytesIO(content))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def test_gruhamitra_voucher_pdf_uses_society_branding():
+    pdf = _voucher_pdf_bytes(
+        {
+            "id": 42,
+            "entry_date": "2026-05-26",
+            "reference": "PV-000001",
+            "description": "Water supply payment",
+            "total_debit": 15000,
+            "total_credit": 15000,
+            "lines": [
+                {"account_code": "5060", "account_name": "Water Supply Expense", "debit": 15000, "credit": 0},
+                {"account_code": "1010", "account_name": "HDFC Bank Current Account", "debit": 0, "credit": 15000},
+            ],
+        },
+        branding={
+            "society_name": "Green Heights RWA",
+            "society_address": "12 Lake Road",
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "pin_code": "560001",
+            "contact_phone": "9876543210",
+            "contact_email": "office@greenheights.example",
+        },
+    )
+
+    text = _pdf_text(pdf)
+    assert "Green Heights RWA" in text
+    assert "12 Lake Road" in text
+    assert "9876543210" in text
+    assert "office@greenheights.example" in text
+
+
+def test_gruhamitra_accounting_report_pdf_uses_society_branding():
+    pdf = _report_pdf_bytes(
+        "Trial Balance",
+        {
+            "as_of": "2026-05-26",
+            "lines": [
+                {
+                    "account_code": "1010",
+                    "account_name": "HDFC Bank Current Account",
+                    "debit_total": 100,
+                    "credit_total": 0,
+                    "net_balance": 100,
+                }
+            ],
+        },
+        branding={
+            "society_name": "Green Heights RWA",
+            "society_address": "12 Lake Road",
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "pin_code": "560001",
+            "contact_phone": "9876543210",
+            "contact_email": "office@greenheights.example",
+        },
+    )
+
+    text = _pdf_text(pdf)
+    assert "Green Heights RWA" in text
+    assert "Trial Balance" in text
+    assert "12 Lake Road" in text
