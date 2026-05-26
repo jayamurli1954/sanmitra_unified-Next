@@ -134,6 +134,34 @@ def _voucher_pdf_bytes(voucher: dict[str, Any]) -> bytes:
     return buffer.getvalue()
 
 
+def _voucher_from_transaction_doc(txn: dict[str, Any], *, tenant_id: str, app_key: str, journal_entry_id: int) -> dict[str, Any]:
+    lines = []
+    for raw in txn.get("lines") or []:
+        lines.append(
+            {
+                "line_id": raw.get("id"),
+                "account_id": raw.get("account_id"),
+                "account_code": raw.get("account_code") or raw.get("accountCode"),
+                "account_name": raw.get("account_name") or raw.get("accountName") or raw.get("account_code") or raw.get("accountCode"),
+                "debit": _as_float(raw.get("debit"), 0.0),
+                "credit": _as_float(raw.get("credit"), 0.0),
+            }
+        )
+
+    return {
+        "id": journal_entry_id,
+        "entry_date": txn.get("voucher_date") or txn.get("entry_date") or txn.get("created_at"),
+        "description": txn.get("narration") or txn.get("description"),
+        "reference": txn.get("voucher_number") or txn.get("reference"),
+        "total_debit": _as_float(txn.get("total_debit") or txn.get("amount"), 0.0),
+        "total_credit": _as_float(txn.get("total_credit") or txn.get("amount"), 0.0),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": "primary",
+        "lines": lines,
+    }
+
+
 def _page(items: list[dict[str, Any]], page: int, page_size: int, key: str) -> dict[str, Any]:
     total = len(items)
     total_pages = max(1, ceil(total / page_size)) if total else 1
@@ -1064,7 +1092,24 @@ async def transaction_voucher_pdf(
             journal_id=journal_entry_id,
         )
     except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        txn = await get_collection("mb_transactions").find_one(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "$or": [
+                    {"journal_entry_id": journal_entry_id},
+                    {"reversing_journal_entry_id": journal_entry_id},
+                ],
+            }
+        )
+        if txn is None:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        voucher = _voucher_from_transaction_doc(
+            txn,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            journal_entry_id=journal_entry_id,
+        )
 
     pdf_bytes = _voucher_pdf_bytes(voucher)
     filename = f"Voucher_{journal_entry_id}.pdf"
