@@ -78,3 +78,9 @@ def test_gruhamitra_accounting_report_aliases_are_registered():
     }
 
     assert expected <= routes
+
+
+def test_gruhamitra_voucher_pdf_route_is_registered():
+    routes = _route_keys()
+
+    assert ("GET", "/api/v1/transactions/vouchers/{journal_entry_id}/pdf") in routes
