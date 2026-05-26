@@ -76,6 +76,26 @@ class _Collection:
         return type("Result", (), {"inserted_ids": list(range(len(docs)))})()
 
 
+class _SqlRows:
+    def __init__(self, rows: list):
+        self.rows = rows
+
+    def all(self):
+        return self.rows
+
+
+class _ExpenseAccountSession:
+    def __init__(self, account_rows: list[tuple[str, str]]):
+        self.account_rows = account_rows
+        self.calls = 0
+
+    async def execute(self, _stmt):
+        self.calls += 1
+        if self.calls == 1:
+            return _SqlRows([])
+        return _SqlRows(self.account_rows)
+
+
 def test_expense_period_matching_accepts_explicit_month_and_two_digit_year_narration():
     assert housing_router._matches_expense_period(
         {"expense_month": "April, 2026", "narration": "Posted on 26 May"},
@@ -97,6 +117,52 @@ def test_expense_period_matching_accepts_explicit_month_and_two_digit_year_narra
         month=4,
         year=2026,
     )
+
+
+@pytest.mark.asyncio
+async def test_expense_accounts_classify_water_from_voucher_text_and_split_same_code(monkeypatch):
+    txns = _Collection(
+        "mb_transactions",
+        rows=[
+            {
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "voucher_type": "payment",
+                "expense_month": "April, 2026",
+                "voucher_number": "PV-000001",
+                "narration": "being water supply charges paid to Ramanna for 25 tanker for the month of Ap",
+                "lines": [{"account_code": "5090", "description": "Generic Expense", "debit": 15000}],
+            },
+            {
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "voucher_type": "payment",
+                "expense_month": "April, 2026",
+                "voucher_number": "PV-000002",
+                "narration": "salary paid to watchman for Apr 26",
+                "lines": [{"account_code": "5090", "description": "Generic Expense", "debit": 15000}],
+            },
+        ],
+    )
+
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: txns)
+
+    rows = await housing_router._expense_accounts_for_period(
+        _ExpenseAccountSession([("5090", "Generic Expense")]),
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        month=4,
+        year=2026,
+    )
+
+    water_rows = [row for row in rows if row["is_water"]]
+    fixed_rows = [row for row in rows if not row["is_water"]]
+    assert len(water_rows) == 1
+    assert len(fixed_rows) == 1
+    assert water_rows[0]["account_code"] == "5090"
+    assert water_rows[0]["total_amount"] == 15000
+    assert fixed_rows[0]["account_code"] == "5090"
+    assert fixed_rows[0]["total_amount"] == 15000
 
 
 @pytest.mark.asyncio

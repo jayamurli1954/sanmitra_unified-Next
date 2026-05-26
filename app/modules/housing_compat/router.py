@@ -652,8 +652,8 @@ def _matches_expense_period(txn: dict[str, Any], *, month: int, year: int) -> bo
     return any(label in text for label in labels)
 
 
-def _is_water_expense_account(code: Any, name: Any) -> bool:
-    text = f"{code or ''} {name or ''}".lower()
+def _is_water_expense_account(code: Any, name: Any, *context: Any) -> bool:
+    text = " ".join(str(value or "") for value in (code, name, *context)).lower()
     return any(token in text for token in ("water", "tanker", "bwssb", "borewell"))
 
 
@@ -693,18 +693,19 @@ async def _expense_accounts_for_period(
         .order_by(Account.code.asc().nullslast(), Account.name.asc())
     )
     rows = (await session.execute(stmt)).all()
-    accounts_by_code: dict[str, dict[str, Any]] = {}
+    accounts_by_key: dict[str, dict[str, Any]] = {}
     for row in rows:
         amount = _round_money(float(row.debit_total or 0) - float(row.credit_total or 0))
         if amount <= 0:
             continue
         code = str(row.account_code or "")
-        accounts_by_code[code] = {
+        is_water = _is_water_expense_account(row.account_code, row.account_name)
+        accounts_by_key[f"{code}:{'water' if is_water else 'fixed'}"] = {
             "account_code": row.account_code,
             "account_name": row.account_name,
             "total_amount": amount,
             "transaction_count": int(row.transaction_count or 0),
-            "is_water": _is_water_expense_account(row.account_code, row.account_name),
+            "is_water": is_water,
         }
 
     txns = await get_collection("mb_transactions").find(
@@ -734,13 +735,20 @@ async def _expense_accounts_for_period(
         names_by_code = {str(code): str(name) for code, name in account_rows}
 
     for txn in period_txns:
+        txn_context = " ".join(
+            str(txn.get(key) or "")
+            for key in ("description", "narration", "paid_to", "vendor_name", "reference", "voucher_number")
+        )
         for line in txn.get("lines") or []:
             debit = _safe_float((line or {}).get("debit"))
             code = str((line or {}).get("account_code") or "")
             if debit <= 0 or not code:
                 continue
-            name = names_by_code.get(code) or str((line or {}).get("description") or code)
-            existing = accounts_by_code.get(code)
+            line_description = str((line or {}).get("description") or "")
+            name = names_by_code.get(code) or line_description or code
+            is_water = _is_water_expense_account(code, name, line_description, txn_context)
+            account_key = f"{code}:{'water' if is_water else 'fixed'}"
+            existing = accounts_by_key.get(account_key)
             if existing:
                 # If the SQL date query already counted the same voucher, do not double count.
                 existing_refs = existing.setdefault("_mongo_refs", set())
@@ -751,17 +759,17 @@ async def _expense_accounts_for_period(
                 existing["total_amount"] = _round_money(_safe_float(existing.get("total_amount")) + debit)
                 existing["transaction_count"] = _safe_int(existing.get("transaction_count")) + 1
             else:
-                accounts_by_code[code] = {
+                accounts_by_key[account_key] = {
                     "account_code": code,
                     "account_name": name,
                     "total_amount": _round_money(debit),
                     "transaction_count": 1,
-                    "is_water": _is_water_expense_account(code, name),
+                    "is_water": is_water,
                     "_mongo_refs": {str(txn.get("voucher_number") or txn.get("journal_entry_id") or txn.get("id"))},
                 }
 
     accounts = []
-    for row in accounts_by_code.values():
+    for row in accounts_by_key.values():
         row.pop("_mongo_refs", None)
         accounts.append(row)
     return sorted(accounts, key=lambda item: (str(item.get("account_code") or ""), str(item.get("account_name") or "")))
@@ -840,7 +848,6 @@ async def _build_maintenance_bills(
         month=month,
         year=year,
     )
-    expense_by_code = {str(row.get("account_code")): row for row in expense_accounts}
     non_water_expense_codes = [
         str(row.get("account_code"))
         for row in expense_accounts
@@ -854,9 +861,9 @@ async def _build_maintenance_bills(
     )
     selected_fixed_total = _round_money(
         sum(
-            _safe_float(expense_by_code[code].get("total_amount"))
-            for code in selected_fixed_codes
-            if code in expense_by_code and not expense_by_code[code].get("is_water")
+            _safe_float(row.get("total_amount"))
+            for row in expense_accounts
+            if not row.get("is_water") and str(row.get("account_code")) in selected_fixed_codes
         )
     )
 
