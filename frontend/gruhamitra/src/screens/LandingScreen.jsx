@@ -51,9 +51,27 @@ const featureCards = [
 ];
 
 const plans = [
-  { name: 'Starter', price: 'Rs. 1,000 + Rs. 25 / flat', points: ['Core society setup', 'Members and flats', 'Maintenance billing'] },
-  { name: 'Growth', price: 'Rs. 1,500 + Rs. 40 / flat', points: ['Accounting reports', 'Meetings and messages', 'Complaints workflow'] },
-  { name: 'Professional', price: 'Rs. 2,500 + Rs. 50 / flat', points: ['Advanced billing controls', 'Governance workflows', 'Priority implementation support'] },
+  {
+    name: 'Starter',
+    monthly: '₹25 / flat',
+    yearly: '₹250 / flat',
+    range: 'Minimum 25 flats and up to 50 flats',
+    points: ['Core society setup', 'Members and flats', 'Maintenance billing'],
+  },
+  {
+    name: 'Growth',
+    monthly: '₹35 / flat',
+    yearly: '₹350 / flat',
+    range: '51 to 100 flats',
+    points: ['Accounting reports', 'Meetings and messages', 'Complaints workflow'],
+  },
+  {
+    name: 'Professional',
+    monthly: '₹50 / flat',
+    yearly: '₹500 / flat',
+    range: '101 flats and above',
+    points: ['Advanced billing controls', 'Governance workflows', 'Priority implementation support'],
+  },
 ];
 
 const LandingScreen = () => {
@@ -167,18 +185,31 @@ const LandingScreen = () => {
       <section className="landing-plans" aria-labelledby="plans">
         <div className="landing-section-heading">
           <span className="landing-kicker">Plans</span>
-          <h2 id="plans">Simple monthly pricing for housing societies</h2>
+          <h2 id="plans">Clear monthly and yearly pricing for housing societies</h2>
         </div>
         <div className="landing-plan-grid">
           {plans.map((plan) => (
             <article key={plan.name} className="landing-plan-card">
               <h3>{plan.name}</h3>
-              <div className="landing-plan-price">{plan.price}</div>
+              <div className="landing-plan-range">{plan.range}</div>
+              <div className="landing-plan-rates">
+                <div>
+                  <span>Monthly</span>
+                  <strong>{plan.monthly}</strong>
+                </div>
+                <div>
+                  <span>Yearly</span>
+                  <strong>{plan.yearly}</strong>
+                </div>
+              </div>
               <ul>
                 {plan.points.map((point) => <li key={point}>{point}</li>)}
               </ul>
             </article>
           ))}
+        </div>
+        <div className="landing-implementation-fee">
+          One-time implementation, migration, and training fee: <strong>₹5,000</strong>
         </div>
       </section>
 

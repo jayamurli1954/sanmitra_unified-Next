@@ -625,11 +625,58 @@ body {
   line-height: 1.55;
 }
 
-.landing-plan-price {
+.landing-plan-range {
   margin-bottom: 14px;
-  color: #e47419;
-  font-size: 20px;
+  color: #5f6d76;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.landing-plan-rates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.landing-plan-rates div {
+  padding: 12px;
+  background: #fffaf3;
+  border: 1px solid #ead8c0;
+  border-radius: 8px;
+}
+
+.landing-plan-rates span {
+  display: block;
+  margin-bottom: 6px;
+  color: #667680;
+  font-size: 12px;
   font-weight: 900;
+  text-transform: uppercase;
+}
+
+.landing-plan-rates strong {
+  color: #e47419;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.landing-implementation-fee {
+  margin-top: 18px;
+  padding: 18px 20px;
+  color: #452204;
+  background: #ffffff;
+  border: 1px solid #ead8c0;
+  border-left: 5px solid #e8842a;
+  border-radius: 8px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.landing-implementation-fee strong {
+  color: #e47419;
+  font-size: 22px;
 }
 
 .landing-plan-card ul {
