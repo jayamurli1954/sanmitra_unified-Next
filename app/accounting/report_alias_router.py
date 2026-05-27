@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -21,6 +22,8 @@ from app.accounting.router import (
 )
 from app.accounting.service import AccountingNotFoundError, get_ledger_lines
 from app.core.auth.dependencies import get_current_user
+from app.core.tenants.context import resolve_app_key, resolve_tenant_id
+from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 from app.modules.housing_compat.pdf_branding import (
     draw_society_pdf_header,
@@ -33,6 +36,130 @@ router = APIRouter(prefix="/reports", tags=["accounting-report-compat"])
 
 def _money_float(value: Decimal) -> float:
     return float(value.quantize(Decimal("0.01")))
+
+
+def _safe_money(value: Any) -> Decimal:
+    try:
+        return Decimal(str(value or "0")).quantize(Decimal("0.01"))
+    except Exception:
+        return Decimal("0.00")
+
+
+def _bill_is_reversed(row: dict[str, Any]) -> bool:
+    return str(row.get("status") or "").strip().lower() == "reversed" or bool(row.get("is_reversed"))
+
+
+def _bill_paid_amount(row: dict[str, Any]) -> Decimal:
+    status = str(row.get("payment_status") or row.get("status") or "").strip().lower()
+    if status in {"paid", "collected", "settled"}:
+        return _safe_money(row.get("amount"))
+    return _safe_money(row.get("paid_amount") or row.get("amount_paid") or row.get("collected_amount"))
+
+
+def _as_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except Exception:
+        return None
+
+
+def _bill_date(row: dict[str, Any]) -> date | None:
+    return _as_date(row.get("bill_date") or row.get("created_at") or row.get("updated_at"))
+
+
+def _active_member_name(row: dict[str, Any]) -> str:
+    return str(row.get("owner_name") or row.get("member_name") or row.get("name") or "").strip()
+
+
+async def _member_dues_payload(
+    *,
+    tenant_id: str,
+    app_key: str,
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> dict[str, Any]:
+    bills = await get_collection("housing_maintenance_bills").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=5000)
+    members = await get_collection("housing_members").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=5000)
+
+    member_by_flat: dict[str, dict[str, Any]] = {}
+    for member in members:
+        status = str(member.get("status") or "active").strip().lower()
+        if status in {"moved_out", "inactive", "closed", "rejected"}:
+            continue
+        flat_number = str(member.get("flat_number") or "").strip().upper()
+        if not flat_number:
+            continue
+        current = member_by_flat.get(flat_number)
+        if current is None or bool(member.get("is_primary")):
+            member_by_flat[flat_number] = member
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for bill in bills:
+        if _bill_is_reversed(bill):
+            continue
+        bill_date = _bill_date(bill)
+        if to_date and bill_date and bill_date > to_date:
+            continue
+        if from_date and bill_date and bill_date < from_date:
+            continue
+        flat_number = str(bill.get("flat_number") or "").strip().upper()
+        if not flat_number:
+            continue
+
+        amount = _safe_money(bill.get("amount"))
+        paid = min(_bill_paid_amount(bill), amount)
+        outstanding = max(amount - paid, Decimal("0.00"))
+        if outstanding <= Decimal("0.00"):
+            continue
+
+        member = member_by_flat.get(flat_number, {})
+        row = grouped.setdefault(
+            flat_number,
+            {
+                "flat_number": flat_number,
+                "member_name": _active_member_name(member),
+                "owner_name": _active_member_name(member),
+                "outstanding_amount": Decimal("0.00"),
+                "total_billed": Decimal("0.00"),
+                "total_paid": Decimal("0.00"),
+                "bill_count": 0,
+                "last_payment_date": None,
+            },
+        )
+        row["outstanding_amount"] += outstanding
+        row["total_billed"] += amount
+        row["total_paid"] += paid
+        row["bill_count"] += 1
+        last_payment_date = _as_date(bill.get("last_payment_date") or bill.get("paid_at") or bill.get("payment_date"))
+        if last_payment_date:
+            current_last = _as_date(row.get("last_payment_date"))
+            if current_last is None or last_payment_date > current_last:
+                row["last_payment_date"] = last_payment_date.isoformat()
+
+    rows = sorted(grouped.values(), key=lambda item: str(item.get("flat_number") or ""))
+    total_outstanding = sum((row["outstanding_amount"] for row in rows), Decimal("0.00"))
+    for row in rows:
+        row["outstanding_amount"] = _money_float(row["outstanding_amount"])
+        row["outstanding"] = row["outstanding_amount"]
+        row["total_billed"] = _money_float(row["total_billed"])
+        row["total_paid"] = _money_float(row["total_paid"])
+
+    return {
+        "report_type": "member_dues",
+        "from_date": from_date.isoformat() if from_date else None,
+        "to_date": to_date.isoformat() if to_date else None,
+        "members": rows,
+        "total_outstanding": _money_float(total_outstanding),
+    }
 
 
 def _ledger_report_payload(account: Account, raw_lines: list[dict], *, from_date: date, to_date: date) -> dict:
@@ -354,6 +481,24 @@ async def receipts_payments_legacy_endpoint(
         to_date=to_date,
         session=session,
         accounting_context=accounting_context,
+    )
+
+
+@router.get("/member-dues")
+async def member_dues_legacy_endpoint(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "gruhamitra").strip())
+    return await _member_dues_payload(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        from_date=from_date,
+        to_date=to_date,
     )
 
 
