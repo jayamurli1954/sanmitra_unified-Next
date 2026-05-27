@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.accounting.models import Account, JournalEntry
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
+    AccountingValidationError,
     get_balance_sheet,
     get_ledger_lines,
     get_profit_loss,
+    get_receipts_payments,
     get_trial_balance,
     post_journal_entry,
     reverse_journal_entry,
@@ -284,3 +286,29 @@ async def test_reports_keep_tenant_boundary(async_session: AsyncSession) -> None
     assert total_liabilities == Decimal("0.00")
     assert total_equity == Decimal("175.00")
     assert equity == [{"account_id": 0, "account_name": "Current Period Earnings (System)", "balance": Decimal("175.00")}]
+
+
+@pytest.mark.asyncio
+async def test_profit_loss_rejects_reversed_date_range(async_session: AsyncSession) -> None:
+    with pytest.raises(AccountingValidationError, match="from_date cannot be greater than to_date"):
+        await get_profit_loss(
+            async_session,
+            tenant_id="tenant-report-range",
+            app_key=APP_KEY,
+            accounting_entity_id=ENTITY_ID,
+            from_date=date(2026, 5, 31),
+            to_date=date(2026, 5, 1),
+        )
+
+
+@pytest.mark.asyncio
+async def test_receipts_payments_rejects_reversed_date_range(async_session: AsyncSession) -> None:
+    with pytest.raises(AccountingValidationError, match="from_date cannot be greater than to_date"):
+        await get_receipts_payments(
+            async_session,
+            tenant_id="tenant-report-range",
+            app_key=APP_KEY,
+            accounting_entity_id=ENTITY_ID,
+            from_date=date(2026, 5, 31),
+            to_date=date(2026, 5, 1),
+        )

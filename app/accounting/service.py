@@ -1395,6 +1395,11 @@ def _net_profit_from_rows(rows) -> Decimal:
     return _q(income_total - expense_total)
 
 
+def _validate_report_date_range(*, from_date: date | None = None, to_date: date | None = None) -> None:
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise AccountingValidationError("from_date cannot be greater than to_date")
+
+
 async def _gl_sums_by_account(
     session: AsyncSession,
     *,
@@ -1409,6 +1414,8 @@ async def _gl_sums_by_account(
     only_receivable: bool = False,
     only_payable: bool = False,
 ):
+    _validate_report_date_range(from_date=from_date, to_date=to_date)
+
     conditions = [
         *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
         *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
@@ -1591,8 +1598,7 @@ async def get_journal_drilldown(
     normalized_level = str(level or "month").strip().lower()
     if normalized_level not in {"month", "week", "day", "voucher"}:
         raise AccountingValidationError("level must be month, week, day, or voucher")
-    if from_date > to_date:
-        raise AccountingValidationError("from_date cannot be greater than to_date")
+    _validate_report_date_range(from_date=from_date, to_date=to_date)
 
     stmt = (
         select(JournalEntry)
