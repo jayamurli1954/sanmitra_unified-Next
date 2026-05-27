@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -35,7 +36,34 @@ class _Rows:
 
 
 class _Session:
+    def __init__(self):
+        self.calls = 0
+
     async def execute(self, _stmt):
+        self.calls += 1
+        if self.calls == 2:
+            return _Rows(
+                [
+                    SimpleNamespace(
+                        code="1100",
+                        debit_total=9945.20,
+                        credit_total=1000,
+                    ),
+                ]
+            )
+        if self.calls == 3:
+            return _Rows(
+                [
+                    SimpleNamespace(
+                        id=40,
+                        entry_date=date(2026, 5, 27),
+                        reference="RV-000001",
+                        description="Maintenance receipt from A-101",
+                        created_at="2026-05-27T09:00:00Z",
+                        amount=1000,
+                    ),
+                ]
+            )
         return _Rows(
             [
                 SimpleNamespace(
@@ -117,6 +145,8 @@ async def test_gruhamitra_dashboard_summary_uses_bills_and_cash_bank_balance(mon
 
     assert result["admin_stats"]["society_balance"] == 262744
     assert result["admin_stats"]["monthly_billing"] == 9945.20
-    assert result["admin_stats"]["dues_pending"] == 9945.20
+    assert result["admin_stats"]["dues_pending"] == 8945.20
     assert result["admin_stats"]["complaints_open"] == 1
     assert result["admin_stats"]["billing_period"] == {"month": 4, "year": 2026}
+    assert result["recent_activities"][0]["icon"] == "receipt"
+    assert result["recent_activities"][0]["title"] == "Maintenance receipt RV-000001"
