@@ -1,0 +1,60 @@
+name: semgrep
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  schedule:
+    - cron: "45 3 * * 2"
+
+jobs:
+  static-analysis:
+    name: Semgrep static analysis
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Semgrep
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install semgrep
+
+      - name: Run Semgrep scan
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/javascript \
+            --config p/secrets \
+            --metrics=off \
+            --sarif \
+            --output semgrep-results.sarif \
+            --exclude .git \
+            --exclude .venv \
+            --exclude venv \
+            --exclude external-repos \
+            --exclude htmlcov \
+            --exclude data \
+            --exclude logs \
+            --exclude tmp \
+            .
+
+      - name: Upload Semgrep scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: semgrep-results.sarif

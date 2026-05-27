@@ -632,6 +632,7 @@ GitHub Actions is the source of truth for repository validation:
 - `AGENTS compliance`: verifies the PR acceptance checklist remains present and wired into CI/release preflight.
 - `codeql-analysis`: Python static security analysis using CodeQL.
 - `security-trivy`: dependency, secret, and misconfiguration scanning.
+- `semgrep`: advisory static analysis for Python, JavaScript, and secret-pattern findings.
 - `release-tag`: creates reviewed fallback tags after release preflight passes.
 - `render-deploy`: manual staging and production deploys.
 
