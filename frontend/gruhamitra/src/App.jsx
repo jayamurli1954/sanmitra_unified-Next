@@ -12,6 +12,7 @@ import { authService } from './services/authService';
 
 // Route-level lazy loading to reduce initial bundle size on first load.
 import LoginScreen from './screens/LoginScreen';
+import LandingScreen from './screens/LandingScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -164,6 +165,7 @@ const App = () => {
             </>
           ) : (
             <>
+              <Route path="/" element={<LandingScreen />} />
               <Route path="/login" element={<LoginScreen onLoginSuccess={handleAuthSuccess} />} />
               <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
               <Route path="/reset-password" element={<ResetPasswordScreen />} />
@@ -171,7 +173,7 @@ const App = () => {
               <Route path="/onboard-society" element={<SocietyOnboardingScreen onRegisterSuccess={handleAuthSuccess} />} />
               <Route path="/resident-signup" element={<ResidentSignupScreen />} />
               <Route path="/complete-registration" element={<CompleteRegistrationScreen />} />
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </>
           )}
         </Routes>
