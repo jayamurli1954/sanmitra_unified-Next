@@ -300,6 +300,38 @@ const MeetingsScreen = () => {
         }
     };
 
+    const formatNoticeDate = (value) => {
+        if (!value) return '';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return '';
+        return parsed.toLocaleString();
+    };
+
+    const getNoticeRoomName = (meeting) => {
+        if (!meeting) return 'Meeting Notices';
+        return meeting.notice_room_name
+            || noticeRooms.find(room => room.id === meeting.notice_room_id)?.name
+            || 'Meeting Notices';
+    };
+
+    const getNoticeSummary = (meeting) => {
+        if (!meeting?.notice_sent) return 'Notice not posted';
+        const roomName = getNoticeRoomName(meeting);
+        const postedAt = formatNoticeDate(meeting.notice_sent_at);
+        return postedAt ? `Posted to ${roomName} on ${postedAt}` : `Posted to ${roomName}`;
+    };
+
+    const noticeBadgeStyle = (meeting) => ({
+        fontSize: '11px',
+        fontWeight: '800',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        color: meeting?.notice_sent ? '#1B7F3A' : '#8A3E00',
+        backgroundColor: meeting?.notice_sent ? '#E9F8EF' : '#FFF7EC',
+        border: `1px solid ${meeting?.notice_sent ? '#A9E6BC' : '#F4A640'}`,
+        textTransform: 'uppercase'
+    });
+
     const presentCount = meetingDetails
         ? (meetingDetails.meeting?.total_members_present ??
             (meetingDetails.attendance || []).filter(a => ['present', 'proxy'].includes(String(a?.status || '').toLowerCase())).length)
@@ -435,18 +467,28 @@ const MeetingsScreen = () => {
                                         }}>{meeting.meeting_type}</span>
                                         <span style={{ fontSize: '12px', color: '#8E8E93' }}>{meeting.meeting_date}</span>
                                     </div>
-                                    <div style={{
-                                        fontSize: '11px',
-                                        fontWeight: '700',
-                                        color: getStatusColor(meeting.status),
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
-                                    }}>
-                                         {meeting.status}
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                                     <div style={{
+                                         fontSize: '11px',
+                                         fontWeight: '700',
+                                         color: getStatusColor(meeting.status),
+                                         textTransform: 'uppercase',
+                                         letterSpacing: '0.5px'
+                                     }}>
+                                          {meeting.status}
+                                     </div>
+                                     <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                         <span style={noticeBadgeStyle(meeting)}>
+                                             {meeting.notice_sent ? 'Notice posted' : 'Notice pending'}
+                                         </span>
+                                         {meeting.notice_sent && (
+                                             <span style={{ fontSize: '11px', color: '#6B7280', lineHeight: '1.35' }}>
+                                                 {getNoticeSummary(meeting)}
+                                             </span>
+                                         )}
+                                     </div>
+                                 </div>
+                             ))
+                         )}
                     </div>
                 </div>
 
@@ -502,22 +544,43 @@ const MeetingsScreen = () => {
                                                 borderRadius: '6px',
                                                 textTransform: 'uppercase'
                                             }}>
-                                                {meetingDetails.meeting.status}
-                                            </div>
-                                        </div>
-                                        <h2 style={{ fontSize: '28px', color: '#1D1D1F', marginBottom: '12px' }}>{meetingDetails.meeting.meeting_title}</h2>
-                                        <div style={{ display: 'flex', gap: '24px', color: '#5A2E0A', fontSize: '15px', fontWeight: '500' }}>
-                                            <span> {meetingDetails.meeting.meeting_date}</span>
-                                            <span> {meetingDetails.meeting.meeting_time || 'N/A'}</span>
-                                            <span> {meetingDetails.meeting.venue || 'No venue specified'}</span>
-                                        </div>
-                                    </div>
+                                                 {meetingDetails.meeting.status}
+                                             </div>
+                                             <span style={noticeBadgeStyle(meetingDetails.meeting)}>
+                                                 {meetingDetails.meeting.notice_sent ? 'Notice posted' : 'Notice pending'}
+                                             </span>
+                                         </div>
+                                         <h2 style={{ fontSize: '28px', color: '#1D1D1F', marginBottom: '12px' }}>{meetingDetails.meeting.meeting_title}</h2>
+                                         <div style={{ display: 'flex', gap: '24px', color: '#5A2E0A', fontSize: '15px', fontWeight: '500' }}>
+                                             <span> {meetingDetails.meeting.meeting_date}</span>
+                                             <span> {meetingDetails.meeting.meeting_time || 'N/A'}</span>
+                                             <span> {meetingDetails.meeting.venue || 'No venue specified'}</span>
+                                         </div>
+                                         <div style={{
+                                             marginTop: '14px',
+                                             padding: '12px 14px',
+                                             borderRadius: '10px',
+                                             backgroundColor: meetingDetails.meeting.notice_sent ? '#F0FFF4' : '#FFF7EC',
+                                             border: `1px solid ${meetingDetails.meeting.notice_sent ? '#A9E6BC' : '#F4A640'}`,
+                                             color: meetingDetails.meeting.notice_sent ? '#14532D' : '#8A3E00',
+                                             fontSize: '14px',
+                                             fontWeight: '600',
+                                             maxWidth: '720px'
+                                         }}>
+                                             {getNoticeSummary(meetingDetails.meeting)}
+                                             {meetingDetails.meeting.notice_message_id && (
+                                                 <span style={{ display: 'block', marginTop: '4px', color: '#6B7280', fontSize: '12px', fontWeight: '500' }}>
+                                                     Message ID: {meetingDetails.meeting.notice_message_id}
+                                                 </span>
+                                             )}
+                                         </div>
+                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                     <div style={{ display: 'flex', gap: '12px' }}>
                                         {canManageMeetings && (
                                             <>
-                                                {!meetingDetails.meeting.notice_sent && (
-                                                    <button onClick={handleSendNotice} style={{
+                                                 {!meetingDetails.meeting.notice_sent && (
+                                                     <button onClick={handleSendNotice} style={{
                                                         padding: '10px 20px',
                                                         borderRadius: '10px',
                                                         backgroundColor: '#007AFF',
@@ -527,10 +590,24 @@ const MeetingsScreen = () => {
                                                         fontWeight: '700',
                                                         cursor: 'pointer'
                                                     }}>
-                                                        Send Notice
-                                                    </button>
-                                                )}
-                                                <button onClick={() => {
+                                                         Send Notice
+                                                     </button>
+                                                 )}
+                                                 {meetingDetails.meeting.notice_sent && (
+                                                     <button onClick={() => navigate('/message')} style={{
+                                                         padding: '10px 20px',
+                                                         borderRadius: '10px',
+                                                         backgroundColor: '#F0FFF4',
+                                                         color: '#1B7F3A',
+                                                         border: '1px solid #1B7F3A',
+                                                         fontSize: '14px',
+                                                         fontWeight: '700',
+                                                         cursor: 'pointer'
+                                                     }}>
+                                                         Open Notice Room
+                                                     </button>
+                                                 )}
+                                                 <button onClick={() => {
                                                     setEditMeeting({
                                                         meeting_title: meetingDetails.meeting.meeting_title,
                                                         meeting_type: meetingDetails.meeting.meeting_type,
@@ -721,15 +798,31 @@ const MeetingsScreen = () => {
                                                             color: meetingDetails.meeting.quorum_met ? '#2E8B57' : '#C0392B'
                                                         }}>{meetingDetails.meeting.quorum_met ? 'YES' : 'NO'}</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                                                        <span style={{ color: '#8E8E93' }}>Notice Sent:</span>
-                                                        <span style={{
-                                                            fontWeight: '700',
-                                                            color: meetingDetails.meeting.notice_sent ? '#2E8B57' : '#E6A800'
-                                                        }}>{meetingDetails.meeting.notice_sent ? 'SENT' : 'NOT SENT'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                                                         <span style={{ color: '#8E8E93' }}>Notice Sent:</span>
+                                                         <span style={{
+                                                             fontWeight: '700',
+                                                             color: meetingDetails.meeting.notice_sent ? '#2E8B57' : '#E6A800'
+                                                         }}>{meetingDetails.meeting.notice_sent ? 'SENT' : 'NOT SENT'}</span>
+                                                     </div>
+                                                     {meetingDetails.meeting.notice_sent && (
+                                                         <>
+                                                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', fontSize: '14px' }}>
+                                                                 <span style={{ color: '#8E8E93' }}>Notice Room:</span>
+                                                                 <span style={{ fontWeight: '700', color: '#1D1D1F', textAlign: 'right' }}>
+                                                                     {getNoticeRoomName(meetingDetails.meeting)}
+                                                                 </span>
+                                                             </div>
+                                                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', fontSize: '14px' }}>
+                                                                 <span style={{ color: '#8E8E93' }}>Posted At:</span>
+                                                                 <span style={{ fontWeight: '700', color: '#1D1D1F', textAlign: 'right' }}>
+                                                                     {formatNoticeDate(meetingDetails.meeting.notice_sent_at) || '-'}
+                                                                 </span>
+                                                             </div>
+                                                         </>
+                                                     )}
+                                                 </div>
+                                             </div>
 
                                             <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #f0f0f0' }}>
                                                 <h3 style={{ fontSize: '18px', color: '#1D1D1F', marginBottom: '20px' }}>Resolutions</h3>

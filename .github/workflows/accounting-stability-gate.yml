@@ -8,6 +8,8 @@ on:
       - app/modules/mandir_compat/**
       - app/modules/housing_compat/**
       - app/accounting/**
+      - app/api/legacy_alias_router.py
+      - tests/test_gruhamitra_*.py
       - tests/test_mandir_*.py
       - tests/test_accounting_*.py
       - AGENTS.md
@@ -20,6 +22,8 @@ on:
       - app/modules/mandir_compat/**
       - app/modules/housing_compat/**
       - app/accounting/**
+      - app/api/legacy_alias_router.py
+      - tests/test_gruhamitra_*.py
       - tests/test_mandir_*.py
       - tests/test_accounting_*.py
       - AGENTS.md
@@ -75,6 +79,8 @@ jobs:
             tests/test_accounting_report_verification.py \
             tests/test_accounting_reversal.py \
             tests/test_accounting_validation.py \
+            tests/test_gruhamitra_dashboard_summary.py \
+            tests/test_gruhamitra_member_dues_report.py \
             tests/test_mandir_accounting_setup_stability.py \
             tests/test_mandir_coa_edit_persistence.py \
             tests/test_mandir_posting_guardrails.py \
