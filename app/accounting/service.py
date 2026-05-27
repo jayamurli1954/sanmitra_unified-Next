@@ -348,6 +348,7 @@ def _requested_journal_matches_existing(
     total_debit: Decimal,
     total_credit: Decimal,
     normalized_lines: list[tuple[int, Decimal, Decimal]],
+    reversal_of_journal_id: int | None,
 ) -> bool:
     return (
         existing.entry_date == payload.entry_date
@@ -356,6 +357,7 @@ def _requested_journal_matches_existing(
         and existing.source_module == payload.source_module
         and existing.source_document_type == payload.source_document_type
         and existing.source_document_id == payload.source_document_id
+        and existing.reversal_of_journal_id == reversal_of_journal_id
         and _q(Decimal(existing.total_debit)) == total_debit
         and _q(Decimal(existing.total_credit)) == total_credit
         and _existing_journal_signature(existing) == _journal_line_signature(normalized_lines)
@@ -545,6 +547,7 @@ async def post_journal_entry(
     created_by: str,
     payload: JournalPostRequest,
     idempotency_key: str | None,
+    reversal_of_journal_id: int | None = None,
 ) -> tuple[JournalEntry, bool]:
     total_debit, total_credit, normalized_lines = validate_journal_lines(payload.lines)
 
@@ -565,6 +568,7 @@ async def post_journal_entry(
                 total_debit=total_debit,
                 total_credit=total_credit,
                 normalized_lines=normalized_lines,
+                reversal_of_journal_id=reversal_of_journal_id,
             ):
                 raise AccountingIdempotencyConflictError("Idempotency key already used for a different journal payload")
             return existing, False
@@ -597,6 +601,7 @@ async def post_journal_entry(
         source_module=payload.source_module,
         source_document_type=payload.source_document_type,
         source_document_id=payload.source_document_id,
+        reversal_of_journal_id=reversal_of_journal_id,
         idempotency_key=idempotency_key,
         total_debit=total_debit,
         total_credit=total_credit,
@@ -689,6 +694,7 @@ async def reverse_journal_entry(
         created_by=created_by,
         payload=reversal_payload,
         idempotency_key=reversal_key,
+        reversal_of_journal_id=original.id,
     )
 
 

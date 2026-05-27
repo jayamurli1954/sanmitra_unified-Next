@@ -74,6 +74,7 @@ class JournalEntry(Base):
     source_module: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_document_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     source_document_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reversal_of_journal_id: Mapped[int | None] = mapped_column(ForeignKey("journal_entries.id"), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     total_debit: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, default=Decimal("0.00"), server_default="0")
     total_credit: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, default=Decimal("0.00"), server_default="0")
@@ -89,6 +90,7 @@ class JournalEntry(Base):
         Index("ix_journal_entries_tenant", "tenant_id"),
         Index("ix_journal_entries_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
         Index("ix_journal_entries_source", "app_key", "tenant_id", "accounting_entity_id", "source_module", "source_document_type", "source_document_id"),
+        Index("ix_journal_entries_reversal_of", "app_key", "tenant_id", "accounting_entity_id", "reversal_of_journal_id"),
         Index("ix_journal_entries_date", "entry_date"),
     )
 

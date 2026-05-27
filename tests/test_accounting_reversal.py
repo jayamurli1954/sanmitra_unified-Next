@@ -94,6 +94,7 @@ async def test_reverse_journal_entry_posts_equal_opposite_entry(async_session: A
     assert reversal.source_module == "accounting"
     assert reversal.source_document_type == "journal_reversal"
     assert reversal.source_document_id == str(original.id)
+    assert reversal.reversal_of_journal_id == original.id
     assert reversal.total_debit == original.total_debit
     assert reversal.total_credit == original.total_credit
     assert reversal.idempotency_key == f"journal-reversal:{original.id}"

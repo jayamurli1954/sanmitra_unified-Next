@@ -279,6 +279,34 @@ async def test_post_journal_entry_rejects_idempotency_key_for_different_source_m
         )
 
 
+@pytest.mark.asyncio
+async def test_post_journal_entry_rejects_idempotency_key_for_different_reversal_link(async_session) -> None:
+    tenant_id = "tenant-idempotency-reversal-conflict"
+    cash, income = await _create_idempotency_accounts(async_session, tenant_id)
+
+    await post_journal_entry(
+        async_session,
+        tenant_id=tenant_id,
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="test-user",
+        idempotency_key="receipt-reversal-conflict-key",
+        payload=_journal_payload(cash.id, income.id),
+    )
+
+    with pytest.raises(AccountingIdempotencyConflictError, match="different journal payload"):
+        await post_journal_entry(
+            async_session,
+            tenant_id=tenant_id,
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            created_by="test-user",
+            idempotency_key="receipt-reversal-conflict-key",
+            payload=_journal_payload(cash.id, income.id),
+            reversal_of_journal_id=999,
+        )
+
+
 
 def test_net_profit_from_rows_handles_income_and_expense() -> None:
     rows = [
