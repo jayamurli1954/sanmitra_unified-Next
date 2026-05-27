@@ -168,6 +168,122 @@ def test_voucher_detail_route_uses_trusted_accounting_context(monkeypatch, accou
     _assert_trusted_context(captured, expected_extra={"journal_id": 77})
 
 
+def test_pnl_route_uses_trusted_accounting_context(monkeypatch, accounting_report_client):
+    captured = {}
+
+    async def fake_get_profit_loss(_session, **kwargs):
+        captured.update(kwargs)
+        return [], Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
+
+    monkeypatch.setattr(accounting_router, "get_profit_loss", fake_get_profit_loss)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/pnl",
+        params={
+            "from_date": "2026-05-01",
+            "to_date": "2026-05-27",
+            "tenant_id": "tenant-spoofed",
+        },
+        headers={"X-Tenant-ID": "tenant-header-spoofed"},
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(
+        captured,
+        expected_extra={"from_date": date(2026, 5, 1), "to_date": date(2026, 5, 27)},
+    )
+
+
+def test_income_expenditure_route_uses_trusted_accounting_context(monkeypatch, accounting_report_client):
+    captured = {}
+
+    async def fake_get_profit_loss(_session, **kwargs):
+        captured.update(kwargs)
+        return [], Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
+
+    monkeypatch.setattr(accounting_router, "get_profit_loss", fake_get_profit_loss)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/income-expenditure",
+        params={
+            "from_date": "2026-05-01",
+            "to_date": "2026-05-27",
+            "tenant_id": "tenant-spoofed",
+        },
+        headers={"X-Tenant-ID": "tenant-header-spoofed"},
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(
+        captured,
+        expected_extra={"from_date": date(2026, 5, 1), "to_date": date(2026, 5, 27)},
+    )
+
+
+def test_receipts_payments_route_uses_trusted_accounting_context(monkeypatch, accounting_report_client):
+    captured = {}
+
+    async def fake_get_receipts_payments(_session, **kwargs):
+        captured.update(kwargs)
+        return [], Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
+
+    monkeypatch.setattr(accounting_router, "get_receipts_payments", fake_get_receipts_payments)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/receipts-payments",
+        params={
+            "from_date": "2026-05-01",
+            "to_date": "2026-05-27",
+            "tenant_id": "tenant-spoofed",
+        },
+        headers={"X-Tenant-ID": "tenant-header-spoofed"},
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(
+        captured,
+        expected_extra={"from_date": date(2026, 5, 1), "to_date": date(2026, 5, 27)},
+    )
+
+
+def test_accounts_receivable_route_uses_trusted_accounting_context(monkeypatch, accounting_report_client):
+    captured = {}
+
+    async def fake_get_accounts_receivable(_session, **kwargs):
+        captured.update(kwargs)
+        return [], Decimal("0.00")
+
+    monkeypatch.setattr(accounting_router, "get_accounts_receivable", fake_get_accounts_receivable)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/accounts-receivable",
+        params={"as_of": "2026-05-27", "tenant_id": "tenant-spoofed"},
+        headers={"X-Tenant-ID": "tenant-header-spoofed"},
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(captured, expected_extra={"as_of": date(2026, 5, 27)})
+
+
+def test_accounts_payable_route_uses_trusted_accounting_context(monkeypatch, accounting_report_client):
+    captured = {}
+
+    async def fake_get_accounts_payable(_session, **kwargs):
+        captured.update(kwargs)
+        return [], Decimal("0.00")
+
+    monkeypatch.setattr(accounting_router, "get_accounts_payable", fake_get_accounts_payable)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/accounts-payable",
+        params={"as_of": "2026-05-27", "tenant_id": "tenant-spoofed"},
+        headers={"X-Tenant-ID": "tenant-header-spoofed"},
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(captured, expected_extra={"as_of": date(2026, 5, 27)})
+
+
 def test_trial_balance_route_maps_accounting_validation_errors(monkeypatch, accounting_report_client):
     async def fake_get_trial_balance(_session, **_kwargs):
         raise AccountingValidationError("Report date is outside the allowed accounting period")
@@ -247,3 +363,55 @@ def test_voucher_detail_route_maps_accounting_not_found_errors(monkeypatch, acco
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Journal voucher not found"
+
+
+@pytest.mark.parametrize(
+    ("route", "service_name"),
+    [
+        ("/api/v1/accounting/reports/pnl", "get_profit_loss"),
+        ("/api/v1/accounting/reports/income-expenditure", "get_profit_loss"),
+        ("/api/v1/accounting/reports/receipts-payments", "get_receipts_payments"),
+    ],
+)
+def test_period_report_routes_map_accounting_validation_errors(
+    monkeypatch,
+    accounting_report_client,
+    route,
+    service_name,
+):
+    async def fake_period_report(_session, **_kwargs):
+        raise AccountingValidationError("from_date cannot be greater than to_date")
+
+    monkeypatch.setattr(accounting_router, service_name, fake_period_report)
+
+    response = accounting_report_client.get(
+        route,
+        params={"from_date": "2026-05-27", "to_date": "2026-05-01"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "from_date cannot be greater than to_date"
+
+
+@pytest.mark.parametrize(
+    ("route", "service_name"),
+    [
+        ("/api/v1/accounting/reports/accounts-receivable", "get_accounts_receivable"),
+        ("/api/v1/accounting/reports/accounts-payable", "get_accounts_payable"),
+    ],
+)
+def test_ar_ap_routes_map_accounting_validation_errors(
+    monkeypatch,
+    accounting_report_client,
+    route,
+    service_name,
+):
+    async def fake_ar_ap_report(_session, **_kwargs):
+        raise AccountingValidationError("Report date is outside the allowed accounting period")
+
+    monkeypatch.setattr(accounting_router, service_name, fake_ar_ap_report)
+
+    response = accounting_report_client.get(route, params={"as_of": "2026-05-27"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Report date is outside the allowed accounting period"
