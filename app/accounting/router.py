@@ -63,6 +63,8 @@ from app.accounting.service import (
 )
 from app.accounting.context import AccountingContext, resolve_accounting_context
 from app.core.auth.dependencies import get_current_user
+from app.core.modules.registry import ModuleAccessError, require_module_access
+from app.core.tenants.service import get_tenant
 from app.db.postgres import get_async_session
 
 router = APIRouter(prefix="/accounting", tags=["accounting"])
@@ -74,12 +76,28 @@ async def enforce_accounting_route_tenant(
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ) -> AccountingContext:
-    return resolve_accounting_context(
+    accounting_context = resolve_accounting_context(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
         x_app_key=x_app_key,
         x_accounting_entity_id=x_accounting_entity_id,
     )
+    tenant = await get_tenant(accounting_context.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    if str(tenant.get("status") or "active").strip().lower() != "active":
+        raise HTTPException(status_code=403, detail="Tenant is not active")
+    try:
+        require_module_access(
+            module_key="accounting",
+            organization_type=tenant.get("organization_type"),
+            enabled_modules=tenant.get("enabled_modules") or [],
+            app_key=accounting_context.app_key,
+        )
+    except ModuleAccessError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    return accounting_context
 
 @router.post("/accounts", response_model=AccountResponse)
 async def create_account_endpoint(
