@@ -87,6 +87,32 @@ class JournalReversalResponse(BaseModel):
     total_credit: Decimal
 
 
+class JournalLineResponse(BaseModel):
+    id: int
+    account_id: int
+    debit: Decimal
+    credit: Decimal
+
+
+class JournalEntryResponse(BaseModel):
+    id: int
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    entry_date: date
+    description: str | None
+    reference: str | None
+    source_module: str | None
+    source_document_type: str | None
+    source_document_id: str | None
+    reversal_of_journal_id: int | None
+    idempotency_key: str | None
+    total_debit: Decimal
+    total_credit: Decimal
+    created_by: str | None
+    lines: list[JournalLineResponse]
+
+
 class LedgerLineResponse(BaseModel):
     journal_id: int
     entry_date: date

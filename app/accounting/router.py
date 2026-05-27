@@ -22,6 +22,8 @@ from app.accounting.schemas import (
     CoaSourceAccountResponse,
     JournalPostRequest,
     JournalPostResponse,
+    JournalEntryResponse,
+    JournalLineResponse,
     JournalReversalRequest,
     JournalReversalResponse,
     LedgerLineResponse,
@@ -47,11 +49,13 @@ from app.accounting.service import (
     get_ledger_lines,
     get_journal_drilldown,
     get_journal_voucher_detail,
+    get_journal_entry_detail,
     get_profit_loss,
     get_receipts_payments,
     get_trial_balance,
     initialize_default_chart_of_accounts,
     list_accounts,
+    list_journal_entries,
     list_coa_mappings,
     list_source_accounts,
     post_journal_entry,
@@ -68,6 +72,35 @@ from app.core.tenants.service import get_tenant
 from app.db.postgres import get_async_session
 
 router = APIRouter(prefix="/accounting", tags=["accounting"])
+
+
+def _journal_entry_response(entry) -> JournalEntryResponse:
+    return JournalEntryResponse(
+        id=entry.id,
+        tenant_id=entry.tenant_id,
+        app_key=entry.app_key,
+        accounting_entity_id=entry.accounting_entity_id,
+        entry_date=entry.entry_date,
+        description=entry.description,
+        reference=entry.reference,
+        source_module=entry.source_module,
+        source_document_type=entry.source_document_type,
+        source_document_id=entry.source_document_id,
+        reversal_of_journal_id=entry.reversal_of_journal_id,
+        idempotency_key=entry.idempotency_key,
+        total_debit=entry.total_debit,
+        total_credit=entry.total_credit,
+        created_by=entry.created_by,
+        lines=[
+            JournalLineResponse(
+                id=line.id,
+                account_id=line.account_id,
+                debit=line.debit,
+                credit=line.credit,
+            )
+            for line in entry.lines
+        ],
+    )
 
 
 async def enforce_accounting_route_tenant(
@@ -346,6 +379,53 @@ async def approve_coa_mappings_endpoint(
         raise HTTPException(status_code=404, detail=str(exc))
 
     return CoaMappingApproveResponse(**row)
+
+
+@router.get("/journal", response_model=list[JournalEntryResponse])
+async def list_journal_entries_endpoint(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    try:
+        entries = await list_journal_entries(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+            offset=offset,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return [_journal_entry_response(entry) for entry in entries]
+
+
+@router.get("/journal/{journal_id}", response_model=JournalEntryResponse)
+async def get_journal_entry_endpoint(
+    journal_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    try:
+        entry = await get_journal_entry_detail(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            journal_id=journal_id,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return _journal_entry_response(entry)
+
 
 @router.post("/journal/from-source", response_model=SourceJournalPostResponse)
 async def post_source_journal_endpoint(

@@ -1888,6 +1888,8 @@ async def list_journal_entries(
     limit: int = 100,
     offset: int = 0,
 ) -> list[JournalEntry]:
+    _validate_report_date_range(from_date=from_date, to_date=to_date)
+
     stmt = select(JournalEntry).where(
         *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id)
     )

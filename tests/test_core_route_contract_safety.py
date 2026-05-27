@@ -17,6 +17,8 @@ def test_accounting_and_module_route_contracts_are_registered() -> None:
         ("GET", "/api/v1/modules/me"),
         ("GET", "/api/v1/accounting/accounts"),
         ("POST", "/api/v1/accounting/accounts"),
+        ("GET", "/api/v1/accounting/journal"),
+        ("GET", "/api/v1/accounting/journal/{journal_id}"),
         ("POST", "/api/v1/accounting/journal"),
         ("POST", "/api/v1/accounting/journal/from-source"),
         ("POST", "/api/v1/accounting/journal/{journal_id}/reverse"),
