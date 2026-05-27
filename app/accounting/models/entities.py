@@ -71,6 +71,9 @@ class JournalEntry(Base):
     entry_date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_module: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_document_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source_document_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     total_debit: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, default=Decimal("0.00"), server_default="0")
     total_credit: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, default=Decimal("0.00"), server_default="0")
@@ -85,6 +88,7 @@ class JournalEntry(Base):
         CheckConstraint("total_debit > 0 AND total_credit > 0", name="ck_journal_entries_positive_totals"),
         Index("ix_journal_entries_tenant", "tenant_id"),
         Index("ix_journal_entries_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
+        Index("ix_journal_entries_source", "app_key", "tenant_id", "accounting_entity_id", "source_module", "source_document_type", "source_document_id"),
         Index("ix_journal_entries_date", "entry_date"),
     )
 

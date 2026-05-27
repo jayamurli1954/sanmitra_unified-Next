@@ -91,6 +91,9 @@ async def test_reverse_journal_entry_posts_equal_opposite_entry(async_session: A
     assert reversal.id != original.id
     assert reversal.entry_date == date(2026, 5, 16)
     assert reversal.reference == f"REV-{original.id}-SALE-001"
+    assert reversal.source_module == "accounting"
+    assert reversal.source_document_type == "journal_reversal"
+    assert reversal.source_document_id == str(original.id)
     assert reversal.total_debit == original.total_debit
     assert reversal.total_credit == original.total_credit
     assert reversal.idempotency_key == f"journal-reversal:{original.id}"

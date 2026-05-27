@@ -59,6 +59,9 @@ class JournalPostRequest(BaseModel):
     entry_date: date
     description: str | None = None
     reference: str | None = Field(default=None, max_length=120)
+    source_module: str | None = Field(default=None, max_length=50)
+    source_document_type: str | None = Field(default=None, max_length=80)
+    source_document_id: str | None = Field(default=None, max_length=120)
     lines: list[JournalLineIn] = Field(min_length=2)
 
 
@@ -273,6 +276,8 @@ class SourceJournalPostRequest(BaseModel):
     entry_date: date
     description: str | None = None
     reference: str | None = Field(default=None, max_length=120)
+    source_document_type: str | None = Field(default=None, max_length=80)
+    source_document_id: str | None = Field(default=None, max_length=120)
     lines: list[SourceJournalLineIn] = Field(min_length=2)
 
 

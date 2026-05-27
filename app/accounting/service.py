@@ -353,6 +353,9 @@ def _requested_journal_matches_existing(
         existing.entry_date == payload.entry_date
         and existing.description == payload.description
         and existing.reference == payload.reference
+        and existing.source_module == payload.source_module
+        and existing.source_document_type == payload.source_document_type
+        and existing.source_document_id == payload.source_document_id
         and _q(Decimal(existing.total_debit)) == total_debit
         and _q(Decimal(existing.total_credit)) == total_credit
         and _existing_journal_signature(existing) == _journal_line_signature(normalized_lines)
@@ -591,6 +594,9 @@ async def post_journal_entry(
         entry_date=payload.entry_date,
         description=payload.description,
         reference=payload.reference,
+        source_module=payload.source_module,
+        source_document_type=payload.source_document_type,
+        source_document_id=payload.source_document_id,
         idempotency_key=idempotency_key,
         total_debit=total_debit,
         total_credit=total_credit,
@@ -670,6 +676,9 @@ async def reverse_journal_entry(
         entry_date=reversal_date or date.today(),
         description=f"Reversal of journal entry #{original.id}: {reason_text}",
         reference=reference,
+        source_module="accounting",
+        source_document_type="journal_reversal",
+        source_document_id=str(original.id),
         lines=reversal_lines,
     )
     return await post_journal_entry(
@@ -1219,6 +1228,9 @@ async def post_source_journal_entry(
         entry_date=payload.entry_date,
         description=payload.description,
         reference=payload.reference,
+        source_module=payload.source_system,
+        source_document_type=payload.source_document_type,
+        source_document_id=payload.source_document_id,
         lines=canonical_lines,
     )
 
