@@ -267,9 +267,20 @@ async def test_reports_keep_tenant_boundary(async_session: AsyncSession) -> None
         accounting_entity_id=ENTITY_ID,
         account_id=cash.id,
     )
+    _assets, _liabilities, equity, total_assets, total_liabilities, total_equity = await get_balance_sheet(
+        async_session,
+        tenant_id=tenant_id,
+        app_key=APP_KEY,
+        accounting_entity_id=ENTITY_ID,
+        as_of=date(2026, 5, 15),
+    )
 
     assert total_debit == Decimal("175.00")
     assert total_credit == Decimal("175.00")
     assert len(lines) == 2
     assert all(line["debit_total"] != Decimal("900.00") for line in lines)
     assert ledger_lines[-1]["running_balance"] == Decimal("175.00")
+    assert total_assets == Decimal("175.00")
+    assert total_liabilities == Decimal("0.00")
+    assert total_equity == Decimal("175.00")
+    assert equity == [{"account_id": 0, "account_name": "Current Period Earnings (System)", "balance": Decimal("175.00")}]

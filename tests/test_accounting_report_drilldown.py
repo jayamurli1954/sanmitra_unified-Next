@@ -42,6 +42,26 @@ async def test_journal_drilldown_groups_month_week_day_and_vouchers(async_sessio
                 total_debit=Decimal("999.00"),
                 total_credit=Decimal("999.00"),
             ),
+            JournalEntry(
+                app_key="mandirmitra",
+                tenant_id="tenant-2",
+                accounting_entity_id="primary",
+                entry_date=date(2026, 5, 10),
+                description="Other tenant donation",
+                reference="TENANT-2-DON",
+                total_debit=Decimal("777.00"),
+                total_credit=Decimal("777.00"),
+            ),
+            JournalEntry(
+                app_key="mandirmitra",
+                tenant_id="tenant-1",
+                accounting_entity_id="secondary",
+                entry_date=date(2026, 5, 11),
+                description="Other accounting entity donation",
+                reference="ENTITY-2-DON",
+                total_debit=Decimal("888.00"),
+                total_credit=Decimal("888.00"),
+            ),
         ]
     )
     await async_session.commit()
@@ -58,6 +78,7 @@ async def test_journal_drilldown_groups_month_week_day_and_vouchers(async_sessio
     assert month["items"][0]["month"] == "2026-05"
     assert month["items"][0]["voucher_count"] == 2
     assert month["items"][0]["last_voucher"]["reference"] == "SEV-1"
+    assert month["summary"]["total_debit"] == 802.0
 
     week = await get_journal_drilldown(
         async_session,
@@ -102,6 +123,9 @@ async def test_journal_drilldown_groups_month_week_day_and_vouchers(async_sessio
         day=date(2026, 5, 8),
     )
     assert [row["reference"] for row in vouchers["items"]] == ["SEV-1"]
+    all_payloads = str(month) + str(vouchers)
+    assert "TENANT-2-DON" not in all_payloads
+    assert "ENTITY-2-DON" not in all_payloads
 
 
 @pytest.mark.asyncio
@@ -179,5 +203,23 @@ async def test_journal_voucher_detail_returns_lines_and_enforces_app_scope(async
             app_key="gruhamitra",
             tenant_id="tenant-1",
             accounting_entity_id="primary",
+            journal_id=entry.id,
+        )
+
+    with pytest.raises(AccountingNotFoundError):
+        await get_journal_voucher_detail(
+            async_session,
+            app_key="mandirmitra",
+            tenant_id="tenant-2",
+            accounting_entity_id="primary",
+            journal_id=entry.id,
+        )
+
+    with pytest.raises(AccountingNotFoundError):
+        await get_journal_voucher_detail(
+            async_session,
+            app_key="mandirmitra",
+            tenant_id="tenant-1",
+            accounting_entity_id="secondary",
             journal_id=entry.id,
         )
