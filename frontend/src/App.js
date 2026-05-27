@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { clearAuthSession, getAccessToken } from './utils/authStorage';
 
 const Login = lazy(() => import('./pages/Login'));
+const MandirMitraLanding = lazy(() => import('./pages/MandirMitraLanding'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const TempleRegistration = lazy(() => import('./pages/TempleRegistration'));
 const TenantInactive = lazy(() => import('./pages/TenantInactive'));
@@ -163,6 +164,7 @@ function App() {
             <Router>
               <Suspense fallback={<div style={{ padding: 16 }}>Loading...</div>}>
                 <Routes>
+                  <Route path="/" element={<MandirMitraLanding />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/register-temple" element={<TempleRegistration />} />
@@ -450,7 +452,6 @@ function App() {
                   <Route path="/pay" element={<PublicSevaPayment />} />
                   <Route path="/mandir-public/*" element={<Navigate to="/pay" replace />} />
                   <Route path="/mitrabooks-erp/*" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </Suspense>
             </Router>
