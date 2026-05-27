@@ -8,6 +8,7 @@ import app.accounting.service as accounting_service
 from app.accounting.models import Account
 from app.accounting.schemas import JournalLineIn, JournalPostRequest, SourceJournalLineIn
 from app.accounting.service import (
+    AccountingIdempotencyConflictError,
     AccountingValidationError,
     _net_profit_from_rows,
     post_journal_entry,
@@ -121,6 +122,104 @@ def test_suggest_canonical_account_prefers_exact_code_match() -> None:
     assert suggestion is not None
     assert suggestion["canonical_account_id"] == 1
     assert suggestion["reason"] == "exact_code_match"
+
+
+async def _create_idempotency_accounts(async_session, tenant_id: str) -> tuple[Account, Account]:
+    cash = Account(
+        app_key="mitrabooks",
+        tenant_id=tenant_id,
+        accounting_entity_id="primary",
+        code="1000",
+        name="Cash",
+        type="asset",
+        classification="real",
+        is_cash_bank=False,
+        is_receivable=False,
+        is_payable=False,
+    )
+    income = Account(
+        app_key="mitrabooks",
+        tenant_id=tenant_id,
+        accounting_entity_id="primary",
+        code="4000",
+        name="Service Income",
+        type="income",
+        classification="nominal",
+        is_cash_bank=False,
+        is_receivable=False,
+        is_payable=False,
+    )
+    async_session.add_all([cash, income])
+    await async_session.commit()
+    return cash, income
+
+
+def _journal_payload(cash_id: int, income_id: int, amount: str = "100.00") -> JournalPostRequest:
+    return JournalPostRequest(
+        entry_date=date(2026, 5, 27),
+        description="Idempotency receipt",
+        reference="IDEMP-001",
+        lines=[
+            JournalLineIn(account_id=cash_id, debit=Decimal(amount), credit=Decimal("0.00")),
+            JournalLineIn(account_id=income_id, debit=Decimal("0.00"), credit=Decimal(amount)),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_journal_entry_reuses_idempotency_key_for_same_payload(async_session) -> None:
+    tenant_id = "tenant-idempotency-same"
+    cash, income = await _create_idempotency_accounts(async_session, tenant_id)
+
+    first, first_created = await post_journal_entry(
+        async_session,
+        tenant_id=tenant_id,
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="test-user",
+        idempotency_key="receipt-duplicate-key",
+        payload=_journal_payload(cash.id, income.id),
+    )
+    second, second_created = await post_journal_entry(
+        async_session,
+        tenant_id=tenant_id,
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="test-user",
+        idempotency_key="receipt-duplicate-key",
+        payload=_journal_payload(cash.id, income.id),
+    )
+
+    assert first_created is True
+    assert second_created is False
+    assert second.id == first.id
+
+
+@pytest.mark.asyncio
+async def test_post_journal_entry_rejects_idempotency_key_for_different_payload(async_session) -> None:
+    tenant_id = "tenant-idempotency-conflict"
+    cash, income = await _create_idempotency_accounts(async_session, tenant_id)
+
+    await post_journal_entry(
+        async_session,
+        tenant_id=tenant_id,
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="test-user",
+        idempotency_key="receipt-conflict-key",
+        payload=_journal_payload(cash.id, income.id, "100.00"),
+    )
+
+    with pytest.raises(AccountingIdempotencyConflictError, match="different journal payload"):
+        await post_journal_entry(
+            async_session,
+            tenant_id=tenant_id,
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            created_by="test-user",
+            idempotency_key="receipt-conflict-key",
+            payload=_journal_payload(cash.id, income.id, "125.00"),
+        )
 
 
 

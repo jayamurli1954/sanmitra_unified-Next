@@ -22,6 +22,10 @@ class AccountingValidationError(ValueError):
     pass
 
 
+class AccountingIdempotencyConflictError(AccountingValidationError):
+    pass
+
+
 class AccountingNotFoundError(ValueError):
     pass
 
@@ -329,6 +333,32 @@ def validate_journal_lines(lines: list[JournalLineIn]) -> tuple[Decimal, Decimal
     return total_debit, total_credit, normalized_lines
 
 
+def _journal_line_signature(lines: list[tuple[int, Decimal, Decimal]]) -> list[tuple[int, Decimal, Decimal]]:
+    return sorted((account_id, _q(debit), _q(credit)) for account_id, debit, credit in lines)
+
+
+def _existing_journal_signature(entry: JournalEntry) -> list[tuple[int, Decimal, Decimal]]:
+    return _journal_line_signature([(line.account_id, Decimal(line.debit), Decimal(line.credit)) for line in entry.lines])
+
+
+def _requested_journal_matches_existing(
+    *,
+    existing: JournalEntry,
+    payload: JournalPostRequest,
+    total_debit: Decimal,
+    total_credit: Decimal,
+    normalized_lines: list[tuple[int, Decimal, Decimal]],
+) -> bool:
+    return (
+        existing.entry_date == payload.entry_date
+        and existing.description == payload.description
+        and existing.reference == payload.reference
+        and _q(Decimal(existing.total_debit)) == total_debit
+        and _q(Decimal(existing.total_credit)) == total_credit
+        and _existing_journal_signature(existing) == _journal_line_signature(normalized_lines)
+    )
+
+
 def validate_source_journal_lines(lines: list[SourceJournalLineIn]) -> tuple[Decimal, Decimal, list[tuple[str, Decimal, Decimal]]]:
     if len(lines) < 2:
         raise AccountingValidationError("At least two source journal lines are required")
@@ -516,12 +546,24 @@ async def post_journal_entry(
     total_debit, total_credit, normalized_lines = validate_journal_lines(payload.lines)
 
     if idempotency_key:
-        existing_stmt = select(JournalEntry).where(
-            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
-            JournalEntry.idempotency_key == idempotency_key,
+        existing_stmt = (
+            select(JournalEntry)
+            .where(
+                *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+                JournalEntry.idempotency_key == idempotency_key,
+            )
+            .options(selectinload(JournalEntry.lines))
         )
         existing = (await session.execute(existing_stmt)).scalar_one_or_none()
         if existing is not None:
+            if not _requested_journal_matches_existing(
+                existing=existing,
+                payload=payload,
+                total_debit=total_debit,
+                total_credit=total_credit,
+                normalized_lines=normalized_lines,
+            ):
+                raise AccountingIdempotencyConflictError("Idempotency key already used for a different journal payload")
             return existing, False
 
     account_ids = [line[0] for line in normalized_lines]

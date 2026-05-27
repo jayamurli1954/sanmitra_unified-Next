@@ -34,6 +34,7 @@ from app.accounting.schemas import (
     TrialBalanceResponse,
 )
 from app.accounting.service import (
+    AccountingIdempotencyConflictError,
     AccountingNotFoundError,
     AccountingValidationError,
     approve_coa_mappings,
@@ -345,6 +346,8 @@ async def post_source_journal_endpoint(
             payload=payload,
             idempotency_key=x_idempotency_key,
         )
+    except AccountingIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except AccountingNotFoundError as exc:
@@ -379,6 +382,8 @@ async def post_journal_endpoint(
             payload=payload,
             idempotency_key=x_idempotency_key,
         )
+    except AccountingIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except AccountingNotFoundError as exc:
@@ -415,6 +420,8 @@ async def reverse_journal_endpoint(
             reason=payload.reason,
             idempotency_key=x_idempotency_key,
         )
+    except AccountingIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except AccountingNotFoundError as exc:
