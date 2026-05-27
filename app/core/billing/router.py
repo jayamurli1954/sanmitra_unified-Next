@@ -1,10 +1,20 @@
 from fastapi import APIRouter, Request, Header, HTTPException
+from app.core.billing.pricing import get_product_pricing
 from app.core.billing.service import billing_service
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payments", tags=["billing"])
+
+
+@router.get("/pricing/{app_key}")
+async def product_pricing(app_key: str):
+    try:
+        return get_product_pricing(app_key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Pricing product not found")
+
 
 @router.post("/webhook")
 async def razorpay_webhook(request: Request, x_razorpay_signature: str = Header(None)):
