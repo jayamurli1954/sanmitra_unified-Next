@@ -7,7 +7,10 @@ import {
   FaChartLine,
   FaCheckCircle,
   FaComments,
+  FaEnvelope,
   FaFileInvoice,
+  FaGlobe,
+  FaPhoneAlt,
   FaTools,
   FaUsers,
 } from 'react-icons/fa';
@@ -187,6 +190,43 @@ const LandingScreen = () => {
         <div className="landing-cta-actions">
           <Link to="/login" className="landing-primary-button">Login</Link>
           <Link to="/resident-signup" className="landing-secondary-button">Join Existing Society</Link>
+        </div>
+      </section>
+
+      <section className="landing-contact" aria-labelledby="contact">
+        <div className="landing-section-heading">
+          <span className="landing-kicker">Contact</span>
+          <h2 id="contact">Talk to SanMitra Tech</h2>
+        </div>
+        <div className="landing-contact-grid">
+          <a href="https://wa.me/917904942915" className="landing-contact-card">
+            <span><FaPhoneAlt /></span>
+            <div>
+              <strong>WhatsApp</strong>
+              <p>7904942915</p>
+            </div>
+          </a>
+          <a href="mailto:contact@sanmitratech.in" className="landing-contact-card">
+            <span><FaEnvelope /></span>
+            <div>
+              <strong>Email</strong>
+              <p>contact@sanmitratech.in</p>
+            </div>
+          </a>
+          <a href="https://www.sanmitratech.in" className="landing-contact-card">
+            <span><FaGlobe /></span>
+            <div>
+              <strong>SanMitra Tech</strong>
+              <p>www.sanmitratech.in</p>
+            </div>
+          </a>
+          <a href="https://www.gruhamitra.sanmitratech.in" className="landing-contact-card">
+            <span><FaGlobe /></span>
+            <div>
+              <strong>GruhaMitra</strong>
+              <p>www.gruhamitra.sanmitratech.in</p>
+            </div>
+          </a>
         </div>
       </section>
     </main>

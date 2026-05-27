@@ -500,7 +500,8 @@ body {
 .landing-flow-section,
 .landing-features,
 .landing-plans,
-.landing-cta {
+.landing-cta,
+.landing-contact {
   padding: 46px 5vw;
 }
 
@@ -656,6 +657,63 @@ body {
 .landing-cta p {
   margin-top: 8px;
   opacity: 0.86;
+}
+
+.landing-contact {
+  background: #fffaf3;
+}
+
+.landing-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.landing-contact-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 112px;
+  padding: 18px;
+  color: #162b35;
+  text-decoration: none;
+  background: #ffffff;
+  border: 1px solid #ecd8bd;
+  border-radius: 8px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.landing-contact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(29, 52, 64, 0.10);
+}
+
+.landing-contact-card > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  color: #ffffff;
+  background: var(--gm-bg-header);
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+.landing-contact-card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #452204;
+  font-size: 16px;
+}
+
+.landing-contact-card p {
+  margin: 0;
+  color: #5f6d76;
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 /* ============================================
@@ -1587,7 +1645,8 @@ body {
 
   .landing-preview-grid,
   .landing-feature-grid,
-  .landing-plan-grid {
+  .landing-plan-grid,
+  .landing-contact-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1629,7 +1688,8 @@ body {
   .landing-flow-section,
   .landing-features,
   .landing-plans,
-  .landing-cta {
+  .landing-cta,
+  .landing-contact {
     padding-left: 16px;
     padding-right: 16px;
   }
