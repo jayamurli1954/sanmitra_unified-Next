@@ -471,6 +471,8 @@ async def ledger_endpoint(
             accounting_entity_id=accounting_context.accounting_entity_id,
             account_id=account_id,
         )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -484,13 +486,16 @@ async def trial_balance_endpoint(
     current_user: dict | None = Depends(get_current_user),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, total_debit, total_credit = await get_trial_balance(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        as_of=as_of,
-    )
+    try:
+        lines, total_debit, total_credit = await get_trial_balance(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return TrialBalanceResponse(
         as_of=as_of,
         lines=lines,
@@ -507,14 +512,17 @@ async def pnl_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, income_total, expense_total, net_profit = await get_profit_loss(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    try:
+        lines, income_total, expense_total, net_profit = await get_profit_loss(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ProfitLossResponse(
         from_date=from_date,
         to_date=to_date,
@@ -532,14 +540,17 @@ async def income_expenditure_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, income_total, expense_total, net_profit = await get_profit_loss(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    try:
+        lines, income_total, expense_total, net_profit = await get_profit_loss(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ProfitLossResponse(
         from_date=from_date,
         to_date=to_date,
@@ -557,14 +568,17 @@ async def receipts_payments_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, total_receipts, total_payments, net_receipts = await get_receipts_payments(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    try:
+        lines, total_receipts, total_payments, net_receipts = await get_receipts_payments(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ReceiptsPaymentsResponse(
         from_date=from_date,
         to_date=to_date,
@@ -629,13 +643,16 @@ async def balance_sheet_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    assets, liabilities, equity, total_assets, total_liabilities, total_equity = await get_balance_sheet(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        as_of=as_of,
-    )
+    try:
+        assets, liabilities, equity, total_assets, total_liabilities, total_equity = await get_balance_sheet(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return BalanceSheetResponse(
         as_of=as_of,
         assets=assets,
@@ -654,13 +671,16 @@ async def accounts_receivable_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, total_balance = await get_accounts_receivable(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        as_of=as_of,
-    )
+    try:
+        lines, total_balance = await get_accounts_receivable(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ARApResponse(as_of=as_of, total_balance=total_balance, lines=lines)
 
 
@@ -670,13 +690,16 @@ async def accounts_payable_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
-    lines, total_balance = await get_accounts_payable(
-        session,
-        app_key=accounting_context.app_key,
-        tenant_id=accounting_context.tenant_id,
-        accounting_entity_id=accounting_context.accounting_entity_id,
-        as_of=as_of,
-    )
+    try:
+        lines, total_balance = await get_accounts_payable(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ARApResponse(as_of=as_of, total_balance=total_balance, lines=lines)
 
 

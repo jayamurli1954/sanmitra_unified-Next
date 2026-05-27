@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import app.accounting.router as accounting_router
 from app.accounting.context import AccountingContext
+from app.accounting.service import AccountingNotFoundError, AccountingValidationError
 from app.main import app
 
 
@@ -165,3 +166,84 @@ def test_voucher_detail_route_uses_trusted_accounting_context(monkeypatch, accou
     assert response.status_code == 200
     assert response.json()["tenant_id"] == TRUSTED_CONTEXT.tenant_id
     _assert_trusted_context(captured, expected_extra={"journal_id": 77})
+
+
+def test_trial_balance_route_maps_accounting_validation_errors(monkeypatch, accounting_report_client):
+    async def fake_get_trial_balance(_session, **_kwargs):
+        raise AccountingValidationError("Report date is outside the allowed accounting period")
+
+    monkeypatch.setattr(accounting_router, "get_trial_balance", fake_get_trial_balance)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/trial-balance",
+        params={"as_of": "2026-05-27"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Report date is outside the allowed accounting period"
+
+
+def test_balance_sheet_route_maps_accounting_validation_errors(monkeypatch, accounting_report_client):
+    async def fake_get_balance_sheet(_session, **_kwargs):
+        raise AccountingValidationError("Report date is outside the allowed accounting period")
+
+    monkeypatch.setattr(accounting_router, "get_balance_sheet", fake_get_balance_sheet)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/balance-sheet",
+        params={"as_of": "2026-05-27"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Report date is outside the allowed accounting period"
+
+
+def test_ledger_route_maps_accounting_validation_errors(monkeypatch, accounting_report_client):
+    async def fake_get_ledger_lines(_session, **_kwargs):
+        raise AccountingValidationError("Ledger report is not available for closed books")
+
+    monkeypatch.setattr(accounting_router, "get_ledger_lines", fake_get_ledger_lines)
+
+    response = accounting_report_client.get("/api/v1/accounting/ledger/42")
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Ledger report is not available for closed books"
+
+
+def test_ledger_route_maps_accounting_not_found_errors(monkeypatch, accounting_report_client):
+    async def fake_get_ledger_lines(_session, **_kwargs):
+        raise AccountingNotFoundError("Account not found")
+
+    monkeypatch.setattr(accounting_router, "get_ledger_lines", fake_get_ledger_lines)
+
+    response = accounting_report_client.get("/api/v1/accounting/ledger/404")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Account not found"
+
+
+def test_drilldown_route_maps_accounting_validation_errors(monkeypatch, accounting_report_client):
+    async def fake_get_journal_drilldown(_session, **_kwargs):
+        raise AccountingValidationError("from_date cannot be greater than to_date")
+
+    monkeypatch.setattr(accounting_router, "get_journal_drilldown", fake_get_journal_drilldown)
+
+    response = accounting_report_client.get(
+        "/api/v1/accounting/reports/drilldown",
+        params={"from_date": "2026-05-27", "to_date": "2026-05-01"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "from_date cannot be greater than to_date"
+
+
+def test_voucher_detail_route_maps_accounting_not_found_errors(monkeypatch, accounting_report_client):
+    async def fake_get_journal_voucher_detail(_session, **_kwargs):
+        raise AccountingNotFoundError("Journal voucher not found")
+
+    monkeypatch.setattr(accounting_router, "get_journal_voucher_detail", fake_get_journal_voucher_detail)
+
+    response = accounting_report_client.get("/api/v1/accounting/reports/vouchers/404")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Journal voucher not found"
