@@ -55,16 +55,16 @@ const featureItems = [
 const pricingPlans = [
   {
     name: 'Starter',
-    price: '₹1,500',
-    note: 'per month, fixed',
+    monthlyPrice: '₹500',
+    yearlyPrice: '₹5,000',
     bestFor: 'Smaller temples and trusts starting with core digital operations.',
     limits: ['Up to 500 receipts/month', 'Up to 100 seva bookings/month', '3 users'],
     features: ['Donations and seva booking', 'Bilingual receipts', 'Basic roles and access'],
   },
   {
     name: 'Growth',
-    price: '₹2,500',
-    note: 'per month, fixed',
+    monthlyPrice: '₹750',
+    yearlyPrice: '₹7,500',
     bestFor: 'Growing institutions needing stronger workflows, reports, and accounting.',
     limits: ['Up to 2,000 receipts/month', 'Up to 500 seva bookings/month', '10 users'],
     features: ['Accounting integration', 'Advanced reports and audit drilldown', 'Priority support'],
@@ -72,8 +72,8 @@ const pricingPlans = [
   },
   {
     name: 'Professional',
-    price: '₹5,000',
-    note: 'per month, fixed',
+    monthlyPrice: '₹1,200',
+    yearlyPrice: '₹12,000',
     bestFor: 'High-volume temples and trusts needing governance and advanced controls.',
     limits: ['Up to 10,000 receipts/month', 'Up to 2,500 seva bookings/month', '25 users'],
     features: ['Multi-entity controls', 'API/webhook integrations', 'Advanced governance support'],
@@ -321,7 +321,7 @@ function MandirMitraLanding() {
             Simple monthly plans for temples and trusts
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mt: 1.5, maxWidth: 760 }}>
-            Choose a fixed monthly plan based on receipt volume, seva bookings, user count, and the level of accounting and governance support required.
+            Choose a monthly or yearly plan based on receipt volume, seva bookings, user count, and the level of accounting and governance support required.
           </Typography>
         </Box>
         <Grid container spacing={2.5}>
@@ -340,9 +340,19 @@ function MandirMitraLanding() {
               >
                 <Typography variant="h5" sx={{ fontWeight: 900 }}>{plan.name}</Typography>
                 <Typography sx={{ color: '#6B7280', mt: 1, minHeight: 48 }}>{plan.bestFor}</Typography>
-                <Box sx={{ mt: 3 }}>
-                  <Typography component="span" sx={{ fontSize: 36, fontWeight: 900 }}>{plan.price}</Typography>
-                  <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>{plan.note}</Typography>
+                <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#FFFBEB', border: '1px solid #F3E8D0' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                      Monthly
+                    </Typography>
+                    <Typography sx={{ fontSize: 28, fontWeight: 900, lineHeight: 1.15 }}>{plan.monthlyPrice}</Typography>
+                  </Box>
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#F0FDF4', border: '1px solid #DCFCE7' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                      Yearly
+                    </Typography>
+                    <Typography sx={{ fontSize: 28, fontWeight: 900, lineHeight: 1.15 }}>{plan.yearlyPrice}</Typography>
+                  </Box>
                 </Box>
                 <Box sx={{ mt: 3 }}>
                   {plan.limits.map((item) => (
@@ -377,7 +387,7 @@ function MandirMitraLanding() {
           ))}
         </Grid>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Annual prepay discounts, data migration, onboarding, training, payment gateway, SMS, and WhatsApp charges are quoted separately where applicable.
+          One-time implementation, migration, and training fee: ₹10,000. Payment gateway, SMS, WhatsApp, and other third-party usage charges are quoted separately where applicable.
         </Typography>
       </Container>
 
