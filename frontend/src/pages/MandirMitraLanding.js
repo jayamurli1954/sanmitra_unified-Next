@@ -436,6 +436,12 @@ function MandirMitraLanding() {
                 <Button href="https://www.sanmitratech.in" startIcon={<LanguageIcon />} sx={{ color: '#D1FAE5', justifyContent: 'flex-start' }}>www.sanmitratech.in</Button>
                 <Button href="https://www.mandirmitra.sanmitratech.in" startIcon={<LanguageIcon />} sx={{ color: '#D1FAE5', justifyContent: 'flex-start' }}>www.mandirmitra.sanmitratech.in</Button>
               </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ flexWrap: 'wrap', mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <Button href="/about.html" sx={{ color: '#FED7AA', justifyContent: 'flex-start' }}>About Us</Button>
+                <Button href="/contact.html" sx={{ color: '#FED7AA', justifyContent: 'flex-start' }}>Contact</Button>
+                <Button href="/privacy.html" sx={{ color: '#FED7AA', justifyContent: 'flex-start' }}>Privacy Policy</Button>
+                <Button href="/terms.html" sx={{ color: '#FED7AA', justifyContent: 'flex-start' }}>Terms of Service</Button>
+              </Stack>
             </Grid>
           </Grid>
         </Container>
