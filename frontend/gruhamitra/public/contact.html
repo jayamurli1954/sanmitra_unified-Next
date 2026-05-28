@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Us | GruhaMitra</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #E8842A;
+      --primary-hover: #D0721D;
+      --secondary: #F4A640;
+      --dark-brown: #7A3E0C;
+      --light-bg: #FFF7EC;
+      --card-bg: #FFFFFF;
+      --text-dark: #3E2006;
+      --text-muted: #8B6543;
+      --glass: rgba(255, 255, 255, 0.88);
+      --shadow: 0 12px 40px rgba(122, 62, 12, 0.08);
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --border-radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--light-bg);
+      color: var(--text-dark);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* --- Navbar --- */
+    header {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(244, 166, 64, 0.15);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 80px;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      object-fit: cover;
+      box-shadow: 0 4px 10px rgba(122, 62, 12, 0.15);
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--dark-brown), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-menu {
+      display: flex;
+      list-style: none;
+      gap: 24px;
+    }
+
+    .nav-menu a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-weight: 500;
+      transition: var(--transition);
+    }
+
+    .nav-menu a:hover {
+      color: var(--primary);
+    }
+
+    /* --- Content Layout --- */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 60px;
+      padding: 80px 0;
+      align-items: center;
+    }
+
+    .contact-info h1 {
+      font-size: 42px;
+      color: var(--dark-brown);
+      margin-bottom: 16px;
+      font-weight: 800;
+    }
+
+    .contact-info p {
+      font-size: 17px;
+      color: var(--text-muted);
+      margin-bottom: 36px;
+    }
+
+    .contact-methods {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .contact-method {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .contact-method-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #FFEBE6;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .contact-method-text h4 {
+      font-size: 16px;
+      margin-bottom: 2px;
+      color: var(--dark-brown);
+    }
+
+    .contact-method-text p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .form-card {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 44px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(244, 166, 64, 0.1);
+    }
+
+    .form-card h3 {
+      font-size: 24px;
+      margin-bottom: 24px;
+      color: var(--dark-brown);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--dark-brown);
+    }
+
+    .form-control {
+      width: 100%;
+      height: 48px;
+      border: 1px solid rgba(122, 62, 12, 0.15);
+      border-radius: 8px;
+      padding: 0 16px;
+      font-family: inherit;
+      font-size: 15px;
+      background-color: var(--light-bg);
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      background-color: #fff;
+      box-shadow: 0 0 0 4px rgba(232, 132, 42, 0.1);
+    }
+
+    textarea.form-control {
+      height: 120px;
+      padding: 12px 16px;
+      resize: vertical;
+    }
+
+    .btn-submit {
+      width: 100%;
+      height: 52px;
+      background: linear-gradient(135deg, var(--secondary), var(--primary));
+      color: #fff;
+      font-weight: 600;
+      border-radius: 30px;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      transition: var(--transition);
+      box-shadow: 0 6px 20px rgba(232, 132, 42, 0.25);
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(232, 132, 42, 0.4);
+      filter: brightness(1.05);
+    }
+
+    .status-msg {
+      margin-top: 12px;
+      font-size: 13px;
+      text-align: center;
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    /* --- Footer --- */
+    footer {
+      background: var(--dark-brown);
+      color: rgba(255, 255, 255, 0.85);
+      padding: 40px 0;
+      text-align: center;
+      border-top: 2px solid var(--primary);
+    }
+
+    footer a {
+      color: var(--secondary);
+      text-decoration: none;
+      margin: 0 12px;
+      font-weight: 600;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    footer p {
+      margin-top: 16px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    @media (max-width: 768px) {
+      .contact-grid {
+        grid-template-columns: 1fr;
+        padding: 40px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container nav-wrapper">
+      <a href="./index.html" class="logo-container">
+        <svg class="logo-img" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="background: linear-gradient(135deg, #F4A640, #E8842A);">
+          <path d="M50 20L20 45V80H40V60H60V80H80V45L50 20Z" fill="white"/>
+          <circle cx="50" cy="40" r="8" fill="#7A3E0C"/>
+        </svg>
+        <span class="logo-text">GruhaMitra</span>
+      </a>
+      <ul class="nav-menu">
+        <li><a href="./index.html#about">Home</a></li>
+        <li><a href="./index.html#features">Features</a></li>
+        <li><a href="./index.html#pricing">Pricing</a></li>
+        <li><a href="./index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="container contact-grid">
+    <section class="contact-info">
+      <h1>Let's digitize your community.</h1>
+      <p>Have questions about setting up GruhaMitra, onboarding your cooperative housing society/RWA, or billing options? Reach out to the support team.</p>
+
+      <div class="contact-methods">
+        <div class="contact-method">
+          <div class="contact-method-icon">✉️</div>
+          <div class="contact-method-text">
+            <h4>Email Support</h4>
+            <p>gruhamitra@sanmitratech.in</p>
+          </div>
+        </div>
+        <div class="contact-method">
+          <div class="contact-method-icon">📍</div>
+          <div class="contact-method-text">
+            <h4>Headquarters</h4>
+            <p>Flat No. 201, Sarvajit Heights Apartment, Gottigere, Bengaluru 560083</p>
+          </div>
+        </div>
+        <div class="contact-method">
+          <div class="contact-method-icon">💬</div>
+          <div class="contact-method-text">
+            <h4>WhatsApp Hotline</h4>
+            <p>+91 7904942915</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-card">
+      <h3>Submit a Query</h3>
+      <form id="contact-form">
+        <div class="form-group">
+          <label for="contact-name">Full Name *</label>
+          <input type="text" id="contact-name" class="form-control" placeholder="E.g., Ramesh Kumar" required>
+        </div>
+        <div class="form-group">
+          <label for="contact-email">Email Address *</label>
+          <input type="email" id="contact-email" class="form-control" placeholder="ramesh@gmail.com" required>
+        </div>
+        <div class="form-group">
+          <label for="contact-society">Society / Organization Name *</label>
+          <input type="text" id="contact-society" class="form-control" placeholder="E.g., Green Meadows RWA" required>
+        </div>
+        <div class="form-group">
+          <label for="contact-message">Message *</label>
+          <textarea id="contact-message" class="form-control" placeholder="Enter your query details..." required></textarea>
+        </div>
+        <button type="submit" class="btn-submit">Send Message</button>
+        <div id="contact-status" class="status-msg"></div>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div style="margin-bottom: 12px;">
+        <a href="./about.html">About Us</a>
+        <a href="./contact.html">Contact Us</a>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="./terms.html">Terms of Service</a>
+      </div>
+      <p>© 2026 GruhaMitra. Part of the SanMitra Platform. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("contact-form")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = document.getElementById("contact-name").value.trim();
+      const email = document.getElementById("contact-email").value.trim();
+      const society = document.getElementById("contact-society").value.trim();
+      const message = document.getElementById("contact-message").value.trim();
+      const body = [
+        "Hello GruhaMitra Team,",
+        "",
+        "I would like to share the following query:",
+        "",
+        message || "(Please describe your requirement here.)",
+        "",
+        "Name: " + (name || "-"),
+        "Email: " + (email || "-"),
+        "Society: " + (society || "-"),
+      ].join("\n");
+      window.location.href = "mailto:gruhamitra@sanmitratech.in?subject=" + encodeURIComponent("GruhaMitra Contact Request") + "&body=" + encodeURIComponent(body);
+      document.getElementById("contact-status").textContent = "Opening your mail application. The email will be sent from your account.";
+    });
+  </script>
+
+</body>
+</html>

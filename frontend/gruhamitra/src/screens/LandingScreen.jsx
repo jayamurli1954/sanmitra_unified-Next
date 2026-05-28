@@ -260,6 +260,43 @@ const LandingScreen = () => {
           </a>
         </div>
       </section>
+
+      <footer className="landing-footer" style={{
+        backgroundColor: '#7A3E0C',
+        color: 'rgba(255, 255, 255, 0.85)',
+        padding: '40px 24px',
+        textAlign: 'center',
+        borderTop: '2px solid #E8842A',
+        marginTop: '60px'
+      }}>
+        <div style={{
+          maxWidth: '1100px',
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '24px',
+            flexWrap: 'wrap'
+          }}>
+            <a href="/gruhamitra/about.html" style={{ color: '#F4A640', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>About Us</a>
+            <a href="/gruhamitra/contact.html" style={{ color: '#F4A640', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>Contact Us</a>
+            <a href="/gruhamitra/privacy.html" style={{ color: '#F4A640', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>Privacy Policy</a>
+            <a href="/gruhamitra/terms.html" style={{ color: '#F4A640', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>Terms of Service</a>
+          </div>
+          <p style={{
+            fontSize: '13px',
+            color: 'rgba(255, 255, 255, 0.55)',
+            margin: 0
+          }}>
+            © 2026 GruhaMitra. Part of the SanMitra Platform. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </main>
   );
 };
