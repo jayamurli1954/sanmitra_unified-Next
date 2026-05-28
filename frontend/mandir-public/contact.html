@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Contact | MandirMitra</title>
+    <link class="brand-favicon" rel="icon" href="../assets/brand/mandirmitra-logo.jpeg" type="image/jpeg">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mandir-public-v4">
+    <style>
+      /* Green theme adjustments for MandirMitra Editorial pages */
+      .legal-navbar {
+        background: #1f3d2b !important;
+        border-bottom: 2px solid #ff9226 !important;
+      }
+      .legal-navbar a, .legal-navbar span {
+        color: #ffffff !important;
+      }
+      .legal-navbar .button {
+        background: #ff9226 !important;
+        border-color: #ff9226 !important;
+        color: #ffffff !important;
+      }
+      .legal-contact-page h1 {
+        color: #1f3d2b !important;
+      }
+      .legal-contact-methods article strong {
+        color: #1f3d2b !important;
+      }
+      .legal-contact-form button {
+        background: #ff9226 !important;
+        border-color: #ff9226 !important;
+        color: #ffffff !important;
+      }
+      .legal-contact-form button:hover {
+        background: #e67e17 !important;
+      }
+      .legal-footer {
+        background: #1f3d2b !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+        border-top: 3px solid #ff9226 !important;
+      }
+      .legal-footer a {
+        color: #ff9226 !important;
+      }
+      .legal-footer a:hover {
+        color: #ffffff !important;
+      }
+    </style>
+  </head>
+  <body class="legal-editorial-page">
+    <header class="legal-navbar">
+      <a class="legal-wordmark" href="./">
+        <img src="../assets/brand/mandirmitra-logo.jpeg" alt="MandirMitra" style="border-radius: 4px;">
+        <span>MandirMitra</span>
+      </a>
+      <nav class="legal-page-nav" aria-label="MandirMitra sections">
+        <a href="./">Home</a>
+        <a href="./about.html">About</a>
+        <a href="./contact.html" aria-current="page">Contact</a>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="./terms.html">Terms of Service</a>
+      </nav>
+      <div class="legal-header-actions">
+        <a href="./">Public Payment</a>
+      </div>
+    </header>
+
+    <main class="legal-contact-page">
+      <section class="legal-contact-copy">
+        <h1>Connect with temple operations.</h1>
+        <p>Have questions about MandirMitra, trust configurations, onboarding your temple, or online donation setups? Reach out to the SanMitra support team.</p>
+
+        <div class="legal-contact-methods">
+          <article>
+            <span>Email Support</span>
+            <strong>mandirmitra@sanmitratech.in</strong>
+          </article>
+          <article>
+            <span>Headquarters</span>
+            <strong>Flat No. 201, Sarvajit Heights<br>Apartment, Gottigere<br>Bengaluru 560083</strong>
+          </article>
+          <article>
+            <span>WhatsApp Support</span>
+            <strong>+91 7904942915</strong>
+          </article>
+          <article>
+            <span>Working Hours</span>
+            <strong>Mon - Fri: 10:00 AM - 6:00 PM</strong>
+          </article>
+        </div>
+      </section>
+
+      <form class="legal-contact-form" id="contact-form">
+        <label>
+          <span>Full Name</span>
+          <input id="contact-name" name="name" placeholder="E.g., Ramesh Sharma" required>
+        </label>
+        <label>
+          <span>Email Address</span>
+          <input id="contact-email" name="email" type="email" placeholder="ramesh@gmail.com" required>
+        </label>
+        <label>
+          <span>Temple / Trust Name</span>
+          <input id="contact-org" name="organization" placeholder="E.g., Sri Siddhivinayak Trust">
+        </label>
+        <label>
+          <span>Message</span>
+          <textarea id="contact-message" name="message" rows="5" placeholder="Describe your query..." required></textarea>
+        </label>
+        <button type="submit">Send Message</button>
+        <p id="contact-status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+
+    <footer class="legal-footer">
+      <img src="../assets/brand/mandirmitra-logo.jpeg" alt="MandirMitra" style="border-radius: 4px; max-width: 64px;">
+      <p>MandirMitra Temple Management System handles devotee registers, Hundi tracking, seva bookings, and trust accounting. Part of the SanMitra Platform.</p>
+      <div>
+        <a href="./about.html">About Us</a>
+        <a href="./contact.html">Contact</a>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="./terms.html">Terms of Service</a>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById("contact-form")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const name = document.getElementById("contact-name").value.trim();
+        const email = document.getElementById("contact-email").value.trim();
+        const org = document.getElementById("contact-org").value.trim();
+        const message = document.getElementById("contact-message").value.trim();
+        const body = [
+          "Hello MandirMitra Team,",
+          "",
+          "I would like to share the following query:",
+          "",
+          message || "(Please describe your requirement here.)",
+          "",
+          "Name: " + (name || "-"),
+          "Email: " + (email || "-"),
+          "Temple / Trust: " + (org || "-"),
+        ].join("\n");
+        window.location.href = "mailto:mandirmitra@sanmitratech.in?subject=" + encodeURIComponent("MandirMitra Contact Request") + "&body=" + encodeURIComponent(body);
+        document.getElementById("contact-status").textContent = "Opening your mail application. The email will be sent from your account.";
+      });
+    </script>
+  </body>
+</html>
