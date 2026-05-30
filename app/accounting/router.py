@@ -236,12 +236,15 @@ async def initialize_chart_of_accounts_endpoint(
     session: AsyncSession = Depends(get_async_session),
     accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
 ):
+    tenant = await get_tenant(accounting_context.tenant_id)
+    organization_type = (tenant or {}).get("organization_type")
     try:
         return await initialize_default_chart_of_accounts(
             session,
             app_key=accounting_context.app_key,
             tenant_id=accounting_context.tenant_id,
             accounting_entity_id=accounting_context.accounting_entity_id,
+            organization_type=organization_type,
         )
     except IntegrityError:
         await session.rollback()

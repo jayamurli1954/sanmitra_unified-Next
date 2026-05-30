@@ -58,6 +58,7 @@ class Account(Base):
         ),
         Index("ix_accounts_tenant", "tenant_id"),
         Index("ix_accounts_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
+        Index("ix_accounts_app_tenant_entity_name", "app_key", "tenant_id", "accounting_entity_id", "name"),
     )
 
 

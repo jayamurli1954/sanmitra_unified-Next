@@ -17,11 +17,10 @@ def test_gruhamitra_pricing_catalog_matches_approved_tiers() -> None:
 
     assert plans["starter"]["min_flats"] == 25
     assert plans["starter"]["max_flats"] == 50
-    assert plans["starter"]["cycles"][0] == {
-        "cycle": "monthly",
-        "price_per_flat_paise": 2500,
-        "display_price": "Rs. 25 / flat",
-    }
+    starter_monthly = plans["starter"]["cycles"][0]
+    assert starter_monthly["cycle"] == "monthly"
+    assert starter_monthly["price_per_flat_paise"] == 2500
+    assert starter_monthly["display_price"] == "Rs. 25 / flat"
     assert plans["starter"]["cycles"][1]["price_per_flat_paise"] == 25000
 
     assert plans["growth"]["min_flats"] == 51

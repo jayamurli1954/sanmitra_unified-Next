@@ -202,6 +202,108 @@ DEFAULT_HOUSING_CHART_OF_ACCOUNTS = [
 ]
 
 
+# Shared base Chart of Accounts for MitraBooks BUSINESS tenants. This is a
+# general double-entry trading/services COA with GST and AR/AP readiness.
+# Business-type variants (retail, trading, services, professional) are a later
+# Phase 1 follow-up; this base list is intentionally broad but neutral.
+#
+# Canonical platform account-code standard: 5-digit C-SS-NNN where the first
+# digit is the account class (1 Asset, 2 Liability, 3 Equity, 4 Income,
+# 5 Expense), the next two digits are the subclass, and the final two digits
+# are the specific account. This matches the MandirMitra scheme so the whole
+# platform shares one numbering SOP.
+DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
+    # Assets (1xxxx) -----------------------------------------------------------
+    # 11xxx Cash and bank
+    _default_account("11001", "Cash in Hand", "asset", "real", is_cash_bank=True),
+    _default_account("11002", "Petty Cash", "asset", "real", is_cash_bank=True),
+    _default_account("11010", "Bank Account", "asset", "real", is_cash_bank=True),
+    # 12xxx Receivables
+    _default_account("12001", "Sundry Debtors", "asset", "personal", is_receivable=True),
+    _default_account("12002", "Other Receivables", "asset", "personal", is_receivable=True),
+    # 13xxx Inventory and advances
+    _default_account("13001", "Inventory / Stock in Hand", "asset", "real"),
+    _default_account("13002", "Advance to Suppliers", "asset", "personal"),
+    # 14xxx Tax assets (Input GST)
+    _default_account("14001", "Input CGST", "asset", "personal"),
+    _default_account("14002", "Input SGST", "asset", "personal"),
+    _default_account("14003", "Input IGST", "asset", "personal"),
+    # 15xxx Other current assets
+    _default_account("15001", "Prepaid Expenses", "asset", "real"),
+    _default_account("15002", "Security Deposits Paid", "asset", "real"),
+    # 16xxx Fixed assets
+    _default_account("16001", "Furniture and Fixtures", "asset", "real"),
+    _default_account("16002", "Office Equipment", "asset", "real"),
+    _default_account("16003", "Plant and Machinery", "asset", "real"),
+    _default_account("16004", "Computers", "asset", "real"),
+    # Liabilities (2xxxx) ------------------------------------------------------
+    # 21xxx Payables
+    _default_account("21001", "Sundry Creditors", "liability", "personal", is_payable=True),
+    _default_account("21002", "Expenses Payable", "liability", "personal", is_payable=True),
+    # 22xxx Tax payable (Output GST)
+    _default_account("22001", "Output CGST", "liability", "personal"),
+    _default_account("22002", "Output SGST", "liability", "personal"),
+    _default_account("22003", "Output IGST", "liability", "personal"),
+    # 23xxx Statutory dues
+    _default_account("23001", "TDS Payable", "liability", "personal", is_payable=True),
+    _default_account("23002", "Statutory Dues Payable", "liability", "personal", is_payable=True),
+    # 24xxx Advances and loans
+    _default_account("24001", "Advance from Customers", "liability", "personal"),
+    _default_account("24002", "Loans Payable", "liability", "personal"),
+    _default_account("24003", "Bank Overdraft", "liability", "personal"),
+    # Equity (3xxxx) -----------------------------------------------------------
+    _default_account("31001", "Owner's Capital", "equity", "nominal"),
+    _default_account("31002", "Drawings", "equity", "nominal"),
+    _default_account("31003", "Retained Earnings", "equity", "nominal"),
+    _default_account("31004", "Opening Balance Equity", "equity", "nominal"),
+    # Income (4xxxx) -----------------------------------------------------------
+    # 41xxx Operating income
+    _default_account("41001", "Sales", "income", "nominal"),
+    _default_account("41002", "Service Income", "income", "nominal"),
+    _default_account("41003", "Other Operating Income", "income", "nominal"),
+    # 42xxx Other income
+    _default_account("42001", "Interest Income", "income", "nominal"),
+    _default_account("42002", "Discount Received", "income", "nominal"),
+    _default_account("42003", "Miscellaneous Income", "income", "nominal"),
+    # Expenses (5xxxx) ---------------------------------------------------------
+    # 51xxx Cost of goods / purchases
+    _default_account("51001", "Purchases", "expense", "nominal"),
+    _default_account("51002", "Cost of Goods Sold", "expense", "nominal"),
+    # 52xxx Personnel
+    _default_account("52001", "Salaries and Wages", "expense", "nominal"),
+    # 53xxx Operating expenses
+    _default_account("53001", "Rent Expense", "expense", "nominal"),
+    _default_account("53002", "Electricity Expense", "expense", "nominal"),
+    _default_account("53003", "Telephone and Internet Expense", "expense", "nominal"),
+    _default_account("53004", "Office Expense", "expense", "nominal"),
+    _default_account("53005", "Repairs and Maintenance Expense", "expense", "nominal"),
+    _default_account("53006", "Travel and Conveyance Expense", "expense", "nominal"),
+    _default_account("53007", "Printing and Stationery Expense", "expense", "nominal"),
+    _default_account("53008", "Advertising and Marketing Expense", "expense", "nominal"),
+    _default_account("53009", "Freight and Transportation Expense", "expense", "nominal"),
+    _default_account("53010", "Insurance Expense", "expense", "nominal"),
+    # 54xxx Financial and other expenses
+    _default_account("54001", "Bank Charges", "expense", "nominal"),
+    _default_account("54002", "Legal and Professional Fees", "expense", "nominal"),
+    _default_account("54003", "Depreciation Expense", "expense", "nominal"),
+    _default_account("54004", "Discount Allowed", "expense", "nominal"),
+    _default_account("54005", "Miscellaneous Expense", "expense", "nominal"),
+]
+
+
+def get_default_chart_of_accounts(organization_type: str | None = None) -> list[dict]:
+    """Return the default COA template for an organization type.
+
+    BUSINESS (and the MitraBooks business app) uses the general business COA.
+    Every other organization type keeps the existing housing-style template so
+    that live HOUSING/TEMPLE behavior is unchanged.
+    """
+    normalized = str(organization_type or "").strip().upper()
+    if normalized == "BUSINESS":
+        return DEFAULT_BUSINESS_CHART_OF_ACCOUNTS
+    return DEFAULT_HOUSING_CHART_OF_ACCOUNTS
+
+
 def _q(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -496,6 +598,7 @@ async def initialize_default_chart_of_accounts(
     tenant_id: str,
     app_key: str,
     accounting_entity_id: str = "primary",
+    organization_type: str | None = None,
 ) -> dict:
     existing_stmt = select(Account.code).where(
         *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
@@ -503,8 +606,10 @@ async def initialize_default_chart_of_accounts(
     )
     existing_codes = set((await session.execute(existing_stmt)).scalars().all())
 
+    chart_of_accounts = get_default_chart_of_accounts(organization_type)
+
     created = 0
-    for item in DEFAULT_HOUSING_CHART_OF_ACCOUNTS:
+    for item in chart_of_accounts:
         if item["code"] in existing_codes:
             continue
         session.add(
