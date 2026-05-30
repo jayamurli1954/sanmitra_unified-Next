@@ -323,6 +323,144 @@
         </div>
       </form>
     </dialog>
+    <dialog class="entitlement-dialog" id="business-party-create-dialog">
+      <form method="dialog" id="business-party-create-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Create Party</h3>
+            <p class="muted">Add a new customer or vendor.</p>
+          </div>
+          <button class="secondary" type="button" id="business-party-create-close">Close</button>
+        </div>
+        <div class="field">
+          <label for="business-party-type">Party type</label>
+          <select id="business-party-type" required>
+            <option value="customer">Customer</option>
+            <option value="vendor">Vendor</option>
+            <option value="both">Both (Customer & Vendor)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="business-party-name">Name</label>
+          <input id="business-party-name" type="text" required minlength="1" maxlength="160" placeholder="Company or individual name">
+        </div>
+        <div class="field">
+          <label for="business-party-gstin">GSTIN (optional)</label>
+          <input id="business-party-gstin" type="text" maxlength="15" placeholder="15-digit GSTIN">
+        </div>
+        <div class="field">
+          <label for="business-party-opening-balance">Opening balance (₹)</label>
+          <input id="business-party-opening-balance" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="business-party-create-cancel">Cancel</button>
+          <button type="submit">Create Party</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="entitlement-dialog" id="business-party-edit-dialog">
+      <form method="dialog" id="business-party-edit-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Edit Party</h3>
+            <p class="muted" id="business-party-edit-label">Update party details.</p>
+          </div>
+          <button class="secondary" type="button" id="business-party-edit-close">Close</button>
+        </div>
+        <input id="business-party-edit-id" type="hidden">
+        <div class="field">
+          <label for="business-party-edit-name">Name</label>
+          <input id="business-party-edit-name" type="text" required minlength="1" maxlength="160">
+        </div>
+        <div class="field">
+          <label for="business-party-edit-gstin">GSTIN (optional)</label>
+          <input id="business-party-edit-gstin" type="text" maxlength="15">
+        </div>
+        <div class="field">
+          <label for="business-party-edit-opening-balance">Opening balance (₹)</label>
+          <input id="business-party-edit-opening-balance" type="number" min="0" step="0.01">
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="business-party-edit-cancel">Cancel</button>
+          <button type="submit">Save Changes</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="entitlement-dialog" id="audit-event-detail-dialog" style="min-width: 500px;">
+      <form method="dialog" id="audit-event-detail-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Audit Event Details</h3>
+            <p class="muted" id="audit-event-detail-label">Full event payload and metadata.</p>
+          </div>
+          <button class="secondary" type="button" id="audit-event-detail-close">Close</button>
+        </div>
+        <div style="margin: 16px 0; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+            <div>
+              <strong>Entity</strong><br>
+              <span id="audit-event-entity" style="font-family: monospace; font-size: 12px;">-</span>
+            </div>
+            <div>
+              <strong>Action</strong><br>
+              <span id="audit-event-action" style="font-family: monospace; font-size: 12px;">-</span>
+            </div>
+            <div>
+              <strong>Actor</strong><br>
+              <span id="audit-event-actor" style="font-family: monospace; font-size: 12px;">-</span>
+            </div>
+            <div>
+              <strong>Timestamp</strong><br>
+              <span id="audit-event-timestamp" style="font-family: monospace; font-size: 12px;">-</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <strong>Event Payload</strong>
+          <pre id="audit-event-payload" style="background: #f9f9f9; padding: 12px; border-radius: 4px; font-size: 11px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd;">Loading...</pre>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="audit-event-detail-cancel">Close</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="entitlement-dialog" id="business-voucher-create-dialog" style="min-width: 600px;">
+      <form method="dialog" id="business-voucher-create-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Create Voucher</h3>
+            <p class="muted" id="business-voucher-create-label">Enter voucher details and line items.</p>
+          </div>
+          <button class="secondary" type="button" id="business-voucher-create-close">Close</button>
+        </div>
+        <input id="business-voucher-type" type="hidden" value="journal">
+        <div class="field">
+          <label for="business-voucher-date">Date</label>
+          <input id="business-voucher-date" type="date" required>
+        </div>
+        <div class="field">
+          <label for="business-voucher-reference">Reference / Cheque #</label>
+          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: cheque number, bill reference">
+        </div>
+        <div class="field">
+          <label for="business-voucher-narration">Narration / Description</label>
+          <textarea id="business-voucher-narration" rows="2" maxlength="240" placeholder="Reason for this transaction"></textarea>
+        </div>
+        <div style="margin: 16px 0; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+          <h4 style="margin-top: 0;">Line Items</h4>
+          <div id="business-voucher-lines" style="margin-bottom: 12px;"></div>
+          <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
+        </div>
+        <div style="padding: 12px; background: #fff3cd; border-radius: 4px; margin-bottom: 16px;">
+          <strong>Balance Check:</strong>
+          <span id="business-voucher-balance" style="font-weight: bold; margin-left: 8px;">Debit: ₹0 | Credit: ₹0</span>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="business-voucher-create-cancel">Cancel</button>
+          <button type="submit" id="business-voucher-submit">Post Voucher</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="../shared/pwa-shell.js?v=mandir-live-ui-v5"></script>
     <script type="module" src="./app.js?v=mandir-live-ui-v5"></script>
   </body>

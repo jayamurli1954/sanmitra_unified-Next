@@ -378,11 +378,13 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     ? mandirNavigationItems()
     : currentExperience === "gruha"
       ? gruhaNavigationItems()
-      : modules.map((module) => ({
-      label: `${module.nav_group || "Module"}: ${module.display_name}`,
-      module,
-      workspace: mandirWorkspaceFromModule(module),
-      }));
+      : currentExperience === "mitrabooks"
+        ? businessNavigationItems()
+        : modules.map((module) => ({
+        label: `${module.nav_group || "Module"}: ${module.display_name}`,
+        module,
+        workspace: mandirWorkspaceFromModule(module),
+        }));
 
   navItems.forEach((item) => {
     const module = item.module || {};
@@ -398,6 +400,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     }
     if (item.gruhaWorkspace) {
       link.dataset.gruhaWorkspace = item.gruhaWorkspace;
+    }
+    if (item.businessWorkspace) {
+      link.dataset.businessWorkspace = item.businessWorkspace;
     }
     link.dataset.navIcon = item.icon || navIconForMandirWorkspace(mandirWorkspace);
     link.textContent = item.label;
@@ -415,6 +420,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   });
   syncMandirNavActiveState();
   syncGruhaNavActiveState();
+  syncBusinessNavActiveState();
 }
 
 function mandirNavigationItems() {
@@ -459,6 +465,16 @@ function gruhaNavigationItems() {
     { label: "Accounting", gruhaWorkspace: "accounting", icon: "L", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
     { label: "Reports", gruhaWorkspace: "reports", icon: "R", module: { module_key: "housing", frontend_path: "/housing/reports", enabled: true } },
     { label: "Settings", gruhaWorkspace: "settings", icon: "S", module: { module_key: "audit", frontend_path: "/housing/settings", enabled: true } },
+  ];
+}
+
+function businessNavigationItems() {
+  return [
+    { label: "Dashboard", businessWorkspace: "overview", icon: "▦", module: { module_key: "business", frontend_path: "/business", enabled: true } },
+    { label: "Parties", businessWorkspace: "parties", icon: "●", module: { module_key: "business", frontend_path: "/business/parties", enabled: true } },
+    { label: "Vouchers", businessWorkspace: "vouchers", icon: "▤", module: { module_key: "business", frontend_path: "/business/vouchers", enabled: true } },
+    { label: "Audit Trail", businessWorkspace: "audit", icon: "⏱", module: { module_key: "audit", frontend_path: "/audit", enabled: true } },
+    { label: "Accounting", businessWorkspace: "accounting", icon: "▣", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
   ];
 }
 
@@ -2797,29 +2813,872 @@ function renderDashboardPreview(config) {
     return renderGruhaDashboard(config, lastGruhaData);
   }
 
-  return `
-    <div class="legacy-dashboard business-dashboard">
-      <div class="preview-heading">
-        <div>
-          <h3>MitraBooks Dashboard</h3>
-          <p>Accounting-first business workspace with vouchers, ledgers, reports, and compliance shortcuts.</p>
+  if (dashboard.type === "business" || currentExperience === "mitrabooks") {
+    if (activeBusinessWorkspace !== "overview") {
+      return renderBusinessWorkspace();
+    }
+    return `
+      <div class="legacy-dashboard business-dashboard">
+        <div class="preview-heading">
+          <div>
+            <h3>MitraBooks Dashboard</h3>
+            <p>Accounting-first business workspace with vouchers, ledgers, reports, and compliance shortcuts.</p>
+          </div>
+          <span class="pill ok">finance workspace</span>
         </div>
-        <span class="pill ok">finance workspace</span>
-      </div>
-      <div class="metric-grid four">${renderStatCards(dashboard.stats)}</div>
-      <div class="dashboard-main-grid">
-        <article>
-          <h4>Quick Actions</h4>
-          <div class="quick-grid">${renderActionTiles(dashboard.actions)}</div>
-        </article>
-        <article>
-          <h4>Recent Activity</h4>
-          <ul class="activity-list">${renderActivity(dashboard.activity)}</ul>
-        </article>
-      </div>
-      ${renderAccountingDrilldownPanel()}
+        <div class="metric-grid four">${renderStatCards(dashboard.stats || [])}</div>
+        <div class="dashboard-main-grid">
+          <article>
+            <h4>Quick Actions</h4>
+            <div class="quick-grid">${renderActionTiles(dashboard.actions || [])}</div>
+          </article>
+          <article>
+            <h4>Recent Activity</h4>
+            <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
+          </article>
+        </div>
+        ${renderAccountingDrilldownPanel()}
     </div>
   `;
+}
+
+// ========== Business Module: Party Master ==========
+
+let activeBusinessWorkspace = "overview";
+let lastBusinessParties = [];
+const businessListState = {
+  parties: {
+    offset: 0,
+    q: "",
+    party_type: "",
+    from_date: "",
+    to_date: "",
+  },
+};
+
+function renderBusinessPartiesTable(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `<p class="muted">No parties found.</p>`;
+  }
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>GSTIN</th>
+            <th>Opening Balance</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0, 20).map((row) => {
+            const isInactive = row.is_inactive || row.status === "inactive";
+            return `
+              <tr>
+                <td><strong>${escapeHtml(row.name || "Unnamed")}</strong></td>
+                <td>${escapeHtml(row.party_type || row.type || "unknown")}</td>
+                <td>${escapeHtml(row.gstin || "-")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.opening_balance_paise ? row.opening_balance_paise / 100 : 0))}</td>
+                <td><span class="pill ${isInactive ? "warn" : "ok"}">${isInactive ? "Inactive" : "Active"}</span></td>
+                <td>
+                  <div class="action-row">
+                    <button
+                      class="secondary"
+                      type="button"
+                      data-business-action="edit-party"
+                      data-party-id="${escapeHtml(row.party_id || row.id || "")}"
+                      data-party-name="${escapeHtml(row.name || "")}"
+                      data-party-gstin="${escapeHtml(row.gstin || "")}"
+                      data-party-opening-balance="${escapeHtml(row.opening_balance_paise ? row.opening_balance_paise / 100 : 0)}"
+                    >Edit</button>
+                    ${!isInactive ? `
+                      <button
+                        class="secondary"
+                        type="button"
+                        data-business-action="deactivate-party"
+                        data-party-id="${escapeHtml(row.party_id || row.id || "")}"
+                      >Deactivate</button>
+                    ` : ""}
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderBusinessPartiesListFilters(rowsLength) {
+  const state = businessListState.parties;
+  const offset = Number(state.offset || 0);
+  const startRow = rowsLength > 0 ? offset + 1 : 0;
+  const endRow = rowsLength > 0 ? offset + Math.min(rowsLength, 20) : 0;
+  const nextDisabled = rowsLength < 20 ? "disabled" : "";
+  const prevDisabled = offset <= 0 ? "disabled" : "";
+
+  return `
+    <div class="list-filter-panel" data-business-list="parties">
+      <div class="list-filter-bar">
+        <label class="field">
+          <span>Search</span>
+          <input name="q" type="search" value="${escapeHtml(state.q || "")}" placeholder="Name or GSTIN">
+        </label>
+        <label class="field">
+          <span>Type</span>
+          <select name="party_type">
+            <option value="">All types</option>
+            <option value="customer" ${state.party_type === "customer" ? "selected" : ""}>Customer</option>
+            <option value="vendor" ${state.party_type === "vendor" ? "selected" : ""}>Vendor</option>
+            <option value="both" ${state.party_type === "both" ? "selected" : ""}>Both</option>
+          </select>
+        </label>
+        <div class="list-filter-actions">
+          <button type="button" data-business-action="apply-list-filter" data-list-kind="parties">Apply</button>
+          <button class="secondary" type="button" data-business-action="reset-list-filter" data-list-kind="parties">Reset</button>
+        </div>
+      </div>
+      <div class="paging-row">
+        <span class="muted">Showing ${escapeHtml(startRow)}-${escapeHtml(endRow)}</span>
+        <button class="secondary" type="button" data-business-action="page-list" data-list-kind="parties" data-page-direction="prev" ${prevDisabled}>Prev</button>
+        <button class="secondary" type="button" data-business-action="page-list" data-list-kind="parties" data-page-direction="next" ${nextDisabled}>Next</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBusinessVouchersTable(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `<p class="muted">No vouchers posted yet.</p>`;
+  }
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Reference</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Narration</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0, 20).map((row) => {
+            const status = row.status || "posted";
+            const isReversed = status === "reversed";
+            return `
+              <tr>
+                <td>${escapeHtml(String(row.entry_date || row.created_at || "").slice(0, 10))}</td>
+                <td>${escapeHtml(row.reference || row.cheque_number || "-")}</td>
+                <td>${escapeHtml(row.voucher_type || "journal")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.total_debit || row.amount || 0))}</td>
+                <td>${escapeHtml((row.description || row.narration || "").slice(0, 40))}</td>
+                <td><span class="pill ${isReversed ? "warn" : "ok"}">${escapeHtml(status)}</span></td>
+                <td>
+                  ${!isReversed ? `
+                    <button
+                      class="secondary"
+                      type="button"
+                      data-business-action="reverse-voucher"
+                      data-voucher-id="${escapeHtml(row.voucher_id || row.id || "")}"
+                    >Reverse</button>
+                  ` : `
+                    <button class="secondary" type="button" disabled>Reversed</button>
+                  `}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderBusinessWorkspace() {
+  if (activeBusinessWorkspace === "parties") {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Parties</h4>
+            <p>Customers and vendors for this business workspace.</p>
+          </div>
+          <button class="secondary" type="button" data-business-action="open-create-party">+ New Party</button>
+        </div>
+        ${renderBusinessPartiesListFilters(lastBusinessParties.length)}
+        ${renderBusinessPartiesTable(lastBusinessParties)}
+      </div>
+    `;
+  }
+  if (activeBusinessWorkspace === "vouchers") {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Vouchers</h4>
+            <p>Posted journal entries, payments, receipts, and contra vouchers.</p>
+          </div>
+          <button class="secondary" type="button" data-business-action="open-create-voucher">+ New Voucher</button>
+        </div>
+        ${renderBusinessVouchersTable(lastBusinessVouchers)}
+      </div>
+    `;
+  }
+  if (activeBusinessWorkspace === "audit") {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Audit Trail</h4>
+            <p>All party, voucher, and account changes for compliance and troubleshooting.</p>
+          </div>
+        </div>
+        ${renderAuditListFilters(lastAuditEvents.length)}
+        ${renderAuditEventsTable(lastAuditEvents)}
+      </div>
+    `;
+  }
+  return `
+    <div class="dashboard-main-grid">
+      <article>
+        <h4>Quick Actions</h4>
+        <div class="quick-grid">
+          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="parties">
+            <span class="quick-icon">●</span>
+            <span>Parties</span>
+          </button>
+          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">
+            <span class="quick-icon">▤</span>
+            <span>Vouchers</span>
+          </button>
+          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="audit">
+            <span class="quick-icon">⏱</span>
+            <span>Audit</span>
+          </button>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+async function loadBusinessParties(filters = {}) {
+  const appKey = "mitrabooks";
+  const state = businessListState.parties;
+  const params = new URLSearchParams();
+
+  if (state.q) params.append("q", state.q);
+  if (state.party_type) params.append("party_type", state.party_type);
+  params.append("offset", state.offset || 0);
+  params.append("limit", 20);
+
+  const queryString = params.toString();
+  const url = `/api/v1/business/parties${queryString ? "?" + queryString : ""}`;
+
+  const result = await apiRequest(appKey, url, { method: "GET" });
+  if (result.ok) {
+    lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+  } else {
+    lastBusinessParties = [];
+    setLoginStatus("warn", "Unable to load parties", result.payload?.detail || "Check connection and try again.");
+  }
+  renderJson(apiOutput, { parties: { ok: result.ok, count: lastBusinessParties.length } });
+}
+
+async function createBusinessParty(data) {
+  const appKey = "mitrabooks";
+  const payload = {
+    name: data.name,
+    party_type: data.party_type,
+    gstin: data.gstin || null,
+    opening_balance_paise: Math.round((Number(data.opening_balance) || 0) * 100),
+  };
+
+  const result = await apiRequest(appKey, "/api/v1/business/parties", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Party created", result.payload?.name || "New party added.");
+    document.getElementById("business-party-create-dialog")?.close();
+    await loadBusinessParties();
+  } else {
+    setLoginStatus("danger", "Create party failed", result.payload?.detail || "Try again.");
+  }
+  renderJson(apiOutput, { create_party: result });
+}
+
+async function updateBusinessParty(partyId, data) {
+  const appKey = "mitrabooks";
+  const payload = {
+    name: data.name,
+    gstin: data.gstin || null,
+    opening_balance_paise: Math.round((Number(data.opening_balance) || 0) * 100),
+  };
+
+  const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Party updated", result.payload?.name || "Changes saved.");
+    document.getElementById("business-party-edit-dialog")?.close();
+    await loadBusinessParties();
+  } else {
+    setLoginStatus("danger", "Update party failed", result.payload?.detail || "Try again.");
+  }
+  renderJson(apiOutput, { update_party: result });
+}
+
+async function deactivateBusinessParty(partyId) {
+  const appKey = "mitrabooks";
+  const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate`, {
+    method: "PATCH",
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Party deactivated", "Party is now inactive.");
+    await loadBusinessParties();
+  } else {
+    setLoginStatus("danger", "Deactivate party failed", result.payload?.detail || "Try again.");
+  }
+  renderJson(apiOutput, { deactivate_party: result });
+}
+
+function openBusinessCreatePartyDialog() {
+  const dialog = document.getElementById("business-party-create-dialog");
+  const form = document.getElementById("business-party-create-form");
+  if (!form) return;
+
+  form.reset();
+  dialog?.showModal();
+}
+
+function openBusinessEditPartyDialog(button) {
+  const dialog = document.getElementById("business-party-edit-dialog");
+  const form = document.getElementById("business-party-edit-form");
+  if (!form) return;
+
+  const partyId = button.getAttribute("data-party-id") || "";
+  const partyName = button.getAttribute("data-party-name") || "";
+  const partyGstin = button.getAttribute("data-party-gstin") || "";
+  const openingBalance = button.getAttribute("data-party-opening-balance") || "0";
+
+  document.getElementById("business-party-edit-id").value = partyId;
+  document.getElementById("business-party-edit-name").value = partyName;
+  document.getElementById("business-party-edit-gstin").value = partyGstin;
+  document.getElementById("business-party-edit-opening-balance").value = openingBalance;
+  document.getElementById("business-party-edit-label").textContent = `Editing ${partyName}`;
+
+  dialog?.showModal();
+}
+
+function setBusinessWorkspace(workspace) {
+  activeBusinessWorkspace = workspace;
+  syncBusinessNavActiveState();
+  const panel = document.getElementById("context-cards");
+  if (panel) {
+    if (workspace === "accounting") {
+      panel.innerHTML = renderAccountingDrilldownPanel();
+    } else {
+      panel.innerHTML = renderBusinessWorkspace();
+    }
+  }
+  if (workspace === "parties") {
+    loadBusinessParties();
+  } else if (workspace === "vouchers") {
+    loadBusinessAccounts();
+    loadBusinessVouchers();
+  } else if (workspace === "audit") {
+    loadAuditEvents();
+  }
+}
+
+function syncBusinessNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.businessWorkspace || "";
+    const isActive = currentExperience === "mitrabooks" && workspace && workspace === activeBusinessWorkspace;
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent && currentExperience === "mitrabooks") {
+    const labels = {
+      overview: "Dashboard",
+      parties: "Parties",
+    };
+    topbarCurrent.textContent = labels[activeBusinessWorkspace] || "Dashboard";
+  }
+}
+
+function applyBusinessListFilter(listKind) {
+  if (listKind === "parties") {
+    const panel = document.querySelector("[data-business-list='parties']");
+    if (!panel) return;
+
+    const qInput = panel.querySelector("input[name='q']");
+    const typeInput = panel.querySelector("select[name='party_type']");
+
+    businessListState.parties.q = qInput?.value || "";
+    businessListState.parties.party_type = typeInput?.value || "";
+    businessListState.parties.offset = 0;
+
+    loadBusinessParties();
+  }
+}
+
+function resetBusinessListFilter(listKind) {
+  if (listKind === "parties") {
+    businessListState.parties = {
+      offset: 0,
+      q: "",
+      party_type: "",
+      from_date: "",
+      to_date: "",
+    };
+    loadBusinessParties();
+  }
+}
+
+function pageBusinessList(listKind, direction) {
+  if (listKind === "parties") {
+    const offset = Number(businessListState.parties.offset || 0);
+    businessListState.parties.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
+    loadBusinessParties();
+  }
+}
+
+// ========== Business Module: Typed Vouchers ==========
+
+let lastBusinessVouchers = [];
+let lastBusinessAccounts = [];
+let voucherLineCounter = 0;
+
+const voucherLineState = [];
+
+function renderVoucherLineItem(lineId, voucherType) {
+  return `
+    <div class="voucher-line" data-line-id="${escapeHtml(lineId)}" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; align-items: center;">
+      <input
+        class="voucher-account"
+        type="text"
+        placeholder="Account name or code"
+        data-line-id="${escapeHtml(lineId)}"
+        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
+        autocomplete="off"
+      >
+      <select
+        class="voucher-account-select"
+        data-line-id="${escapeHtml(lineId)}"
+        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
+      >
+        <option value="">Select account</option>
+      </select>
+      <input
+        class="voucher-debit"
+        type="number"
+        placeholder="Debit"
+        min="0"
+        step="0.01"
+        data-line-id="${escapeHtml(lineId)}"
+        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; text-align: right; font-size: 13px;"
+      >
+      <input
+        class="voucher-credit"
+        type="number"
+        placeholder="Credit"
+        min="0"
+        step="0.01"
+        data-line-id="${escapeHtml(lineId)}"
+        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; text-align: right; font-size: 13px;"
+      >
+      <button
+        class="secondary"
+        type="button"
+        data-business-action="remove-voucher-line"
+        data-line-id="${escapeHtml(lineId)}"
+        style="padding: 6px 12px; font-size: 12px;"
+      >✕</button>
+    </div>
+  `;
+}
+
+function updateVoucherBalance() {
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  document.querySelectorAll(".voucher-debit").forEach((input) => {
+    totalDebit += Number(input.value) || 0;
+  });
+
+  document.querySelectorAll(".voucher-credit").forEach((input) => {
+    totalCredit += Number(input.value) || 0;
+  });
+
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  const balanceEl = document.getElementById("business-voucher-balance");
+  if (balanceEl) {
+    balanceEl.innerHTML = `Debit: ${formatCurrency(totalDebit)} | Credit: ${formatCurrency(totalCredit)} <span style="margin-left: 12px; ${isBalanced ? "color: green;" : "color: red;"}${isBalanced ? "✓ Balanced" : "✗ Imbalanced"}</span>`;
+  }
+
+  const submitBtn = document.getElementById("business-voucher-submit");
+  if (submitBtn) {
+    submitBtn.disabled = !isBalanced;
+  }
+}
+
+function addVoucherLine() {
+  voucherLineCounter += 1;
+  const lineId = `line-${voucherLineCounter}`;
+  const container = document.getElementById("business-voucher-lines");
+  if (!container) return;
+
+  const lineHtml = renderVoucherLineItem(lineId);
+  container.innerHTML += lineHtml;
+
+  // Populate account dropdown
+  const select = container.querySelector(`[data-line-id="${lineId}"].voucher-account-select`);
+  if (select && Array.isArray(lastBusinessAccounts)) {
+    lastBusinessAccounts.forEach((acc) => {
+      const option = document.createElement("option");
+      option.value = acc.account_id || acc.id || "";
+      option.textContent = `${acc.account_code || ""} ${acc.account_name || acc.name || ""}`.trim();
+      select.appendChild(option);
+    });
+  }
+
+  // Add change listeners
+  const debitInput = container.querySelector(`[data-line-id="${lineId}"].voucher-debit`);
+  const creditInput = container.querySelector(`[data-line-id="${lineId}"].voucher-credit`);
+  if (debitInput) debitInput.addEventListener("change", updateVoucherBalance);
+  if (creditInput) creditInput.addEventListener("change", updateVoucherBalance);
+}
+
+function removeVoucherLine(lineId) {
+  const lineEl = document.querySelector(`[data-line-id="${escapeHtml(lineId)}"]`);
+  if (lineEl) {
+    lineEl.remove();
+    updateVoucherBalance();
+  }
+}
+
+function clearVoucherForm() {
+  voucherLineCounter = 0;
+  document.getElementById("business-voucher-date").valueAsDate = new Date();
+  document.getElementById("business-voucher-reference").value = "";
+  document.getElementById("business-voucher-narration").value = "";
+  document.getElementById("business-voucher-lines").innerHTML = "";
+  updateVoucherBalance();
+}
+
+async function loadBusinessAccounts() {
+  const appKey = "mitrabooks";
+  const result = await apiRequest(appKey, "/api/v1/accounting/accounts", { method: "GET" });
+
+  if (result.ok) {
+    lastBusinessAccounts = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+  } else {
+    lastBusinessAccounts = [];
+  }
+}
+
+async function createBusinessVoucher(voucherData) {
+  const appKey = "mitrabooks";
+
+  // Collect line items from form
+  const lines = [];
+  document.querySelectorAll(".voucher-line").forEach((lineEl) => {
+    const accountSelect = lineEl.querySelector(".voucher-account-select");
+    const debitInput = lineEl.querySelector(".voucher-debit");
+    const creditInput = lineEl.querySelector(".voucher-credit");
+
+    const accountId = accountSelect?.value || "";
+    const debit = Number(debitInput?.value) || 0;
+    const credit = Number(creditInput?.value) || 0;
+
+    if (accountId && (debit > 0 || credit > 0)) {
+      lines.push({
+        account_id: accountId,
+        debit_paise: Math.round(debit * 100),
+        credit_paise: Math.round(credit * 100),
+      });
+    }
+  });
+
+  if (lines.length < 2) {
+    setLoginStatus("warn", "At least 2 line items required", "Every voucher needs debit and credit accounts.");
+    return;
+  }
+
+  const payload = {
+    entry_date: voucherData.date,
+    reference: voucherData.reference || null,
+    description: voucherData.narration || null,
+    voucher_type: "journal",
+    lines: lines,
+  };
+
+  const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Voucher posted", `Journal entry ${result.payload?.id || "created"} posted.`);
+    document.getElementById("business-voucher-create-dialog")?.close();
+    clearVoucherForm();
+    await loadBusinessVouchers();
+  } else {
+    setLoginStatus("danger", "Post voucher failed", result.payload?.detail || "Check entries and try again.");
+  }
+  renderJson(apiOutput, { create_voucher: result });
+}
+
+async function loadBusinessVouchers(filters = {}) {
+  const appKey = "mitrabooks";
+  const params = new URLSearchParams();
+  params.append("offset", 0);
+  params.append("limit", 20);
+
+  const queryString = params.toString();
+  const url = `/api/v1/business/vouchers${queryString ? "?" + queryString : ""}`;
+
+  const result = await apiRequest(appKey, url, { method: "GET" });
+  if (result.ok) {
+    lastBusinessVouchers = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+  } else {
+    lastBusinessVouchers = [];
+  }
+}
+
+async function reverseBusinessVoucher(voucherId) {
+  const appKey = "mitrabooks";
+  const result = await apiRequest(appKey, `/api/v1/accounting/reversals`, {
+    method: "POST",
+    body: JSON.stringify({
+      original_voucher_id: voucherId,
+      reason: "Reversal",
+    }),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Voucher reversed", "Reversal entry created.");
+    await loadBusinessVouchers();
+  } else {
+    setLoginStatus("danger", "Reverse voucher failed", result.payload?.detail || "Try again.");
+  }
+  renderJson(apiOutput, { reverse_voucher: result });
+}
+
+function openBusinessCreateVoucherDialog() {
+  const dialog = document.getElementById("business-voucher-create-dialog");
+  if (!dialog) return;
+
+  clearVoucherForm();
+  document.getElementById("business-voucher-date").valueAsDate = new Date();
+
+  // Add initial line items
+  addVoucherLine();
+  addVoucherLine();
+
+  dialog.showModal();
+}
+
+// ========== Business Module: Audit Trail ==========
+
+let lastAuditEvents = [];
+const auditListState = {
+  offset: 0,
+  q: "",
+  entity_type: "",
+  action: "",
+  from_date: "",
+  to_date: "",
+};
+
+function renderAuditEventsTable(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `<p class="muted">No audit events found.</p>`;
+  }
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Entity</th>
+            <th>Action</th>
+            <th>Actor</th>
+            <th>Detail</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0, 30).map((row) => {
+            const detail = row.description || row.detail || row.entity_id || "-";
+            const detailShort = detail.length > 30 ? detail.slice(0, 27) + "..." : detail;
+            return `
+              <tr>
+                <td style="font-size: 12px;">${escapeHtml(String(row.timestamp || row.created_at || "").slice(0, 19))}</td>
+                <td>${escapeHtml(row.entity_type || row.entity || "-")}</td>
+                <td><span class="pill">${escapeHtml(row.action || "unknown")}</span></td>
+                <td>${escapeHtml(row.actor || row.user || "-")}</td>
+                <td style="font-size: 12px;">${escapeHtml(detailShort)}</td>
+                <td>
+                  <button
+                    class="secondary"
+                    type="button"
+                    data-business-action="view-audit-event"
+                    data-event-id="${escapeHtml(row.event_id || row.id || "")}"
+                  >View</button>
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderAuditListFilters(rowsLength) {
+  const state = auditListState;
+  const offset = Number(state.offset || 0);
+  const startRow = rowsLength > 0 ? offset + 1 : 0;
+  const endRow = rowsLength > 0 ? offset + Math.min(rowsLength, 30) : 0;
+  const nextDisabled = rowsLength < 30 ? "disabled" : "";
+  const prevDisabled = offset <= 0 ? "disabled" : "";
+
+  return `
+    <div class="list-filter-panel" data-business-list="audit">
+      <div class="list-filter-bar">
+        <label class="field">
+          <span>Entity</span>
+          <select name="entity_type">
+            <option value="">All entities</option>
+            <option value="party" ${state.entity_type === "party" ? "selected" : ""}>Party</option>
+            <option value="voucher" ${state.entity_type === "voucher" ? "selected" : ""}>Voucher</option>
+            <option value="account" ${state.entity_type === "account" ? "selected" : ""}>Account</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Action</span>
+          <select name="action">
+            <option value="">All actions</option>
+            <option value="create" ${state.action === "create" ? "selected" : ""}>Create</option>
+            <option value="update" ${state.action === "update" ? "selected" : ""}>Update</option>
+            <option value="post" ${state.action === "post" ? "selected" : ""}>Post</option>
+            <option value="reverse" ${state.action === "reverse" ? "selected" : ""}>Reverse</option>
+            <option value="deactivate" ${state.action === "deactivate" ? "selected" : ""}>Deactivate</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>From</span>
+          <input name="from_date" type="date" value="${escapeHtml(state.from_date || "")}">
+        </label>
+        <label class="field">
+          <span>To</span>
+          <input name="to_date" type="date" value="${escapeHtml(state.to_date || "")}">
+        </label>
+        <div class="list-filter-actions">
+          <button type="button" data-business-action="apply-audit-filter">Apply</button>
+          <button class="secondary" type="button" data-business-action="reset-audit-filter">Reset</button>
+        </div>
+      </div>
+      <div class="paging-row">
+        <span class="muted">Showing ${escapeHtml(startRow)}-${escapeHtml(endRow)}</span>
+        <button class="secondary" type="button" data-business-action="page-audit" data-page-direction="prev" ${prevDisabled}>Prev</button>
+        <button class="secondary" type="button" data-business-action="page-audit" data-page-direction="next" ${nextDisabled}>Next</button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAuditEvents(filters = {}) {
+  const appKey = "mitrabooks";
+  const state = auditListState;
+  const params = new URLSearchParams();
+
+  if (state.entity_type) params.append("entity_type", state.entity_type);
+  if (state.action) params.append("action", state.action);
+  if (state.from_date) params.append("from_date", state.from_date);
+  if (state.to_date) params.append("to_date", state.to_date);
+  params.append("offset", state.offset || 0);
+  params.append("limit", 30);
+
+  const queryString = params.toString();
+  const url = `/api/v1/audit/events${queryString ? "?" + queryString : ""}`;
+
+  const result = await apiRequest(appKey, url, { method: "GET" });
+  if (result.ok) {
+    lastAuditEvents = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+  } else {
+    lastAuditEvents = [];
+    setLoginStatus("warn", "Unable to load audit events", result.payload?.detail || "Check connection and try again.");
+  }
+  renderJson(apiOutput, { audit_events: { ok: result.ok, count: lastAuditEvents.length } });
+}
+
+function openAuditEventDetailDialog(eventId) {
+  const dialog = document.getElementById("audit-event-detail-dialog");
+  if (!dialog) return;
+
+  const event = lastAuditEvents.find((e) => (e.event_id || e.id) === eventId);
+  if (!event) {
+    setLoginStatus("warn", "Event not found", "The event may have been deleted.");
+    return;
+  }
+
+  document.getElementById("audit-event-entity").textContent = event.entity_type || "-";
+  document.getElementById("audit-event-action").textContent = event.action || "-";
+  document.getElementById("audit-event-actor").textContent = event.actor || event.user || "-";
+  document.getElementById("audit-event-timestamp").textContent = String(event.timestamp || event.created_at || "-").slice(0, 19);
+  document.getElementById("audit-event-detail-label").textContent = `${event.entity_type || "Event"} · ${event.action || "unknown"}`;
+
+  const payload = event.payload || event.details || {};
+  document.getElementById("audit-event-payload").textContent = JSON.stringify(payload, null, 2);
+
+  dialog.showModal();
+}
+
+function applyAuditFilters() {
+  const panel = document.querySelector("[data-business-list='audit']");
+  if (!panel) return;
+
+  const entityInput = panel.querySelector("select[name='entity_type']");
+  const actionInput = panel.querySelector("select[name='action']");
+  const fromInput = panel.querySelector("input[name='from_date']");
+  const toInput = panel.querySelector("input[name='to_date']");
+
+  auditListState.entity_type = entityInput?.value || "";
+  auditListState.action = actionInput?.value || "";
+  auditListState.from_date = fromInput?.value || "";
+  auditListState.to_date = toInput?.value || "";
+  auditListState.offset = 0;
+
+  loadAuditEvents();
+}
+
+function resetAuditFilters() {
+  auditListState.offset = 0;
+  auditListState.entity_type = "";
+  auditListState.action = "";
+  auditListState.from_date = "";
+  auditListState.to_date = "";
+  loadAuditEvents();
+}
+
+function pageAuditList(direction) {
+  const offset = Number(auditListState.offset || 0);
+  auditListState.offset = direction === "next" ? offset + 30 : Math.max(0, offset - 30);
+  loadAuditEvents();
 }
 
 function renderGruhaDashboard(config, payload) {
@@ -4318,8 +5177,19 @@ nav.addEventListener("click", (event) => {
   }
   setGruhaWorkspace(link.dataset.gruhaWorkspace || "overview");
 });
+nav.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-business-workspace]");
+  if (!link || currentExperience !== "mitrabooks") {
+    return;
+  }
+  event.preventDefault();
+  if (link.getAttribute("aria-disabled") === "true") {
+    return;
+  }
+  setBusinessWorkspace(link.dataset.businessWorkspace || "overview");
+});
 dashboardPreview.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action]");
+  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action]");
   if (!button) {
     return;
   }
@@ -4328,6 +5198,7 @@ dashboardPreview.addEventListener("click", (event) => {
   const mandirAction = button.getAttribute("data-mandir-action");
   const gruhaAction = button.getAttribute("data-gruha-action");
   const accountingAction = button.getAttribute("data-accounting-action");
+  const businessAction = button.getAttribute("data-business-action");
   if (action === "approve") {
     approveOnboardingRequest(requestId);
   } else if (action === "reject") {
@@ -4368,13 +5239,47 @@ dashboardPreview.addEventListener("click", (event) => {
     openAccountingVoucherDetail(button);
   } else if (accountingAction === "tb-ledger") {
     openMandirTrialBalanceLedger(button);
+  } else if (businessAction === "open-create-party") {
+    openBusinessCreatePartyDialog();
+  } else if (businessAction === "edit-party") {
+    openBusinessEditPartyDialog(button);
+  } else if (businessAction === "deactivate-party") {
+    const partyId = button.getAttribute("data-party-id") || "";
+    if (confirm("Deactivate this party? It will no longer appear in new vouchers.")) {
+      deactivateBusinessParty(partyId);
+    }
+  } else if (businessAction === "apply-list-filter") {
+    applyBusinessListFilter(button.getAttribute("data-list-kind") || "");
+  } else if (businessAction === "reset-list-filter") {
+    resetBusinessListFilter(button.getAttribute("data-list-kind") || "");
+  } else if (businessAction === "page-list") {
+    pageBusinessList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
+  } else if (businessAction === "workspace-view") {
+    setBusinessWorkspace(button.getAttribute("data-workspace-view") || "overview");
+  } else if (businessAction === "open-create-voucher") {
+    openBusinessCreateVoucherDialog();
+  } else if (businessAction === "remove-voucher-line") {
+    removeVoucherLine(button.getAttribute("data-line-id") || "");
+  } else if (businessAction === "reverse-voucher") {
+    const voucherId = button.getAttribute("data-voucher-id") || "";
+    if (confirm("Reverse this voucher? A reversal entry will be created.")) {
+      reverseBusinessVoucher(voucherId);
+    }
+  } else if (businessAction === "view-audit-event") {
+    openAuditEventDetailDialog(button.getAttribute("data-event-id") || "");
+  } else if (businessAction === "apply-audit-filter") {
+    applyAuditFilters();
+  } else if (businessAction === "reset-audit-filter") {
+    resetAuditFilters();
+  } else if (businessAction === "page-audit") {
+    pageAuditList(button.getAttribute("data-page-direction") || "next");
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") {
     return;
   }
-  const input = event.target.closest("[data-mandir-list] input, [data-mandir-list] select");
+  const input = event.target.closest("[data-mandir-list] input, [data-mandir-list] select, [data-business-list] input, [data-business-list] select");
   if (!input) {
     const accountingInput = event.target.closest("[data-accounting-drilldown] input, [data-accounting-drilldown] select");
     if (!accountingInput) {
@@ -4385,8 +5290,13 @@ dashboardPreview.addEventListener("keydown", (event) => {
     return;
   }
   event.preventDefault();
-  const panel = input.closest("[data-mandir-list]");
-  applyMandirListFilter(panel?.getAttribute("data-mandir-list") || "");
+  const mandirPanel = input.closest("[data-mandir-list]");
+  const businessPanel = input.closest("[data-business-list]");
+  if (mandirPanel) {
+    applyMandirListFilter(mandirPanel.getAttribute("data-mandir-list") || "");
+  } else if (businessPanel) {
+    applyBusinessListFilter(businessPanel.getAttribute("data-business-list") || "");
+  }
 });
 dashboardPreview.addEventListener("submit", (event) => {
   const form = event.target.closest("[data-mandir-create-form]");
@@ -4434,6 +5344,93 @@ receiptPreviewDialog.addEventListener("close", () => {
     activeReceiptPreviewObjectUrl = "";
   }
 });
+const businessPartyCreateDialog = document.getElementById("business-party-create-dialog");
+const businessPartyCreateForm = document.getElementById("business-party-create-form");
+const businessPartyEditDialog = document.getElementById("business-party-edit-dialog");
+const businessPartyEditForm = document.getElementById("business-party-edit-form");
+
+if (businessPartyCreateForm) {
+  businessPartyCreateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = document.getElementById("business-party-name")?.value || "";
+    const party_type = document.getElementById("business-party-type")?.value || "customer";
+    const gstin = document.getElementById("business-party-gstin")?.value || "";
+    const opening_balance = document.getElementById("business-party-opening-balance")?.value || "0";
+
+    if (!name.trim()) {
+      setLoginStatus("warn", "Party name required", "Enter a name for the party.");
+      return;
+    }
+
+    createBusinessParty({ name, party_type, gstin, opening_balance });
+  });
+}
+
+if (businessPartyEditForm) {
+  businessPartyEditForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const partyId = document.getElementById("business-party-edit-id")?.value || "";
+    const name = document.getElementById("business-party-edit-name")?.value || "";
+    const gstin = document.getElementById("business-party-edit-gstin")?.value || "";
+    const opening_balance = document.getElementById("business-party-edit-opening-balance")?.value || "0";
+
+    if (!name.trim()) {
+      setLoginStatus("warn", "Party name required", "Enter a name for the party.");
+      return;
+    }
+
+    updateBusinessParty(partyId, { name, gstin, opening_balance });
+  });
+}
+
+document.getElementById("business-party-create-close")?.addEventListener("click", () => businessPartyCreateDialog?.close());
+document.getElementById("business-party-create-cancel")?.addEventListener("click", () => businessPartyCreateDialog?.close());
+document.getElementById("business-party-edit-close")?.addEventListener("click", () => businessPartyEditDialog?.close());
+document.getElementById("business-party-edit-cancel")?.addEventListener("click", () => businessPartyEditDialog?.close());
+
+const businessVoucherCreateDialog = document.getElementById("business-voucher-create-dialog");
+const businessVoucherCreateForm = document.getElementById("business-voucher-create-form");
+
+if (businessVoucherCreateForm) {
+  businessVoucherCreateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const date = document.getElementById("business-voucher-date")?.value || "";
+    const reference = document.getElementById("business-voucher-reference")?.value || "";
+    const narration = document.getElementById("business-voucher-narration")?.value || "";
+
+    if (!date) {
+      setLoginStatus("warn", "Date required", "Enter the voucher date.");
+      return;
+    }
+
+    createBusinessVoucher({ date, reference, narration });
+  });
+}
+
+document.getElementById("business-voucher-create-close")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
+document.getElementById("business-voucher-create-cancel")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
+
+document.getElementById("business-voucher-add-line")?.addEventListener("click", (event) => {
+  event.preventDefault();
+  addVoucherLine();
+});
+
+const auditEventDetailDialog = document.getElementById("audit-event-detail-dialog");
+document.getElementById("audit-event-detail-close")?.addEventListener("click", () => auditEventDetailDialog?.close());
+document.getElementById("audit-event-detail-cancel")?.addEventListener("click", () => auditEventDetailDialog?.close());
+
+dashboardPreview.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") {
+    return;
+  }
+  const input = event.target.closest("[data-business-list='audit'] input, [data-business-list='audit'] select");
+  if (!input) {
+    return;
+  }
+  event.preventDefault();
+  applyAuditFilters();
+});
+
 document.getElementById("mode-mitrabooks").addEventListener("click", () => setExperience("mitrabooks"));
 document.getElementById("mode-platform").addEventListener("click", () => setExperience("platform"));
 document.getElementById("mode-mandir").addEventListener("click", () => setExperience("mandir"));
