@@ -43,3 +43,37 @@ async def log_audit_event(
     }
     await audit.insert_one(doc)
     return event_id
+
+
+def _json_safe_event(doc: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in doc.items() if key != "_id"}
+
+
+async def list_audit_events(
+    *,
+    tenant_id: str,
+    product: str | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    action: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    filters: dict[str, Any] = {"tenant_id": tenant_id}
+    if product:
+        filters["product"] = product
+    if entity_type:
+        filters["entity_type"] = entity_type
+    if entity_id:
+        filters["entity_id"] = entity_id
+    if action:
+        filters["action"] = action
+
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(AUDIT_COLLECTION)
+        .find(filters)
+        .sort("timestamp", -1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    return {"items": [_json_safe_event(row) for row in rows], "total": len(rows)}

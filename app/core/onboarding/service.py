@@ -17,6 +17,7 @@ from app.core.onboarding.schemas import (
     OnboardingRequestCreate,
     OnboardingResendRequest,
 )
+from app.core.modules.registry import derive_enabled_modules, normalize_organization_type
 from app.core.tenants.context import get_app_key
 from app.core.tenants.service import ensure_tenant_exists, get_tenant
 from app.core.users.service import create_user
@@ -414,6 +415,10 @@ async def approve_onboarding_request(*, request_id: str, approved_by: str, paylo
 
     tenant_name = str(doc.get("tenant_name") or doc.get("temple_name") or doc.get("trust_name") or "").strip() or "New Tenant"
 
+    app_key = str(doc.get("app_key") or get_app_key() or "mandirmitra").strip().lower()
+    organization_type = normalize_organization_type(None, app_key=app_key)
+    enabled_modules = derive_enabled_modules(organization_type=organization_type)
+
     requested_tenant_id = payload.tenant_id
     if requested_tenant_id:
         tenant_id = requested_tenant_id
@@ -421,8 +426,14 @@ async def approve_onboarding_request(*, request_id: str, approved_by: str, paylo
         tenant_hint = str(doc.get("temple_slug") or tenant_name)
         tenant_id = await _allocate_tenant_id(tenant_hint)
 
-    await ensure_tenant_exists(tenant_id, display_name=tenant_name, created_by=approved_by)
-    app_key = str(doc.get("app_key") or get_app_key() or "mandirmitra").strip().lower()
+    await ensure_tenant_exists(
+        tenant_id,
+        display_name=tenant_name,
+        organization_type=organization_type,
+        enabled_modules=enabled_modules,
+        app_keys=[app_key],
+        created_by=approved_by,
+    )
 
     temp_password = payload.initial_password or _generate_temporary_password()
     admin_email = str(doc.get("admin_email") or "").strip().lower()
@@ -633,7 +644,6 @@ async def reject_onboarding_request(*, request_id: str, rejected_by: str, payloa
         "status": "rejected",
         "message": "Onboarding request rejected",
     }
-
 
 
 

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth.dependencies import get_current_user
-from app.core.tenants.schemas import TenantResponse, TenantStatusUpdateRequest
-from app.core.tenants.service import get_tenant, list_tenants, set_tenant_status
+from app.core.tenants.schemas import TenantEntitlementsUpdateRequest, TenantResponse, TenantStatusUpdateRequest
+from app.core.tenants.service import get_tenant, list_tenants, set_tenant_status, update_tenant_entitlements
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -36,6 +36,30 @@ async def get_tenant_endpoint(
     tenant = await get_tenant(tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    return TenantResponse(**tenant)
+
+
+@router.patch("/{tenant_id}/entitlements", response_model=TenantResponse)
+async def update_tenant_entitlements_endpoint(
+    tenant_id: str,
+    payload: TenantEntitlementsUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admins can change tenant entitlements")
+
+    try:
+        tenant = await update_tenant_entitlements(
+            tenant_id=tenant_id,
+            subscription_plan=payload.subscription_plan,
+            enabled_modules=payload.enabled_modules,
+            updated_by=str(current_user.get("sub") or "system"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc.args[0] if exc.args else exc))
+
     return TenantResponse(**tenant)
 
 

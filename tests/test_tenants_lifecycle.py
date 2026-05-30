@@ -1,10 +1,15 @@
 from types import SimpleNamespace
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 import pytest
 
+import app.core.tenants.router as tenant_router
 import app.core.tenants.service as tenant_service
+from app.core.auth.dependencies import get_current_user
+from app.main import app
 
 
 class FakeCollection:
@@ -145,3 +150,178 @@ async def test_ensure_tenant_is_active_bootstraps_missing(monkeypatch):
     tenant = await tenant_service.get_tenant("tenant-new")
     assert tenant is not None
     assert tenant["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_update_tenant_entitlements_sets_plan_and_modules(monkeypatch):
+    fake = FakeCollection()
+    monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
+
+    await tenant_service.ensure_tenant_exists(
+        "tenant-temple-entitlements",
+        display_name="Temple Tenant",
+        organization_type="TEMPLE",
+        app_keys=["mandirmitra"],
+    )
+
+    updated = await tenant_service.update_tenant_entitlements(
+        tenant_id="tenant-temple-entitlements",
+        subscription_plan="pro",
+        enabled_modules=["temple", "accounting", "audit"],
+        updated_by="platform-owner",
+    )
+
+    assert updated["subscription_plan"] == "pro"
+    assert updated["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert updated["updated_by"] == "platform-owner"
+
+
+@pytest.mark.asyncio
+async def test_update_tenant_entitlements_rejects_module_outside_org_type(monkeypatch):
+    fake = FakeCollection()
+    monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
+
+    await tenant_service.ensure_tenant_exists(
+        "tenant-temple-invalid-module",
+        display_name="Temple Tenant",
+        organization_type="TEMPLE",
+        app_keys=["mandirmitra"],
+    )
+
+    with pytest.raises(ValueError, match="not available for organization_type=TEMPLE"):
+        await tenant_service.update_tenant_entitlements(
+            tenant_id="tenant-temple-invalid-module",
+            enabled_modules=["temple", "inventory"],
+            updated_by="platform-owner",
+        )
+
+
+def test_update_tenant_entitlements_endpoint_rejects_tenant_admin(monkeypatch):
+    async def fake_update_tenant_entitlements(**_kwargs):
+        raise AssertionError("Tenant admin must not reach entitlement update service")
+
+    monkeypatch.setattr(tenant_router, "update_tenant_entitlements", fake_update_tenant_entitlements)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "tenant@example.com",
+        "role": "tenant_admin",
+        "tenant_id": "tenant-temple",
+        "app_key": "mandirmitra",
+    }
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/api/v1/tenants/tenant-temple/entitlements",
+            json={"subscription_plan": "pro"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only super admins can change tenant entitlements"
+
+
+def test_update_tenant_entitlements_endpoint_allows_super_admin(monkeypatch):
+    async def fake_update_tenant_entitlements(**kwargs):
+        assert kwargs["tenant_id"] == "tenant-temple"
+        assert kwargs["subscription_plan"] == "pro"
+        assert kwargs["enabled_modules"] == ["temple", "accounting", "audit"]
+        assert kwargs["updated_by"] == "owner@example.com"
+        now = datetime.now(timezone.utc)
+        return {
+            "tenant_id": "tenant-temple",
+            "display_name": "Temple Tenant",
+            "status": "active",
+            "organization_type": "TEMPLE",
+            "enabled_modules": ["temple", "accounting", "audit"],
+            "app_keys": ["mandirmitra"],
+            "subscription_plan": "pro",
+            "created_at": now,
+            "updated_at": now,
+            "updated_by": "owner@example.com",
+        }
+
+    monkeypatch.setattr(tenant_router, "update_tenant_entitlements", fake_update_tenant_entitlements)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "owner@example.com",
+        "role": "super_admin",
+        "tenant_id": "platform",
+        "app_key": "mitrabooks",
+    }
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/api/v1/tenants/tenant-temple/entitlements",
+            json={"subscription_plan": "pro", "enabled_modules": ["temple", "accounting", "audit"]},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["subscription_plan"] == "pro"
+
+
+def test_update_tenant_status_endpoint_rejects_tenant_admin(monkeypatch):
+    async def fake_set_tenant_status(**_kwargs):
+        raise AssertionError("Tenant admin must not reach status update service")
+
+    monkeypatch.setattr(tenant_router, "set_tenant_status", fake_set_tenant_status)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "tenant@example.com",
+        "role": "tenant_admin",
+        "tenant_id": "tenant-temple",
+        "app_key": "mandirmitra",
+    }
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/api/v1/tenants/tenant-temple/status",
+            json={"status": "inactive"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only super admins can change tenant status"
+
+
+def test_update_tenant_status_endpoint_allows_super_admin(monkeypatch):
+    async def fake_set_tenant_status(**kwargs):
+        assert kwargs["tenant_id"] == "tenant-temple"
+        assert kwargs["status"] == "inactive"
+        assert kwargs["updated_by"] == "owner@example.com"
+        now = datetime.now(timezone.utc)
+        return {
+            "tenant_id": "tenant-temple",
+            "display_name": "Temple Tenant",
+            "status": "inactive",
+            "organization_type": "TEMPLE",
+            "enabled_modules": ["temple", "accounting", "audit"],
+            "app_keys": ["mandirmitra"],
+            "subscription_plan": "pro",
+            "created_at": now,
+            "updated_at": now,
+            "updated_by": "owner@example.com",
+        }
+
+    monkeypatch.setattr(tenant_router, "set_tenant_status", fake_set_tenant_status)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "owner@example.com",
+        "role": "super_admin",
+        "tenant_id": "platform",
+        "app_key": "mitrabooks",
+    }
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/api/v1/tenants/tenant-temple/status",
+            json={"status": "inactive"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "inactive"

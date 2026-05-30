@@ -3,11 +3,12 @@ from time import monotonic
 
 from fastapi import HTTPException
 
-from app.core.modules.registry import derive_enabled_modules, normalize_organization_type
+from app.core.modules.registry import derive_enabled_modules, get_module_definition, normalize_organization_type
 from app.db.mongo import get_collection
 
 TENANTS_COLLECTION = "core_tenants"
 VALID_TENANT_STATUSES = {"active", "inactive"}
+VALID_SUBSCRIPTION_PLANS = {"free", "trial", "pro", "elite"}
 
 _TENANT_INDEXES_READY = False
 _ACTIVE_TENANT_CACHE_TTL_SECONDS = 10.0
@@ -67,6 +68,34 @@ def _get_tenant_status_cache(tenant_id: str) -> str | None:
         return None
 
     return status
+
+
+def _normalize_enabled_modules(values: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    modules: list[str] = []
+    for value in values or []:
+        key = str(value or "").strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            modules.append(key)
+    return modules
+
+
+def _validate_enabled_modules(*, organization_type: str, app_keys: list[str], enabled_modules: list[str]) -> None:
+    if not enabled_modules:
+        raise ValueError("enabled_modules must not be empty")
+    normalized_app_keys = [str(key or "").strip().lower() for key in app_keys if str(key or "").strip()]
+    if not normalized_app_keys:
+        raise ValueError("tenant must have at least one app key before modules can be updated")
+
+    for module_key in enabled_modules:
+        definition = get_module_definition(module_key)
+        if definition is None:
+            raise ValueError(f"Unknown module: {module_key}")
+        if organization_type not in definition.allowed_organization_types:
+            raise ValueError(f"Module {module_key} is not available for organization_type={organization_type}")
+        if not any(app_key in definition.allowed_app_keys for app_key in normalized_app_keys):
+            raise ValueError(f"Module {module_key} is not available for tenant app keys")
 
 
 async def ensure_tenant_exists(
@@ -202,6 +231,60 @@ async def set_tenant_status(*, tenant_id: str, status: str, updated_by: str) -> 
         raise KeyError("Tenant not found")
 
     _set_tenant_status_cache(normalized_tenant_id, normalized_status)
+    return _serialize_tenant(doc)
+
+
+async def update_tenant_entitlements(
+    *,
+    tenant_id: str,
+    subscription_plan: str | None = None,
+    enabled_modules: list[str] | None = None,
+    updated_by: str,
+) -> dict:
+    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    if not normalized_tenant_id:
+        raise ValueError("tenant_id is required")
+
+    await ensure_tenants_indexes()
+    tenants = get_collection(TENANTS_COLLECTION)
+    existing = await tenants.find_one({"tenant_id": normalized_tenant_id})
+    if not existing:
+        raise KeyError("Tenant not found")
+
+    serialized = _serialize_tenant(existing)
+    update_fields: dict = {
+        "updated_at": datetime.now(timezone.utc),
+        "updated_by": updated_by,
+    }
+
+    if subscription_plan is not None:
+        normalized_plan = str(subscription_plan or "").strip().lower()
+        if normalized_plan not in VALID_SUBSCRIPTION_PLANS:
+            raise ValueError("Invalid subscription plan")
+        update_fields["subscription_plan"] = normalized_plan
+
+    if enabled_modules is not None:
+        normalized_modules = _normalize_enabled_modules(enabled_modules)
+        _validate_enabled_modules(
+            organization_type=serialized["organization_type"],
+            app_keys=serialized["app_keys"],
+            enabled_modules=normalized_modules,
+        )
+        update_fields["enabled_modules"] = normalized_modules
+
+    if set(update_fields) == {"updated_at", "updated_by"}:
+        raise ValueError("No entitlement changes provided")
+
+    result = await tenants.update_one(
+        {"tenant_id": normalized_tenant_id},
+        {"$set": update_fields},
+    )
+    if result.matched_count == 0:
+        raise KeyError("Tenant not found")
+
+    doc = await tenants.find_one({"tenant_id": normalized_tenant_id})
+    if not doc:
+        raise KeyError("Tenant not found")
     return _serialize_tenant(doc)
 
 

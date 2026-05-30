@@ -23,3 +23,8 @@ class TenantResponse(BaseModel):
 
 class TenantStatusUpdateRequest(BaseModel):
     status: TenantStatus = Field(description="Set tenant lifecycle status")
+
+
+class TenantEntitlementsUpdateRequest(BaseModel):
+    subscription_plan: str | None = Field(default=None, min_length=2, max_length=40)
+    enabled_modules: list[str] | None = None

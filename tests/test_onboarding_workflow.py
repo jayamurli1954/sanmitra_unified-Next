@@ -93,6 +93,9 @@ async def test_approve_onboarding_request_creates_tenant_admin(monkeypatch):
     async def fake_ensure_tenant_exists(tenant_id: str, **kwargs):
         ensured["tenant_id"] = tenant_id
         ensured["display_name"] = kwargs.get("display_name")
+        ensured["organization_type"] = kwargs.get("organization_type")
+        ensured["enabled_modules"] = kwargs.get("enabled_modules")
+        ensured["app_keys"] = kwargs.get("app_keys")
         return {"tenant_id": tenant_id, "status": "active"}
 
     created = {}
@@ -134,11 +137,71 @@ async def test_approve_onboarding_request_creates_tenant_admin(monkeypatch):
     assert result["email_error"] is None
 
     assert ensured["tenant_id"] == "sri-ganesh-temple"
+    assert ensured["organization_type"] == "TEMPLE"
+    assert ensured["enabled_modules"] == ["temple", "accounting", "audit"]
+    assert ensured["app_keys"] == ["mandirmitra"]
     assert created["role"] == "tenant_admin"
 
     stored = await fake_requests.find_one({"request_id": "req-1"})
     assert stored["status"] == "approved"
     assert stored["approved_tenant_id"] == "sri-ganesh-temple"
+
+
+@pytest.mark.asyncio
+async def test_approve_onboarding_request_uses_app_key_for_tenant_modules(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    fake_requests.docs.append(
+        {
+            "request_id": "req-gruha-1",
+            "status": "pending",
+            "tenant_name": "Lake View Society",
+            "admin_full_name": "Society Admin",
+            "admin_email": "admin.society@example.com",
+            "app_key": "gruhamitra",
+            "submitted_at": 100,
+            "updated_at": 100,
+        }
+    )
+
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+    monkeypatch.setattr(onboarding_service, "get_tenant", lambda _tenant_id: None)
+
+    ensured = {}
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **kwargs):
+        ensured.update({"tenant_id": tenant_id, **kwargs})
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    async def fake_create_user(**kwargs):
+        return {
+            "user_id": "tenant-admin-gruha",
+            "email": kwargs["email"],
+            "tenant_id": kwargs["tenant_id"],
+            "role": kwargs["role"],
+            "is_active": True,
+        }
+
+    async def fake_send_onboarding_email(**_kwargs):
+        return True, None
+
+    async def _noop_sync_mandir(**_kwargs):
+        return None
+
+    monkeypatch.setattr(onboarding_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+    monkeypatch.setattr(onboarding_service, "create_user", fake_create_user)
+    monkeypatch.setattr(onboarding_service, "_send_onboarding_email", fake_send_onboarding_email)
+    monkeypatch.setattr(onboarding_service, "_sync_mandir_temple_profile_from_request", _noop_sync_mandir)
+
+    result = await onboarding_service.approve_onboarding_request(
+        request_id="req-gruha-1",
+        approved_by="super-admin-1",
+        payload=OnboardingApproveRequest(tenant_id="lake-view-society", initial_password="TempPass123!"),
+    )
+
+    assert result["status"] == "approved"
+    assert ensured["organization_type"] == "HOUSING"
+    assert ensured["enabled_modules"] == ["housing", "accounting", "audit"]
+    assert ensured["app_keys"] == ["gruhamitra"]
 
 
 @pytest.mark.asyncio
