@@ -2877,12 +2877,14 @@ function renderBusinessPartiesTable(rows) {
         <tbody>
           ${rows.slice(0, 20).map((row) => {
             const isInactive = row.is_inactive || row.status === "inactive";
+            const partyName = row.party_name || row.name || "Unnamed";
+            const openingBalance = Number(row.opening_balance ?? (row.opening_balance_paise ? row.opening_balance_paise / 100 : 0)) || 0;
             return `
               <tr>
-                <td><strong>${escapeHtml(row.name || "Unnamed")}</strong></td>
+                <td><strong>${escapeHtml(partyName)}</strong></td>
                 <td>${escapeHtml(row.party_type || row.type || "unknown")}</td>
                 <td>${escapeHtml(row.gstin || "-")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(row.opening_balance_paise ? row.opening_balance_paise / 100 : 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(openingBalance))}</td>
                 <td><span class="pill ${isInactive ? "warn" : "ok"}">${isInactive ? "Inactive" : "Active"}</span></td>
                 <td>
                   <div class="action-row">
@@ -2891,9 +2893,9 @@ function renderBusinessPartiesTable(rows) {
                       type="button"
                       data-business-action="edit-party"
                       data-party-id="${escapeHtml(row.party_id || row.id || "")}"
-                      data-party-name="${escapeHtml(row.name || "")}"
+                      data-party-name="${escapeHtml(partyName)}"
                       data-party-gstin="${escapeHtml(row.gstin || "")}"
-                      data-party-opening-balance="${escapeHtml(row.opening_balance_paise ? row.opening_balance_paise / 100 : 0)}"
+                      data-party-opening-balance="${escapeHtml(openingBalance)}"
                     >Edit</button>
                     ${!isInactive ? `
                       <button
@@ -3086,6 +3088,9 @@ async function loadBusinessParties(filters = {}) {
   const result = await apiRequest(appKey, url, { method: "GET" });
   if (result.ok) {
     lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "parties") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   } else {
     lastBusinessParties = [];
     setLoginStatus("warn", "Unable to load parties", result.payload?.detail || "Check connection and try again.");
@@ -3096,10 +3101,10 @@ async function loadBusinessParties(filters = {}) {
 async function createBusinessParty(data) {
   const appKey = "mitrabooks";
   const payload = {
-    name: data.name,
+    party_name: data.name,
     party_type: data.party_type,
     gstin: data.gstin || null,
-    opening_balance_paise: Math.round((Number(data.opening_balance) || 0) * 100),
+    opening_balance: String(Number(data.opening_balance) || 0),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/parties", {
@@ -3108,11 +3113,11 @@ async function createBusinessParty(data) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Party created", result.payload?.name || "New party added.");
+    setLoginStatus("ok", "Party created", result.payload?.party_name || "New party added.");
     document.getElementById("business-party-create-dialog")?.close();
     await loadBusinessParties();
   } else {
-    setLoginStatus("danger", "Create party failed", result.payload?.detail || "Try again.");
+    setLoginStatus("danger", "Create party failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
   renderJson(apiOutput, { create_party: result });
 }
@@ -3120,9 +3125,8 @@ async function createBusinessParty(data) {
 async function updateBusinessParty(partyId, data) {
   const appKey = "mitrabooks";
   const payload = {
-    name: data.name,
+    party_name: data.name,
     gstin: data.gstin || null,
-    opening_balance_paise: Math.round((Number(data.opening_balance) || 0) * 100),
   };
 
   const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}`, {
@@ -3131,11 +3135,11 @@ async function updateBusinessParty(partyId, data) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Party updated", result.payload?.name || "Changes saved.");
+    setLoginStatus("ok", "Party updated", result.payload?.party_name || "Changes saved.");
     document.getElementById("business-party-edit-dialog")?.close();
     await loadBusinessParties();
   } else {
-    setLoginStatus("danger", "Update party failed", result.payload?.detail || "Try again.");
+    setLoginStatus("danger", "Update party failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
   renderJson(apiOutput, { update_party: result });
 }
@@ -3453,6 +3457,9 @@ async function loadBusinessVouchers(filters = {}) {
   const result = await apiRequest(appKey, url, { method: "GET" });
   if (result.ok) {
     lastBusinessVouchers = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   } else {
     lastBusinessVouchers = [];
   }
@@ -3619,6 +3626,9 @@ async function loadAuditEvents(filters = {}) {
   const result = await apiRequest(appKey, url, { method: "GET" });
   if (result.ok) {
     lastAuditEvents = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "audit") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   } else {
     lastAuditEvents = [];
     setLoginStatus("warn", "Unable to load audit events", result.payload?.detail || "Check connection and try again.");

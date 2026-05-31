@@ -61,3 +61,27 @@ def test_business_workspace_menu_renders_main_preview_directly() -> None:
     assert 'dashboardPreview.innerHTML = renderAccountingDrilldownPanel();' in workspace_switcher
     assert 'dashboardPreview.innerHTML = renderBusinessWorkspace();' in workspace_switcher
     assert 'document.getElementById("context-cards")' not in workspace_switcher
+
+
+def test_business_party_payload_matches_backend_schema() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    create_start = app_source.index("async function createBusinessParty(data)")
+    create_end = app_source.index("async function updateBusinessParty", create_start)
+    create_block = app_source[create_start:create_end]
+    update_end = app_source.index("async function deactivateBusinessParty", create_end)
+    update_block = app_source[create_end:update_end]
+
+    assert "party_name: data.name" in create_block
+    assert "opening_balance: String(Number(data.opening_balance) || 0)" in create_block
+    assert "opening_balance_paise" not in create_block
+    assert "party_name: data.name" in update_block
+    assert "opening_balance_paise" not in update_block
+
+
+def test_business_loaders_refresh_active_workspace_panel() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'activeBusinessWorkspace === "parties"' in app_source
+    assert 'activeBusinessWorkspace === "vouchers"' in app_source
+    assert 'activeBusinessWorkspace === "audit"' in app_source
+    assert app_source.count("dashboardPreview.innerHTML = renderBusinessWorkspace();") >= 3
