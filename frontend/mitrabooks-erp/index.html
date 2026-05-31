@@ -12,7 +12,7 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="../assets/brand/mitrabooks-logo.jpg" type="image/jpeg">
     <title>MitraBooks Unified ERP</title>
-    <link rel="stylesheet" href="../shared/app-shell.css?v=mitrabooks-erp-v6">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mitrabooks-erp-v7">
   </head>
   <body>
     <div class="app" id="app-root">
@@ -449,6 +449,8 @@
         </div>
         <div style="margin: 16px 0; padding: 12px; background: #f5f5f5; border-radius: 4px;">
           <h4 style="margin-top: 0;">Line Items</h4>
+          <p class="muted" id="business-voucher-accounts-status" style="margin: 0 0 8px;">Loading accounts...</p>
+          <datalist id="business-voucher-account-options"></datalist>
           <div id="business-voucher-lines" style="margin-bottom: 12px;"></div>
           <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
         </div>
@@ -462,7 +464,7 @@
         </div>
       </form>
     </dialog>
-    <script type="module" src="../shared/pwa-shell.js?v=mitrabooks-erp-v6"></script>
-    <script type="module" src="./app.js?v=mitrabooks-erp-v6"></script>
+    <script type="module" src="../shared/pwa-shell.js?v=mitrabooks-erp-v7"></script>
+    <script type="module" src="./app.js?v=mitrabooks-erp-v7"></script>
   </body>
 </html>

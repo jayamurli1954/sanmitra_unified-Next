@@ -3294,7 +3294,30 @@ function populateVoucherAccountSelect(select, selectedId = "") {
   });
 }
 
+function refreshVoucherAccountDatalist() {
+  const datalist = document.getElementById("business-voucher-account-options");
+  if (!datalist) return;
+  const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id) : [];
+  datalist.innerHTML = "";
+  accounts.forEach((acc) => {
+    const option = document.createElement("option");
+    option.value = businessAccountLabel(acc);
+    datalist.appendChild(option);
+  });
+}
+
+function updateVoucherAccountsStatus() {
+  const status = document.getElementById("business-voucher-accounts-status");
+  if (!status) return;
+  const count = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
+  status.textContent = count > 0
+    ? `${count} account(s) loaded. Select from the dropdown or type code/name in the account field.`
+    : "No accounts loaded. Refresh the workspace or check backend accounting access.";
+}
+
 function refreshVoucherAccountSelects() {
+  refreshVoucherAccountDatalist();
+  updateVoucherAccountsStatus();
   document.querySelectorAll(".voucher-account-select").forEach((select) => {
     populateVoucherAccountSelect(select, select.value);
   });
@@ -3320,6 +3343,7 @@ function renderVoucherLineItem(lineId, voucherType) {
         class="voucher-account"
         type="text"
         placeholder="Account name or code"
+        list="business-voucher-account-options"
         data-line-id="${escapeHtml(lineId)}"
         style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
         autocomplete="off"
@@ -3327,7 +3351,8 @@ function renderVoucherLineItem(lineId, voucherType) {
       <select
         class="voucher-account-select"
         data-line-id="${escapeHtml(lineId)}"
-        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
+        title="Account code and name"
+        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; min-width: 220px;"
       >
         <option value="">Select account</option>
       </select>
@@ -3392,6 +3417,8 @@ function addVoucherLine() {
 
   const lineHtml = renderVoucherLineItem(lineId);
   container.insertAdjacentHTML("beforeend", lineHtml);
+  refreshVoucherAccountDatalist();
+  updateVoucherAccountsStatus();
 
   const select = container.querySelector(`[data-line-id="${lineId}"].voucher-account-select`);
   populateVoucherAccountSelect(select);
@@ -3439,6 +3466,7 @@ async function loadBusinessAccounts() {
     refreshVoucherAccountSelects();
   } else {
     lastBusinessAccounts = [];
+    updateVoucherAccountsStatus();
   }
 }
 

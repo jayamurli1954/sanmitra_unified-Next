@@ -1,4 +1,4 @@
-const CACHE_NAME = "sanmitra-frontends-v21";
+const CACHE_NAME = "sanmitra-frontends-v22";
 const APP_SHELL = [
   "./",
   "./index.html",
