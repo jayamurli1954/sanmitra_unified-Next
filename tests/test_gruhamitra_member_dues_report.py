@@ -181,10 +181,9 @@ async def test_member_dues_report_nets_posted_receipts_by_flat_or_member_name(mo
                     "app_key": "gruhamitra",
                     "voucher_type": "receipt",
                     "status": "posted",
-                    "flat_id": "flat-a-101",
                     "account_code": "1100",
                     "amount": 5415.20,
-                    "received_from": "Vivek Achari",
+                    "received_from": "Mr. Vivek Achari",
                     "voucher_date": "2026-05-27",
                 },
                 {

@@ -81,7 +81,22 @@ def _flat_key(value: Any) -> str:
 
 
 def _name_key(value: Any) -> str:
-    return " ".join(str(value or "").strip().lower().split())
+    text = str(value or "").strip().lower()
+    cleaned = "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in text)
+    words = [word for word in cleaned.split() if word not in {"mr", "mrs", "ms", "miss", "shri", "smt", "dr"}]
+    return " ".join(words)
+
+
+def _find_flat_by_member_name(name: Any, member_name_to_flat: dict[str, str]) -> str:
+    key = _name_key(name)
+    if not key:
+        return ""
+    if key in member_name_to_flat:
+        return member_name_to_flat[key]
+    for member_key, flat_number in member_name_to_flat.items():
+        if key and member_key and (key in member_key or member_key in key):
+            return flat_number
+    return ""
 
 
 def _transaction_posts_to_member_dues(txn: dict[str, Any]) -> bool:
@@ -123,7 +138,7 @@ async def _member_due_receipt_allocations(
     }
 
     txns = await get_collection("mb_transactions").find(
-        {"tenant_id": tenant_id, "app_key": app_key, "voucher_type": "receipt", "status": "posted"}
+        {"tenant_id": tenant_id, "app_key": app_key, "status": "posted"}
     ).to_list(length=5000)
 
     allocations: dict[str, dict[str, Any]] = {}
@@ -148,7 +163,7 @@ async def _member_due_receipt_allocations(
             flat_id = str(txn.get("flat_id") or txn.get("flatId") or "").strip()
             flat_number = flat_by_id.get(flat_id) or flat_by_number.get(_flat_key(flat_id), "")
         if not flat_number:
-            flat_number = member_name_to_flat.get(_name_key(txn.get("received_from") or txn.get("receivedFrom")), "")
+            flat_number = _find_flat_by_member_name(txn.get("received_from") or txn.get("receivedFrom"), member_name_to_flat)
         if not flat_number:
             continue
 
