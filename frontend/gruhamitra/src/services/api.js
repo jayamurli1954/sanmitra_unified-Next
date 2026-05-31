@@ -198,6 +198,7 @@ api.interceptors.request.use(
       const isAuthCredentialRequest = /\/auth\/(login|local-login|legacy-login|register|google|refresh)(\/|$)/.test(normalizedUrl);
       const isAccountingRequest =
         /\/accounting(\/|$)/.test(normalizedUrl) ||
+        /\/journal(\/|$|\?)/.test(normalizedUrl) ||
         /\/transactions(\/|$)/.test(normalizedUrl) ||
         /\/reports\/trial-balance(\/|$|\?)/.test(normalizedUrl);
       if (isRelativeApiPath && !isAlreadyVersioned) {
@@ -268,7 +269,7 @@ api.interceptors.response.use(
       }
 
       return Promise.reject({
-        message: 'Cannot connect to server (v1.2.3). Please check:\n1. Backend is running at http://localhost:8002\n2. CORS is enabled in backend\n3. No firewall blocking the connection',
+        message: 'Cannot connect to GruhaMitra backend. Please check your internet connection and retry. If the problem continues, contact support with the time of the error.',
         code: 'CONNECTION_ERROR',
         originalError: error,
       });
