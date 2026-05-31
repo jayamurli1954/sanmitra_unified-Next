@@ -50,3 +50,14 @@ def test_mitrabooks_dashboard_preview_closes_before_business_module() -> None:
     preview_block = app_source[start:marker].rstrip()
 
     assert preview_block.endswith("}\n}")
+
+
+def test_business_workspace_menu_renders_main_preview_directly() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("function setBusinessWorkspace(workspace)")
+    end = app_source.index("function syncBusinessNavActiveState()", start)
+    workspace_switcher = app_source[start:end]
+
+    assert 'dashboardPreview.innerHTML = renderAccountingDrilldownPanel();' in workspace_switcher
+    assert 'dashboardPreview.innerHTML = renderBusinessWorkspace();' in workspace_switcher
+    assert 'document.getElementById("context-cards")' not in workspace_switcher

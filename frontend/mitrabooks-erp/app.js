@@ -3186,13 +3186,10 @@ function openBusinessEditPartyDialog(button) {
 function setBusinessWorkspace(workspace) {
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
-  const panel = document.getElementById("context-cards");
-  if (panel) {
-    if (workspace === "accounting") {
-      panel.innerHTML = renderAccountingDrilldownPanel();
-    } else {
-      panel.innerHTML = renderBusinessWorkspace();
-    }
+  if (workspace === "accounting") {
+    dashboardPreview.innerHTML = renderAccountingDrilldownPanel();
+  } else {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
   if (workspace === "parties") {
     loadBusinessParties();
@@ -3201,6 +3198,8 @@ function setBusinessWorkspace(workspace) {
     loadBusinessVouchers();
   } else if (workspace === "audit") {
     loadAuditEvents();
+  } else if (workspace === "accounting") {
+    refreshCurrentAccountingDrilldown();
   }
 }
 
