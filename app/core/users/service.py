@@ -217,6 +217,75 @@ async def ensure_demo_mitrabooks_user(
     }
 
 
+async def ensure_demo_gruhamitra_user(
+    *,
+    email: str,
+    password: str,
+    full_name: str = "Demo GruhaMitra Admin",
+    tenant_id: str = "gruhamitra-demo-society",
+    role: str = "tenant_admin",
+) -> dict | None:
+    normalized_email = str(email or "").strip().lower()
+    normalized_password = str(password or "").strip()
+    normalized_tenant_id = str(tenant_id or "").strip() or "gruhamitra-demo-society"
+    normalized_full_name = str(full_name or "Demo GruhaMitra Admin").strip() or "Demo GruhaMitra Admin"
+    normalized_role = str(role or "tenant_admin").strip() or "tenant_admin"
+
+    if not normalized_email or "@" not in normalized_email:
+        return None
+    if len(normalized_password) < 8:
+        return None
+
+    await ensure_users_indexes()
+    await ensure_tenant_exists(
+        normalized_tenant_id,
+        display_name="GruhaMitra Demo Society",
+        organization_type="HOUSING",
+        enabled_modules=["housing", "accounting", "audit"],
+        app_keys=["gruhamitra"],
+        subscription_plan="growth",
+        created_by="gruhamitra-demo-bootstrap",
+    )
+
+    users = get_collection(USERS_COLLECTION)
+    now = datetime.now(timezone.utc)
+    existing = await users.find_one({"email": normalized_email})
+    user_id = str(existing.get("user_id") or uuid4()) if existing else str(uuid4())
+    update_fields = {
+        "user_id": user_id,
+        "email": normalized_email,
+        "full_name": normalized_full_name,
+        "tenant_id": normalized_tenant_id,
+        "app_key": resolve_app_key("gruhamitra"),
+        "role": normalized_role,
+        "hashed_password": hash_password(normalized_password),
+        "auth_provider": "password",
+        "provider_subject": _password_provider_subject(normalized_email),
+        "is_active": True,
+        "subscription_tier": "growth",
+        "subscription_status": "active",
+        "accepted_terms_at": existing.get("accepted_terms_at") if existing else None,
+        "query_usage_count": existing.get("query_usage_count", 0) if existing else 0,
+        "updated_at": now,
+    }
+    if existing:
+        await users.update_one({"_id": existing["_id"]}, {"$set": update_fields})
+    else:
+        await users.insert_one({**update_fields, "created_at": now})
+
+    return {
+        "user_id": user_id,
+        "email": normalized_email,
+        "full_name": normalized_full_name,
+        "tenant_id": normalized_tenant_id,
+        "app_key": "gruhamitra",
+        "role": normalized_role,
+        "is_active": True,
+        "subscription_tier": "growth",
+        "subscription_status": "active",
+    }
+
+
 async def get_user_by_email(email: str):
     users = get_collection(USERS_COLLECTION)
     normalized = email.strip().lower()

@@ -212,3 +212,72 @@ async def test_ensure_demo_mitrabooks_user_updates_existing_account(monkeypatch)
     assert updated["role"] == "tenant_admin"
     assert updated["is_active"] is True
     assert updated["hashed_password"] != "old-hash"
+
+
+@pytest.mark.asyncio
+async def test_ensure_demo_gruhamitra_user_creates_housing_tenant(monkeypatch):
+    fake_users = FakeUsersCollection()
+
+    monkeypatch.setattr(users_service, "get_collection", lambda _name: fake_users)
+
+    ensured = {}
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **_kwargs):
+        ensured["tenant_id"] = tenant_id
+        ensured.update(_kwargs)
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+
+    result = await users_service.ensure_demo_gruhamitra_user(
+        email="demo.admin@gruhamitra.sanmitratech.in",
+        password="GruhaDemo@2026",
+    )
+
+    assert result is not None
+    assert result["email"] == "demo.admin@gruhamitra.sanmitratech.in"
+    assert result["tenant_id"] == "gruhamitra-demo-society"
+    assert result["app_key"] == "gruhamitra"
+    assert result["role"] == "tenant_admin"
+    assert ensured["organization_type"] == "HOUSING"
+    assert ensured["enabled_modules"] == ["housing", "accounting", "audit"]
+    assert ensured["app_keys"] == ["gruhamitra"]
+    assert ensured["subscription_plan"] == "growth"
+
+
+@pytest.mark.asyncio
+async def test_ensure_demo_gruhamitra_user_updates_existing_account(monkeypatch):
+    fake_users = FakeUsersCollection()
+    fake_users.docs.append(
+        {
+            "_id": "u-gruha",
+            "user_id": "gruhamitra-user",
+            "email": "demo.admin@gruhamitra.sanmitratech.in",
+            "tenant_id": "old-tenant",
+            "role": "operator",
+            "auth_provider": "password",
+            "provider_subject": None,
+            "hashed_password": "old-hash",
+            "is_active": False,
+        }
+    )
+
+    monkeypatch.setattr(users_service, "get_collection", lambda _name: fake_users)
+
+    async def fake_ensure_tenant_exists(_tenant_id: str, **_kwargs):
+        return {"tenant_id": _tenant_id, "status": "active"}
+
+    monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+
+    await users_service.ensure_demo_gruhamitra_user(
+        email="demo.admin@gruhamitra.sanmitratech.in",
+        password="GruhaDemo@2026",
+    )
+
+    updated = await fake_users.find_one({"email": "demo.admin@gruhamitra.sanmitratech.in"})
+    assert updated["user_id"] == "gruhamitra-user"
+    assert updated["tenant_id"] == "gruhamitra-demo-society"
+    assert updated["app_key"] == "gruhamitra"
+    assert updated["role"] == "tenant_admin"
+    assert updated["is_active"] is True
+    assert updated["hashed_password"] != "old-hash"
