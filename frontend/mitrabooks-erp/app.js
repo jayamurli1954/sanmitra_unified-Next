@@ -3325,7 +3325,7 @@ function updateVoucherBalance() {
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
   const balanceEl = document.getElementById("business-voucher-balance");
   if (balanceEl) {
-    balanceEl.innerHTML = `Debit: ${formatCurrency(totalDebit)} | Credit: ${formatCurrency(totalCredit)} <span style="margin-left: 12px; ${isBalanced ? "color: green;" : "color: red;"}${isBalanced ? "✓ Balanced" : "✗ Imbalanced"}</span>`;
+    balanceEl.innerHTML = `Debit: ${formatCurrency(totalDebit)} | Credit: ${formatCurrency(totalCredit)} <span style="margin-left: 12px; ${isBalanced ? "color: green;" : "color: red;"}">${isBalanced ? "✓ Balanced" : "✗ Imbalanced"}</span>`;
   }
 
   const submitBtn = document.getElementById("business-voucher-submit");
