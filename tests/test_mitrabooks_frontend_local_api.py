@@ -41,3 +41,12 @@ def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:
     assert 'host === "127.0.0.1"' in pwa_source
     assert "registration.unregister()" in pwa_source
     assert "caches.delete(key)" in pwa_source
+
+
+def test_mitrabooks_dashboard_preview_closes_before_business_module() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("function renderDashboardPreview(config)")
+    marker = app_source.index("// ========== Business Module: Party Master ==========", start)
+    preview_block = app_source[start:marker].rstrip()
+
+    assert preview_block.endswith("}\n}")

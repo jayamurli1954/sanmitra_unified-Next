@@ -2841,6 +2841,7 @@ function renderDashboardPreview(config) {
     </div>
   `;
 }
+}
 
 // ========== Business Module: Party Master ==========
 
