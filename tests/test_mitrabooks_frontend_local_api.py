@@ -85,3 +85,31 @@ def test_business_loaders_refresh_active_workspace_panel() -> None:
     assert 'activeBusinessWorkspace === "vouchers"' in app_source
     assert 'activeBusinessWorkspace === "audit"' in app_source
     assert app_source.count("dashboardPreview.innerHTML = renderBusinessWorkspace();") >= 3
+
+
+def test_business_voucher_accounts_use_backend_account_contract() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert "function normalizeBusinessAccount(acc)" in app_source
+    assert "acc.account_id ?? acc.id" in app_source
+    assert "acc.account_code ?? acc.code" in app_source
+    assert "acc.account_name ?? acc.name" in app_source
+    assert "populateVoucherAccountSelect(select" in app_source
+    assert "syncVoucherAccountFromText" in app_source
+    assert 'await loadBusinessAccounts();' in app_source
+
+
+def test_business_voucher_payload_matches_typed_voucher_api() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("async function createBusinessVoucher(voucherData)")
+    end = app_source.index("async function loadBusinessVouchers", start)
+    create_block = app_source[start:end]
+
+    assert 'voucher_type: "journal"' in create_block
+    assert "amount: debitTotal.toFixed(2)" in create_block
+    assert "debit_account_id: debitLines[0].account_id" in create_block
+    assert "credit_account_id: creditLines[0].account_id" in create_block
+    assert '"X-Idempotency-Key"' in create_block
+    assert "lines:" not in create_block
+    assert "debit_paise" not in create_block
+    assert "credit_paise" not in create_block

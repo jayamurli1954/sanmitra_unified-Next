@@ -3267,6 +3267,52 @@ let voucherLineCounter = 0;
 
 const voucherLineState = [];
 
+function normalizeBusinessAccount(acc) {
+  return {
+    id: String(acc.account_id ?? acc.id ?? ""),
+    code: String(acc.account_code ?? acc.code ?? ""),
+    name: String(acc.account_name ?? acc.name ?? ""),
+  };
+}
+
+function businessAccountLabel(account) {
+  return `${account.code} ${account.name}`.trim();
+}
+
+function populateVoucherAccountSelect(select, selectedId = "") {
+  if (!select) return;
+  const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id) : [];
+  select.innerHTML = `<option value="">Select account</option>`;
+  accounts.forEach((acc) => {
+    const option = document.createElement("option");
+    option.value = acc.id;
+    option.textContent = businessAccountLabel(acc);
+    if (String(selectedId) === acc.id) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+}
+
+function refreshVoucherAccountSelects() {
+  document.querySelectorAll(".voucher-account-select").forEach((select) => {
+    populateVoucherAccountSelect(select, select.value);
+  });
+}
+
+function syncVoucherAccountFromText(lineEl) {
+  const input = lineEl?.querySelector(".voucher-account");
+  const select = lineEl?.querySelector(".voucher-account-select");
+  const query = String(input?.value || "").trim().toLowerCase();
+  if (!query || !select) return;
+  const match = (Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [])
+    .map(normalizeBusinessAccount)
+    .find((acc) => acc.code.toLowerCase().startsWith(query) || acc.name.toLowerCase().includes(query));
+  if (match?.id) {
+    select.value = match.id;
+  }
+}
+
 function renderVoucherLineItem(lineId, voucherType) {
   return `
     <div class="voucher-line" data-line-id="${escapeHtml(lineId)}" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; align-items: center;">
@@ -3345,24 +3391,26 @@ function addVoucherLine() {
   if (!container) return;
 
   const lineHtml = renderVoucherLineItem(lineId);
-  container.innerHTML += lineHtml;
+  container.insertAdjacentHTML("beforeend", lineHtml);
 
-  // Populate account dropdown
   const select = container.querySelector(`[data-line-id="${lineId}"].voucher-account-select`);
-  if (select && Array.isArray(lastBusinessAccounts)) {
-    lastBusinessAccounts.forEach((acc) => {
-      const option = document.createElement("option");
-      option.value = acc.account_id || acc.id || "";
-      option.textContent = `${acc.account_code || ""} ${acc.account_name || acc.name || ""}`.trim();
-      select.appendChild(option);
+  populateVoucherAccountSelect(select);
+  if (select) {
+    select.addEventListener("change", () => {
+      const selected = normalizeBusinessAccount(lastBusinessAccounts.find((acc) => String(acc.account_id ?? acc.id ?? "") === select.value) || {});
+      const accountInput = container.querySelector(`[data-line-id="${lineId}"].voucher-account`);
+      if (accountInput && selected.id) {
+        accountInput.value = businessAccountLabel(selected);
+      }
     });
   }
 
-  // Add change listeners
+  const accountInput = container.querySelector(`[data-line-id="${lineId}"].voucher-account`);
   const debitInput = container.querySelector(`[data-line-id="${lineId}"].voucher-debit`);
   const creditInput = container.querySelector(`[data-line-id="${lineId}"].voucher-credit`);
-  if (debitInput) debitInput.addEventListener("change", updateVoucherBalance);
-  if (creditInput) creditInput.addEventListener("change", updateVoucherBalance);
+  if (accountInput) accountInput.addEventListener("input", () => syncVoucherAccountFromText(accountInput.closest(".voucher-line")));
+  if (debitInput) debitInput.addEventListener("input", updateVoucherBalance);
+  if (creditInput) creditInput.addEventListener("input", updateVoucherBalance);
 }
 
 function removeVoucherLine(lineId) {
@@ -3388,6 +3436,7 @@ async function loadBusinessAccounts() {
 
   if (result.ok) {
     lastBusinessAccounts = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    refreshVoucherAccountSelects();
   } else {
     lastBusinessAccounts = [];
   }
@@ -3396,8 +3445,8 @@ async function loadBusinessAccounts() {
 async function createBusinessVoucher(voucherData) {
   const appKey = "mitrabooks";
 
-  // Collect line items from form
-  const lines = [];
+  const debitLines = [];
+  const creditLines = [];
   document.querySelectorAll(".voucher-line").forEach((lineEl) => {
     const accountSelect = lineEl.querySelector(".voucher-account-select");
     const debitInput = lineEl.querySelector(".voucher-debit");
@@ -3408,29 +3457,37 @@ async function createBusinessVoucher(voucherData) {
     const credit = Number(creditInput?.value) || 0;
 
     if (accountId && (debit > 0 || credit > 0)) {
-      lines.push({
-        account_id: accountId,
-        debit_paise: Math.round(debit * 100),
-        credit_paise: Math.round(credit * 100),
-      });
+      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit });
+      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit });
     }
   });
 
-  if (lines.length < 2) {
-    setLoginStatus("warn", "At least 2 line items required", "Every voucher needs debit and credit accounts.");
+  if (debitLines.length !== 1 || creditLines.length !== 1) {
+    setLoginStatus("warn", "One debit and one credit required", "Phase 1 voucher posting supports one debit account and one credit account.");
+    return;
+  }
+  const debitTotal = debitLines[0].amount;
+  const creditTotal = creditLines[0].amount;
+  if (Math.abs(debitTotal - creditTotal) >= 0.01) {
+    setLoginStatus("warn", "Voucher is not balanced", "Debit amount must equal credit amount.");
     return;
   }
 
   const payload = {
-    entry_date: voucherData.date,
-    reference: voucherData.reference || null,
-    description: voucherData.narration || null,
     voucher_type: "journal",
-    lines: lines,
+    entry_date: voucherData.date,
+    amount: debitTotal.toFixed(2),
+    debit_account_id: debitLines[0].account_id,
+    credit_account_id: creditLines[0].account_id,
+    description: voucherData.narration || voucherData.reference || "Business voucher",
+    reference: voucherData.reference || null,
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
     method: "POST",
+    headers: {
+      "X-Idempotency-Key": `business-voucher-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
     body: JSON.stringify(payload),
   });
 
@@ -3440,7 +3497,7 @@ async function createBusinessVoucher(voucherData) {
     clearVoucherForm();
     await loadBusinessVouchers();
   } else {
-    setLoginStatus("danger", "Post voucher failed", result.payload?.detail || "Check entries and try again.");
+    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
   renderJson(apiOutput, { create_voucher: result });
 }
@@ -3484,16 +3541,22 @@ async function reverseBusinessVoucher(voucherId) {
   renderJson(apiOutput, { reverse_voucher: result });
 }
 
-function openBusinessCreateVoucherDialog() {
+async function openBusinessCreateVoucherDialog() {
   const dialog = document.getElementById("business-voucher-create-dialog");
   if (!dialog) return;
 
+  if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
+    await loadBusinessAccounts();
+  }
   clearVoucherForm();
   document.getElementById("business-voucher-date").valueAsDate = new Date();
 
   // Add initial line items
   addVoucherLine();
   addVoucherLine();
+  if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
+    setLoginStatus("warn", "Accounts unavailable", "Load the MitraBooks chart of accounts before posting a voucher.");
+  }
 
   dialog.showModal();
 }
