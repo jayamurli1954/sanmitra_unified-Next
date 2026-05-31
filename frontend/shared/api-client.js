@@ -16,10 +16,11 @@ function getRuntimeApiBaseUrl() {
   const globalValue = normalizeApiBaseUrl(window.SANMITRA_API_BASE_URL);
   if (globalValue) return globalValue;
 
+  if (isLocalFrontendHost()) return LOCAL_API_BASE_URL;
+
   const metaValue = normalizeApiBaseUrl(document.querySelector("meta[name='sanmitra-api-base-url']")?.content);
   if (metaValue) return metaValue;
 
-  if (isLocalFrontendHost()) return LOCAL_API_BASE_URL;
   return normalizeApiBaseUrl(window.location.origin) || LOCAL_API_BASE_URL;
 }
 
