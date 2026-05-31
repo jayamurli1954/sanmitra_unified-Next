@@ -150,6 +150,73 @@ async def ensure_super_admin_user() -> None:
     await users.insert_one(doc)
 
 
+async def ensure_demo_mitrabooks_user(
+    *,
+    email: str,
+    password: str,
+    full_name: str = "Demo MitraBooks Admin",
+    tenant_id: str = "demo-mitrabooks-business",
+) -> dict | None:
+    normalized_email = str(email or "").strip().lower()
+    normalized_password = str(password or "").strip()
+    normalized_tenant_id = str(tenant_id or "").strip() or "demo-mitrabooks-business"
+    normalized_full_name = str(full_name or "Demo MitraBooks Admin").strip() or "Demo MitraBooks Admin"
+
+    if not normalized_email or "@" not in normalized_email:
+        return None
+    if len(normalized_password) < 6:
+        return None
+
+    await ensure_users_indexes()
+    await ensure_tenant_exists(
+        normalized_tenant_id,
+        display_name="Local MitraBooks Demo Business",
+        organization_type="BUSINESS",
+        enabled_modules=["business", "accounting", "gst", "inventory", "audit"],
+        app_keys=["mitrabooks"],
+        subscription_plan="pro",
+        created_by="local-demo-bootstrap",
+    )
+
+    users = get_collection(USERS_COLLECTION)
+    now = datetime.now(timezone.utc)
+    existing = await users.find_one({"email": normalized_email})
+    user_id = str(existing.get("user_id") or uuid4()) if existing else str(uuid4())
+    update_fields = {
+        "user_id": user_id,
+        "email": normalized_email,
+        "full_name": normalized_full_name,
+        "tenant_id": normalized_tenant_id,
+        "app_key": resolve_app_key("mitrabooks"),
+        "role": "tenant_admin",
+        "hashed_password": hash_password(normalized_password),
+        "auth_provider": "password",
+        "provider_subject": _password_provider_subject(normalized_email),
+        "is_active": True,
+        "subscription_tier": "pro",
+        "subscription_status": "active",
+        "accepted_terms_at": existing.get("accepted_terms_at") if existing else None,
+        "query_usage_count": existing.get("query_usage_count", 0) if existing else 0,
+        "updated_at": now,
+    }
+    if existing:
+        await users.update_one({"_id": existing["_id"]}, {"$set": update_fields})
+    else:
+        await users.insert_one({**update_fields, "created_at": now})
+
+    return {
+        "user_id": user_id,
+        "email": normalized_email,
+        "full_name": normalized_full_name,
+        "tenant_id": normalized_tenant_id,
+        "app_key": "mitrabooks",
+        "role": "tenant_admin",
+        "is_active": True,
+        "subscription_tier": "pro",
+        "subscription_status": "active",
+    }
+
+
 async def get_user_by_email(email: str):
     users = get_collection(USERS_COLLECTION)
     normalized = email.strip().lower()
