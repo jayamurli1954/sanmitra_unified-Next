@@ -6,6 +6,17 @@ import { useNavigate } from 'react-router-dom';
 import membershipV2Service from '../services/membershipV2Service';
 import { authService } from '../services/authService';
 
+const resolveAdminSocietyId = (user) => {
+  const candidates = [
+    user?.society_id,
+    user?.tenant_id,
+    typeof window !== 'undefined' ? window.localStorage.getItem('gruhamitra_tenant_id') : null,
+  ];
+  return candidates
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || null;
+};
+
 const roleOptions = [
   { value: 'resident', label: 'Resident' },
   { value: 'chairman', label: 'Chairman' },
@@ -45,7 +56,7 @@ const JoinRequestsScreen = () => {
     const init = async () => {
       setLoading(true);
       const user = await authService.getCurrentUser();
-      const userSocietyId = user?.society_id;
+      const userSocietyId = resolveAdminSocietyId(user);
       if (!userSocietyId) {
         setMessage({ type: 'error', text: 'No society assigned to this admin account.' });
         setLoading(false);
