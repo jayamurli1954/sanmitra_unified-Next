@@ -76,6 +76,94 @@ def _active_member_name(row: dict[str, Any]) -> str:
     return str(row.get("owner_name") or row.get("member_name") or row.get("name") or "").strip()
 
 
+def _flat_key(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def _name_key(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _transaction_posts_to_member_dues(txn: dict[str, Any]) -> bool:
+    if str(txn.get("voucher_type") or "").strip().lower() != "receipt":
+        return False
+    if str(txn.get("status") or "").strip().lower() != "posted":
+        return False
+    if str(txn.get("account_code") or txn.get("accountCode") or "").strip() == "1100":
+        return True
+    for line in txn.get("lines") or []:
+        if (
+            str(line.get("account_code") or line.get("accountCode") or "").strip() == "1100"
+            and _safe_money(line.get("credit") or line.get("credit_amount") or line.get("creditAmount")) > Decimal("0.00")
+        ):
+            return True
+    return False
+
+
+async def _member_due_receipt_allocations(
+    *,
+    tenant_id: str,
+    app_key: str,
+    member_by_flat: dict[str, dict[str, Any]],
+    to_date: date | None = None,
+) -> dict[str, dict[str, Any]]:
+    flats = await get_collection("housing_flats").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=5000)
+    flat_by_id = {
+        str(flat.get("id") or flat.get("_id") or "").strip(): _flat_key(flat.get("flat_number"))
+        for flat in flats
+        if _flat_key(flat.get("flat_number"))
+    }
+    flat_by_number = {_flat_key(flat.get("flat_number")): _flat_key(flat.get("flat_number")) for flat in flats}
+    member_name_to_flat = {
+        _name_key(_active_member_name(member)): flat_number
+        for flat_number, member in member_by_flat.items()
+        if _name_key(_active_member_name(member))
+    }
+
+    txns = await get_collection("mb_transactions").find(
+        {"tenant_id": tenant_id, "app_key": app_key, "voucher_type": "receipt", "status": "posted"}
+    ).to_list(length=5000)
+
+    allocations: dict[str, dict[str, Any]] = {}
+    for txn in txns:
+        if not _transaction_posts_to_member_dues(txn):
+            continue
+        txn_date = _as_date(txn.get("voucher_date") or txn.get("date") or txn.get("created_at"))
+        if to_date and txn_date and txn_date > to_date:
+            continue
+
+        flat_number = ""
+        raw_flat = str(
+            txn.get("flat_number")
+            or txn.get("flatNumber")
+            or txn.get("unit_number")
+            or txn.get("unitNumber")
+            or ""
+        ).strip()
+        if raw_flat:
+            flat_number = flat_by_number.get(_flat_key(raw_flat), _flat_key(raw_flat))
+        if not flat_number:
+            flat_id = str(txn.get("flat_id") or txn.get("flatId") or "").strip()
+            flat_number = flat_by_id.get(flat_id) or flat_by_number.get(_flat_key(flat_id), "")
+        if not flat_number:
+            flat_number = member_name_to_flat.get(_name_key(txn.get("received_from") or txn.get("receivedFrom")), "")
+        if not flat_number:
+            continue
+
+        amount = _safe_money(txn.get("amount") or txn.get("total_credit") or txn.get("totalCredit"))
+        if amount <= Decimal("0.00"):
+            continue
+        current = allocations.setdefault(flat_number, {"amount": Decimal("0.00"), "last_payment_date": None})
+        current["amount"] += amount
+        if txn_date:
+            current_last = _as_date(current.get("last_payment_date"))
+            if current_last is None or txn_date > current_last:
+                current["last_payment_date"] = txn_date.isoformat()
+    return allocations
+
+
 async def _member_dues_payload(
     *,
     tenant_id: str,
@@ -102,6 +190,13 @@ async def _member_dues_payload(
         if current is None or bool(member.get("is_primary")):
             member_by_flat[flat_number] = member
 
+    receipt_allocations = await _member_due_receipt_allocations(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        member_by_flat=member_by_flat,
+        to_date=to_date,
+    )
+
     grouped: dict[str, dict[str, Any]] = {}
     for bill in bills:
         if _bill_is_reversed(bill):
@@ -117,9 +212,6 @@ async def _member_dues_payload(
 
         amount = _safe_money(bill.get("amount"))
         paid = min(_bill_paid_amount(bill), amount)
-        outstanding = max(amount - paid, Decimal("0.00"))
-        if outstanding <= Decimal("0.00"):
-            continue
 
         member = member_by_flat.get(flat_number, {})
         row = grouped.setdefault(
@@ -131,13 +223,13 @@ async def _member_dues_payload(
                 "outstanding_amount": Decimal("0.00"),
                 "total_billed": Decimal("0.00"),
                 "total_paid": Decimal("0.00"),
+                "_bill_paid_total": Decimal("0.00"),
                 "bill_count": 0,
                 "last_payment_date": None,
             },
         )
-        row["outstanding_amount"] += outstanding
         row["total_billed"] += amount
-        row["total_paid"] += paid
+        row["_bill_paid_total"] += paid
         row["bill_count"] += 1
         last_payment_date = _as_date(bill.get("last_payment_date") or bill.get("paid_at") or bill.get("payment_date"))
         if last_payment_date:
@@ -145,7 +237,22 @@ async def _member_dues_payload(
             if current_last is None or last_payment_date > current_last:
                 row["last_payment_date"] = last_payment_date.isoformat()
 
-    rows = sorted(grouped.values(), key=lambda item: str(item.get("flat_number") or ""))
+    rows = []
+    for flat_number, row in grouped.items():
+        receipt = receipt_allocations.get(flat_number, {})
+        receipt_paid = _safe_money(receipt.get("amount"))
+        paid = min(max(row.pop("_bill_paid_total", Decimal("0.00")), receipt_paid), row["total_billed"])
+        row["total_paid"] = paid
+        row["outstanding_amount"] = max(row["total_billed"] - paid, Decimal("0.00"))
+        receipt_last = _as_date(receipt.get("last_payment_date"))
+        if receipt_last:
+            current_last = _as_date(row.get("last_payment_date"))
+            if current_last is None or receipt_last > current_last:
+                row["last_payment_date"] = receipt_last.isoformat()
+        if row["outstanding_amount"] > Decimal("0.00"):
+            rows.append(row)
+
+    rows = sorted(rows, key=lambda item: str(item.get("flat_number") or ""))
     total_outstanding = sum((row["outstanding_amount"] for row in rows), Decimal("0.00"))
     for row in rows:
         row["outstanding_amount"] = _money_float(row["outstanding_amount"])

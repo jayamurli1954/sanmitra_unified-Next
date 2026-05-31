@@ -522,6 +522,12 @@ def _txn_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_id: 
         "narration": str(payload.get("narration") or payload.get("description") or ""),
         "reference": str(payload.get("reference") or ""),
         "received_from": str(payload.get("received_from") or payload.get("receivedFrom") or ""),
+        "flat_id": str(payload.get("flat_id") or payload.get("flatId") or "").strip(),
+        "flat_number": str(payload.get("flat_number") or payload.get("flatNumber") or "").strip(),
+        "account_code": str(payload.get("account_code") or payload.get("accountCode") or "").strip(),
+        "bank_account_code": str(payload.get("bank_account_code") or payload.get("bankAccountCode") or "").strip(),
+        "quantity": _as_float(payload.get("quantity") or payload.get("qty"), 0.0),
+        "unit_price": _as_float(payload.get("unit_price") or payload.get("unitPrice"), 0.0),
         "expense_month": str(
             payload.get("expense_month")
             or payload.get("expenseMonth")
@@ -618,6 +624,12 @@ async def create_transaction(
         payload["voucher_type"] = voucher_type or "journal"
 
     doc = _txn_doc(payload, tenant_id, app_key, company_id, txn_id)
+    if doc.get("flat_id") and not doc.get("flat_number"):
+        flat = await get_collection("housing_flats").find_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "id": doc["flat_id"]}
+        )
+        if flat and flat.get("flat_number"):
+            doc["flat_number"] = str(flat.get("flat_number") or "").strip()
 
     # Build journal lines from payload (support multiple frontend formats)
     journal_lines: list[JournalLineIn] = []
