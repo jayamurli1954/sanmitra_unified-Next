@@ -25,3 +25,19 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     assert "pwa-shell.js?v=mitrabooks-erp-v6" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v6" in index_source
     assert 'CACHE_NAME = "sanmitra-frontends-v21"' in worker_source
+
+
+def test_local_frontend_server_disables_browser_cache() -> None:
+    server_source = (REPO_ROOT / "scripts" / "serve_frontends.py").read_text(encoding="utf-8")
+
+    assert "class LocalFrontendHandler(SimpleHTTPRequestHandler)" in server_source
+    assert '"Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"' in server_source
+    assert "partial(LocalFrontendHandler" in server_source
+
+
+def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:
+    pwa_source = (REPO_ROOT / "frontend" / "shared" / "pwa-shell.js").read_text(encoding="utf-8")
+
+    assert 'host === "127.0.0.1"' in pwa_source
+    assert "registration.unregister()" in pwa_source
+    assert "caches.delete(key)" in pwa_source

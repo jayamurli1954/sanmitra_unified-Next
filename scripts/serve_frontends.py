@@ -6,6 +6,16 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
+class LocalFrontendHandler(SimpleHTTPRequestHandler):
+    """Serve local frontend assets without browser cache reuse."""
+
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Serve SanMitra local frontend workspace.")
     parser.add_argument("--host", default="127.0.0.1")
@@ -14,7 +24,7 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
     frontend_root = repo_root / "frontend"
-    handler = partial(SimpleHTTPRequestHandler, directory=str(frontend_root))
+    handler = partial(LocalFrontendHandler, directory=str(frontend_root))
     server = ThreadingHTTPServer((args.host, args.port), handler)
 
     print(f"Serving SanMitra frontends from {frontend_root}")
