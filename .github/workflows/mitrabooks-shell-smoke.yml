@@ -1,0 +1,72 @@
+name: mitrabooks-shell-smoke
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - frontend/mitrabooks-erp/**
+      - frontend/shared/**
+      - frontend/e2e/mitrabooks-shell.spec.js
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/playwright.config.js
+      - scripts/serve_frontends.py
+      - .github/workflows/mitrabooks-shell-smoke.yml
+  pull_request:
+    paths:
+      - frontend/mitrabooks-erp/**
+      - frontend/shared/**
+      - frontend/e2e/mitrabooks-shell.spec.js
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/playwright.config.js
+      - scripts/serve_frontends.py
+      - .github/workflows/mitrabooks-shell-smoke.yml
+  workflow_dispatch:
+
+jobs:
+  mitrabooks-shell-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Static Frontend Server
+        run: |
+          python scripts/serve_frontends.py --host 127.0.0.1 --port 3300 &
+          echo $! > /tmp/sanmitra_frontend_server.pid
+
+      - name: Run MitraBooks Shell Smoke
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:3300
+        run: npx playwright test e2e/mitrabooks-shell.spec.js --project=chromium
+
+      - name: Stop Static Frontend Server
+        if: always()
+        run: |
+          if [ -f /tmp/sanmitra_frontend_server.pid ]; then
+            kill "$(cat /tmp/sanmitra_frontend_server.pid)" || true
+          fi
