@@ -193,6 +193,8 @@ async def test_journal_voucher_detail_returns_lines_and_enforces_app_scope(async
 
     assert detail["reference"] == "DON-99"
     assert detail["total_debit"] == 501.0
+    assert detail["reversal_of_journal_id"] is None
+    assert detail["reversed_by_journal_ids"] == []
     assert [line["account_code"] for line in detail["lines"]] == ["11001", "44001"]
     assert detail["lines"][0]["debit"] == 501.0
     assert detail["lines"][1]["credit"] == 501.0
@@ -223,3 +225,111 @@ async def test_journal_voucher_detail_returns_lines_and_enforces_app_scope(async
             accounting_entity_id="secondary",
             journal_id=entry.id,
         )
+
+
+@pytest.mark.asyncio
+async def test_journal_voucher_detail_exposes_reversal_links(async_session):
+    cash = Account(
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        code="11001",
+        name="Cash in Hand",
+        type="asset",
+        classification="real",
+        is_cash_bank=True,
+    )
+    income = Account(
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        code="44001",
+        name="Sales",
+        type="income",
+        classification="nominal",
+    )
+    async_session.add_all([cash, income])
+    await async_session.flush()
+
+    original = JournalEntry(
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        entry_date=date(2026, 6, 1),
+        description="Business voucher",
+        reference="JV-1",
+        total_debit=Decimal("11.00"),
+        total_credit=Decimal("11.00"),
+        lines=[
+            JournalLine(
+                app_key="mitrabooks",
+                tenant_id="tenant-1",
+                accounting_entity_id="primary",
+                account_id=cash.id,
+                debit=Decimal("11.00"),
+                credit=Decimal("0.00"),
+            ),
+            JournalLine(
+                app_key="mitrabooks",
+                tenant_id="tenant-1",
+                accounting_entity_id="primary",
+                account_id=income.id,
+                debit=Decimal("0.00"),
+                credit=Decimal("11.00"),
+            ),
+        ],
+    )
+    async_session.add(original)
+    await async_session.flush()
+
+    reversal = JournalEntry(
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        entry_date=date(2026, 6, 2),
+        description="Reversal of business voucher",
+        reference="REV-1",
+        reversal_of_journal_id=original.id,
+        total_debit=Decimal("11.00"),
+        total_credit=Decimal("11.00"),
+        lines=[
+            JournalLine(
+                app_key="mitrabooks",
+                tenant_id="tenant-1",
+                accounting_entity_id="primary",
+                account_id=cash.id,
+                debit=Decimal("0.00"),
+                credit=Decimal("11.00"),
+            ),
+            JournalLine(
+                app_key="mitrabooks",
+                tenant_id="tenant-1",
+                accounting_entity_id="primary",
+                account_id=income.id,
+                debit=Decimal("11.00"),
+                credit=Decimal("0.00"),
+            ),
+        ],
+    )
+    async_session.add(reversal)
+    await async_session.commit()
+
+    original_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        journal_id=original.id,
+    )
+    reversal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="tenant-1",
+        accounting_entity_id="primary",
+        journal_id=reversal.id,
+    )
+
+    assert original_detail["reversed_by_journal_ids"] == [reversal.id]
+    assert original_detail["reversal_of_journal_id"] is None
+    assert reversal_detail["reversal_of_journal_id"] == original.id
+    assert reversal_detail["reversed_by_journal_ids"] == []

@@ -1667,6 +1667,7 @@ def _journal_voucher_row(entry: JournalEntry) -> dict:
         "description": entry.description,
         "reference": entry.reference,
         "idempotency_key": entry.idempotency_key,
+        "reversal_of_journal_id": entry.reversal_of_journal_id,
         "total_debit": _money_float(entry.total_debit),
         "total_credit": _money_float(entry.total_credit),
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
@@ -1830,11 +1831,24 @@ async def get_journal_voucher_detail(
         }
         for line, account in line_rows
     ]
+    reversal_ids = (
+        await session.execute(
+            select(JournalEntry.id)
+            .where(
+                JournalEntry.app_key == app_key,
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.accounting_entity_id == accounting_entity_id,
+                JournalEntry.reversal_of_journal_id == entry.id,
+            )
+            .order_by(JournalEntry.id.asc())
+        )
+    ).scalars().all()
     return {
         **_journal_voucher_row(entry),
         "tenant_id": tenant_id,
         "app_key": app_key,
         "accounting_entity_id": accounting_entity_id,
+        "reversed_by_journal_ids": [int(value) for value in reversal_ids],
         "lines": lines,
     }
 

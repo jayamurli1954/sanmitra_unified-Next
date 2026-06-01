@@ -143,3 +143,15 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
     assert "/api/v1/accounting/reversals" not in reverse_block
     assert '"X-Idempotency-Key"' in reverse_block
     assert "original_voucher_id" not in reverse_block
+
+
+def test_accounting_voucher_detail_surfaces_reversal_links() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("function renderAccountingVoucherDetail")
+    end = app_source.index("function renderAccountingDrilldownPanel", start)
+    detail_block = app_source[start:end]
+
+    assert "reversed_by_journal_ids" in detail_block
+    assert "reversal_of_journal_id" in detail_block
+    assert "Reversal of journal #" in detail_block
+    assert "Reversed by journal #" in detail_block

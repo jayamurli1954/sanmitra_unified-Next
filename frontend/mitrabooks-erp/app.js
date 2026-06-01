@@ -1668,10 +1668,19 @@ function renderAccountingVoucherDetail(detail = lastAccountingVoucherDetail) {
     return `<p class="muted">Voucher detail unavailable.</p>`;
   }
   const lines = Array.isArray(detail.lines) ? detail.lines : [];
+  const reversedBy = Array.isArray(detail.reversed_by_journal_ids) ? detail.reversed_by_journal_ids : [];
+  const isReversal = Boolean(detail.reversal_of_journal_id);
+  const isReversed = reversedBy.length > 0;
   return `
     <div class="table-preview compact-table">
       <h4>Voucher ${escapeHtml(detail.reference || detail.id)}</h4>
       <p class="muted">${escapeHtml(detail.entry_date || "")} | ${escapeHtml(detail.description || "Posted journal voucher")}</p>
+      <p class="muted">
+        Journal #${escapeHtml(detail.id || "")}
+        ${isReversal ? ` | Reversal of journal #${escapeHtml(detail.reversal_of_journal_id)}` : ""}
+        ${isReversed ? ` | Reversed by journal #${escapeHtml(reversedBy.join(", #"))}` : ""}
+        ${isReversal ? `<span class="pill warn">reversal</span>` : isReversed ? `<span class="pill warn">reversed</span>` : `<span class="pill ok">posted</span>`}
+      </p>
       <table>
         <thead>
           <tr>
