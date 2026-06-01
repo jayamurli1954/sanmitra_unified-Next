@@ -3619,10 +3619,12 @@ async function loadBusinessVouchers(filters = {}) {
 
 async function reverseBusinessVoucher(voucherId) {
   const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, `/api/v1/accounting/reversals`, {
+  const result = await apiRequest(appKey, `/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/reverse`, {
     method: "POST",
+    headers: {
+      "X-Idempotency-Key": `business-voucher-reversal-${voucherId}`,
+    },
     body: JSON.stringify({
-      original_voucher_id: voucherId,
       reason: "Reversal",
     }),
   });

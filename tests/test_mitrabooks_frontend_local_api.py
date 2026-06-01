@@ -131,3 +131,15 @@ def test_business_voucher_loader_surfaces_backend_errors() -> None:
     assert 'setLoginStatus("danger", "Unable to load vouchers"' in load_block
     assert "statusDetailText(result.payload?.detail)" in load_block
     assert "renderJson(apiOutput, { vouchers:" in load_block
+
+
+def test_business_voucher_reversal_uses_business_route_contract() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("async function reverseBusinessVoucher")
+    end = app_source.index("async function openBusinessCreateVoucherDialog", start)
+    reverse_block = app_source[start:end]
+
+    assert "/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/reverse" in reverse_block
+    assert "/api/v1/accounting/reversals" not in reverse_block
+    assert '"X-Idempotency-Key"' in reverse_block
+    assert "original_voucher_id" not in reverse_block
