@@ -77,37 +77,58 @@ class FakeCollection:
         return all(doc.get(key) == value for key, value in filters.items())
 
 
-@pytest.mark.asyncio
-async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_reversal_drilldown(
-    async_session,
-    monkeypatch,
-):
-    tenant = {
+def _default_tenant(*, enabled_modules: list[str] | None = None) -> dict:
+    return {
         "tenant_id": TENANT_ID,
         "organization_type": "BUSINESS",
-        "enabled_modules": ["business", "accounting", "gst", "inventory", "audit"],
+        "enabled_modules": enabled_modules or ["business", "accounting", "gst", "inventory", "audit"],
         "subscription_plan": "pro",
         "status": "active",
     }
-    current_user = {
+
+
+def _default_current_user() -> dict:
+    return {
         "sub": "business-smoke-user",
         "email": "business.admin@sanmitra.local",
         "tenant_id": TENANT_ID,
         "app_key": APP_KEY,
         "role": "tenant_admin",
     }
-    collections = {
+
+
+def _fake_business_collections() -> dict[str, FakeCollection]:
+    return {
         business_service.PARTIES_COLLECTION: FakeCollection(),
         business_service.VOUCHERS_COLLECTION: FakeCollection(),
         business_service.VOUCHER_COUNTERS_COLLECTION: FakeCollection(),
     }
 
+
+def _clear_dependency_overrides() -> None:
+    app.dependency_overrides.pop(auth_dependencies.get_current_user, None)
+    app.dependency_overrides.pop(accounting_router.get_async_session, None)
+    app.dependency_overrides.pop(business_router.get_async_session, None)
+
+
+def _install_smoke_context(
+    *,
+    async_session,
+    monkeypatch,
+    tenant: dict | None = None,
+    current_user: dict | None = None,
+    collections: dict[str, FakeCollection] | None = None,
+) -> tuple[dict, dict, dict[str, FakeCollection]]:
+    active_tenant = tenant or _default_tenant()
+    active_user = current_user or _default_current_user()
+    active_collections = collections or _fake_business_collections()
+
     async def fake_get_tenant(tenant_id: str):
         assert tenant_id == TENANT_ID
-        return tenant
+        return active_tenant
 
     async def fake_get_current_user():
-        return current_user
+        return active_user
 
     async def fake_session():
         yield async_session
@@ -129,12 +150,34 @@ async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_re
     monkeypatch.setattr(accounting_router, "get_tenant", fake_get_tenant)
     monkeypatch.setattr(auth_router, "login_user", fake_login_user)
     monkeypatch.setattr(auth_router, "_log_login_activity", noop_login_activity)
-    monkeypatch.setattr(business_service, "get_collection", lambda name: collections[name])
+    monkeypatch.setattr(business_service, "get_collection", lambda name: active_collections[name])
     monkeypatch.setattr(business_service, "log_audit_event", noop_audit_event)
 
     app.dependency_overrides[auth_dependencies.get_current_user] = fake_get_current_user
     app.dependency_overrides[accounting_router.get_async_session] = fake_session
     app.dependency_overrides[business_router.get_async_session] = fake_session
+
+    return active_tenant, active_user, active_collections
+
+
+async def _initialize_accounts(client: AsyncClient, headers: dict) -> tuple[dict, dict]:
+    init_response = await client.post("/api/v1/accounting/initialize-chart-of-accounts", headers=headers)
+    assert init_response.status_code == 200
+
+    accounts_response = await client.get("/api/v1/accounting/accounts", headers=headers)
+    assert accounts_response.status_code == 200
+    accounts = accounts_response.json()
+    debit_account = next(account for account in accounts if account["type"] == "asset")
+    credit_account = next(account for account in accounts if account["type"] in {"income", "liability"})
+    return debit_account, credit_account
+
+
+@pytest.mark.asyncio
+async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_reversal_drilldown(
+    async_session,
+    monkeypatch,
+):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
 
     headers = {"X-App-Key": APP_KEY}
     try:
@@ -242,6 +285,99 @@ async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_re
             assert original_detail["total_debit"] == 125.0
             assert original_detail["total_credit"] == 125.0
     finally:
-        app.dependency_overrides.pop(auth_dependencies.get_current_user, None)
-        app.dependency_overrides.pop(accounting_router.get_async_session, None)
-        app.dependency_overrides.pop(business_router.get_async_session, None)
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
+async def test_mitrabooks_business_routes_reject_wrong_app_key_header(async_session, monkeypatch):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/business/parties", headers={"X-App-Key": "mandirmitra"})
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "mitrabooks app context required"
+    finally:
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
+async def test_mitrabooks_business_routes_fail_closed_when_business_module_disabled(async_session, monkeypatch):
+    tenant = _default_tenant(enabled_modules=["accounting", "audit"])
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch, tenant=tenant)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/business/parties", headers={"X-App-Key": APP_KEY})
+
+        assert response.status_code == 403
+        assert "Module business is not enabled" in response.json()["detail"]
+    finally:
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
+async def test_mitrabooks_voucher_posting_reuses_duplicate_idempotency_key(async_session, monkeypatch):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
+    headers = {"X-App-Key": APP_KEY}
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            debit_account, credit_account = await _initialize_accounts(client, headers)
+            payload = {
+                "voucher_type": "journal",
+                "entry_date": "2026-06-01",
+                "amount": "50.00",
+                "debit_account_id": debit_account["id"],
+                "credit_account_id": credit_account["id"],
+                "description": "Duplicate idempotency smoke voucher",
+                "accounting_entity_id": ACCOUNTING_ENTITY_ID,
+            }
+
+            first = await client.post(
+                "/api/v1/business/vouchers",
+                json=payload,
+                headers={**headers, "X-Idempotency-Key": "mitrabooks-smoke-duplicate-idem"},
+            )
+            second = await client.post(
+                "/api/v1/business/vouchers",
+                json=payload,
+                headers={**headers, "X-Idempotency-Key": "mitrabooks-smoke-duplicate-idem"},
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["voucher_id"] == second.json()["voucher_id"]
+        assert first.json()["created"] is True
+        assert second.json()["created"] is False
+    finally:
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
+async def test_mitrabooks_accounting_journal_rejects_unbalanced_posting(async_session, monkeypatch):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
+    headers = {"X-App-Key": APP_KEY}
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            debit_account, credit_account = await _initialize_accounts(client, headers)
+            response = await client.post(
+                "/api/v1/accounting/journal",
+                json={
+                    "entry_date": "2026-06-01",
+                    "description": "Unbalanced smoke journal",
+                    "reference": "UNBALANCED-SMOKE",
+                    "lines": [
+                        {"account_id": debit_account["id"], "debit": "125.00", "credit": "0.00"},
+                        {"account_id": credit_account["id"], "debit": "0.00", "credit": "124.00"},
+                    ],
+                },
+                headers={**headers, "X-Idempotency-Key": "mitrabooks-smoke-unbalanced"},
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Debits and credits must be equal"
+    finally:
+        _clear_dependency_overrides()
