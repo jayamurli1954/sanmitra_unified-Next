@@ -3609,7 +3609,12 @@ async function loadBusinessVouchers(filters = {}) {
     }
   } else {
     lastBusinessVouchers = [];
+    setLoginStatus("danger", "Unable to load vouchers", statusDetailText(result.payload?.detail) || `Voucher list request failed with HTTP ${result.status}.`);
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   }
+  renderJson(apiOutput, { vouchers: { ok: result.ok, status: result.status, count: lastBusinessVouchers.length, detail: result.payload?.detail || null } });
 }
 
 async function reverseBusinessVoucher(voucherId) {
