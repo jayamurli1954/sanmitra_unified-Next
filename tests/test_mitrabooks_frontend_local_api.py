@@ -21,10 +21,10 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v7" in index_source
-    assert "pwa-shell.js?v=mitrabooks-erp-v7" in index_source
-    assert "app-shell.css?v=mitrabooks-erp-v7" in index_source
-    assert 'CACHE_NAME = "sanmitra-frontends-v22"' in worker_source
+    assert "app.js?v=mitrabooks-erp-v9" in index_source
+    assert "pwa-shell.js?v=mitrabooks-erp-v9" in index_source
+    assert "app-shell.css?v=mitrabooks-erp-v9" in index_source
+    assert 'CACHE_NAME = "sanmitra-frontends-v24"' in worker_source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -98,6 +98,11 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "syncVoucherAccountFromText" in app_source
     assert 'list="business-voucher-account-options"' in app_source
     assert "updateVoucherAccountsStatus" in app_source
+    assert "grid-column: 1 / -1" in app_source
+    assert "Account code / name" in app_source
+    assert "accountRowsFromPayload" in app_source
+    assert "MitraBooks business tenant required" in app_source
+    assert "businessadmin@sanmitra.local" in app_source
     assert 'await loadBusinessAccounts();' in app_source
 
 

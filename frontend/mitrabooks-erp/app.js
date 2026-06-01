@@ -3263,6 +3263,7 @@ function pageBusinessList(listKind, direction) {
 
 let lastBusinessVouchers = [];
 let lastBusinessAccounts = [];
+let lastModuleContext = null;
 let voucherLineCounter = 0;
 
 const voucherLineState = [];
@@ -3310,9 +3311,21 @@ function updateVoucherAccountsStatus() {
   const status = document.getElementById("business-voucher-accounts-status");
   if (!status) return;
   const count = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
-  status.textContent = count > 0
-    ? `${count} account(s) loaded. Select from the dropdown or type code/name in the account field.`
-    : "No accounts loaded. Refresh the workspace or check backend accounting access.";
+  status.textContent = "";
+  if (count <= 0) {
+    status.textContent = "No accounts loaded. Refresh the workspace or check backend accounting access.";
+    return;
+  }
+  const message = document.createElement("span");
+  message.textContent = `${count} account(s) loaded. Examples: `;
+  status.appendChild(message);
+  const preview = document.createElement("strong");
+  preview.textContent = lastBusinessAccounts
+    .slice(0, 3)
+    .map((acc) => businessAccountLabel(normalizeBusinessAccount(acc)))
+    .filter(Boolean)
+    .join(" | ");
+  status.appendChild(preview);
 }
 
 function refreshVoucherAccountSelects() {
@@ -3321,6 +3334,31 @@ function refreshVoucherAccountSelects() {
   document.querySelectorAll(".voucher-account-select").forEach((select) => {
     populateVoucherAccountSelect(select, select.value);
   });
+}
+
+function accountRowsFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.accounts)) return payload.accounts;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function isBusinessModuleEnabled(context) {
+  const modules = Array.isArray(context?.enabled_modules) ? context.enabled_modules : [];
+  return modules.some((module) => {
+    const key = typeof module === "string" ? module : module?.module_key;
+    return key === "business";
+  });
+}
+
+async function loadModuleContextForAccounts() {
+  if (lastModuleContext) return lastModuleContext;
+  const result = await loadModules("mitrabooks");
+  if (result.ok) {
+    lastModuleContext = result.payload;
+  }
+  return lastModuleContext;
 }
 
 function syncVoucherAccountFromText(lineEl) {
@@ -3338,24 +3376,27 @@ function syncVoucherAccountFromText(lineEl) {
 
 function renderVoucherLineItem(lineId, voucherType) {
   return `
-    <div class="voucher-line" data-line-id="${escapeHtml(lineId)}" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; align-items: center;">
+    <div class="voucher-line" data-line-id="${escapeHtml(lineId)}" style="display: grid; grid-template-columns: minmax(180px, 1fr) 120px 120px auto; gap: 8px; margin-bottom: 10px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; align-items: end;">
+      <label class="field" style="grid-column: 1 / -1; margin: 0;">
+        <span>Account code / name</span>
+        <select
+          class="voucher-account-select"
+          data-line-id="${escapeHtml(lineId)}"
+          title="Account code and name"
+          style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 14px;"
+        >
+          <option value="">Select account</option>
+        </select>
+      </label>
       <input
         class="voucher-account"
         type="text"
-        placeholder="Account name or code"
+        placeholder="Search account code or name"
         list="business-voucher-account-options"
         data-line-id="${escapeHtml(lineId)}"
         style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
         autocomplete="off"
       >
-      <select
-        class="voucher-account-select"
-        data-line-id="${escapeHtml(lineId)}"
-        title="Account code and name"
-        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; min-width: 220px;"
-      >
-        <option value="">Select account</option>
-      </select>
       <input
         class="voucher-debit"
         type="number"
@@ -3462,10 +3503,23 @@ async function loadBusinessAccounts() {
   const result = await apiRequest(appKey, "/api/v1/accounting/accounts", { method: "GET" });
 
   if (result.ok) {
-    lastBusinessAccounts = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    lastBusinessAccounts = accountRowsFromPayload(result.payload);
+    if (lastBusinessAccounts.length === 0) {
+      const context = await loadModuleContextForAccounts();
+      if (String(context?.organization_type || "").toUpperCase() !== "BUSINESS" || !isBusinessModuleEnabled(context)) {
+        setLoginStatus(
+          "warn",
+          "MitraBooks business tenant required",
+          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as businessadmin@sanmitra.local for voucher posting.`
+        );
+      } else {
+        setLoginStatus("warn", "No chart of accounts found", "Initialize the MitraBooks chart of accounts before posting vouchers.");
+      }
+    }
     refreshVoucherAccountSelects();
   } else {
     lastBusinessAccounts = [];
+    setLoginStatus("danger", "Unable to load accounts", statusDetailText(result.payload?.detail) || "Check accounting access and try again.");
     updateVoucherAccountsStatus();
   }
 }
@@ -3969,6 +4023,9 @@ async function runChecks() {
   healthPill.className = `pill ${health.ok ? "ok" : "danger"}`;
 
   const modules = await loadModules(activeAppKey);
+  if (modules.ok) {
+    lastModuleContext = modules.payload;
+  }
   renderJson(apiOutput, { health, modules });
   renderModuleState(moduleState, modules);
 
