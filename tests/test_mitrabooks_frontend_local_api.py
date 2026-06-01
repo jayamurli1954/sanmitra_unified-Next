@@ -21,9 +21,9 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v9" in index_source
-    assert "pwa-shell.js?v=mitrabooks-erp-v9" in index_source
-    assert "app-shell.css?v=mitrabooks-erp-v9" in index_source
+    assert "app.js?v=mitrabooks-erp-v10" in index_source
+    assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
+    assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
     assert 'CACHE_NAME = "sanmitra-frontends-v24"' in worker_source
 
 
@@ -63,6 +63,16 @@ def test_business_workspace_menu_renders_main_preview_directly() -> None:
     assert 'document.getElementById("context-cards")' not in workspace_switcher
 
 
+def test_mitrabooks_accounting_refresh_preserves_accounting_panel() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("async function refreshCurrentAccountingDrilldown()")
+    end = app_source.index("async function applyAccountingDrilldownFilters()", start)
+    refresh_block = app_source[start:end]
+
+    assert 'currentExperience === "mitrabooks" && activeBusinessWorkspace === "accounting"' in refresh_block
+    assert "dashboardPreview.innerHTML = renderAccountingDrilldownPanel();" in refresh_block
+
+
 def test_business_party_payload_matches_backend_schema() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     create_start = app_source.index("async function createBusinessParty(data)")
@@ -89,6 +99,7 @@ def test_business_loaders_refresh_active_workspace_panel() -> None:
 
 def test_business_voucher_accounts_use_backend_account_contract() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
 
     assert "function normalizeBusinessAccount(acc)" in app_source
     assert "acc.account_id ?? acc.id" in app_source
@@ -98,12 +109,28 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "syncVoucherAccountFromText" in app_source
     assert 'list="business-voucher-account-options"' in app_source
     assert "updateVoucherAccountsStatus" in app_source
-    assert "grid-column: 1 / -1" in app_source
+    assert "grid-column: 1 / -1" in css_source
     assert "Account code / name" in app_source
     assert "accountRowsFromPayload" in app_source
     assert "MitraBooks business tenant required" in app_source
     assert "businessadmin@sanmitra.local" in app_source
     assert 'await loadBusinessAccounts();' in app_source
+
+
+def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
+
+    assert "erp-workspace-panel" in app_source
+    assert "erp-table" in app_source
+    assert "voucher-line" in app_source
+    assert "voucher-lines-panel" in index_source
+    assert ".business-dashboard" in css_source
+    assert ".voucher-balance-status.balanced" in css_source
+    assert "const hasAmount = totalDebit > 0 || totalCredit > 0" in app_source
+    assert "#business-voucher-create-dialog" in css_source
+    assert "GST invoice" not in app_source
 
 
 def test_business_voucher_payload_matches_typed_voucher_api() -> None:

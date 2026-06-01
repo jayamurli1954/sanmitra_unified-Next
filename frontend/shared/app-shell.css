@@ -524,8 +524,15 @@ a {
   --accent-2: #0f172a;
 }
 
+.app:not(.mandir-theme):not(.gruha-theme):not(.legal-theme):not(.invest-theme) {
+  --bg: #f5f7fb;
+  --panel-2: #eef3f8;
+  --accent: #1d4ed8;
+  --accent-2: #0f766e;
+}
+
 .sidebar {
-  background: #121826;
+  background: #111827;
   color: #f8fafc;
   padding: 20px;
   display: flex;
@@ -534,6 +541,11 @@ a {
   min-height: calc(var(--app-height) - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.app:not(.mandir-theme):not(.gruha-theme):not(.legal-theme):not(.invest-theme) .sidebar {
+  background: #101828;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .mandir-theme .sidebar {
@@ -614,6 +626,13 @@ a {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+.app:not(.mandir-theme):not(.gruha-theme):not(.legal-theme):not(.invest-theme) .nav a.active,
+.app:not(.mandir-theme):not(.gruha-theme):not(.legal-theme):not(.invest-theme) .nav button.active {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #111827;
+}
+
 .nav a.locked,
 .nav button.locked {
   color: #9aa4b2;
@@ -634,6 +653,11 @@ a {
 .module-switch button.active {
   background: #fff;
   color: #111827;
+}
+
+.app:not(.mandir-theme):not(.gruha-theme):not(.legal-theme):not(.invest-theme) .module-switch {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .main {
@@ -812,6 +836,37 @@ button.danger {
   border-radius: 8px;
   background: #fff;
   padding: 16px;
+}
+
+.business-dashboard,
+.erp-workspace-panel,
+.accounting-drilldown-panel {
+  border-color: #d7dee9;
+  border-left-color: var(--accent);
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+}
+
+.business-dashboard {
+  padding: 20px;
+}
+
+.business-dashboard .metric-tile {
+  background: #f8fafc;
+  border-color: #d9e2ec;
+}
+
+.business-dashboard .metric-tile strong {
+  color: #101828;
+}
+
+.erp-workspace-panel,
+.accounting-drilldown-panel {
+  gap: 14px;
+}
+
+.erp-command-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .preview-heading,
@@ -1096,6 +1151,30 @@ button.danger {
   background: var(--panel-2);
 }
 
+.erp-table {
+  padding: 0;
+}
+
+.erp-table table {
+  margin-top: 0;
+}
+
+.erp-table th {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.erp-table td {
+  vertical-align: middle;
+}
+
+.erp-table tbody tr:hover {
+  background: #f8fafc;
+}
+
 .table-preview th.amount,
 .table-preview td.amount {
   text-align: right;
@@ -1105,6 +1184,43 @@ button.danger {
 
 .compact-table table {
   min-width: 560px;
+}
+
+.row-subtext {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: #eef4ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.empty-state {
+  display: grid;
+  gap: 4px;
+  min-height: 120px;
+  align-content: center;
+  justify-items: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--text);
 }
 
 .list-filter-panel {
@@ -1136,6 +1252,89 @@ button.danger {
 .paging-row button {
   min-height: 38px;
   padding: 8px 10px;
+}
+
+.voucher-line {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.8fr) 130px 130px auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.voucher-lines-panel,
+.voucher-balance-panel {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.voucher-lines-panel h4 {
+  margin: 0;
+}
+
+.voucher-lines-panel #business-voucher-accounts-status,
+.voucher-lines-panel #business-voucher-lines {
+  margin: 0;
+}
+
+.voucher-balance-panel {
+  margin-bottom: 16px;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.voucher-account-field {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.voucher-line .voucher-debit,
+.voucher-line .voucher-credit {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.voucher-line button {
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.voucher-balance-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.voucher-balance-status span {
+  font-variant-numeric: tabular-nums;
+}
+
+.voucher-balance-status strong {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.voucher-balance-status.balanced strong {
+  background: #dcfce7;
+  color: var(--success);
+}
+
+.voucher-balance-status.imbalanced strong {
+  background: #fee4e2;
+  color: var(--danger);
 }
 
 .paging-row {
@@ -1232,6 +1431,12 @@ button.danger {
   display: grid;
   gap: 16px;
   padding: 18px;
+}
+
+#business-voucher-create-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
 }
 
 .receipt-preview-dialog {
@@ -5394,7 +5599,8 @@ pre {
   .mandir-dashboard .dashboard-main-grid.platform-grid,
   .entry-form-grid,
   .list-filter-bar,
-  .grouped-nav-preview {
+  .grouped-nav-preview,
+  .voucher-line {
     grid-template-columns: 1fr;
   }
 

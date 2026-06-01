@@ -2868,10 +2868,15 @@ const businessListState = {
 
 function renderBusinessPartiesTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    return `<p class="muted">No parties found.</p>`;
+    return `
+      <div class="empty-state">
+        <strong>No parties found</strong>
+        <span>Add a customer or vendor to use party context in vouchers.</span>
+      </div>
+    `;
   }
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table erp-table">
       <table>
         <thead>
           <tr>
@@ -2890,8 +2895,11 @@ function renderBusinessPartiesTable(rows) {
             const openingBalance = Number(row.opening_balance ?? (row.opening_balance_paise ? row.opening_balance_paise / 100 : 0)) || 0;
             return `
               <tr>
-                <td><strong>${escapeHtml(partyName)}</strong></td>
-                <td>${escapeHtml(row.party_type || row.type || "unknown")}</td>
+                <td>
+                  <strong>${escapeHtml(partyName)}</strong>
+                  <span class="row-subtext">${escapeHtml(row.party_code || row.code || "")}</span>
+                </td>
+                <td><span class="type-chip">${escapeHtml(row.party_type || row.type || "unknown")}</span></td>
                 <td>${escapeHtml(row.gstin || "-")}</td>
                 <td class="amount">${escapeHtml(formatCurrency(openingBalance))}</td>
                 <td><span class="pill ${isInactive ? "warn" : "ok"}">${isInactive ? "Inactive" : "Active"}</span></td>
@@ -2965,10 +2973,15 @@ function renderBusinessPartiesListFilters(rowsLength) {
 
 function renderBusinessVouchersTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    return `<p class="muted">No vouchers posted yet.</p>`;
+    return `
+      <div class="empty-state">
+        <strong>No vouchers posted yet</strong>
+        <span>Post a balanced journal voucher after the chart of accounts is available.</span>
+      </div>
+    `;
   }
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table erp-table">
       <table>
         <thead>
           <tr>
@@ -3017,7 +3030,7 @@ function renderBusinessVouchersTable(rows) {
 function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "parties") {
     return `
-      <div class="verification-panel">
+      <div class="verification-panel erp-workspace-panel">
         <div class="preview-heading compact">
           <div>
             <h4>Parties</h4>
@@ -3032,7 +3045,7 @@ function renderBusinessWorkspace() {
   }
   if (activeBusinessWorkspace === "vouchers") {
     return `
-      <div class="verification-panel">
+      <div class="verification-panel erp-workspace-panel">
         <div class="preview-heading compact">
           <div>
             <h4>Vouchers</h4>
@@ -3046,7 +3059,7 @@ function renderBusinessWorkspace() {
   }
   if (activeBusinessWorkspace === "audit") {
     return `
-      <div class="verification-panel">
+      <div class="verification-panel erp-workspace-panel">
         <div class="preview-heading compact">
           <div>
             <h4>Audit Trail</h4>
@@ -3059,7 +3072,7 @@ function renderBusinessWorkspace() {
     `;
   }
   return `
-    <div class="dashboard-main-grid">
+    <div class="dashboard-main-grid erp-command-grid">
       <article>
         <h4>Quick Actions</h4>
         <div class="quick-grid">
@@ -3230,6 +3243,9 @@ function syncBusinessNavActiveState() {
     const labels = {
       overview: "Dashboard",
       parties: "Parties",
+      vouchers: "Vouchers",
+      audit: "Audit Trail",
+      accounting: "Accounting",
     };
     topbarCurrent.textContent = labels[activeBusinessWorkspace] || "Dashboard";
   }
@@ -3389,14 +3405,13 @@ function syncVoucherAccountFromText(lineEl) {
 
 function renderVoucherLineItem(lineId, voucherType) {
   return `
-    <div class="voucher-line" data-line-id="${escapeHtml(lineId)}" style="display: grid; grid-template-columns: minmax(180px, 1fr) 120px 120px auto; gap: 8px; margin-bottom: 10px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; align-items: end;">
-      <label class="field" style="grid-column: 1 / -1; margin: 0;">
+    <div class="voucher-line" data-line-id="${escapeHtml(lineId)}">
+      <label class="field voucher-account-field">
         <span>Account code / name</span>
         <select
           class="voucher-account-select"
           data-line-id="${escapeHtml(lineId)}"
           title="Account code and name"
-          style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 14px;"
         >
           <option value="">Select account</option>
         </select>
@@ -3407,7 +3422,6 @@ function renderVoucherLineItem(lineId, voucherType) {
         placeholder="Search account code or name"
         list="business-voucher-account-options"
         data-line-id="${escapeHtml(lineId)}"
-        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
         autocomplete="off"
       >
       <input
@@ -3417,7 +3431,6 @@ function renderVoucherLineItem(lineId, voucherType) {
         min="0"
         step="0.01"
         data-line-id="${escapeHtml(lineId)}"
-        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; text-align: right; font-size: 13px;"
       >
       <input
         class="voucher-credit"
@@ -3426,14 +3439,12 @@ function renderVoucherLineItem(lineId, voucherType) {
         min="0"
         step="0.01"
         data-line-id="${escapeHtml(lineId)}"
-        style="padding: 6px; border: 1px solid #ccc; border-radius: 3px; text-align: right; font-size: 13px;"
       >
       <button
         class="secondary"
         type="button"
         data-business-action="remove-voucher-line"
         data-line-id="${escapeHtml(lineId)}"
-        style="padding: 6px 12px; font-size: 12px;"
       >✕</button>
     </div>
   `;
@@ -3455,6 +3466,35 @@ function updateVoucherBalance() {
   const balanceEl = document.getElementById("business-voucher-balance");
   if (balanceEl) {
     balanceEl.innerHTML = `Debit: ${formatCurrency(totalDebit)} | Credit: ${formatCurrency(totalCredit)} <span style="margin-left: 12px; ${isBalanced ? "color: green;" : "color: red;"}">${isBalanced ? "✓ Balanced" : "✗ Imbalanced"}</span>`;
+  }
+
+  const submitBtn = document.getElementById("business-voucher-submit");
+  if (submitBtn) {
+    submitBtn.disabled = !isBalanced;
+  }
+}
+
+function updateVoucherBalanceState() {
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  document.querySelectorAll(".voucher-debit").forEach((input) => {
+    totalDebit += Number(input.value) || 0;
+  });
+  document.querySelectorAll(".voucher-credit").forEach((input) => {
+    totalCredit += Number(input.value) || 0;
+  });
+
+  const hasAmount = totalDebit > 0 || totalCredit > 0;
+  const isBalanced = hasAmount && Math.abs(totalDebit - totalCredit) < 0.01;
+  const balanceEl = document.getElementById("business-voucher-balance");
+  if (balanceEl) {
+    balanceEl.className = isBalanced ? "voucher-balance-status balanced" : "voucher-balance-status imbalanced";
+    balanceEl.innerHTML = `
+      <span>Debit: ${formatCurrency(totalDebit)}</span>
+      <span>Credit: ${formatCurrency(totalCredit)}</span>
+      <strong>${isBalanced ? "Balanced" : "Imbalanced"}</strong>
+    `;
   }
 
   const submitBtn = document.getElementById("business-voucher-submit");
@@ -3490,15 +3530,15 @@ function addVoucherLine() {
   const debitInput = container.querySelector(`[data-line-id="${lineId}"].voucher-debit`);
   const creditInput = container.querySelector(`[data-line-id="${lineId}"].voucher-credit`);
   if (accountInput) accountInput.addEventListener("input", () => syncVoucherAccountFromText(accountInput.closest(".voucher-line")));
-  if (debitInput) debitInput.addEventListener("input", updateVoucherBalance);
-  if (creditInput) creditInput.addEventListener("input", updateVoucherBalance);
+  if (debitInput) debitInput.addEventListener("input", updateVoucherBalanceState);
+  if (creditInput) creditInput.addEventListener("input", updateVoucherBalanceState);
 }
 
 function removeVoucherLine(lineId) {
   const lineEl = document.querySelector(`[data-line-id="${escapeHtml(lineId)}"]`);
   if (lineEl) {
     lineEl.remove();
-    updateVoucherBalance();
+    updateVoucherBalanceState();
   }
 }
 
@@ -3508,7 +3548,7 @@ function clearVoucherForm() {
   document.getElementById("business-voucher-reference").value = "";
   document.getElementById("business-voucher-narration").value = "";
   document.getElementById("business-voucher-lines").innerHTML = "";
-  updateVoucherBalance();
+  updateVoucherBalanceState();
 }
 
 async function loadBusinessAccounts() {
@@ -5124,6 +5164,8 @@ async function refreshCurrentAccountingDrilldown() {
   renderJson(apiOutput, { accounting_drilldown: result });
   if (currentExperience === "mandir") {
     await loadMandirDashboard();
+  } else if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "accounting") {
+    dashboardPreview.innerHTML = renderAccountingDrilldownPanel();
   } else {
     dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
   }
