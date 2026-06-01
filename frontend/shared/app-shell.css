@@ -925,6 +925,73 @@ button.danger {
   line-height: 1.4;
 }
 
+.erp-health-actions {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 12px;
+}
+
+.erp-health-actions h5 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.erp-health-actions p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.erp-health-actions ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.erp-health-actions li {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.erp-health-actions span {
+  width: fit-content;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #3538cd;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.erp-health-actions strong {
+  color: var(--text);
+}
+
+.erp-health-actions small,
+.erp-health-actions em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.erp-health-actions em {
+  color: #344054;
+  font-weight: 700;
+}
+
 .preview-heading,
 .society-header-preview {
   display: flex;
@@ -5652,6 +5719,7 @@ pre {
   .metric-grid.two,
   .metric-grid.four,
   .erp-health-list,
+  .erp-health-actions ol,
   .dashboard-main-grid,
   .mandir-dashboard .dashboard-main-grid.platform-grid,
   .entry-form-grid,

@@ -11,7 +11,10 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-health-panel')).toContainText('Business tenant context');
     await expect(page.locator('.erp-health-panel')).toContainText('Chart of accounts loaded');
     await expect(page.locator('.erp-health-panel')).toContainText('Cash and bank accounts');
+    await expect(page.locator('.erp-health-panel')).toContainText('Party GSTIN sample');
     await expect(page.locator('.erp-health-panel')).toContainText('Voucher drill-down');
+    await expect(page.locator('.erp-health-actions')).toContainText('Action Queue');
+    await expect(page.locator('.erp-health-actions')).toContainText('Concrete next fixes');
     await expect(page.locator('.accounting-drilldown-panel')).toBeVisible();
     await expect(page.getByText('MitraBooks Dashboard')).toBeVisible();
 

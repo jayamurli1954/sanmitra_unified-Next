@@ -147,11 +147,35 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert "Cash and bank accounts" in app_source
     assert "Revenue / income accounts" in app_source
     assert "Expense accounts" in app_source
+    assert "Party GSTIN sample" in app_source
     assert "Voucher drill-down" in app_source
     assert "await loadBusinessAccounts();" in run_block
+    assert "await loadBusinessPartiesForHealth();" in run_block
     assert "/api/v1/accounting/accounts" in app_source
+    assert "/api/v1/business/parties?offset=0&limit=20" in app_source
     assert "/api/v1/modules/me" not in app_source
     assert ".erp-health-panel" in css_source
+    assert ".erp-health-actions" in css_source
+
+
+def test_mitrabooks_phase_2b_data_health_actions_are_actionable_not_future_scope() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    start = app_source.index("function renderBusinessDataHealthActions")
+    end = app_source.index("function renderBusinessDataHealthPanel", start)
+    actions_block = app_source[start:end]
+
+    assert "Action Queue" in actions_block
+    assert "Complete party GSTINs" in actions_block
+    assert "Add cash or bank account" in actions_block
+    assert "Add revenue account" in actions_block
+    assert "Add expense account" in actions_block
+    assert "Verify voucher drill-down" in actions_block
+    assert "sales, purchases, GST, or inventory" in actions_block
+    assert "Continue with parties and balanced vouchers; keep GST/inventory depth deferred." in actions_block
+    assert "OCR" not in actions_block
+    assert "GSTR-2B" not in actions_block
+    assert ".erp-health-actions ol" in css_source
 
 
 def test_business_voucher_payload_matches_typed_voucher_api() -> None:

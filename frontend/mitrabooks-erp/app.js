@@ -2857,6 +2857,7 @@ function renderDashboardPreview(config) {
 
 let activeBusinessWorkspace = "overview";
 let lastBusinessParties = [];
+let lastBusinessPartiesResult = null;
 const businessListState = {
   parties: {
     offset: 0,
@@ -3109,6 +3110,7 @@ async function loadBusinessParties(filters = {}) {
   const url = `/api/v1/business/parties${queryString ? "?" + queryString : ""}`;
 
   const result = await apiRequest(appKey, url, { method: "GET" });
+  lastBusinessPartiesResult = result;
   if (result.ok) {
     lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
     if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "parties") {
@@ -3119,6 +3121,7 @@ async function loadBusinessParties(filters = {}) {
     setLoginStatus("warn", "Unable to load parties", result.payload?.detail || "Check connection and try again.");
   }
   renderJson(apiOutput, { parties: { ok: result.ok, count: lastBusinessParties.length } });
+  return result;
 }
 
 async function createBusinessParty(data) {
@@ -3412,6 +3415,11 @@ function hasBusinessAccount(matchNames, matchTypes = []) {
   });
 }
 
+function countPartiesMissingGstin(rows = lastBusinessParties) {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  return rows.filter((row) => !String(row.gstin || "").trim()).length;
+}
+
 function dataHealthItem(label, ok, copy) {
   return `
     <li class="${ok ? "ok" : "warn"}">
@@ -3422,23 +3430,153 @@ function dataHealthItem(label, ok, copy) {
   `;
 }
 
+function dataHealthAction(priority, title, detail, actionText) {
+  return `
+    <li>
+      <span>${escapeHtml(priority)}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(detail)}</small>
+      <em>${escapeHtml(actionText)}</em>
+    </li>
+  `;
+}
+
+function renderBusinessDataHealthActions(state) {
+  const actions = [];
+
+  if (!state.isBusinessTenant || !state.hasBusinessModule) {
+    actions.push(dataHealthAction(
+      "Access",
+      "Fix MitraBooks tenant context",
+      "Business workspaces need organization_type=BUSINESS and the business module enabled.",
+      "Review tenant setup before adding more business records."
+    ));
+  }
+  if (!state.hasAccountingModule || !state.accountsLoaded) {
+    actions.push(dataHealthAction(
+      "Setup",
+      "Load the chart of accounts",
+      state.accountsBlocked ? `Accounts request returned HTTP ${state.accountsStatus}.` : "The voucher form needs tenant-owned cash, bank, revenue, and expense ledgers.",
+      "Open Accounting and confirm the business chart exists."
+    ));
+  }
+  if (state.accountsLoaded && !state.hasCashBank) {
+    actions.push(dataHealthAction(
+      "Accounts",
+      "Add cash or bank account",
+      "Receipt, payment, and contra vouchers need an asset-side cash or bank ledger.",
+      "Create or map Cash in Hand / Bank Account before payment workflows."
+    ));
+  }
+  if (state.accountsLoaded && !state.hasRevenue) {
+    actions.push(dataHealthAction(
+      "Accounts",
+      "Add revenue account",
+      "Sales and service postings need an income/revenue ledger before invoice workflows are enabled.",
+      "Create or map Sales / Service Income."
+    ));
+  }
+  if (state.accountsLoaded && !state.hasExpense) {
+    actions.push(dataHealthAction(
+      "Accounts",
+      "Add expense account",
+      "Purchase and expense postings need an expense ledger before purchase workflows are enabled.",
+      "Create or map Purchases / Office Expense / Rent Expense."
+    ));
+  }
+  if (state.partiesLoaded && state.partiesMissingGstin > 0) {
+    actions.push(dataHealthAction(
+      "Parties",
+      "Complete party GSTINs",
+      `${state.partiesMissingGstin} visible party record(s) are missing GSTIN.`,
+      "Open Parties and update GSTIN where the party is registered."
+    ));
+  }
+  if (state.partiesBlocked) {
+    actions.push(dataHealthAction(
+      "Parties",
+      "Reload party sample",
+      "The dashboard could not read the visible party sample used for GSTIN checks.",
+      "Open Parties after confirming the business module is enabled."
+    ));
+  }
+  if (!state.drilldownReady) {
+    actions.push(dataHealthAction(
+      "Reports",
+      "Verify voucher drill-down",
+      "Accounting report drill-down must load before reports can be trusted for business review.",
+      "Open Accounting and retry after posting a balanced voucher."
+    ));
+  }
+
+  if (actions.length === 0) {
+    actions.push(dataHealthAction(
+      "Ready",
+      "Core accounting data is ready",
+      "Tenant context, modules, chart of accounts, party GSTIN sample, and drill-down are available.",
+      "Continue with parties and balanced vouchers; keep GST/inventory depth deferred."
+    ));
+  }
+
+  return `
+    <div class="erp-health-actions">
+      <div>
+        <h5>Action Queue</h5>
+        <p>Concrete next fixes before expanding into sales, purchases, GST, or inventory.</p>
+      </div>
+      <ol>${actions.join("")}</ol>
+    </div>
+  `;
+}
+
 function renderBusinessDataHealthPanel() {
   const modules = enabledModuleKeys();
   const organizationType = String(lastModuleContext?.organization_type || "unknown").toUpperCase();
   const tenantId = lastModuleContext?.tenant_id || "not loaded";
   const accountsLoaded = Array.isArray(lastBusinessAccounts) && lastBusinessAccounts.length > 0;
   const accountsBlocked = lastBusinessAccountsResult && !lastBusinessAccountsResult.ok;
+  const accountsStatus = lastBusinessAccountsResult?.status || "unknown";
+  const partiesLoaded = Array.isArray(lastBusinessParties) && lastBusinessParties.length > 0;
+  const partiesBlocked = lastBusinessPartiesResult && !lastBusinessPartiesResult.ok;
+  const partiesMissingGstin = countPartiesMissingGstin();
+  const partiesGstinReady = !partiesBlocked && (!partiesLoaded || partiesMissingGstin === 0);
+  const partiesGstinCopy = partiesBlocked
+    ? `Parties request returned HTTP ${lastBusinessPartiesResult.status}.`
+    : partiesLoaded
+      ? `${partiesMissingGstin} visible party record(s) missing GSTIN.`
+      : "No visible parties yet; GSTIN checks start after party creation.";
   const drilldownReady = lastAccountingDrilldown && lastAccountingDrilldown.ok !== false;
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
+  const hasBusinessModule = modules.has("business");
+  const hasAccountingModule = modules.has("accounting");
+  const hasCashBank = hasBusinessAccount(["Cash in Hand", "Bank Account"], ["asset"]);
+  const hasRevenue = hasBusinessAccount(["Sales", "Service Income"], ["income", "revenue"]);
+  const hasExpense = hasBusinessAccount(["Purchases", "Office Expense", "Rent Expense"], ["expense"]);
+  const healthState = {
+    isBusinessTenant: organizationType === "BUSINESS",
+    hasBusinessModule,
+    hasAccountingModule,
+    accountsLoaded,
+    accountsBlocked,
+    accountsStatus,
+    hasCashBank,
+    hasRevenue,
+    hasExpense,
+    partiesLoaded,
+    partiesBlocked,
+    partiesMissingGstin,
+    drilldownReady,
+  };
 
   const checks = [
-    dataHealthItem("Business tenant context", organizationType === "BUSINESS", `organization_type=${organizationType}; tenant=${tenantId}`),
-    dataHealthItem("Business module enabled", modules.has("business"), "Required before parties and vouchers can return tenant data."),
-    dataHealthItem("Accounting module enabled", modules.has("accounting"), "Required for chart of accounts and drill-down reports."),
+    dataHealthItem("Business tenant context", healthState.isBusinessTenant, `organization_type=${organizationType}; tenant=${tenantId}`),
+    dataHealthItem("Business module enabled", hasBusinessModule, "Required before parties and vouchers can return tenant data."),
+    dataHealthItem("Accounting module enabled", hasAccountingModule, "Required for chart of accounts and drill-down reports."),
     dataHealthItem("Chart of accounts loaded", accountsLoaded, accountsBlocked ? `Accounts request returned HTTP ${lastBusinessAccountsResult.status}.` : `${lastBusinessAccounts.length} account(s) available.`),
-    dataHealthItem("Cash and bank accounts", hasBusinessAccount(["Cash in Hand", "Bank Account"], ["asset"]), "Required for receipt, payment, and contra voucher posting."),
-    dataHealthItem("Revenue / income accounts", hasBusinessAccount(["Sales", "Service Income"], ["income", "revenue"]), "Required before sales or service income postings are introduced."),
-    dataHealthItem("Expense accounts", hasBusinessAccount(["Purchases", "Office Expense", "Rent Expense"], ["expense"]), "Required for purchase and expense postings."),
+    dataHealthItem("Cash and bank accounts", hasCashBank, "Required for receipt, payment, and contra voucher posting."),
+    dataHealthItem("Revenue / income accounts", hasRevenue, "Required before sales or service income postings are introduced."),
+    dataHealthItem("Expense accounts", hasExpense, "Required for purchase and expense postings."),
+    dataHealthItem("Party GSTIN sample", partiesGstinReady, partiesGstinCopy),
     dataHealthItem("Voucher drill-down", drilldownReady, `Current period shows ${voucherCount} posted voucher(s).`),
   ];
 
@@ -3449,11 +3587,21 @@ function renderBusinessDataHealthPanel() {
           <h4>Data Health</h4>
           <p>Tenant, module, chart, and drill-down readiness for the current MitraBooks context.</p>
         </div>
-        <span class="pill ${accountsLoaded && modules.has("business") && modules.has("accounting") ? "ok" : "warn"}">Phase 2A</span>
+        <span class="pill ${accountsLoaded && hasBusinessModule && hasAccountingModule ? "ok" : "warn"}">Phase 2B</span>
       </div>
       <ul class="erp-health-list">${checks.join("")}</ul>
+      ${renderBusinessDataHealthActions(healthState)}
     </section>
   `;
+}
+
+async function loadBusinessPartiesForHealth() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/parties?offset=0&limit=20", { method: "GET" });
+  lastBusinessPartiesResult = result;
+  if (result.ok) {
+    lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+  }
+  return result;
 }
 
 async function loadModuleContextForAccounts() {
@@ -4208,6 +4356,7 @@ async function runChecks() {
     await loadGruhaDashboard();
   } else if (currentExperience === "mitrabooks") {
     await loadBusinessAccounts();
+    await loadBusinessPartiesForHealth();
     const accountingDrilldown = await loadAccountingDrilldownResult();
     renderJson(apiOutput, { health, modules, accounting_drilldown: accountingDrilldown });
     dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
