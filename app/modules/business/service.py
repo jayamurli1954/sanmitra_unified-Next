@@ -313,29 +313,75 @@ async def _reserve_voucher_number(
 
 async def list_vouchers(
     *,
+    session: AsyncSession | None = None,
     tenant_id: str,
     app_key: str,
     accounting_entity_id: str,
     voucher_type: str | None = None,
     limit: int = 100,
 ) -> dict:
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-    }
-    if voucher_type:
-        filters["voucher_type"] = voucher_type
+    """List business vouchers from accounting journal entries.
 
-    safe_limit = max(1, min(int(limit or 100), 500))
-    rows = (
-        await get_collection(VOUCHERS_COLLECTION)
-        .find(filters)
-        .sort("entry_date", -1)
-        .limit(safe_limit)
-        .to_list(length=safe_limit)
+    Queries the accounting module's journal_entries table instead of MongoDB,
+    since vouchers are created and stored in the accounting system.
+    """
+    from app.accounting.models import JournalEntry
+    from sqlalchemy import and_, select
+
+    if session is None:
+        # Fallback to MongoDB if no session provided (for backward compatibility)
+        filters = {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+        }
+        if voucher_type:
+            filters["voucher_type"] = voucher_type
+
+        safe_limit = max(1, min(int(limit or 100), 500))
+        rows = (
+            await get_collection(VOUCHERS_COLLECTION)
+            .find(filters)
+            .sort("entry_date", -1)
+            .limit(safe_limit)
+            .to_list(length=safe_limit)
+        )
+        return {"items": [_json_safe_doc(row) for row in rows], "total": len(rows)}
+
+    # Query from PostgreSQL journal_entries table
+    stmt = select(JournalEntry).where(
+        and_(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.app_key == app_key,
+            JournalEntry.accounting_entity_id == accounting_entity_id,
+        )
     )
-    return {"items": [_json_safe_doc(row) for row in rows], "total": len(rows)}
+
+    if voucher_type:
+        stmt = stmt.where(JournalEntry.voucher_type == voucher_type)
+
+    stmt = stmt.order_by(JournalEntry.entry_date.desc()).limit(max(1, min(int(limit or 100), 500)))
+
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "voucher_id": row.voucher_id or str(row.id),
+                "entry_date": row.entry_date.isoformat() if row.entry_date else None,
+                "reference": row.reference,
+                "voucher_type": row.voucher_type,
+                "status": "posted",
+                "total_debit": int(row.total_debit) if row.total_debit else 0,
+                "total_credit": int(row.total_credit) if row.total_credit else 0,
+                "description": row.description,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
 
 
 async def get_voucher(

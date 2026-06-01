@@ -210,6 +210,7 @@ async def list_business_vouchers(
     voucher_type: str | None = Query(default=None, pattern="^(payment|receipt|contra|journal)$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
+    session: AsyncSession = Depends(get_async_session),
     _module_context: dict = Depends(require_enabled_module("business")),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -223,6 +224,7 @@ async def list_business_vouchers(
         operation="voucher listing",
     )
     return await list_vouchers(
+        session=session,
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
