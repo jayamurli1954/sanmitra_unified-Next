@@ -133,6 +133,27 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     assert "GST invoice" not in app_source
 
 
+def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    run_start = app_source.index("async function runChecks()")
+    run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
+    run_block = app_source[run_start:run_end]
+
+    assert "function renderBusinessDataHealthPanel()" in app_source
+    assert "Tenant, module, chart, and drill-down readiness" in app_source
+    assert "Business tenant context" in app_source
+    assert "Chart of accounts loaded" in app_source
+    assert "Cash and bank accounts" in app_source
+    assert "Revenue / income accounts" in app_source
+    assert "Expense accounts" in app_source
+    assert "Voucher drill-down" in app_source
+    assert "await loadBusinessAccounts();" in run_block
+    assert "/api/v1/accounting/accounts" in app_source
+    assert "/api/v1/modules/me" not in app_source
+    assert ".erp-health-panel" in css_source
+
+
 def test_business_voucher_payload_matches_typed_voucher_api() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     start = app_source.index("async function createBusinessVoucher(voucherData)")

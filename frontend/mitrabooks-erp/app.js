@@ -2846,6 +2846,7 @@ function renderDashboardPreview(config) {
             <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
           </article>
         </div>
+        ${renderBusinessDataHealthPanel()}
         ${renderAccountingDrilldownPanel()}
     </div>
   `;
@@ -3292,6 +3293,7 @@ function pageBusinessList(listKind, direction) {
 
 let lastBusinessVouchers = [];
 let lastBusinessAccounts = [];
+let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
 
@@ -3379,6 +3381,79 @@ function isBusinessModuleEnabled(context) {
     const key = typeof module === "string" ? module : module?.module_key;
     return key === "business";
   });
+}
+
+function enabledModuleKeys(context = lastModuleContext) {
+  const modules = Array.isArray(context?.enabled_modules) ? context.enabled_modules : [];
+  return new Set(modules
+    .map((module) => typeof module === "string" ? module : module?.module_key)
+    .map((key) => String(key || "").trim().toLowerCase())
+    .filter(Boolean));
+}
+
+function normalizedAccountRows(rows = lastBusinessAccounts) {
+  return Array.isArray(rows) ? rows.map((account) => {
+    const normalized = normalizeBusinessAccount(account);
+    return {
+      ...normalized,
+      type: String(account.account_type ?? account.type ?? "").toLowerCase(),
+      nameKey: normalized.name.toLowerCase(),
+    };
+  }).filter((account) => account.id || account.code || account.name) : [];
+}
+
+function hasBusinessAccount(matchNames, matchTypes = []) {
+  const names = matchNames.map((name) => name.toLowerCase());
+  const types = matchTypes.map((type) => type.toLowerCase());
+  return normalizedAccountRows().some((account) => {
+    const nameMatch = names.some((name) => account.nameKey === name || account.nameKey.includes(name));
+    const typeMatch = types.length === 0 || types.includes(account.type);
+    return nameMatch && typeMatch;
+  });
+}
+
+function dataHealthItem(label, ok, copy) {
+  return `
+    <li class="${ok ? "ok" : "warn"}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${ok ? "Ready" : "Needs attention"}</strong>
+      <small>${escapeHtml(copy)}</small>
+    </li>
+  `;
+}
+
+function renderBusinessDataHealthPanel() {
+  const modules = enabledModuleKeys();
+  const organizationType = String(lastModuleContext?.organization_type || "unknown").toUpperCase();
+  const tenantId = lastModuleContext?.tenant_id || "not loaded";
+  const accountsLoaded = Array.isArray(lastBusinessAccounts) && lastBusinessAccounts.length > 0;
+  const accountsBlocked = lastBusinessAccountsResult && !lastBusinessAccountsResult.ok;
+  const drilldownReady = lastAccountingDrilldown && lastAccountingDrilldown.ok !== false;
+  const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
+
+  const checks = [
+    dataHealthItem("Business tenant context", organizationType === "BUSINESS", `organization_type=${organizationType}; tenant=${tenantId}`),
+    dataHealthItem("Business module enabled", modules.has("business"), "Required before parties and vouchers can return tenant data."),
+    dataHealthItem("Accounting module enabled", modules.has("accounting"), "Required for chart of accounts and drill-down reports."),
+    dataHealthItem("Chart of accounts loaded", accountsLoaded, accountsBlocked ? `Accounts request returned HTTP ${lastBusinessAccountsResult.status}.` : `${lastBusinessAccounts.length} account(s) available.`),
+    dataHealthItem("Cash and bank accounts", hasBusinessAccount(["Cash in Hand", "Bank Account"], ["asset"]), "Required for receipt, payment, and contra voucher posting."),
+    dataHealthItem("Revenue / income accounts", hasBusinessAccount(["Sales", "Service Income"], ["income", "revenue"]), "Required before sales or service income postings are introduced."),
+    dataHealthItem("Expense accounts", hasBusinessAccount(["Purchases", "Office Expense", "Rent Expense"], ["expense"]), "Required for purchase and expense postings."),
+    dataHealthItem("Voucher drill-down", drilldownReady, `Current period shows ${voucherCount} posted voucher(s).`),
+  ];
+
+  return `
+    <section class="erp-health-panel" aria-label="MitraBooks data health">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Data Health</h4>
+          <p>Tenant, module, chart, and drill-down readiness for the current MitraBooks context.</p>
+        </div>
+        <span class="pill ${accountsLoaded && modules.has("business") && modules.has("accounting") ? "ok" : "warn"}">Phase 2A</span>
+      </div>
+      <ul class="erp-health-list">${checks.join("")}</ul>
+    </section>
+  `;
 }
 
 async function loadModuleContextForAccounts() {
@@ -3554,6 +3629,7 @@ function clearVoucherForm() {
 async function loadBusinessAccounts() {
   const appKey = "mitrabooks";
   const result = await apiRequest(appKey, "/api/v1/accounting/accounts", { method: "GET" });
+  lastBusinessAccountsResult = result;
 
   if (result.ok) {
     lastBusinessAccounts = accountRowsFromPayload(result.payload);
@@ -4131,6 +4207,7 @@ async function runChecks() {
   } else if (currentExperience === "gruha") {
     await loadGruhaDashboard();
   } else if (currentExperience === "mitrabooks") {
+    await loadBusinessAccounts();
     const accountingDrilldown = await loadAccountingDrilldownResult();
     renderJson(apiOutput, { health, modules, accounting_drilldown: accountingDrilldown });
     dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);

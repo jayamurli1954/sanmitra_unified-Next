@@ -869,6 +869,62 @@ button.danger {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.erp-health-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d7dee9;
+  border-left: 4px solid var(--accent-2);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.erp-health-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.erp-health-list li {
+  display: grid;
+  gap: 5px;
+  min-height: 112px;
+  align-content: start;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.erp-health-list li.ok {
+  border-color: #bbf7d0;
+  background: #f7fef9;
+}
+
+.erp-health-list li.warn {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.erp-health-list span {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.erp-health-list strong {
+  color: var(--text);
+}
+
+.erp-health-list small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .preview-heading,
 .society-header-preview {
   display: flex;
@@ -5595,6 +5651,7 @@ pre {
   .metric-grid.three,
   .metric-grid.two,
   .metric-grid.four,
+  .erp-health-list,
   .dashboard-main-grid,
   .mandir-dashboard .dashboard-main-grid.platform-grid,
   .entry-form-grid,

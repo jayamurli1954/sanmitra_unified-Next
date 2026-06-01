@@ -6,6 +6,12 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await expect(page).toHaveTitle('MitraBooks Unified ERP');
     await expect(page.locator('.business-dashboard')).toBeVisible();
+    await expect(page.locator('.erp-health-panel')).toBeVisible();
+    await expect(page.locator('.erp-health-panel')).toContainText('Data Health');
+    await expect(page.locator('.erp-health-panel')).toContainText('Business tenant context');
+    await expect(page.locator('.erp-health-panel')).toContainText('Chart of accounts loaded');
+    await expect(page.locator('.erp-health-panel')).toContainText('Cash and bank accounts');
+    await expect(page.locator('.erp-health-panel')).toContainText('Voucher drill-down');
     await expect(page.locator('.accounting-drilldown-panel')).toBeVisible();
     await expect(page.getByText('MitraBooks Dashboard')).toBeVisible();
 
