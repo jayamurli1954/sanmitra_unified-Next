@@ -3116,6 +3116,10 @@ async function createBusinessParty(data) {
     setLoginStatus("ok", "Party created", result.payload?.party_name || "New party added.");
     document.getElementById("business-party-create-dialog")?.close();
     await loadBusinessParties();
+    // Force refresh of current workspace
+    if (activeBusinessWorkspace === "parties") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   } else {
     setLoginStatus("danger", "Create party failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
@@ -3578,6 +3582,10 @@ async function createBusinessVoucher(voucherData) {
     document.getElementById("business-voucher-create-dialog")?.close();
     clearVoucherForm();
     await loadBusinessVouchers();
+    // Force refresh of current workspace
+    if (activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
   } else {
     setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
