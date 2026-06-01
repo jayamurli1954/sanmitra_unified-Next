@@ -15,6 +15,75 @@ import {
   statusLabel,
 } from "../shared/api-client.js";
 
+// ============================================
+// THEME MANAGEMENT (PWA-Compatible)
+// ============================================
+
+const THEME_STORAGE_KEY = "mitrabooks-theme";
+
+/**
+ * Set the app theme (dark or light)
+ * Persists to localStorage for offline retention
+ */
+function setTheme(theme) {
+  const validTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", validTheme);
+  localStorage.setItem(THEME_STORAGE_KEY, validTheme);
+  updateThemeButtons(validTheme);
+}
+
+/**
+ * Get the current theme or user preference
+ */
+function getTheme() {
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved) {
+    return saved;
+  }
+
+  // Check system preference
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+
+  return "dark"; // Default to dark
+}
+
+/**
+ * Initialize theme on app load
+ */
+function initializeTheme() {
+  const theme = getTheme();
+  document.documentElement.setAttribute("data-theme", theme);
+  updateThemeButtons(theme);
+}
+
+/**
+ * Update UI buttons to show active theme
+ */
+function updateThemeButtons(theme) {
+  const darkBtn = document.getElementById("theme-dark-btn");
+  const lightBtn = document.getElementById("theme-light-btn");
+
+  if (darkBtn) {
+    darkBtn.classList.toggle("active", theme === "dark");
+  }
+  if (lightBtn) {
+    lightBtn.classList.toggle("active", theme === "light");
+  }
+}
+
+/**
+ * Listen for system theme changes (respects user's OS preference)
+ */
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (!localStorage.getItem(THEME_STORAGE_KEY)) {
+      setTheme(e.matches ? "dark" : "light");
+    }
+  });
+}
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const LOGIN_EMAIL_STORAGE_KEY = "sanmitra_mitrabooks_login_email";
@@ -5903,6 +5972,215 @@ document.getElementById("mode-mitrabooks").addEventListener("click", () => setEx
 document.getElementById("mode-platform").addEventListener("click", () => setExperience("platform"));
 document.getElementById("mode-mandir").addEventListener("click", () => setExperience("mandir"));
 document.getElementById("mode-gruha").addEventListener("click", () => setExperience("gruha"));
+
+// Initialize theme on app load
+initializeTheme();
+
+// Theme toggle buttons (if they exist in the sidebar)
+const themeDarkBtn = document.getElementById("theme-dark-btn");
+const themeLightBtn = document.getElementById("theme-light-btn");
+
+if (themeDarkBtn) {
+  themeDarkBtn.addEventListener("click", () => setTheme("dark"));
+}
+if (themeLightBtn) {
+  themeLightBtn.addEventListener("click", () => setTheme("light"));
+}
+
+// ============================================
+// SIDEBAR UI INTERACTIONS (Phase 1C)
+// ============================================
+
+/**
+ * Org Selector Dropdown Toggle
+ */
+const orgTrigger = document.getElementById("org-trigger");
+const orgMenu = document.getElementById("org-menu");
+const orgSelector = document.getElementById("org-selector");
+const orgOptions = document.querySelectorAll(".org-option");
+
+if (orgTrigger) {
+  orgTrigger.addEventListener("click", () => {
+    const isOpen = orgMenu.style.display === "block";
+    orgMenu.style.display = isOpen ? "none" : "block";
+    orgSelector.classList.toggle("open");
+  });
+}
+
+// Close org dropdown when option is selected
+orgOptions.forEach((option) => {
+  option.addEventListener("click", (e) => {
+    const orgType = e.currentTarget.getAttribute("data-org");
+    orgOptions.forEach((o) => o.classList.remove("active"));
+    e.currentTarget.classList.add("active");
+    orgMenu.style.display = "none";
+    orgSelector.classList.remove("open");
+    // Optional: Update org display
+    if (orgType === "BUSINESS") {
+      document.getElementById("current-org-type").textContent = "Business Suite";
+      document.getElementById("current-org-tenant").textContent = "Acme Corp Ltd";
+    } else if (orgType === "PROFESSIONAL") {
+      document.getElementById("current-org-type").textContent = "Professional Suite";
+      document.getElementById("current-org-tenant").textContent = "Your Org";
+    } else if (orgType === "CA_PRACTICE") {
+      document.getElementById("current-org-type").textContent = "CA Practice Portal";
+      document.getElementById("current-org-tenant").textContent = "Multi-Client Books";
+    }
+  });
+});
+
+/**
+ * FY Selector Dropdown Toggle
+ */
+const fyTrigger = document.getElementById("fy-trigger");
+const fyMenu = document.getElementById("fy-menu");
+const fyOptions = document.querySelectorAll(".fy-option");
+
+if (fyTrigger) {
+  fyTrigger.addEventListener("click", () => {
+    const isOpen = fyMenu.style.display === "block";
+    fyMenu.style.display = isOpen ? "none" : "block";
+  });
+}
+
+// Close FY dropdown when option is selected
+fyOptions.forEach((option) => {
+  option.addEventListener("click", (e) => {
+    const fy = e.currentTarget.getAttribute("data-fy");
+    fyOptions.forEach((o) => o.classList.remove("active"));
+    e.currentTarget.classList.add("active");
+    fyMenu.style.display = "none";
+    document.getElementById("current-fy").textContent = `FY ${fy}`;
+  });
+});
+
+/**
+ * Close dropdowns when clicking outside
+ */
+document.addEventListener("click", (e) => {
+  // Close org dropdown if click is outside
+  if (orgMenu && orgSelector && !orgSelector.contains(e.target)) {
+    orgMenu.style.display = "none";
+    orgSelector.classList.remove("open");
+  }
+  // Close FY dropdown if click is outside
+  if (fyMenu && fyTrigger && !fyTrigger.closest(".fy-selector").contains(e.target)) {
+    fyMenu.style.display = "none";
+  }
+});
+
+// ============================================
+// HEADER & HEALTH WIDGET (Phase 1C Step 7)
+// ============================================
+
+/**
+ * Update health widget with data
+ * @param {number} percentage - Health percentage (0-100)
+ * @param {string} status - Status message
+ */
+function updateHealthWidget(percentage = 94, status = "All balanced") {
+  const healthPercent = document.getElementById("health-percent-text");
+  const healthBar = document.getElementById("health-circle-bar");
+  const healthStatus = document.querySelector(".health-text span");
+
+  if (healthPercent) {
+    healthPercent.textContent = `${percentage}%`;
+  }
+  if (healthBar) {
+    const dasharray = `${percentage}, 100`;
+    healthBar.setAttribute("stroke-dasharray", dasharray);
+  }
+  if (healthStatus) {
+    healthStatus.textContent = status;
+  }
+}
+
+/**
+ * Quick Action Buttons
+ */
+const btnQuickParty = document.getElementById("btn-quick-party");
+const btnQuickJournal = document.getElementById("btn-quick-post-journal");
+
+if (btnQuickParty) {
+  btnQuickParty.addEventListener("click", () => {
+    // Trigger create party modal/form
+    // This will integrate with existing party creation logic
+    console.log("[UI] New Party button clicked");
+    // The existing app.js should handle this, or we can dispatch an event
+    const event = new CustomEvent("createPartyRequested");
+    document.dispatchEvent(event);
+  });
+
+  // Hover effect
+  btnQuickParty.addEventListener("mouseenter", () => {
+    btnQuickParty.style.background = "var(--accent-hover, #60a5fa)";
+    btnQuickParty.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
+  });
+  btnQuickParty.addEventListener("mouseleave", () => {
+    btnQuickParty.style.background = "var(--accent-color, #3b82f6)";
+    btnQuickParty.style.boxShadow = "none";
+  });
+}
+
+if (btnQuickJournal) {
+  btnQuickJournal.addEventListener("click", () => {
+    // Trigger create journal/voucher modal
+    console.log("[UI] Journal Post button clicked");
+    const event = new CustomEvent("createVoucherRequested");
+    document.dispatchEvent(event);
+  });
+
+  // Hover effect
+  btnQuickJournal.addEventListener("mouseenter", () => {
+    btnQuickJournal.style.background = "rgba(255, 255, 255, 0.09)";
+    btnQuickJournal.style.borderColor = "rgba(255, 255, 255, 0.15)";
+  });
+  btnQuickJournal.addEventListener("mouseleave", () => {
+    btnQuickJournal.style.background = "rgba(255, 255, 255, 0.05)";
+    btnQuickJournal.style.borderColor = "rgba(255, 255, 255, 0.08)";
+  });
+}
+
+/**
+ * Update page title and breadcrumb based on current view
+ * @param {string} parentName - Parent breadcrumb name
+ * @param {string} currentName - Current breadcrumb name
+ * @param {string} pageTitle - Full page title
+ */
+function updatePageHeader(parentName = "Workspaces", currentName = "Dashboard", pageTitle = "Dashboard Workspace") {
+  const breadcrumbParent = document.getElementById("breadcrumb-parent");
+  const breadcrumbCurrent = document.getElementById("breadcrumb-current");
+  const viewTitle = document.getElementById("view-title");
+
+  if (breadcrumbParent) breadcrumbParent.textContent = parentName;
+  if (breadcrumbCurrent) breadcrumbCurrent.textContent = currentName;
+  if (viewTitle) viewTitle.textContent = pageTitle;
+}
+
+/**
+ * Initialize health widget on page load
+ */
+function initializeHealthWidget() {
+  // Simulate or fetch health data
+  // For now, using default 94% (all balanced)
+  updateHealthWidget(94, "All balanced");
+
+  // In a real app, this would fetch from the backend:
+  // apiRequest('/api/v1/business/health').then((data) => {
+  //   updateHealthWidget(data.percentage, data.status);
+  // });
+}
+
+/**
+ * Initialize header on page load
+ */
+function initializeHeader() {
+  updatePageHeader("Workspaces", "Dashboard", "Dashboard Workspace");
+  initializeHealthWidget();
+}
+
+// Call on app initialization
+initializeHeader();
 
 if (isProductionShell()) {
   const configuredApiBase = getConfiguredApiBaseUrl();

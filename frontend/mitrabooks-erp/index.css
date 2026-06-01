@@ -1,0 +1,287 @@
+/*
+  =========================================
+  MitraBooks ERP - Theme Enhancement CSS
+  =========================================
+  Enhances app-shell.css with theme tokens for dark/light mode support.
+  PWA-safe: zero external dependencies, works with existing HTML structure.
+*/
+
+/* ============================================
+   THEME AWARE OVERRIDES FOR EXISTING CLASSES
+   ============================================ */
+
+/* Dark theme (default) - override app-shell.css hardcoded colors */
+html[data-theme="dark"] {
+  --bg: var(--bg-primary, #090c14);
+  --panel: var(--bg-secondary, #0f1424);
+  --panel-2: var(--bg-card, rgba(18, 25, 47, 0.65));
+  --text: var(--text-primary, #f8fafc);
+  --muted: var(--text-secondary, #94a3b8);
+  --border: var(--border-color, rgba(255, 255, 255, 0.08));
+  --accent: var(--accent-color, #3b82f6);
+  --success: var(--success-color, #10b981);
+  --warning: var(--warning-color, #f59e0b);
+  --danger: var(--danger-color, #ef4444);
+}
+
+/* Light theme - override for light mode */
+html[data-theme="light"] {
+  --bg: var(--bg-primary, #f8fafc);
+  --panel: var(--bg-secondary, #ffffff);
+  --panel-2: var(--bg-card, rgba(255, 255, 255, 0.85));
+  --text: var(--text-primary, #0f172a);
+  --muted: var(--text-secondary, #475569);
+  --border: var(--border-color, rgba(0, 0, 0, 0.08));
+  --accent: var(--accent-color, #2563eb);
+  --success: var(--success-color, #059669);
+  --warning: var(--warning-color, #d97706);
+  --danger: var(--danger-color, #dc2626);
+}
+
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ============================================
+   ENHANCE EXISTING SIDEBAR
+   ============================================ */
+
+.sidebar {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html[data-theme="dark"] .sidebar {
+  background: var(--bg-sidebar, #0a0d18) !important;
+  border-color: var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+}
+
+html[data-theme="light"] .sidebar {
+  background: var(--bg-secondary, #ffffff) !important;
+  border-color: var(--border-color, rgba(0, 0, 0, 0.08)) !important;
+}
+
+/* ============================================
+   ENHANCE BRAND SECTION
+   ============================================ */
+
+.brand {
+  position: relative;
+}
+
+html[data-theme="dark"] .brand {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .brand h1 {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .brand p {
+  color: #94a3b8;
+}
+
+/* ============================================
+   ENHANCE NAVIGATION
+   ============================================ */
+
+.nav a,
+.nav button {
+  transition: var(--transition-smooth, all 0.25s ease);
+}
+
+html[data-theme="dark"] .nav a,
+html[data-theme="dark"] .nav button {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .nav a:hover,
+html[data-theme="dark"] .nav button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .nav a.active,
+html[data-theme="dark"] .nav button.active {
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+  color: var(--accent-color, #3b82f6);
+}
+
+html[data-theme="light"] .nav a:hover,
+html[data-theme="light"] .nav button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="light"] .nav a.active,
+html[data-theme="light"] .nav button.active {
+  color: var(--accent-color, #2563eb);
+}
+
+/* ============================================
+   ENHANCE TOPBAR/HEADER
+   ============================================ */
+
+.topbar {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+html[data-theme="dark"] .topbar {
+  background: var(--bg-secondary, #0f1424) !important;
+  border-color: var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+}
+
+html[data-theme="light"] .topbar {
+  background: var(--bg-secondary, #ffffff) !important;
+  border-color: var(--border-color, rgba(0, 0, 0, 0.08)) !important;
+}
+
+/* ============================================
+   ENHANCE BUTTONS
+   ============================================ */
+
+.secondary {
+  transition: var(--transition-smooth, all 0.25s ease);
+}
+
+html[data-theme="dark"] .secondary {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #94a3b8 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="dark"] .secondary:hover {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ============================================
+   HEALTH/PILL WIDGET
+   ============================================ */
+
+.pill {
+  transition: var(--transition-smooth, all 0.25s ease);
+}
+
+html[data-theme="dark"] .pill {
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+  border-color: rgba(var(--accent-rgb, 59, 130, 246), 0.2);
+  color: var(--accent-color, #3b82f6);
+}
+
+html[data-theme="light"] .pill {
+  background: rgba(var(--accent-rgb, 37, 99, 235), 0.08);
+  border-color: rgba(var(--accent-rgb, 37, 99, 235), 0.15);
+  color: var(--accent-color, #2563eb);
+}
+
+/* ============================================
+   CONTENT AREA
+   ============================================ */
+
+.content {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html[data-theme="dark"] .content {
+  background: var(--bg-primary, #090c14) !important;
+}
+
+html[data-theme="light"] .content {
+  background: var(--bg-primary, #f8fafc) !important;
+}
+
+/* ============================================
+   CARD STYLING
+   ============================================ */
+
+.card {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+html[data-theme="dark"] .card {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65)) !important;
+  border-color: var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--text-primary, #f8fafc);
+}
+
+html[data-theme="light"] .card {
+  background: var(--bg-card, rgba(255, 255, 255, 0.85)) !important;
+  border-color: var(--border-color, rgba(0, 0, 0, 0.08)) !important;
+  color: var(--text-primary, #0f172a);
+}
+
+/* ============================================
+   FORM ELEMENTS
+   ============================================ */
+
+input,
+textarea,
+select {
+  transition: var(--transition-smooth, all 0.25s ease);
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background: var(--bg-input, #12182e) !important;
+  color: var(--text-primary, #f8fafc) !important;
+  border-color: var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--text-muted, #475569) !important;
+}
+
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] select:focus {
+  border-color: var(--border-color-focus, rgba(59, 130, 246, 0.5)) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 59, 130, 246), 0.1) !important;
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select {
+  background: var(--bg-input, #f1f5f9) !important;
+  color: var(--text-primary, #0f172a) !important;
+  border-color: var(--border-color, rgba(0, 0, 0, 0.08)) !important;
+}
+
+html[data-theme="light"] input:focus,
+html[data-theme="light"] textarea:focus,
+html[data-theme="light"] select:focus {
+  border-color: var(--border-color-focus, rgba(37, 99, 235, 0.5)) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 37, 99, 235), 0.08) !important;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease;
+}

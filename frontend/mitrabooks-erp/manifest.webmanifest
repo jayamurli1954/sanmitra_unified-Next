@@ -1,20 +1,55 @@
 {
   "name": "MitraBooks Unified ERP",
   "short_name": "MitraBooks",
-  "description": "Unified ERP shell for GruhaMitra, MandirMitra, and MitraBooks workflows.",
+  "description": "Premium PWA for unified accounting-heavy ERP workflows with offline support.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
   "orientation": "any",
-  "background_color": "#f7f8fb",
-  "theme_color": "#121826",
+  "background_color": "#090c14",
+  "theme_color": "#3b82f6",
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "../assets/brand/mitrabooks-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "form_factor": "wide"
+    }
+  ],
   "icons": [
     {
       "src": "../assets/brand/mitrabooks-logo.jpg",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open MitraBooks dashboard",
+      "url": "./?view=dashboard",
+      "icons": [
+        {
+          "src": "../assets/brand/mitrabooks-logo.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Create Voucher",
+      "short_name": "New Voucher",
+      "description": "Create a new accounting voucher",
+      "url": "./?view=vouchers",
+      "icons": [
+        {
+          "src": "../assets/brand/mitrabooks-logo.jpg",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
