@@ -547,6 +547,149 @@ function businessNavigationItems() {
   ];
 }
 
+/**
+ * Load grouped navigation from /api/v1/modules/me (Phase 1D)
+ * Groups modules by nav_group for professional accounting app layout
+ */
+async function loadAndRenderGroupedNav(appKey) {
+  try {
+    const response = await loadModules(appKey);
+    if (!response.ok) {
+      console.log("[Nav] API returned status", response.status, "- using fallback");
+      renderGroupedNavFromItems(businessNavigationItems());
+      return;
+    }
+
+    const payload = await response.json();
+    const modules = payload.enabled_modules || [];
+
+    if (!Array.isArray(modules) || modules.length === 0) {
+      console.log("[Nav] No modules in response - using fallback");
+      renderGroupedNavFromItems(businessNavigationItems());
+      return;
+    }
+
+    // Group modules by nav_group field
+    const grouped = {};
+    const groupOrder = [
+      "Main Workspaces",
+      "Core Ledger",
+      "Income (Sales)",
+      "Expenses (Purchases)",
+      "Banking & Treasury",
+      "Taxes & Compliance",
+      "Intelligence & Reports",
+      "Configuration & Extensions",
+    ];
+
+    modules.forEach(module => {
+      const group = module.nav_group || "Other";
+      if (!grouped[group]) {
+        grouped[group] = [];
+      }
+      grouped[group].push({
+        label: module.display_name,
+        businessWorkspace: module.frontend_path?.split("/").pop() || "default",
+        icon: module.icon || "●",
+        module: {
+          module_key: module.module_key,
+          frontend_path: module.frontend_path,
+          enabled: module.enabled !== false,
+          display_name: module.display_name,
+        },
+      });
+    });
+
+    // Sort groups by predefined order
+    const sortedGroups = [];
+    groupOrder.forEach(group => {
+      if (grouped[group]) {
+        sortedGroups.push({ name: group, items: grouped[group] });
+      }
+    });
+
+    // Add remaining groups not in predefined order
+    Object.keys(grouped).forEach(group => {
+      if (!groupOrder.includes(group)) {
+        sortedGroups.push({ name: group, items: grouped[group] });
+      }
+    });
+
+    renderGroupedNav(sortedGroups);
+    console.log("[Nav] Loaded grouped navigation with", sortedGroups.length, "groups");
+  } catch (error) {
+    console.error("[Nav] Error loading grouped navigation:", error);
+    renderGroupedNavFromItems(businessNavigationItems());
+  }
+}
+
+/**
+ * Render navigation with group headers (Phase 1D)
+ */
+function renderGroupedNav(groups) {
+  const nav = document.getElementById("nav");
+  if (!nav) return;
+
+  nav.innerHTML = "";
+
+  groups.forEach((group, groupIndex) => {
+    // Group header
+    const header = document.createElement("div");
+    header.className = "nav-group-header";
+    header.textContent = group.name;
+    header.style.cssText = `
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 12px 16px 8px;
+      margin-top: ${groupIndex === 0 ? "0" : "8px"};
+    `;
+    nav.appendChild(header);
+
+    // Items in group
+    group.items.forEach(item => {
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = item.module.enabled ? "" : "locked";
+      link.setAttribute("aria-disabled", item.module.enabled ? "false" : "true");
+      link.dataset.moduleKey = item.module.module_key || "";
+      link.dataset.frontendPath = item.module.frontend_path || "";
+      link.dataset.businessWorkspace = item.businessWorkspace || "";
+      link.dataset.navIcon = item.icon;
+      link.textContent = item.label;
+      nav.appendChild(link);
+    });
+  });
+
+  syncBusinessNavActiveState();
+}
+
+/**
+ * Fallback: Render hardcoded navigation items (no grouping)
+ */
+function renderGroupedNavFromItems(items) {
+  const nav = document.getElementById("nav");
+  if (!nav) return;
+
+  nav.innerHTML = "";
+  items.forEach(item => {
+    const link = document.createElement("a");
+    link.href = "#";
+    link.className = item.module.enabled === false ? "locked" : "";
+    link.setAttribute("aria-disabled", item.module.enabled ? "false" : "true");
+    link.dataset.moduleKey = item.module.module_key || "";
+    link.dataset.frontendPath = item.module.frontend_path || "";
+    link.dataset.businessWorkspace = item.businessWorkspace || "";
+    link.dataset.navIcon = item.icon;
+    link.textContent = item.label;
+    nav.appendChild(link);
+  });
+
+  syncBusinessNavActiveState();
+}
+
 function renderStatCards(stats) {
   return stats.map(([label, value, subtext]) => `
     <article class="metric-tile">
@@ -5652,6 +5795,8 @@ function setExperience(nextExperience) {
   } else if (nextExperience === "gruha") {
     loadGruhaDashboard();
   } else if (nextExperience === "mitrabooks") {
+    const appKey = EXPERIENCE_APP_KEYS[nextExperience] || APP_KEY;
+    loadAndRenderGroupedNav(appKey);
     loadAccountingDrilldownResult().then(() => {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
     });
@@ -6197,5 +6342,12 @@ document.querySelectorAll(".module-switch button").forEach((button) => button.cl
 document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
 updateSessionUi();
 renderModules();
+
+// Load grouped navigation for MitraBooks (Phase 1D)
+if (currentExperience === "mitrabooks" && getAccessToken()) {
+  const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  loadAndRenderGroupedNav(appKey);
+}
+
 renderModuleState(moduleState);
 runChecks();
