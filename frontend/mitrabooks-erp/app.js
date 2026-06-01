@@ -569,6 +569,8 @@ async function loadAndRenderGroupedNav(appKey) {
       return;
     }
 
+    console.log("[Nav] Loaded", modules.length, "modules from API");
+
     // Group modules by nav_group field
     const grouped = {};
     const groupOrder = [
@@ -583,7 +585,7 @@ async function loadAndRenderGroupedNav(appKey) {
     ];
 
     modules.forEach(module => {
-      const group = module.nav_group || "Other";
+      const group = module.nav_group || "Modules";
       if (!grouped[group]) {
         grouped[group] = [];
       }
@@ -615,8 +617,14 @@ async function loadAndRenderGroupedNav(appKey) {
       }
     });
 
+    if (sortedGroups.length === 0) {
+      console.log("[Nav] No groups created - using fallback");
+      renderGroupedNavFromItems(businessNavigationItems());
+      return;
+    }
+
     renderGroupedNav(sortedGroups);
-    console.log("[Nav] Loaded grouped navigation with", sortedGroups.length, "groups");
+    console.log("[Nav] Rendered grouped navigation with", sortedGroups.length, "groups");
   } catch (error) {
     console.error("[Nav] Error loading grouped navigation:", error);
     renderGroupedNavFromItems(businessNavigationItems());
@@ -631,6 +639,7 @@ function renderGroupedNav(groups) {
   if (!nav) return;
 
   nav.innerHTML = "";
+  console.log("[Nav] Rendering", groups.length, "groups");
 
   groups.forEach((group, groupIndex) => {
     // Group header
@@ -660,6 +669,7 @@ function renderGroupedNav(groups) {
       link.dataset.navIcon = item.icon;
       link.textContent = item.label;
       nav.appendChild(link);
+      console.log("[Nav]   -", group.name, ":", item.label, "(", item.businessWorkspace, ")");
     });
   });
 
@@ -667,13 +677,30 @@ function renderGroupedNav(groups) {
 }
 
 /**
- * Fallback: Render hardcoded navigation items (no grouping)
+ * Fallback: Render hardcoded navigation items (no grouping, while backend adds nav_group)
  */
 function renderGroupedNavFromItems(items) {
   const nav = document.getElementById("nav");
   if (!nav) return;
 
   nav.innerHTML = "";
+  console.log("[Nav] Using fallback with", items.length, "hardcoded items");
+
+  // Add a single "Main" group header for fallback
+  const header = document.createElement("div");
+  header.className = "nav-group-header";
+  header.textContent = "Main";
+  header.style.cssText = `
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted, #94a3b8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 16px 8px;
+    margin-top: 0;
+  `;
+  nav.appendChild(header);
+
   items.forEach(item => {
     const link = document.createElement("a");
     link.href = "#";
@@ -685,6 +712,7 @@ function renderGroupedNavFromItems(items) {
     link.dataset.navIcon = item.icon;
     link.textContent = item.label;
     nav.appendChild(link);
+    console.log("[Nav]   - Main:", item.label);
   });
 
   syncBusinessNavActiveState();
@@ -1375,6 +1403,15 @@ async function signInWithPassword() {
   updateSessionUi();
   setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
   renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
+
+  // Load grouped navigation after successful login (Phase 1D)
+  if (currentExperience === "mitrabooks") {
+    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+    loadAndRenderGroupedNav(appKey).catch(err => {
+      console.error("[Login] Failed to load grouped nav:", err);
+    });
+  }
+
   await showMandirSplash();
   try {
     await Promise.all([runChecks(), delay(1400)]);
