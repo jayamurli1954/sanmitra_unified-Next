@@ -27,6 +27,12 @@ def _json_safe_doc(doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key != "_id"}
 
 
+def _voucher_response_doc(doc: dict, *, created: bool = False) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("created", created)
+    return result
+
+
 def _voucher_prefix(voucher_type: str) -> str:
     return {
         "payment": "PV",
@@ -337,7 +343,7 @@ async def list_vouchers(
         .limit(safe_limit)
         .to_list(length=safe_limit)
     )
-    return {"items": [_json_safe_doc(row) for row in rows], "total": len(rows)}
+    return {"items": [_voucher_response_doc(row) for row in rows], "total": len(rows)}
 
 
 async def get_voucher(
@@ -355,7 +361,7 @@ async def get_voucher(
             "voucher_id": voucher_id,
         }
     )
-    return _json_safe_doc(row) if row else None
+    return _voucher_response_doc(row) if row else None
 
 
 async def reverse_typed_voucher(

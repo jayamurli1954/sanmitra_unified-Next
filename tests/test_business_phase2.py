@@ -357,6 +357,9 @@ async def test_list_vouchers_filters_by_type_and_scope(monkeypatch):
             "accounting_entity_id": "primary",
             "entry_date": "2026-05-20",
             "journal_entry_id": 77,
+            "created_by": "owner-1",
+            "created_at": "2026-05-20T10:00:00Z",
+            "updated_at": "2026-05-20T10:00:00Z",
         },
         {
             "voucher_id": "v2",
@@ -392,6 +395,7 @@ async def test_list_vouchers_filters_by_type_and_scope(monkeypatch):
     assert result["items"][0]["voucher_id"] == "v1"
     assert result["items"][0]["tenant_id"] == "business-tenant"
     assert result["items"][0]["journal_entry_id"] == 77
+    assert result["items"][0]["created"] is False
 
 
 @pytest.mark.asyncio
