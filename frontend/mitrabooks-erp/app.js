@@ -560,7 +560,7 @@ async function loadAndRenderGroupedNav(appKey) {
       return;
     }
 
-    const payload = await response.json();
+    const payload = response.payload || {};
     const modules = payload.enabled_modules || [];
 
     if (!Array.isArray(modules) || modules.length === 0) {
