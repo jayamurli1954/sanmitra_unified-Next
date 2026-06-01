@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sanmitra-backend-staging-sg
+    name: sanmitra-unified-next-staging-sg
     runtime: python
     plan: starter
     region: singapore
