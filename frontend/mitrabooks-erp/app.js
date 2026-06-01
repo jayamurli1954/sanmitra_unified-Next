@@ -3663,6 +3663,24 @@ const auditListState = {
   to_date: "",
 };
 
+function formatTimestampIST(utcTimestamp) {
+  if (!utcTimestamp) return "-";
+  try {
+    // Parse UTC timestamp and convert to IST (UTC+5:30)
+    const date = new Date(utcTimestamp.includes('Z') ? utcTimestamp : utcTimestamp + 'Z');
+    const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours for IST
+    const year = istDate.getUTCFullYear();
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    const hours = String(istDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} IST`;
+  } catch (e) {
+    return utcTimestamp.slice(0, 19);
+  }
+}
+
 function renderAuditEventsTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return `<p class="muted">No audit events found.</p>`;
@@ -3686,7 +3704,7 @@ function renderAuditEventsTable(rows) {
             const detailShort = detail.length > 30 ? detail.slice(0, 27) + "..." : detail;
             return `
               <tr>
-                <td style="font-size: 12px;">${escapeHtml(String(row.timestamp || row.created_at || "").slice(0, 19))}</td>
+                <td style="font-size: 12px;">${escapeHtml(formatTimestampIST(row.timestamp || row.created_at || ""))}</td>
                 <td>${escapeHtml(row.entity_type || row.entity || "-")}</td>
                 <td><span class="pill">${escapeHtml(row.action || "unknown")}</span></td>
                 <td>${escapeHtml(row.actor || row.user || "-")}</td>
