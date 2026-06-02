@@ -41,6 +41,19 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toBeVisible();
     await expect(page.locator('#access-panel')).toBeHidden();
     await expect(page.locator('.business-dashboard')).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const topbar = document.querySelector('.erp-topbar')?.getBoundingClientRect();
+      const contextCards = document.querySelector('#context-cards')?.getBoundingClientRect();
+      return {
+        topbarTop: topbar?.top ?? 0,
+        contextTop: contextCards?.top ?? 0,
+        contextLeft: contextCards?.left ?? 0,
+        contextWidth: contextCards?.width ?? 0,
+      };
+    });
+    expect(layout.topbarTop).toBeLessThan(layout.contextTop);
+    expect(layout.contextLeft).toBeLessThan(420);
+    expect(layout.contextWidth).toBeGreaterThan(700);
     await expect(page.locator('.executive-dashboard')).toBeVisible();
     await expect(page.locator('.executive-dashboard')).toContainText('Income vs Expenses');
     await expect(page.locator('.executive-dashboard')).toContainText('CEO Insight');
