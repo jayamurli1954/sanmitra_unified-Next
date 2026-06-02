@@ -156,6 +156,7 @@ if (window.matchMedia) {
 
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
+const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
 const LOGIN_EMAIL_STORAGE_KEY = "sanmitra_mitrabooks_login_email";
 const EXPERIENCE_APP_KEYS = {
   mitrabooks: "mitrabooks",
@@ -1601,8 +1602,8 @@ function updateSessionUi() {
     const role = lastModuleContext?.role || lastModuleContext?.user_role || "";
     sidebarUserRole.textContent = signedIn ? (role || "Tenant context pending") : "Sign in to load tenant";
   }
-  if (loginEmail && !loginEmail.value && savedEmail) {
-    loginEmail.value = savedEmail;
+  if (loginEmail && !loginEmail.value) {
+    loginEmail.value = savedEmail || DEFAULT_MITRABOOKS_LOGIN_EMAIL;
   }
   if (tokenInput) {
     tokenInput.value = getAccessToken();
@@ -4406,7 +4407,7 @@ async function loadBusinessAccounts() {
         setLoginStatus(
           "warn",
           "MitraBooks business tenant required",
-          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as admin@mitrabooks.local for voucher posting.`
+          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as ${DEFAULT_MITRABOOKS_LOGIN_EMAIL} for voucher posting.`
         );
       } else {
         setLoginStatus("warn", "No chart of accounts found", "Initialize the MitraBooks chart of accounts before posting vouchers.");

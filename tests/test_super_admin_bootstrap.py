@@ -255,6 +255,36 @@ async def test_demo_mitrabooks_alias_email_defaults_include_legacy_business_admi
     assert "businessadmin@sanmitra.local" in settings.DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS
 
 
+def test_mitrabooks_seed_script_can_expand_admin_aliases(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts.seed_mitrabooks_local_demo import _admin_emails
+
+    settings = SimpleNamespace(
+        DEMO_MITRABOOKS_ADMIN_EMAIL="admin@mitrabooks.local",
+        DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS=[
+            "business.admin@sanmitra.local",
+            "businessadmin@sanmitra.local",
+            "businessadmin@sanmitra.local",
+        ],
+    )
+
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+
+    emails = _admin_emails(
+        SimpleNamespace(
+            email="BUSINESSADMIN@sanmitra.local",
+            all_admin_aliases=True,
+        )
+    )
+
+    assert emails == [
+        "businessadmin@sanmitra.local",
+        "admin@mitrabooks.local",
+        "business.admin@sanmitra.local",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_ensure_demo_gruhamitra_user_creates_housing_tenant(monkeypatch):
     fake_users = FakeUsersCollection()
