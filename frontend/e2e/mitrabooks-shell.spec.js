@@ -114,23 +114,24 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.getByRole('button', { name: 'Expenses (Purchases)' }).click();
     await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toBeVisible();
     await expect(page.locator('#access-panel')).toBeHidden();
+    await expect(page.locator('#context-cards')).toBeHidden();
     await expect(page.locator('.business-dashboard')).toBeVisible();
     const layout = await page.evaluate(() => {
       const topbar = document.querySelector('.erp-topbar')?.getBoundingClientRect();
-      const contextCards = document.querySelector('#context-cards')?.getBoundingClientRect();
+      const executiveDashboard = document.querySelector('.executive-dashboard')?.getBoundingClientRect();
       return {
         topbarTop: topbar?.top ?? 0,
-        contextTop: contextCards?.top ?? 0,
-        contextLeft: contextCards?.left ?? 0,
-        contextWidth: contextCards?.width ?? 0,
+        executiveTop: executiveDashboard?.top ?? 0,
+        executiveLeft: executiveDashboard?.left ?? 0,
+        executiveWidth: executiveDashboard?.width ?? 0,
       };
     });
-    expect(layout.topbarTop).toBeLessThan(layout.contextTop);
-    expect(layout.contextLeft).toBeLessThan(420);
-    expect(layout.contextWidth).toBeGreaterThan(700);
+    expect(layout.topbarTop).toBeLessThan(layout.executiveTop);
+    expect(layout.executiveLeft).toBeLessThan(420);
+    expect(layout.executiveWidth).toBeGreaterThan(700);
     await expect(page.locator('.executive-dashboard')).toBeVisible();
-    await expect(page.locator('.executive-dashboard')).toContainText('Income vs Expenses');
-    await expect(page.locator('.executive-dashboard')).toContainText('CEO Insight');
+    await expect(page.locator('.executive-dashboard')).toContainText('Sales & Expenses Trend');
+    await expect(page.locator('.executive-dashboard')).toContainText('CEO Insights');
     await expect(page.locator('.finance-chart')).toBeVisible();
     await expect(page.locator('.erp-health-panel')).toBeVisible();
     await expect(page.locator('.erp-health-panel')).toContainText('Data Health');

@@ -886,8 +886,8 @@ function renderBusinessExecutiveDashboard() {
         <article class="finance-chart-card">
           <div class="preview-heading compact">
             <div>
-              <h4>Income vs Expenses</h4>
-              <p>Monthly operating comparison for quick management review.</p>
+              <h4>Sales & Expenses Trend</h4>
+              <p>Scoped performance metrics for the active BUSINESS Suite.</p>
             </div>
             <span class="pill ok">CEO view</span>
           </div>
@@ -903,13 +903,13 @@ function renderBusinessExecutiveDashboard() {
         <article class="ceo-panel">
           <div class="preview-heading compact">
             <div>
-              <h4>CEO Insight</h4>
-              <p>Management actions for the next operating cycle.</p>
+              <h4>CEO Insights</h4>
+              <p>Real-time ledger analytics and operating summaries.</p>
             </div>
           </div>
           <ul>
-            <li><strong>Collections:</strong> Keep receivables review on the daily workbench.</li>
-            <li><strong>Spend:</strong> Purchases are controlled, but vendor dues need weekly review.</li>
+            <li><strong>Cash flow:</strong> Coverage is robust; keep vendor obligations visible.</li>
+            <li><strong>Receivables:</strong> Collection follow-up remains the highest-impact daily action.</li>
             <li><strong>Books:</strong> ${voucherCount} posted voucher(s), ${partyCount} visible party record(s), and ${accountCount} account(s) loaded.</li>
           </ul>
         </article>
@@ -3387,8 +3387,8 @@ function renderDashboardPreview(config) {
           </div>
           <span class="pill ok">finance workspace</span>
         </div>
-        <div class="metric-grid four">${renderStatCards(dashboard.stats || [])}</div>
         ${renderBusinessExecutiveDashboard()}
+        <div class="metric-grid four">${renderStatCards(dashboard.stats || [])}</div>
         <div class="dashboard-main-grid">
           <article>
             <h4>Quick Actions</h4>

@@ -873,6 +873,10 @@ html[data-theme="light"] select:focus {
   display: none;
 }
 
+.app.signed-in:not(.mandir-domain) #context-cards {
+  display: none;
+}
+
 .app.signed-in:not(.mandir-domain) .main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
