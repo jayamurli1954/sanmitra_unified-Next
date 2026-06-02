@@ -20,7 +20,7 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Parties');
-    await expect(page.getByRole('button', { name: '+ New Party' })).toBeVisible();
+    await expect(page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Party' })).toBeVisible();
 
     await page.locator('nav#nav a[data-business-workspace="vouchers"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Vouchers');

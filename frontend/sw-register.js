@@ -5,8 +5,12 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    if (!window.location.pathname.startsWith('/mitrabooks-erp/')) {
+      return;
+    }
+
     navigator.serviceWorker
-      .register('/service-worker.js', { scope: '/' })
+      .register('/service-worker.js', { scope: '/mitrabooks-erp/' })
       .then((registration) => {
         console.log('[App] Service Worker registered:', registration);
 

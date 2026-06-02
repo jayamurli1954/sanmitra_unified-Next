@@ -20,6 +20,15 @@ function copyStaticDir(name) {
   fs.cpSync(source, destination, { recursive: true });
 }
 
+function copyStaticFile(name) {
+  const source = path.join(repoRoot, name);
+  const destination = path.join(buildDir, name);
+  if (!fs.existsSync(source)) {
+    return;
+  }
+  fs.copyFileSync(source, destination);
+}
+
 const buildResult = spawnSync(
   process.execPath,
   [require.resolve('react-scripts/scripts/build')],
@@ -48,6 +57,8 @@ async function run() {
   copyStaticDir('assets');
   copyStaticDir('shared');
   copyStaticDir('mitrabooks-erp');
+  copyStaticFile('service-worker.js');
+  copyStaticFile('sw-register.js');
 }
 
 run();

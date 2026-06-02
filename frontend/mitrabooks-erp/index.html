@@ -21,58 +21,54 @@
     <!-- Service Worker Registration (PWA offline support) -->
     <script src="../sw-register.js" defer></script>
     <div class="app" id="app-root">
-      <aside class="sidebar">
-        <!-- Brand Section with Glow Effect -->
-        <div class="brand" style="position: relative;">
-          <div style="position: absolute; width: 44px; height: 44px; background: var(--accent-color, #3b82f6); filter: blur(12px); opacity: 0.35; border-radius: 50%; z-index: 1;"></div>
-          <img class="brand-logo" id="brand-logo" src="../assets/brand/mitrabooks-logo.jpg" alt="MitraBooks" style="position: relative; z-index: 2;">
+      <aside class="sidebar erp-sidebar">
+        <div class="brand erp-brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <img class="brand-logo" id="brand-logo" src="../assets/brand/mitrabooks-logo.jpg" alt="MitraBooks">
           <div class="brand-text">
             <h1 id="brand-title">MitraBooks ERP</h1>
             <p id="brand-subtitle">Unified shell for accounting-heavy SanMitra modules</p>
           </div>
         </div>
 
-        <!-- Org/Experience Selector (Phase 1C Enhancement) -->
-        <div class="org-selector" id="org-selector" style="position: relative; margin-bottom: 8px;">
-          <button class="selected-org" id="org-trigger" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); padding: 10px 14px; border-radius: 8px; cursor: pointer; color: #e2e8f0; width: 100%; font-size: 13px; font-weight: 600; transition: all 0.25s ease;">
-            <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--accent-color, #3b82f6); box-shadow: 0 0 8px var(--accent-color, #3b82f6); flex-shrink: 0;"></div>
-            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-              <span id="current-org-type" style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Business Suite</span>
-              <small id="current-org-tenant" style="font-size: 10px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Acme Corp Ltd</small>
+        <div class="org-selector" id="org-selector">
+          <button class="selected-org" id="org-trigger" type="button">
+            <span class="context-dot" aria-hidden="true"></span>
+            <div class="context-copy">
+              <span id="current-org-type">Context not loaded</span>
+              <small id="current-org-tenant">Sign in to load tenant</small>
             </div>
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s ease; flex-shrink: 0;"><path d="M6 9l6 6 6-6"/></svg>
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
-          <div class="org-dropdown" id="org-menu" style="position: absolute; top: 100%; left: 0; right: 0; margin-top: 8px; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); overflow: hidden; z-index: 200; display: none;">
-            <div class="org-option active" data-org="BUSINESS" style="display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; transition: all 0.25s ease; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: #e2e8f0;">
-              <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--accent-color, #3b82f6); flex-shrink: 0;"></div>
-              <div><strong style="display: block; font-size: 13px;">Business Suite</strong><small style="font-size: 10px; color: #94a3b8;">SME & Accounting</small></div>
+          <div class="org-dropdown" id="org-menu" hidden>
+            <div class="org-option active" data-org="BUSINESS">
+              <span class="context-dot" aria-hidden="true"></span>
+              <div><strong>Business Suite</strong><small>SME and accounting</small></div>
             </div>
-            <div class="org-option" data-org="PROFESSIONAL" style="display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; transition: all 0.25s ease; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: #e2e8f0;">
-              <div style="width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); flex-shrink: 0;"></div>
-              <div><strong style="display: block; font-size: 13px;">Professional Suite</strong><small style="font-size: 10px; color: #94a3b8;">Billing & Invoicing</small></div>
+            <div class="org-option" data-org="PROFESSIONAL">
+              <span class="context-dot muted-dot" aria-hidden="true"></span>
+              <div><strong>Professional Suite</strong><small>Billing and invoicing</small></div>
             </div>
-            <div class="org-option" data-org="CA_PRACTICE" style="display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; transition: all 0.25s ease; color: #e2e8f0;">
-              <div style="width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); flex-shrink: 0;"></div>
-              <div><strong style="display: block; font-size: 13px;">CA Practice Portal</strong><small style="font-size: 10px; color: #94a3b8;">Multi-Client Books</small></div>
+            <div class="org-option" data-org="CA_PRACTICE">
+              <span class="context-dot muted-dot" aria-hidden="true"></span>
+              <div><strong>CA Practice Portal</strong><small>Planned multi-client books</small></div>
             </div>
           </div>
         </div>
 
-        <!-- Financial Year Selector (Phase 1C Enhancement) -->
-        <div class="fy-selector" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; padding: 8px; margin-bottom: 8px; position: relative;">
+        <div class="fy-selector">
           <span>Active Period:</span>
-          <button class="fy-badge" id="fy-trigger" style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); padding: 6px 10px; border-radius: 6px; cursor: pointer; color: #e2e8f0; font-size: 12px; font-weight: 600; transition: all 0.25s ease;">
+          <button class="fy-badge" id="fy-trigger" type="button">
             <span id="current-fy">FY 2026-27</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 10px; height: 10px; margin-left: 4px;"><path d="M6 9l6 6 6-6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
-          <div class="fy-dropdown" id="fy-menu" style="position: absolute; top: 100%; left: 8px; margin-top: 8px; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); overflow: hidden; z-index: 200; display: none; min-width: 140px;">
-            <div class="fy-option active" data-fy="2026-27" style="display: block; padding: 10px 14px; cursor: pointer; transition: all 0.25s ease; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: #e2e8f0; font-size: 12px; font-weight: 600;">FY 2026-27 <small style="color: #94a3b8;">(Active)</small></div>
-            <div class="fy-option" data-fy="2025-26" style="display: block; padding: 10px 14px; cursor: pointer; transition: all 0.25s ease; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: #e2e8f0; font-size: 12px;">FY 2025-26</div>
-            <div class="fy-option" data-fy="2024-25" style="display: block; padding: 10px 14px; cursor: pointer; transition: all 0.25s ease; color: #e2e8f0; font-size: 12px;">FY 2024-25</div>
+          <div class="fy-dropdown" id="fy-menu" hidden>
+            <div class="fy-option active" data-fy="2026-27">FY 2026-27 <small>(Active)</small></div>
+            <div class="fy-option" data-fy="2025-26">FY 2025-26</div>
+            <div class="fy-option" data-fy="2024-25">FY 2024-25</div>
           </div>
         </div>
 
-        <!-- Module Switch (Existing, can be hidden with CSS if needed) -->
         <div class="module-switch" aria-label="Experience selector">
           <button id="mode-mitrabooks" class="active" type="button">MitraBooks</button>
           <button id="mode-platform" type="button">Platform Owner</button>
@@ -80,87 +76,77 @@
           <button id="mode-gruha" type="button">GruhaMitra</button>
         </div>
 
-        <!-- Main Navigation -->
         <nav class="nav" id="nav"></nav>
 
-        <!-- Sidebar Footer (Phase 1C Enhancement) -->
-        <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: auto;">
-          <!-- PWA Status Widget -->
-          <div class="pwa-status-widget" style="display: flex; align-items: center; gap: 12px; padding: 8px; font-size: 12px; color: #94a3b8;">
-            <span class="pwa-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981; flex-shrink: 0;"></span>
-            <div class="pwa-details" style="display: flex; flex-direction: column; gap: 2px;">
-              <strong style="font-size: 11px; font-weight: 600; color: #e2e8f0;">PWA Cloud Sync</strong>
-              <span id="pwa-sync-text">Online & Cached</span>
+        <div class="sidebar-footer">
+          <div class="pwa-status-widget">
+            <span class="pwa-dot" aria-hidden="true"></span>
+            <div class="pwa-details">
+              <strong>PWA Cache</strong>
+              <span id="pwa-sync-text">MitraBooks scoped</span>
             </div>
           </div>
 
-          <!-- Theme Switcher Buttons -->
-          <div class="theme-switcher" style="display: flex; gap: 8px;">
-            <button class="theme-btn" id="theme-dark-btn" aria-label="Dark theme" style="flex: 1; padding: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #94a3b8; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; display: flex; align-items: center; justify-content: center;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <div class="theme-switcher">
+            <button class="theme-btn" id="theme-dark-btn" aria-label="Dark theme" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
-            <button class="theme-btn" id="theme-light-btn" aria-label="Light theme" style="flex: 1; padding: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #94a3b8; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; display: flex; align-items: center; justify-content: center;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>
+            <button class="theme-btn" id="theme-light-btn" aria-label="Light theme" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>
             </button>
           </div>
 
-          <!-- User Profile Tile -->
-          <div class="user-profile-tile" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; cursor: pointer; transition: all 0.25s ease;">
-            <div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-color, #3b82f6); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0;">MM</div>
-            <div class="user-details" style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-              <strong style="font-size: 12px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Muralidhar M.</strong>
-              <span style="font-size: 10px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Super Administrator</span>
+          <div class="user-profile-tile">
+            <div class="avatar" id="sidebar-avatar">S</div>
+            <div class="user-details">
+              <strong id="sidebar-user-name">Not signed in</strong>
+              <span id="sidebar-user-role">Tenant context pending</span>
             </div>
           </div>
         </div>
       </aside>
       <main class="main">
-        <header class="topbar" style="display: flex; align-items: center; justify-content: space-between; gap: 24px;">
-          <!-- Header Left: Breadcrumb & Title -->
-          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
-            <div class="breadcrumb" style="font-size: 12px; color: var(--text-muted, #94a3b8); display: flex; align-items: center; gap: 8px;">
+        <header class="topbar erp-topbar">
+          <div class="page-title-block">
+            <div class="breadcrumb">
               <span id="breadcrumb-parent">Workspaces</span>
-              <span class="separator" style="color: var(--text-muted, #94a3b8);">/</span>
-              <strong id="breadcrumb-current" style="color: var(--text-primary, #f8fafc);">Dashboard</strong>
+              <span class="separator">/</span>
+              <strong id="breadcrumb-current">Dashboard</strong>
             </div>
-            <h1 id="view-title" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 18px; font-weight: 600; color: var(--text-primary, #f8fafc); margin: 0;">Dashboard Workspace</h1>
+            <h1 id="view-title">Dashboard Workspace</h1>
           </div>
 
-          <!-- Header Right: Health Widget & Action Buttons -->
-          <div style="display: flex; align-items: center; gap: 24px; margin-left: auto;">
-            <!-- Health Score Widget -->
-            <div class="health-score-widget" style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px;">
-              <svg class="circular-chart" viewBox="0 0 36 36" style="width: 42px; height: 42px; flex-shrink: 0;">
-                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" style="fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 1;" />
-                <path class="circle" stroke-dasharray="94, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" id="health-circle-bar" style="fill: none; stroke: #10b981; stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 0.3s ease;" />
-                <text x="18" y="20.35" class="percentage" id="health-percent-text" style="font-size: 12px; font-weight: 700; text-anchor: middle; color: #10b981; fill: #10b981;">94%</text>
+          <div class="topbar-control-strip">
+            <div class="health-score-widget pending" id="books-health-widget">
+              <svg class="circular-chart" viewBox="0 0 36 36" aria-hidden="true">
+                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="circle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" id="health-circle-bar" />
+                <text x="18" y="20.35" class="percentage" id="health-percent-text">--</text>
               </svg>
               <div class="health-text">
-                <strong style="font-size: 12px; font-weight: 600; color: var(--text-primary, #f8fafc);">Books Health</strong>
-                <span style="font-size: 11px; color: var(--text-muted, #94a3b8);">All balanced</span>
+                <strong>Books Health</strong>
+                <span>Run checks</span>
               </div>
             </div>
 
-            <!-- Quick Action Buttons -->
-            <div class="action-buttons" style="display: flex; gap: 12px; align-items: center;">
-              <button class="btn btn-secondary" id="btn-quick-post-journal" style="padding: 8px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-primary, #f8fafc); border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px; transition: all 0.25s ease;">
+            <div class="action-buttons">
+              <button class="btn btn-secondary" id="btn-quick-post-journal" type="button">
                 <span>Journal Post</span>
               </button>
-              <button class="btn btn-primary" id="btn-quick-party" style="padding: 8px 16px; background: var(--accent-color, #3b82f6); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px; transition: all 0.25s ease;">
+              <button class="btn btn-primary" id="btn-quick-party" type="button">
                 <span>+ New Party</span>
               </button>
             </div>
           </div>
 
-          <!-- Legacy Elements (Kept for compatibility) -->
-          <div class="topbar-actions" id="topbar-actions" style="display: none;">
+          <div class="topbar-actions" id="topbar-actions" hidden>
             <button class="secondary mandir-language" type="button">English</button>
             <span class="topbar-current" id="topbar-current">Dashboard</span>
             <span class="topbar-user" id="topbar-user">Signed in</span>
             <span class="topbar-avatar" id="topbar-avatar">S</span>
             <button class="secondary" id="topbar-logout" type="button">Logout</button>
           </div>
-          <span class="pill" id="health-pill" style="display: none;">Not checked</span>
+          <span class="pill" id="health-pill" hidden>Not checked</span>
         </header>
         <section class="content">
           <section class="card access-panel" id="access-panel">

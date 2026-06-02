@@ -17,6 +17,8 @@ class SpaRequestHandler(SimpleHTTPRequestHandler):
         candidate = Path(self.directory, relative_path)
         if request_path in ('', '/'):
             self.path = '/index.html'
+        elif candidate.is_dir() and Path(candidate, 'index.html').exists():
+            self.path = f'/{relative_path.rstrip("/")}/index.html'
         elif not candidate.exists() or candidate.is_dir():
             if '.' not in Path(relative_path).name:
                 self.path = '/index.html'

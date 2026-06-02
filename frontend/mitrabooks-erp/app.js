@@ -359,6 +359,11 @@ const healthPill = document.getElementById("health-pill");
 const moduleState = document.getElementById("module-state");
 const apiBaseInput = document.getElementById("api-base");
 const tokenInput = document.getElementById("access-token");
+const sidebarAvatar = document.getElementById("sidebar-avatar");
+const sidebarUserName = document.getElementById("sidebar-user-name");
+const sidebarUserRole = document.getElementById("sidebar-user-role");
+const currentOrgType = document.getElementById("current-org-type");
+const currentOrgTenant = document.getElementById("current-org-tenant");
 const entitlementDialog = document.getElementById("entitlement-dialog");
 const entitlementForm = document.getElementById("entitlement-form");
 const entitlementTenantId = document.getElementById("entitlement-tenant-id");
@@ -405,6 +410,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   const preview = options.preview !== false;
   appRoot.className = `app ${config.theme} ${isProductionShell() ? "production-shell" : ""} ${isMandirHost() ? "mandir-domain" : ""}`.trim();
   updateSessionUi();
+  updateTrustedContextUi();
   if (appKeyLabel) {
     appKeyLabel.textContent = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
   }
@@ -1359,6 +1365,16 @@ function updateSessionUi() {
   if (topbarAvatar) {
     topbarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
   }
+  if (sidebarAvatar) {
+    sidebarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
+  }
+  if (sidebarUserName) {
+    sidebarUserName.textContent = signedIn ? (savedEmail || "Signed in") : "Not signed in";
+  }
+  if (sidebarUserRole) {
+    const role = lastModuleContext?.role || lastModuleContext?.user_role || "";
+    sidebarUserRole.textContent = signedIn ? (role || "Tenant context pending") : "Sign in to load tenant";
+  }
   if (loginEmail && !loginEmail.value && savedEmail) {
     loginEmail.value = savedEmail;
   }
@@ -1368,6 +1384,27 @@ function updateSessionUi() {
   const publicLink = document.getElementById("mandir-public-link");
   if (publicLink) {
     publicLink.href = mandirPublicPaymentPageUrl();
+  }
+}
+
+function updateTrustedContextUi(context = lastModuleContext) {
+  const organizationType = String(context?.organization_type || "").toUpperCase();
+  const tenantLabel = context?.tenant_name || context?.organization_name || context?.tenant_id || "";
+  const enabledCount = Array.isArray(context?.enabled_modules)
+    ? context.enabled_modules.length
+    : Array.isArray(context?.modules)
+      ? context.modules.filter((module) => module.enabled !== false).length
+      : 0;
+
+  if (currentOrgType) {
+    currentOrgType.textContent = organizationType ? `${organizationType} workspace` : "Context not loaded";
+  }
+  if (currentOrgTenant) {
+    currentOrgTenant.textContent = tenantLabel || "Sign in to load tenant";
+  }
+  if (sidebarUserRole && getAccessToken()) {
+    const role = context?.role || context?.user_role || "";
+    sidebarUserRole.textContent = role || (enabledCount ? `${enabledCount} enabled module(s)` : "Tenant context loaded");
   }
 }
 
@@ -3322,6 +3359,44 @@ function renderBusinessWorkspace() {
       </div>
     `;
   }
+  if (activeBusinessWorkspace === "accounting") {
+    return `
+      <div class="verification-panel erp-workspace-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Accounting</h4>
+            <p>Chart readiness, voucher drill-down, and posted ledger checks for the active tenant.</p>
+          </div>
+        </div>
+        ${renderAccountingDrilldownPanel()}
+      </div>
+    `;
+  }
+  return `
+    <div class="erp-workbench-grid">
+      <article class="erp-workbench-card">
+        <span class="workbench-kicker">Core Master</span>
+        <h4>Parties</h4>
+        <strong>${escapeHtml(lastBusinessParties.length)}</strong>
+        <p>Customers and vendors available for business posting.</p>
+        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="parties">Open Parties</button>
+      </article>
+      <article class="erp-workbench-card">
+        <span class="workbench-kicker">Posting</span>
+        <h4>Vouchers</h4>
+        <strong>${escapeHtml(lastBusinessVouchers.length)}</strong>
+        <p>Posted journal entries, receipts, payments, and reversals.</p>
+        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">Open Vouchers</button>
+      </article>
+      <article class="erp-workbench-card">
+        <span class="workbench-kicker">Chart</span>
+        <h4>Accounts</h4>
+        <strong>${escapeHtml(lastBusinessAccounts.length)}</strong>
+        <p>Tenant-owned chart of accounts loaded from accounting APIs.</p>
+        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="accounting">Open Accounting</button>
+      </article>
+    </div>
+  `;
   return `
     <div class="dashboard-main-grid erp-command-grid">
       <article>
@@ -3469,11 +3544,7 @@ function openBusinessEditPartyDialog(button) {
 function setBusinessWorkspace(workspace) {
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
-  if (workspace === "accounting") {
-    dashboardPreview.innerHTML = renderAccountingDrilldownPanel();
-  } else {
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-  }
+  dashboardPreview.innerHTML = renderBusinessWorkspace();
   if (workspace === "parties") {
     loadBusinessParties();
   } else if (workspace === "vouchers") {
@@ -3500,7 +3571,9 @@ function syncBusinessNavActiveState() {
       audit: "Audit Trail",
       accounting: "Accounting",
     };
-    topbarCurrent.textContent = labels[activeBusinessWorkspace] || "Dashboard";
+    const label = labels[activeBusinessWorkspace] || "Dashboard";
+    topbarCurrent.textContent = label;
+    updatePageHeader("MitraBooks", label, `${label} Workspace`);
   }
 }
 
@@ -3778,7 +3851,7 @@ function renderBusinessDataHealthActions(state) {
   `;
 }
 
-function renderBusinessDataHealthPanel() {
+function getBusinessHealthState() {
   const modules = enabledModuleKeys();
   const organizationType = String(lastModuleContext?.organization_type || "unknown").toUpperCase();
   const tenantId = lastModuleContext?.tenant_id || "not loaded";
@@ -3796,37 +3869,45 @@ function renderBusinessDataHealthPanel() {
       : "No visible parties yet; GSTIN checks start after party creation.";
   const drilldownReady = lastAccountingDrilldown && lastAccountingDrilldown.ok !== false;
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
-  const hasBusinessModule = modules.has("business");
-  const hasAccountingModule = modules.has("accounting");
-  const hasCashBank = hasBusinessAccount(["Cash in Hand", "Bank Account"], ["asset"]);
-  const hasRevenue = hasBusinessAccount(["Sales", "Service Income"], ["income", "revenue"]);
-  const hasExpense = hasBusinessAccount(["Purchases", "Office Expense", "Rent Expense"], ["expense"]);
   const healthState = {
     isBusinessTenant: organizationType === "BUSINESS",
-    hasBusinessModule,
-    hasAccountingModule,
+    hasBusinessModule: modules.has("business"),
+    hasAccountingModule: modules.has("accounting"),
     accountsLoaded,
     accountsBlocked,
     accountsStatus,
-    hasCashBank,
-    hasRevenue,
-    hasExpense,
+    hasCashBank: hasBusinessAccount(["Cash in Hand", "Bank Account"], ["asset"]),
+    hasRevenue: hasBusinessAccount(["Sales", "Service Income"], ["income", "revenue"]),
+    hasExpense: hasBusinessAccount(["Purchases", "Office Expense", "Rent Expense"], ["expense"]),
     partiesLoaded,
     partiesBlocked,
     partiesMissingGstin,
+    partiesGstinReady,
     drilldownReady,
   };
 
+  return {
+    healthState,
+    organizationType,
+    tenantId,
+    partiesGstinCopy,
+    voucherCount,
+  };
+}
+
+function renderBusinessDataHealthPanel() {
+  const { healthState, organizationType, tenantId, partiesGstinCopy, voucherCount } = getBusinessHealthState();
+
   const checks = [
     dataHealthItem("Business tenant context", healthState.isBusinessTenant, `organization_type=${organizationType}; tenant=${tenantId}`),
-    dataHealthItem("Business module enabled", hasBusinessModule, "Required before parties and vouchers can return tenant data."),
-    dataHealthItem("Accounting module enabled", hasAccountingModule, "Required for chart of accounts and drill-down reports."),
-    dataHealthItem("Chart of accounts loaded", accountsLoaded, accountsBlocked ? `Accounts request returned HTTP ${lastBusinessAccountsResult.status}.` : `${lastBusinessAccounts.length} account(s) available.`),
-    dataHealthItem("Cash and bank accounts", hasCashBank, "Required for receipt, payment, and contra voucher posting."),
-    dataHealthItem("Revenue / income accounts", hasRevenue, "Required before sales or service income postings are introduced."),
-    dataHealthItem("Expense accounts", hasExpense, "Required for purchase and expense postings."),
-    dataHealthItem("Party GSTIN sample", partiesGstinReady, partiesGstinCopy),
-    dataHealthItem("Voucher drill-down", drilldownReady, `Current period shows ${voucherCount} posted voucher(s).`),
+    dataHealthItem("Business module enabled", healthState.hasBusinessModule, "Required before parties and vouchers can return tenant data."),
+    dataHealthItem("Accounting module enabled", healthState.hasAccountingModule, "Required for chart of accounts and drill-down reports."),
+    dataHealthItem("Chart of accounts loaded", healthState.accountsLoaded, healthState.accountsBlocked ? `Accounts request returned HTTP ${lastBusinessAccountsResult.status}.` : `${lastBusinessAccounts.length} account(s) available.`),
+    dataHealthItem("Cash and bank accounts", healthState.hasCashBank, "Required for receipt, payment, and contra voucher posting."),
+    dataHealthItem("Revenue / income accounts", healthState.hasRevenue, "Required before sales or service income postings are introduced."),
+    dataHealthItem("Expense accounts", healthState.hasExpense, "Required for purchase and expense postings."),
+    dataHealthItem("Party GSTIN sample", healthState.partiesGstinReady, partiesGstinCopy),
+    dataHealthItem("Voucher drill-down", healthState.drilldownReady, `Current period shows ${voucherCount} posted voucher(s).`),
   ];
 
   return `
@@ -3836,7 +3917,7 @@ function renderBusinessDataHealthPanel() {
           <h4>Data Health</h4>
           <p>Tenant, module, chart, and drill-down readiness for the current MitraBooks context.</p>
         </div>
-        <span class="pill ${accountsLoaded && hasBusinessModule && hasAccountingModule ? "ok" : "warn"}">Phase 2B</span>
+        <span class="pill ${healthState.accountsLoaded && healthState.hasBusinessModule && healthState.hasAccountingModule ? "ok" : "warn"}">Phase 2B</span>
       </div>
       <ul class="erp-health-list">${checks.join("")}</ul>
       ${renderBusinessDataHealthActions(healthState)}
@@ -4580,6 +4661,7 @@ async function runChecks() {
   const modules = await loadModules(activeAppKey);
   if (modules.ok) {
     lastModuleContext = modules.payload;
+    updateTrustedContextUi(lastModuleContext);
   }
   renderJson(apiOutput, { health, modules });
   renderModuleState(moduleState, modules);
@@ -4608,6 +4690,7 @@ async function runChecks() {
     await loadBusinessPartiesForHealth();
     const accountingDrilldown = await loadAccountingDrilldownResult();
     renderJson(apiOutput, { health, modules, accounting_drilldown: accountingDrilldown });
+    refreshBooksHealthWidget();
     dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
   }
 }
@@ -6183,9 +6266,9 @@ const orgOptions = document.querySelectorAll(".org-option");
 
 if (orgTrigger) {
   orgTrigger.addEventListener("click", () => {
-    const isOpen = orgMenu.style.display === "block";
-    orgMenu.style.display = isOpen ? "none" : "block";
-    orgSelector.classList.toggle("open");
+    const isOpen = !orgMenu.hidden;
+    orgMenu.hidden = isOpen;
+    orgSelector.classList.toggle("open", !isOpen);
   });
 }
 
@@ -6195,19 +6278,12 @@ orgOptions.forEach((option) => {
     const orgType = e.currentTarget.getAttribute("data-org");
     orgOptions.forEach((o) => o.classList.remove("active"));
     e.currentTarget.classList.add("active");
-    orgMenu.style.display = "none";
+    orgMenu.hidden = true;
     orgSelector.classList.remove("open");
-    // Optional: Update org display
-    if (orgType === "BUSINESS") {
-      document.getElementById("current-org-type").textContent = "Business Suite";
-      document.getElementById("current-org-tenant").textContent = "Acme Corp Ltd";
-    } else if (orgType === "PROFESSIONAL") {
-      document.getElementById("current-org-type").textContent = "Professional Suite";
-      document.getElementById("current-org-tenant").textContent = "Your Org";
-    } else if (orgType === "CA_PRACTICE") {
-      document.getElementById("current-org-type").textContent = "CA Practice Portal";
-      document.getElementById("current-org-tenant").textContent = "Multi-Client Books";
+    if (orgType !== "BUSINESS") {
+      setLoginStatus("warn", "Planned workspace", "This selector is visual only until the backend exposes this tenant context.");
     }
+    updateTrustedContextUi();
   });
 });
 
@@ -6220,8 +6296,8 @@ const fyOptions = document.querySelectorAll(".fy-option");
 
 if (fyTrigger) {
   fyTrigger.addEventListener("click", () => {
-    const isOpen = fyMenu.style.display === "block";
-    fyMenu.style.display = isOpen ? "none" : "block";
+    const isOpen = !fyMenu.hidden;
+    fyMenu.hidden = isOpen;
   });
 }
 
@@ -6231,7 +6307,7 @@ fyOptions.forEach((option) => {
     const fy = e.currentTarget.getAttribute("data-fy");
     fyOptions.forEach((o) => o.classList.remove("active"));
     e.currentTarget.classList.add("active");
-    fyMenu.style.display = "none";
+    fyMenu.hidden = true;
     document.getElementById("current-fy").textContent = `FY ${fy}`;
   });
 });
@@ -6242,12 +6318,12 @@ fyOptions.forEach((option) => {
 document.addEventListener("click", (e) => {
   // Close org dropdown if click is outside
   if (orgMenu && orgSelector && !orgSelector.contains(e.target)) {
-    orgMenu.style.display = "none";
+    orgMenu.hidden = true;
     orgSelector.classList.remove("open");
   }
   // Close FY dropdown if click is outside
   if (fyMenu && fyTrigger && !fyTrigger.closest(".fy-selector").contains(e.target)) {
-    fyMenu.style.display = "none";
+    fyMenu.hidden = true;
   }
 });
 
@@ -6260,21 +6336,58 @@ document.addEventListener("click", (e) => {
  * @param {number} percentage - Health percentage (0-100)
  * @param {string} status - Status message
  */
-function updateHealthWidget(percentage = 94, status = "All balanced") {
+function updateHealthWidget(percentage = null, status = "Run checks", tone = "pending") {
+  const widget = document.getElementById("books-health-widget");
   const healthPercent = document.getElementById("health-percent-text");
   const healthBar = document.getElementById("health-circle-bar");
   const healthStatus = document.querySelector(".health-text span");
+  const safePercentage = Number.isFinite(Number(percentage))
+    ? Math.max(0, Math.min(100, Number(percentage)))
+    : null;
 
+  if (widget) {
+    widget.classList.remove("pending", "warn", "ok");
+    widget.classList.add(tone);
+  }
   if (healthPercent) {
-    healthPercent.textContent = `${percentage}%`;
+    healthPercent.textContent = safePercentage === null ? "--" : `${safePercentage}%`;
   }
   if (healthBar) {
-    const dasharray = `${percentage}, 100`;
+    const dasharray = `${safePercentage ?? 0}, 100`;
     healthBar.setAttribute("stroke-dasharray", dasharray);
   }
   if (healthStatus) {
     healthStatus.textContent = status;
   }
+}
+
+function refreshBooksHealthWidget() {
+  if (!lastModuleContext) {
+    updateHealthWidget(null, "Run checks", "pending");
+    return;
+  }
+
+  const { healthState } = getBusinessHealthState();
+  const checks = [
+    healthState.isBusinessTenant,
+    healthState.hasBusinessModule,
+    healthState.hasAccountingModule,
+    healthState.accountsLoaded,
+    healthState.hasCashBank,
+    healthState.hasRevenue,
+    healthState.hasExpense,
+    healthState.partiesGstinReady,
+    healthState.drilldownReady,
+  ];
+  const passed = checks.filter(Boolean).length;
+  const percentage = Math.round((passed / checks.length) * 100);
+  const ready = passed === checks.length;
+  const blocked = healthState.accountsBlocked || healthState.partiesBlocked;
+  updateHealthWidget(
+    percentage,
+    ready ? "Ready" : blocked ? "Needs review" : "In progress",
+    ready ? "ok" : "warn"
+  );
 }
 
 /**
@@ -6285,41 +6398,19 @@ const btnQuickJournal = document.getElementById("btn-quick-post-journal");
 
 if (btnQuickParty) {
   btnQuickParty.addEventListener("click", () => {
-    // Trigger create party modal/form
-    // This will integrate with existing party creation logic
-    console.log("[UI] New Party button clicked");
-    // The existing app.js should handle this, or we can dispatch an event
-    const event = new CustomEvent("createPartyRequested");
-    document.dispatchEvent(event);
-  });
-
-  // Hover effect
-  btnQuickParty.addEventListener("mouseenter", () => {
-    btnQuickParty.style.background = "var(--accent-hover, #60a5fa)";
-    btnQuickParty.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
-  });
-  btnQuickParty.addEventListener("mouseleave", () => {
-    btnQuickParty.style.background = "var(--accent-color, #3b82f6)";
-    btnQuickParty.style.boxShadow = "none";
+    activeBusinessWorkspace = "parties";
+    syncBusinessNavActiveState();
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+    openBusinessCreatePartyDialog();
   });
 }
 
 if (btnQuickJournal) {
-  btnQuickJournal.addEventListener("click", () => {
-    // Trigger create journal/voucher modal
-    console.log("[UI] Journal Post button clicked");
-    const event = new CustomEvent("createVoucherRequested");
-    document.dispatchEvent(event);
-  });
-
-  // Hover effect
-  btnQuickJournal.addEventListener("mouseenter", () => {
-    btnQuickJournal.style.background = "rgba(255, 255, 255, 0.09)";
-    btnQuickJournal.style.borderColor = "rgba(255, 255, 255, 0.15)";
-  });
-  btnQuickJournal.addEventListener("mouseleave", () => {
-    btnQuickJournal.style.background = "rgba(255, 255, 255, 0.05)";
-    btnQuickJournal.style.borderColor = "rgba(255, 255, 255, 0.08)";
+  btnQuickJournal.addEventListener("click", async () => {
+    activeBusinessWorkspace = "vouchers";
+    syncBusinessNavActiveState();
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+    await openBusinessCreateVoucherDialog();
   });
 }
 
@@ -6343,14 +6434,7 @@ function updatePageHeader(parentName = "Workspaces", currentName = "Dashboard", 
  * Initialize health widget on page load
  */
 function initializeHealthWidget() {
-  // Simulate or fetch health data
-  // For now, using default 94% (all balanced)
-  updateHealthWidget(94, "All balanced");
-
-  // In a real app, this would fetch from the backend:
-  // apiRequest('/api/v1/business/health').then((data) => {
-  //   updateHealthWidget(data.percentage, data.status);
-  // });
+  refreshBooksHealthWidget();
 }
 
 /**

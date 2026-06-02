@@ -19,8 +19,8 @@
   --sidebar-width: 280px;
   --header-height: 80px;
   --border-radius-sm: 8px;
-  --border-radius-md: 12px;
-  --border-radius-lg: 18px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 8px;
 
   /* Transitions & Animations */
   --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);

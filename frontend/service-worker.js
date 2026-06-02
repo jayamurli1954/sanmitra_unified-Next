@@ -3,27 +3,30 @@
   PWA caching strategy: Network-first for APIs, Cache-first for assets
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v1';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v1';
+const CACHE_NAME = 'mitrabooks-erp-v2';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v2';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
   // HTML
-  '/',
-  '/index.html',
-  '/frontend/mitrabooks-erp/index.html',
+  '/mitrabooks-erp/',
+  '/mitrabooks-erp/index.html',
 
   // CSS (theme tokens + styles)
-  '/frontend/shared/theme-tokens.css',
-  '/frontend/shared/app-shell.css',
-  '/frontend/mitrabooks-erp/index.css',
-  '/frontend/mitrabooks-erp/theme-overrides.css',
+  '/shared/theme-tokens.css',
+  '/shared/app-shell.css',
+  '/mitrabooks-erp/index.css',
+
+  // JavaScript
+  '/shared/api-client.js',
+  '/shared/pwa-shell.js',
+  '/mitrabooks-erp/app.js',
 
   // Brand assets
-  '/frontend/assets/brand/mitrabooks-logo.jpg',
+  '/assets/brand/mitrabooks-logo.jpg',
 
   // Manifest
-  '/manifest.webmanifest'
+  '/mitrabooks-erp/manifest.webmanifest'
 ];
 
 // API endpoints - use network-first (online preferred)
@@ -152,8 +155,8 @@ async function cacheFirstStrategy(request) {
 // Helper: Check if request is API call
 function isApiRequest(url) {
   return url.pathname.includes('/api/v1/') ||
-         url.origin.includes('sanmitra') ||
-         url.origin.includes('onrender.com');
+         url.pathname === '/health' ||
+         url.hostname === 'sanmitra-unified-next-staging-sg.onrender.com';
 }
 
 // Helper: Check if request is static asset
