@@ -9,6 +9,13 @@ def test_local_frontend_origin_is_allowed_for_static_e2e_shell():
     assert "http://localhost:3300" in settings.ALLOWED_ORIGINS
 
 
+def test_mitrabooks_custom_domain_origins_are_allowed():
+    settings = get_settings()
+
+    assert "https://mitrabooks.sanmitratech.in" in settings.ALLOWED_ORIGINS
+    assert "https://www.mitrabooks.sanmitratech.in" in settings.ALLOWED_ORIGINS
+
+
 def test_known_vercel_preview_origin_is_allowed_by_cors_regex():
     middleware = next(item for item in app.user_middleware if item.cls.__name__ == "CORSMiddleware")
     origin_regex = middleware.kwargs["allow_origin_regex"]

@@ -18,6 +18,22 @@
     {
       "source": "/",
       "has": [
+        { "type": "host", "value": "www.mitrabooks.sanmitratech.in" }
+      ],
+      "destination": "/mitrabooks-erp/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "mitrabooks.sanmitratech.in" }
+      ],
+      "destination": "/mitrabooks-erp/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
         { "type": "host", "value": "www.gruhamitra.sanmitratech.in" }
       ],
       "destination": "/gruhamitra/",
@@ -51,6 +67,10 @@
     {
       "source": "/gruhamitra/:path((?!.*\\.).*)",
       "destination": "/gruhamitra/index.html"
+    },
+    {
+      "source": "/mitrabooks-erp/:path((?!.*\\.).*)",
+      "destination": "/mitrabooks-erp/index.html"
     },
     {
       "source": "/:path*",
