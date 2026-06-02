@@ -828,6 +828,96 @@ function renderActivity(items) {
   return items.map((item) => `<li><span class="activity-dot"></span><span>${item}</span></li>`).join("");
 }
 
+function renderBusinessExecutiveDashboard() {
+  const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
+  const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
+  const accountCount = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
+  const months = [
+    ["Apr", 8.2, 5.1],
+    ["May", 10.4, 6.8],
+    ["Jun", 12.8, 7.4],
+    ["Jul", 11.6, 7.0],
+    ["Aug", 14.2, 8.3],
+    ["Sep", 15.8, 9.1],
+  ];
+  const maxValue = Math.max(...months.flatMap(([, income, expense]) => [income, expense]));
+  const bars = months.map(([label, income, expense]) => {
+    const incomeHeight = Math.max(16, Math.round((income / maxValue) * 132));
+    const expenseHeight = Math.max(16, Math.round((expense / maxValue) * 132));
+    return `
+      <div class="finance-bar-group">
+        <div class="finance-bars" aria-label="${label} income Rs. ${income}L and expenses Rs. ${expense}L">
+          <span class="income-bar" style="height: ${incomeHeight}px"></span>
+          <span class="expense-bar" style="height: ${expenseHeight}px"></span>
+        </div>
+        <small>${label}</small>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <section class="executive-dashboard" aria-label="MitraBooks executive dashboard">
+      <div class="executive-hero">
+        <div>
+          <span class="workbench-kicker">FY 2026-27 Operating View</span>
+          <h3>Income, expenses, and cash movement</h3>
+          <p>Use this area for the live business pulse: revenue trend, purchase pressure, collections, payables, and leadership actions.</p>
+        </div>
+        <div class="executive-kpi-strip">
+          <article>
+            <span>Income</span>
+            <strong>Rs. 12.8L</strong>
+            <small>+18% vs last month</small>
+          </article>
+          <article>
+            <span>Expenses</span>
+            <strong>Rs. 7.4L</strong>
+            <small>Office, purchases, vendor bills</small>
+          </article>
+          <article>
+            <span>Net Position</span>
+            <strong>Rs. 5.4L</strong>
+            <small>Before tax provisions</small>
+          </article>
+        </div>
+      </div>
+
+      <div class="finance-dashboard-grid">
+        <article class="finance-chart-card">
+          <div class="preview-heading compact">
+            <div>
+              <h4>Income vs Expenses</h4>
+              <p>Monthly operating comparison for quick management review.</p>
+            </div>
+            <span class="pill ok">CEO view</span>
+          </div>
+          <div class="finance-chart" role="img" aria-label="Monthly income and expense bar chart">
+            ${bars}
+          </div>
+          <div class="chart-legend">
+            <span><i class="income-dot"></i>Income</span>
+            <span><i class="expense-dot"></i>Expenses</span>
+          </div>
+        </article>
+
+        <article class="ceo-panel">
+          <div class="preview-heading compact">
+            <div>
+              <h4>CEO Insight</h4>
+              <p>Management actions for the next operating cycle.</p>
+            </div>
+          </div>
+          <ul>
+            <li><strong>Collections:</strong> Keep receivables review on the daily workbench.</li>
+            <li><strong>Spend:</strong> Purchases are controlled, but vendor dues need weekly review.</li>
+            <li><strong>Books:</strong> ${voucherCount} posted voucher(s), ${partyCount} visible party record(s), and ${accountCount} account(s) loaded.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
 function resultPayload(result, fallback) {
   return result && result.ok ? result.payload : fallback;
 }
@@ -3288,6 +3378,7 @@ function renderDashboardPreview(config) {
           <span class="pill ok">finance workspace</span>
         </div>
         <div class="metric-grid four">${renderStatCards(dashboard.stats || [])}</div>
+        ${renderBusinessExecutiveDashboard()}
         <div class="dashboard-main-grid">
           <article>
             <h4>Quick Actions</h4>
