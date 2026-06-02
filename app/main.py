@@ -102,12 +102,18 @@ async def on_startup() -> None:
         await ensure_seed_user()
         await ensure_super_admin_user()
         if settings.DEMO_MITRABOOKS_BOOTSTRAP and settings.DEMO_MITRABOOKS_ADMIN_PASSWORD:
-            await ensure_demo_mitrabooks_user(
-                email=settings.DEMO_MITRABOOKS_ADMIN_EMAIL,
-                password=settings.DEMO_MITRABOOKS_ADMIN_PASSWORD,
-                full_name=settings.DEMO_MITRABOOKS_ADMIN_FULL_NAME,
-                tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
-            )
+            demo_mitrabooks_emails = []
+            for email in [settings.DEMO_MITRABOOKS_ADMIN_EMAIL, *settings.DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS]:
+                normalized_email = str(email or "").strip().lower()
+                if normalized_email and normalized_email not in demo_mitrabooks_emails:
+                    demo_mitrabooks_emails.append(normalized_email)
+            for email in demo_mitrabooks_emails:
+                await ensure_demo_mitrabooks_user(
+                    email=email,
+                    password=settings.DEMO_MITRABOOKS_ADMIN_PASSWORD,
+                    full_name=settings.DEMO_MITRABOOKS_ADMIN_FULL_NAME,
+                    tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
+                )
         await ensure_demo_mandir_bootstrap()
         await ensure_audit_indexes()
         await ensure_donations_indexes()

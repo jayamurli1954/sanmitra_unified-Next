@@ -246,6 +246,16 @@ async def test_ensure_demo_mitrabooks_user_supports_mitrabooks_admin_alias(monke
 
 
 @pytest.mark.asyncio
+async def test_demo_mitrabooks_alias_email_defaults_include_legacy_business_admin():
+    from app.config import Settings
+
+    settings = Settings()
+
+    assert "business.admin@sanmitra.local" in settings.DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS
+    assert "businessadmin@sanmitra.local" in settings.DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS
+
+
+@pytest.mark.asyncio
 async def test_ensure_demo_gruhamitra_user_creates_housing_tenant(monkeypatch):
     fake_users = FakeUsersCollection()
 

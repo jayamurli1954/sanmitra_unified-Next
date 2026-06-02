@@ -238,6 +238,14 @@ class Settings:
     DEMO_MITRABOOKS_ADMIN_EMAIL = os.getenv("DEMO_MITRABOOKS_ADMIN_EMAIL", "admin@mitrabooks.local")
     DEMO_MITRABOOKS_ADMIN_PASSWORD = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
     DEMO_MITRABOOKS_ADMIN_FULL_NAME = os.getenv("DEMO_MITRABOOKS_ADMIN_FULL_NAME", "MitraBooks Admin")
+    DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS = [
+        email.strip().lower()
+        for email in os.getenv(
+            "DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS",
+            "business.admin@sanmitra.local,businessadmin@sanmitra.local",
+        ).split(",")
+        if email.strip()
+    ]
     DEMO_MITRABOOKS_E2E_SEED_ENABLED = os.getenv("DEMO_MITRABOOKS_E2E_SEED_ENABLED", "false").lower() in {
         "1",
         "true",
