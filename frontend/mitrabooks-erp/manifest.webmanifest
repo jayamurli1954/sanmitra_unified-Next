@@ -1,5 +1,5 @@
 {
-  "name": "MitraBooks Unified ERP",
+  "name": "MitraBooks Pro",
   "short_name": "MitraBooks",
   "description": "Premium PWA for unified accounting-heavy ERP workflows with offline support.",
   "start_url": "./",
@@ -12,17 +12,17 @@
   "categories": ["business", "productivity"],
   "screenshots": [
     {
-      "src": "../assets/brand/mitrabooks-logo.jpg",
+      "src": "../assets/brand/mitrabooks-pro-logo.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "form_factor": "wide"
     }
   ],
   "icons": [
     {
-      "src": "../assets/brand/mitrabooks-logo.jpg",
+      "src": "../assets/brand/mitrabooks-pro-logo.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
@@ -34,7 +34,7 @@
       "url": "./?view=dashboard",
       "icons": [
         {
-          "src": "../assets/brand/mitrabooks-logo.jpg",
+          "src": "../assets/brand/mitrabooks-pro-logo.png",
           "sizes": "192x192"
         }
       ]
@@ -46,7 +46,7 @@
       "url": "./?view=vouchers",
       "icons": [
         {
-          "src": "../assets/brand/mitrabooks-logo.jpg",
+          "src": "../assets/brand/mitrabooks-pro-logo.png",
           "sizes": "192x192"
         }
       ]

@@ -21,6 +21,76 @@ import {
 
 const THEME_STORAGE_KEY = "mitrabooks-theme";
 
+function businessNavigationGroups() {
+  return [
+    {
+      name: "Main Workspaces",
+      items: [
+        { label: "Dashboard", businessWorkspace: "overview", icon: "DB", module: { module_key: "business", frontend_path: "/business", enabled: true } },
+        { label: "Parties", businessWorkspace: "parties", icon: "PT", module: { module_key: "business", frontend_path: "/business/parties", enabled: true } },
+      ],
+    },
+    {
+      name: "Core Ledger",
+      items: [
+        { label: "Core Ledger", businessWorkspace: "accounting", icon: "CL", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
+        { label: "Journal Post", businessWorkspace: "vouchers", icon: "JP", module: { module_key: "business", frontend_path: "/business/vouchers", enabled: true } },
+        { label: "Audit Trails", businessWorkspace: "audit", icon: "AT", module: { module_key: "audit", frontend_path: "/audit", enabled: true } },
+      ],
+    },
+    {
+      name: "Income (Sales)",
+      items: [
+        { label: "Sales", businessWorkspace: "sales", icon: "SL", module: { module_key: "sales", frontend_path: "/business/sales", enabled: false } },
+        { label: "Credit Notes", businessWorkspace: "credit-notes", icon: "CN", module: { module_key: "sales", frontend_path: "/business/credit-notes", enabled: false } },
+      ],
+    },
+    {
+      name: "Expenses (Purchases)",
+      items: [
+        { label: "Bills (Vendor)", businessWorkspace: "bills", icon: "BL", module: { module_key: "purchase", frontend_path: "/business/bills", enabled: false } },
+        { label: "Purchase Orders", businessWorkspace: "purchase-orders", icon: "PO", module: { module_key: "purchase", frontend_path: "/business/purchase-orders", enabled: false } },
+        { label: "Debit Notes", businessWorkspace: "debit-notes", icon: "DN", module: { module_key: "purchase", frontend_path: "/business/debit-notes", enabled: false } },
+        { label: "Expenses log", businessWorkspace: "expenses", icon: "EX", module: { module_key: "business", frontend_path: "/business/expenses", enabled: false } },
+      ],
+    },
+    {
+      name: "Banking & Treasury",
+      items: [
+        { label: "Bank Feeds", businessWorkspace: "bank-feeds", icon: "BF", module: { module_key: "banking", frontend_path: "/business/bank-feeds", enabled: false } },
+        { label: "UPI / QR Payments", businessWorkspace: "upi-payments", icon: "UP", module: { module_key: "payments", frontend_path: "/business/upi-payments", enabled: false } },
+        { label: "Reconciliation", businessWorkspace: "reconciliation", icon: "RC", module: { module_key: "accounting", frontend_path: "/accounting/reconciliation", enabled: false }, badge: "3" },
+      ],
+    },
+    {
+      name: "Taxes & Compliance",
+      items: [
+        { label: "GST Returns", businessWorkspace: "gst-returns", icon: "GT", module: { module_key: "gst", frontend_path: "/gst/returns", enabled: false } },
+        { label: "TDS / TCS", businessWorkspace: "tds-tcs", icon: "TD", module: { module_key: "tax", frontend_path: "/tax/tds-tcs", enabled: false } },
+        { label: "CA Access Portal", businessWorkspace: "ca-access", icon: "CA", module: { module_key: "ca_access", frontend_path: "/business/ca-access", enabled: false } },
+      ],
+    },
+    {
+      name: "Intelligence & Reports",
+      items: [
+        { label: "Financial Statements", businessWorkspace: "financial-statements", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: false } },
+        { label: "Analytics", businessWorkspace: "analytics", icon: "AN", module: { module_key: "analytics", frontend_path: "/business/analytics", enabled: false } },
+      ],
+    },
+    {
+      name: "Configuration & Extensions",
+      items: [
+        { label: "Future Hub & Add-ons", businessWorkspace: "addons", icon: "FH", module: { module_key: "addons", frontend_path: "/business/addons", enabled: false }, badge: "New" },
+        { label: "+ Custom Menu", businessWorkspace: "custom-menu", icon: "CM", module: { module_key: "custom_menu", frontend_path: "/business/custom-menu", enabled: false } },
+      ],
+    },
+  ];
+}
+
+function businessNavigationItems() {
+  return businessNavigationGroups().flatMap((group) => group.items);
+}
+
 /**
  * Set the app theme (dark or light)
  * Persists to localStorage for offline retention
@@ -131,10 +201,10 @@ const entitlementModulesByOrgType = {
 
 const experienceConfig = {
   mitrabooks: {
-    title: "MitraBooks ERP",
-    subtitle: "Unified shell for accounting-heavy SanMitra modules",
-    logo: "../assets/brand/mitrabooks-logo.jpg",
-    video: "../assets/brand/mitrabooks-logo.mp4",
+    title: "MitraBooks Pro",
+    subtitle: "Unified Enterprise ERP",
+    logo: "../assets/brand/mitrabooks-pro-logo.png",
+    video: "../assets/brand/mitrabooks-pro-logo.mp4",
     theme: "",
     scopeTitle: "MitraBooks Business Workspace",
     scopeCopy: "Business, GST, inventory, parties, vouchers, and financial reports stay close to the old MitraBooks accounting layout.",
@@ -463,6 +533,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
         workspace: mandirWorkspaceFromModule(module),
         }));
 
+  if (currentExperience === "mitrabooks") {
+    renderGroupedNav(businessNavigationGroups());
+  } else {
   navItems.forEach((item) => {
     const module = item.module || {};
     const link = document.createElement("a");
@@ -485,6 +558,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     link.textContent = item.label;
     nav.appendChild(link);
   });
+  }
 
   modules.forEach((module) => {
     const item = document.createElement("li");
@@ -545,7 +619,7 @@ function gruhaNavigationItems() {
   ];
 }
 
-function businessNavigationItems() {
+function legacyBusinessNavigationItems() {
   return [
     { label: "Dashboard", businessWorkspace: "overview", icon: "▦", module: { module_key: "business", frontend_path: "/business", enabled: true } },
     { label: "Parties", businessWorkspace: "parties", icon: "●", module: { module_key: "business", frontend_path: "/business/parties", enabled: true } },
@@ -560,6 +634,10 @@ function businessNavigationItems() {
  * Groups modules by nav_group for professional accounting app layout
  */
 async function loadAndRenderGroupedNav(appKey) {
+  if (appKey === "mitrabooks") {
+    renderGroupedNav(businessNavigationGroups());
+    return;
+  }
   try {
     const response = await loadModules(appKey);
     if (!response.ok) {
@@ -647,38 +725,39 @@ function renderGroupedNav(groups) {
   if (!nav) return;
 
   nav.innerHTML = "";
-  console.log("[Nav] Rendering", groups.length, "groups");
 
   groups.forEach((group, groupIndex) => {
-    // Group header
-    const header = document.createElement("div");
-    header.className = "nav-group-header";
-    header.textContent = group.name;
-    header.style.cssText = `
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted, #94a3b8);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 12px 16px 8px;
-      margin-top: ${groupIndex === 0 ? "0" : "8px"};
-    `;
+    const groupId = `business-nav-group-${groupIndex}`;
+    const header = document.createElement("button");
+    header.className = "nav-group-toggle";
+    header.type = "button";
+    header.dataset.navGroupToggle = groupId;
+    header.setAttribute("aria-expanded", "true");
+    header.setAttribute("aria-controls", groupId);
+    header.innerHTML = `<span>${escapeHtml(group.name)}</span><span aria-hidden="true">v</span>`;
     nav.appendChild(header);
 
-    // Items in group
+    const panel = document.createElement("div");
+    panel.className = "nav-group-items";
+    panel.id = groupId;
+    panel.dataset.navGroupItems = groupId;
     group.items.forEach(item => {
       const link = document.createElement("a");
       link.href = "#";
-      link.className = item.module.enabled ? "" : "locked";
+      link.className = item.module.enabled ? "erp-nav-link" : "erp-nav-link locked";
       link.setAttribute("aria-disabled", item.module.enabled ? "false" : "true");
       link.dataset.moduleKey = item.module.module_key || "";
       link.dataset.frontendPath = item.module.frontend_path || "";
       link.dataset.businessWorkspace = item.businessWorkspace || "";
       link.dataset.navIcon = item.icon;
-      link.textContent = item.label;
-      nav.appendChild(link);
-      console.log("[Nav]   -", group.name, ":", item.label, "(", item.businessWorkspace, ")");
+      link.innerHTML = `
+        <span class="nav-icon">${escapeHtml(item.icon || "")}</span>
+        <span class="nav-label">${escapeHtml(item.label)}</span>
+        ${item.badge ? `<span class="nav-badge">${escapeHtml(item.badge)}</span>` : ""}
+      `;
+      panel.appendChild(link);
     });
+    nav.appendChild(panel);
   });
 
   syncBusinessNavActiveState();
@@ -1341,8 +1420,8 @@ async function showMandirSplash() {
         copy: "Opening MandirMitra dashboard...",
       }
     : {
-        video: "../assets/brand/mitrabooks-logo.mp4",
-        image: "../assets/brand/mitrabooks-logo.jpg",
+        video: "../assets/brand/mitrabooks-pro-logo.mp4",
+        image: "../assets/brand/mitrabooks-pro-logo.png",
         alt: "MitraBooks",
         copy: "Opening MitraBooks dashboard...",
       };
@@ -1422,10 +1501,14 @@ function updateTrustedContextUi(context = lastModuleContext) {
       : 0;
 
   if (currentOrgType) {
-    currentOrgType.textContent = organizationType ? `${organizationType} workspace` : "Context not loaded";
+    currentOrgType.textContent = organizationType === "BUSINESS"
+      ? "Business Suite"
+      : organizationType
+        ? `${organizationType} workspace`
+        : "Business Suite";
   }
   if (currentOrgTenant) {
-    currentOrgTenant.textContent = tenantLabel || "Sign in to load tenant";
+    currentOrgTenant.textContent = tenantLabel || "Acme Corp Ltd";
   }
   if (sidebarUserRole && getAccessToken()) {
     const role = context?.role || context?.user_role || "";
@@ -5981,6 +6064,20 @@ document.getElementById("topbar-logout")?.addEventListener("click", () => {
   updateSessionUi();
   setLoginStatus("", "", "");
   runChecks();
+});
+nav.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-nav-group-toggle]");
+  if (!toggle) {
+    return;
+  }
+  event.preventDefault();
+  const groupId = toggle.getAttribute("data-nav-group-toggle") || "";
+  const panel = document.getElementById(groupId);
+  const expanded = toggle.getAttribute("aria-expanded") !== "false";
+  toggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+  if (panel) {
+    panel.hidden = expanded;
+  }
 });
 nav.addEventListener("click", (event) => {
   const link = event.target.closest("a[data-mandir-workspace]");

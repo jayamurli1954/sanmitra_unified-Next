@@ -8,10 +8,19 @@ test.describe('MitraBooks ERP static shell', () => {
     });
     await page.goto('/mitrabooks-erp/');
 
-    await expect(page).toHaveTitle('MitraBooks Unified ERP');
+    await expect(page).toHaveTitle('MitraBooks Pro');
+    await expect(page.locator('#brand-title')).toContainText('MitraBooks Pro');
+    await expect(page.locator('#brand-subtitle')).toContainText('Unified Enterprise ERP');
     await expect(page.getByRole('button', { name: 'Platform Owner' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'MandirMitra' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'GruhaMitra' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Main Workspaces' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Expenses (Purchases)' })).toBeVisible();
+    await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toHaveAttribute('aria-disabled', 'true');
+    await page.getByRole('button', { name: 'Expenses (Purchases)' }).click();
+    await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toBeHidden();
+    await page.getByRole('button', { name: 'Expenses (Purchases)' }).click();
+    await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toBeVisible();
     await expect(page.locator('#access-panel')).toBeHidden();
     await expect(page.locator('.business-dashboard')).toBeVisible();
     await expect(page.locator('.erp-health-panel')).toBeVisible();

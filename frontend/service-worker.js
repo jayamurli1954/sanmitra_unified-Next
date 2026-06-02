@@ -3,8 +3,8 @@
   PWA caching strategy: Network-first for APIs, Cache-first for assets
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v2';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v2';
+const CACHE_NAME = 'mitrabooks-erp-v3';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v3';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
@@ -24,6 +24,8 @@ const CRITICAL_ASSETS = [
 
   // Brand assets
   '/assets/brand/mitrabooks-logo.jpg',
+  '/assets/brand/mitrabooks-pro-logo.png',
+  '/assets/brand/mitrabooks-pro-logo.mp4',
 
   // Manifest
   '/mitrabooks-erp/manifest.webmanifest'
@@ -161,7 +163,7 @@ function isApiRequest(url) {
 
 // Helper: Check if request is static asset
 function isStaticAsset(url) {
-  return /\.(css|js|png|jpg|jpeg|svg|woff2?|ttf|eot)$/.test(url.pathname);
+  return /\.(css|js|png|jpg|jpeg|svg|mp4|woff2?|ttf|eot)$/.test(url.pathname);
 }
 
 // Message handler - allow clients to skip waiting (instant updates)
