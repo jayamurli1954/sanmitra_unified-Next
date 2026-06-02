@@ -4006,6 +4006,21 @@ function enabledModuleKeys(context = lastModuleContext) {
     .filter(Boolean));
 }
 
+function isPlatformOwnerContext(context = lastModuleContext) {
+  const tenantId = String(context?.tenant_id || "").trim().toLowerCase();
+  const role = String(context?.role || context?.user_role || "").trim().toLowerCase();
+  const organizationType = String(context?.organization_type || "").trim().toUpperCase();
+  return context?.is_platform_owner === true
+    || role === "super_admin"
+    || tenantId === "platform"
+    || organizationType === "PLATFORM";
+}
+
+function isBusinessTenantContext(context = lastModuleContext) {
+  const organizationType = String(context?.organization_type || "").trim().toUpperCase();
+  return organizationType === "BUSINESS" && !isPlatformOwnerContext(context) && isBusinessModuleEnabled(context);
+}
+
 function normalizedAccountRows(rows = lastBusinessAccounts) {
   return Array.isArray(rows) ? rows.map((account) => {
     const normalized = normalizeBusinessAccount(account);
@@ -4160,7 +4175,7 @@ function getBusinessHealthState() {
   const drilldownReady = lastAccountingDrilldown && lastAccountingDrilldown.ok !== false;
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const healthState = {
-    isBusinessTenant: organizationType === "BUSINESS",
+    isBusinessTenant: isBusinessTenantContext(),
     hasBusinessModule: modules.has("business"),
     hasAccountingModule: modules.has("accounting"),
     accountsLoaded,
@@ -4971,6 +4986,17 @@ async function runChecks() {
     renderModules();
     setLoginStatus("warn", "Tenant session required", "Sign in to load your MitraBooks dashboard.");
     updateSessionUi();
+    return;
+  }
+
+  if (modules.ok && currentExperience === "mitrabooks" && isPlatformOwnerContext(modules.payload)) {
+    currentExperience = "platform";
+    document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
+    document.getElementById("mode-platform")?.classList.add("active");
+    renderModules();
+    setLoginStatus("ok", "Platform owner signed in", "Showing the platform-owner workspace. Business tenant data remains tenant-scoped.");
+    updateSessionUi();
+    await loadPlatformOwnerDashboard();
     return;
   }
 

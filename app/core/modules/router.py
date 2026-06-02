@@ -27,10 +27,14 @@ async def get_my_modules(
         app_key=app_key,
         include_available=include_available,
     )
+    role = str(current_user.get("role") or "").strip()
+    is_platform_owner = role == "super_admin" or tenant_id == "platform"
 
     return {
         "tenant_id": tenant_id,
         "app_key": app_key,
+        "role": role,
+        "is_platform_owner": is_platform_owner,
         "organization_type": module_context["organization_type"],
         "subscription_plan": tenant.get("subscription_plan", "free"),
         "enabled_modules": module_context["enabled_modules"],

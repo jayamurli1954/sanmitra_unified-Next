@@ -37,6 +37,8 @@ async def test_get_my_modules_returns_enabled_and_available_modules(monkeypatch)
     assert "investment_research" in available_keys
     assert all(item["frontend_path"] for item in result["enabled_modules"])
     assert result["navigation"][0]["display_name"] == "Portfolio"
+    assert result["role"] == "tenant_admin"
+    assert result["is_platform_owner"] is False
 
 
 @pytest.mark.asyncio
@@ -158,3 +160,31 @@ async def test_get_my_modules_requires_tenant_context():
         )
 
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_my_modules_marks_platform_owner_context(monkeypatch):
+    async def fake_get_tenant(tenant_id: str):
+        assert tenant_id == "platform"
+        return {
+            "tenant_id": tenant_id,
+            "organization_type": "BUSINESS",
+            "enabled_modules": ["business", "accounting", "audit"],
+            "subscription_plan": "enterprise",
+        }
+
+    monkeypatch.setattr(modules_router, "get_tenant", fake_get_tenant)
+
+    result = await modules_router.get_my_modules(
+        include_available=True,
+        current_user={
+            "sub": "platform-owner-1",
+            "tenant_id": "platform",
+            "role": "super_admin",
+            "app_key": "mitrabooks",
+        },
+    )
+
+    assert result["tenant_id"] == "platform"
+    assert result["role"] == "super_admin"
+    assert result["is_platform_owner"] is True

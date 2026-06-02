@@ -24,7 +24,7 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     assert "app.js?v=mitrabooks-erp-v10" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert 'CACHE_NAME = "sanmitra-frontends-v24"' in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v3'" in worker_source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -58,8 +58,8 @@ def test_business_workspace_menu_renders_main_preview_directly() -> None:
     end = app_source.index("function syncBusinessNavActiveState()", start)
     workspace_switcher = app_source[start:end]
 
-    assert 'dashboardPreview.innerHTML = renderAccountingDrilldownPanel();' in workspace_switcher
     assert 'dashboardPreview.innerHTML = renderBusinessWorkspace();' in workspace_switcher
+    assert "refreshCurrentAccountingDrilldown();" in workspace_switcher
     assert 'document.getElementById("context-cards")' not in workspace_switcher
 
 
@@ -113,7 +113,7 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "Account code / name" in app_source
     assert "accountRowsFromPayload" in app_source
     assert "MitraBooks business tenant required" in app_source
-    assert "admin@mitrabooks.local" in app_source
+    assert "business.admin@sanmitra.local" in app_source
     assert 'await loadBusinessAccounts();' in app_source
 
 
@@ -149,11 +149,15 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert "Expense accounts" in app_source
     assert "Party GSTIN sample" in app_source
     assert "Voucher drill-down" in app_source
+    assert "function isPlatformOwnerContext" in app_source
+    assert "function isBusinessTenantContext" in app_source
+    assert 'currentExperience === "mitrabooks" && isPlatformOwnerContext(modules.payload)' in run_block
+    assert run_block.index("isPlatformOwnerContext(modules.payload)") < run_block.index("await loadBusinessAccounts();")
     assert "await loadBusinessAccounts();" in run_block
     assert "await loadBusinessPartiesForHealth();" in run_block
     assert "/api/v1/accounting/accounts" in app_source
     assert "/api/v1/business/parties?offset=0&limit=20" in app_source
-    assert "/api/v1/modules/me" not in app_source
+    assert "loadModules(activeAppKey)" in run_block
     assert ".erp-health-panel" in css_source
     assert ".erp-health-actions" in css_source
 
