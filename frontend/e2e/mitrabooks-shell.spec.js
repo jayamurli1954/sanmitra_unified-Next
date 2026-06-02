@@ -1,6 +1,24 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('MitraBooks ERP static shell', () => {
+  test('shows login validation and password toggle before sign in', async ({ page }) => {
+    await page.goto('/mitrabooks-erp/');
+
+    await expect(page.locator('#access-panel')).toBeVisible();
+    await expect(page.locator('.erp-sidebar')).toBeHidden();
+    await expect(page.locator('#login-error-field')).toBeHidden();
+
+    await page.locator('#login-submit').click();
+    await expect(page.locator('#login-error-field')).toBeVisible();
+    await expect(page.locator('#login-error-message')).toContainText('Email and password are required.');
+
+    await page.locator('#login-password').fill('admin123');
+    await expect(page.locator('#login-password')).toHaveAttribute('type', 'password');
+    await page.locator('#toggle-password').click();
+    await expect(page.locator('#login-password')).toHaveAttribute('type', 'text');
+    await expect(page.locator('#toggle-password')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('loads dashboard and opens core workspaces', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');

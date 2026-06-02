@@ -1517,51 +1517,109 @@ function updateTrustedContextUi(context = lastModuleContext) {
 }
 
 async function signInWithPassword() {
-  const email = String(loginEmail?.value || "").trim();
+  const email = String(loginEmail?.value || "").trim().toLowerCase();
   const password = String(loginPassword?.value || "");
+  const loginSubmitBtn = document.getElementById("login-submit");
+  const errorField = document.getElementById("login-error-field");
+  const errorMessage = document.getElementById("login-error-message");
+
+  // Validate input
   if (!email || !password) {
+    if (errorField && errorMessage) {
+      errorField.hidden = false;
+      errorMessage.textContent = "Email and password are required.";
+    }
     setLoginStatus("warn", "Email and password required", "Enter your MitraBooks tenant admin login.");
     return;
   }
 
-  setLoginStatus("", "Signing in", "Checking your tenant access...");
-  const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-  const result = await apiRequest(appKey, "/api/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!result.ok) {
-    clearAccessToken();
-    updateSessionUi();
-    const detail = result.payload?.detail || "Unable to sign in with these credentials.";
-    setLoginStatus("danger", "Sign in failed", detail);
-    renderJson(apiOutput, { login: { ok: result.ok, status: result.status, detail } });
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    if (errorField && errorMessage) {
+      errorField.hidden = false;
+      errorMessage.textContent = "Please enter a valid email address.";
+    }
+    setLoginStatus("warn", "Invalid email", "Email must be a valid email address.");
     return;
   }
 
-  setAccessToken(result.payload?.access_token || "");
-  window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
-  if (loginPassword) {
-    loginPassword.value = "";
-  }
-  updateSessionUi();
-  setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
-  renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
-
-  // Load grouped navigation after successful login (Phase 1D)
-  if (currentExperience === "mitrabooks") {
-    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-    loadAndRenderGroupedNav(appKey).catch(err => {
-      console.error("[Login] Failed to load grouped nav:", err);
-    });
+  // Clear previous errors
+  if (errorField) {
+    errorField.hidden = true;
   }
 
-  await showMandirSplash();
+  // Disable button and show loading state
+  if (loginSubmitBtn) {
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.textContent = "Signing in...";
+  }
+
   try {
-    await Promise.all([runChecks(), delay(1400)]);
+    setLoginStatus("", "Signing in", "Checking your tenant access...");
+    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+    const result = await apiRequest(appKey, "/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!result.ok) {
+      clearAccessToken();
+      updateSessionUi();
+      const detail = result.payload?.detail || "Unable to sign in with these credentials.";
+
+      // Show error message in form
+      if (errorField && errorMessage) {
+        errorField.hidden = false;
+        errorMessage.textContent = detail;
+      }
+
+      setLoginStatus("danger", "Sign in failed", detail);
+      renderJson(apiOutput, { login: { ok: result.ok, status: result.status, detail } });
+      return;
+    }
+
+    // Successful login
+    setAccessToken(result.payload?.access_token || "");
+    window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
+
+    // Clear password for security
+    if (loginPassword) {
+      loginPassword.value = "";
+    }
+
+    updateSessionUi();
+    setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
+    renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
+
+    // Load grouped navigation after successful login (Phase 1D)
+    if (currentExperience === "mitrabooks") {
+      const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+      loadAndRenderGroupedNav(appKey).catch(err => {
+        console.error("[Login] Failed to load grouped nav:", err);
+      });
+    }
+
+    // Show splash and load dashboard
+    await showMandirSplash();
+    try {
+      await Promise.all([runChecks(), delay(1400)]);
+    } finally {
+      hideMandirSplash();
+    }
+  } catch (error) {
+    console.error("[Login] Error during sign in:", error);
+    if (errorField && errorMessage) {
+      errorField.hidden = false;
+      errorMessage.textContent = "An unexpected error occurred. Please try again.";
+    }
+    setLoginStatus("danger", "Sign in error", "An unexpected error occurred. Please try again.");
   } finally {
-    hideMandirSplash();
+    // Re-enable button
+    if (loginSubmitBtn) {
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.textContent = "Sign in";
+    }
   }
 }
 
@@ -6038,13 +6096,27 @@ document.getElementById("save-config").addEventListener("click", () => {
   runChecks();
 });
 
-document.getElementById("login-submit").addEventListener("click", signInWithPassword);
-loginPassword?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
+// Enhanced login form handling
+const loginForm = document.getElementById("login-form");
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    signInWithPassword();
-  }
-});
+    await signInWithPassword();
+  });
+}
+
+// Password visibility toggle
+const togglePasswordBtn = document.getElementById("toggle-password");
+if (togglePasswordBtn && loginPassword) {
+  togglePasswordBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    const nextType = loginPassword.type === "password" ? "text" : "password";
+    loginPassword.type = nextType;
+    const isVisible = nextType === "text";
+    togglePasswordBtn.classList.toggle("show", isVisible);
+    togglePasswordBtn.setAttribute("aria-pressed", String(isVisible));
+  });
+}
 document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
   clearAccessToken();

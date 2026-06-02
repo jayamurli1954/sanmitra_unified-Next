@@ -163,19 +163,49 @@
               </div>
               <span class="pill" id="session-pill">Not signed in</span>
             </div>
-            <div class="toolbar">
+            <form class="toolbar" id="login-form" novalidate>
               <div class="field">
                 <label for="login-email">Email</label>
-                <input id="login-email" autocomplete="username" placeholder="admin@example.com">
+                <input
+                  id="login-email"
+                  type="email"
+                  autocomplete="username"
+                  placeholder="businessadmin@sanmitra.local"
+                  required
+                  aria-label="Email address">
               </div>
               <div class="field">
                 <label for="login-password">Password</label>
-                <input id="login-password" autocomplete="current-password" type="password" placeholder="Password">
+                <div class="password-field-wrapper">
+                  <input
+                    id="login-password"
+                    autocomplete="current-password"
+                    type="password"
+                    placeholder="Password"
+                    required
+                    minlength="6"
+                    aria-label="Password">
+                  <button
+                    id="toggle-password"
+                    type="button"
+                    class="toggle-password-btn"
+                    aria-label="Show/hide password"
+                    aria-pressed="false"
+                    tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <button id="login-submit" type="button">Sign in</button>
+              <div class="field" id="login-error-field" hidden>
+                <p id="login-error-message"></p>
+              </div>
+              <button id="login-submit" type="submit" class="primary">Sign in</button>
               <button class="secondary" id="run-checks" type="button">Refresh</button>
               <button class="danger" id="clear-token" type="button">Sign out</button>
-            </div>
+            </form>
             <div class="mandir-login-links" hidden>
               <a href="../mandir-public/" id="mandir-public-link">Book a Seva / Make a Donation</a>
             </div>
