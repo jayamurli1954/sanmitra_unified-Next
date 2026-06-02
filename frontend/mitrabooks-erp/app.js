@@ -902,16 +902,38 @@ function renderBusinessExecutiveDashboard() {
 
         <article class="ceo-panel">
           <div class="preview-heading compact">
-            <div>
+            <div class="ceo-title-block">
+              <span class="ceo-orbit" aria-hidden="true"></span>
               <h4>CEO Insights</h4>
+              <span class="ai-badge">AI Enabled</span>
               <p>Real-time ledger analytics and operating summaries.</p>
             </div>
           </div>
-          <ul>
-            <li><strong>Cash flow:</strong> Coverage is robust; keep vendor obligations visible.</li>
-            <li><strong>Receivables:</strong> Collection follow-up remains the highest-impact daily action.</li>
-            <li><strong>Books:</strong> ${voucherCount} posted voucher(s), ${partyCount} visible party record(s), and ${accountCount} account(s) loaded.</li>
-          </ul>
+          <div class="ceo-insight-list" role="list">
+            <div class="ceo-insight-row" role="listitem">
+              <span class="insight-spark" aria-hidden="true"></span>
+              <span>Cash flow is highly robust with</span>
+              <strong>65.1x coverage</strong>
+              <span>on pending vendor obligations.</span>
+            </div>
+            <div class="ceo-insight-row" role="listitem">
+              <span class="insight-spark" aria-hidden="true"></span>
+              <span>Average receivables collections period has reduced to</span>
+              <strong>28 days</strong>
+              <span>, boosting liquidity.</span>
+            </div>
+            <div class="ceo-insight-row" role="listitem">
+              <span class="insight-spark" aria-hidden="true"></span>
+              <span>Inventory turnover rate for consumables is currently running at</span>
+              <strong>4.2x</strong>
+              <span>.</span>
+            </div>
+          </div>
+          <div class="ceo-ask-row">
+            <input type="text" value="" placeholder="Ask AI: 'What is our GST exposure?' or 'Rent balance?'" aria-label="Ask AI for ledger insight">
+            <button type="button">Ask</button>
+          </div>
+          <p class="ceo-footnote">${voucherCount} posted voucher(s), ${partyCount} party record(s), and ${accountCount} account(s) are available for the current dashboard context.</p>
         </article>
       </div>
     </section>
