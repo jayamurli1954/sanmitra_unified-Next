@@ -73,6 +73,8 @@ services:
         sync: false
       - key: DEMO_MITRABOOKS_ADMIN_FULL_NAME
         value: MitraBooks Admin
+      - key: DEMO_MITRABOOKS_E2E_SEED_ENABLED
+        value: "true"
       - key: RAG_EMBEDDING_PROVIDER
         value: hash
       - key: LEGAL_HYBRID_AI_FALLBACK_ENABLED

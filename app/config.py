@@ -238,6 +238,12 @@ class Settings:
     DEMO_MITRABOOKS_ADMIN_EMAIL = os.getenv("DEMO_MITRABOOKS_ADMIN_EMAIL", "admin@mitrabooks.local")
     DEMO_MITRABOOKS_ADMIN_PASSWORD = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
     DEMO_MITRABOOKS_ADMIN_FULL_NAME = os.getenv("DEMO_MITRABOOKS_ADMIN_FULL_NAME", "MitraBooks Admin")
+    DEMO_MITRABOOKS_E2E_SEED_ENABLED = os.getenv("DEMO_MITRABOOKS_E2E_SEED_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
     def validate(self) -> None:
@@ -301,10 +307,11 @@ class Settings:
             self.SUPER_ADMIN_BOOTSTRAP
             or self.DEMO_MANDIR_BOOTSTRAP
             or self.DEMO_MITRABOOKS_BOOTSTRAP
+            or self.DEMO_MITRABOOKS_E2E_SEED_ENABLED
         ):
             _config_logger.warning(
                 "Bootstrap flags (SUPER_ADMIN_BOOTSTRAP / DEMO_MANDIR_BOOTSTRAP / "
-                "DEMO_MITRABOOKS_BOOTSTRAP) are enabled "
+                "DEMO_MITRABOOKS_BOOTSTRAP / DEMO_MITRABOOKS_E2E_SEED_ENABLED) are enabled "
                 "in a production environment. Ensure this is intentional."
             )
 

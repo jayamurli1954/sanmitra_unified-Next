@@ -21,7 +21,8 @@ from app.core.tenants.context import TenantContextMiddleware
 from app.core.tenants.service import ensure_seed_tenant
 from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
-from app.db.postgres import close_postgres, create_postgres_tables, init_postgres, ping_postgres
+from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
+from app.modules.business.seed import ensure_mitrabooks_e2e_seed
 from app.modules.housing.service import ensure_maintenance_indexes
 from app.modules.housing_compat.service import ensure_housing_compat_indexes
 from app.modules.investment.service import ensure_investment_indexes
@@ -142,6 +143,15 @@ async def on_startup() -> None:
 
         if settings.PG_AUTO_CREATE_TABLES:
             await create_postgres_tables(Base.metadata)
+        if settings.DEMO_MITRABOOKS_E2E_SEED_ENABLED:
+            session_factory = get_session_factory()
+            async with session_factory() as session:
+                seed_result = await ensure_mitrabooks_e2e_seed(
+                    session,
+                    tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
+                    created_by=settings.DEMO_MITRABOOKS_ADMIN_EMAIL or "system",
+                )
+            _startup_logger.info("MitraBooks E2E seed completed: %s", seed_result)
     except Exception as exc:
         # Keep app booting even if PostgreSQL is unavailable; health endpoint will show degraded state.
         _startup_logger.error("PostgreSQL startup initialisation failed: %s", exc, exc_info=True)
