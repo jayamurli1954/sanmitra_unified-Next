@@ -39,6 +39,7 @@ async def seed_demo(args: argparse.Namespace) -> None:
     if args.use_env_password:
         password = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
     if not password:
+        print("MitraBooks demo seed failed: DEMO_MITRABOOKS_ADMIN_PASSWORD is not set.")
         raise SystemExit("password is required; pass --password or set DEMO_MITRABOOKS_ADMIN_PASSWORD with --use-env-password")
 
     emails = _admin_emails(args)
