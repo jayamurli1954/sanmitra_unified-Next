@@ -404,6 +404,8 @@ const mandirCorrectionType = document.getElementById("mandir-correction-type");
 const mandirCorrectionPurpose = document.getElementById("mandir-correction-purpose");
 const mandirSplash = document.getElementById("mandir-splash");
 const mandirSplashVideo = document.getElementById("mandir-splash-video");
+const mandirSplashImage = document.getElementById("mandir-splash-image");
+const brandSplashCopy = document.getElementById("brand-splash-copy");
 
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
@@ -1328,8 +1330,31 @@ function delay(ms) {
 }
 
 async function showMandirSplash() {
-  if (!isMandirHost() || !mandirSplash) {
+  if (!mandirSplash) {
     return;
+  }
+  const splashConfig = currentExperience === "mandir"
+    ? {
+        video: "../assets/brand/mandirmitra-logo.mp4",
+        image: "../assets/brand/mandirmitra-logo.jpeg",
+        alt: "MandirMitra",
+        copy: "Opening MandirMitra dashboard...",
+      }
+    : {
+        video: "../assets/brand/mitrabooks-logo.mp4",
+        image: "../assets/brand/mitrabooks-logo.jpg",
+        alt: "MitraBooks",
+        copy: "Opening MitraBooks dashboard...",
+      };
+  if (mandirSplashVideo) {
+    mandirSplashVideo.src = splashConfig.video;
+  }
+  if (mandirSplashImage) {
+    mandirSplashImage.src = splashConfig.image;
+    mandirSplashImage.alt = splashConfig.alt;
+  }
+  if (brandSplashCopy) {
+    brandSplashCopy.textContent = splashConfig.copy;
   }
   mandirSplash.classList.add("show");
   mandirSplash.setAttribute("aria-hidden", "false");
@@ -1412,7 +1437,7 @@ async function signInWithPassword() {
   const email = String(loginEmail?.value || "").trim();
   const password = String(loginPassword?.value || "");
   if (!email || !password) {
-    setLoginStatus("warn", "Email and password required", "Enter your MandirMitra tenant admin login.");
+    setLoginStatus("warn", "Email and password required", "Enter your MitraBooks tenant admin login.");
     return;
   }
 

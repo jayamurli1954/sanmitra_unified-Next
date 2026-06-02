@@ -721,6 +721,64 @@ html[data-theme="light"] select:focus {
   filter: brightness(1.08);
 }
 
+.advanced-connection,
+.technical-context[hidden] {
+  display: none !important;
+}
+
+.app.signed-out {
+  display: block;
+  min-height: 100vh;
+}
+
+.app.signed-out .erp-sidebar,
+.app.signed-out .erp-topbar,
+.app.signed-out #context-cards,
+.app.signed-out #legacy-strip,
+.app.signed-out #dashboard-preview,
+.app.signed-out .technical-context {
+  display: none !important;
+}
+
+.app.signed-out .main {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.app.signed-out .content {
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(16, 185, 129, 0.08)),
+    var(--bg-primary, #090c14) !important;
+  display: grid;
+  min-height: 100vh;
+  padding: 28px;
+  place-items: center;
+  width: 100%;
+}
+
+.app.signed-out #access-panel {
+  max-width: 760px;
+  width: min(760px, 100%);
+}
+
+.app.signed-in:not(.mandir-domain) #access-panel {
+  display: none;
+}
+
+.module-switch[hidden],
+.mandir-login-links[hidden] {
+  display: none !important;
+}
+
+.business-context-cards .card {
+  min-height: 148px;
+}
+
+.business-context-cards h3 {
+  margin-bottom: 10px;
+}
+
 .business-dashboard {
   display: grid;
   gap: 18px;

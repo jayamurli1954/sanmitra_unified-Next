@@ -2,9 +2,17 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('MitraBooks ERP static shell', () => {
   test('loads dashboard and opens core workspaces', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
+      window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
+    });
     await page.goto('/mitrabooks-erp/');
 
     await expect(page).toHaveTitle('MitraBooks Unified ERP');
+    await expect(page.getByRole('button', { name: 'Platform Owner' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'MandirMitra' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'GruhaMitra' })).toHaveCount(0);
+    await expect(page.locator('#access-panel')).toBeHidden();
     await expect(page.locator('.business-dashboard')).toBeVisible();
     await expect(page.locator('.erp-health-panel')).toBeVisible();
     await expect(page.locator('.erp-health-panel')).toContainText('Data Health');
