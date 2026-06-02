@@ -5891,3 +5891,122 @@ pre {
     transform: translateY(0);
   }
 }
+
+/* ============================================
+   Authentication Flow: Login Page vs Dashboard
+   Phase 1C/1D - MitraBooks ERP
+   ============================================ */
+
+/* When signed OUT: Hide dashboard, show login form */
+.app.signed-out .sidebar {
+  display: none;
+}
+
+.app.signed-out .main {
+  display: none;
+}
+
+.app.signed-out .access-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.app.signed-out .mandir-login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.app.signed-out .mandir-login-brand img {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+}
+
+.app.signed-out .mandir-login-brand strong {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  max-width: 300px;
+}
+
+.app.signed-out .access-panel .toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 400px;
+}
+
+/* When signed IN: Show dashboard, hide login */
+.app.signed-in .access-panel {
+  display: none;
+}
+
+.app.signed-in .sidebar {
+  display: flex;
+}
+
+.app.signed-in .main {
+  display: flex;
+}
+
+/* Login form styling */
+.mandir-login-brand {
+  display: none;
+}
+
+.app.signed-out .mandir-login-brand {
+  display: flex;
+}
+
+#login-email,
+#login-password {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--panel);
+  color: var(--text);
+}
+
+#login-email:focus,
+#login-password:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+#login-submit {
+  padding: 12px 24px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#login-submit:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+#login-submit:active {
+  transform: translateY(0);
+}
+
+.login-error {
+  color: var(--danger);
+  font-size: 13px;
+  text-align: center;
+}
