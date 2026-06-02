@@ -215,6 +215,37 @@ async def test_ensure_demo_mitrabooks_user_updates_existing_account(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_ensure_demo_mitrabooks_user_supports_mitrabooks_admin_alias(monkeypatch):
+    fake_users = FakeUsersCollection()
+
+    monkeypatch.setattr(users_service, "get_collection", lambda _name: fake_users)
+
+    ensured = {}
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **_kwargs):
+        ensured["tenant_id"] = tenant_id
+        ensured.update(_kwargs)
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+
+    result = await users_service.ensure_demo_mitrabooks_user(
+        email="admin@mitrabooks.local",
+        password="admin123",
+        full_name="MitraBooks Admin",
+        tenant_id="demo-mitrabooks-business",
+    )
+
+    assert result is not None
+    assert result["email"] == "admin@mitrabooks.local"
+    assert result["tenant_id"] == "demo-mitrabooks-business"
+    assert result["app_key"] == "mitrabooks"
+    assert result["role"] == "tenant_admin"
+    assert ensured["organization_type"] == "BUSINESS"
+    assert ensured["app_keys"] == ["mitrabooks"]
+
+
+@pytest.mark.asyncio
 async def test_ensure_demo_gruhamitra_user_creates_housing_tenant(monkeypatch):
     fake_users = FakeUsersCollection()
 

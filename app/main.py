@@ -19,7 +19,7 @@ from app.core.audit.service import ensure_audit_indexes
 from app.core.onboarding.service import ensure_onboarding_indexes
 from app.core.tenants.context import TenantContextMiddleware
 from app.core.tenants.service import ensure_seed_tenant
-from app.core.users.service import ensure_seed_user, ensure_super_admin_user
+from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, init_postgres, ping_postgres
 from app.modules.housing.service import ensure_maintenance_indexes
@@ -100,6 +100,13 @@ async def on_startup() -> None:
         await ensure_seed_tenant()
         await ensure_seed_user()
         await ensure_super_admin_user()
+        if settings.DEMO_MITRABOOKS_BOOTSTRAP and settings.DEMO_MITRABOOKS_ADMIN_PASSWORD:
+            await ensure_demo_mitrabooks_user(
+                email=settings.DEMO_MITRABOOKS_ADMIN_EMAIL,
+                password=settings.DEMO_MITRABOOKS_ADMIN_PASSWORD,
+                full_name=settings.DEMO_MITRABOOKS_ADMIN_FULL_NAME,
+                tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
+            )
         await ensure_demo_mandir_bootstrap()
         await ensure_audit_indexes()
         await ensure_donations_indexes()

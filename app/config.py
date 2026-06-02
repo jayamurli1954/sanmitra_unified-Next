@@ -228,6 +228,17 @@ class Settings:
     DEMO_MANDIR_ADMIN_PASSWORD = os.getenv("DEMO_MANDIR_ADMIN_PASSWORD", "")
     DEMO_MANDIR_ADMIN_PHONE = os.getenv("DEMO_MANDIR_ADMIN_PHONE", "+91-9000000001")
 
+    DEMO_MITRABOOKS_BOOTSTRAP = os.getenv("DEMO_MITRABOOKS_BOOTSTRAP", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    DEMO_MITRABOOKS_TENANT_ID = os.getenv("DEMO_MITRABOOKS_TENANT_ID", "demo-mitrabooks-business")
+    DEMO_MITRABOOKS_ADMIN_EMAIL = os.getenv("DEMO_MITRABOOKS_ADMIN_EMAIL", "admin@mitrabooks.local")
+    DEMO_MITRABOOKS_ADMIN_PASSWORD = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
+    DEMO_MITRABOOKS_ADMIN_FULL_NAME = os.getenv("DEMO_MITRABOOKS_ADMIN_FULL_NAME", "MitraBooks Admin")
+
 
     def validate(self) -> None:
         """Fail fast on dangerous mis-configuration before the app accepts traffic."""
@@ -276,9 +287,24 @@ class Settings:
                 "demo bootstrap will be skipped at startup."
             )
 
-        if is_prod and (self.SUPER_ADMIN_BOOTSTRAP or self.DEMO_MANDIR_BOOTSTRAP):
+        if self.DEMO_MITRABOOKS_BOOTSTRAP and not self.DEMO_MITRABOOKS_ADMIN_PASSWORD:
+            if is_prod:
+                raise ValueError(
+                    "DEMO_MITRABOOKS_ADMIN_PASSWORD must be set when DEMO_MITRABOOKS_BOOTSTRAP=true."
+                )
             _config_logger.warning(
-                "Bootstrap flags (SUPER_ADMIN_BOOTSTRAP / DEMO_MANDIR_BOOTSTRAP) are enabled "
+                "DEMO_MITRABOOKS_BOOTSTRAP=true but DEMO_MITRABOOKS_ADMIN_PASSWORD is not set — "
+                "demo bootstrap will be skipped at startup."
+            )
+
+        if is_prod and (
+            self.SUPER_ADMIN_BOOTSTRAP
+            or self.DEMO_MANDIR_BOOTSTRAP
+            or self.DEMO_MITRABOOKS_BOOTSTRAP
+        ):
+            _config_logger.warning(
+                "Bootstrap flags (SUPER_ADMIN_BOOTSTRAP / DEMO_MANDIR_BOOTSTRAP / "
+                "DEMO_MITRABOOKS_BOOTSTRAP) are enabled "
                 "in a production environment. Ensure this is intentional."
             )
 

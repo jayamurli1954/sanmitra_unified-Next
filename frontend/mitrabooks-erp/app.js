@@ -4406,7 +4406,7 @@ async function loadBusinessAccounts() {
         setLoginStatus(
           "warn",
           "MitraBooks business tenant required",
-          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as businessadmin@sanmitra.local for voucher posting.`
+          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as admin@mitrabooks.local for voucher posting.`
         );
       } else {
         setLoginStatus("warn", "No chart of accounts found", "Initialize the MitraBooks chart of accounts before posting vouchers.");

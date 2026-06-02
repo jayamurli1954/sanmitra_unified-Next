@@ -113,7 +113,7 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "Account code / name" in app_source
     assert "accountRowsFromPayload" in app_source
     assert "MitraBooks business tenant required" in app_source
-    assert "businessadmin@sanmitra.local" in app_source
+    assert "admin@mitrabooks.local" in app_source
     assert 'await loadBusinessAccounts();' in app_source
 
 
