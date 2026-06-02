@@ -1,5 +1,53 @@
 const { test, expect } = require('@playwright/test');
 
+async function mockVerifiedMitraBooksSession(page) {
+  await page.route('**/health', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'ok' }),
+  }));
+  await page.route('**/api/v1/modules/me', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      tenant_id: 'demo-mitrabooks-business',
+      tenant_name: 'Acme Corp Ltd',
+      organization_type: 'BUSINESS',
+      role: 'tenant_admin',
+      enabled_modules: [
+        { module_key: 'business', display_name: 'MitraBooks Business Operations', frontend_path: '/business', enabled: true },
+        { module_key: 'accounting', display_name: 'MitraBooks Accounting Engine', frontend_path: '/accounting', enabled: true },
+        { module_key: 'audit', display_name: 'Audit Log', frontend_path: '/audit', enabled: true },
+      ],
+      available_modules: [],
+    }),
+  }));
+  await page.route('**/api/v1/accounting/accounts', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      { id: 'cash', code: '1001', name: 'Cash in Hand', account_type: 'asset' },
+      { id: 'sales', code: '4001', name: 'Sales', account_type: 'revenue' },
+      { id: 'expense', code: '5001', name: 'Office Expense', account_type: 'expense' },
+    ]),
+  }));
+  await page.route('**/api/v1/business/parties**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{ id: 'p1', party_name: 'Karnataka Office Supplies', party_type: 'vendor', gstin: '29ABCDE1234F1Z5' }] }),
+  }));
+  await page.route('**/api/v1/business/vouchers**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [] }),
+  }));
+  await page.route('**/api/v1/accounting/reports/drilldown**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ summary: { voucher_count: 0 }, items: [] }),
+  }));
+}
+
 test.describe('MitraBooks ERP static shell', () => {
   test('shows login validation and password toggle before sign in', async ({ page }) => {
     await page.goto('/mitrabooks-erp/');
@@ -19,7 +67,33 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#toggle-password')).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('keeps login page visible when cached token has no tenant session', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sanmitra_frontend_access_token', 'stale-local-preview-token');
+      window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
+    });
+    await page.route('**/health', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok' }),
+    }));
+    await page.route('**/api/v1/modules/me', route => route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Unauthorized' }),
+    }));
+
+    await page.goto('/mitrabooks-erp/');
+
+    await expect(page.locator('#access-panel')).toBeVisible();
+    await expect(page.locator('.erp-sidebar')).toBeHidden();
+    await expect(page.locator('#session-pill')).toContainText('Not signed in');
+    await expect(page.locator('#login-status')).toContainText('Sign in required');
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('sanmitra_frontend_access_token'))).toBeNull();
+  });
+
   test('loads dashboard and opens core workspaces', async ({ page }) => {
+    await mockVerifiedMitraBooksSession(page);
     await page.addInitScript(() => {
       window.localStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
       window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');

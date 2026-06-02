@@ -1542,8 +1542,18 @@ function hideMandirSplash() {
   mandirSplashVideo?.pause();
 }
 
+function hasTrustedSession() {
+  if (!getAccessToken()) {
+    return false;
+  }
+  if (currentExperience !== "mitrabooks") {
+    return true;
+  }
+  return Boolean(lastModuleContext && typeof lastModuleContext === "object");
+}
+
 function updateSessionUi() {
-  const signedIn = Boolean(getAccessToken());
+  const signedIn = hasTrustedSession();
   appRoot.classList.toggle("signed-in", signedIn);
   appRoot.classList.toggle("signed-out", !signedIn);
   document.getElementById("access-panel")?.classList.toggle("signed-in", signedIn);
@@ -4919,13 +4929,24 @@ async function runChecks() {
   if (modules.ok) {
     lastModuleContext = modules.payload;
     updateTrustedContextUi(lastModuleContext);
+    updateSessionUi();
   }
   renderJson(apiOutput, { health, modules });
   renderModuleState(moduleState, modules);
 
   if (!modules.ok && modules.status === 401) {
+    lastModuleContext = null;
+    clearAccessToken();
     renderModules();
     setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
+    updateSessionUi();
+    return;
+  }
+
+  if (!modules.ok && currentExperience === "mitrabooks") {
+    lastModuleContext = null;
+    renderModules();
+    setLoginStatus("warn", "Tenant session required", "Sign in to load your MitraBooks dashboard.");
     updateSessionUi();
     return;
   }
@@ -6183,6 +6204,7 @@ function setExperience(nextExperience) {
 document.getElementById("save-config").addEventListener("click", () => {
   setConfiguredApiBaseUrl(apiBaseInput.value);
   setAccessToken(tokenInput.value);
+  lastModuleContext = null;
   updateSessionUi();
   runChecks();
 });
@@ -6211,6 +6233,7 @@ if (togglePasswordBtn && loginPassword) {
 document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
   clearAccessToken();
+  lastModuleContext = null;
   tokenInput.value = "";
   updateSessionUi();
   setLoginStatus("", "", "");
@@ -6218,6 +6241,7 @@ document.getElementById("clear-token").addEventListener("click", () => {
 });
 document.getElementById("topbar-logout")?.addEventListener("click", () => {
   clearAccessToken();
+  lastModuleContext = null;
   if (tokenInput) {
     tokenInput.value = "";
   }
@@ -6748,12 +6772,6 @@ document.querySelectorAll(".module-switch button").forEach((button) => button.cl
 document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
 updateSessionUi();
 renderModules();
-
-// Load grouped navigation for MitraBooks (Phase 1D)
-if (currentExperience === "mitrabooks" && getAccessToken()) {
-  const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-  loadAndRenderGroupedNav(appKey);
-}
 
 renderModuleState(moduleState);
 runChecks();
