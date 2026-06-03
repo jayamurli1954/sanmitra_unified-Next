@@ -401,6 +401,8 @@ let accountingDrilldownState = {
 let lastAccountingDrilldown = null;
 let lastAccountingVoucherDetail = null;
 let lastGruhaData = null;
+let lastBusinessParties = [];
+let lastBusinessAccounts = [];
 
 const appRoot = document.getElementById("app-root");
 const brandLogo = document.getElementById("brand-logo");
@@ -480,12 +482,12 @@ const brandSplashCopy = document.getElementById("brand-splash-copy");
 const topbarControlStrip = document.querySelector(".topbar-control-strip");
 const accountMenuTrigger = document.getElementById("account-menu-trigger");
 const accountMenuPanel = document.getElementById("account-menu-panel");
-const passwordDialog = document.getElementById("password-dialog");
-const passwordForm = document.getElementById("password-form");
-const passwordStatus = document.getElementById("password-status");
+const passwordDialog = document.getElementById("change-password-dialog");
+const passwordForm = document.getElementById("change-password-form");
+const passwordStatus = document.getElementById("password-error-message");
 const currentPasswordInput = document.getElementById("current-password");
 const newPasswordInput = document.getElementById("new-password");
-const confirmNewPasswordInput = document.getElementById("confirm-new-password");
+const confirmNewPasswordInput = document.getElementById("confirm-password");
 
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
@@ -647,8 +649,15 @@ function legacyBusinessNavigationItems() {
  * Groups modules by nav_group for professional accounting app layout
  */
 async function loadAndRenderGroupedNav(appKey) {
+  console.log("[Nav] loadAndRenderGroupedNav called with appKey:", appKey);
+
   if (appKey === "mitrabooks") {
-    renderGroupedNav(businessNavigationGroups());
+    console.log("[Nav] Using hardcoded MitraBooks navigation");
+    const groups = businessNavigationGroups();
+    console.log("[Nav] businessNavigationGroups returned", groups.length, "groups");
+    console.log("[Nav] Groups:", groups.map(g => g.name));
+    renderGroupedNav(groups);
+    console.log("[Nav] renderGroupedNav completed");
     return;
   }
   try {
@@ -734,9 +743,14 @@ async function loadAndRenderGroupedNav(appKey) {
  * Render navigation with group headers (Phase 1D)
  */
 function renderGroupedNav(groups) {
+  console.log("[Nav] renderGroupedNav called with", groups.length, "groups");
   const nav = document.getElementById("nav");
-  if (!nav) return;
+  if (!nav) {
+    console.error("[Nav] ERROR: nav element not found in DOM!");
+    return;
+  }
 
+  console.log("[Nav] Found nav element, clearing and populating...");
   nav.innerHTML = "";
 
   groups.forEach((group, groupIndex) => {
@@ -1662,6 +1676,21 @@ function updateSessionUi() {
     const role = lastModuleContext?.role || lastModuleContext?.user_role || "";
     sidebarUserRole.textContent = signedIn ? (role || "Tenant context pending") : "Sign in to load tenant";
   }
+
+  // Update user credentials display in topbar
+  const emailDisplay = document.getElementById("topbar-email-display");
+  const menuEmailDisplay = document.getElementById("menu-email-display");
+  const menuTenantDisplay = document.getElementById("menu-tenant-display");
+  if (emailDisplay) {
+    emailDisplay.textContent = savedEmail || "Not signed in";
+  }
+  if (menuEmailDisplay) {
+    menuEmailDisplay.textContent = savedEmail || "Not signed in";
+  }
+  if (menuTenantDisplay && lastModuleContext?.tenant_id) {
+    menuTenantDisplay.textContent = lastModuleContext.tenant_id;
+  }
+
   document.getElementById("topbar-actions")?.toggleAttribute("hidden", !signedIn);
   document.getElementById("sidebar-logout")?.toggleAttribute("hidden", !signedIn);
   if (loginEmail && !loginEmail.value) {
@@ -1732,7 +1761,7 @@ async function updateCurrentPassword() {
   const currentPassword = String(currentPasswordInput?.value || "");
   const newPassword = String(newPasswordInput?.value || "");
   const confirmPassword = String(confirmNewPasswordInput?.value || "");
-  const submitButton = document.getElementById("password-submit");
+  const submitButton = document.getElementById("change-password-submit");
 
   if (!currentPassword || currentPassword.length < 6) {
     if (passwordStatus) {
@@ -3574,93 +3603,63 @@ function renderDashboardPreview(config) {
       return renderBusinessWorkspace();
     }
     return `
-      <div class="legacy-dashboard business-dashboard">
-        <div class="preview-heading">
-          <div>
-            <h3>MitraBooks Dashboard</h3>
-            <p>Accounting-first business workspace with vouchers, ledgers, reports, and compliance shortcuts.</p>
-          </div>
-          <span class="pill ok">finance workspace</span>
-        </div>
+      <div class="business-dashboard-clean">
         ${renderBusinessExecutiveDashboard()}
-        <div class="metric-grid four business-kpi-grid">${renderStatCards(dashboard.stats || [])}</div>
-        <div class="business-overview-grid">
-          <article class="business-overview-main">
-            <div class="preview-heading compact">
-              <div>
-                <h4>Recent Journal Vouchers</h4>
-                <p>Latest posted entries and reversals for the active business tenant.</p>
-              </div>
-              <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">Open Voucher Register</button>
-            </div>
-            ${renderBusinessRecentVoucherRows(lastBusinessVouchers)}
+
+        <div class="business-bottom-metrics">
+          <article class="metric-card">
+            <span class="metric-label">Cash and Bank</span>
+            <strong class="metric-value">Rs. 8.4L</strong>
+            <small class="metric-sub">available balance</small>
           </article>
-          <article class="business-overview-side">
-            <div class="preview-heading compact">
-              <div>
-                <h4>Quick Actions Hub</h4>
-                <p>Core accounting shortcuts for day-to-day posting.</p>
-              </div>
-            </div>
-            <div class="quick-grid business-quick-grid">
-              <button class="quick-tile" type="button" data-business-action="open-create-voucher">
-                <span class="quick-icon">JV</span>
-                <span>Journal Post</span>
-              </button>
-              <button class="quick-tile" type="button" data-business-action="open-create-party">
-                <span class="quick-icon">PT</span>
-                <span>Add Party</span>
-              </button>
-              <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="accounting">
-                <span class="quick-icon">TB</span>
-                <span>Trial Balance</span>
-              </button>
-              <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="audit">
-                <span class="quick-icon">AT</span>
-                <span>Audit Trail</span>
-              </button>
-            </div>
+          <article class="metric-card">
+            <span class="metric-label">Receivables</span>
+            <strong class="metric-value">Rs. 2.1L</strong>
+            <small class="metric-sub">open invoices</small>
           </article>
-          <article class="business-overview-main">
-            <div class="preview-heading compact">
-              <div>
-                <h4>Operating Focus</h4>
-                <p>What the business admin should work through in this session.</p>
-              </div>
-            </div>
-            <ul class="activity-list business-focus-list">${renderActivity([
-              "Review posted vouchers and reversals before month-end close.",
-              "Maintain customer and vendor party masters with GSTIN details.",
-              "Use accounting view for chart readiness and drill-down validation.",
-            ])}</ul>
+          <article class="metric-card">
+            <span class="metric-label">Payables</span>
+            <strong class="metric-value">Rs. 96K</strong>
+            <small class="metric-sub">vendor dues</small>
           </article>
-          <article class="business-overview-side">
-            <div class="preview-heading compact">
-              <div>
-                <h4>Recent Activity</h4>
-                <p>Operational follow-ups and ledger checkpoints.</p>
-              </div>
-            </div>
-            <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
+          <article class="metric-card">
+            <span class="metric-label">GST Filing</span>
+            <strong class="metric-value">Ready</strong>
+            <small class="metric-sub">current period</small>
           </article>
         </div>
-        <div class="business-overview-footer">
-          <div class="inline-summary">
-            <span><strong>${escapeHtml(String(partyCount))}</strong> parties</span>
-            <span><strong>${escapeHtml(String(accountCount))}</strong> accounts</span>
-            <span><strong>${escapeHtml(String(voucherCount))}</strong> posted vouchers in current drill-down period</span>
-          </div>
-          <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="accounting">Open Accounting Checks</button>
+
+        <div class="business-quick-actions-clean">
+          <button class="quick-action-btn" type="button" data-business-action="open-create-voucher" title="Post a journal entry">
+            <span class="quick-icon">📝</span>
+            <span>Journal</span>
+          </button>
+          <button class="quick-action-btn" type="button" data-business-action="open-create-party" title="Add a new party">
+            <span class="quick-icon">👤</span>
+            <span>Party</span>
+          </button>
+          <button class="quick-action-btn" type="button" data-business-action="workspace-view" data-workspace-view="accounting" title="View trial balance">
+            <span class="quick-icon">📊</span>
+            <span>Trial Balance</span>
+          </button>
+          <button class="quick-action-btn" type="button" data-business-action="workspace-view" data-workspace-view="audit" title="View audit trail">
+            <span class="quick-icon">📋</span>
+            <span>Audit</span>
+          </button>
         </div>
-    </div>
-  `;
+
+        <div class="business-recent-activity-clean">
+          <h4>Recent Activity</h4>
+          <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
+        </div>
+      </div>
+    `;
 }
 }
 
 // ========== Business Module: Party Master ==========
 
 let activeBusinessWorkspace = "overview";
-let lastBusinessParties = [];
 let lastBusinessPartiesResult = null;
 const businessListState = {
   parties: {
@@ -4135,7 +4134,6 @@ function pageBusinessList(listKind, direction) {
 // ========== Business Module: Typed Vouchers ==========
 
 let lastBusinessVouchers = [];
-let lastBusinessAccounts = [];
 let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
@@ -6525,8 +6523,8 @@ accountMenuTrigger?.addEventListener("click", () => {
   accountMenuTrigger.setAttribute("aria-expanded", String(!isOpen));
 });
 document.getElementById("topbar-update-password")?.addEventListener("click", openPasswordDialog);
-document.getElementById("password-close")?.addEventListener("click", () => passwordDialog?.close());
-document.getElementById("password-cancel")?.addEventListener("click", () => passwordDialog?.close());
+document.getElementById("change-password-close")?.addEventListener("click", () => passwordDialog?.close());
+document.getElementById("change-password-cancel")?.addEventListener("click", () => passwordDialog?.close());
 passwordForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   await updateCurrentPassword();
@@ -7059,6 +7057,14 @@ document.querySelectorAll(".module-switch button").forEach((button) => button.cl
 document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
 updateSessionUi();
 renderModules();
+
+// Load grouped navigation for MitraBooks if already signed in (Phase 1D)
+if (currentExperience === "mitrabooks" && getAccessToken()) {
+  const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  loadAndRenderGroupedNav(appKey).catch(err => {
+    console.error("[Init] Failed to load grouped nav on page load:", err);
+  });
+}
 
 renderModuleState(moduleState);
 runChecks();
