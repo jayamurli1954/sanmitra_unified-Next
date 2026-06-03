@@ -68,7 +68,9 @@ services:
       - key: DEMO_MITRABOOKS_TENANT_ID
         value: demo-mitrabooks-business
       - key: DEMO_MITRABOOKS_ADMIN_EMAIL
-        value: admin@mitrabooks.local
+        value: businessadmin@sanmitra.local
+      - key: DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS
+        value: admin@mitrabooks.local,business.admin@sanmitra.local
       - key: DEMO_MITRABOOKS_ADMIN_PASSWORD
         sync: false
       - key: DEMO_MITRABOOKS_ADMIN_FULL_NAME
