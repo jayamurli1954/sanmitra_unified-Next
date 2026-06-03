@@ -887,6 +887,7 @@ html[data-theme="light"] select:focus {
 .app.signed-in:not(.mandir-domain) .content {
   min-width: 0;
   overflow-x: hidden;
+  padding-bottom: 112px;
 }
 
 .app.signed-in:not(.mandir-domain) #legacy-strip {
@@ -958,6 +959,10 @@ html[data-theme="light"] select:focus {
   max-width: 760px;
 }
 
+.business-kpi-grid {
+  margin-top: -2px;
+}
+
 .erp-workbench-grid {
   display: grid;
   gap: 14px;
@@ -1012,7 +1017,7 @@ html[data-theme="light"] select:focus {
 .executive-hero {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(260px, 0.92fr) minmax(360px, 1.08fr);
+  grid-template-columns: minmax(280px, 0.96fr) minmax(360px, 1.04fr);
   padding: 18px;
 }
 
@@ -1027,6 +1032,7 @@ html[data-theme="light"] select:focus {
 .finance-chart-card p {
   color: var(--text-secondary, #94a3b8);
   margin: 0;
+  max-width: 58ch;
 }
 
 .executive-kpi-strip {
@@ -1059,7 +1065,8 @@ html[data-theme="light"] select:focus {
 .finance-dashboard-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(420px, 1.35fr) minmax(300px, 0.65fr);
+  align-items: start;
+  grid-template-columns: minmax(460px, 1.3fr) minmax(320px, 0.7fr);
 }
 
 .finance-chart-card,
@@ -1072,7 +1079,7 @@ html[data-theme="light"] select:focus {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(6, minmax(44px, 1fr));
-  min-height: 190px;
+  min-height: 152px;
   padding: 18px 4px 6px;
 }
 
@@ -1087,7 +1094,7 @@ html[data-theme="light"] select:focus {
   align-items: end;
   display: flex;
   gap: 7px;
-  height: 140px;
+  height: 104px;
 }
 
 .finance-bars span {
@@ -1196,25 +1203,34 @@ html[data-theme="light"] select:focus {
 .ceo-insight-list {
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   display: grid;
-  gap: 18px;
-  margin-top: 18px;
-  padding-bottom: 18px;
+  gap: 14px;
+  margin-top: 16px;
+  padding-bottom: 16px;
 }
 
 .ceo-insight-row {
   align-items: start;
   color: var(--text-primary, #f8fafc);
   display: grid;
-  font-weight: 650;
-  gap: 10px 12px;
-  grid-template-columns: 14px minmax(120px, 1.1fr) minmax(74px, auto) minmax(110px, 0.9fr);
+  gap: 10px;
+  grid-template-columns: 14px minmax(0, 1fr);
   line-height: 1.45;
 }
 
-.ceo-insight-row strong {
+.ceo-insight-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.ceo-insight-copy strong {
   color: var(--text-primary, #f8fafc);
   font-size: 18px;
   line-height: 1.25;
+}
+
+.ceo-insight-copy span {
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 14px;
 }
 
 .insight-spark {
@@ -1269,6 +1285,69 @@ html[data-theme="light"] select:focus {
   color: var(--text-secondary, #94a3b8);
   font-size: 12px;
   margin-top: 12px;
+}
+
+.business-overview-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+}
+
+.business-overview-main,
+.business-overview-side {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.business-overview-side {
+  align-content: start;
+}
+
+.business-recent-table table td strong {
+  color: var(--text-primary, #f8fafc);
+  display: block;
+  font-size: 13px;
+}
+
+.business-recent-table .row-subtext {
+  color: var(--text-secondary, #94a3b8);
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.business-quick-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.business-focus-list {
+  grid-template-columns: 1fr;
+}
+
+.business-overview-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.inline-summary {
+  color: var(--text-secondary, #94a3b8);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.inline-summary strong {
+  color: var(--text-primary, #f8fafc);
+  margin-right: 4px;
 }
 
 .workbench-kicker {
@@ -1482,7 +1561,9 @@ html[data-theme="light"] .fy-selector {
   .mini-kpi-row,
   .executive-hero,
   .executive-kpi-strip,
-  .finance-dashboard-grid {
+  .finance-dashboard-grid,
+  .business-overview-grid,
+  .business-quick-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1490,15 +1571,16 @@ html[data-theme="light"] .fy-selector {
     gap: 8px;
     grid-template-columns: repeat(3, minmax(52px, 1fr));
   }
+
+  .business-overview-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 1260px) {
   .ceo-insight-row {
     grid-template-columns: 14px minmax(0, 1fr);
-  }
-
-  .ceo-insight-row strong {
-    grid-column: 2;
   }
 
   .ceo-ask-row {

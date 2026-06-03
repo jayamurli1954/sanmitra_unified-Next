@@ -133,16 +133,10 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.executive-dashboard')).toContainText('Sales & Expenses Trend');
     await expect(page.locator('.executive-dashboard')).toContainText('CEO Insights');
     await expect(page.locator('.finance-chart')).toBeVisible();
-    await expect(page.locator('.erp-health-panel')).toBeVisible();
-    await expect(page.locator('.erp-health-panel')).toContainText('Data Health');
-    await expect(page.locator('.erp-health-panel')).toContainText('Business tenant context');
-    await expect(page.locator('.erp-health-panel')).toContainText('Chart of accounts loaded');
-    await expect(page.locator('.erp-health-panel')).toContainText('Cash and bank accounts');
-    await expect(page.locator('.erp-health-panel')).toContainText('Party GSTIN sample');
-    await expect(page.locator('.erp-health-panel')).toContainText('Voucher drill-down');
-    await expect(page.locator('.erp-health-actions')).toContainText('Action Queue');
-    await expect(page.locator('.erp-health-actions')).toContainText('Concrete next fixes');
-    await expect(page.locator('.accounting-drilldown-panel')).toBeVisible();
+    await expect(page.locator('.business-overview-grid')).toBeVisible();
+    await expect(page.locator('.business-overview-grid')).toContainText('Recent Journal Vouchers');
+    await expect(page.locator('.business-overview-grid')).toContainText('Quick Actions Hub');
+    await expect(page.locator('.business-overview-grid')).toContainText('Recent Activity');
     await expect(page.getByText('MitraBooks Dashboard')).toBeVisible();
 
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();

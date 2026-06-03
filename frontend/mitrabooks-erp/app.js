@@ -841,6 +841,50 @@ function renderActivity(items) {
   return items.map((item) => `<li><span class="activity-dot"></span><span>${item}</span></li>`).join("");
 }
 
+function renderBusinessRecentVoucherRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `
+      <div class="empty-state compact">
+        <strong>No posted vouchers yet</strong>
+        <span>Post the first balanced journal to start the operational timeline.</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="table-preview compact-table erp-table business-recent-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Reference</th>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0, 5).map((row) => {
+            const status = String(row.status || "posted");
+            const isReversed = status === "reversed";
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(row.reference || row.cheque_number || "-")}</strong>
+                  <span class="row-subtext">${escapeHtml((row.description || row.narration || "").slice(0, 42))}</span>
+                </td>
+                <td>${escapeHtml(String(row.entry_date || row.created_at || "").slice(0, 10))}</td>
+                <td>${escapeHtml(row.voucher_type || "journal")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.total_debit || row.amount || 0))}</td>
+                <td><span class="pill ${isReversed ? "warn" : "ok"}">${escapeHtml(status)}</span></td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
@@ -925,21 +969,24 @@ function renderBusinessExecutiveDashboard() {
           <div class="ceo-insight-list" role="list">
             <div class="ceo-insight-row" role="listitem">
               <span class="insight-spark" aria-hidden="true"></span>
-              <span>Cash flow is highly robust with</span>
-              <strong>65.1x coverage</strong>
-              <span>on pending vendor obligations.</span>
+              <div class="ceo-insight-copy">
+                <strong>65.1x coverage</strong>
+                <span>Cash flow is covering pending vendor obligations comfortably.</span>
+              </div>
             </div>
             <div class="ceo-insight-row" role="listitem">
               <span class="insight-spark" aria-hidden="true"></span>
-              <span>Average receivables collections period has reduced to</span>
-              <strong>28 days</strong>
-              <span>, boosting liquidity.</span>
+              <div class="ceo-insight-copy">
+                <strong>28 days</strong>
+                <span>Receivables collection time has tightened and liquidity has improved.</span>
+              </div>
             </div>
             <div class="ceo-insight-row" role="listitem">
               <span class="insight-spark" aria-hidden="true"></span>
-              <span>Inventory turnover rate for consumables is currently running at</span>
-              <strong>4.2x</strong>
-              <span>.</span>
+              <div class="ceo-insight-copy">
+                <strong>4.2x</strong>
+                <span>Consumables inventory is turning at a healthy operating cadence.</span>
+              </div>
             </div>
           </div>
           <div class="ceo-ask-row">
@@ -3536,19 +3583,75 @@ function renderDashboardPreview(config) {
           <span class="pill ok">finance workspace</span>
         </div>
         ${renderBusinessExecutiveDashboard()}
-        <div class="metric-grid four">${renderStatCards(dashboard.stats || [])}</div>
-        <div class="dashboard-main-grid">
-          <article>
-            <h4>Quick Actions</h4>
-            <div class="quick-grid">${renderActionTiles(dashboard.actions || [])}</div>
+        <div class="metric-grid four business-kpi-grid">${renderStatCards(dashboard.stats || [])}</div>
+        <div class="business-overview-grid">
+          <article class="business-overview-main">
+            <div class="preview-heading compact">
+              <div>
+                <h4>Recent Journal Vouchers</h4>
+                <p>Latest posted entries and reversals for the active business tenant.</p>
+              </div>
+              <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">Open Voucher Register</button>
+            </div>
+            ${renderBusinessRecentVoucherRows(lastBusinessVouchers)}
           </article>
-          <article>
-            <h4>Recent Activity</h4>
+          <article class="business-overview-side">
+            <div class="preview-heading compact">
+              <div>
+                <h4>Quick Actions Hub</h4>
+                <p>Core accounting shortcuts for day-to-day posting.</p>
+              </div>
+            </div>
+            <div class="quick-grid business-quick-grid">
+              <button class="quick-tile" type="button" data-business-action="open-create-voucher">
+                <span class="quick-icon">JV</span>
+                <span>Journal Post</span>
+              </button>
+              <button class="quick-tile" type="button" data-business-action="open-create-party">
+                <span class="quick-icon">PT</span>
+                <span>Add Party</span>
+              </button>
+              <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="accounting">
+                <span class="quick-icon">TB</span>
+                <span>Trial Balance</span>
+              </button>
+              <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="audit">
+                <span class="quick-icon">AT</span>
+                <span>Audit Trail</span>
+              </button>
+            </div>
+          </article>
+          <article class="business-overview-main">
+            <div class="preview-heading compact">
+              <div>
+                <h4>Operating Focus</h4>
+                <p>What the business admin should work through in this session.</p>
+              </div>
+            </div>
+            <ul class="activity-list business-focus-list">${renderActivity([
+              "Review posted vouchers and reversals before month-end close.",
+              "Maintain customer and vendor party masters with GSTIN details.",
+              "Use accounting view for chart readiness and drill-down validation.",
+            ])}</ul>
+          </article>
+          <article class="business-overview-side">
+            <div class="preview-heading compact">
+              <div>
+                <h4>Recent Activity</h4>
+                <p>Operational follow-ups and ledger checkpoints.</p>
+              </div>
+            </div>
             <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
           </article>
         </div>
-        ${renderBusinessDataHealthPanel()}
-        ${renderAccountingDrilldownPanel()}
+        <div class="business-overview-footer">
+          <div class="inline-summary">
+            <span><strong>${escapeHtml(String(partyCount))}</strong> parties</span>
+            <span><strong>${escapeHtml(String(accountCount))}</strong> accounts</span>
+            <span><strong>${escapeHtml(String(voucherCount))}</strong> posted vouchers in current drill-down period</span>
+          </div>
+          <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="accounting">Open Accounting Checks</button>
+        </div>
     </div>
   `;
 }
