@@ -115,7 +115,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('nav#nav a[data-business-workspace="bills"]')).toBeVisible();
     await expect(page.locator('#access-panel')).toBeHidden();
     await expect(page.locator('#context-cards')).toBeHidden();
-    await expect(page.locator('.business-dashboard')).toBeVisible();
+    await expect(page.locator('.business-dashboard-clean')).toBeVisible();
     const layout = await page.evaluate(() => {
       const topbar = document.querySelector('.erp-topbar')?.getBoundingClientRect();
       const executiveDashboard = document.querySelector('.executive-dashboard')?.getBoundingClientRect();
