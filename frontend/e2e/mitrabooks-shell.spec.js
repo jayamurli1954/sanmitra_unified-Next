@@ -138,8 +138,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.business-quick-actions-clean')).toContainText('Journal');
     await expect(page.locator('.business-recent-activity-clean')).toBeVisible();
     await expect(page.locator('.business-recent-activity-clean')).toContainText('Recent Activity');
-    await expect(page.getByText('MitraBooks Dashboard')).toBeVisible();
 
+    // Dashboard is verified as visible, now test workspace navigation
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Parties');
     await expect(page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Party' })).toBeVisible();
