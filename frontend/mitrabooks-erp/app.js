@@ -3606,29 +3606,6 @@ function renderDashboardPreview(config) {
       <div class="business-dashboard-clean">
         ${renderBusinessExecutiveDashboard()}
 
-        <div class="business-bottom-metrics">
-          <article class="metric-card">
-            <span class="metric-label">Cash and Bank</span>
-            <strong class="metric-value">Rs. 8.4L</strong>
-            <small class="metric-sub">available balance</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Receivables</span>
-            <strong class="metric-value">Rs. 2.1L</strong>
-            <small class="metric-sub">open invoices</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Payables</span>
-            <strong class="metric-value">Rs. 96K</strong>
-            <small class="metric-sub">vendor dues</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">GST Filing</span>
-            <strong class="metric-value">Ready</strong>
-            <small class="metric-sub">current period</small>
-          </article>
-        </div>
-
         <div class="business-quick-actions-clean">
           <button class="quick-action-btn" type="button" data-business-action="open-create-voucher" title="Post a journal entry">
             <span class="quick-icon">📝</span>
@@ -3646,6 +3623,29 @@ function renderDashboardPreview(config) {
             <span class="quick-icon">📋</span>
             <span>Audit</span>
           </button>
+        </div>
+
+        <div class="business-bottom-metrics">
+          <div class="metric-item">
+            <span class="metric-label">Cash and Bank</span>
+            <strong class="metric-value">Rs. 8.4L</strong>
+            <small class="metric-sub">available balance</small>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Receivables</span>
+            <strong class="metric-value">Rs. 2.1L</strong>
+            <small class="metric-sub">open invoices</small>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Payables</span>
+            <strong class="metric-value">Rs. 96K</strong>
+            <small class="metric-sub">vendor dues</small>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">GST Filing</span>
+            <strong class="metric-value">Ready</strong>
+            <small class="metric-sub">current period</small>
+          </div>
         </div>
 
         <div class="business-recent-activity-clean">
