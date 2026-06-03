@@ -478,6 +478,14 @@ const mandirSplashVideo = document.getElementById("mandir-splash-video");
 const mandirSplashImage = document.getElementById("mandir-splash-image");
 const brandSplashCopy = document.getElementById("brand-splash-copy");
 const topbarControlStrip = document.querySelector(".topbar-control-strip");
+const accountMenuTrigger = document.getElementById("account-menu-trigger");
+const accountMenuPanel = document.getElementById("account-menu-panel");
+const passwordDialog = document.getElementById("password-dialog");
+const passwordForm = document.getElementById("password-form");
+const passwordStatus = document.getElementById("password-status");
+const currentPasswordInput = document.getElementById("current-password");
+const newPasswordInput = document.getElementById("new-password");
+const confirmNewPasswordInput = document.getElementById("confirm-new-password");
 
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
@@ -1591,7 +1599,8 @@ function updateSessionUi() {
   }
   const savedEmail = window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || "";
   if (topbarUser) {
-    topbarUser.textContent = savedEmail || "Signed in";
+    topbarUser.textContent = compactAccountLabel(savedEmail || "Signed in");
+    topbarUser.title = savedEmail || "Signed in";
   }
   if (topbarAvatar) {
     topbarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
@@ -1620,6 +1629,17 @@ function updateSessionUi() {
   }
 }
 
+function compactAccountLabel(email) {
+  const value = String(email || "").trim();
+  if (!value.includes("@")) {
+    return value || "Account";
+  }
+  const [name, domain] = value.split("@");
+  const shortName = name.length > 12 ? `${name.slice(0, 10)}...` : name;
+  const shortDomain = String(domain || "").split(".")[0] || domain;
+  return `${shortName}@${shortDomain}`;
+}
+
 function signOutAndReturnToLogin() {
   clearAccessToken();
   lastModuleContext = null;
@@ -1642,6 +1662,81 @@ function signOutAndReturnToLogin() {
   document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
   renderModules();
   updateSessionUi();
+}
+
+function closeAccountMenu() {
+  if (accountMenuPanel) {
+    accountMenuPanel.hidden = true;
+  }
+  accountMenuTrigger?.setAttribute("aria-expanded", "false");
+}
+
+function openPasswordDialog() {
+  closeAccountMenu();
+  passwordForm?.reset();
+  if (passwordStatus) {
+    passwordStatus.className = "module-state";
+    passwordStatus.textContent = "";
+  }
+  passwordDialog?.showModal();
+}
+
+async function updateCurrentPassword() {
+  const currentPassword = String(currentPasswordInput?.value || "");
+  const newPassword = String(newPasswordInput?.value || "");
+  const confirmPassword = String(confirmNewPasswordInput?.value || "");
+  const submitButton = document.getElementById("password-submit");
+
+  if (!currentPassword || currentPassword.length < 6) {
+    if (passwordStatus) {
+      passwordStatus.className = "module-state danger";
+      passwordStatus.innerHTML = "<strong>Current password required</strong><span>Enter the current account password first.</span>";
+    }
+    return;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    if (passwordStatus) {
+      passwordStatus.className = "module-state danger";
+      passwordStatus.innerHTML = "<strong>New password too short</strong><span>Use at least 6 characters.</span>";
+    }
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    if (passwordStatus) {
+      passwordStatus.className = "module-state danger";
+      passwordStatus.innerHTML = "<strong>Passwords do not match</strong><span>Confirm the new password again.</span>";
+    }
+    return;
+  }
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Updating...";
+  }
+  const result = await apiRequest(APP_KEY, "/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Update Password";
+  }
+
+  if (result.ok) {
+    passwordForm?.reset();
+    if (passwordStatus) {
+      passwordStatus.className = "module-state ok";
+      passwordStatus.innerHTML = "<strong>Password updated</strong><span>Use the new password for your next sign-in.</span>";
+    }
+    setLoginStatus("ok", "Password updated", "Use the new password for your next sign-in.");
+  } else if (passwordStatus) {
+    passwordStatus.className = "module-state danger";
+    passwordStatus.innerHTML = `<strong>Password update failed</strong><span>${escapeHtml(statusDetailText(result.payload?.detail) || statusDetailText(result.payload) || "Try again.")}</span>`;
+  }
+  renderJson(apiOutput, { change_password: { ok: result.ok, status: result.status, detail: result.payload?.detail } });
 }
 
 function updateTrustedContextUi(context = lastModuleContext) {
@@ -6318,6 +6413,28 @@ document.getElementById("topbar-logout")?.addEventListener("click", () => {
 });
 document.getElementById("sidebar-logout")?.addEventListener("click", () => {
   signOutAndReturnToLogin();
+});
+accountMenuTrigger?.addEventListener("click", () => {
+  const isOpen = accountMenuPanel && !accountMenuPanel.hidden;
+  if (accountMenuPanel) {
+    accountMenuPanel.hidden = isOpen;
+  }
+  accountMenuTrigger.setAttribute("aria-expanded", String(!isOpen));
+});
+document.getElementById("topbar-update-password")?.addEventListener("click", openPasswordDialog);
+document.getElementById("password-close")?.addEventListener("click", () => passwordDialog?.close());
+document.getElementById("password-cancel")?.addEventListener("click", () => passwordDialog?.close());
+passwordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await updateCurrentPassword();
+});
+document.addEventListener("click", (event) => {
+  if (!accountMenuPanel || accountMenuPanel.hidden) {
+    return;
+  }
+  if (!event.target.closest(".account-menu")) {
+    closeAccountMenu();
+  }
 });
 nav.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-nav-group-toggle]");

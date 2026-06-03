@@ -141,11 +141,18 @@
           </div>
 
           <div class="topbar-actions" id="topbar-actions" hidden>
-            <button class="secondary mandir-language" type="button">English</button>
             <span class="topbar-current" id="topbar-current">Dashboard</span>
-            <span class="topbar-user" id="topbar-user">Signed in</span>
-            <span class="topbar-avatar" id="topbar-avatar">S</span>
-            <button class="secondary" id="topbar-logout" type="button">Logout</button>
+            <div class="account-menu">
+              <button class="account-menu-trigger" id="account-menu-trigger" type="button" aria-expanded="false" aria-controls="account-menu-panel">
+                <span class="topbar-avatar" id="topbar-avatar">S</span>
+                <span class="topbar-user" id="topbar-user">Signed in</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="account-menu-panel" id="account-menu-panel" hidden>
+                <button type="button" id="topbar-update-password">Update password</button>
+                <button type="button" id="topbar-logout">Logout</button>
+              </div>
+            </div>
           </div>
           <span class="pill" id="health-pill" hidden>Not checked</span>
         </header>
@@ -334,6 +341,34 @@
         <div class="dialog-actions">
           <button class="secondary" type="button" id="entitlement-cancel">Cancel</button>
           <button type="submit">Save Entitlements</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="entitlement-dialog" id="password-dialog">
+      <form method="dialog" id="password-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Update Password</h3>
+            <p class="muted">Change the password for the currently signed-in account.</p>
+          </div>
+          <button class="secondary" type="button" id="password-close">Close</button>
+        </div>
+        <div class="field">
+          <label for="current-password">Current password</label>
+          <input id="current-password" type="password" autocomplete="current-password" required minlength="6">
+        </div>
+        <div class="field">
+          <label for="new-password">New password</label>
+          <input id="new-password" type="password" autocomplete="new-password" required minlength="6">
+        </div>
+        <div class="field">
+          <label for="confirm-new-password">Confirm new password</label>
+          <input id="confirm-new-password" type="password" autocomplete="new-password" required minlength="6">
+        </div>
+        <p class="module-state" id="password-status"></p>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="password-cancel">Cancel</button>
+          <button type="submit" id="password-submit">Update Password</button>
         </div>
       </form>
     </dialog>

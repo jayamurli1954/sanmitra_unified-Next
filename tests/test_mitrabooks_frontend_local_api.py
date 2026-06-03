@@ -140,10 +140,18 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
 
     assert 'id="topbar-logout"' in index_source
     assert 'id="sidebar-logout"' in index_source
+    assert 'id="account-menu-trigger"' in index_source
+    assert 'id="topbar-update-password"' in index_source
+    assert 'id="password-dialog"' in index_source
     assert "function signOutAndReturnToLogin()" in app_source
+    assert "function updateCurrentPassword()" in app_source
+    assert "/api/v1/auth/change-password" in app_source
     assert 'document.getElementById("topbar-logout")?.addEventListener("click"' in app_source
     assert 'document.getElementById("sidebar-logout")?.addEventListener("click"' in app_source
+    assert 'document.getElementById("topbar-update-password")?.addEventListener("click", openPasswordDialog)' in app_source
     assert 'topbarControlStrip.hidden = currentExperience !== "mitrabooks";' in app_source
+    assert ".account-menu-trigger" in css_source
+    assert ".account-menu-panel" in css_source
     assert ".app.signed-out .main" in css_source
     assert ".app.signed-out .topbar" in css_source
     assert ".app.signed-in .topbar-actions" in css_source
