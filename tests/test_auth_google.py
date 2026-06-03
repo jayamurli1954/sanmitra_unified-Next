@@ -197,6 +197,99 @@ async def test_password_login_rejects_google_account(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_password_login_repairs_demo_mitrabooks_account(monkeypatch) -> None:
+    users = {
+        "businessadmin@sanmitra.local": None,
+    }
+    issued = {}
+
+    class DemoSettings:
+        DEMO_MITRABOOKS_BOOTSTRAP = True
+        DEMO_MITRABOOKS_ADMIN_EMAIL = "businessadmin@sanmitra.local"
+        DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS = ["admin@mitrabooks.local", "business.admin@sanmitra.local"]
+        DEMO_MITRABOOKS_ADMIN_PASSWORD = "LocalTest@123"
+        DEMO_MITRABOOKS_ADMIN_FULL_NAME = "MitraBooks Admin"
+        DEMO_MITRABOOKS_TENANT_ID = "demo-mitrabooks-business"
+
+    async def fake_get_user_by_email(email: str):
+        return users.get(email.strip().lower())
+
+    async def fake_ensure_demo_user(*, email: str, password: str, full_name: str, tenant_id: str):
+        users[email] = {
+            "user_id": "demo-user-1",
+            "email": email,
+            "tenant_id": tenant_id,
+            "role": "tenant_admin",
+            "app_key": "mitrabooks",
+            "auth_provider": "password",
+            "hashed_password": "demo-hash",
+            "full_name": full_name,
+            "is_active": True,
+        }
+        issued["repair_email"] = email
+        issued["repair_password"] = password
+        return users[email]
+
+    async def fake_issue_tokens(user: dict, app_key: str | None):
+        issued["user"] = user
+        issued["app_key"] = app_key
+        return "access-token", "refresh-token"
+
+    monkeypatch.setattr(auth_service, "get_settings", lambda: DemoSettings())
+    monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(auth_service, "ensure_demo_mitrabooks_user", fake_ensure_demo_user)
+    monkeypatch.setattr(auth_service, "_issue_tokens_with_context", fake_issue_tokens)
+    monkeypatch.setattr(
+        auth_service,
+        "verify_password",
+        lambda plain, hashed: plain == "LocalTest@123" and hashed == "demo-hash",
+    )
+
+    access, refresh = await auth_service.login_user(
+        "businessadmin@sanmitra.local",
+        "LocalTest@123",
+        app_key="mitrabooks",
+    )
+
+    assert access == "access-token"
+    assert refresh == "refresh-token"
+    assert issued["repair_email"] == "businessadmin@sanmitra.local"
+    assert issued["repair_password"] == "LocalTest@123"
+    assert issued["user"]["tenant_id"] == "demo-mitrabooks-business"
+
+
+@pytest.mark.asyncio
+async def test_password_login_does_not_repair_non_demo_user(monkeypatch) -> None:
+    class DemoSettings:
+        DEMO_MITRABOOKS_BOOTSTRAP = True
+        DEMO_MITRABOOKS_ADMIN_EMAIL = "businessadmin@sanmitra.local"
+        DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS = ["admin@mitrabooks.local"]
+        DEMO_MITRABOOKS_ADMIN_PASSWORD = "LocalTest@123"
+        DEMO_MITRABOOKS_ADMIN_FULL_NAME = "MitraBooks Admin"
+        DEMO_MITRABOOKS_TENANT_ID = "demo-mitrabooks-business"
+
+    seen = {"repair_called": False}
+
+    async def fake_get_user_by_email(_email: str):
+        return None
+
+    async def fake_ensure_demo_user(**_kwargs):
+        seen["repair_called"] = True
+        return None
+
+    monkeypatch.setattr(auth_service, "get_settings", lambda: DemoSettings())
+    monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(auth_service, "ensure_demo_mitrabooks_user", fake_ensure_demo_user)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth_service.login_user("ordinary.user@example.com", "LocalTest@123", app_key="mitrabooks")
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Invalid credentials"
+    assert seen["repair_called"] is False
+
+
+@pytest.mark.asyncio
 async def test_issue_tokens_for_user_returns_tokens_and_stores_refresh(monkeypatch) -> None:
     seen = {}
 

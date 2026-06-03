@@ -18,6 +18,7 @@ from app.core.tenants.service import ensure_tenant_is_active
 from app.core.users.service import (
     create_user_from_google,
     create_user_from_mobile,
+    ensure_demo_mitrabooks_user,
     get_user_by_email,
     get_user_by_mobile,
 )
@@ -27,6 +28,36 @@ REFRESH_TOKENS_COLLECTION = "core_auth_refresh_tokens"
 MOBILE_OTP_COLLECTION = "core_auth_mobile_otp"
 _REFRESH_INDEXES_READY = False
 _MOBILE_OTP_INDEXES_READY = False
+
+
+def _demo_mitrabooks_admin_emails(settings) -> set[str]:
+    emails: set[str] = set()
+    for email in [settings.DEMO_MITRABOOKS_ADMIN_EMAIL, *settings.DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS]:
+        normalized = str(email or "").strip().lower()
+        if normalized:
+            emails.add(normalized)
+    return emails
+
+
+async def _repair_demo_mitrabooks_login(email: str, password: str) -> dict | None:
+    settings = get_settings()
+    normalized_email = str(email or "").strip().lower()
+    normalized_password = str(password or "")
+
+    if not settings.DEMO_MITRABOOKS_BOOTSTRAP:
+        return None
+    if normalized_password != str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or ""):
+        return None
+    if normalized_email not in _demo_mitrabooks_admin_emails(settings):
+        return None
+
+    await ensure_demo_mitrabooks_user(
+        email=normalized_email,
+        password=normalized_password,
+        full_name=settings.DEMO_MITRABOOKS_ADMIN_FULL_NAME,
+        tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
+    )
+    return await get_user_by_email(normalized_email)
 
 
 def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
@@ -453,16 +484,24 @@ async def login_user(email: str, password: str, app_key: str | None = None):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = await _repair_demo_mitrabooks_login(email, password)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if user.get("auth_provider") == "google":
         raise HTTPException(status_code=401, detail="Use Google login for this account")
 
     if not user.get("hashed_password"):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = await _repair_demo_mitrabooks_login(email, password)
+        if not user or not user.get("hashed_password"):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not await asyncio.to_thread(verify_password, password, user["hashed_password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = await _repair_demo_mitrabooks_login(email, password)
+        if not user or not user.get("hashed_password") or not await asyncio.to_thread(
+            verify_password, password, user["hashed_password"]
+        ):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return await _issue_tokens_with_context(user, app_key)
 
