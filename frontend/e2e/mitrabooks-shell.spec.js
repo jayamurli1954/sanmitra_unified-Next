@@ -133,10 +133,11 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.executive-dashboard')).toContainText('Sales & Expenses Trend');
     await expect(page.locator('.executive-dashboard')).toContainText('CEO Insights');
     await expect(page.locator('.finance-chart')).toBeVisible();
-    await expect(page.locator('.business-overview-grid')).toBeVisible();
-    await expect(page.locator('.business-overview-grid')).toContainText('Recent Journal Vouchers');
-    await expect(page.locator('.business-overview-grid')).toContainText('Quick Actions Hub');
-    await expect(page.locator('.business-overview-grid')).toContainText('Recent Activity');
+    await expect(page.locator('.business-bottom-metrics')).toBeVisible();
+    await expect(page.locator('.business-quick-actions-clean')).toBeVisible();
+    await expect(page.locator('.business-quick-actions-clean')).toContainText('Journal');
+    await expect(page.locator('.business-recent-activity-clean')).toBeVisible();
+    await expect(page.locator('.business-recent-activity-clean')).toContainText('Recent Activity');
     await expect(page.getByText('MitraBooks Dashboard')).toBeVisible();
 
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();
