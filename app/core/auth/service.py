@@ -43,21 +43,39 @@ async def _repair_demo_mitrabooks_login(email: str, password: str) -> dict | Non
     settings = get_settings()
     normalized_email = str(email or "").strip().lower()
     normalized_password = str(password or "")
+    password_configured = bool(str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or ""))
+    bootstrap_enabled = bool(settings.DEMO_MITRABOOKS_BOOTSTRAP)
+    allowed_emails = _demo_mitrabooks_admin_emails(settings)
 
-    if not settings.DEMO_MITRABOOKS_BOOTSTRAP:
+    _service_logger.info(
+        "MitraBooks demo login repair check: bootstrap=%s password_configured=%s email=%s allowed_email=%s",
+        bootstrap_enabled,
+        password_configured,
+        normalized_email,
+        normalized_email in allowed_emails,
+    )
+
+    if not bootstrap_enabled:
         return None
     if normalized_password != str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or ""):
         return None
-    if normalized_email not in _demo_mitrabooks_admin_emails(settings):
+    if normalized_email not in allowed_emails:
         return None
 
-    await ensure_demo_mitrabooks_user(
+    user = await ensure_demo_mitrabooks_user(
         email=normalized_email,
         password=normalized_password,
         full_name=settings.DEMO_MITRABOOKS_ADMIN_FULL_NAME,
         tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID,
     )
-    return await get_user_by_email(normalized_email)
+    resolved_user = await get_user_by_email(normalized_email)
+    _service_logger.info(
+        "MitraBooks demo login repair applied: email=%s tenant_id=%s resolved=%s",
+        normalized_email,
+        settings.DEMO_MITRABOOKS_TENANT_ID,
+        bool(resolved_user or user),
+    )
+    return resolved_user or user
 
 
 def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
@@ -478,6 +496,7 @@ async def _issue_tokens_with_context(user: dict, app_key: str | None):
 
 
 async def login_user(email: str, password: str, app_key: str | None = None):
+    repaired_demo_user = False
     try:
         user = await get_user_by_email(email)
     except RuntimeError as exc:
@@ -487,6 +506,7 @@ async def login_user(email: str, password: str, app_key: str | None = None):
         user = await _repair_demo_mitrabooks_login(email, password)
         if not user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        repaired_demo_user = True
 
     if user.get("auth_provider") == "google":
         raise HTTPException(status_code=401, detail="Use Google login for this account")
@@ -495,13 +515,16 @@ async def login_user(email: str, password: str, app_key: str | None = None):
         user = await _repair_demo_mitrabooks_login(email, password)
         if not user or not user.get("hashed_password"):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        repaired_demo_user = True
 
-    if not await asyncio.to_thread(verify_password, password, user["hashed_password"]):
+    if not repaired_demo_user and not await asyncio.to_thread(verify_password, password, user["hashed_password"]):
         user = await _repair_demo_mitrabooks_login(email, password)
-        if not user or not user.get("hashed_password") or not await asyncio.to_thread(
-            verify_password, password, user["hashed_password"]
-        ):
+        if not user or not user.get("hashed_password"):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        repaired_demo_user = True
+
+    if not repaired_demo_user and not await asyncio.to_thread(verify_password, password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return await _issue_tokens_with_context(user, app_key)
 
