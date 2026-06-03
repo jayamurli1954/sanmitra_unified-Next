@@ -477,6 +477,7 @@ const mandirSplash = document.getElementById("mandir-splash");
 const mandirSplashVideo = document.getElementById("mandir-splash-video");
 const mandirSplashImage = document.getElementById("mandir-splash-image");
 const brandSplashCopy = document.getElementById("brand-splash-copy");
+const topbarControlStrip = document.querySelector(".topbar-control-strip");
 
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
@@ -494,6 +495,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     topbarSubtitle.textContent = currentExperience === "mandir"
       ? "Temple / Trust Management & Accounting System"
       : config.subtitle;
+  }
+  if (topbarControlStrip) {
+    topbarControlStrip.hidden = currentExperience !== "mitrabooks";
   }
   brandLogo.src = config.logo;
   brandLogo.alt = config.title;
@@ -1602,6 +1606,8 @@ function updateSessionUi() {
     const role = lastModuleContext?.role || lastModuleContext?.user_role || "";
     sidebarUserRole.textContent = signedIn ? (role || "Tenant context pending") : "Sign in to load tenant";
   }
+  document.getElementById("topbar-actions")?.toggleAttribute("hidden", !signedIn);
+  document.getElementById("sidebar-logout")?.toggleAttribute("hidden", !signedIn);
   if (loginEmail && !loginEmail.value) {
     loginEmail.value = savedEmail || DEFAULT_MITRABOOKS_LOGIN_EMAIL;
   }
@@ -1612,6 +1618,30 @@ function updateSessionUi() {
   if (publicLink) {
     publicLink.href = mandirPublicPaymentPageUrl();
   }
+}
+
+function signOutAndReturnToLogin() {
+  clearAccessToken();
+  lastModuleContext = null;
+  lastBusinessAccounts = [];
+  lastBusinessParties = [];
+  lastBusinessVouchers = [];
+  lastAccountingDrilldown = null;
+  if (tokenInput) {
+    tokenInput.value = "";
+  }
+  if (loginPassword) {
+    loginPassword.value = "";
+  }
+  setLoginStatus("", "", "");
+  dashboardPreview.innerHTML = "";
+  renderJson(apiOutput, {});
+  renderModuleState(moduleState);
+  currentExperience = initialExperience();
+  document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
+  document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
+  renderModules();
+  updateSessionUi();
 }
 
 function updateTrustedContextUi(context = lastModuleContext) {
@@ -6281,25 +6311,13 @@ if (togglePasswordBtn && loginPassword) {
 }
 document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
-  clearAccessToken();
-  lastModuleContext = null;
-  tokenInput.value = "";
-  updateSessionUi();
-  setLoginStatus("", "", "");
-  runChecks();
+  signOutAndReturnToLogin();
 });
 document.getElementById("topbar-logout")?.addEventListener("click", () => {
-  clearAccessToken();
-  lastModuleContext = null;
-  if (tokenInput) {
-    tokenInput.value = "";
-  }
-  if (loginPassword) {
-    loginPassword.value = "";
-  }
-  updateSessionUi();
-  setLoginStatus("", "", "");
-  runChecks();
+  signOutAndReturnToLogin();
+});
+document.getElementById("sidebar-logout")?.addEventListener("click", () => {
+  signOutAndReturnToLogin();
 });
 nav.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-nav-group-toggle]");

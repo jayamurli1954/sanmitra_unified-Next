@@ -133,6 +133,22 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     assert "GST invoice" not in app_source
 
 
+def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
+
+    assert 'id="topbar-logout"' in index_source
+    assert 'id="sidebar-logout"' in index_source
+    assert "function signOutAndReturnToLogin()" in app_source
+    assert 'document.getElementById("topbar-logout")?.addEventListener("click"' in app_source
+    assert 'document.getElementById("sidebar-logout")?.addEventListener("click"' in app_source
+    assert 'topbarControlStrip.hidden = currentExperience !== "mitrabooks";' in app_source
+    assert ".app.signed-out .main" in css_source
+    assert ".app.signed-out .topbar" in css_source
+    assert ".app.signed-in .topbar-actions" in css_source
+
+
 def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

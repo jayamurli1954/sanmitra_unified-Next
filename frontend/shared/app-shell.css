@@ -66,6 +66,13 @@ a {
   display: none;
 }
 
+.app.signed-in .topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
 .app.mandir-domain {
   grid-template-columns: 300px 1fr;
   background: #f5f5f5;
@@ -187,6 +194,27 @@ a {
   border-color: rgba(255, 255, 255, 0.55);
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+
+.app:not(.mandir-domain) .topbar-actions button {
+  min-height: 40px;
+}
+
+.app:not(.mandir-domain) .topbar-current,
+.app:not(.mandir-domain) .topbar-user {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.app:not(.mandir-domain) .topbar-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.14);
+  color: var(--accent);
+  font-weight: 900;
 }
 
 .app.mandir-domain .topbar-current,
@@ -5902,8 +5930,26 @@ pre {
   display: none;
 }
 
+.app.signed-out {
+  grid-template-columns: 1fr;
+}
+
 .app.signed-out .main {
+  display: flex;
+}
+
+.app.signed-out .topbar,
+.app.signed-out #context-cards,
+.app.signed-out .dashboard-preview {
   display: none;
+}
+
+.app.signed-out .content {
+  min-height: 100vh;
+  min-height: var(--app-height);
+  display: grid;
+  place-items: center;
+  padding: 24px;
 }
 
 .app.signed-out .access-panel {
