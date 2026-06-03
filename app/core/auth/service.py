@@ -43,21 +43,21 @@ async def _repair_demo_mitrabooks_login(email: str, password: str) -> dict | Non
     settings = get_settings()
     normalized_email = str(email or "").strip().lower()
     normalized_password = str(password or "")
-    password_configured = bool(str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or ""))
-    bootstrap_enabled = bool(settings.DEMO_MITRABOOKS_BOOTSTRAP)
+    configured_password = str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or "").strip()
+    password_configured = bool(configured_password)
     allowed_emails = _demo_mitrabooks_admin_emails(settings)
 
     _service_logger.info(
         "MitraBooks demo login repair check: bootstrap=%s password_configured=%s email=%s allowed_email=%s",
-        bootstrap_enabled,
+        bool(settings.DEMO_MITRABOOKS_BOOTSTRAP),
         password_configured,
         normalized_email,
         normalized_email in allowed_emails,
     )
 
-    if not bootstrap_enabled:
+    if not password_configured:
         return None
-    if normalized_password != str(settings.DEMO_MITRABOOKS_ADMIN_PASSWORD or ""):
+    if normalized_password != configured_password:
         return None
     if normalized_email not in allowed_emails:
         return None
