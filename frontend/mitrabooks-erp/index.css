@@ -1609,9 +1609,30 @@ html[data-theme="light"] .fy-selector {
 .executive-dashboard .kpi-widget-hero {
   background: transparent;
   border: 0;
-  gap: 18px;
+  gap: 22px;
   margin: 0;
   padding: 0;
+}
+
+.executive-dashboard #widget-kpi-strip .widget-header {
+  margin-bottom: 22px;
+}
+
+.executive-dashboard .kpi-widget-title-block {
+  display: block;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.executive-dashboard .kpi-widget-title {
+  display: block;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 100%;
+  overflow: visible;
+  padding-top: 2px;
 }
 
 .executive-hero h3 {
