@@ -51,11 +51,11 @@ All accounting-impacting workflows should continue to post through MitraBooks ac
 Use these only after the demo seed has been run in the backend environment.
 
 ```text
-Admin demo
+Admin demo  # this is for Society Admin to login
 Email: demo.admin@gruhamitra.sanmitratech.in
 Password: GruhaDemo@2026
 
-Resident demo
+Resident demo # this is for Society resident to login
 Email: demo.resident@gruhamitra.sanmitratech.in
 Password: ResidentDemo@2026
 ```

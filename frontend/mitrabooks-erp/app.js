@@ -4897,6 +4897,222 @@ document.addEventListener("keydown", (event) => {
 
 // ========== Voucher Form Integration ==========
 
+/**
+ * Create voucher by type - handles Payment, Receipt, Contra, Journal
+ */
+async function createBusinessVoucherByType(voucherType, date) {
+  const appKey = "mitrabooks";
+
+  try {
+    if (voucherType === "payment" || voucherType === "receipt") {
+      await createSimplePartyVoucher(appKey, voucherType, date);
+    } else if (voucherType === "contra") {
+      await createContraVoucher(appKey, date);
+    } else if (voucherType === "journal") {
+      await createJournalVoucher(appKey, date);
+    } else {
+      setLoginStatus("warn", "Unknown voucher type", `Voucher type '${voucherType}' is not supported.`);
+    }
+  } catch (error) {
+    setLoginStatus("danger", "Voucher creation failed", error.message || "An unexpected error occurred.");
+  }
+}
+
+/**
+ * Create Payment or Receipt voucher (simple: one party, one bank/cash account)
+ */
+async function createSimplePartyVoucher(appKey, voucherType, date) {
+  const partyId = document.getElementById("business-voucher-party")?.value || "";
+  const amount = document.getElementById("business-voucher-amount")?.value || "0";
+  const accountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-account']");
+  const accountId = accountIdInput?.value || "";
+  const description = document.getElementById("business-voucher-description")?.value || "";
+  const reference = document.getElementById("business-voucher-reference")?.value || "";
+
+  if (!partyId) {
+    setLoginStatus("warn", "Party required", "Select a party for this voucher.");
+    return;
+  }
+
+  if (!accountId) {
+    setLoginStatus("warn", "Account required", "Select a bank/cash account.");
+    return;
+  }
+
+  const amountVal = Number(amount);
+  if (amountVal <= 0) {
+    setLoginStatus("warn", "Invalid amount", "Amount must be greater than zero.");
+    return;
+  }
+
+  // Determine debit/credit based on type
+  let debitAccountId, creditAccountId;
+  if (voucherType === "payment") {
+    // Payment: credit party AR, debit cash/bank
+    debitAccountId = Number(accountId);
+    creditAccountId = 2000; // TODO: Get AP account from party
+  } else {
+    // Receipt: debit party AR, credit cash/bank
+    debitAccountId = 2000; // TODO: Get AR account from party
+    creditAccountId = Number(accountId);
+  }
+
+  const payload = {
+    voucher_type: voucherType,
+    entry_date: date,
+    amount: amountVal.toFixed(2),
+    debit_account_id: debitAccountId,
+    credit_account_id: creditAccountId,
+    description: description || `${voucherType} voucher`,
+    reference: reference || null,
+    party_id: partyId,
+  };
+
+  const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": `business-voucher-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Voucher posted", `${voucherType.toUpperCase()} voucher created successfully.`);
+    document.getElementById("business-voucher-create-dialog")?.close();
+    await loadBusinessVouchers();
+    if (activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+  }
+  renderJson(apiOutput, { create_voucher: result });
+}
+
+/**
+ * Create Contra voucher (bank to bank transfer)
+ */
+async function createContraVoucher(appKey, date) {
+  const fromAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-from-account']");
+  const toAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-to-account']");
+  const fromAccountId = fromAccountIdInput?.value || "";
+  const toAccountId = toAccountIdInput?.value || "";
+  const amount = document.getElementById("business-voucher-amount")?.value || "0";
+  const description = document.getElementById("business-voucher-description")?.value || "Bank transfer";
+
+  if (!fromAccountId || !toAccountId) {
+    setLoginStatus("warn", "Accounts required", "Select both From and To accounts.");
+    return;
+  }
+
+  if (fromAccountId === toAccountId) {
+    setLoginStatus("warn", "Same account", "From and To accounts must be different.");
+    return;
+  }
+
+  const amountVal = Number(amount);
+  if (amountVal <= 0) {
+    setLoginStatus("warn", "Invalid amount", "Amount must be greater than zero.");
+    return;
+  }
+
+  const payload = {
+    voucher_type: "contra",
+    entry_date: date,
+    amount: amountVal.toFixed(2),
+    debit_account_id: Number(toAccountId),
+    credit_account_id: Number(fromAccountId),
+    description: description,
+    reference: null,
+  };
+
+  const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": `business-voucher-contra-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Voucher posted", "Contra voucher created successfully.");
+    document.getElementById("business-voucher-create-dialog")?.close();
+    await loadBusinessVouchers();
+    if (activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+  }
+  renderJson(apiOutput, { create_voucher: result });
+}
+
+/**
+ * Create Journal voucher (custom debit/credit lines)
+ */
+async function createJournalVoucher(appKey, date) {
+  const description = document.getElementById("business-voucher-description")?.value || "";
+
+  const debitLines = [];
+  const creditLines = [];
+  document.querySelectorAll(".voucher-line").forEach((lineEl) => {
+    const accountIdInput = lineEl.querySelector(".account-id-input");
+    const debitInput = lineEl.querySelector(".voucher-debit");
+    const creditInput = lineEl.querySelector(".voucher-credit");
+
+    const accountId = accountIdInput?.value || "";
+    const debit = Number(debitInput?.value) || 0;
+    const credit = Number(creditInput?.value) || 0;
+
+    if (accountId && (debit > 0 || credit > 0)) {
+      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit.toFixed(2) });
+      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit.toFixed(2) });
+    }
+  });
+
+  if (debitLines.length !== 1 || creditLines.length !== 1) {
+    setLoginStatus("warn", "One debit and one credit required", "Phase 1 supports one debit and one credit account per entry.");
+    return;
+  }
+
+  const debitTotal = Number(debitLines[0].amount);
+  const creditTotal = Number(creditLines[0].amount);
+  if (Math.abs(debitTotal - creditTotal) >= 0.01) {
+    setLoginStatus("warn", "Voucher is not balanced", "Debit amount must equal credit amount.");
+    return;
+  }
+
+  const payload = {
+    voucher_type: "journal",
+    entry_date: date,
+    amount: debitTotal.toFixed(2),
+    debit_account_id: debitLines[0].account_id,
+    credit_account_id: creditLines[0].account_id,
+    description: description || "Journal entry",
+    reference: null,
+  };
+
+  const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": `business-voucher-journal-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", "Voucher posted", "Journal entry posted successfully.");
+    document.getElementById("business-voucher-create-dialog")?.close();
+    await loadBusinessVouchers();
+    if (activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+  }
+  renderJson(apiOutput, { create_voucher: result });
+}
+
 async function createBusinessVoucher(voucherData) {
   const appKey = "mitrabooks";
 
@@ -5008,6 +5224,142 @@ async function reverseBusinessVoucher(voucherId) {
   renderJson(apiOutput, { reverse_voucher: result });
 }
 
+/**
+ * Render form fields for specific voucher type
+ */
+function renderVoucherTypeForm(voucherType) {
+  const accountSelector = (fieldId) => renderAccountSelectorComponent(fieldId);
+
+  if (voucherType === "payment") {
+    return `
+      <div class="voucher-type-form">
+        <div class="field">
+          <label for="business-voucher-party">Party (Vendor/Customer)</label>
+          <select id="business-voucher-party" required>
+            <option value="">-- Select Party --</option>
+            ${Array.isArray(lastBusinessParties) ? lastBusinessParties.map(p =>
+              `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
+            ).join('') : ''}
+          </select>
+        </div>
+        <div class="field">
+          <label for="business-voucher-amount">Amount (₹)</label>
+          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
+        </div>
+        <div class="field">
+          <label>Bank/Cash Account</label>
+          ${accountSelector("business-voucher-account")}
+        </div>
+        <div class="field">
+          <label for="business-voucher-description">Description</label>
+          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Payment description"></textarea>
+        </div>
+        <div class="field">
+          <label for="business-voucher-reference">Reference (Check #, UTR, etc.)</label>
+          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: check number or reference">
+        </div>
+      </div>
+    `;
+  }
+
+  if (voucherType === "receipt") {
+    return `
+      <div class="voucher-type-form">
+        <div class="field">
+          <label for="business-voucher-party">Party (Customer/Vendor)</label>
+          <select id="business-voucher-party" required>
+            <option value="">-- Select Party --</option>
+            ${Array.isArray(lastBusinessParties) ? lastBusinessParties.map(p =>
+              `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
+            ).join('') : ''}
+          </select>
+        </div>
+        <div class="field">
+          <label for="business-voucher-amount">Amount (₹)</label>
+          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
+        </div>
+        <div class="field">
+          <label>Bank/Cash Account</label>
+          ${accountSelector("business-voucher-account")}
+        </div>
+        <div class="field">
+          <label for="business-voucher-description">Description</label>
+          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Receipt description"></textarea>
+        </div>
+        <div class="field">
+          <label for="business-voucher-reference">Reference (Invoice #, etc.)</label>
+          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: invoice number or reference">
+        </div>
+      </div>
+    `;
+  }
+
+  if (voucherType === "contra") {
+    return `
+      <div class="voucher-type-form">
+        <div class="field">
+          <label>From Account</label>
+          ${accountSelector("business-voucher-from-account")}
+        </div>
+        <div class="field">
+          <label>To Account</label>
+          ${accountSelector("business-voucher-to-account")}
+        </div>
+        <div class="field">
+          <label for="business-voucher-amount">Amount (₹)</label>
+          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
+        </div>
+        <div class="field">
+          <label for="business-voucher-description">Description</label>
+          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Transfer description (e.g., sweep to savings)"></textarea>
+        </div>
+      </div>
+    `;
+  }
+
+  if (voucherType === "journal") {
+    return `
+      <div class="voucher-type-form">
+        <div class="field">
+          <label for="business-voucher-description">Description</label>
+          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Journal entry description" required></textarea>
+        </div>
+        <div class="voucher-lines-panel">
+          <h4>Debit/Credit Lines</h4>
+          <p class="muted" id="business-voucher-accounts-status">Select accounts and enter amounts.</p>
+          <div id="business-voucher-lines"></div>
+          <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
+        </div>
+        <div class="voucher-balance-panel">
+          <strong>Balance Check:</strong>
+          <span id="business-voucher-balance" style="font-weight: bold; margin-left: 8px;">Debit: ₹0 | Credit: ₹0</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `<p class="muted">Select a voucher type to proceed.</p>`;
+}
+
+/**
+ * Update form when voucher type changes
+ */
+function updateVoucherTypeForm(voucherType) {
+  const container = document.getElementById("business-voucher-form-container");
+  if (!container) return;
+
+  container.innerHTML = renderVoucherTypeForm(voucherType);
+
+  // For journal entries, add initial lines
+  if (voucherType === "journal") {
+    addVoucherLine();
+    addVoucherLine();
+  }
+
+  // Re-attach event listeners for new elements
+  updateVoucherBalance();
+}
+
 async function openBusinessCreateVoucherDialog() {
   const dialog = document.getElementById("business-voucher-create-dialog");
   if (!dialog) return;
@@ -5015,12 +5367,15 @@ async function openBusinessCreateVoucherDialog() {
   if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
     await loadBusinessAccounts();
   }
-  clearVoucherForm();
+  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) {
+    await loadBusinessParties();
+  }
+
+  // Reset form
+  document.getElementById("business-voucher-type-select").value = "";
+  document.getElementById("business-voucher-form-container").innerHTML = "";
   document.getElementById("business-voucher-date").valueAsDate = new Date();
 
-  // Add initial line items
-  addVoucherLine();
-  addVoucherLine();
   if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
     setLoginStatus("warn", "Accounts unavailable", "Load the MitraBooks chart of accounts before posting a voucher.");
   }
@@ -7026,16 +7381,26 @@ const businessVoucherCreateForm = document.getElementById("business-voucher-crea
 if (businessVoucherCreateForm) {
   businessVoucherCreateForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    const voucherType = document.getElementById("business-voucher-type-select")?.value || "";
     const date = document.getElementById("business-voucher-date")?.value || "";
-    const reference = document.getElementById("business-voucher-reference")?.value || "";
-    const narration = document.getElementById("business-voucher-narration")?.value || "";
+
+    if (!voucherType) {
+      setLoginStatus("warn", "Voucher type required", "Select a voucher type.");
+      return;
+    }
 
     if (!date) {
       setLoginStatus("warn", "Date required", "Enter the voucher date.");
       return;
     }
 
-    createBusinessVoucher({ date, reference, narration });
+    createBusinessVoucherByType(voucherType, date);
+  });
+
+  // Add event listener for voucher type selector
+  document.getElementById("business-voucher-type-select")?.addEventListener("change", (event) => {
+    const voucherType = event.target.value;
+    updateVoucherTypeForm(voucherType);
   });
 }
 

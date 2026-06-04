@@ -69,6 +69,7 @@ Before frontend merging starts, the platform needs a small foundation PR:
 ## Documentation Map
 
 - [Unified Platform PRD](docs/prd/SANMITRA_UNIFIED_PLATFORM_PRD.md)
+- [MitraBooks ERP Gap Matrix](docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md)
 - [Architecture](docs/architecture/ARCHITECTURE.md)
 - [Current vs Target Matrix](docs/architecture/CURRENT_VS_TARGET.md)
 - [Accounting Doctrine](docs/architecture/ACCOUNTING_DOCTRINE.md)

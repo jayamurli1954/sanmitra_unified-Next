@@ -5,6 +5,36 @@
 
 ---
 
+## Seeded Test Credentials (By App)
+
+Current local/demo credentials must remain app-scoped. Do not reuse one app's tenant-admin login in another app context.
+
+### MitraBooks ERP
+
+Current tested local MitraBooks login:
+
+```text
+Email:    businessadmin@sanmitra.local
+Password: businessadmin123
+App Key:  mitrabooks
+```
+
+Planned/optional demo credentials such as `admin@mitrabooks.local` are valid only if the backend startup path explicitly creates that user.
+
+### MandirMitra
+
+```text
+Email:    admin@sanmitra.local
+Password: admin123
+App Key:  mandirmitra
+```
+
+### Other Apps
+
+Create separate users per app key. Do not mix MandirMitra, GruhaMitra, LegalMitra, InvestMitra, and MitraBooks credentials.
+
+---
+
 ## 🏗️ Current Architecture (From Backend Code Review)
 
 ### **1. Authentication Flow**
@@ -37,22 +67,22 @@ Returns TokenResponse:
 
 ### **2. Tenant Context Routing**
 
-After login, all API calls must include **X-Tenant-ID** header:
+After login, protected browser API calls use the trusted token context plus the app key. The MitraBooks frontend must not send `X-Tenant-ID` for normal tenant-admin requests.
 
-```
+```text
 GET /api/v1/modules/me
 Headers:
-  X-Tenant-ID: tenant_a          ← Scope to specific tenant
-  X-App-Key: mitrabooks          ← Scope to app
-  Authorization: Bearer <token>  ← Auth token
+  X-App-Key: mitrabooks
+  Authorization: Bearer <token>
 
-Backend TenantContextMiddleware:
-  1. Reads X-Tenant-ID from header
-  2. Sets ContextVar(_tenant_id_ctx = "tenant_a")
-  3. All subsequent queries use this tenant context
-  4. Returns data for ONLY that tenant
+Backend context resolution:
+  1. Decode the access token.
+  2. Resolve tenant_id, app_key, organization_type, role, and permissions from trusted auth/module policy.
+  3. Validate module access before returning tenant data.
+  4. Scope all tenant-owned reads and writes to that trusted tenant context.
 ```
 
+`X-Tenant-ID` is reserved only for explicit super-admin override paths if they are implemented, gated, and audited.
 ### **3. User-Tenant Relationship**
 
 **Current:** Each user has a **SINGLE tenant_id** in their profile

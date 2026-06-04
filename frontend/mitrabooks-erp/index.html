@@ -668,38 +668,40 @@
         </div>
       </form>
     </dialog>
-    <dialog class="entitlement-dialog" id="business-voucher-create-dialog" style="min-width: 600px;">
+    <dialog class="entitlement-dialog" id="business-voucher-create-dialog" style="min-width: 700px;">
       <form method="dialog" id="business-voucher-create-form">
         <div class="dialog-head">
           <div>
             <h3>Create Voucher</h3>
-            <p class="muted" id="business-voucher-create-label">Enter voucher details and line items.</p>
+            <p class="muted" id="business-voucher-create-label">Select type and enter details.</p>
           </div>
           <button class="secondary" type="button" id="business-voucher-create-close">Close</button>
         </div>
-        <input id="business-voucher-type" type="hidden" value="journal">
+
+        <!-- Voucher Type Selector -->
+        <div class="field">
+          <label for="business-voucher-type-select">Voucher Type</label>
+          <select id="business-voucher-type-select" required>
+            <option value="">-- Select Voucher Type --</option>
+            <option value="payment">Payment (PV) - Cash/Bank Payment</option>
+            <option value="receipt">Receipt (RV) - Cash/Bank Receipt</option>
+            <option value="contra">Contra (CV) - Bank to Bank Transfer</option>
+            <option value="journal">Journal (JV) - Custom Entry</option>
+          </select>
+        </div>
+
+        <!-- Common Fields -->
         <div class="field">
           <label for="business-voucher-date">Date</label>
           <input id="business-voucher-date" type="date" required>
         </div>
-        <div class="field">
-          <label for="business-voucher-reference">Reference / Cheque #</label>
-          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: cheque number, bill reference">
+
+        <!-- Type-Specific Form Container -->
+        <div id="business-voucher-form-container">
+          <!-- Filled by renderVoucherTypeForm() -->
         </div>
-        <div class="field">
-          <label for="business-voucher-narration">Narration / Description</label>
-          <textarea id="business-voucher-narration" rows="2" maxlength="240" placeholder="Reason for this transaction"></textarea>
-        </div>
-        <div class="voucher-lines-panel">
-          <h4>Line Items</h4>
-          <p class="muted" id="business-voucher-accounts-status">Loading accounts...</p>
-          <div id="business-voucher-lines"></div>
-          <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
-        </div>
-        <div class="voucher-balance-panel">
-          <strong>Balance Check:</strong>
-          <span id="business-voucher-balance" style="font-weight: bold; margin-left: 8px;">Debit: ₹0 | Credit: ₹0</span>
-        </div>
+
+        <!-- Dialog Actions -->
         <div class="dialog-actions">
           <button class="secondary" type="button" id="business-voucher-create-cancel">Cancel</button>
           <button type="submit" id="business-voucher-submit">Post Voucher</button>

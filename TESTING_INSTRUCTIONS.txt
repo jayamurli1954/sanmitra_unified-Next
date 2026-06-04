@@ -1,0 +1,91 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     PHASE 1C TESTING - QUICK START                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+✅ SERVER IS RUNNING ON http://localhost:8000
+
+📍 TO TEST THE APP:
+   1. Open http://localhost:8000/mitrabooks-erp/ in your browser
+   2. Press F12 to open DevTools
+   3. Follow the testing guide in PHASE_1C_TESTING.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 QUICK VERIFICATION (Already Done):
+   ✓ CSS files loading (theme-tokens.css, app-shell.css, index.css)
+   ✓ Service worker files in correct location
+   ✓ HTML updated with correct paths
+   ✓ Theme functions in app.js (setTheme, getTheme, initializeTheme)
+   ✓ data-theme="dark" attribute set
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 KEY TESTS TO PERFORM:
+
+1. DARK THEME DEFAULT
+   - Should see dark background and light text
+   - Check DevTools → Elements → <html> has data-theme="dark"
+
+2. SERVICE WORKER REGISTRATION
+   - Open DevTools → Application → Service Workers
+   - Should show registered and activated
+
+3. CACHE VERIFICATION
+   - DevTools → Application → Cache Storage
+   - Should see "mitrabooks-erp-v1" cache with CSS files
+
+4. THEME PERSISTENCE (Manual Test)
+   - In DevTools Console, run: setTheme('light')
+   - Reload page - should still be light mode
+   - Check localStorage key "mitrabooks-theme" = "light"
+
+5. OFFLINE MODE (Simulated)
+   - DevTools → Network → Check "Offline"
+   - Reload page - should still work from cache
+
+6. NO BROKEN FEATURES
+   - Sidebar loads correctly
+   - Module switches work
+   - Login form displays
+   - No console errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 FILES TO CHECK:
+
+   - frontend/mitrabooks-erp/index.html (✓ Updated)
+   - frontend/mitrabooks-erp/app.js (✓ Theme functions added)
+   - frontend/shared/theme-tokens.css (✓ Created)
+   - frontend/mitrabooks-erp/index.css (✓ Updated)
+   - frontend/service-worker.js (✓ Copied)
+   - frontend/sw-register.js (✓ Copied)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📄 REFERENCE DOCUMENTS:
+
+   - PHASE_1C_TESTING.md (Detailed testing checklist)
+   - PHASE_1C_PROGRESS.md (Implementation progress)
+   - PHASE_1C_STATUS.md (Current status report)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  NOTE: Theme toggle buttons (dark/light) will be added in Step 6.
+    For now, you can test theme switching via DevTools Console:
+
+    setTheme('light')  // Switch to light
+    setTheme('dark')   // Switch to dark
+    getTheme()         // Check current theme
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ IF ALL TESTS PASS:
+   → Report results and proceed to Step 6 (Sidebar UI JavaScript)
+
+❌ IF ANY TESTS FAIL:
+   → Check console errors and let me know
+   → I'll debug and fix the issue
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Good luck! 🚀

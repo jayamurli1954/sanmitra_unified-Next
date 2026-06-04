@@ -9,9 +9,9 @@ This document prevents ambiguity during implementation. Treat current state as w
 | Frontends | Five separate frontend experiences | Three frontend experiences: MitraBooks Unified ERP, LegalMitra, InvestMitra | Define API contract for menus/modules before merging UI |
 | Backend | Unified FastAPI modular monolith exists in reference backend | Continue modular monolith | Add module registry and explicit module access checks |
 | Accounting | Shared PostgreSQL accounting foundation exists | All accounting-heavy modules use shared accounting engine | Keep module logic from bypassing accounting service |
+| MitraBooks business scope | Core accounting foundation exists; business workflows are only partially specified | Business/professional workflows include parties, typed vouchers, sales, purchases, GST, inventory, AR/AP, MIS, data health, and exports | Use `docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md` to phase scope and reject desktop-era assumptions |
 | Domain data | MongoDB domain data exists | MongoDB remains domain/operational store | Ensure every query is tenant-scoped |
 | Product context | `X-App-Key` exists | Keep app key and add formal organization type | Do not collapse app key and organization type into one field |
 | Tenancy | Tenant middleware/RBAC foundation exists | Tenant, organization type, enabled modules, role, and permissions drive access | Add `organization_type` and `enabled_modules` |
 | Module access | Product routing exists, feature gating is not yet formalized | API and UI both use module registry | Add registry and test access decisions |
 | Frontend merge | Not started in this workspace | Merge GruhaMitra, MandirMitra, and MitraBooks workflows into MitraBooks shell | First PR must prepare backend/docs only |
-
