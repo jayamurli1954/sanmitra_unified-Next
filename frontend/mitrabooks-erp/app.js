@@ -1076,11 +1076,6 @@ function renderBusinessExecutiveDashboard() {
   // Widget 1: KPI Strip (Phase 2C.2-C.3: Collapsible & Customizable)
   const kpiStripContent = `
     <div class="executive-hero kpi-widget-hero">
-      <div class="kpi-widget-title-block">
-        <span class="workbench-kicker">FY 2026-27 Operating View</span>
-        <h3 class="kpi-widget-title">Income, expenses, and cash movement</h3>
-        <p>Use this area for the live business pulse: revenue trend, purchase pressure, collections, payables, and leadership actions.</p>
-      </div>
       <div class="executive-kpi-strip">
         <article>
           <span>Income</span>
