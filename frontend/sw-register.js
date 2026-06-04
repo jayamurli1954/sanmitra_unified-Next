@@ -9,6 +9,27 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
+    const isStagingHost = /(^staging\.mitrabooks\.sanmitratech\.in$|mitrabooks-erp-staging\.vercel\.app$)/i
+      .test(window.location.hostname);
+
+    if (isStagingHost) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .then(() => {
+          if ('caches' in window) {
+            return caches.keys().then((cacheNames) => Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))));
+          }
+          return undefined;
+        })
+        .then(() => {
+          console.log('[App] Staging service worker cache cleared');
+        })
+        .catch((error) => {
+          console.warn('[App] Failed to clear staging service worker cache:', error);
+        });
+      return;
+    }
+
     navigator.serviceWorker
       .register('/service-worker.js', { scope: '/mitrabooks-erp/' })
       .then((registration) => {
