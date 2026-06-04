@@ -154,6 +154,136 @@ if (window.matchMedia) {
   });
 }
 
+// ============================================
+// DASHBOARD WIDGET STATE MANAGEMENT (Phase 2C.2-2C.3)
+// ============================================
+
+const WIDGET_STATES_STORAGE_KEY = "mitrabooks-widget-states";
+const DEFAULT_WIDGET_STATES = {
+  "kpi-strip": { visible: true, collapsed: false, order: 1 },
+  "finance-chart": { visible: true, collapsed: false, order: 2 },
+  "ceo-panel": { visible: true, collapsed: false, order: 3 }
+};
+
+/**
+ * Get all widget states from localStorage
+ */
+function getWidgetStates() {
+  try {
+    const saved = localStorage.getItem(WIDGET_STATES_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : { ...DEFAULT_WIDGET_STATES };
+  } catch (e) {
+    console.warn("Failed to parse widget states, using defaults", e);
+    return { ...DEFAULT_WIDGET_STATES };
+  }
+}
+
+/**
+ * Save widget states to localStorage
+ */
+function saveWidgetStates(states) {
+  try {
+    localStorage.setItem(WIDGET_STATES_STORAGE_KEY, JSON.stringify(states));
+  } catch (e) {
+    console.warn("Failed to save widget states", e);
+  }
+}
+
+/**
+ * Get state of a specific widget
+ */
+function getWidgetState(widgetId) {
+  const states = getWidgetStates();
+  return states[widgetId] || { visible: true, collapsed: false };
+}
+
+/**
+ * Toggle collapse state of a widget
+ */
+function toggleWidgetCollapse(widgetId) {
+  const states = getWidgetStates();
+  if (states[widgetId]) {
+    states[widgetId].collapsed = !states[widgetId].collapsed;
+    saveWidgetStates(states);
+    applyWidgetCollapse(widgetId, states[widgetId].collapsed);
+  }
+}
+
+/**
+ * Toggle visibility of a widget
+ */
+function toggleWidgetVisibility(widgetId) {
+  const states = getWidgetStates();
+  if (states[widgetId]) {
+    states[widgetId].visible = !states[widgetId].visible;
+    saveWidgetStates(states);
+  }
+}
+
+/**
+ * Reset all widgets to default state
+ */
+function resetWidgetStates() {
+  saveWidgetStates({ ...DEFAULT_WIDGET_STATES });
+  // Re-render dashboard to apply defaults
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+/**
+ * Apply collapse/expand animation to widget
+ */
+function applyWidgetCollapse(widgetId, isCollapsed) {
+  const widget = document.getElementById(`widget-${widgetId}`);
+  const btn = document.getElementById(`collapse-btn-${widgetId}`);
+
+  if (widget) {
+    widget.classList.toggle("collapsed", isCollapsed);
+  }
+  if (btn) {
+    btn.textContent = isCollapsed ? "⌄" : "⌃";
+    btn.setAttribute("aria-label", isCollapsed ? "Expand widget" : "Collapse widget");
+  }
+}
+
+/**
+ * Create widget wrapper HTML with header controls
+ */
+function createWidgetWrapper(widgetId, title, content, showControls = true) {
+  const state = getWidgetState(widgetId);
+  const isCollapsed = state.collapsed;
+  const isVisible = state.visible !== false;
+
+  if (!isVisible) {
+    return ""; // Don't render hidden widgets
+  }
+
+  const collapseBtnHtml = showControls ? `
+    <button
+      id="collapse-btn-${widgetId}"
+      class="widget-collapse-btn"
+      onclick="toggleWidgetCollapse('${widgetId}')"
+      aria-label="${isCollapsed ? 'Expand widget' : 'Collapse widget'}"
+      title="${isCollapsed ? 'Expand' : 'Collapse'}"
+    >
+      ${isCollapsed ? "⌄" : "⌃"}
+    </button>
+  ` : "";
+
+  return `
+    <div id="widget-${widgetId}" class="dashboard-widget ${isCollapsed ? 'collapsed' : ''}" data-widget-id="${widgetId}">
+      <div class="widget-header">
+        <h4>${escapeHtml(title)}</h4>
+        ${showControls ? `<div class="widget-header-controls">${collapseBtnHtml}</div>` : ""}
+      </div>
+      <div class="widget-content">
+        ${content}
+      </div>
+    </div>
+  `;
+}
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -943,89 +1073,101 @@ function renderBusinessExecutiveDashboard() {
     `;
   }).join("");
 
-  return `
-    <section class="executive-dashboard" aria-label="MitraBooks executive dashboard">
-      <div class="executive-hero">
-        <div>
-          <span class="workbench-kicker">FY 2026-27 Operating View</span>
-          <h3>Income, expenses, and cash movement</h3>
-          <p>Use this area for the live business pulse: revenue trend, purchase pressure, collections, payables, and leadership actions.</p>
-        </div>
-        <div class="executive-kpi-strip">
-          <article>
-            <span>Income</span>
-            <strong>${escapeHtml(incomeDisplay)}</strong>
-            <small>${incomeGrowth > 0 ? "+" : ""}${incomeGrowth.toFixed(1)}% vs last month</small>
-          </article>
-          <article>
-            <span>Expenses</span>
-            <strong>${escapeHtml(expenseDisplay)}</strong>
-            <small>Office, purchases, vendor bills</small>
-          </article>
-          <article>
-            <span>Net Position</span>
-            <strong>${escapeHtml(netDisplay)}</strong>
-            <small>Before tax provisions</small>
-          </article>
+  // Widget 1: KPI Strip (Phase 2C.2-C.3: Collapsible & Customizable)
+  const kpiStripContent = `
+    <div class="executive-hero" style="border: none; background: transparent; padding: 0; margin: -16px -16px 0;">
+      <div>
+        <span class="workbench-kicker">FY 2026-27 Operating View</span>
+        <h3>Income, expenses, and cash movement</h3>
+        <p>Use this area for the live business pulse: revenue trend, purchase pressure, collections, payables, and leadership actions.</p>
+      </div>
+      <div class="executive-kpi-strip">
+        <article>
+          <span>Income</span>
+          <strong>${escapeHtml(incomeDisplay)}</strong>
+          <small>${incomeGrowth > 0 ? "+" : ""}${incomeGrowth.toFixed(1)}% vs last month</small>
+        </article>
+        <article>
+          <span>Expenses</span>
+          <strong>${escapeHtml(expenseDisplay)}</strong>
+          <small>Office, purchases, vendor bills</small>
+        </article>
+        <article>
+          <span>Net Position</span>
+          <strong>${escapeHtml(netDisplay)}</strong>
+          <small>Before tax provisions</small>
+        </article>
+      </div>
+    </div>
+  `;
+
+  // Widget 2: Finance Chart (Phase 2C.2-C.3: Collapsible & Customizable)
+  const financeChartContent = `
+    <div class="preview-heading compact">
+      <div>
+        <p>Scoped performance metrics for the active BUSINESS Suite.</p>
+      </div>
+      <span class="pill ok">CEO view</span>
+    </div>
+    <div class="finance-chart" role="img" aria-label="Monthly income and expense bar chart">
+      ${bars}
+    </div>
+    <div class="chart-legend">
+      <span><i class="income-dot"></i>Income</span>
+      <span><i class="expense-dot"></i>Expenses</span>
+    </div>
+  `;
+
+  // Widget 3: CEO Panel (Phase 2C.2-C.3: Collapsible & Customizable)
+  const ceoPanelContent = `
+    <div class="preview-heading compact">
+      <div class="ceo-title-block">
+        <span class="ceo-orbit" aria-hidden="true"></span>
+        <span class="ai-badge">AI Enabled</span>
+        <p>Real-time ledger analytics and operating summaries.</p>
+      </div>
+    </div>
+    <div class="ceo-insight-list" role="list">
+      <div class="ceo-insight-row" role="listitem">
+        <span class="insight-spark" aria-hidden="true"></span>
+        <div class="ceo-insight-copy">
+          <strong>65.1x coverage</strong>
+          <span>Cash flow is covering pending vendor obligations comfortably.</span>
         </div>
       </div>
+      <div class="ceo-insight-row" role="listitem">
+        <span class="insight-spark" aria-hidden="true"></span>
+        <div class="ceo-insight-copy">
+          <strong>28 days</strong>
+          <span>Receivables collection time has tightened and liquidity has improved.</span>
+        </div>
+      </div>
+      <div class="ceo-insight-row" role="listitem">
+        <span class="insight-spark" aria-hidden="true"></span>
+        <div class="ceo-insight-copy">
+          <strong>4.2x</strong>
+          <span>Consumables inventory is turning at a healthy operating cadence.</span>
+        </div>
+      </div>
+    </div>
+    <div class="ceo-ask-row">
+      <input type="text" value="" placeholder="Ask AI: 'What is our GST exposure?' or 'Rent balance?'" aria-label="Ask AI for ledger insight">
+      <button type="button">Ask</button>
+    </div>
+    <p class="ceo-footnote">${voucherCount} posted voucher(s), ${partyCount} party record(s), and ${accountCount} account(s) are available for the current dashboard context.</p>
+  `;
 
-      <div class="finance-dashboard-grid">
-        <article class="finance-chart-card">
-          <div class="preview-heading compact">
-            <div>
-              <h4>Sales & Expenses Trend</h4>
-              <p>Scoped performance metrics for the active BUSINESS Suite.</p>
-            </div>
-            <span class="pill ok">CEO view</span>
-          </div>
-          <div class="finance-chart" role="img" aria-label="Monthly income and expense bar chart">
-            ${bars}
-          </div>
-          <div class="chart-legend">
-            <span><i class="income-dot"></i>Income</span>
-            <span><i class="expense-dot"></i>Expenses</span>
-          </div>
-        </article>
+  // Build dashboard with wrapped widgets (Phase 2C.2-C.3)
+  const kpiWidget = createWidgetWrapper("kpi-strip", "Key Performance Indicators", kpiStripContent, true);
+  const chartWidget = createWidgetWrapper("finance-chart", "Sales & Expenses Trend", financeChartContent, true);
+  const ceoWidget = createWidgetWrapper("ceo-panel", "CEO Insights", ceoPanelContent, true);
 
-        <article class="ceo-panel">
-          <div class="preview-heading compact">
-            <div class="ceo-title-block">
-              <span class="ceo-orbit" aria-hidden="true"></span>
-              <h4>CEO Insights</h4>
-              <span class="ai-badge">AI Enabled</span>
-              <p>Real-time ledger analytics and operating summaries.</p>
-            </div>
-          </div>
-          <div class="ceo-insight-list" role="list">
-            <div class="ceo-insight-row" role="listitem">
-              <span class="insight-spark" aria-hidden="true"></span>
-              <div class="ceo-insight-copy">
-                <strong>65.1x coverage</strong>
-                <span>Cash flow is covering pending vendor obligations comfortably.</span>
-              </div>
-            </div>
-            <div class="ceo-insight-row" role="listitem">
-              <span class="insight-spark" aria-hidden="true"></span>
-              <div class="ceo-insight-copy">
-                <strong>28 days</strong>
-                <span>Receivables collection time has tightened and liquidity has improved.</span>
-              </div>
-            </div>
-            <div class="ceo-insight-row" role="listitem">
-              <span class="insight-spark" aria-hidden="true"></span>
-              <div class="ceo-insight-copy">
-                <strong>4.2x</strong>
-                <span>Consumables inventory is turning at a healthy operating cadence.</span>
-              </div>
-            </div>
-          </div>
-          <div class="ceo-ask-row">
-            <input type="text" value="" placeholder="Ask AI: 'What is our GST exposure?' or 'Rent balance?'" aria-label="Ask AI for ledger insight">
-            <button type="button">Ask</button>
-          </div>
-          <p class="ceo-footnote">${voucherCount} posted voucher(s), ${partyCount} party record(s), and ${accountCount} account(s) are available for the current dashboard context.</p>
-        </article>
+  return `
+    <section class="executive-dashboard" aria-label="MitraBooks executive dashboard">
+      ${kpiWidget}
+      <div class="finance-dashboard-grid-wrapper">
+        ${chartWidget}
+        ${ceoWidget}
       </div>
     </section>
   `;
