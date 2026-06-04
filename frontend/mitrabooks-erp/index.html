@@ -140,17 +140,31 @@
             </div>
           </div>
 
-          <div class="topbar-actions" id="topbar-actions" hidden>
-            <span class="topbar-current" id="topbar-current">Dashboard</span>
+          <div class="topbar-actions" id="topbar-actions">
+            <div class="user-credentials-display">
+              <span class="credential-label">Logged in as:</span>
+              <span class="credential-email" id="topbar-email-display">admin@mitrabooks.local</span>
+            </div>
             <div class="account-menu">
               <button class="account-menu-trigger" id="account-menu-trigger" type="button" aria-expanded="false" aria-controls="account-menu-panel">
-                <span class="topbar-avatar" id="topbar-avatar">S</span>
-                <span class="topbar-user" id="topbar-user">Signed in</span>
+                <span class="topbar-avatar" id="topbar-avatar">A</span>
+                <span class="topbar-user" id="topbar-user">Account</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="account-menu-panel" id="account-menu-panel" hidden>
-                <button type="button" id="topbar-update-password">Update password</button>
-                <button type="button" id="topbar-logout">Logout</button>
+                <div class="menu-section">
+                  <div class="menu-item-info">
+                    <span class="menu-label">Email:</span>
+                    <span class="menu-value" id="menu-email-display">admin@mitrabooks.local</span>
+                  </div>
+                  <div class="menu-item-info">
+                    <span class="menu-label">Tenant:</span>
+                    <span class="menu-value" id="menu-tenant-display">seed-tenant-1</span>
+                  </div>
+                </div>
+                <div class="menu-divider"></div>
+                <button type="button" id="topbar-update-password" class="menu-action-btn">🔐 Change Password</button>
+                <button type="button" id="topbar-logout" class="menu-action-btn danger">🚪 Logout</button>
               </div>
             </div>
           </div>
@@ -421,6 +435,55 @@
         <iframe id="receipt-preview-frame" title="Receipt preview"></iframe>
       </div>
     </dialog>
+    <dialog class="entitlement-dialog" id="change-password-dialog">
+      <form method="dialog" id="change-password-form">
+        <div class="dialog-head">
+          <div>
+            <h3>Change Password</h3>
+            <p class="muted" id="change-password-label">Update your account password</p>
+          </div>
+          <button class="secondary" type="button" id="change-password-close">Close</button>
+        </div>
+        <div class="field">
+          <label for="current-password">Current Password</label>
+          <input
+            id="current-password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Enter current password"
+            required
+            minlength="6">
+        </div>
+        <div class="field">
+          <label for="new-password">New Password</label>
+          <input
+            id="new-password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Enter new password"
+            required
+            minlength="6">
+        </div>
+        <div class="field">
+          <label for="confirm-password">Confirm New Password</label>
+          <input
+            id="confirm-password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Re-enter new password"
+            required
+            minlength="6">
+        </div>
+        <div class="field" id="password-error-field" style="display: none;">
+          <p id="password-error-message" style="color: var(--color-danger); margin: 0; font-size: 14px;"></p>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" id="change-password-cancel">Cancel</button>
+          <button type="submit" id="change-password-submit">Update Password</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="entitlement-dialog" id="mandir-cancel-receipt-dialog">
       <form method="dialog" id="mandir-cancel-receipt-form">
         <div class="dialog-head">
@@ -630,7 +693,6 @@
         <div class="voucher-lines-panel">
           <h4>Line Items</h4>
           <p class="muted" id="business-voucher-accounts-status">Loading accounts...</p>
-          <datalist id="business-voucher-account-options"></datalist>
           <div id="business-voucher-lines"></div>
           <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
         </div>

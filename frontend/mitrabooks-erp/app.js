@@ -903,7 +903,23 @@ function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
   const accountCount = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
-  const months = [
+
+  // Use live dashboard data if available, otherwise use defaults
+  const dashboardData = lastBusinessDashboardStats || {};
+
+  // Extract KPI values (in Rupees, not Lakhs)
+  const incomeVal = Number(dashboardData.income?.current_month || 1280000);
+  const expenseVal = Number(dashboardData.expenses?.current_month || 740000);
+  const netVal = Number(dashboardData.net_position?.profit_loss || 540000);
+  const incomeGrowth = Number(dashboardData.income?.ytd_growth || 18);
+
+  // Format values for display (convert to Lakhs if needed)
+  const incomeDisplay = formatCurrency(incomeVal);
+  const expenseDisplay = formatCurrency(expenseVal);
+  const netDisplay = formatCurrency(netVal);
+
+  // Chart data - use from API if available, else defaults
+  const months = dashboardData.monthly_trend || [
     ["Apr", 8.2, 5.1],
     ["May", 10.4, 6.8],
     ["Jun", 12.8, 7.4],
@@ -911,6 +927,7 @@ function renderBusinessExecutiveDashboard() {
     ["Aug", 14.2, 8.3],
     ["Sep", 15.8, 9.1],
   ];
+
   const maxValue = Math.max(...months.flatMap(([, income, expense]) => [income, expense]));
   const bars = months.map(([label, income, expense]) => {
     const incomeHeight = Math.max(16, Math.round((income / maxValue) * 132));
@@ -937,17 +954,17 @@ function renderBusinessExecutiveDashboard() {
         <div class="executive-kpi-strip">
           <article>
             <span>Income</span>
-            <strong>Rs. 12.8L</strong>
-            <small>+18% vs last month</small>
+            <strong>${escapeHtml(incomeDisplay)}</strong>
+            <small>${incomeGrowth > 0 ? "+" : ""}${incomeGrowth.toFixed(1)}% vs last month</small>
           </article>
           <article>
             <span>Expenses</span>
-            <strong>Rs. 7.4L</strong>
+            <strong>${escapeHtml(expenseDisplay)}</strong>
             <small>Office, purchases, vendor bills</small>
           </article>
           <article>
             <span>Net Position</span>
-            <strong>Rs. 5.4L</strong>
+            <strong>${escapeHtml(netDisplay)}</strong>
             <small>Before tax provisions</small>
           </article>
         </div>
@@ -4062,7 +4079,9 @@ function setBusinessWorkspace(workspace) {
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
   dashboardPreview.innerHTML = renderBusinessWorkspace();
-  if (workspace === "parties") {
+  if (workspace === "overview") {
+    loadBusinessDashboardStats();
+  } else if (workspace === "parties") {
     loadBusinessParties();
   } else if (workspace === "vouchers") {
     loadBusinessAccounts();
@@ -4137,6 +4156,7 @@ let lastBusinessVouchers = [];
 let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
+let lastBusinessDashboardStats = null;
 
 const voucherLineState = [];
 
@@ -4488,48 +4508,46 @@ function syncVoucherAccountFromText(lineEl) {
 }
 
 function renderVoucherLineItem(lineId, voucherType) {
+  const accountSelector = renderAccountSelectorComponent(`voucher-account-${lineId}`);
+
   return `
     <div class="voucher-line" data-line-id="${escapeHtml(lineId)}">
-      <label class="field voucher-account-field">
-        <span>Account code / name</span>
-        <select
-          class="voucher-account-select"
-          data-line-id="${escapeHtml(lineId)}"
-          title="Account code and name"
-        >
-          <option value="">Select account</option>
-        </select>
-      </label>
-      <input
-        class="voucher-account"
-        type="text"
-        placeholder="Search account code or name"
-        list="business-voucher-account-options"
-        data-line-id="${escapeHtml(lineId)}"
-        autocomplete="off"
-      >
-      <input
-        class="voucher-debit"
-        type="number"
-        placeholder="Debit"
-        min="0"
-        step="0.01"
-        data-line-id="${escapeHtml(lineId)}"
-      >
-      <input
-        class="voucher-credit"
-        type="number"
-        placeholder="Credit"
-        min="0"
-        step="0.01"
-        data-line-id="${escapeHtml(lineId)}"
-      >
-      <button
-        class="secondary"
-        type="button"
-        data-business-action="remove-voucher-line"
-        data-line-id="${escapeHtml(lineId)}"
-      >✕</button>
+      <div class="voucher-line-grid">
+        <div class="voucher-account-field">
+          <label>Account</label>
+          ${accountSelector}
+        </div>
+        <div class="voucher-amount-field">
+          <label>Debit (₹)</label>
+          <input
+            class="voucher-debit"
+            type="number"
+            placeholder="0.00"
+            min="0"
+            step="0.01"
+            data-line-id="${escapeHtml(lineId)}"
+          >
+        </div>
+        <div class="voucher-amount-field">
+          <label>Credit (₹)</label>
+          <input
+            class="voucher-credit"
+            type="number"
+            placeholder="0.00"
+            min="0"
+            step="0.01"
+            data-line-id="${escapeHtml(lineId)}"
+          >
+        </div>
+        <div class="voucher-action-field">
+          <button
+            class="secondary"
+            type="button"
+            data-business-action="remove-voucher-line"
+            data-line-id="${escapeHtml(lineId)}"
+          >Remove</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -4662,23 +4680,241 @@ async function loadBusinessAccounts() {
   }
 }
 
+// ========== Business Dashboard Data Loading ==========
+
+/**
+ * Load dashboard statistics from API
+ * Fetches live KPI data: income, expenses, net position, GST, cash, receivables, payables
+ */
+async function loadBusinessDashboardStats() {
+  const appKey = "mitrabooks";
+  const result = await apiRequest(appKey, "/api/v1/business/dashboard", { method: "GET" });
+
+  if (result.ok && result.payload) {
+    lastBusinessDashboardStats = result.payload;
+
+    // Re-render dashboard with new data if we're on the business overview
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    lastBusinessDashboardStats = null;
+    setLoginStatus(
+      "warn",
+      "Dashboard data unavailable",
+      "Business dashboard stats could not be loaded. Using default values."
+    );
+  }
+
+  renderJson(apiOutput, { dashboard: { ok: result.ok, hasData: !!lastBusinessDashboardStats } });
+}
+
+// ========== Account Selector Component (Searchable) ==========
+
+/**
+ * Filter accounts by search query (min 3 chars)
+ * Returns array of matching accounts with code and name
+ */
+function filterBusinessAccountsByQuery(query) {
+  const q = String(query || "").trim().toLowerCase();
+
+  // Min 3 characters to filter
+  if (q.length < 3) {
+    return [];
+  }
+
+  const matches = lastBusinessAccounts.filter((acc) => {
+    const code = String(acc.account_code || "").toLowerCase();
+    const name = String(acc.account_name || "").toLowerCase();
+    const type = String(acc.account_type || "").toLowerCase();
+
+    return (
+      code.includes(q) ||
+      name.includes(q) ||
+      type.includes(q)
+    );
+  });
+
+  // Return max 20 results
+  return matches.slice(0, 20);
+}
+
+/**
+ * Render account selector HTML (searchable input + suggestions)
+ * @param {string} fieldId - Unique ID for this selector (e.g., "debit-account", "credit-account")
+ * @param {number} selectedAccountId - Currently selected account ID (optional)
+ * @returns {string} HTML for the account selector component
+ */
+function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
+  const selectedAccount = lastBusinessAccounts.find(
+    (acc) => Number(acc.account_id) === Number(selectedAccountId)
+  );
+
+  const displayText = selectedAccount
+    ? `${selectedAccount.account_code} - ${selectedAccount.account_name}`
+    : "";
+
+  return `
+    <div class="account-selector-component" data-field-id="${escapeHtml(fieldId)}">
+      <div class="account-input-wrapper">
+        <input
+          type="text"
+          class="account-search-input"
+          data-field-id="${escapeHtml(fieldId)}"
+          placeholder="Search account (min 3 chars)"
+          value="${escapeHtml(displayText)}"
+          autocomplete="off"
+        >
+        <input
+          type="hidden"
+          class="account-id-input"
+          data-field-id="${escapeHtml(fieldId)}"
+          value="${escapeHtml(selectedAccountId || "")}"
+        >
+      </div>
+      <ul class="account-suggestions" data-field-id="${escapeHtml(fieldId)}" hidden>
+        <!-- Populated on input -->
+      </ul>
+    </div>
+  `;
+}
+
+/**
+ * Update account selector suggestions as user types
+ */
+function updateAccountSuggestions(fieldId) {
+  const input = document.querySelector(`.account-search-input[data-field-id="${fieldId}"]`);
+  const suggestionsList = document.querySelector(`.account-suggestions[data-field-id="${fieldId}"]`);
+
+  if (!input || !suggestionsList) return;
+
+  const query = input.value.trim();
+  const matches = filterBusinessAccountsByQuery(query);
+
+  if (matches.length === 0) {
+    suggestionsList.hidden = true;
+    suggestionsList.innerHTML = "";
+    return;
+  }
+
+  suggestionsList.innerHTML = matches
+    .map((acc) => {
+      const displayText = `${acc.account_code} - ${acc.account_name}`;
+      return `
+        <li
+          class="account-suggestion-item"
+          data-account-id="${escapeHtml(acc.account_id)}"
+          data-field-id="${escapeHtml(fieldId)}"
+          title="${escapeHtml(displayText)}"
+        >
+          <strong>${escapeHtml(acc.account_code)}</strong>
+          <span>${escapeHtml(acc.account_name)}</span>
+        </li>
+      `;
+    })
+    .join("");
+
+  suggestionsList.hidden = false;
+}
+
+/**
+ * Select an account from suggestions
+ */
+function selectAccountFromSuggestion(suggestionElement) {
+  const fieldId = suggestionElement.getAttribute("data-field-id");
+  const accountId = suggestionElement.getAttribute("data-account-id");
+
+  const account = lastBusinessAccounts.find((acc) => Number(acc.account_id) === Number(accountId));
+  if (!account) return;
+
+  const input = document.querySelector(`.account-search-input[data-field-id="${fieldId}"]`);
+  const idInput = document.querySelector(`.account-id-input[data-field-id="${fieldId}"]`);
+  const suggestionsList = document.querySelector(`.account-suggestions[data-field-id="${fieldId}"]`);
+
+  if (input) {
+    input.value = `${account.account_code} - ${account.account_name}`;
+  }
+  if (idInput) {
+    idInput.value = account.account_id;
+  }
+  if (suggestionsList) {
+    suggestionsList.hidden = true;
+    suggestionsList.innerHTML = "";
+  }
+
+  // Trigger balance check if this is a voucher form
+  updateVoucherBalance();
+}
+
+/**
+ * Close all account suggestions dropdowns
+ */
+function closeAllAccountSuggestions() {
+  document.querySelectorAll(".account-suggestions").forEach((list) => {
+    list.hidden = true;
+  });
+}
+
+// ========== Account Selector Event Handlers ==========
+
+document.addEventListener("input", (event) => {
+  // Handle account selector input
+  const accountInput = event.target.closest(".account-search-input");
+  if (accountInput) {
+    const fieldId = accountInput.getAttribute("data-field-id");
+    if (fieldId) {
+      updateAccountSuggestions(fieldId);
+    }
+    return;
+  }
+
+  // Handle debit/credit input changes - update balance
+  const amountInput = event.target.closest(".voucher-debit, .voucher-credit");
+  if (amountInput) {
+    updateVoucherBalance();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  const suggestion = event.target.closest(".account-suggestion-item");
+  if (suggestion) {
+    selectAccountFromSuggestion(suggestion);
+    return;
+  }
+
+  // Close suggestions if clicking outside
+  const component = event.target.closest(".account-selector-component");
+  if (!component) {
+    closeAllAccountSuggestions();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeAllAccountSuggestions();
+  }
+});
+
+// ========== Voucher Form Integration ==========
+
 async function createBusinessVoucher(voucherData) {
   const appKey = "mitrabooks";
 
   const debitLines = [];
   const creditLines = [];
   document.querySelectorAll(".voucher-line").forEach((lineEl) => {
-    const accountSelect = lineEl.querySelector(".voucher-account-select");
+    // Read account ID from hidden input in account selector component
+    const accountIdInput = lineEl.querySelector(".account-id-input");
     const debitInput = lineEl.querySelector(".voucher-debit");
     const creditInput = lineEl.querySelector(".voucher-credit");
 
-    const accountId = accountSelect?.value || "";
+    const accountId = accountIdInput?.value || "";
     const debit = Number(debitInput?.value) || 0;
     const credit = Number(creditInput?.value) || 0;
 
     if (accountId && (debit > 0 || credit > 0)) {
-      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit });
-      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit });
+      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit.toFixed(2) });
+      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit.toFixed(2) });
     }
   });
 
