@@ -34,6 +34,22 @@
     {
       "source": "/",
       "has": [
+        { "type": "host", "value": "staging.mitrabooks.sanmitratech.in" }
+      ],
+      "destination": "/mitrabooks-erp/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "mitrabooks-erp-staging.vercel.app" }
+      ],
+      "destination": "/mitrabooks-erp/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
         { "type": "host", "value": "www.gruhamitra.sanmitratech.in" }
       ],
       "destination": "/gruhamitra/",

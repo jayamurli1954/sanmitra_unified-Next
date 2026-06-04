@@ -10,7 +10,8 @@
 - **Name:** mitrabooks-erp-staging
 - **URL:** `staging.mitrabooks.sanmitratech.in`
 - **Branch:** `develop`
-- **Root:** `frontend/mitrabooks-erp` (MitraBooks ERP frontend only)
+- **Root:** `frontend`
+- **Served app path:** `/mitrabooks-erp/`
 - **Backend API:** Staging (https://sanmitra-unified-next-staging-sg.onrender.com)
 
 **Production Remains Unchanged:**
@@ -35,8 +36,8 @@
 ### **Step 1: Create a New Vercel Project (Staging)**
 
 ```bash
-# Navigate to the MitraBooks ERP frontend directory
-cd D:\sanmitra_unified-Next\frontend\mitrabooks-erp
+# Navigate to the frontend build root
+cd D:\sanmitra_unified-Next\frontend
 
 # Login to Vercel (if not already logged in)
 vercel login
@@ -49,7 +50,7 @@ vercel --prod --name mitrabooks-erp-staging
 # - Which scope should contain your new project?: [Your Team/Account]
 # - Link to existing project?: NO (create new)
 # - What's your project's name?: mitrabooks-erp-staging
-# - In which directory is your code?: . (current directory, since we're in frontend/mitrabooks-erp)
+# - In which directory is your code?: . (current directory, since we're in frontend)
 # - Want to modify your vercel.json?: YES
 # - Build Command?: npm run build
 # - Output Directory?: build
@@ -87,7 +88,7 @@ vercel link --project mitrabooks-erp-staging
 Create a separate config file for staging (to keep it isolated):
 
 ```bash
-cd D:\sanmitra_unified-Next\frontend\mitrabooks-erp
+cd D:\sanmitra_unified-Next\frontend
 
 # Copy production config to staging config
 copy vercel.json vercel.staging.json
@@ -418,7 +419,7 @@ Run these commands in order:
 
 ```bash
 # 1. Create staging project
-cd D:\sanmitra_unified-Next\frontend\mitrabooks-erp
+cd D:\sanmitra_unified-Next\frontend
 vercel --prod --name mitrabooks-erp-staging
 
 # 2. Link to develop branch

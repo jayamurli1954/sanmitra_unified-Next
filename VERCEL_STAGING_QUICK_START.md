@@ -22,7 +22,7 @@ npx vercel login
 ## 📁 Step 2: Navigate to MitraBooks ERP Frontend
 
 ```powershell
-cd D:\sanmitra_unified-Next\frontend\mitrabooks-erp
+cd D:\sanmitra_unified-Next\frontend
 ```
 
 ---
@@ -30,7 +30,8 @@ cd D:\sanmitra_unified-Next\frontend\mitrabooks-erp
 ## 🎯 Step 3: Create Staging Project
 
 ```powershell
-# Create new Vercel project for staging (MitraBooks ERP only)
+# Create new Vercel project for staging.
+# The Vercel root must be frontend; MitraBooks ERP is served from /mitrabooks-erp/.
 npx vercel --prod --name mitrabooks-erp-staging
 
 # When prompted:

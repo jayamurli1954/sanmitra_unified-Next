@@ -17,7 +17,13 @@ function copyStaticDir(name) {
     return;
   }
   fs.rmSync(destination, { recursive: true, force: true });
-  fs.cpSync(source, destination, { recursive: true });
+  fs.cpSync(source, destination, {
+    recursive: true,
+    filter: (sourcePath) => {
+      const basename = path.basename(sourcePath);
+      return basename !== '.vercel' && basename !== '.git';
+    },
+  });
 }
 
 function copyStaticFile(name) {

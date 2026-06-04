@@ -680,11 +680,18 @@ html[data-theme="light"] select:focus {
 
 .erp-topbar {
   align-items: center;
+  align-self: start;
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
+  grid-row: 1;
   justify-content: space-between;
   min-height: 78px;
   padding: 16px 24px;
+  position: static;
+  top: auto;
+  width: 100%;
+  z-index: auto;
 }
 
 .page-title-block {
@@ -716,8 +723,12 @@ html[data-theme="light"] select:focus {
 .topbar-control-strip {
   align-items: center;
   display: flex;
+  flex: 1 1 420px;
+  flex-wrap: wrap;
   gap: 14px;
+  justify-content: flex-end;
   margin-left: auto;
+  min-width: min(100%, 360px);
 }
 
 .health-score-widget {
@@ -884,15 +895,18 @@ html[data-theme="light"] select:focus {
 
 .app.signed-in:not(.mandir-domain) .main {
   display: grid;
+  flex-direction: column;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 100vh;
   min-width: 0;
 }
 
 .app.signed-in:not(.mandir-domain) .content {
+  grid-row: 2;
   min-width: 0;
   overflow-x: hidden;
-  padding-bottom: 112px;
+  padding-bottom: 32px;
+  scroll-padding-top: 120px;
 }
 
 .app.signed-in:not(.mandir-domain) #legacy-strip {
@@ -1316,6 +1330,7 @@ html[data-theme="light"] select:focus {
 .widget-header h4 {
   color: var(--text-primary, #f8fafc);
   font-size: 18px;
+  line-height: 1.25;
   margin: 0;
   padding: 0;
 }
@@ -1468,6 +1483,87 @@ html[data-theme="light"] select:focus {
   border-radius: 8px;
 }
 
+.app:not(.mandir-domain) .erp-workspace-panel,
+.app:not(.mandir-domain) .verification-panel {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .erp-table {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.app:not(.mandir-domain) .erp-table table {
+  color: var(--text-primary, #f8fafc);
+  min-width: 760px;
+}
+
+.app:not(.mandir-domain) .erp-table th,
+.app:not(.mandir-domain) .erp-table td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 12px 14px;
+}
+
+.app:not(.mandir-domain) .erp-table th {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.app:not(.mandir-domain) .erp-table td {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .erp-table tbody tr {
+  background: rgba(15, 20, 36, 0.74);
+}
+
+.app:not(.mandir-domain) .erp-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.app:not(.mandir-domain) .erp-table td strong {
+  color: var(--text-primary, #f8fafc);
+  display: block;
+  font-weight: 800;
+}
+
+.app:not(.mandir-domain) .erp-table .row-subtext {
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 4px;
+}
+
+.app:not(.mandir-domain) .erp-table .type-chip {
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  color: #93c5fd;
+}
+
+.app:not(.mandir-domain) .erp-table .pill.ok {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+}
+
+.app:not(.mandir-domain) .erp-table .action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.app:not(.mandir-domain) .erp-table .action-row button {
+  min-height: 34px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
 html[data-theme="light"] .erp-sidebar .brand-text h1,
 html[data-theme="light"] .erp-sidebar .brand-text p,
 html[data-theme="light"] .erp-sidebar .context-copy span,
@@ -1510,9 +1606,18 @@ html[data-theme="light"] .fy-selector {
   border-radius: 12px;
 }
 
+.executive-dashboard .kpi-widget-hero {
+  background: transparent;
+  border: 0;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+}
+
 .executive-hero h3 {
   font-size: 24px;
   font-weight: 700;
+  line-height: 1.25;
   margin: 0;
   color: var(--text-primary, #f8fafc);
 }
@@ -1927,8 +2032,10 @@ html[data-theme="light"] .fy-selector {
 .topbar-actions {
   display: flex;
   align-items: center;
+  flex: 0 1 360px;
   gap: 16px;
   margin-left: auto;
+  min-width: 0;
 }
 
 .user-credentials-display {
@@ -2340,8 +2447,27 @@ html[data-theme="light"] .fy-selector {
     flex-direction: column;
   }
 
+  .erp-topbar {
+    position: static;
+  }
+
   .topbar-control-strip {
+    margin-left: 0;
+    min-width: 0;
     width: 100%;
+  }
+
+  .topbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .user-credentials-display {
+    align-items: flex-start;
+    border-right: 0;
+    padding-right: 0;
   }
 
   .health-score-widget,

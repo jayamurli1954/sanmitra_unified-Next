@@ -1075,7 +1075,7 @@ function renderBusinessExecutiveDashboard() {
 
   // Widget 1: KPI Strip (Phase 2C.2-C.3: Collapsible & Customizable)
   const kpiStripContent = `
-    <div class="executive-hero" style="border: none; background: transparent; padding: 0; margin: -16px -16px 0;">
+    <div class="executive-hero kpi-widget-hero">
       <div>
         <span class="workbench-kicker">FY 2026-27 Operating View</span>
         <h3>Income, expenses, and cash movement</h3>
