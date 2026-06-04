@@ -23,6 +23,11 @@ if ('serviceWorker' in navigator) {
         })
         .then(() => {
           console.log('[App] Staging service worker cache cleared');
+          const reloadKey = 'mitrabooks-staging-cache-cleared-v12';
+          if (!sessionStorage.getItem(reloadKey)) {
+            sessionStorage.setItem(reloadKey, '1');
+            window.location.reload();
+          }
         })
         .catch((error) => {
           console.warn('[App] Failed to clear staging service worker cache:', error);

@@ -1614,6 +1614,10 @@ html[data-theme="light"] .fy-selector {
   padding: 0;
 }
 
+.executive-dashboard #widget-kpi-strip .kpi-widget-hero > div:not(.executive-kpi-strip) {
+  display: none !important;
+}
+
 .executive-hero h3 {
   font-size: 24px;
   font-weight: 700;

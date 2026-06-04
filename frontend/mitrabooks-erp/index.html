@@ -15,11 +15,11 @@
     <!-- PWA-Compatible CSS: Theme tokens + component styles -->
     <link rel="stylesheet" href="../shared/theme-tokens.css?v=phase-1c">
     <link rel="stylesheet" href="../shared/app-shell.css?v=mitrabooks-erp-v10">
-    <link rel="stylesheet" href="./index.css?v=mitrabooks-erp-v11">
+    <link rel="stylesheet" href="./index.css?v=mitrabooks-erp-v12">
   </head>
   <body>
     <!-- Service Worker Registration (PWA offline support) -->
-    <script src="../sw-register.js?v=mitrabooks-erp-v11" defer></script>
+    <script src="../sw-register.js?v=mitrabooks-erp-v12" defer></script>
     <div class="app" id="app-root">
       <aside class="sidebar erp-sidebar">
         <div class="brand erp-brand">
@@ -709,6 +709,29 @@
       </form>
     </dialog>
     <script type="module" src="../shared/pwa-shell.js?v=mitrabooks-erp-v10"></script>
-    <script type="module" src="./app.js?v=mitrabooks-erp-v11"></script>
+    <script type="module" src="./app.js?v=mitrabooks-erp-v12"></script>
+    <script>
+      (function removeStaleKpiSubtitle() {
+        var staleText = "Income, expenses, and cash movement";
+        function clean() {
+          var widget = document.getElementById("widget-kpi-strip");
+          if (!widget) {
+            return;
+          }
+          widget.querySelectorAll("h1, h2, h3, h4, p, span").forEach(function (node) {
+            if ((node.textContent || "").trim() === staleText) {
+              var block = node.closest(".kpi-widget-title-block") || node.parentElement;
+              if (block && !block.classList.contains("executive-kpi-strip")) {
+                block.remove();
+              } else {
+                node.remove();
+              }
+            }
+          });
+        }
+        clean();
+        new MutationObserver(clean).observe(document.body, { childList: true, subtree: true });
+      })();
+    </script>
   </body>
 </html>
