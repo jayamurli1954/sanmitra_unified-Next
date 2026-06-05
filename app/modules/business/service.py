@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models.entities import Account
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
-from app.accounting.service import AccountingNotFoundError, AccountingValidationError, post_journal_entry, reverse_journal_entry
+from app.accounting.service import (
+    AccountingNotFoundError,
+    AccountingValidationError,
+    initialize_default_chart_of_accounts,
+    post_journal_entry,
+    reverse_journal_entry,
+)
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
 from app.modules.business.schemas import PartyCreateRequest, PartyUpdateRequest, TypedVoucherCreateRequest, TypedVoucherReversalRequest
@@ -112,6 +118,28 @@ async def _resolve_voucher_account_id(
             return int(account.id)
 
     raise AccountingNotFoundError(f"{side.capitalize()} account not found for this tenant")
+
+
+async def _ensure_business_chart_for_voucher_codes(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    payload: TypedVoucherCreateRequest,
+) -> None:
+    if not payload.debit_account_code and not payload.credit_account_code:
+        return
+    if app_key != "mitrabooks":
+        return
+
+    await initialize_default_chart_of_accounts(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        organization_type="BUSINESS",
+    )
 
 
 async def ensure_business_indexes() -> None:
@@ -487,6 +515,13 @@ async def post_typed_voucher(
     idempotency_key: str | None,
 ) -> dict:
     amount = Decimal(payload.amount).quantize(Decimal("0.01"))
+    await _ensure_business_chart_for_voucher_codes(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        payload=payload,
+    )
     debit_account_id = await _resolve_voucher_account_id(
         session,
         tenant_id=tenant_id,
