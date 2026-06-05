@@ -2316,6 +2316,113 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   background: rgba(255, 255, 255, 0.08);
 }
 
+#business-party-create-dialog,
+#business-party-edit-dialog,
+#business-voucher-create-dialog {
+  background: #0f1424;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  color: #f8fafc;
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
+  width: min(92vw, 720px);
+}
+
+#business-party-create-dialog::backdrop,
+#business-party-edit-dialog::backdrop,
+#business-voucher-create-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
+}
+
+#business-party-create-dialog .dialog-head,
+#business-party-edit-dialog .dialog-head,
+#business-voucher-create-dialog .dialog-head {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+}
+
+#business-party-create-dialog h3,
+#business-party-edit-dialog h3,
+#business-voucher-create-dialog h3 {
+  color: #f8fafc;
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+#business-party-create-dialog .muted,
+#business-party-edit-dialog .muted,
+#business-voucher-create-dialog .muted {
+  color: #94a3b8;
+}
+
+#business-party-create-dialog .field,
+#business-party-edit-dialog .field,
+#business-voucher-create-dialog .field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+#business-party-create-dialog label,
+#business-party-edit-dialog label,
+#business-voucher-create-dialog label,
+#business-voucher-create-dialog .voucher-lines-panel h4,
+#business-voucher-create-dialog .voucher-balance-panel strong {
+  color: #cbd5e1;
+}
+
+#business-party-create-dialog input,
+#business-party-create-dialog select,
+#business-party-edit-dialog input,
+#business-party-edit-dialog select,
+#business-voucher-create-dialog input,
+#business-voucher-create-dialog select,
+#business-voucher-create-dialog textarea {
+  background: #11182d;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 7px;
+  color: #f8fafc;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+#business-party-create-dialog input::placeholder,
+#business-party-edit-dialog input::placeholder,
+#business-voucher-create-dialog input::placeholder,
+#business-voucher-create-dialog textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+#business-party-create-dialog input:focus,
+#business-party-create-dialog select:focus,
+#business-party-edit-dialog input:focus,
+#business-party-edit-dialog select:focus,
+#business-voucher-create-dialog input:focus,
+#business-voucher-create-dialog select:focus,
+#business-voucher-create-dialog textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  outline: none;
+}
+
+#business-party-create-dialog .dialog-actions,
+#business-party-edit-dialog .dialog-actions,
+#business-voucher-create-dialog .dialog-actions {
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
 #change-password-submit {
   background: var(--accent-color, #3b82f6);
   color: #ffffff;
@@ -2559,12 +2666,11 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
 
 .account-input-wrapper {
   position: relative;
-  display: flex;
-  gap: 4px;
+  display: grid;
+  gap: 8px;
 }
 
 .account-search-input {
-  flex: 1;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -2573,6 +2679,23 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   font-size: 14px;
   font-family: inherit;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.account-picker-select {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+#business-voucher-create-dialog .account-picker-select {
+  background: #11182d;
+  border-color: rgba(148, 163, 184, 0.26);
+  color: #f8fafc;
 }
 
 html[data-theme="dark"] .account-search-input {

@@ -23,7 +23,7 @@ if ('serviceWorker' in navigator) {
         })
         .then(() => {
           console.log('[App] Staging service worker cache cleared');
-          const reloadKey = 'mitrabooks-staging-cache-cleared-v13';
+          const reloadKey = 'mitrabooks-staging-cache-cleared-v14';
           if (!sessionStorage.getItem(reloadKey)) {
             sessionStorage.setItem(reloadKey, '1');
             window.location.reload();

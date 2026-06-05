@@ -4838,7 +4838,7 @@ async function loadBusinessDashboardStats() {
 
     // Re-render dashboard with new data if we're on the business overview
     if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
     }
   } else {
     lastBusinessDashboardStats = null;
@@ -4867,9 +4867,10 @@ function filterBusinessAccountsByQuery(query) {
   }
 
   const matches = lastBusinessAccounts.filter((acc) => {
-    const code = String(acc.account_code || "").toLowerCase();
-    const name = String(acc.account_name || "").toLowerCase();
-    const type = String(acc.account_type || "").toLowerCase();
+    const normalized = normalizeBusinessAccount(acc);
+    const code = normalized.code.toLowerCase();
+    const name = normalized.name.toLowerCase();
+    const type = String(acc.account_type || acc.type || "").toLowerCase();
 
     return (
       code.includes(q) ||
@@ -4889,12 +4890,13 @@ function filterBusinessAccountsByQuery(query) {
  * @returns {string} HTML for the account selector component
  */
 function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
-  const selectedAccount = lastBusinessAccounts.find(
-    (acc) => Number(acc.account_id) === Number(selectedAccountId)
-  );
+  const accounts = Array.isArray(lastBusinessAccounts)
+    ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id)
+    : [];
+  const selectedAccount = accounts.find((acc) => String(acc.id) === String(selectedAccountId));
 
   const displayText = selectedAccount
-    ? `${selectedAccount.account_code} - ${selectedAccount.account_name}`
+    ? `${selectedAccount.code} - ${selectedAccount.name}`
     : "";
 
   return `
@@ -4908,6 +4910,18 @@ function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
           value="${escapeHtml(displayText)}"
           autocomplete="off"
         >
+        <select
+          class="account-picker-select"
+          data-field-id="${escapeHtml(fieldId)}"
+          aria-label="Select account"
+        >
+          <option value="">Select account</option>
+          ${accounts.map((account) => `
+            <option value="${escapeHtml(account.id)}" ${String(account.id) === String(selectedAccountId || "") ? "selected" : ""}>
+              ${escapeHtml(`${account.code} - ${account.name}`)}
+            </option>
+          `).join("")}
+        </select>
         <input
           type="hidden"
           class="account-id-input"
@@ -4942,16 +4956,17 @@ function updateAccountSuggestions(fieldId) {
 
   suggestionsList.innerHTML = matches
     .map((acc) => {
-      const displayText = `${acc.account_code} - ${acc.account_name}`;
+      const normalized = normalizeBusinessAccount(acc);
+      const displayText = `${normalized.code} - ${normalized.name}`;
       return `
         <li
           class="account-suggestion-item"
-          data-account-id="${escapeHtml(acc.account_id)}"
+          data-account-id="${escapeHtml(normalized.id)}"
           data-field-id="${escapeHtml(fieldId)}"
           title="${escapeHtml(displayText)}"
         >
-          <strong>${escapeHtml(acc.account_code)}</strong>
-          <span>${escapeHtml(acc.account_name)}</span>
+          <strong>${escapeHtml(normalized.code)}</strong>
+          <span>${escapeHtml(normalized.name)}</span>
         </li>
       `;
     })
@@ -4967,18 +4982,28 @@ function selectAccountFromSuggestion(suggestionElement) {
   const fieldId = suggestionElement.getAttribute("data-field-id");
   const accountId = suggestionElement.getAttribute("data-account-id");
 
-  const account = lastBusinessAccounts.find((acc) => Number(acc.account_id) === Number(accountId));
+  selectBusinessAccount(fieldId, accountId);
+}
+
+function selectBusinessAccount(fieldId, accountId) {
+  const account = (Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [])
+    .map(normalizeBusinessAccount)
+    .find((acc) => String(acc.id) === String(accountId));
   if (!account) return;
 
   const input = document.querySelector(`.account-search-input[data-field-id="${fieldId}"]`);
   const idInput = document.querySelector(`.account-id-input[data-field-id="${fieldId}"]`);
+  const select = document.querySelector(`.account-picker-select[data-field-id="${fieldId}"]`);
   const suggestionsList = document.querySelector(`.account-suggestions[data-field-id="${fieldId}"]`);
 
   if (input) {
-    input.value = `${account.account_code} - ${account.account_name}`;
+    input.value = `${account.code} - ${account.name}`;
   }
   if (idInput) {
-    idInput.value = account.account_id;
+    idInput.value = account.id;
+  }
+  if (select) {
+    select.value = account.id;
   }
   if (suggestionsList) {
     suggestionsList.hidden = true;
@@ -5015,6 +5040,17 @@ document.addEventListener("input", (event) => {
   const amountInput = event.target.closest(".voucher-debit, .voucher-credit");
   if (amountInput) {
     updateVoucherBalance();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const accountSelect = event.target.closest(".account-picker-select");
+  if (!accountSelect) {
+    return;
+  }
+  const fieldId = accountSelect.getAttribute("data-field-id");
+  if (fieldId && accountSelect.value) {
+    selectBusinessAccount(fieldId, accountSelect.value);
   }
 });
 
