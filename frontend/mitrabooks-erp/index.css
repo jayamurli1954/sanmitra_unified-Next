@@ -1636,6 +1636,97 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   min-height: auto;
 }
 
+.financial-health-workspace {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.financial-health-status-grid,
+.financial-health-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.financial-health-status-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.financial-health-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.financial-health-status-grid article,
+.financial-health-grid article,
+.financial-health-roadmap {
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.financial-health-status-grid span {
+  color: #93c5fd;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.financial-health-status-grid strong,
+.financial-health-grid h5,
+.financial-health-roadmap h5 {
+  color: var(--text-primary, #f8fafc);
+  display: block;
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.financial-health-status-grid p,
+.financial-health-roadmap p {
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+}
+
+.financial-health-grid ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.financial-health-grid li {
+  display: grid;
+  gap: 3px;
+}
+
+.financial-health-grid li strong {
+  color: var(--text-primary, #f8fafc);
+  font-size: 13px;
+}
+
+.financial-health-grid li span,
+.financial-health-roadmap li {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 13px;
+}
+
+.financial-health-roadmap ol {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px 18px;
+  padding: 0;
+}
+
+@media (max-width: 980px) {
+  .financial-health-status-grid,
+  .financial-health-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Executive Dashboard Section */
 .business-dashboard-clean .executive-dashboard {
   gap: 20px;

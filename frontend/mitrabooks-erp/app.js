@@ -74,6 +74,7 @@ function businessNavigationGroups() {
       name: "Intelligence & Reports",
       items: [
         { label: "Financial Statements", businessWorkspace: "financial-statements", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: false } },
+        { label: "Financial Health", businessWorkspace: "financial-health", icon: "FH", module: { module_key: "analytics", frontend_path: "/business/financial-health", enabled: true }, badge: "Preview" },
         { label: "Analytics", businessWorkspace: "analytics", icon: "AN", module: { module_key: "analytics", frontend_path: "/business/analytics", enabled: false } },
       ],
     },
@@ -4047,6 +4048,9 @@ function renderBusinessWorkspace() {
       </div>
     `;
   }
+  if (activeBusinessWorkspace === "financial-health") {
+    return renderFinancialHealthWorkspace();
+  }
   return `
     <div class="erp-workbench-grid">
       <article class="erp-workbench-card">
@@ -4092,6 +4096,100 @@ function renderBusinessWorkspace() {
         </div>
       </article>
     </div>
+  `;
+}
+
+function financialHealthFeatureList(items) {
+  return items.map((item) => `
+    <li>
+      <strong>${escapeHtml(item[0])}</strong>
+      <span>${escapeHtml(item[1])}</span>
+    </li>
+  `).join("");
+}
+
+function renderFinancialHealthWorkspace() {
+  const charts = [
+    ["Cash flow", "Operating inflow/outflow trend from posted ledger entries."],
+    ["Receivables aging", "Customer balances grouped by overdue bucket."],
+    ["Payables aging", "Vendor obligations grouped by due bucket."],
+    ["Revenue vs expenses", "Monthly income and cost comparison."],
+    ["Profit trend", "Gross and net profit movement over time."],
+  ];
+  const kpis = [
+    ["Gross margin", "Revenue less direct costs as a percentage of revenue."],
+    ["Net profit", "Posted revenue minus posted expenses."],
+    ["Cash runway", "Available cash divided by average monthly burn."],
+    ["Debtor days", "Average collection period for receivables."],
+    ["Creditor days", "Average payment period for payables."],
+    ["Inventory turnover", "COGS or consumption compared with average inventory."],
+  ];
+  const reports = [
+    ["Monthly financial summary", "Income, expense, cash, receivables, payables, and margin snapshot."],
+    ["Branch/company performance", "Segmented performance once branch/company dimensions are available."],
+  ];
+  const alerts = [
+    ["Low cash", "Cash balance or runway below configured threshold."],
+    ["Overdue receivables", "Invoices crossing due-date buckets."],
+    ["High expenses", "Expense variance above period baseline."],
+    ["Negative margins", "Gross or net margin below zero."],
+  ];
+
+  return `
+    <section class="financial-health-workspace erp-workspace-panel" aria-label="Financial Health Dashboard preview">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Financial Health Dashboard</h4>
+          <p>Preview workspace for value-added financial intelligence inside MitraBooks ERP.</p>
+        </div>
+        <span class="pill warn">Preview</span>
+      </div>
+      <div class="financial-health-status-grid">
+        <article>
+          <span>Current state</span>
+          <strong>Workspace shell added</strong>
+          <p>Navigation and preview sections are available in Intelligence & Reports.</p>
+        </article>
+        <article>
+          <span>Target state</span>
+          <strong>Ledger-backed dashboard</strong>
+          <p>KPIs, charts, alerts, exports, and AI summary should be generated from posted accounting data.</p>
+        </article>
+        <article>
+          <span>Gap</span>
+          <strong>Backend aggregation APIs</strong>
+          <p>Financial health endpoints, export generation, thresholds, and branch/company dimensions are not yet implemented.</p>
+        </article>
+      </div>
+      <div class="financial-health-grid">
+        <article>
+          <h5>Graphs</h5>
+          <ul>${financialHealthFeatureList(charts)}</ul>
+        </article>
+        <article>
+          <h5>KPIs</h5>
+          <ul>${financialHealthFeatureList(kpis)}</ul>
+        </article>
+        <article>
+          <h5>Reports</h5>
+          <ul>${financialHealthFeatureList(reports)}</ul>
+        </article>
+        <article>
+          <h5>Alerts</h5>
+          <ul>${financialHealthFeatureList(alerts)}</ul>
+        </article>
+      </div>
+      <div class="financial-health-roadmap">
+        <h5>Implementation sequence</h5>
+        <ol>
+          <li>Backend: add tenant-scoped financial aggregation APIs from posted ledgers.</li>
+          <li>Frontend: replace preview cards with live charts and KPI widgets.</li>
+          <li>Export service: generate PDF, Excel, and PPT from reviewed report templates.</li>
+          <li>Optional AI layer: financial health summary with risks, assumptions, and recommendations.</li>
+        </ol>
+        <p>Deferred scope: this preview does not calculate live financial health, export files, or generate AI advice yet.</p>
+      </div>
+    </section>
   `;
 }
 
@@ -4249,6 +4347,7 @@ function syncBusinessNavActiveState() {
       vouchers: "Vouchers",
       audit: "Audit Trail",
       accounting: "Accounting",
+      "financial-health": "Financial Health",
     };
     const label = labels[activeBusinessWorkspace] || "Dashboard";
     topbarCurrent.textContent = label;
