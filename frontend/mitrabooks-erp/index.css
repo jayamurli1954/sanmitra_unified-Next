@@ -1579,6 +1579,51 @@ html[data-theme="light"] .fy-selector {
   color: var(--text-secondary, #475569);
 }
 
+html[data-theme="light"] .erp-sidebar {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .erp-sidebar .nav-group-title,
+html[data-theme="light"] .erp-sidebar .nav-section-title,
+html[data-theme="light"] .erp-sidebar .nav-group-toggle,
+html[data-theme="light"] .erp-sidebar .nav a,
+html[data-theme="light"] .erp-sidebar .nav button,
+html[data-theme="light"] .erp-sidebar .erp-nav-link {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .erp-sidebar .nav a:hover,
+html[data-theme="light"] .erp-sidebar .nav button:hover,
+html[data-theme="light"] .erp-sidebar .erp-nav-link:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .erp-sidebar .nav a.active,
+html[data-theme="light"] .erp-sidebar .nav button.active,
+html[data-theme="light"] .erp-sidebar .erp-nav-link.active {
+  background: #eff6ff !important;
+  color: #1e3a8a !important;
+}
+
+html[data-theme="light"] .erp-sidebar .erp-nav-link[aria-disabled="true"],
+html[data-theme="light"] .erp-sidebar .nav a[aria-disabled="true"],
+html[data-theme="light"] .erp-sidebar .nav button[aria-disabled="true"] {
+  color: #64748b !important;
+  opacity: 0.72;
+}
+
+html[data-theme="light"] .erp-sidebar .context-card,
+html[data-theme="light"] .erp-sidebar .fy-selector,
+html[data-theme="light"] .erp-sidebar .pwa-card,
+html[data-theme="light"] .erp-sidebar .sidebar-user-card,
+html[data-theme="light"] .erp-sidebar .theme-btn {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
 /* ============================================
    CLEAN BUSINESS DASHBOARD
    ============================================ */

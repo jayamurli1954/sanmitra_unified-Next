@@ -3,8 +3,8 @@
   PWA caching strategy: Network-first for APIs, Cache-first for assets
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v4';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v4';
+const CACHE_NAME = 'mitrabooks-erp-v5';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v5';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
@@ -106,7 +106,7 @@ async function networkFirstStrategy(request) {
     const response = await fetch(request);
 
     // Cache successful responses
-    if (response.ok) {
+    if (shouldCacheResponse(request, response)) {
       const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, response.clone());
     }
@@ -133,7 +133,7 @@ async function cacheFirstStrategy(request) {
     // Update cache in background
     fetch(request)
       .then((response) => {
-        if (response.ok) {
+        if (shouldCacheResponse(request, response)) {
           const cache = caches.open(CACHE_NAME);
           cache.then((c) => c.put(request, response));
         }
@@ -148,7 +148,7 @@ async function cacheFirstStrategy(request) {
   // Not in cache, fetch from network
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (shouldCacheResponse(request, response)) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
@@ -173,6 +173,13 @@ function isStaticAsset(url) {
 
 function isVersionedCodeAsset(url) {
   return /\.(css|js)$/.test(url.pathname);
+}
+
+function shouldCacheResponse(request, response) {
+  return request.method === 'GET' &&
+         response.status === 200 &&
+         response.type !== 'opaqueredirect' &&
+         !request.headers.has('range');
 }
 
 // Message handler - allow clients to skip waiting (instant updates)

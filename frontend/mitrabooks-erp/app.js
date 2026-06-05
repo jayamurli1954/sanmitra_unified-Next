@@ -2046,7 +2046,9 @@ async function signInWithPassword() {
     if (!result.ok) {
       clearAccessToken();
       updateSessionUi();
-      const detail = result.payload?.detail || "Unable to sign in with these credentials.";
+      const detail = statusDetailText(result.payload?.detail) ||
+        statusDetailText(result.payload) ||
+        "Unable to sign in with these credentials.";
 
       // Show error message in form
       if (errorField && errorMessage) {
@@ -4217,7 +4219,9 @@ function openBusinessEditPartyDialog(button) {
 function setBusinessWorkspace(workspace) {
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
-  dashboardPreview.innerHTML = renderBusinessWorkspace();
+  dashboardPreview.innerHTML = workspace === "overview"
+    ? renderDashboardPreview(experienceConfig.mitrabooks)
+    : renderBusinessWorkspace();
   if (workspace === "overview") {
     loadBusinessDashboardStats();
   } else if (workspace === "parties") {
