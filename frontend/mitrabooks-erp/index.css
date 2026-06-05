@@ -2755,6 +2755,16 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   width: 100%;
 }
 
+.account-selector-caption {
+  color: #93c5fd;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
 .account-input-wrapper {
   position: relative;
   display: grid;
@@ -2787,6 +2797,8 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   background: #11182d;
   border-color: rgba(148, 163, 184, 0.26);
   color: #f8fafc;
+  font-weight: 700;
+  min-height: 46px;
 }
 
 .voucher-posting-map {
@@ -2818,9 +2830,105 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   font-size: 13px;
 }
 
+.voucher-entry-lines {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.voucher-entry-line {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.voucher-entry-line > div:first-child {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.voucher-entry-line span {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.voucher-entry-line strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.voucher-entry-line.debit-line {
+  border-left: 4px solid #22c55e;
+}
+
+.voucher-entry-line.debit-line span {
+  color: #86efac;
+}
+
+.voucher-entry-line.credit-line {
+  border-left: 4px solid #60a5fa;
+}
+
+.voucher-entry-line.credit-line span {
+  color: #93c5fd;
+}
+
+.voucher-balance-panel {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: space-between;
+  margin: 8px 0 16px;
+  padding: 12px;
+}
+
+.voucher-balance-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.voucher-balance-status span {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.voucher-balance-status strong {
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.voucher-balance-status.balanced strong {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.voucher-balance-status.imbalanced strong {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
 @media (max-width: 640px) {
   .voucher-posting-map {
     grid-template-columns: 1fr;
+  }
+
+  .voucher-balance-panel {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

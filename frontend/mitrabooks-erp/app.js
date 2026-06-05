@@ -4806,10 +4806,24 @@ function updateVoucherBalance() {
     totalCredit += Number(input.value) || 0;
   });
 
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  const simpleAmountInput = document.getElementById("business-voucher-amount");
+  const isSimplePartyVoucher = simpleAmountInput && !document.querySelector(".voucher-debit, .voucher-credit");
+  if (isSimplePartyVoucher) {
+    const amount = Number(simpleAmountInput.value) || 0;
+    totalDebit = amount;
+    totalCredit = amount;
+  }
+
+  const hasAmount = totalDebit > 0 || totalCredit > 0;
+  const isBalanced = hasAmount && Math.abs(totalDebit - totalCredit) < 0.01;
   const balanceEl = document.getElementById("business-voucher-balance");
   if (balanceEl) {
-    balanceEl.innerHTML = `Debit: ${formatCurrency(totalDebit)} | Credit: ${formatCurrency(totalCredit)} <span style="margin-left: 12px; ${isBalanced ? "color: green;" : "color: red;"}">${isBalanced ? "✓ Balanced" : "✗ Imbalanced"}</span>`;
+    balanceEl.className = isBalanced ? "voucher-balance-status balanced" : "voucher-balance-status imbalanced";
+    balanceEl.innerHTML = `
+      <span>Debit: ${formatCurrency(totalDebit)}</span>
+      <span>Credit: ${formatCurrency(totalCredit)}</span>
+      <strong>${isBalanced ? "Debit = Credit" : "Debit must equal Credit"}</strong>
+    `;
   }
 
   const submitBtn = document.getElementById("business-voucher-submit");
@@ -5000,27 +5014,28 @@ function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
 
   return `
     <div class="account-selector-component" data-field-id="${escapeHtml(fieldId)}">
+      <span class="account-selector-caption">Account code dropdown</span>
       <div class="account-input-wrapper">
-        <input
-          type="text"
-          class="account-search-input"
-          data-field-id="${escapeHtml(fieldId)}"
-          placeholder="Search account (min 3 chars)"
-          value="${escapeHtml(displayText)}"
-          autocomplete="off"
-        >
         <select
           class="account-picker-select"
           data-field-id="${escapeHtml(fieldId)}"
           aria-label="Select account"
         >
-          <option value="">Select account</option>
+          <option value="">Select account code</option>
           ${accounts.map((account) => `
             <option value="${escapeHtml(account.id)}" ${String(account.id) === String(selectedAccountId || "") ? "selected" : ""}>
               ${escapeHtml(`${account.code} - ${account.name}`)}
             </option>
           `).join("")}
         </select>
+        <input
+          type="text"
+          class="account-search-input"
+          data-field-id="${escapeHtml(fieldId)}"
+          placeholder="Optional search by code or name"
+          value="${escapeHtml(displayText)}"
+          autocomplete="off"
+        >
         <input
           type="hidden"
           class="account-id-input"
@@ -5132,6 +5147,11 @@ document.addEventListener("input", (event) => {
     if (fieldId) {
       updateAccountSuggestions(fieldId);
     }
+    return;
+  }
+
+  if (event.target?.id === "business-voucher-amount") {
+    updateVoucherBalance();
     return;
   }
 
@@ -5529,13 +5549,29 @@ function renderVoucherTypeForm(voucherType) {
           <label for="business-voucher-amount">Amount (₹)</label>
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
-        <div class="field">
-          <label>Debit Account (party payable / expense ledger)</label>
-          ${accountSelector("business-voucher-debit-account")}
+        <div class="voucher-entry-lines">
+          <div class="voucher-entry-line debit-line">
+            <div>
+              <span>Debit</span>
+              <strong>Party payable / expense ledger</strong>
+            </div>
+            ${accountSelector("business-voucher-debit-account")}
+          </div>
+          <div class="voucher-entry-line credit-line">
+            <div>
+              <span>Credit</span>
+              <strong>Bank / cash ledger</strong>
+            </div>
+            ${accountSelector("business-voucher-credit-account")}
+          </div>
         </div>
-        <div class="field">
-          <label>Credit Account (bank / cash ledger)</label>
-          ${accountSelector("business-voucher-credit-account")}
+        <div class="voucher-balance-panel">
+          <strong>Double-entry check</strong>
+          <span id="business-voucher-balance" class="voucher-balance-status imbalanced">
+            <span>Debit: Rs. 0.00</span>
+            <span>Credit: Rs. 0.00</span>
+            <strong>Debit must equal Credit</strong>
+          </span>
         </div>
         <div class="field">
           <label for="business-voucher-description">Description</label>
@@ -5575,13 +5611,29 @@ function renderVoucherTypeForm(voucherType) {
           <label for="business-voucher-amount">Amount (₹)</label>
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
-        <div class="field">
-          <label>Debit Account (bank / cash ledger)</label>
-          ${accountSelector("business-voucher-debit-account")}
+        <div class="voucher-entry-lines">
+          <div class="voucher-entry-line debit-line">
+            <div>
+              <span>Debit</span>
+              <strong>Bank / cash ledger</strong>
+            </div>
+            ${accountSelector("business-voucher-debit-account")}
+          </div>
+          <div class="voucher-entry-line credit-line">
+            <div>
+              <span>Credit</span>
+              <strong>Customer receivable / party ledger</strong>
+            </div>
+            ${accountSelector("business-voucher-credit-account")}
+          </div>
         </div>
-        <div class="field">
-          <label>Credit Account (customer receivable / party ledger)</label>
-          ${accountSelector("business-voucher-credit-account")}
+        <div class="voucher-balance-panel">
+          <strong>Double-entry check</strong>
+          <span id="business-voucher-balance" class="voucher-balance-status imbalanced">
+            <span>Debit: Rs. 0.00</span>
+            <span>Credit: Rs. 0.00</span>
+            <strong>Debit must equal Credit</strong>
+          </span>
         </div>
         <div class="field">
           <label for="business-voucher-description">Description</label>
