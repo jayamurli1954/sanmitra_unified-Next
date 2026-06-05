@@ -150,7 +150,14 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.getByRole('button', { name: '+ New Voucher' }).click();
     await expect(page.locator('#business-voucher-create-dialog')).toBeVisible();
-    await expect(page.locator('.voucher-line')).toHaveCount(2);
+    await page.locator('#business-voucher-type-select').selectOption('receipt');
+    await expect(page.locator('.voucher-entry-line')).toHaveCount(2);
+    await expect(page.locator('.voucher-entry-line.debit-line')).toContainText('Bank / cash ledger');
+    await expect(page.locator('.voucher-entry-line.credit-line')).toContainText('Customer receivable / party ledger');
+    await expect(page.locator('.account-picker-select[data-field-id="business-voucher-debit-account"]')).toBeVisible();
+    await expect(page.locator('.account-picker-select[data-field-id="business-voucher-credit-account"]')).toBeVisible();
+    await expect(page.locator('.account-search-input[data-field-id="business-voucher-debit-account"]')).toBeVisible();
+    await expect(page.locator('.account-search-input[data-field-id="business-voucher-credit-account"]')).toBeVisible();
     await expect(page.locator('.voucher-balance-panel')).toBeVisible();
     await expect(page.locator('#business-voucher-balance')).toHaveClass(/imbalanced/);
     await expect(page.locator('#business-voucher-submit')).toBeDisabled();
