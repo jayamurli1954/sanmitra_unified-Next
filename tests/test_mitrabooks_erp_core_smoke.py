@@ -356,6 +356,37 @@ async def test_mitrabooks_voucher_posting_reuses_duplicate_idempotency_key(async
 
 
 @pytest.mark.asyncio
+async def test_mitrabooks_voucher_posting_resolves_account_codes(async_session, monkeypatch):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
+    headers = {"X-App-Key": APP_KEY}
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            debit_account, credit_account = await _initialize_accounts(client, headers)
+            response = await client.post(
+                "/api/v1/business/vouchers",
+                json={
+                    "voucher_type": "receipt",
+                    "entry_date": "2026-06-01",
+                    "amount": "50.00",
+                    "debit_account_code": debit_account["code"],
+                    "credit_account_code": credit_account["code"],
+                    "description": "Code resolved smoke voucher",
+                    "accounting_entity_id": ACCOUNTING_ENTITY_ID,
+                },
+                headers={**headers, "X-Idempotency-Key": "mitrabooks-smoke-code-resolve"},
+            )
+
+        assert response.status_code == 200
+        voucher = response.json()
+        assert voucher["status"] == "posted"
+        assert voucher["debit_account_id"] == debit_account["id"]
+        assert voucher["credit_account_id"] == credit_account["id"]
+    finally:
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
 async def test_mitrabooks_accounting_journal_rejects_unbalanced_posting(async_session, monkeypatch):
     _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
     headers = {"X-App-Key": APP_KEY}

@@ -61,8 +61,10 @@ class TypedVoucherCreateRequest(BaseModel):
     voucher_type: VoucherType
     entry_date: date
     amount: Decimal = Field(..., gt=Decimal("0"))
-    debit_account_id: int
-    credit_account_id: int
+    debit_account_id: int | None = None
+    credit_account_id: int | None = None
+    debit_account_code: str | None = Field(default=None, min_length=1, max_length=50)
+    credit_account_code: str | None = Field(default=None, min_length=1, max_length=50)
     description: str = Field(..., min_length=1, max_length=300)
     reference: str | None = Field(default=None, max_length=120)
     party_id: str | None = Field(default=None, max_length=80)

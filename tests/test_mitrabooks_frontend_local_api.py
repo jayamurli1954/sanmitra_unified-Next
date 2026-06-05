@@ -103,18 +103,25 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
 
     assert "function normalizeBusinessAccount(acc)" in app_source
     assert "acc.account_id ?? acc.id" in app_source
-    assert "acc.account_code ?? acc.code" in app_source
-    assert "acc.account_name ?? acc.name" in app_source
+    assert "acc.account_code" in app_source
+    assert "?? acc.code" in app_source
+    assert "acc.account_name" in app_source
+    assert "?? acc.name" in app_source
     assert "populateVoucherAccountSelect(select" in app_source
     assert "syncVoucherAccountFromText" in app_source
-    assert 'list="business-voucher-account-options"' in app_source
+    assert "account-selector-component" in app_source
+    assert "account-suggestions" in app_source
     assert "updateVoucherAccountsStatus" in app_source
     assert "grid-column: 1 / -1" in css_source
-    assert "Account code / name" in app_source
+    assert "Account code dropdown" in app_source
     assert "accountRowsFromPayload" in app_source
     assert "MitraBooks business tenant required" in app_source
     assert "business.admin@sanmitra.local" in app_source
     assert 'await loadBusinessAccounts();' in app_source
+    assert "function findBusinessAccountById(accountId)" in app_source
+    assert "function accountIdForVoucherPayload(account)" in app_source
+    assert "debit_account_code: debitAccount.code" in app_source
+    assert "credit_account_code: creditAccount.code" in app_source
 
 
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
@@ -216,6 +223,8 @@ def test_business_voucher_payload_matches_typed_voucher_api() -> None:
     assert "amount: debitTotal.toFixed(2)" in create_block
     assert "debit_account_id: debitLines[0].account_id" in create_block
     assert "credit_account_id: creditLines[0].account_id" in create_block
+    assert "debit_account_code: debitLines[0].account_code" in app_source
+    assert "credit_account_code: creditLines[0].account_code" in app_source
     assert '"X-Idempotency-Key"' in create_block
     assert "lines:" not in create_block
     assert "debit_paise" not in create_block

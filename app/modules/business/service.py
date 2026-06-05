@@ -2,8 +2,10 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounting.models.entities import Account
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import AccountingNotFoundError, AccountingValidationError, post_journal_entry, reverse_journal_entry
 from app.core.audit.service import log_audit_event
@@ -68,6 +70,48 @@ async def _audit_business_event(
         # Audit writes are best-effort here because accounting/domain writes may
         # already be committed by the time this hook runs.
         pass
+
+
+async def _resolve_voucher_account_id(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    account_id: int | None,
+    account_code: str | None,
+    side: str,
+) -> int:
+    if account_id:
+        account = (
+            await session.execute(
+                select(Account).where(
+                    Account.id == account_id,
+                    Account.tenant_id == tenant_id,
+                    Account.app_key == app_key,
+                    Account.accounting_entity_id == accounting_entity_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if account is not None:
+            return int(account.id)
+
+    code = str(account_code or "").strip()
+    if code:
+        account = (
+            await session.execute(
+                select(Account).where(
+                    Account.tenant_id == tenant_id,
+                    Account.app_key == app_key,
+                    Account.accounting_entity_id == accounting_entity_id,
+                    Account.code == code,
+                )
+            )
+        ).scalar_one_or_none()
+        if account is not None:
+            return int(account.id)
+
+    raise AccountingNotFoundError(f"{side.capitalize()} account not found for this tenant")
 
 
 async def ensure_business_indexes() -> None:
@@ -443,6 +487,27 @@ async def post_typed_voucher(
     idempotency_key: str | None,
 ) -> dict:
     amount = Decimal(payload.amount).quantize(Decimal("0.01"))
+    debit_account_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=payload.debit_account_id,
+        account_code=payload.debit_account_code,
+        side="debit",
+    )
+    credit_account_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=payload.credit_account_id,
+        account_code=payload.credit_account_code,
+        side="credit",
+    )
+    if debit_account_id == credit_account_id:
+        raise AccountingValidationError("Debit and credit accounts must be different")
+
     if idempotency_key:
         existing = await get_collection(VOUCHERS_COLLECTION).find_one(
             {
@@ -477,8 +542,8 @@ async def post_typed_voucher(
         "party_id": payload.party_id,
         "amount": _money(amount),
         "entry_date": payload.entry_date.isoformat(),
-        "debit_account_id": payload.debit_account_id,
-        "credit_account_id": payload.credit_account_id,
+        "debit_account_id": debit_account_id,
+        "credit_account_id": credit_account_id,
         "description": payload.description,
         "reference": reference,
         "status": "posting",
@@ -503,8 +568,8 @@ async def post_typed_voucher(
                 description=payload.description,
                 reference=reference,
                 lines=[
-                    JournalLineIn(account_id=payload.debit_account_id, debit=amount, credit=Decimal("0")),
-                    JournalLineIn(account_id=payload.credit_account_id, debit=Decimal("0"), credit=amount),
+                    JournalLineIn(account_id=debit_account_id, debit=amount, credit=Decimal("0")),
+                    JournalLineIn(account_id=credit_account_id, debit=Decimal("0"), credit=amount),
                 ],
             ),
             idempotency_key=idempotency_key or f"business-voucher:{voucher_id}",

@@ -4463,6 +4463,21 @@ function businessAccountsForSelection() {
     .filter((acc) => acc.id && (acc.code || acc.name));
 }
 
+function hasLoadedBusinessAccounts() {
+  return Array.isArray(lastBusinessAccounts) && lastBusinessAccounts.length > 0;
+}
+
+function findBusinessAccountById(accountId) {
+  return businessAccountsForSelection()
+    .find((acc) => String(acc.id) === String(accountId)) || null;
+}
+
+function accountIdForVoucherPayload(account) {
+  if (!account || !hasLoadedBusinessAccounts()) return null;
+  const parsed = Number(account.id);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function populateVoucherAccountSelect(select, selectedId = "") {
   if (!select) return;
   const accounts = businessAccountsForSelection();
@@ -5312,6 +5327,8 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
   const creditAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-credit-account']");
   const debitAccountId = debitAccountIdInput?.value || "";
   const creditAccountId = creditAccountIdInput?.value || "";
+  const debitAccount = findBusinessAccountById(debitAccountId);
+  const creditAccount = findBusinessAccountById(creditAccountId);
   const description = document.getElementById("business-voucher-description")?.value || "";
   const reference = document.getElementById("business-voucher-reference")?.value || "";
 
@@ -5320,12 +5337,12 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     return;
   }
 
-  if (!debitAccountId || !creditAccountId) {
+  if (!debitAccount || !creditAccount) {
     setLoginStatus("warn", "Debit and credit accounts required", "Select both sides of the voucher before posting.");
     return;
   }
 
-  if (debitAccountId === creditAccountId) {
+  if (String(debitAccount.id) === String(creditAccount.id) || debitAccount.code === creditAccount.code) {
     setLoginStatus("warn", "Different accounts required", "Debit and credit accounts cannot be the same ledger account.");
     return;
   }
@@ -5340,8 +5357,10 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     voucher_type: voucherType,
     entry_date: date,
     amount: amountVal.toFixed(2),
-    debit_account_id: Number(debitAccountId),
-    credit_account_id: Number(creditAccountId),
+    debit_account_id: accountIdForVoucherPayload(debitAccount),
+    credit_account_id: accountIdForVoucherPayload(creditAccount),
+    debit_account_code: debitAccount.code,
+    credit_account_code: creditAccount.code,
     description: description || `${voucherType} voucher`,
     reference: reference || null,
     party_id: partyId,
@@ -5376,15 +5395,17 @@ async function createContraVoucher(appKey, date) {
   const toAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-to-account']");
   const fromAccountId = fromAccountIdInput?.value || "";
   const toAccountId = toAccountIdInput?.value || "";
+  const fromAccount = findBusinessAccountById(fromAccountId);
+  const toAccount = findBusinessAccountById(toAccountId);
   const amount = document.getElementById("business-voucher-amount")?.value || "0";
   const description = document.getElementById("business-voucher-description")?.value || "Bank transfer";
 
-  if (!fromAccountId || !toAccountId) {
+  if (!fromAccount || !toAccount) {
     setLoginStatus("warn", "Accounts required", "Select both From and To accounts.");
     return;
   }
 
-  if (fromAccountId === toAccountId) {
+  if (String(fromAccount.id) === String(toAccount.id) || fromAccount.code === toAccount.code) {
     setLoginStatus("warn", "Same account", "From and To accounts must be different.");
     return;
   }
@@ -5399,8 +5420,10 @@ async function createContraVoucher(appKey, date) {
     voucher_type: "contra",
     entry_date: date,
     amount: amountVal.toFixed(2),
-    debit_account_id: Number(toAccountId),
-    credit_account_id: Number(fromAccountId),
+    debit_account_id: accountIdForVoucherPayload(toAccount),
+    credit_account_id: accountIdForVoucherPayload(fromAccount),
+    debit_account_code: toAccount.code,
+    credit_account_code: fromAccount.code,
     description: description,
     reference: null,
   };
@@ -5440,12 +5463,18 @@ async function createJournalVoucher(appKey, date) {
     const creditInput = lineEl.querySelector(".voucher-credit");
 
     const accountId = accountIdInput?.value || "";
+    const account = findBusinessAccountById(accountId);
     const debit = Number(debitInput?.value) || 0;
     const credit = Number(creditInput?.value) || 0;
 
-    if (accountId && (debit > 0 || credit > 0)) {
-      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit.toFixed(2) });
-      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit.toFixed(2) });
+    if (account && (debit > 0 || credit > 0)) {
+      const lineAccount = {
+        account_id: accountIdForVoucherPayload(account),
+        account_code: account.code,
+        amount: "",
+      };
+      if (debit > 0) debitLines.push({ ...lineAccount, amount: debit.toFixed(2) });
+      if (credit > 0) creditLines.push({ ...lineAccount, amount: credit.toFixed(2) });
     }
   });
 
@@ -5467,6 +5496,8 @@ async function createJournalVoucher(appKey, date) {
     amount: debitTotal.toFixed(2),
     debit_account_id: debitLines[0].account_id,
     credit_account_id: creditLines[0].account_id,
+    debit_account_code: debitLines[0].account_code,
+    credit_account_code: creditLines[0].account_code,
     description: description || "Journal entry",
     reference: null,
   };
