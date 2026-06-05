@@ -4403,12 +4403,16 @@ let lastBusinessDashboardStats = null;
 const voucherLineState = [];
 
 const MITRABOOKS_FALLBACK_ACCOUNTS = [
-  { account_id: 1000, account_code: "1000", account_name: "Cash on hand", account_type: "asset" },
-  { account_id: 1010, account_code: "1010", account_name: "Bank account", account_type: "asset" },
-  { account_id: 1200, account_code: "1200", account_name: "Accounts receivable", account_type: "asset" },
-  { account_id: 2000, account_code: "2000", account_name: "Accounts payable", account_type: "liability" },
-  { account_id: 4000, account_code: "4000", account_name: "Sales revenue", account_type: "revenue" },
-  { account_id: 5000, account_code: "5000", account_name: "Operating expense", account_type: "expense" },
+  { account_id: 11001, account_code: "11001", account_name: "Cash in Hand", account_type: "asset" },
+  { account_id: 11010, account_code: "11010", account_name: "Bank Account", account_type: "asset" },
+  { account_id: 12001, account_code: "12001", account_name: "Sundry Debtors", account_type: "asset" },
+  { account_id: 13002, account_code: "13002", account_name: "Advance to Suppliers", account_type: "asset" },
+  { account_id: 21001, account_code: "21001", account_name: "Sundry Creditors", account_type: "liability" },
+  { account_id: 24001, account_code: "24001", account_name: "Advance from Customers", account_type: "liability" },
+  { account_id: 41001, account_code: "41001", account_name: "Sales", account_type: "income" },
+  { account_id: 41002, account_code: "41002", account_name: "Service Income", account_type: "income" },
+  { account_id: 53004, account_code: "53004", account_name: "Office Expense", account_type: "expense" },
+  { account_id: 54001, account_code: "54001", account_name: "Bank Charges", account_type: "expense" },
 ];
 
 function normalizeBusinessAccount(acc) {
