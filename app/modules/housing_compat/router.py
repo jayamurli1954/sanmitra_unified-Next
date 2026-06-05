@@ -92,6 +92,63 @@ from app.modules.housing_compat.service import (
 
 router = APIRouter(tags=["housing-compat"])
 
+GRUHA_LEGACY_ACCOUNT_CODE_MAP: dict[str, str] = {
+    "1000": "11001",
+    "1010": "11010",
+    "1020": "11011",
+    "1030": "15010",
+    "1040": "12003",
+    "1100": "12001",
+    "1110": "12002",
+    "1120": "12004",
+    "1210": "13002",
+    "1220": "15001",
+    "1230": "15002",
+    "1300": "16001",
+    "1310": "16002",
+    "1320": "16003",
+    "1500": "16003",
+    "2000": "31001",
+    "2010": "24001",
+    "2020": "24002",
+    "2100": "21001",
+    "2110": "21002",
+    "2120": "23002",
+    "2130": "23001",
+    "3000": "31002",
+    "3010": "31003",
+    "3020": "31004",
+    "3030": "31005",
+    "3040": "31006",
+    "3050": "31099",
+    "4000": "41001",
+    "4010": "41002",
+    "4020": "41003",
+    "4030": "41004",
+    "4040": "42001",
+    "4050": "41005",
+    "4060": "41006",
+    "4070": "42002",
+    "5000": "53005",
+    "5010": "53002",
+    "5020": "52001",
+    "5030": "53003",
+    "5040": "53004",
+    "5050": "53006",
+    "5060": "53007",
+    "5070": "53008",
+    "5080": "54002",
+    "5090": "54001",
+    "5100": "54003",
+    "5110": "53009",
+    "5120": "53010",
+}
+
+
+def _canonical_gruha_account_code(code: Any) -> str:
+    raw = str(code or "").strip()
+    return GRUHA_LEGACY_ACCOUNT_CODE_MAP.get(raw, raw)
+
 
 def _safe_file_name(original: str, prefix: str = "doc") -> str:
     name = (original or "").strip()
@@ -123,7 +180,7 @@ def _asset_response(row: dict[str, Any]) -> dict[str, Any]:
         "asset_code": row.get("asset_code") or row.get("account_code") or "",
         "name": row.get("name") or "",
         "category": row.get("category") or "other",
-        "account_code": row.get("account_code") or "1500",
+        "account_code": _canonical_gruha_account_code(row.get("account_code") or "16003"),
         "quantity": _safe_int(row.get("quantity"), default=1),
         "location": row.get("location") or "",
         "status": row.get("status") or "Active",
@@ -196,7 +253,7 @@ async def _find_corpus_account(
     if account is not None:
         return account
 
-    for code in ("3000", "3010"):
+    for code in ("31002",):
         by_code = await session.execute(select(Account).where(*scoped, Account.code == code, Account.name.ilike("%corpus%")))
         account = by_code.scalar_one_or_none()
         if account is not None:
@@ -232,15 +289,15 @@ async def _post_asset_capitalization_journal(
         session,
         tenant_id=tenant_id,
         app_key=app_key,
-        code=str(asset.get("account_code") or ""),
+        code=_canonical_gruha_account_code(asset.get("account_code") or ""),
         account_type="asset",
     )
-    if asset_account is None and str(asset.get("account_code") or "") == "1500":
+    if asset_account is None and _canonical_gruha_account_code(asset.get("account_code") or "") == "16003":
         asset_account = await _find_account_by_code(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
-            code="1320",
+            code="16003",
             account_type="asset",
         )
     if asset_account is None:
@@ -1004,26 +1061,32 @@ async def _account_ids_by_code(
     app_key: str,
     codes: set[str],
 ) -> dict[str, int]:
+    requested_codes = {str(code).strip() for code in codes if str(code).strip()}
+    canonical_by_requested = {code: _canonical_gruha_account_code(code) for code in requested_codes}
+    canonical_codes = set(canonical_by_requested.values())
     rows = (
         await session.execute(
             select(Account.code, Account.id).where(
                 Account.tenant_id == tenant_id,
                 Account.app_key == app_key,
                 Account.accounting_entity_id == "primary",
-                Account.code.in_(codes),
+                Account.code.in_(canonical_codes),
             )
         )
     ).all()
     found = {str(code): int(account_id) for code, account_id in rows}
-    missing = sorted(codes - set(found))
+    missing = sorted(canonical_codes - set(found))
     if missing:
         raise HTTPException(status_code=400, detail=f"Required accounting accounts missing: {', '.join(missing)}")
-    return found
+    result = dict(found)
+    for requested, canonical in canonical_by_requested.items():
+        result[requested] = found[canonical]
+    return result
 
 
 def _bill_credit_components(bill: dict[str, Any]) -> list[tuple[str, Decimal]]:
     total = _as_decimal_money(bill.get("amount"))
-    return [("4000", total)] if total > 0 else []
+    return [("41001", total)] if total > 0 else []
 
 
 async def _post_maintenance_bill_to_accounting(
@@ -1046,9 +1109,9 @@ async def _post_maintenance_bill_to_accounting(
     if total != credit_total:
         total = credit_total
 
-    required_codes = {"1100", *(code for code, _amount in credit_components)}
+    required_codes = {"12001", *(code for code, _amount in credit_components)}
     account_ids = await _account_ids_by_code(session, tenant_id=tenant_id, app_key=app_key, codes=required_codes)
-    lines = [JournalLineIn(account_id=account_ids["1100"], debit=total, credit=Decimal("0.00"))]
+    lines = [JournalLineIn(account_id=account_ids["12001"], debit=total, credit=Decimal("0.00"))]
     lines.extend(
         JournalLineIn(account_id=account_ids[code], debit=Decimal("0.00"), credit=amount)
         for code, amount in credit_components
@@ -2098,7 +2161,7 @@ async def assets_create(
         "asset_code": await _next_asset_code(tenant_id=tenant_id, app_key=app_key, category=category),
         "name": name,
         "category": category,
-        "account_code": str(payload.get("account_code") or "1500").strip(),
+        "account_code": _canonical_gruha_account_code(payload.get("account_code") or "16003"),
         "quantity": max(1, _safe_int(payload.get("quantity"), default=1)),
         "location": str(payload.get("location") or "").strip(),
         "status": str(payload.get("status") or "Active").strip() or "Active",

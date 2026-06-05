@@ -876,7 +876,7 @@ async def cash_book_report(
         cash_account = None
         accounts = await list_accounts(session, tenant_id=tenant_id)
         for acc in accounts:
-            if acc.is_cash_bank and str(acc.type) == 'asset' and (str(acc.name).lower().find('cash') >= 0 or str(acc.code) == '1001'):
+            if acc.is_cash_bank and str(acc.type) == 'asset' and (str(acc.name).lower().find('cash') >= 0 or str(acc.code) == '11001'):
                 cash_account = acc
                 break
         if cash_account is None and accounts:

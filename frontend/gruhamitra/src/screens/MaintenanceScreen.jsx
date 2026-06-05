@@ -888,7 +888,7 @@ const MaintenanceScreen = () => {
                       checked={billForm.auto_post_to_accounting}
                       onChange={(e) => setBillForm({ ...billForm, auto_post_to_accounting: e.target.checked })}
                     />
-                    <span style={{ marginLeft: '8px' }}>Auto-post to Accounting (Debit 1100, Credit 4000/4010/etc)</span>
+                    <span style={{ marginLeft: '8px' }}>Auto-post to Accounting (Debit 12001, Credit 41001/41002/etc)</span>
                   </label>
                   <small style={{ color: '#666', display: 'block', marginTop: '5px' }}>
                     Automatically creates journal entries with double-entry validation

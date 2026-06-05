@@ -11,7 +11,7 @@ const AddAssetScreen = () => {
     const [formData, setFormData] = useState({
         name: '',
         category: 'lift',
-        account_code: '1320',
+        account_code: '16003',
         quantity: 1,
         location: '',
         status: 'Active',
@@ -348,7 +348,7 @@ const AddAssetScreen = () => {
                                         <input
                                             type="text"
                                             className="form-input"
-                                            value="Corpus Fund (3000)"
+                                            value="Corpus Fund (31002)"
                                             disabled
                                             style={{ backgroundColor: '#f0f0f0' }}
                                         />
@@ -409,7 +409,7 @@ const AddAssetScreen = () => {
                                     {assetAccounts.map(acc => (
                                         <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>
                                     ))}
-                                    {assetAccounts.length === 0 && <option value="1320">1320 - Common Area Equipment</option>}
+                                    {assetAccounts.length === 0 && <option value="16003">16003 - Common Area Equipment</option>}
                                 </select>
                             </div>
                         </div>

@@ -268,7 +268,7 @@ const AssetDetailScreen = () => {
                                     <div className="detail-row"><span className="detail-label">Depreciation</span><span className="detail-value">{asset.depreciation_rate}% ({asset.depreciation_method === 'straight_line' ? 'SLM' : 'WDV'})</span></div>
                                     <div className="detail-row"><span className="detail-label">Useful Life</span><span className="detail-value">{asset.useful_life_years || 0} years</span></div>
                                     <div className="detail-row"><span className="detail-label">Residual Value</span><span className="detail-value">{formatCurrency(asset.residual_value)}</span></div>
-                                    <div className="detail-row"><span className="detail-label">Account Head</span><span className="detail-value">{asset.account_code || '1500'}</span></div>
+                                    <div className="detail-row"><span className="detail-label">Account Head</span><span className="detail-value">{asset.account_code || '16003'}</span></div>
                                     <div className="detail-row"><span className="detail-label">Accounting Status</span><span className="detail-value">{asset.accounting_posting_status === 'posted' ? `Posted${asset.journal_entry_id ? ` (#${asset.journal_entry_id})` : ''}` : 'Not posted'}</span></div>
                                 </div>
                             </div>

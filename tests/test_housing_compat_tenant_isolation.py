@@ -131,7 +131,7 @@ async def test_expense_accounts_classify_water_from_voucher_text_and_split_same_
                 "expense_month": "April, 2026",
                 "voucher_number": "PV-000001",
                 "narration": "being water supply charges paid to Ramanna for 25 tanker for the month of Ap",
-                "lines": [{"account_code": "5090", "description": "Generic Expense", "debit": 15000}],
+                "lines": [{"account_code": "54001", "description": "Generic Expense", "debit": 15000}],
             },
             {
                 "tenant_id": "society-1",
@@ -140,7 +140,7 @@ async def test_expense_accounts_classify_water_from_voucher_text_and_split_same_
                 "expense_month": "April, 2026",
                 "voucher_number": "PV-000002",
                 "narration": "salary paid to watchman for Apr 26",
-                "lines": [{"account_code": "5090", "description": "Generic Expense", "debit": 15000}],
+                "lines": [{"account_code": "54001", "description": "Generic Expense", "debit": 15000}],
             },
         ],
     )
@@ -148,7 +148,7 @@ async def test_expense_accounts_classify_water_from_voucher_text_and_split_same_
     monkeypatch.setattr(housing_router, "get_collection", lambda name: txns)
 
     rows = await housing_router._expense_accounts_for_period(
-        _ExpenseAccountSession([("5090", "Generic Expense")]),
+        _ExpenseAccountSession([("54001", "Generic Expense")]),
         tenant_id="society-1",
         app_key="gruhamitra",
         month=4,
@@ -159,9 +159,9 @@ async def test_expense_accounts_classify_water_from_voucher_text_and_split_same_
     fixed_rows = [row for row in rows if not row["is_water"]]
     assert len(water_rows) == 1
     assert len(fixed_rows) == 1
-    assert water_rows[0]["account_code"] == "5090"
+    assert water_rows[0]["account_code"] == "54001"
     assert water_rows[0]["total_amount"] == 15000
-    assert fixed_rows[0]["account_code"] == "5090"
+    assert fixed_rows[0]["account_code"] == "54001"
     assert fixed_rows[0]["total_amount"] == 15000
 
 
@@ -273,9 +273,9 @@ async def test_maintenance_generation_uses_exact_water_rate_fixed_expenses_and_s
 
     async def period_expenses(*_args, **_kwargs):
         return [
-            {"account_code": "5060", "account_name": "Water Supply Expense", "total_amount": 15000, "is_water": True},
-            {"account_code": "5010", "account_name": "Electricity Expense", "total_amount": 7256, "is_water": False},
-            {"account_code": "5020", "account_name": "Watchman Salary", "total_amount": 15000, "is_water": False},
+            {"account_code": "53007", "account_name": "Water Supply Expense", "total_amount": 15000, "is_water": True},
+            {"account_code": "53002", "account_name": "Electricity Expense", "total_amount": 7256, "is_water": False},
+            {"account_code": "52001", "account_name": "Watchman Salary", "total_amount": 15000, "is_water": False},
         ]
 
     async def billing_settings(**_kwargs):
@@ -372,7 +372,7 @@ async def test_maintenance_bill_posts_total_to_member_dues_income(monkeypatch):
         captured["tenant_id"] = tenant_id
         captured["app_key"] = app_key
         captured["codes"] = set(codes)
-        return {"1100": 1, "4000": 2}
+        return {"12001": 1, "41001": 2}
 
     async def fake_post_journal_entry(_session, **kwargs):
         captured["payload"] = kwargs["payload"]
@@ -403,7 +403,7 @@ async def test_maintenance_bill_posts_total_to_member_dues_income(monkeypatch):
 
     lines = captured["payload"].lines
     assert journal_id == 99
-    assert captured["codes"] == {"1100", "4000"}
+    assert captured["codes"] == {"12001", "41001"}
     assert lines[0].account_id == 1
     assert lines[0].debit == Decimal("5415.20")
     assert lines[0].credit == Decimal("0.00")

@@ -107,8 +107,8 @@ def test_gruhamitra_voucher_pdf_uses_society_branding():
             "total_debit": 15000,
             "total_credit": 15000,
             "lines": [
-                {"account_code": "5060", "account_name": "Water Supply Expense", "debit": 15000, "credit": 0},
-                {"account_code": "1010", "account_name": "HDFC Bank Current Account", "debit": 0, "credit": 15000},
+                {"account_code": "53007", "account_name": "Water Supply Expense", "debit": 15000, "credit": 0},
+                {"account_code": "11010", "account_name": "HDFC Bank Current Account", "debit": 0, "credit": 15000},
             ],
         },
         branding={
@@ -136,7 +136,7 @@ def test_gruhamitra_accounting_report_pdf_uses_society_branding():
             "as_of": "2026-05-26",
             "lines": [
                 {
-                    "account_code": "1010",
+                    "account_code": "11010",
                     "account_name": "HDFC Bank Current Account",
                     "debit_total": 100,
                     "credit_total": 0,

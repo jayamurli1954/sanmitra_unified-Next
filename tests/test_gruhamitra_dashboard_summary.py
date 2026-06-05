@@ -45,7 +45,7 @@ class _Session:
             return _Rows(
                 [
                     SimpleNamespace(
-                        code="1100",
+                        code="12001",
                         debit_total=9945.20,
                         credit_total=1000,
                     ),
@@ -67,7 +67,7 @@ class _Session:
         return _Rows(
             [
                 SimpleNamespace(
-                    code="1010",
+                        code="11010",
                     name="HDFC Bank Current Account",
                     is_cash_bank=True,
                     debit_total=300000,

@@ -507,7 +507,7 @@ async def _resolve_mandir_payment_account_id(
     mode = str(payment_mode or "").strip().lower()
 
     if mode == "cash":
-        for preferred_code in ("11001", "1001"):
+        for preferred_code in ("11001",):
             preferred = next(
                 (
                     acc
@@ -522,7 +522,7 @@ async def _resolve_mandir_payment_account_id(
             if acc.is_cash_bank and "cash" in str(acc.name).lower():
                 return int(acc.id)
     elif mode == "bank":
-        for preferred_code in ("12001", "1002"):
+        for preferred_code in ("12001",):
             preferred = next(
                 (
                     acc

@@ -35,6 +35,15 @@ def _bill_paid_amount(row: dict[str, Any]) -> float:
     return _safe_float(row.get("paid_amount") or row.get("amount_paid") or row.get("collected_amount"))
 
 
+def _account_code_with_legacy_aliases(account_code: str) -> list[str]:
+    code = str(account_code or "").strip()
+    aliases = {
+        "12001": ["12001", "1100"],
+        "1100": ["12001", "1100"],
+    }
+    return aliases.get(code, [code])
+
+
 async def _society_cash_bank_balance(session: AsyncSession, *, tenant_id: str, app_key: str) -> float:
     rows = (
         await session.execute(
@@ -58,7 +67,7 @@ async def _society_cash_bank_balance(session: AsyncSession, *, tenant_id: str, a
                     JournalEntry.accounting_entity_id == "primary",
                     or_(
                         Account.is_cash_bank.is_(True),
-                        Account.code.in_(["1000", "1010"]),
+                        Account.code.in_(["11001", "11010", "11011", "1000", "1010", "1020"]),
                     ),
                 )
             )
@@ -72,6 +81,7 @@ async def _society_cash_bank_balance(session: AsyncSession, *, tenant_id: str, a
 
 
 async def _account_code_balance(session: AsyncSession, *, tenant_id: str, app_key: str, account_code: str) -> float:
+    account_codes = _account_code_with_legacy_aliases(account_code)
     rows = (
         await session.execute(
             select(
@@ -86,7 +96,7 @@ async def _account_code_balance(session: AsyncSession, *, tenant_id: str, app_ke
                     Account.tenant_id == tenant_id,
                     Account.app_key == app_key,
                     Account.accounting_entity_id == "primary",
-                    Account.code == account_code,
+                    Account.code.in_(account_codes),
                     JournalEntry.tenant_id == tenant_id,
                     JournalEntry.app_key == app_key,
                     JournalEntry.accounting_entity_id == "primary",
@@ -119,7 +129,7 @@ async def _recent_member_due_receipts(session: AsyncSession, *, tenant_id: str, 
                     Account.tenant_id == tenant_id,
                     Account.app_key == app_key,
                     Account.accounting_entity_id == "primary",
-                    Account.code == "1100",
+                    Account.code.in_(["12001", "1100"]),
                     JournalEntry.tenant_id == tenant_id,
                     JournalEntry.app_key == app_key,
                     JournalEntry.accounting_entity_id == "primary",
@@ -181,7 +191,7 @@ async def _gruhamitra_dashboard_summary(
     monthly_billing = round(sum(_safe_float(row.get("amount")) for row in period_bills), 2)
     society_balance = await _society_cash_bank_balance(session, tenant_id=tenant_id, app_key=app_key)
     dues_pending = max(
-        await _account_code_balance(session, tenant_id=tenant_id, app_key=app_key, account_code="1100"),
+        await _account_code_balance(session, tenant_id=tenant_id, app_key=app_key, account_code="12001"),
         0.0,
     )
     complaints_open = await get_collection("housing_complaints").count_documents(

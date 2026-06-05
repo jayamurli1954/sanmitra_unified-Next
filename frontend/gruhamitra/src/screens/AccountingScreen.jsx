@@ -381,9 +381,8 @@ const ChartOfAccountsTab = () => {
       return;
     }
 
-    // Validate code format (should be numeric, 4-10 digits)
-    if (!/^\d{4,10}$/.test(newAccount.code.trim())) {
-      setMessage({ type: 'error', text: 'Account code must be 4-10 digits (e.g., 1000, 1010, 5001).' });
+    if (!/^\d{5}$/.test(newAccount.code.trim())) {
+      setMessage({ type: 'error', text: 'Account code must be 5 digits (e.g., 11001, 12001, 41001).' });
       return;
     }
 
@@ -537,14 +536,14 @@ const ChartOfAccountsTab = () => {
                   type="text"
                   value={newAccount.code}
                   onChange={(e) => setNewAccount({ ...newAccount, code: e.target.value })}
-                  placeholder="e.g., 1000, 1010, 5001"
+                  placeholder="e.g., 11001, 12001, 41001"
                   required
-                  pattern="[0-9]{4,10}"
-                  title="Account code must be 4-10 digits"
+                  pattern="[0-9]{5}"
+                  title="Account code must be 5 digits"
                   disabled={saving}
                 />
                 <small style={{ color: '#666', fontSize: '12px' }}>
-                  Must be 4-10 digits. Follow standard ranges: 1000-1999 (Assets), 2000-2999 (Liabilities), 3000-3999 (Capital), 4000-4999 (Income), 5000-5999 (Expenses)
+                  Must be 5 digits. Use platform ranges: 1xxxx Assets, 2xxxx Liabilities, 3xxxx Equity, 4xxxx Income, 5xxxx Expenses.
                 </small>
               </div>
               <div className="settings-form-group">
@@ -1208,7 +1207,7 @@ const ReceiptVoucherTab = () => {
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    account_code: '1100', // Maintenance Dues (Default)
+    account_code: '12001', // Member Dues Receivable (Default)
     amount: '',
     qty: '',
     unit_price: '',

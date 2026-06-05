@@ -104,11 +104,12 @@ def _transaction_posts_to_member_dues(txn: dict[str, Any]) -> bool:
         return False
     if str(txn.get("status") or "").strip().lower() != "posted":
         return False
-    if str(txn.get("account_code") or txn.get("accountCode") or "").strip() == "1100":
+    member_due_codes = {"12001", "1100"}
+    if str(txn.get("account_code") or txn.get("accountCode") or "").strip() in member_due_codes:
         return True
     for line in txn.get("lines") or []:
         if (
-            str(line.get("account_code") or line.get("accountCode") or "").strip() == "1100"
+            str(line.get("account_code") or line.get("accountCode") or "").strip() in member_due_codes
             and _safe_money(line.get("credit") or line.get("credit_amount") or line.get("creditAmount")) > Decimal("0.00")
         ):
             return True
