@@ -3024,6 +3024,12 @@ html[data-theme="light"] .account-suggestion-item:hover {
   text-overflow: ellipsis;
 }
 
+.account-suggestion-empty {
+  color: #fbbf24;
+  font-size: 13px;
+  padding: 9px 12px;
+}
+
 .account-suggestion-item:hover span {
   color: var(--text);
 }

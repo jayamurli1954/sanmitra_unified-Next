@@ -4474,6 +4474,24 @@ function populateVoucherAccountSelect(select, selectedId = "") {
   });
 }
 
+function populateAccountPickerSelect(fieldId, accounts, selectedId = "") {
+  const select = document.querySelector(`.account-picker-select[data-field-id="${fieldId}"]`);
+  if (!select) return;
+  const rows = Array.isArray(accounts) && accounts.length > 0 ? accounts : businessAccountsForSelection();
+  const currentValue = selectedId || select.value || "";
+  select.innerHTML = `<option value="">${rows.length === 0 ? "No matching account code" : "Select account code"}</option>`;
+  rows.forEach((account) => {
+    const normalized = normalizeBusinessAccount(account);
+    const option = document.createElement("option");
+    option.value = normalized.id;
+    option.textContent = businessAccountLabel(normalized);
+    if (String(currentValue) === String(normalized.id)) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+}
+
 function refreshVoucherAccountDatalist() {
   const datalist = document.getElementById("business-voucher-account-options");
   if (!datalist) return;
@@ -5087,7 +5105,7 @@ function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
           type="text"
           class="account-search-input"
           data-field-id="${escapeHtml(fieldId)}"
-          placeholder="Optional search by code or name"
+          placeholder="Type 3+ characters to filter account codes"
           value="${escapeHtml(displayText)}"
           autocomplete="off"
         >
@@ -5118,9 +5136,18 @@ function updateAccountSuggestions(fieldId) {
   const query = input.value.trim();
   const matches = filterBusinessAccountsByQuery(query);
 
-  if (matches.length === 0) {
+  if (query.length < 3) {
+    populateAccountPickerSelect(fieldId, businessAccountsForSelection());
     suggestionsList.hidden = true;
     suggestionsList.innerHTML = "";
+    return;
+  }
+
+  populateAccountPickerSelect(fieldId, matches);
+
+  if (matches.length === 0) {
+    suggestionsList.hidden = false;
+    suggestionsList.innerHTML = `<li class="account-suggestion-empty">No matching account code</li>`;
     return;
   }
 
