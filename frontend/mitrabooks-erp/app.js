@@ -4402,22 +4402,67 @@ let lastBusinessDashboardStats = null;
 
 const voucherLineState = [];
 
+const MITRABOOKS_FALLBACK_ACCOUNTS = [
+  { account_id: 1000, account_code: "1000", account_name: "Cash on hand", account_type: "asset" },
+  { account_id: 1010, account_code: "1010", account_name: "Bank account", account_type: "asset" },
+  { account_id: 1200, account_code: "1200", account_name: "Accounts receivable", account_type: "asset" },
+  { account_id: 2000, account_code: "2000", account_name: "Accounts payable", account_type: "liability" },
+  { account_id: 4000, account_code: "4000", account_name: "Sales revenue", account_type: "revenue" },
+  { account_id: 5000, account_code: "5000", account_name: "Operating expense", account_type: "expense" },
+];
+
 function normalizeBusinessAccount(acc) {
+  const id = acc.account_id
+    ?? acc.id
+    ?? acc.accountId
+    ?? acc.accountID
+    ?? acc.ledger_id
+    ?? acc.ledgerId
+    ?? acc._id
+    ?? acc.account_code
+    ?? acc.code
+    ?? "";
+  const code = acc.account_code
+    ?? acc.code
+    ?? acc.accountCode
+    ?? acc.ledger_code
+    ?? acc.ledgerCode
+    ?? acc.gl_code
+    ?? acc.glCode
+    ?? acc.number
+    ?? acc.account_number
+    ?? id
+    ?? "";
+  const name = acc.account_name
+    ?? acc.name
+    ?? acc.accountName
+    ?? acc.ledger_name
+    ?? acc.ledgerName
+    ?? acc.title
+    ?? "";
   return {
-    id: String(acc.account_id ?? acc.id ?? ""),
-    code: String(acc.account_code ?? acc.code ?? ""),
-    name: String(acc.account_name ?? acc.name ?? ""),
+    id: String(id),
+    code: String(code),
+    name: String(name),
   };
 }
 
 function businessAccountLabel(account) {
-  return `${account.code} ${account.name}`.trim();
+  return `${account.code}${account.name ? " - " + account.name : ""}`.trim();
+}
+
+function businessAccountsForSelection() {
+  const loaded = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [];
+  const source = loaded.length > 0 ? loaded : MITRABOOKS_FALLBACK_ACCOUNTS;
+  return source
+    .map(normalizeBusinessAccount)
+    .filter((acc) => acc.id && (acc.code || acc.name));
 }
 
 function populateVoucherAccountSelect(select, selectedId = "") {
   if (!select) return;
-  const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id) : [];
-  select.innerHTML = `<option value="">Select account</option>`;
+  const accounts = businessAccountsForSelection();
+  select.innerHTML = `<option value="">Select account code</option>`;
   accounts.forEach((acc) => {
     const option = document.createElement("option");
     option.value = acc.id;
@@ -4432,7 +4477,7 @@ function populateVoucherAccountSelect(select, selectedId = "") {
 function refreshVoucherAccountDatalist() {
   const datalist = document.getElementById("business-voucher-account-options");
   if (!datalist) return;
-  const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id) : [];
+  const accounts = businessAccountsForSelection();
   datalist.innerHTML = "";
   accounts.forEach((acc) => {
     const option = document.createElement("option");
@@ -4447,7 +4492,7 @@ function updateVoucherAccountsStatus() {
   const count = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
   status.textContent = "";
   if (count <= 0) {
-    status.textContent = "No accounts loaded. Refresh the workspace or check backend accounting access.";
+    status.textContent = "No tenant chart loaded. Showing default MitraBooks account codes until the chart of accounts API returns rows.";
     return;
   }
   const message = document.createElement("span");
@@ -4468,6 +4513,9 @@ function refreshVoucherAccountSelects() {
   document.querySelectorAll(".voucher-account-select").forEach((select) => {
     populateVoucherAccountSelect(select, select.value);
   });
+  document.querySelectorAll(".account-picker-select").forEach((select) => {
+    populateVoucherAccountSelect(select, select.value);
+  });
 }
 
 function accountRowsFromPayload(payload) {
@@ -4475,6 +4523,15 @@ function accountRowsFromPayload(payload) {
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.accounts)) return payload.accounts;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.result)) return payload.result;
+  if (Array.isArray(payload?.data?.items)) return payload.data.items;
+  if (Array.isArray(payload?.data?.accounts)) return payload.data.accounts;
+  if (Array.isArray(payload?.data?.rows)) return payload.data.rows;
+  if (Array.isArray(payload?.result?.items)) return payload.result.items;
+  if (Array.isArray(payload?.result?.accounts)) return payload.result.accounts;
+  if (Array.isArray(payload?.payload?.items)) return payload.payload.items;
+  if (Array.isArray(payload?.payload?.accounts)) return payload.payload.accounts;
   return [];
 }
 
@@ -4979,11 +5036,10 @@ function filterBusinessAccountsByQuery(query) {
     return [];
   }
 
-  const matches = lastBusinessAccounts.filter((acc) => {
-    const normalized = normalizeBusinessAccount(acc);
+  const matches = businessAccountsForSelection().filter((normalized) => {
     const code = normalized.code.toLowerCase();
     const name = normalized.name.toLowerCase();
-    const type = String(acc.account_type || acc.type || "").toLowerCase();
+    const type = String(normalized.account_type || normalized.type || "").toLowerCase();
 
     return (
       code.includes(q) ||
@@ -5003,10 +5059,9 @@ function filterBusinessAccountsByQuery(query) {
  * @returns {string} HTML for the account selector component
  */
 function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
-  const accounts = Array.isArray(lastBusinessAccounts)
-    ? lastBusinessAccounts.map(normalizeBusinessAccount).filter((acc) => acc.id)
-    : [];
+  const accounts = businessAccountsForSelection();
   const selectedAccount = accounts.find((acc) => String(acc.id) === String(selectedAccountId));
+  const usingFallbackAccounts = !Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0;
 
   const displayText = selectedAccount
     ? `${selectedAccount.code} - ${selectedAccount.name}`
@@ -5046,6 +5101,7 @@ function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
       <ul class="account-suggestions" data-field-id="${escapeHtml(fieldId)}" hidden>
         <!-- Populated on input -->
       </ul>
+      ${usingFallbackAccounts ? `<p class="account-selector-note">Using default account codes. Load tenant chart of accounts to replace these defaults.</p>` : ""}
     </div>
   `;
 }
@@ -5100,8 +5156,7 @@ function selectAccountFromSuggestion(suggestionElement) {
 }
 
 function selectBusinessAccount(fieldId, accountId) {
-  const account = (Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [])
-    .map(normalizeBusinessAccount)
+  const account = businessAccountsForSelection()
     .find((acc) => String(acc.id) === String(accountId));
   if (!account) return;
 
