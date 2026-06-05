@@ -288,6 +288,7 @@ const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
 const LOGIN_EMAIL_STORAGE_KEY = "sanmitra_mitrabooks_login_email";
+const LOGIN_REQUEST_TIMEOUT_MS = 20000;
 const EXPERIENCE_APP_KEYS = {
   mitrabooks: "mitrabooks",
   platform: "mitrabooks",
@@ -2038,6 +2039,7 @@ async function signInWithPassword() {
     const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
     const result = await apiRequest(appKey, "/api/v1/auth/login", {
       method: "POST",
+      timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
       body: JSON.stringify({ email, password }),
     });
 
