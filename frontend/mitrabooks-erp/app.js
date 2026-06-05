@@ -5103,8 +5103,10 @@ async function createBusinessVoucherByType(voucherType, date) {
 async function createSimplePartyVoucher(appKey, voucherType, date) {
   const partyId = document.getElementById("business-voucher-party")?.value || "";
   const amount = document.getElementById("business-voucher-amount")?.value || "0";
-  const accountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-account']");
-  const accountId = accountIdInput?.value || "";
+  const debitAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-debit-account']");
+  const creditAccountIdInput = document.querySelector(".account-id-input[data-field-id='business-voucher-credit-account']");
+  const debitAccountId = debitAccountIdInput?.value || "";
+  const creditAccountId = creditAccountIdInput?.value || "";
   const description = document.getElementById("business-voucher-description")?.value || "";
   const reference = document.getElementById("business-voucher-reference")?.value || "";
 
@@ -5113,8 +5115,13 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     return;
   }
 
-  if (!accountId) {
-    setLoginStatus("warn", "Account required", "Select a bank/cash account.");
+  if (!debitAccountId || !creditAccountId) {
+    setLoginStatus("warn", "Debit and credit accounts required", "Select both sides of the voucher before posting.");
+    return;
+  }
+
+  if (debitAccountId === creditAccountId) {
+    setLoginStatus("warn", "Different accounts required", "Debit and credit accounts cannot be the same ledger account.");
     return;
   }
 
@@ -5124,24 +5131,12 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     return;
   }
 
-  // Determine debit/credit based on type
-  let debitAccountId, creditAccountId;
-  if (voucherType === "payment") {
-    // Payment: credit party AR, debit cash/bank
-    debitAccountId = Number(accountId);
-    creditAccountId = 2000; // TODO: Get AP account from party
-  } else {
-    // Receipt: debit party AR, credit cash/bank
-    debitAccountId = 2000; // TODO: Get AR account from party
-    creditAccountId = Number(accountId);
-  }
-
   const payload = {
     voucher_type: voucherType,
     entry_date: date,
     amount: amountVal.toFixed(2),
-    debit_account_id: debitAccountId,
-    credit_account_id: creditAccountId,
+    debit_account_id: Number(debitAccountId),
+    credit_account_id: Number(creditAccountId),
     description: description || `${voucherType} voucher`,
     reference: reference || null,
     party_id: partyId,
@@ -5412,6 +5407,16 @@ function renderVoucherTypeForm(voucherType) {
   if (voucherType === "payment") {
     return `
       <div class="voucher-type-form">
+        <div class="voucher-posting-map" aria-label="Payment voucher posting">
+          <div>
+            <span>Debit</span>
+            <strong>Vendor / party ledger</strong>
+          </div>
+          <div>
+            <span>Credit</span>
+            <strong>Bank or cash account</strong>
+          </div>
+        </div>
         <div class="field">
           <label for="business-voucher-party">Party (Vendor/Customer)</label>
           <select id="business-voucher-party" required>
@@ -5426,8 +5431,12 @@ function renderVoucherTypeForm(voucherType) {
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
         <div class="field">
-          <label>Bank/Cash Account</label>
-          ${accountSelector("business-voucher-account")}
+          <label>Debit Account (party payable / expense ledger)</label>
+          ${accountSelector("business-voucher-debit-account")}
+        </div>
+        <div class="field">
+          <label>Credit Account (bank / cash ledger)</label>
+          ${accountSelector("business-voucher-credit-account")}
         </div>
         <div class="field">
           <label for="business-voucher-description">Description</label>
@@ -5444,6 +5453,16 @@ function renderVoucherTypeForm(voucherType) {
   if (voucherType === "receipt") {
     return `
       <div class="voucher-type-form">
+        <div class="voucher-posting-map" aria-label="Receipt voucher posting">
+          <div>
+            <span>Debit</span>
+            <strong>Bank or cash account</strong>
+          </div>
+          <div>
+            <span>Credit</span>
+            <strong>Customer / party ledger</strong>
+          </div>
+        </div>
         <div class="field">
           <label for="business-voucher-party">Party (Customer/Vendor)</label>
           <select id="business-voucher-party" required>
@@ -5458,8 +5477,12 @@ function renderVoucherTypeForm(voucherType) {
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
         <div class="field">
-          <label>Bank/Cash Account</label>
-          ${accountSelector("business-voucher-account")}
+          <label>Debit Account (bank / cash ledger)</label>
+          ${accountSelector("business-voucher-debit-account")}
+        </div>
+        <div class="field">
+          <label>Credit Account (customer receivable / party ledger)</label>
+          ${accountSelector("business-voucher-credit-account")}
         </div>
         <div class="field">
           <label for="business-voucher-description">Description</label>
