@@ -1576,6 +1576,74 @@ html[data-theme="light"] select:focus {
   color: #cbd5e1 !important;
 }
 
+.erp-workspace-panel .table-preview,
+.verification-panel .table-preview {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview table,
+.verification-panel .table-preview table,
+.erp-workspace-panel .erp-table table,
+.verification-panel .erp-table table {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview thead,
+.verification-panel .table-preview thead,
+.erp-workspace-panel .erp-table thead,
+.verification-panel .erp-table thead {
+  background: transparent !important;
+}
+
+.erp-workspace-panel .table-preview th,
+.verification-panel .table-preview th,
+.erp-workspace-panel .erp-table th,
+.verification-panel .erp-table th {
+  background: rgba(148, 163, 184, 0.1) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  color: #94a3b8 !important;
+}
+
+.erp-workspace-panel .table-preview tbody,
+.verification-panel .table-preview tbody,
+.erp-workspace-panel .erp-table tbody,
+.verification-panel .erp-table tbody {
+  background: rgba(15, 20, 36, 0.74) !important;
+}
+
+.erp-workspace-panel .table-preview tr,
+.verification-panel .table-preview tr,
+.erp-workspace-panel .erp-table tr,
+.verification-panel .erp-table tr {
+  background: rgba(15, 20, 36, 0.74) !important;
+}
+
+.erp-workspace-panel .table-preview td,
+.verification-panel .table-preview td,
+.erp-workspace-panel .erp-table td,
+.verification-panel .erp-table td {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview button,
+.verification-panel .table-preview button,
+.erp-workspace-panel .erp-table button,
+.verification-panel .erp-table button {
+  color: #cbd5e1 !important;
+}
+
+.erp-workspace-panel .empty-state,
+.verification-panel .empty-state {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px dashed rgba(148, 163, 184, 0.28) !important;
+  color: #94a3b8 !important;
+}
+
 .app:not(.mandir-domain) .empty-state {
   background: rgba(18, 25, 47, 0.72) !important;
   border: 1px dashed rgba(148, 163, 184, 0.28) !important;
