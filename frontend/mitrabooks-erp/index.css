@@ -3395,3 +3395,102 @@ html[data-theme="light"] .account-suggestion-item:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Final MitraBooks shell guard: keep workspaces dark even when the light toggle is active. */
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) {
+  --bg: #090c14;
+  --panel: #0f1424;
+  --panel-2: rgba(18, 25, 47, 0.72);
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --border: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .content,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .main,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-topbar,
+.app.signed-in:not(.mandir-domain) .verification-panel,
+.app.signed-in:not(.mandir-domain) .erp-workspace-panel {
+  background: #090c14 !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-topbar,
+.app.signed-in:not(.mandir-domain) .verification-panel,
+.app.signed-in:not(.mandir-domain) .erp-workspace-panel {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.active,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button.active,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link.active,
+.app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.erp-nav-link.active {
+  background: rgba(59, 130, 246, 0.16) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.active .nav-icon,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button.active .nav-icon,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link.active .nav-icon,
+.app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.erp-nav-link.active .nav-icon {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(96, 165, 250, 0.36) !important;
+  color: #93c5fd !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview,
+.app.signed-in:not(.mandir-domain) .erp-table,
+.app.signed-in:not(.mandir-domain) .audit-table,
+.app.signed-in:not(.mandir-domain) .empty-state {
+  background: rgba(18, 25, 47, 0.92) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview table,
+.app.signed-in:not(.mandir-domain) .erp-table table,
+.app.signed-in:not(.mandir-domain) .audit-table table,
+.app.signed-in:not(.mandir-domain) .table-preview thead,
+.app.signed-in:not(.mandir-domain) .erp-table thead,
+.app.signed-in:not(.mandir-domain) .audit-table thead,
+.app.signed-in:not(.mandir-domain) .table-preview tbody,
+.app.signed-in:not(.mandir-domain) .erp-table tbody,
+.app.signed-in:not(.mandir-domain) .audit-table tbody,
+.app.signed-in:not(.mandir-domain) .table-preview tr,
+.app.signed-in:not(.mandir-domain) .erp-table tr,
+.app.signed-in:not(.mandir-domain) .audit-table tr {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview th,
+.app.signed-in:not(.mandir-domain) .erp-table th,
+.app.signed-in:not(.mandir-domain) .audit-table th {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+  color: #cbd5e1 !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview td,
+.app.signed-in:not(.mandir-domain) .erp-table td,
+.app.signed-in:not(.mandir-domain) .audit-table td {
+  background: rgba(15, 20, 36, 0.54) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview button,
+.app.signed-in:not(.mandir-domain) .erp-table button,
+.app.signed-in:not(.mandir-domain) .audit-table button {
+  color: #cbd5e1 !important;
+}
