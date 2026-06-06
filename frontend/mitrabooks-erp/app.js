@@ -5885,7 +5885,12 @@ function formatTimestampIST(utcTimestamp) {
 
 function renderAuditEventsTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    return `<p class="muted">No audit events found.</p>`;
+    return `
+      <div class="empty-state">
+        <strong>No audit events found</strong>
+        <span>Audit entries will appear here after party, voucher, or account activity.</span>
+      </div>
+    `;
   }
   return `
     <div class="table-preview compact-table erp-table audit-table">

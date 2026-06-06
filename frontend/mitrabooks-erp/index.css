@@ -1529,48 +1529,68 @@ html[data-theme="light"] select:focus {
 }
 
 .app:not(.mandir-domain) .table-preview {
-  background: rgba(18, 25, 47, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  color: var(--text-primary, #f8fafc);
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: var(--text-primary, #f8fafc) !important;
   overflow-x: auto;
 }
 
 .app:not(.mandir-domain) .table-preview table {
-  color: var(--text-primary, #f8fafc);
+  background: transparent !important;
+  color: var(--text-primary, #f8fafc) !important;
 }
 
 .app:not(.mandir-domain) .table-preview th,
 .app:not(.mandir-domain) .table-preview td {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
 }
 
 .app:not(.mandir-domain) .table-preview th {
-  background: rgba(148, 163, 184, 0.1);
-  color: var(--text-secondary, #94a3b8);
+  background: rgba(148, 163, 184, 0.1) !important;
+  color: var(--text-secondary, #94a3b8) !important;
   font-size: 11px;
   letter-spacing: 0.04em;
 }
 
 .app:not(.mandir-domain) .table-preview td {
-  color: var(--text-primary, #f8fafc);
+  background: transparent !important;
+  color: var(--text-primary, #f8fafc) !important;
 }
 
 .app:not(.mandir-domain) .table-preview tbody tr {
-  background: rgba(15, 20, 36, 0.74);
+  background: rgba(15, 20, 36, 0.74) !important;
 }
 
 .app:not(.mandir-domain) .table-preview tbody tr:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+.app:not(.mandir-domain) .erp-workspace-panel .table-preview,
+.app:not(.mandir-domain) .verification-panel .table-preview {
+  box-shadow: none !important;
+}
+
+.app:not(.mandir-domain) .table-preview button.secondary,
+.app:not(.mandir-domain) .table-preview a,
+.app:not(.mandir-domain) .table-preview [data-business-action] {
+  color: #cbd5e1 !important;
 }
 
 .app:not(.mandir-domain) .empty-state {
-  background: rgba(18, 25, 47, 0.72);
-  border: 1px dashed rgba(148, 163, 184, 0.28);
-  color: var(--text-secondary, #94a3b8);
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px dashed rgba(148, 163, 184, 0.28) !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  min-height: 96px;
+  padding: 22px;
 }
 
 .app:not(.mandir-domain) .empty-state strong {
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary, #f8fafc) !important;
+}
+
+.app:not(.mandir-domain) .empty-state span,
+.app:not(.mandir-domain) .empty-state p {
+  color: var(--text-secondary, #94a3b8) !important;
 }
 
 .app:not(.mandir-domain) .list-filter-panel {
