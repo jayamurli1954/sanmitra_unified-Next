@@ -284,6 +284,26 @@ async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_re
             assert original_detail["reversed_by_journal_ids"] == [reversed_voucher["reversal_journal_entry_id"]]
             assert original_detail["total_debit"] == 125.0
             assert original_detail["total_credit"] == 125.0
+            original_lines = {line["account_id"]: line for line in original_detail["lines"]}
+            assert original_lines[debit_account["id"]]["debit"] == 125.0
+            assert original_lines[debit_account["id"]]["credit"] == 0.0
+            assert original_lines[credit_account["id"]]["debit"] == 0.0
+            assert original_lines[credit_account["id"]]["credit"] == 125.0
+
+            reversal_detail_response = await client.get(
+                f"/api/v1/accounting/reports/vouchers/{reversed_voucher['reversal_journal_entry_id']}",
+                headers=headers,
+            )
+            assert reversal_detail_response.status_code == 200
+            reversal_detail = reversal_detail_response.json()
+            assert reversal_detail["reversal_of_journal_id"] == voucher["journal_entry_id"]
+            assert reversal_detail["total_debit"] == 125.0
+            assert reversal_detail["total_credit"] == 125.0
+            reversal_lines = {line["account_id"]: line for line in reversal_detail["lines"]}
+            assert reversal_lines[debit_account["id"]]["debit"] == 0.0
+            assert reversal_lines[debit_account["id"]]["credit"] == 125.0
+            assert reversal_lines[credit_account["id"]]["debit"] == 125.0
+            assert reversal_lines[credit_account["id"]]["credit"] == 0.0
     finally:
         _clear_dependency_overrides()
 
