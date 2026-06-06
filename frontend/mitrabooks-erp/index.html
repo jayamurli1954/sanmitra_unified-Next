@@ -15,7 +15,7 @@
     <!-- PWA-Compatible CSS: Theme tokens + component styles -->
     <link rel="stylesheet" href="../shared/theme-tokens.css?v=phase-1c">
     <link rel="stylesheet" href="../shared/app-shell.css?v=mitrabooks-erp-v10">
-    <link rel="stylesheet" href="./index.css?v=mitrabooks-erp-v20">
+    <link rel="stylesheet" href="./index.css?v=mitrabooks-erp-v21">
   </head>
   <body>
     <!-- Service Worker Registration (PWA offline support) -->
@@ -630,7 +630,7 @@
         </div>
       </form>
     </dialog>
-    <dialog class="entitlement-dialog" id="audit-event-detail-dialog" style="min-width: 500px;">
+    <dialog class="entitlement-dialog audit-event-dialog" id="audit-event-detail-dialog">
       <form method="dialog" id="audit-event-detail-form">
         <div class="dialog-head">
           <div>
@@ -639,29 +639,29 @@
           </div>
           <button class="secondary" type="button" id="audit-event-detail-close">Close</button>
         </div>
-        <div style="margin: 16px 0; padding: 12px; background: #f5f5f5; border-radius: 4px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+        <div class="audit-event-summary">
+          <div class="audit-event-summary-grid">
             <div>
               <strong>Entity</strong><br>
-              <span id="audit-event-entity" style="font-family: monospace; font-size: 12px;">-</span>
+              <span id="audit-event-entity">-</span>
             </div>
             <div>
               <strong>Action</strong><br>
-              <span id="audit-event-action" style="font-family: monospace; font-size: 12px;">-</span>
+              <span id="audit-event-action">-</span>
             </div>
             <div>
               <strong>Actor</strong><br>
-              <span id="audit-event-actor" style="font-family: monospace; font-size: 12px;">-</span>
+              <span id="audit-event-actor">-</span>
             </div>
             <div>
               <strong>Timestamp</strong><br>
-              <span id="audit-event-timestamp" style="font-family: monospace; font-size: 12px;">-</span>
+              <span id="audit-event-timestamp">-</span>
             </div>
           </div>
         </div>
-        <div style="margin-bottom: 16px;">
+        <div class="audit-event-payload-panel">
           <strong>Event Payload</strong>
-          <pre id="audit-event-payload" style="background: #f9f9f9; padding: 12px; border-radius: 4px; font-size: 11px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd;">Loading...</pre>
+          <pre id="audit-event-payload">Loading...</pre>
         </div>
         <div class="dialog-actions">
           <button class="secondary" type="button" id="audit-event-detail-cancel">Close</button>
