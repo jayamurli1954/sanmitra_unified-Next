@@ -1528,6 +1528,79 @@ html[data-theme="light"] select:focus {
   background: rgba(59, 130, 246, 0.08);
 }
 
+.app:not(.mandir-domain) .table-preview {
+  background: rgba(18, 25, 47, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  color: var(--text-primary, #f8fafc);
+  overflow-x: auto;
+}
+
+.app:not(.mandir-domain) .table-preview table {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .table-preview th,
+.app:not(.mandir-domain) .table-preview td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.app:not(.mandir-domain) .table-preview th {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.app:not(.mandir-domain) .table-preview td {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .table-preview tbody tr {
+  background: rgba(15, 20, 36, 0.74);
+}
+
+.app:not(.mandir-domain) .table-preview tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.app:not(.mandir-domain) .empty-state {
+  background: rgba(18, 25, 47, 0.72);
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  color: var(--text-secondary, #94a3b8);
+}
+
+.app:not(.mandir-domain) .empty-state strong {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .list-filter-panel {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .list-filter-panel .field span {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.app:not(.mandir-domain) .list-filter-panel input,
+.app:not(.mandir-domain) .list-filter-panel select {
+  background: #11182d;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  color: #f8fafc;
+}
+
+.app:not(.mandir-domain) .list-filter-panel input::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.app:not(.mandir-domain) .list-filter-panel input:focus,
+.app:not(.mandir-domain) .list-filter-panel select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  outline: none;
+}
+
 .app:not(.mandir-domain) .erp-table td strong {
   color: var(--text-primary, #f8fafc);
   display: block;
@@ -1562,6 +1635,57 @@ html[data-theme="light"] select:focus {
   min-height: 34px;
   padding: 7px 10px;
   white-space: nowrap;
+}
+
+.app:not(.mandir-domain) .audit-table {
+  background: rgba(18, 25, 47, 0.72);
+  box-shadow: none;
+}
+
+.app:not(.mandir-domain) .audit-table table {
+  min-width: 860px;
+}
+
+.app:not(.mandir-domain) .audit-table .pill {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  color: #93c5fd;
+}
+
+.app:not(.mandir-domain) .audit-table .secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] {
+  background: transparent;
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] .field span {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] input,
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] select {
+  background: #11182d;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  color: #f8fafc;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] input:focus,
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  outline: none;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] button {
+  min-height: 42px;
 }
 
 html[data-theme="light"] .erp-sidebar .brand-text h1,

@@ -1231,7 +1231,7 @@ function renderSimpleTable(rows, columns, emptyText) {
     return `<p class="muted">${escapeHtml(emptyText)}</p>`;
   }
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table erp-table">
       <table>
         <thead>
           <tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
@@ -1401,7 +1401,7 @@ function renderPlatformTable(rows, columns, emptyText) {
     return `<p class="muted">${emptyText}</p>`;
   }
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table erp-table">
       <table>
         <thead>
           <tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
@@ -5888,7 +5888,7 @@ function renderAuditEventsTable(rows) {
     return `<p class="muted">No audit events found.</p>`;
   }
   return `
-    <div class="table-preview compact-table">
+    <div class="table-preview compact-table erp-table audit-table">
       <table>
         <thead>
           <tr>
