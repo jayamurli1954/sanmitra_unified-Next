@@ -1130,6 +1130,97 @@ html[data-theme="light"] select:focus {
   gap: 6px;
 }
 
+.ca-document-intake {
+  display: grid;
+  gap: 14px;
+}
+
+.ca-document-upload-card {
+  align-items: stretch;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.44fr);
+  padding: 16px;
+}
+
+.ca-document-upload-card h4 {
+  color: var(--text-primary, #f8fafc);
+  font-size: 20px;
+  margin: 6px 0 8px;
+}
+
+.ca-document-upload-card p {
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+}
+
+.ca-upload-placeholder {
+  align-items: center;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px dashed rgba(96, 165, 250, 0.42);
+  border-radius: 8px;
+  color: var(--text-secondary, #94a3b8);
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  min-height: 128px;
+  padding: 18px;
+  text-align: center;
+}
+
+.ca-upload-placeholder strong {
+  color: var(--text-primary, #f8fafc);
+  font-size: 18px;
+}
+
+.ca-upload-placeholder span,
+.ca-upload-placeholder small {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.ca-upload-placeholder input {
+  display: none;
+}
+
+.ca-document-status-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ca-document-status-grid article {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.ca-document-status-grid span {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ca-document-status-grid strong {
+  color: var(--text-primary, #f8fafc);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.ca-document-status-grid small {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.ca-document-status-table {
+  margin: 0;
+}
+
 .executive-dashboard {
   display: grid;
   gap: 16px;
@@ -3126,7 +3217,9 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   }
 
   .planned-org-kpis,
-  .planned-org-module-grid {
+  .planned-org-module-grid,
+  .ca-document-upload-card,
+  .ca-document-status-grid {
     grid-template-columns: 1fr;
   }
 

@@ -1070,6 +1070,22 @@ function plannedOrgWorkspaceModel(orgType) {
         ["Review queue", "Route vouchers, invoices, and adjustments for partner review before final posting.", "Planned"],
         ["Consolidated reports", "Practice-wide receivables, workload, client health, and team productivity.", "Planned"],
       ],
+      documentIntake: {
+        title: "Client document intake",
+        copy: "Placeholder for uploading client bank statements, purchase bills, sales invoices, GST returns, TDS files, and supporting documents.",
+        metrics: [
+          ["Uploaded", "18", "Awaiting classification"],
+          ["Under review", "7", "Partner or staff review"],
+          ["Posted", "9", "Linked to vouchers"],
+          ["Pending", "4", "Needs client clarification"],
+        ],
+        rows: [
+          ["Jayam Publications", "Bank statement", "Under review", "Reconciliation check"],
+          ["Kartik Enterprises", "Purchase bills", "Posted", "Voucher batch ready"],
+          ["Power & Light Corp", "GST working", "Pending", "Missing invoice support"],
+          ["Stellar Logistics", "Sales invoices", "Reviewed", "Ready for posting"],
+        ],
+      },
       note: "No accounting data is posted from this planned workspace until the backend exposes CA practice module access.",
     };
   }
@@ -1128,6 +1144,57 @@ function renderSelectedOrgWorkspace() {
           </article>
         `).join("")}
       </div>
+
+      ${model.documentIntake ? `
+        <div class="ca-document-intake">
+          <div class="ca-document-upload-card">
+            <div>
+              <span class="workbench-kicker">Document Upload</span>
+              <h4>${escapeHtml(model.documentIntake.title)}</h4>
+              <p>${escapeHtml(model.documentIntake.copy)}</p>
+            </div>
+            <label class="ca-upload-placeholder" aria-disabled="true">
+              <span>Upload placeholder</span>
+              <strong>Drop files or browse</strong>
+              <small>PDF, Excel, image, bank statement</small>
+              <input type="file" multiple disabled>
+            </label>
+          </div>
+
+          <div class="ca-document-status-grid">
+            ${model.documentIntake.metrics.map(([label, value, copy]) => `
+              <article>
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+                <small>${escapeHtml(copy)}</small>
+              </article>
+            `).join("")}
+          </div>
+
+          <div class="table-preview compact-table erp-table ca-document-status-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Document type</th>
+                  <th>Status</th>
+                  <th>Next action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${model.documentIntake.rows.map(([client, type, status, action]) => `
+                  <tr>
+                    <td><strong>${escapeHtml(client)}</strong></td>
+                    <td>${escapeHtml(type)}</td>
+                    <td><span class="pill">${escapeHtml(status)}</span></td>
+                    <td>${escapeHtml(action)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ` : ""}
 
       <div class="planned-org-note">
         <strong>Implementation status</strong>
