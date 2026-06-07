@@ -458,6 +458,18 @@ html[data-theme="light"] select:focus {
   padding: 11px 12px;
 }
 
+.org-option > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.org-option strong,
+.org-option small {
+  display: block;
+  line-height: 1.25;
+}
+
 .org-option:not(:last-child),
 .fy-option:not(:last-child) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);

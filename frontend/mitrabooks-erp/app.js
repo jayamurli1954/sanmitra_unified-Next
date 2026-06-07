@@ -332,6 +332,27 @@ const entitlementModulesByOrgType = {
   PROFESSIONAL: ["professional", "accounting", "billing", "audit"],
 };
 
+const orgSelectorMeta = {
+  BUSINESS: {
+    label: "Business Suite",
+    subtitle: "SME and accounting",
+    statusTitle: "Business workspace active",
+    statusCopy: "Using the signed-in business tenant context.",
+  },
+  PROFESSIONAL: {
+    label: "Professional Suite",
+    subtitle: "Billing and invoicing",
+    statusTitle: "Professional workspace planned",
+    statusCopy: "This selector is ready in the shell; backend tenant context and modules are not enabled yet.",
+  },
+  CA_PRACTICE: {
+    label: "CA Practice Portal",
+    subtitle: "Planned multi-client books",
+    statusTitle: "CA Practice Portal planned",
+    statusCopy: "Multi-client books will be enabled after the backend exposes the CA practice tenant context.",
+  },
+};
+
 const experienceConfig = {
   mitrabooks: {
     title: "MitraBooks Pro",
@@ -476,6 +497,7 @@ const experienceConfig = {
 };
 
 let currentExperience = initialExperience();
+let selectedOrgType = null;
 let lastMandirReceipt = null;
 let activeReceiptPreviewObjectUrl = "";
 let activeMandirWorkspace = "overview";
@@ -1971,8 +1993,21 @@ async function updateCurrentPassword() {
   renderJson(apiOutput, { change_password: { ok: result.ok, status: result.status, detail: result.payload?.detail } });
 }
 
+function activeOrgSelectorType(context = lastModuleContext) {
+  const organizationType = String(context?.organization_type || "").toUpperCase();
+  return selectedOrgType || organizationType || "BUSINESS";
+}
+
+function syncOrgSelectorOptions(orgType) {
+  document.querySelectorAll(".org-option").forEach((option) => {
+    option.classList.toggle("active", option.getAttribute("data-org") === orgType);
+  });
+}
+
 function updateTrustedContextUi(context = lastModuleContext) {
   const organizationType = String(context?.organization_type || "").toUpperCase();
+  const selectorOrgType = activeOrgSelectorType(context);
+  const selectorMeta = orgSelectorMeta[selectorOrgType] || orgSelectorMeta.BUSINESS;
   const tenantLabel = context?.tenant_name || context?.organization_name || context?.tenant_id || "";
   const enabledCount = Array.isArray(context?.enabled_modules)
     ? context.enabled_modules.length
@@ -1981,15 +2016,14 @@ function updateTrustedContextUi(context = lastModuleContext) {
       : 0;
 
   if (currentOrgType) {
-    currentOrgType.textContent = organizationType === "BUSINESS"
-      ? "Business Suite"
-      : organizationType
-        ? `${organizationType} workspace`
-        : "Business Suite";
+    currentOrgType.textContent = selectorMeta.label;
   }
   if (currentOrgTenant) {
-    currentOrgTenant.textContent = tenantLabel || "Acme Corp Ltd";
+    currentOrgTenant.textContent = selectorOrgType === "BUSINESS"
+      ? tenantLabel || selectorMeta.subtitle
+      : selectorMeta.subtitle;
   }
+  syncOrgSelectorOptions(selectorOrgType);
   if (sidebarUserRole && getAccessToken()) {
     const role = context?.role || context?.user_role || "";
     sidebarUserRole.textContent = role || (enabledCount ? `${enabledCount} enabled module(s)` : "Tenant context loaded");
@@ -7946,12 +7980,15 @@ if (orgTrigger) {
 orgOptions.forEach((option) => {
   option.addEventListener("click", (e) => {
     const orgType = e.currentTarget.getAttribute("data-org");
-    orgOptions.forEach((o) => o.classList.remove("active"));
-    e.currentTarget.classList.add("active");
+    const selectorMeta = orgSelectorMeta[orgType] || orgSelectorMeta.BUSINESS;
+    selectedOrgType = orgType;
+    syncOrgSelectorOptions(orgType);
     orgMenu.hidden = true;
     orgSelector.classList.remove("open");
     if (orgType !== "BUSINESS") {
-      setLoginStatus("warn", "Planned workspace", "This selector is visual only until the backend exposes this tenant context.");
+      setLoginStatus("warn", selectorMeta.statusTitle, selectorMeta.statusCopy);
+    } else {
+      setLoginStatus("ok", selectorMeta.statusTitle, selectorMeta.statusCopy);
     }
     updateTrustedContextUi();
   });
