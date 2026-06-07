@@ -1053,6 +1053,90 @@ function renderBusinessRecentVoucherRows(rows) {
   `;
 }
 
+function plannedOrgWorkspaceModel(orgType) {
+  if (orgType === "CA_PRACTICE") {
+    return {
+      label: "CA Practice Portal",
+      eyebrow: "Planned multi-client books",
+      lead: "Practice-level workspace for client books, compliance reviews, and consolidated reporting. This shell is visible now; backend tenant switching is still planned.",
+      kpis: [
+        ["Client Books", "Planned", "Multi-client ledger access"],
+        ["Review Queue", "Planned", "Voucher and return review workflow"],
+        ["Compliance", "Planned", "GST, TDS, and filing calendar"],
+      ],
+      modules: [
+        ["Client ledger access", "Open each client book with tenant-safe context before showing accounting data.", "Planned"],
+        ["GST and TDS workbench", "Track return status, due dates, reconciliation, and filing readiness.", "Planned"],
+        ["Review queue", "Route vouchers, invoices, and adjustments for partner review before final posting.", "Planned"],
+        ["Consolidated reports", "Practice-wide receivables, workload, client health, and team productivity.", "Planned"],
+      ],
+      note: "No accounting data is posted from this planned workspace until the backend exposes CA practice module access.",
+    };
+  }
+
+  return {
+    label: "Professional Suite",
+    eyebrow: "Planned billing and invoicing",
+    lead: "Service-business workspace for billing, receipts, professional client accounts, and revenue tracking. This shell is visible now; backend modules are not enabled yet.",
+    kpis: [
+      ["Billing", "Planned", "Service invoices and retainers"],
+      ["Receivables", "Planned", "Client dues and follow-ups"],
+      ["Reports", "Planned", "Practice performance summaries"],
+    ],
+    modules: [
+      ["Client billing", "Create professional service invoices with GST and accounting posting.", "Planned"],
+      ["Retainers and advances", "Track advance receipts separately from final service revenue recognition.", "Planned"],
+      ["Receivables follow-up", "Age client balances and route overdue reminders.", "Planned"],
+      ["Professional reports", "Monthly revenue, collections, margins, and client-wise performance.", "Planned"],
+    ],
+    note: "No backend tenant context has changed; this is a planned workspace preview inside the MitraBooks shell.",
+  };
+}
+
+function renderSelectedOrgWorkspace() {
+  const orgType = activeOrgSelectorType();
+  const model = plannedOrgWorkspaceModel(orgType);
+  return `
+    <div class="planned-org-workspace erp-workspace-panel">
+      <div class="planned-org-hero">
+        <div>
+          <span class="workbench-kicker">${escapeHtml(model.eyebrow)}</span>
+          <h3>${escapeHtml(model.label)} Workspace</h3>
+          <p>${escapeHtml(model.lead)}</p>
+        </div>
+        <span class="pill warn">Planned</span>
+      </div>
+
+      <div class="planned-org-kpis">
+        ${model.kpis.map(([title, value, copy]) => `
+          <article>
+            <span>${escapeHtml(title)}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <small>${escapeHtml(copy)}</small>
+          </article>
+        `).join("")}
+      </div>
+
+      <div class="planned-org-module-grid">
+        ${model.modules.map(([title, copy, status]) => `
+          <article>
+            <div>
+              <h4>${escapeHtml(title)}</h4>
+              <span class="pill">${escapeHtml(status)}</span>
+            </div>
+            <p>${escapeHtml(copy)}</p>
+          </article>
+        `).join("")}
+      </div>
+
+      <div class="planned-org-note">
+        <strong>Implementation status</strong>
+        <span>${escapeHtml(model.note)}</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
@@ -3795,6 +3879,9 @@ function renderDashboardPreview(config) {
     if (activeBusinessWorkspace !== "overview") {
       return renderBusinessWorkspace();
     }
+    if (activeOrgSelectorType() !== "BUSINESS") {
+      return renderSelectedOrgWorkspace();
+    }
     return `
       <div class="business-dashboard-clean">
         ${renderBusinessExecutiveDashboard()}
@@ -4349,6 +4436,10 @@ function openBusinessEditPartyDialog(button) {
 }
 
 function setBusinessWorkspace(workspace) {
+  if (currentExperience === "mitrabooks" && activeOrgSelectorType() !== "BUSINESS") {
+    selectedOrgType = "BUSINESS";
+    updateTrustedContextUi();
+  }
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
   dashboardPreview.innerHTML = workspace === "overview"
@@ -4369,9 +4460,16 @@ function setBusinessWorkspace(workspace) {
 }
 
 function syncBusinessNavActiveState() {
+  const selectorOrgType = activeOrgSelectorType();
+  const isPlannedOrgWorkspace = currentExperience === "mitrabooks"
+    && activeBusinessWorkspace === "overview"
+    && selectorOrgType !== "BUSINESS";
   nav.querySelectorAll("a").forEach((link) => {
     const workspace = link.dataset.businessWorkspace || "";
-    const isActive = currentExperience === "mitrabooks" && workspace && workspace === activeBusinessWorkspace;
+    const isActive = currentExperience === "mitrabooks"
+      && !isPlannedOrgWorkspace
+      && workspace
+      && workspace === activeBusinessWorkspace;
     link.classList.toggle("active", isActive);
   });
   if (topbarCurrent && currentExperience === "mitrabooks") {
@@ -4383,7 +4481,10 @@ function syncBusinessNavActiveState() {
       accounting: "Accounting",
       "financial-health": "Financial Health",
     };
-    const label = labels[activeBusinessWorkspace] || "Dashboard";
+    const plannedMeta = orgSelectorMeta[selectorOrgType];
+    const label = isPlannedOrgWorkspace
+      ? plannedMeta?.label || "Planned Workspace"
+      : labels[activeBusinessWorkspace] || "Dashboard";
     topbarCurrent.textContent = label;
     updatePageHeader("MitraBooks", label, `${label} Workspace`);
   }
@@ -7991,6 +8092,14 @@ orgOptions.forEach((option) => {
       setLoginStatus("ok", selectorMeta.statusTitle, selectorMeta.statusCopy);
     }
     updateTrustedContextUi();
+    if (currentExperience === "mitrabooks") {
+      activeBusinessWorkspace = "overview";
+      syncBusinessNavActiveState();
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+      if (orgType === "BUSINESS") {
+        loadBusinessDashboardStats();
+      }
+    }
   });
 });
 
