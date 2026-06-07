@@ -1072,18 +1072,26 @@ function plannedOrgWorkspaceModel(orgType) {
       ],
       documentIntake: {
         title: "Client document intake",
-        copy: "Placeholder for uploading client bank statements, purchase bills, sales invoices, GST returns, TDS files, and supporting documents.",
+        copy: "Placeholder for uploading client bank statements, purchase bills, sales invoices, GST returns, TDS files, and supporting documents before review and posting.",
+        uploadFields: [
+          ["Client", "Select client book"],
+          ["Document type", "Bank statement, invoice, GST, TDS"],
+          ["Period", "FY 2026-27 / month"],
+          ["Assigned to", "Reviewer or partner"],
+        ],
+        workflow: ["Uploaded", "Under review", "Query raised", "Reviewed", "Posted"],
         metrics: [
           ["Uploaded", "18", "Awaiting classification"],
-          ["Under review", "7", "Partner or staff review"],
+          ["Under review", "7", "Staff review in progress"],
+          ["Reviewed", "5", "Ready for posting"],
           ["Posted", "9", "Linked to vouchers"],
-          ["Pending", "4", "Needs client clarification"],
+          ["Query raised", "4", "Needs client clarification"],
         ],
         rows: [
-          ["Jayam Publications", "Bank statement", "Under review", "Reconciliation check"],
-          ["Kartik Enterprises", "Purchase bills", "Posted", "Voucher batch ready"],
-          ["Power & Light Corp", "GST working", "Pending", "Missing invoice support"],
-          ["Stellar Logistics", "Sales invoices", "Reviewed", "Ready for posting"],
+          ["Jayam Publications", "Bank statement", "May 2026", "Under review", "Reconciliation check", "-"],
+          ["Kartik Enterprises", "Purchase bills", "May 2026", "Posted", "Voucher batch ready", "JV-2026-00012"],
+          ["Power & Light Corp", "GST working", "Q1 2026", "Query raised", "Missing invoice support", "-"],
+          ["Stellar Logistics", "Sales invoices", "May 2026", "Reviewed", "Ready for posting", "-"],
         ],
       },
       note: "No accounting data is posted from this planned workspace until the backend exposes CA practice module access.",
@@ -1152,6 +1160,14 @@ function renderSelectedOrgWorkspace() {
               <span class="workbench-kicker">Document Upload</span>
               <h4>${escapeHtml(model.documentIntake.title)}</h4>
               <p>${escapeHtml(model.documentIntake.copy)}</p>
+              <div class="ca-upload-field-grid">
+                ${model.documentIntake.uploadFields.map(([label, placeholder]) => `
+                  <label>
+                    <span>${escapeHtml(label)}</span>
+                    <input type="text" value="${escapeHtml(placeholder)}" disabled>
+                  </label>
+                `).join("")}
+              </div>
             </div>
             <label class="ca-upload-placeholder" aria-disabled="true">
               <span>Upload placeholder</span>
@@ -1159,6 +1175,12 @@ function renderSelectedOrgWorkspace() {
               <small>PDF, Excel, image, bank statement</small>
               <input type="file" multiple disabled>
             </label>
+          </div>
+
+          <div class="ca-document-workflow" aria-label="Document review workflow">
+            ${model.documentIntake.workflow.map((step, index) => `
+              <span class="${index === 0 ? "active" : ""}">${escapeHtml(step)}</span>
+            `).join("")}
           </div>
 
           <div class="ca-document-status-grid">
@@ -1177,21 +1199,29 @@ function renderSelectedOrgWorkspace() {
                 <tr>
                   <th>Client</th>
                   <th>Document type</th>
+                  <th>Period</th>
                   <th>Status</th>
                   <th>Next action</th>
+                  <th>Posting ref</th>
                 </tr>
               </thead>
               <tbody>
-                ${model.documentIntake.rows.map(([client, type, status, action]) => `
+                ${model.documentIntake.rows.map(([client, type, period, status, action, postingRef]) => `
                   <tr>
                     <td><strong>${escapeHtml(client)}</strong></td>
                     <td>${escapeHtml(type)}</td>
+                    <td>${escapeHtml(period)}</td>
                     <td><span class="pill">${escapeHtml(status)}</span></td>
                     <td>${escapeHtml(action)}</td>
+                    <td>${escapeHtml(postingRef)}</td>
                   </tr>
                 `).join("")}
               </tbody>
             </table>
+          </div>
+
+          <div class="ca-document-note">
+            Current state: this is a UI placeholder only. Target state: uploaded files will be tenant-scoped, audited, reviewed, and linked to voucher or return references when posting is enabled.
           </div>
         </div>
       ` : ""}
