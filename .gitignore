@@ -28,6 +28,7 @@ htmlcov/
 # Runtime data / local artifacts
 logs/
 tmp/
+.tmp.driveupload/
 data/
 .pgdata/
 *.log
