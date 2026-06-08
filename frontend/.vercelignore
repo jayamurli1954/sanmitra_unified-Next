@@ -1,13 +1,6 @@
 node_modules
-build
 coverage
 test-results
-.env*
 e2e
-src
-public
-scripts
-jest.config.js
-playwright.config.js
-package-lock.json
+.env*
 debug.log
