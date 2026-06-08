@@ -4985,7 +4985,9 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "receivables-payables") {
     await loadBusinessReceivablesPayables();
   } else if (tab === "general-ledger") {
-    if (businessReportState.ledgerAccountId) {
+    if (businessReportState.ledgerAccountId === "__all_nonzero__") {
+      await loadBusinessAllLedgers();
+    } else if (businessReportState.ledgerAccountId) {
       await loadBusinessGeneralLedger(businessReportState.ledgerAccountId);
     } else {
       rerenderBusinessReportsIfActive();
@@ -5282,6 +5284,7 @@ function renderBusinessGeneralLedger() {
       <label>Account
         <select name="ledger_account" aria-label="Select ledger account">
           <option value="">Select an account</option>
+          <option value="__all_nonzero__" ${businessReportState.ledgerAccountId === "__all_nonzero__" ? "selected" : ""}>All Ledger Accounts &gt; 0</option>
           ${accounts.map((acc) => `
             <option value="${escapeHtml(acc.id)}" ${String(acc.id) === String(businessReportState.ledgerAccountId) ? "selected" : ""}>
               ${escapeHtml(`${acc.code} - ${acc.name}`)}
@@ -5301,39 +5304,89 @@ function renderBusinessGeneralLedger() {
     trace = `<p class="muted">Loading ledger for ${escapeHtml(payload.account_label || "selected account")}...</p>`;
   } else if (payload.ok === false) {
     trace = reportUnavailablePanel(`Ledger: ${payload.account_label || ""}`, payload);
+  } else if (payload.multi) {
+    const ledgers = Array.isArray(payload.ledgers) ? payload.ledgers : [];
+    trace = ledgers.length
+      ? ledgers.map((l) => renderLedgerTraceTable(l.account_label, l.lines, l.ok === false ? l.detail : null)).join("")
+      : `<p class="muted">No accounts with posted movement as of ${escapeHtml(businessReportState.as_of)}.</p>`;
   } else {
-    const lines = Array.isArray(payload.lines) ? payload.lines : [];
-    trace = `
+    trace = renderLedgerTraceTable(payload.account_label, payload.lines);
+  }
+  return selector + trace;
+}
+
+function renderLedgerTraceTable(label, lines, errorDetail = null) {
+  if (errorDetail) {
+    return `
       <div class="table-preview compact-table">
-        <h4>Ledger: ${escapeHtml(payload.account_label || "")}</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Reference</th>
-              <th>Description</th>
-              <th class="amount">Debit</th>
-              <th class="amount">Credit</th>
-              <th class="amount">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lines.length ? lines.map((line) => `
-              <tr>
-                <td>${escapeHtml(line.entry_date || "")}</td>
-                <td>${escapeHtml(line.reference || "")}</td>
-                <td>${escapeHtml(line.description || "")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(line.debit || 0))}</td>
-                <td class="amount">${escapeHtml(formatCurrency(line.credit || 0))}</td>
-                <td class="amount">${escapeHtml(formatCurrency(line.running_balance || 0))}</td>
-              </tr>
-            `).join("") : `<tr><td colspan="6" class="muted">No posted entries for this account.</td></tr>`}
-          </tbody>
-        </table>
+        <h4>Ledger: ${escapeHtml(label || "")}</h4>
+        <p class="muted">${escapeHtml(errorDetail)}</p>
       </div>
     `;
   }
-  return selector + trace;
+  const rows = Array.isArray(lines) ? lines : [];
+  return `
+    <div class="table-preview compact-table">
+      <h4>Ledger: ${escapeHtml(label || "")}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Reference</th>
+            <th>Description</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
+            <th class="amount">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map((line) => `
+            <tr>
+              <td>${escapeHtml(line.entry_date || "")}</td>
+              <td>${escapeHtml(line.reference || "")}</td>
+              <td>${escapeHtml(line.description || "")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.debit || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.credit || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.running_balance || 0))}</td>
+            </tr>
+          `).join("") : `<tr><td colspan="6" class="muted">No posted entries for this account.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function loadBusinessAllLedgers() {
+  businessReportState.ledgerAccountId = "__all_nonzero__";
+  lastBusinessGeneralLedger = { loading: true, account_label: "All Ledger Accounts > 0" };
+  rerenderBusinessReportsIfActive();
+
+  const tbResult = await apiRequest("mitrabooks", `/api/v1/accounting/reports/trial-balance?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" });
+  if (!tbResult.ok) {
+    lastBusinessGeneralLedger = { ok: false, account_label: "All Ledger Accounts > 0", detail: tbResult.payload?.detail || "Could not load account list." };
+    rerenderBusinessReportsIfActive();
+    return;
+  }
+  const lines = Array.isArray(tbResult.payload?.lines) ? tbResult.payload.lines : [];
+  const active = lines.filter((l) => (Number(l.debit_total || 0) + Number(l.credit_total || 0)) > 0);
+
+  lastBusinessGeneralLedger = { loading: true, account_label: `All Ledger Accounts > 0 (${active.length})` };
+  rerenderBusinessReportsIfActive();
+
+  const ledgers = [];
+  for (const l of active) {
+    const r = await apiRequest("mitrabooks", `/api/v1/accounting/ledger/${encodeURIComponent(l.account_id)}`, { method: "GET" });
+    ledgers.push({
+      account_id: l.account_id,
+      account_label: `${l.account_code || ""} - ${l.account_name || ""}`.trim(),
+      ok: r.ok,
+      lines: r.ok ? (Array.isArray(r.payload) ? r.payload : accountRowsFromPayload(r.payload)) : [],
+      detail: r.ok ? null : (r.payload?.detail || "Ledger unavailable."),
+    });
+  }
+  lastBusinessGeneralLedger = { ok: true, multi: true, account_label: "All Ledger Accounts > 0", ledgers };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { general_ledger_all: { ok: true, accounts: ledgers.length } });
 }
 
 function renderReceivablesPayablesSection(title, subtitle, payload) {
@@ -5417,6 +5470,10 @@ function loadBusinessReportLedgerFromSelect() {
   const accountId = select?.value || "";
   if (!accountId) {
     setLoginStatus("warn", "Select an account", "Choose an account to view its ledger.");
+    return;
+  }
+  if (accountId === "__all_nonzero__") {
+    loadBusinessAllLedgers();
     return;
   }
   loadBusinessGeneralLedger(accountId);

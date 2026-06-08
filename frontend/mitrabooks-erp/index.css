@@ -4016,6 +4016,16 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   min-width: 180px;
 }
 
+/* Keep report metric tiles and section cards on the dark surface (override the
+   light-card defaults from .verification-panel .metric-tile and
+   .dashboard-main-grid > article so reports match the rest of the workspace). */
+.app:not(.mandir-domain) .erp-workspace-panel .metric-tile,
+.app:not(.mandir-domain) .erp-workspace-panel .dashboard-main-grid > article {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #f8fafc);
+}
+
 
 
 
