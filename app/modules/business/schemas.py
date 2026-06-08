@@ -480,3 +480,85 @@ class CreditNoteResponse(BaseModel):
 class CreditNoteListResponse(BaseModel):
     items: list[CreditNoteResponse]
     total: int
+
+
+# ---- Debit Notes (purchase-side GST adjustment against a vendor bill) ----
+
+DebitNoteStatus = Literal["posted", "cancelled"]
+DebitNoteReason = Literal["purchase_return", "rejected_goods", "price_revision", "deficiency", "other"]
+
+
+class DebitNoteLineItem(BaseModel):
+    description: str = Field(..., min_length=1, max_length=300)
+    hsn_sac: str | None = Field(default=None, max_length=20)
+    quantity: Decimal = Field(..., gt=Decimal("0"))
+    rate: Decimal = Field(..., ge=Decimal("0"))
+    gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+
+
+class DebitNoteLineResponse(DebitNoteLineItem):
+    taxable_amount: Decimal
+    cgst: Decimal
+    sgst: Decimal
+    igst: Decimal
+    line_total: Decimal
+
+
+class DebitNoteCreateRequest(BaseModel):
+    vendor_party_id: str = Field(..., min_length=1, max_length=80)
+    note_date: date
+    original_bill_id: str | None = Field(default=None, max_length=80)
+    original_bill_number: str | None = Field(default=None, max_length=120)
+    reason: DebitNoteReason = "purchase_return"
+    is_inter_state: bool = False
+    expense_account_code: str = Field(default="51001", min_length=1, max_length=50)
+    place_of_supply: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=500)
+    line_items: list[DebitNoteLineItem] = Field(..., min_length=1)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class DebitNoteCancelRequest(BaseModel):
+    reason: str = Field(default="Reversal", min_length=1, max_length=240)
+    cancel_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class DebitNoteResponse(BaseModel):
+    debit_note_id: str
+    debit_note_number: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    vendor_party_id: str
+    vendor_name: str | None = None
+    vendor_gstin: str | None = None
+    note_date: date
+    original_bill_id: str | None = None
+    original_bill_number: str | None = None
+    reason: str
+    is_inter_state: bool
+    place_of_supply: str | None = None
+    expense_account_code: str
+    notes: str | None = None
+    line_items: list[DebitNoteLineResponse]
+    taxable_total: Decimal
+    cgst_total: Decimal
+    sgst_total: Decimal
+    igst_total: Decimal
+    gst_total: Decimal
+    note_total: Decimal
+    status: str
+    journal_entry_id: int | None = None
+    reversal_journal_entry_id: int | None = None
+    cancel_reason: str | None = None
+    cancelled_at: datetime | None = None
+    created: bool = False
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class DebitNoteListResponse(BaseModel):
+    items: list[DebitNoteResponse]
+    total: int

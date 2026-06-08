@@ -50,7 +50,7 @@ function businessNavigationGroups() {
       items: [
         { label: "Bills (Vendor)", businessWorkspace: "bills", icon: "BL", module: { module_key: "purchase", frontend_path: "/business/bills", enabled: true } },
         { label: "Purchase Orders", businessWorkspace: "purchase-orders", icon: "PO", module: { module_key: "purchase", frontend_path: "/business/purchase-orders", enabled: false } },
-        { label: "Debit Notes", businessWorkspace: "debit-notes", icon: "DN", module: { module_key: "purchase", frontend_path: "/business/debit-notes", enabled: false } },
+        { label: "Debit Notes", businessWorkspace: "debit-notes", icon: "DN", module: { module_key: "purchase", frontend_path: "/business/debit-notes", enabled: true } },
         { label: "Expenses log", businessWorkspace: "expenses", icon: "EX", module: { module_key: "business", frontend_path: "/business/expenses", enabled: false } },
       ],
     },
@@ -4526,6 +4526,9 @@ function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "credit-notes") {
     return renderBusinessCreditNoteWorkspace();
   }
+  if (activeBusinessWorkspace === "debit-notes") {
+    return renderBusinessDebitNoteWorkspace();
+  }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
   }
@@ -4910,6 +4913,11 @@ function setBusinessWorkspace(workspace) {
     loadBusinessParties();
     loadBusinessAccounts();
     loadCreditNotes();
+  } else if (workspace === "debit-notes") {
+    debitNoteView = "list";
+    loadBusinessParties();
+    loadBusinessAccounts();
+    loadDebitNotes();
   }
 }
 
@@ -4937,6 +4945,7 @@ function syncBusinessNavActiveState() {
       sales: "Sales Invoices",
       bills: "Purchase Bills",
       "credit-notes": "Credit Notes",
+      "debit-notes": "Debit Notes",
       "financial-health": "Financial Health",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -7141,6 +7150,424 @@ function renderBusinessCreditNoteWorkspace() {
         <button class="secondary" type="button" data-business-action="open-create-credit-note">+ New Credit Note</button>
       </div>
       ${renderCnListTable()}
+    </div>
+  `;
+}
+
+// ========== Business Module: Debit Notes (purchase GST adjustment) ==========
+
+let debitNoteView = "list"; // list | create | detail
+let lastDebitNotes = [];
+let lastDebitNoteDetail = null;
+let dnLineSeq = 0;
+let dnFormLines = [];
+let dnReverseOpen = false;
+const DN_REASONS = [
+  ["purchase_return", "Purchase return"],
+  ["rejected_goods", "Rejected goods"],
+  ["price_revision", "Price revision (downward)"],
+  ["deficiency", "Deficiency in service/goods"],
+  ["other", "Other"],
+];
+const dnFormHeader = {
+  vendor_party_id: "",
+  note_date: todayIsoDate(),
+  original_bill_number: "",
+  reason: "purchase_return",
+  is_inter_state: false,
+  expense_account_code: "51001",
+  place_of_supply: "",
+  notes: "",
+};
+
+function rerenderDebitNoteIfActive() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "debit-notes") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function loadDebitNotes() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/debit-notes?limit=100", { method: "GET" });
+  lastDebitNotes = result.ok && Array.isArray(result.payload?.items) ? result.payload.items : [];
+  if (!result.ok) setLoginStatus("danger", "Unable to load debit notes", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  rerenderDebitNoteIfActive();
+  renderJson(apiOutput, { debit_notes: { ok: result.ok, count: lastDebitNotes.length } });
+}
+
+function syncDnFormFromDom() {
+  const form = document.querySelector("[data-dn-form]");
+  if (!form) return;
+  const val = (sel) => form.querySelector(sel)?.value ?? "";
+  dnFormHeader.vendor_party_id = val("select[name='vendor_party_id']");
+  dnFormHeader.note_date = val("input[name='note_date']") || todayIsoDate();
+  dnFormHeader.original_bill_number = val("input[name='original_bill_number']");
+  dnFormHeader.reason = val("select[name='reason']") || "purchase_return";
+  dnFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  dnFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
+  dnFormHeader.place_of_supply = val("input[name='place_of_supply']");
+  dnFormHeader.notes = val("textarea[name='notes']");
+  dnFormLines = Array.from(form.querySelectorAll("[data-dn-line]")).map((row) => ({
+    id: row.getAttribute("data-dn-line"),
+    description: row.querySelector("input[name='description']")?.value || "",
+    hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
+    quantity: row.querySelector("input[name='quantity']")?.value || "",
+    rate: row.querySelector("input[name='rate']")?.value || "",
+    gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+  }));
+}
+
+function updateDnTotalsDisplay() {
+  const form = document.querySelector("[data-dn-form]");
+  if (!form) return;
+  const inter = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
+  form.querySelectorAll("[data-dn-line]").forEach((row) => {
+    const c = computeInvoiceLine(
+      row.querySelector("input[name='quantity']")?.value,
+      row.querySelector("input[name='rate']")?.value,
+      row.querySelector("input[name='gst_rate']")?.value,
+      inter,
+    );
+    row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
+    row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
+    row.querySelector("[data-line-total]").textContent = formatCurrency(c.total);
+    taxableTotal += c.taxable; cgstTotal += c.cgst; sgstTotal += c.sgst; igstTotal += c.igst;
+  });
+  const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
+  const noteTotal = round2(taxableTotal + gstTotal);
+  const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
+  set("[data-total-taxable]", taxableTotal);
+  set("[data-total-cgst]", cgstTotal);
+  set("[data-total-sgst]", sgstTotal);
+  set("[data-total-igst]", igstTotal);
+  set("[data-total-note]", noteTotal);
+  const cgstRow = form.querySelector("[data-row-cgst]");
+  const sgstRow = form.querySelector("[data-row-sgst]");
+  const igstRow = form.querySelector("[data-row-igst]");
+  if (cgstRow && sgstRow && igstRow) {
+    cgstRow.hidden = inter;
+    sgstRow.hidden = inter;
+    igstRow.hidden = !inter;
+  }
+}
+
+function setDebitNoteView(view) {
+  debitNoteView = view;
+  dnReverseOpen = false;
+  rerenderDebitNoteIfActive();
+  if (view === "create") {
+    updateDnTotalsDisplay();
+  }
+}
+
+function openDebitNoteCreate() {
+  dnFormLines = [{ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  dnFormHeader.vendor_party_id = "";
+  dnFormHeader.note_date = todayIsoDate();
+  dnFormHeader.original_bill_number = "";
+  dnFormHeader.reason = "purchase_return";
+  dnFormHeader.is_inter_state = false;
+  dnFormHeader.expense_account_code = "51001";
+  dnFormHeader.place_of_supply = "";
+  dnFormHeader.notes = "";
+  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
+  if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  setDebitNoteView("create");
+}
+
+function addDnLine() {
+  syncDnFormFromDom();
+  dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  rerenderDebitNoteIfActive();
+  updateDnTotalsDisplay();
+}
+
+function removeDnLine(lineId) {
+  syncDnFormFromDom();
+  dnFormLines = dnFormLines.filter((l) => l.id !== lineId);
+  if (dnFormLines.length === 0) {
+    dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  }
+  rerenderDebitNoteIfActive();
+  updateDnTotalsDisplay();
+}
+
+async function submitDebitNote() {
+  syncDnFormFromDom();
+  if (!dnFormHeader.vendor_party_id) {
+    setLoginStatus("warn", "Vendor required", "Select the vendor for this debit note.");
+    return;
+  }
+  const lineItems = dnFormLines
+    .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
+    .map((l) => ({
+      description: String(l.description).trim(),
+      hsn_sac: String(l.hsn_sac || "").trim() || null,
+      quantity: String(Number(l.quantity)),
+      rate: String(Number(l.rate || 0)),
+      gst_rate: String(Number(l.gst_rate || 0)),
+    }));
+  if (lineItems.length === 0) {
+    setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
+    return;
+  }
+  const body = {
+    vendor_party_id: dnFormHeader.vendor_party_id,
+    note_date: dnFormHeader.note_date || todayIsoDate(),
+    original_bill_number: String(dnFormHeader.original_bill_number || "").trim() || null,
+    reason: dnFormHeader.reason || "purchase_return",
+    is_inter_state: !!dnFormHeader.is_inter_state,
+    expense_account_code: dnFormHeader.expense_account_code || "51001",
+    place_of_supply: String(dnFormHeader.place_of_supply || "").trim() || null,
+    notes: String(dnFormHeader.notes || "").trim() || null,
+    line_items: lineItems,
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/debit-notes", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `debit-note-${Date.now()}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Debit note posted", `${result.payload?.debit_note_number || "Debit note"} posted to the ledger.`);
+    await loadDebitNotes();
+    setDebitNoteView("list");
+  } else {
+    setLoginStatus("danger", "Debit note failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { create_debit_note: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
+}
+
+async function openDebitNoteDetail(noteId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/debit-notes/${encodeURIComponent(noteId)}`, { method: "GET" });
+  if (result.ok) {
+    lastDebitNoteDetail = result.payload;
+    setDebitNoteView("detail");
+  } else {
+    setLoginStatus("danger", "Unable to load debit note", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { debit_note_detail: { ok: result.ok, status: result.status } });
+}
+
+async function cancelDebitNote(noteId, reversalDate) {
+  const body = { reason: "Reversal" };
+  if (reversalDate) body.cancel_date = reversalDate;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/debit-notes/${encodeURIComponent(noteId)}/cancel`, {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `debit-note-cancel-${noteId}-${reversalDate || "today"}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    dnReverseOpen = false;
+    setLoginStatus("ok", "Debit note reversed", "A reversing journal entry was posted.");
+    await loadDebitNotes();
+    if (lastDebitNoteDetail && lastDebitNoteDetail.debit_note_id === noteId) {
+      lastDebitNoteDetail = result.payload;
+    }
+    rerenderDebitNoteIfActive();
+  } else {
+    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { cancel_debit_note: { ok: result.ok, status: result.status } });
+}
+
+function dnReasonLabel(value) {
+  const found = DN_REASONS.find((r) => r[0] === value);
+  return found ? found[1] : (value || "");
+}
+
+function renderDnListTable() {
+  const rows = lastDebitNotes;
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Debit Note #</th><th>Date</th><th>Vendor</th><th>Against</th>
+            <th class="amount">Taxable</th><th class="amount">ITC</th><th class="amount">Total</th><th>Status</th><th>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map((n) => `
+            <tr>
+              <td>${escapeHtml(n.debit_note_number || "")}</td>
+              <td>${escapeHtml(n.note_date || "")}</td>
+              <td>${escapeHtml(n.vendor_name || n.vendor_party_id || "")}</td>
+              <td>${escapeHtml(n.original_bill_number || "—")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.taxable_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.gst_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.note_total || 0))}</td>
+              <td>${invoiceStatusPill(n.status)}</td>
+              <td><button class="secondary" type="button" data-business-action="view-debit-note" data-dn-id="${escapeHtml(n.debit_note_id)}">View</button></td>
+            </tr>
+          `).join("") : `<tr><td colspan="9" class="muted">No debit notes yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDebitNoteCreateForm() {
+  const vendors = vendorPartyOptions();
+  const expenseAccounts = expenseAccountOptions();
+  const lineRows = dnFormLines.map((l) => `
+    <tr data-dn-line="${escapeHtml(l.id)}">
+      <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
+      <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
+      <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
+      <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
+      <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      <td class="amount" data-line-taxable>—</td>
+      <td class="amount" data-line-gst>—</td>
+      <td class="amount" data-line-total>—</td>
+      <td><button class="secondary" type="button" data-business-action="remove-dn-line" data-line-id="${escapeHtml(l.id)}">✕</button></td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="verification-panel erp-workspace-panel" data-dn-form>
+      <div class="preview-heading compact">
+        <div>
+          <h4>New Debit Note</h4>
+          <p>Reduce a vendor bill (return, rejected goods, or price revision). Reduces input GST (ITC) and payables.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="dn-back">← Back to list</button>
+      </div>
+      <div class="invoice-form-grid">
+        <label>Vendor
+          <select name="vendor_party_id">
+            <option value="">Select vendor</option>
+            ${vendors.map((v) => `<option value="${escapeHtml(v.party_id)}" ${v.party_id === dnFormHeader.vendor_party_id ? "selected" : ""}>${escapeHtml(v.party_name)}${v.gstin ? ` (${escapeHtml(v.gstin)})` : ""}</option>`).join("")}
+          </select>
+        </label>
+        <label>Note date
+          <input type="date" name="note_date" value="${escapeHtml(dnFormHeader.note_date)}">
+        </label>
+        <label>Against bill #
+          <input type="text" name="original_bill_number" value="${escapeHtml(dnFormHeader.original_bill_number)}" placeholder="Original supplier bill number">
+        </label>
+        <label>Reason
+          <select name="reason">
+            ${DN_REASONS.map(([v, lbl]) => `<option value="${escapeHtml(v)}" ${v === dnFormHeader.reason ? "selected" : ""}>${escapeHtml(lbl)}</option>`).join("")}
+          </select>
+        </label>
+        <label>Expense account
+          <select name="expense_account_code">
+            ${expenseAccounts.length ? expenseAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === dnFormHeader.expense_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="51001" selected>51001 - Purchases</option>`}
+          </select>
+        </label>
+        <label>Place of supply
+          <input type="text" name="place_of_supply" value="${escapeHtml(dnFormHeader.place_of_supply)}" placeholder="State / code">
+        </label>
+        <label class="invoice-inter-toggle">
+          <input type="checkbox" name="is_inter_state" ${dnFormHeader.is_inter_state ? "checked" : ""}>
+          Inter-state supply (IGST)
+        </label>
+      </div>
+
+      <div class="table-preview compact-table invoice-lines">
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST %</th>
+              <th class="amount">Taxable</th><th class="amount">ITC</th><th class="amount">Total</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${lineRows}</tbody>
+        </table>
+      </div>
+      <button class="secondary" type="button" data-business-action="add-dn-line">+ Add line</button>
+
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
+        <div data-row-cgst ${dnFormHeader.is_inter_state ? "hidden" : ""}><span>Input CGST</span><strong data-total-cgst>${formatCurrency(0)}</strong></div>
+        <div data-row-sgst ${dnFormHeader.is_inter_state ? "hidden" : ""}><span>Input SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
+        <div data-row-igst ${dnFormHeader.is_inter_state ? "" : "hidden"}><span>Input IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand"><span>Debit note total</span><strong data-total-note>${formatCurrency(0)}</strong></div>
+      </div>
+
+      <label class="invoice-notes">Notes
+        <textarea name="notes" rows="2" placeholder="Optional notes">${escapeHtml(dnFormHeader.notes)}</textarea>
+      </label>
+
+      <div class="invoice-form-actions">
+        <button class="primary" type="button" data-business-action="save-debit-note">Post Debit Note</button>
+        <button class="secondary" type="button" data-business-action="dn-back">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderDebitNoteDetail() {
+  const n = lastDebitNoteDetail;
+  if (!n) {
+    return `<div class="verification-panel erp-workspace-panel"><p class="muted">Debit note not found.</p></div>`;
+  }
+  const lines = Array.isArray(n.line_items) ? n.line_items : [];
+  const taxRow = n.is_inter_state
+    ? `<div><span>Input IGST</span><strong>${formatCurrency(n.igst_total || 0)}</strong></div>`
+    : `<div><span>Input CGST</span><strong>${formatCurrency(n.cgst_total || 0)}</strong></div><div><span>Input SGST</span><strong>${formatCurrency(n.sgst_total || 0)}</strong></div>`;
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Debit Note ${escapeHtml(n.debit_note_number || "")} ${invoiceStatusPill(n.status)}</h4>
+          <p>${escapeHtml(n.vendor_name || n.vendor_party_id || "")}${n.vendor_gstin ? ` · ${escapeHtml(n.vendor_gstin)}` : ""} · ${escapeHtml(n.note_date || "")}${n.original_bill_number ? ` · against ${escapeHtml(n.original_bill_number)}` : ""}</p>
+        </div>
+        <div class="invoice-detail-actions">
+          <button class="secondary" type="button" data-business-action="dn-back">← Back to list</button>
+          ${String(n.status).toLowerCase() === "posted" && !dnReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-dn">Reverse</button>` : ""}
+        </div>
+      </div>
+      ${String(n.status).toLowerCase() === "posted" && dnReverseOpen ? reversalPanel("dn", n.debit_note_id, n.note_date) : ""}
+      <p class="muted">${escapeHtml(dnReasonLabel(n.reason))}${n.is_inter_state ? " · Inter-state (IGST input)" : " · Intra-state (CGST + SGST input)"}</p>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr><th>Description</th><th>HSN/SAC</th><th class="amount">Qty</th><th class="amount">Rate</th><th class="amount">GST %</th><th class="amount">Taxable</th><th class="amount">Total</th></tr>
+          </thead>
+          <tbody>
+            ${lines.map((l) => `
+              <tr>
+                <td>${escapeHtml(l.description || "")}</td>
+                <td>${escapeHtml(l.hsn_sac || "")}</td>
+                <td class="amount">${escapeHtml(l.quantity || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.rate || 0))}</td>
+                <td class="amount">${escapeHtml(String(l.gst_rate || 0))}%</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.taxable_amount || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.line_total || 0))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong>${formatCurrency(n.taxable_total || 0)}</strong></div>
+        ${taxRow}
+        <div class="invoice-grand"><span>Debit note total</span><strong>${formatCurrency(n.note_total || 0)}</strong></div>
+      </div>
+      ${n.notes ? `<p class="muted">${escapeHtml(n.notes)}</p>` : ""}
+      ${String(n.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${n.cancel_reason ? `: ${escapeHtml(n.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(n.reversal_journal_entry_id || "")} posted.</p>` : ""}
+    </div>
+  `;
+}
+
+function renderBusinessDebitNoteWorkspace() {
+  if (debitNoteView === "create") {
+    return renderDebitNoteCreateForm();
+  }
+  if (debitNoteView === "detail") {
+    return renderDebitNoteDetail();
+  }
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Debit Notes</h4>
+          <p>Purchase-side GST adjustments against vendor bills (returns, rejected goods, price revisions).</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="open-create-debit-note">+ New Debit Note</button>
+      </div>
+      ${renderDnListTable()}
     </div>
   `;
 }
@@ -10582,6 +11009,28 @@ dashboardPreview.addEventListener("click", (event) => {
     const noteId = button.getAttribute("data-cn-id") || "";
     const dateInput = document.querySelector("[data-reversal-date]");
     cancelCreditNote(noteId, dateInput?.value || "");
+  } else if (businessAction === "open-create-debit-note") {
+    openDebitNoteCreate();
+  } else if (businessAction === "add-dn-line") {
+    addDnLine();
+  } else if (businessAction === "remove-dn-line") {
+    removeDnLine(button.getAttribute("data-line-id") || "");
+  } else if (businessAction === "save-debit-note") {
+    submitDebitNote();
+  } else if (businessAction === "dn-back") {
+    setDebitNoteView("list");
+  } else if (businessAction === "view-debit-note") {
+    openDebitNoteDetail(button.getAttribute("data-dn-id") || "");
+  } else if (businessAction === "begin-reverse-dn") {
+    dnReverseOpen = true;
+    rerenderDebitNoteIfActive();
+  } else if (businessAction === "cancel-reverse-dn") {
+    dnReverseOpen = false;
+    rerenderDebitNoteIfActive();
+  } else if (businessAction === "confirm-reverse-dn") {
+    const noteId = button.getAttribute("data-dn-id") || "";
+    const dateInput = document.querySelector("[data-reversal-date]");
+    cancelDebitNote(noteId, dateInput?.value || "");
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
@@ -10591,6 +11040,8 @@ dashboardPreview.addEventListener("input", (event) => {
     updateBillTotalsDisplay();
   } else if (event.target.closest("[data-cn-form]")) {
     updateCnTotalsDisplay();
+  } else if (event.target.closest("[data-dn-form]")) {
+    updateDnTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
@@ -10603,6 +11054,8 @@ dashboardPreview.addEventListener("change", (event) => {
     updateBillTotalsDisplay();
   } else if (event.target.closest("[data-cn-form]")) {
     updateCnTotalsDisplay();
+  } else if (event.target.closest("[data-dn-form]")) {
+    updateDnTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {

@@ -15,6 +15,10 @@ from app.modules.business.schemas import (
     CreditNoteCreateRequest,
     CreditNoteListResponse,
     CreditNoteResponse,
+    DebitNoteCancelRequest,
+    DebitNoteCreateRequest,
+    DebitNoteListResponse,
+    DebitNoteResponse,
     GstPeriodLockListResponse,
     GstPeriodLockResponse,
     GstPeriodLockUpdateRequest,
@@ -39,19 +43,23 @@ from app.modules.business.schemas import (
 )
 from app.modules.business.service import (
     cancel_credit_note,
+    cancel_debit_note,
     cancel_purchase_bill,
     cancel_sales_invoice,
     create_ca_document_metadata,
     create_credit_note,
+    create_debit_note,
     create_party,
     create_purchase_bill,
     create_sales_invoice,
     deactivate_party,
     get_credit_note,
+    get_debit_note,
     get_invoice_settings,
     get_purchase_bill,
     get_sales_invoice,
     list_credit_notes,
+    list_debit_notes,
     list_ca_document_metadata,
     get_party,
     get_voucher,
@@ -854,6 +862,125 @@ async def cancel_business_credit_note(
             tenant_id=context.tenant_id,
             app_key=context.app_key,
             credit_note_id=credit_note_id,
+            created_by=_created_by(current_user),
+            payload=payload,
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/debit-notes", response_model=DebitNoteResponse)
+async def create_business_debit_note(
+    payload: DebitNoteCreateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="debit note posting",
+    )
+    try:
+        return await create_debit_note(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            created_by=_created_by(current_user),
+            payload=payload,
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/debit-notes", response_model=DebitNoteListResponse)
+async def list_business_debit_notes(
+    status: str | None = Query(default=None, pattern="^(posted|cancelled)$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    limit: int = Query(default=100, ge=1, le=500),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="debit note listing",
+    )
+    return await list_debit_notes(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        status=status,
+        limit=limit,
+    )
+
+
+@router.get("/debit-notes/{debit_note_id}", response_model=DebitNoteResponse)
+async def get_business_debit_note(
+    debit_note_id: str,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="debit note lookup",
+    )
+    note = await get_debit_note(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        debit_note_id=debit_note_id,
+    )
+    if note is None:
+        raise HTTPException(status_code=404, detail="Debit note not found")
+    return note
+
+
+@router.post("/debit-notes/{debit_note_id}/cancel", response_model=DebitNoteResponse)
+async def cancel_business_debit_note(
+    debit_note_id: str,
+    payload: DebitNoteCancelRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="debit note reversal",
+    )
+    try:
+        return await cancel_debit_note(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            debit_note_id=debit_note_id,
             created_by=_created_by(current_user),
             payload=payload,
             idempotency_key=x_idempotency_key,

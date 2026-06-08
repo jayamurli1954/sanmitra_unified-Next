@@ -14,6 +14,8 @@ from app.modules.business.schemas import (
     PartyUpdateRequest,
     CreditNoteCreateRequest,
     CreditNoteLineItem,
+    DebitNoteCreateRequest,
+    DebitNoteLineItem,
     PurchaseBillCancelRequest,
     PurchaseBillCreateRequest,
     PurchaseBillLineItem,
@@ -1037,6 +1039,62 @@ async def test_credit_note_blocked_in_locked_period(monkeypatch):
             ),
             idempotency_key=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_debit_note_posts_mirror_of_bill(monkeypatch):
+    store = FakeCollection()
+    _seed_vendor(store)
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=1101), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_debit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=DebitNoteCreateRequest(
+            vendor_party_id="vend-1",
+            note_date=date(2026, 6, 20),
+            original_bill_number="SUP-2026-77",
+            reason="purchase_return",
+            is_inter_state=False,
+            line_items=[DebitNoteLineItem(description="Returned material", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("1180.00")
+    # Mirror of a purchase bill: payable DEBITED (reduced); expense + Input GST CREDITED (reduced).
+    assert {l.account_id: l.debit for l in lines if l.debit > 0} == {_INVOICE_ACCOUNT_IDS["21001"]: Decimal("1180.00")}
+    credits = {l.account_id: l.credit for l in lines if l.credit > 0}
+    assert credits[_INVOICE_ACCOUNT_IDS["51001"]] == Decimal("1000.00")
+    assert credits[_INVOICE_ACCOUNT_IDS["14001"]] == Decimal("90.00")
+    assert credits[_INVOICE_ACCOUNT_IDS["14002"]] == Decimal("90.00")
+    assert captured["payload"].source_document_type == "debit_note"
+    assert result["debit_note_number"].startswith("DN-2026-2027-")
+    assert result["note_total"] == "1180.00"
+    assert result["status"] == "posted"
+    assert audit_events[0]["action"] == "business_debit_note_posted"
 
 
 def _async_none():
