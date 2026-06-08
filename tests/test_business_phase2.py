@@ -12,9 +12,15 @@ from app.modules.business.schemas import (
     CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    SalesInvoiceCancelRequest,
+    SalesInvoiceCreateRequest,
+    SalesInvoiceLineItem,
     TypedVoucherCreateRequest,
     TypedVoucherReversalRequest,
 )
+
+# Account codes resolved by code in the BUSINESS chart of accounts.
+_INVOICE_ACCOUNT_IDS = {"12001": 100, "41001": 200, "41002": 201, "22001": 301, "22002": 302, "22003": 303}
 
 
 class FakeCollection:
@@ -531,6 +537,195 @@ async def test_reverse_typed_voucher_is_idempotent_after_domain_status(monkeypat
 
     assert result["created"] is False
     assert result["reversal_journal_entry_id"] == 99
+
+
+def _seed_customer(collection):
+    collection.docs.append(
+        {
+            "party_id": "cust-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "party_name": "Acme Traders",
+            "party_type": "customer",
+            "party_code": "CUST-001",
+            "gstin": "29ABCDE1234F1Z5",
+            "is_active": True,
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_posts_balanced_gst_journal(monkeypatch):
+    store = FakeCollection()
+    _seed_customer(store)
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_init_coa(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", fake_init_coa)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        captured.update(kwargs)
+        return SimpleNamespace(id=501), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_sales_invoice(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(
+            customer_party_id="cust-1",
+            invoice_date=date(2026, 6, 8),
+            is_inter_state=False,
+            line_items=[
+                SalesInvoiceLineItem(description="Widget", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18")),
+                SalesInvoiceLineItem(description="Service", quantity=Decimal("1"), rate=Decimal("5000"), gst_rate=Decimal("18")),
+            ],
+        ),
+        idempotency_key="inv-idem-1",
+    )
+
+    lines = captured["payload"].lines
+    total_debit = sum(line.debit for line in lines)
+    total_credit = sum(line.credit for line in lines)
+    assert total_debit == total_credit == Decimal("7080.00")
+    # AR debit carries the full invoice total.
+    assert lines[0].account_id == _INVOICE_ACCOUNT_IDS["12001"]
+    assert lines[0].debit == Decimal("7080.00")
+    # Income credit is the taxable base; CGST + SGST credits carry the tax.
+    assert lines[1].account_id == _INVOICE_ACCOUNT_IDS["41001"]
+    assert lines[1].credit == Decimal("6000.00")
+    gst_lines = {line.account_id: line.credit for line in lines[2:]}
+    assert gst_lines == {_INVOICE_ACCOUNT_IDS["22001"]: Decimal("540.00"), _INVOICE_ACCOUNT_IDS["22002"]: Decimal("540.00")}
+    assert captured["payload"].source_document_type == "sales_invoice"
+
+    assert result["status"] == "posted"
+    assert result["journal_entry_id"] == 501
+    assert result["invoice_number"].startswith("INV-2026-2027-")
+    assert result["taxable_total"] == "6000.00"
+    assert result["cgst_total"] == "540.00"
+    assert result["sgst_total"] == "540.00"
+    assert result["igst_total"] == "0.00"
+    assert result["invoice_total"] == "7080.00"
+    assert result["customer_name"] == "Acme Traders"
+    assert audit_events[0]["action"] == "business_sales_invoice_posted"
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_inter_state_uses_igst(monkeypatch):
+    store = FakeCollection()
+    _seed_customer(store)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=502), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_sales_invoice(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(
+            customer_party_id="cust-1",
+            invoice_date=date(2026, 6, 8),
+            is_inter_state=True,
+            line_items=[SalesInvoiceLineItem(description="Widget", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+
+    gst_lines = {line.account_id: line.credit for line in captured["payload"].lines[2:]}
+    assert gst_lines == {_INVOICE_ACCOUNT_IDS["22003"]: Decimal("180.00")}
+    assert result["igst_total"] == "180.00"
+    assert result["cgst_total"] == "0.00"
+    assert result["invoice_total"] == "1180.00"
+
+
+@pytest.mark.asyncio
+async def test_cancel_sales_invoice_posts_reversal(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        {
+            "invoice_id": "inv-1",
+            "invoice_number": "INV-2026-2027-000001",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "customer_party_id": "cust-1",
+            "invoice_date": "2026-06-08",
+            "journal_entry_id": 501,
+            "status": "posted",
+            "invoice_total": "1180.00",
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_reverse(session, *, journal_id, **kwargs):
+        captured["journal_id"] = journal_id
+        captured.update(kwargs)
+        return SimpleNamespace(id=601), True
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse)
+
+    result = await business_service.cancel_sales_invoice(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id="inv-1",
+        created_by="owner-2",
+        payload=SalesInvoiceCancelRequest(reason="Wrong customer"),
+        idempotency_key=None,
+    )
+
+    assert captured["journal_id"] == 501
+    assert result["status"] == "cancelled"
+    assert result["reversal_journal_entry_id"] == 601
+    assert store.docs[0]["status"] == "cancelled"
+    assert audit_events[0]["action"] == "business_sales_invoice_cancelled"
+
+
+def _async_none():
+    async def _noop():
+        return None
+    return _noop()
 
 
 def test_business_resolver_rejects_wrong_app_key():

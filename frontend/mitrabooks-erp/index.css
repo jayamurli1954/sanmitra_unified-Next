@@ -4026,6 +4026,111 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   color: var(--text-primary, #f8fafc);
 }
 
+/* Sales invoice form */
+.invoice-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.invoice-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-form-grid input,
+.invoice-form-grid select,
+.invoice-notes textarea,
+.invoice-lines input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  background: var(--surface, rgba(15, 23, 42, 0.6));
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+}
+
+.invoice-form-grid .invoice-inter-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  align-self: end;
+}
+
+.invoice-form-grid .invoice-inter-toggle input {
+  width: auto;
+  padding: 0;
+}
+
+.invoice-lines input[type="number"] {
+  width: 90px;
+}
+
+.invoice-lines input[name="description"] {
+  min-width: 160px;
+  width: 100%;
+}
+
+.invoice-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-notes textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.invoice-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+  margin-left: auto;
+  max-width: 360px;
+}
+
+.invoice-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-totals .invoice-grand {
+  border-top: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  padding-top: 8px;
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--text, #e2e8f0);
+}
+
+.invoice-totals .invoice-grand strong {
+  color: var(--accent, #3b82f6);
+}
+
+.invoice-form-actions,
+.invoice-detail-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.invoice-form-actions {
+  margin-top: 16px;
+}
+
 
 
 

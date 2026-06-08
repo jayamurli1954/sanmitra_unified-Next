@@ -1,5 +1,5 @@
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -21,6 +21,8 @@ from app.modules.business.schemas import (
     CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    SalesInvoiceCancelRequest,
+    SalesInvoiceCreateRequest,
     TypedVoucherCreateRequest,
     TypedVoucherReversalRequest,
 )
@@ -28,7 +30,14 @@ from app.modules.business.schemas import (
 PARTIES_COLLECTION = "business_parties"
 VOUCHERS_COLLECTION = "business_vouchers"
 VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
+SALES_INVOICES_COLLECTION = "business_sales_invoices"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+
+# Default Output-GST and receivable account codes from the BUSINESS chart of accounts.
+SALES_RECEIVABLE_CODE = "12001"  # Sundry Debtors
+OUTPUT_CGST_CODE = "22001"
+OUTPUT_SGST_CODE = "22002"
+OUTPUT_IGST_CODE = "22003"
 CA_DOCUMENT_DEFAULT_NEXT_ACTION = {
     "uploaded": "Classify document and assign reviewer",
     "under_review": "Review support and raise query if needed",
@@ -168,6 +177,10 @@ async def ensure_business_indexes() -> None:
     ca_documents = get_collection(CA_DOCUMENTS_COLLECTION)
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("updated_at", -1)])
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True)
+    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("invoice_date", -1)])
+    await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("invoice_id", 1)], unique=True)
+    await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -766,6 +779,380 @@ async def post_typed_voucher(
         action="business_voucher_posted",
         entity_type="business_voucher",
         entity_id=voucher_id,
+        new_value=result,
+    )
+    return result
+
+
+# ===================== Sales Invoices (GST) =====================
+
+
+def _q2(value) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _invoice_response_doc(doc: dict, *, created: bool = False) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("created", created)
+    return result
+
+
+def _compute_invoice_lines(payload: SalesInvoiceCreateRequest):
+    """Compute per-line taxable + GST split and roll up invoice totals.
+
+    Each monetary value is quantized to 2dp; totals are sums of rounded line
+    values so debits and credits stay balanced. For intra-state supply GST is
+    split CGST/SGST (with the remainder assigned to SGST to avoid rounding
+    drift); for inter-state it posts fully to IGST.
+    """
+    lines: list[dict] = []
+    taxable_total = Decimal("0.00")
+    cgst_total = Decimal("0.00")
+    sgst_total = Decimal("0.00")
+    igst_total = Decimal("0.00")
+    for item in payload.line_items:
+        taxable = _q2(Decimal(item.quantity) * Decimal(item.rate))
+        gst_amount = _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
+        if payload.is_inter_state:
+            cgst = Decimal("0.00")
+            sgst = Decimal("0.00")
+            igst = gst_amount
+        else:
+            cgst = _q2(gst_amount / Decimal("2"))
+            sgst = _q2(gst_amount - cgst)
+            igst = Decimal("0.00")
+        line_total = _q2(taxable + cgst + sgst + igst)
+        lines.append({
+            "description": item.description.strip(),
+            "hsn_sac": item.hsn_sac,
+            "quantity": str(Decimal(item.quantity)),
+            "rate": _money(item.rate),
+            "gst_rate": str(Decimal(item.gst_rate)),
+            "taxable_amount": str(taxable),
+            "cgst": str(cgst),
+            "sgst": str(sgst),
+            "igst": str(igst),
+            "line_total": str(line_total),
+        })
+        taxable_total += taxable
+        cgst_total += cgst
+        sgst_total += sgst
+        igst_total += igst
+    gst_total = cgst_total + sgst_total + igst_total
+    invoice_total = taxable_total + gst_total
+    return lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total
+
+
+async def _reserve_invoice_number(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    invoice_date,
+) -> str:
+    financial_year = f"{invoice_date.year}-{invoice_date.year + 1}" if invoice_date.month >= 4 else f"{invoice_date.year - 1}-{invoice_date.year}"
+    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:sales_invoice:{financial_year}"
+    counters = get_collection(VOUCHER_COUNTERS_COLLECTION)
+    try:
+        from pymongo import ReturnDocument
+
+        counter = await counters.find_one_and_update(
+            {"_id": counter_id},
+            {
+                "$inc": {"seq": 1},
+                "$setOnInsert": {
+                    "tenant_id": tenant_id,
+                    "app_key": app_key,
+                    "accounting_entity_id": accounting_entity_id,
+                    "voucher_type": "sales_invoice",
+                    "financial_year": financial_year,
+                    "created_at": _now(),
+                },
+                "$set": {"updated_at": _now()},
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        seq = int((counter or {}).get("seq") or 1)
+    except Exception:
+        existing = await get_collection(SALES_INVOICES_COLLECTION).count_documents(
+            {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+        )
+        seq = int(existing) + 1
+    return f"INV-{financial_year}-{seq:06d}"
+
+
+async def list_sales_invoices(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    status: str | None = None,
+    limit: int = 100,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+    }
+    if status:
+        filters["status"] = status
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(SALES_INVOICES_COLLECTION)
+        .find(filters)
+        .sort("invoice_date", -1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    return {"items": [_invoice_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def get_sales_invoice(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    invoice_id: str,
+) -> dict | None:
+    row = await get_collection(SALES_INVOICES_COLLECTION).find_one(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "invoice_id": invoice_id,
+        }
+    )
+    return _invoice_response_doc(row) if row else None
+
+
+async def create_sales_invoice(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    created_by: str,
+    payload: SalesInvoiceCreateRequest,
+    idempotency_key: str | None,
+) -> dict:
+    if app_key == "mitrabooks":
+        await initialize_default_chart_of_accounts(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            organization_type="BUSINESS",
+        )
+
+    if idempotency_key:
+        existing = await get_collection(SALES_INVOICES_COLLECTION).find_one(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "accounting_entity_id": payload.accounting_entity_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        if existing is not None:
+            return _invoice_response_doc(existing, created=False)
+
+    customer = await get_party(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        party_id=payload.customer_party_id,
+    )
+    if customer is None:
+        raise AccountingValidationError("Customer party not found for this tenant")
+
+    lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total = _compute_invoice_lines(payload)
+    if invoice_total <= Decimal("0"):
+        raise AccountingValidationError("Invoice total must be greater than zero")
+
+    receivable_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=None,
+        account_code=SALES_RECEIVABLE_CODE,
+        side="receivable",
+    )
+    income_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=None,
+        account_code=payload.income_account_code,
+        side="income",
+    )
+
+    journal_lines = [
+        JournalLineIn(account_id=receivable_id, debit=invoice_total, credit=Decimal("0")),
+        JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
+    ]
+    for gst_amount, code in (
+        (cgst_total, OUTPUT_CGST_CODE),
+        (sgst_total, OUTPUT_SGST_CODE),
+        (igst_total, OUTPUT_IGST_CODE),
+    ):
+        if gst_amount > Decimal("0"):
+            gst_account_id = await _resolve_voucher_account_id(
+                session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=payload.accounting_entity_id,
+                account_id=None,
+                account_code=code,
+                side="output GST",
+            )
+            journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=Decimal("0"), credit=gst_amount))
+
+    invoice_id = str(uuid4())
+    invoice_number = await _reserve_invoice_number(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        invoice_date=payload.invoice_date,
+    )
+    description = f"Sales Invoice {invoice_number} - {customer.get('party_name') or payload.customer_party_id}"
+    now = _now()
+    doc = {
+        "invoice_id": invoice_id,
+        "invoice_number": invoice_number,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "customer_party_id": payload.customer_party_id,
+        "customer_name": customer.get("party_name"),
+        "customer_gstin": customer.get("gstin"),
+        "invoice_date": payload.invoice_date.isoformat(),
+        "due_date": payload.due_date.isoformat() if payload.due_date else None,
+        "is_inter_state": payload.is_inter_state,
+        "place_of_supply": payload.place_of_supply,
+        "income_account_code": payload.income_account_code,
+        "reference": payload.reference,
+        "notes": payload.notes,
+        "line_items": lines,
+        "taxable_total": str(taxable_total),
+        "cgst_total": str(cgst_total),
+        "sgst_total": str(sgst_total),
+        "igst_total": str(igst_total),
+        "gst_total": str(gst_total),
+        "invoice_total": str(invoice_total),
+        "status": "posting",
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if idempotency_key:
+        doc["idempotency_key"] = idempotency_key
+    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    await invoices.insert_one(doc)
+
+    try:
+        journal_entry, created = await post_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            payload=JournalPostRequest(
+                entry_date=payload.invoice_date,
+                description=description,
+                reference=invoice_number,
+                source_module="business",
+                source_document_type="sales_invoice",
+                source_document_id=invoice_id,
+                lines=journal_lines,
+            ),
+            idempotency_key=idempotency_key or f"sales-invoice:{invoice_id}",
+        )
+    except Exception:
+        await invoices.delete_one({"tenant_id": tenant_id, "app_key": app_key, "invoice_id": invoice_id})
+        raise
+
+    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
+    await invoices.update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "invoice_id": invoice_id},
+        {"$set": update},
+    )
+    doc.update(update)
+    result = _invoice_response_doc(doc, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_sales_invoice_posted",
+        entity_type="business_sales_invoice",
+        entity_id=invoice_id,
+        new_value=result,
+    )
+    return result
+
+
+async def cancel_sales_invoice(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    invoice_id: str,
+    created_by: str,
+    payload: SalesInvoiceCancelRequest,
+    idempotency_key: str | None,
+) -> dict:
+    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "invoice_id": invoice_id,
+    }
+    invoice = await invoices.find_one(filters)
+    if invoice is None:
+        raise AccountingNotFoundError("Sales invoice not found")
+
+    if invoice.get("status") == "cancelled" and invoice.get("reversal_journal_entry_id"):
+        return _invoice_response_doc(invoice, created=False)
+
+    journal_entry_id = invoice.get("journal_entry_id")
+    if not journal_entry_id:
+        raise AccountingValidationError("Sales invoice is not linked to a posted journal entry")
+    if invoice.get("status") != "posted":
+        raise AccountingValidationError("Only posted sales invoices can be cancelled")
+
+    old_invoice = _invoice_response_doc(invoice)
+    reversal_key = idempotency_key or f"sales-invoice-cancel:{invoice_id}"
+    reversal, created = await reverse_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        created_by=created_by,
+        journal_id=int(journal_entry_id),
+        reversal_date=payload.cancel_date or date.today(),
+        reason=payload.reason,
+        idempotency_key=reversal_key,
+    )
+    update = {
+        "status": "cancelled",
+        "reversal_journal_entry_id": reversal.id,
+        "cancel_reason": payload.reason,
+        "cancelled_at": _now(),
+        "updated_at": _now(),
+    }
+    await invoices.update_one(filters, {"$set": update})
+    invoice.update(update)
+    result = _invoice_response_doc(invoice, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_sales_invoice_cancelled",
+        entity_type="business_sales_invoice",
+        entity_id=invoice_id,
+        old_value=old_invoice,
         new_value=result,
     )
     return result

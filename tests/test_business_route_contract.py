@@ -15,6 +15,10 @@ def test_business_phase2_target_routes_are_registered() -> None:
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/ca-documents", "phase2-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/ca-documents", "phase2-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "PATCH", "/api/v1/business/ca-documents/{param}", "phase2-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/invoices", "phase2-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/invoices", "phase2-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/invoices/{param}", "phase2-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/invoices/{param}/cancel", "phase2-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/audit/events", "phase2-contract", 1),
     ]
 

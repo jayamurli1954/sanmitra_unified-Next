@@ -150,3 +150,80 @@ class CaDocumentResponse(BaseModel):
 class CaDocumentListResponse(BaseModel):
     items: list[CaDocumentResponse]
     total: int
+
+
+SalesInvoiceStatus = Literal["posted", "cancelled"]
+
+
+class SalesInvoiceLineItem(BaseModel):
+    description: str = Field(..., min_length=1, max_length=300)
+    hsn_sac: str | None = Field(default=None, max_length=20)
+    quantity: Decimal = Field(..., gt=Decimal("0"))
+    rate: Decimal = Field(..., ge=Decimal("0"))
+    gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+
+
+class SalesInvoiceLineResponse(SalesInvoiceLineItem):
+    taxable_amount: Decimal
+    cgst: Decimal
+    sgst: Decimal
+    igst: Decimal
+    line_total: Decimal
+
+
+class SalesInvoiceCreateRequest(BaseModel):
+    customer_party_id: str = Field(..., min_length=1, max_length=80)
+    invoice_date: date
+    due_date: date | None = None
+    is_inter_state: bool = False
+    income_account_code: str = Field(default="41001", min_length=1, max_length=50)
+    place_of_supply: str | None = Field(default=None, max_length=80)
+    reference: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+    line_items: list[SalesInvoiceLineItem] = Field(..., min_length=1)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class SalesInvoiceCancelRequest(BaseModel):
+    reason: str = Field(default="Cancellation", min_length=1, max_length=240)
+    cancel_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class SalesInvoiceResponse(BaseModel):
+    invoice_id: str
+    invoice_number: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    customer_party_id: str
+    customer_name: str | None = None
+    customer_gstin: str | None = None
+    invoice_date: date
+    due_date: date | None = None
+    is_inter_state: bool
+    place_of_supply: str | None = None
+    income_account_code: str
+    reference: str | None = None
+    notes: str | None = None
+    line_items: list[SalesInvoiceLineResponse]
+    taxable_total: Decimal
+    cgst_total: Decimal
+    sgst_total: Decimal
+    igst_total: Decimal
+    gst_total: Decimal
+    invoice_total: Decimal
+    status: str
+    journal_entry_id: int | None = None
+    reversal_journal_entry_id: int | None = None
+    cancel_reason: str | None = None
+    cancelled_at: datetime | None = None
+    created: bool = False
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SalesInvoiceListResponse(BaseModel):
+    items: list[SalesInvoiceResponse]
+    total: int

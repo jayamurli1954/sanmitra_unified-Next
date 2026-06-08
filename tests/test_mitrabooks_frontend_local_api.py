@@ -137,7 +137,10 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     assert ".voucher-balance-status.balanced" in css_source
     assert "const hasAmount = totalDebit > 0 || totalCredit > 0" in app_source
     assert "#business-voucher-create-dialog" in css_source
-    assert "GST invoice" not in app_source
+    # Sprint 2: Sales Invoices with GST are part of the business shell.
+    assert "function renderBusinessSalesWorkspace()" in app_source
+    assert "/api/v1/business/invoices" in app_source
+    assert "function computeInvoiceLine(" in app_source
 
 
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
