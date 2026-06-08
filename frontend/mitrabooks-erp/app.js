@@ -5691,6 +5691,7 @@ function reversalPanel(kind, id, isoDate) {
         <button class="secondary" type="button" data-business-action="cancel-reverse-${kind}">Cancel</button>
       </div>
       <p class="muted">Must be dated within the document's GST month (${escapeHtml(b.label)}). A reversing journal entry will be posted on this date.</p>
+      <p class="muted reversal-scope-note">Use reverse only to correct an entry made in error in the open period. For returns, price changes, or ITC reversal, raise a ${kind === "bill" ? "debit note" : "credit note"} instead (coming soon).</p>
     </div>
   `;
 }
