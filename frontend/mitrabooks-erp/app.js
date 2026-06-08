@@ -42,7 +42,7 @@ function businessNavigationGroups() {
       name: "Income (Sales)",
       items: [
         { label: "Sales", businessWorkspace: "sales", icon: "SL", module: { module_key: "sales", frontend_path: "/business/sales", enabled: true } },
-        { label: "Credit Notes", businessWorkspace: "credit-notes", icon: "CN", module: { module_key: "sales", frontend_path: "/business/credit-notes", enabled: false } },
+        { label: "Credit Notes", businessWorkspace: "credit-notes", icon: "CN", module: { module_key: "sales", frontend_path: "/business/credit-notes", enabled: true } },
       ],
     },
     {
@@ -4523,6 +4523,9 @@ function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "bills") {
     return renderBusinessPurchaseWorkspace();
   }
+  if (activeBusinessWorkspace === "credit-notes") {
+    return renderBusinessCreditNoteWorkspace();
+  }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
   }
@@ -4902,6 +4905,11 @@ function setBusinessWorkspace(workspace) {
     loadBusinessParties();
     loadBusinessAccounts();
     loadBusinessBills();
+  } else if (workspace === "credit-notes") {
+    creditNoteView = "list";
+    loadBusinessParties();
+    loadBusinessAccounts();
+    loadCreditNotes();
   }
 }
 
@@ -4928,6 +4936,7 @@ function syncBusinessNavActiveState() {
       reports: "Financial Reports",
       sales: "Sales Invoices",
       bills: "Purchase Bills",
+      "credit-notes": "Credit Notes",
       "financial-health": "Financial Health",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -6707,6 +6716,431 @@ function renderBusinessPurchaseWorkspace() {
         <button class="secondary" type="button" data-business-action="open-create-bill">+ New Bill</button>
       </div>
       ${renderBillListTable()}
+    </div>
+  `;
+}
+
+// ========== Business Module: Credit Notes (sales GST adjustment) ==========
+
+let creditNoteView = "list"; // list | create | detail
+let lastCreditNotes = [];
+let lastCreditNoteDetail = null;
+let cnLineSeq = 0;
+let cnFormLines = [];
+let cnReverseOpen = false;
+const CN_REASONS = [
+  ["sales_return", "Sales return"],
+  ["discount", "Post-sale discount"],
+  ["price_revision", "Price revision (downward)"],
+  ["deficiency", "Deficiency in service/goods"],
+  ["other", "Other"],
+];
+const cnFormHeader = {
+  customer_party_id: "",
+  note_date: todayIsoDate(),
+  original_invoice_number: "",
+  reason: "sales_return",
+  is_inter_state: false,
+  income_account_code: "41001",
+  place_of_supply: "",
+  notes: "",
+};
+
+function rerenderCreditNoteIfActive() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "credit-notes") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function loadCreditNotes() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/credit-notes?limit=100", { method: "GET" });
+  lastCreditNotes = result.ok && Array.isArray(result.payload?.items) ? result.payload.items : [];
+  if (!result.ok) setLoginStatus("danger", "Unable to load credit notes", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  rerenderCreditNoteIfActive();
+  renderJson(apiOutput, { credit_notes: { ok: result.ok, count: lastCreditNotes.length } });
+}
+
+function syncCnFormFromDom() {
+  const form = document.querySelector("[data-cn-form]");
+  if (!form) return;
+  const val = (sel) => form.querySelector(sel)?.value ?? "";
+  cnFormHeader.customer_party_id = val("select[name='customer_party_id']");
+  cnFormHeader.note_date = val("input[name='note_date']") || todayIsoDate();
+  cnFormHeader.original_invoice_number = val("input[name='original_invoice_number']");
+  cnFormHeader.reason = val("select[name='reason']") || "sales_return";
+  cnFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  cnFormHeader.income_account_code = val("select[name='income_account_code']") || "41001";
+  cnFormHeader.place_of_supply = val("input[name='place_of_supply']");
+  cnFormHeader.notes = val("textarea[name='notes']");
+  cnFormLines = Array.from(form.querySelectorAll("[data-cn-line]")).map((row) => ({
+    id: row.getAttribute("data-cn-line"),
+    description: row.querySelector("input[name='description']")?.value || "",
+    hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
+    quantity: row.querySelector("input[name='quantity']")?.value || "",
+    rate: row.querySelector("input[name='rate']")?.value || "",
+    gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+  }));
+}
+
+function updateCnTotalsDisplay() {
+  const form = document.querySelector("[data-cn-form]");
+  if (!form) return;
+  const inter = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
+  form.querySelectorAll("[data-cn-line]").forEach((row) => {
+    const c = computeInvoiceLine(
+      row.querySelector("input[name='quantity']")?.value,
+      row.querySelector("input[name='rate']")?.value,
+      row.querySelector("input[name='gst_rate']")?.value,
+      inter,
+    );
+    row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
+    row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
+    row.querySelector("[data-line-total]").textContent = formatCurrency(c.total);
+    taxableTotal += c.taxable; cgstTotal += c.cgst; sgstTotal += c.sgst; igstTotal += c.igst;
+  });
+  const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
+  const noteTotal = round2(taxableTotal + gstTotal);
+  const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
+  set("[data-total-taxable]", taxableTotal);
+  set("[data-total-cgst]", cgstTotal);
+  set("[data-total-sgst]", sgstTotal);
+  set("[data-total-igst]", igstTotal);
+  set("[data-total-note]", noteTotal);
+  const cgstRow = form.querySelector("[data-row-cgst]");
+  const sgstRow = form.querySelector("[data-row-sgst]");
+  const igstRow = form.querySelector("[data-row-igst]");
+  if (cgstRow && sgstRow && igstRow) {
+    cgstRow.hidden = inter;
+    sgstRow.hidden = inter;
+    igstRow.hidden = !inter;
+  }
+}
+
+function setCreditNoteView(view) {
+  creditNoteView = view;
+  cnReverseOpen = false;
+  rerenderCreditNoteIfActive();
+  if (view === "create") {
+    updateCnTotalsDisplay();
+  }
+}
+
+function openCreditNoteCreate() {
+  cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  cnFormHeader.customer_party_id = "";
+  cnFormHeader.note_date = todayIsoDate();
+  cnFormHeader.original_invoice_number = "";
+  cnFormHeader.reason = "sales_return";
+  cnFormHeader.is_inter_state = false;
+  cnFormHeader.income_account_code = "41001";
+  cnFormHeader.place_of_supply = "";
+  cnFormHeader.notes = "";
+  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
+  if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  setCreditNoteView("create");
+}
+
+function addCnLine() {
+  syncCnFormFromDom();
+  cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  rerenderCreditNoteIfActive();
+  updateCnTotalsDisplay();
+}
+
+function removeCnLine(lineId) {
+  syncCnFormFromDom();
+  cnFormLines = cnFormLines.filter((l) => l.id !== lineId);
+  if (cnFormLines.length === 0) {
+    cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  }
+  rerenderCreditNoteIfActive();
+  updateCnTotalsDisplay();
+}
+
+async function submitCreditNote() {
+  syncCnFormFromDom();
+  if (!cnFormHeader.customer_party_id) {
+    setLoginStatus("warn", "Customer required", "Select the customer for this credit note.");
+    return;
+  }
+  const lineItems = cnFormLines
+    .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
+    .map((l) => ({
+      description: String(l.description).trim(),
+      hsn_sac: String(l.hsn_sac || "").trim() || null,
+      quantity: String(Number(l.quantity)),
+      rate: String(Number(l.rate || 0)),
+      gst_rate: String(Number(l.gst_rate || 0)),
+    }));
+  if (lineItems.length === 0) {
+    setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
+    return;
+  }
+  const body = {
+    customer_party_id: cnFormHeader.customer_party_id,
+    note_date: cnFormHeader.note_date || todayIsoDate(),
+    original_invoice_number: String(cnFormHeader.original_invoice_number || "").trim() || null,
+    reason: cnFormHeader.reason || "sales_return",
+    is_inter_state: !!cnFormHeader.is_inter_state,
+    income_account_code: cnFormHeader.income_account_code || "41001",
+    place_of_supply: String(cnFormHeader.place_of_supply || "").trim() || null,
+    notes: String(cnFormHeader.notes || "").trim() || null,
+    line_items: lineItems,
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/credit-notes", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `credit-note-${Date.now()}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Credit note posted", `${result.payload?.credit_note_number || "Credit note"} posted to the ledger.`);
+    await loadCreditNotes();
+    setCreditNoteView("list");
+  } else {
+    setLoginStatus("danger", "Credit note failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { create_credit_note: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
+}
+
+async function openCreditNoteDetail(noteId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/credit-notes/${encodeURIComponent(noteId)}`, { method: "GET" });
+  if (result.ok) {
+    lastCreditNoteDetail = result.payload;
+    setCreditNoteView("detail");
+  } else {
+    setLoginStatus("danger", "Unable to load credit note", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { credit_note_detail: { ok: result.ok, status: result.status } });
+}
+
+async function cancelCreditNote(noteId, reversalDate) {
+  const body = { reason: "Reversal" };
+  if (reversalDate) body.cancel_date = reversalDate;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/credit-notes/${encodeURIComponent(noteId)}/cancel`, {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `credit-note-cancel-${noteId}-${reversalDate || "today"}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    cnReverseOpen = false;
+    setLoginStatus("ok", "Credit note reversed", "A reversing journal entry was posted.");
+    await loadCreditNotes();
+    if (lastCreditNoteDetail && lastCreditNoteDetail.credit_note_id === noteId) {
+      lastCreditNoteDetail = result.payload;
+    }
+    rerenderCreditNoteIfActive();
+  } else {
+    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { cancel_credit_note: { ok: result.ok, status: result.status } });
+}
+
+function cnReasonLabel(value) {
+  const found = CN_REASONS.find((r) => r[0] === value);
+  return found ? found[1] : (value || "");
+}
+
+function renderCnListTable() {
+  const rows = lastCreditNotes;
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Credit Note #</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Against</th>
+            <th class="amount">Taxable</th>
+            <th class="amount">GST</th>
+            <th class="amount">Total</th>
+            <th>Status</th>
+            <th>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map((n) => `
+            <tr>
+              <td>${escapeHtml(n.credit_note_number || "")}</td>
+              <td>${escapeHtml(n.note_date || "")}</td>
+              <td>${escapeHtml(n.customer_name || n.customer_party_id || "")}</td>
+              <td>${escapeHtml(n.original_invoice_number || "—")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.taxable_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.gst_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(n.note_total || 0))}</td>
+              <td>${invoiceStatusPill(n.status)}</td>
+              <td><button class="secondary" type="button" data-business-action="view-credit-note" data-cn-id="${escapeHtml(n.credit_note_id)}">View</button></td>
+            </tr>
+          `).join("") : `<tr><td colspan="9" class="muted">No credit notes yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderCreditNoteCreateForm() {
+  const customers = customerPartyOptions();
+  const incomeAccounts = incomeAccountOptions();
+  const lineRows = cnFormLines.map((l) => `
+    <tr data-cn-line="${escapeHtml(l.id)}">
+      <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
+      <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
+      <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
+      <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
+      <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      <td class="amount" data-line-taxable>—</td>
+      <td class="amount" data-line-gst>—</td>
+      <td class="amount" data-line-total>—</td>
+      <td><button class="secondary" type="button" data-business-action="remove-cn-line" data-line-id="${escapeHtml(l.id)}">✕</button></td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="verification-panel erp-workspace-panel" data-cn-form>
+      <div class="preview-heading compact">
+        <div>
+          <h4>New Credit Note</h4>
+          <p>Reduce a customer's invoice (return, discount, or price revision). Reduces output GST and receivables.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="cn-back">← Back to list</button>
+      </div>
+      <div class="invoice-form-grid">
+        <label>Customer
+          <select name="customer_party_id">
+            <option value="">Select customer</option>
+            ${customers.map((c) => `<option value="${escapeHtml(c.party_id)}" ${c.party_id === cnFormHeader.customer_party_id ? "selected" : ""}>${escapeHtml(c.party_name)}${c.gstin ? ` (${escapeHtml(c.gstin)})` : ""}</option>`).join("")}
+          </select>
+        </label>
+        <label>Note date
+          <input type="date" name="note_date" value="${escapeHtml(cnFormHeader.note_date)}">
+        </label>
+        <label>Against invoice #
+          <input type="text" name="original_invoice_number" value="${escapeHtml(cnFormHeader.original_invoice_number)}" placeholder="Original invoice number">
+        </label>
+        <label>Reason
+          <select name="reason">
+            ${CN_REASONS.map(([v, lbl]) => `<option value="${escapeHtml(v)}" ${v === cnFormHeader.reason ? "selected" : ""}>${escapeHtml(lbl)}</option>`).join("")}
+          </select>
+        </label>
+        <label>Income account
+          <select name="income_account_code">
+            ${incomeAccounts.length ? incomeAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === cnFormHeader.income_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="41001" selected>41001 - Sales</option>`}
+          </select>
+        </label>
+        <label>Place of supply
+          <input type="text" name="place_of_supply" value="${escapeHtml(cnFormHeader.place_of_supply)}" placeholder="State / code">
+        </label>
+        <label class="invoice-inter-toggle">
+          <input type="checkbox" name="is_inter_state" ${cnFormHeader.is_inter_state ? "checked" : ""}>
+          Inter-state supply (IGST)
+        </label>
+      </div>
+
+      <div class="table-preview compact-table invoice-lines">
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST %</th>
+              <th class="amount">Taxable</th><th class="amount">GST</th><th class="amount">Total</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${lineRows}</tbody>
+        </table>
+      </div>
+      <button class="secondary" type="button" data-business-action="add-cn-line">+ Add line</button>
+
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
+        <div data-row-cgst ${cnFormHeader.is_inter_state ? "hidden" : ""}><span>CGST</span><strong data-total-cgst>${formatCurrency(0)}</strong></div>
+        <div data-row-sgst ${cnFormHeader.is_inter_state ? "hidden" : ""}><span>SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
+        <div data-row-igst ${cnFormHeader.is_inter_state ? "" : "hidden"}><span>IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand"><span>Credit note total</span><strong data-total-note>${formatCurrency(0)}</strong></div>
+      </div>
+
+      <label class="invoice-notes">Notes
+        <textarea name="notes" rows="2" placeholder="Optional notes">${escapeHtml(cnFormHeader.notes)}</textarea>
+      </label>
+
+      <div class="invoice-form-actions">
+        <button class="primary" type="button" data-business-action="save-credit-note">Post Credit Note</button>
+        <button class="secondary" type="button" data-business-action="cn-back">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderCreditNoteDetail() {
+  const n = lastCreditNoteDetail;
+  if (!n) {
+    return `<div class="verification-panel erp-workspace-panel"><p class="muted">Credit note not found.</p></div>`;
+  }
+  const lines = Array.isArray(n.line_items) ? n.line_items : [];
+  const taxRow = n.is_inter_state
+    ? `<div><span>IGST</span><strong>${formatCurrency(n.igst_total || 0)}</strong></div>`
+    : `<div><span>CGST</span><strong>${formatCurrency(n.cgst_total || 0)}</strong></div><div><span>SGST</span><strong>${formatCurrency(n.sgst_total || 0)}</strong></div>`;
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Credit Note ${escapeHtml(n.credit_note_number || "")} ${invoiceStatusPill(n.status)}</h4>
+          <p>${escapeHtml(n.customer_name || n.customer_party_id || "")}${n.customer_gstin ? ` · ${escapeHtml(n.customer_gstin)}` : ""} · ${escapeHtml(n.note_date || "")}${n.original_invoice_number ? ` · against ${escapeHtml(n.original_invoice_number)}` : ""}</p>
+        </div>
+        <div class="invoice-detail-actions">
+          <button class="secondary" type="button" data-business-action="cn-back">← Back to list</button>
+          ${String(n.status).toLowerCase() === "posted" && !cnReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-cn">Reverse</button>` : ""}
+        </div>
+      </div>
+      ${String(n.status).toLowerCase() === "posted" && cnReverseOpen ? reversalPanel("cn", n.credit_note_id, n.note_date) : ""}
+      <p class="muted">${escapeHtml(cnReasonLabel(n.reason))}${n.is_inter_state ? " · Inter-state (IGST)" : " · Intra-state (CGST + SGST)"}</p>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr><th>Description</th><th>HSN/SAC</th><th class="amount">Qty</th><th class="amount">Rate</th><th class="amount">GST %</th><th class="amount">Taxable</th><th class="amount">Total</th></tr>
+          </thead>
+          <tbody>
+            ${lines.map((l) => `
+              <tr>
+                <td>${escapeHtml(l.description || "")}</td>
+                <td>${escapeHtml(l.hsn_sac || "")}</td>
+                <td class="amount">${escapeHtml(l.quantity || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.rate || 0))}</td>
+                <td class="amount">${escapeHtml(String(l.gst_rate || 0))}%</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.taxable_amount || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.line_total || 0))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong>${formatCurrency(n.taxable_total || 0)}</strong></div>
+        ${taxRow}
+        <div class="invoice-grand"><span>Credit note total</span><strong>${formatCurrency(n.note_total || 0)}</strong></div>
+      </div>
+      ${n.notes ? `<p class="muted">${escapeHtml(n.notes)}</p>` : ""}
+      ${String(n.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${n.cancel_reason ? `: ${escapeHtml(n.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(n.reversal_journal_entry_id || "")} posted.</p>` : ""}
+    </div>
+  `;
+}
+
+function renderBusinessCreditNoteWorkspace() {
+  if (creditNoteView === "create") {
+    return renderCreditNoteCreateForm();
+  }
+  if (creditNoteView === "detail") {
+    return renderCreditNoteDetail();
+  }
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Credit Notes</h4>
+          <p>Sales-side GST adjustments against invoices (returns, discounts, price revisions).</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="open-create-credit-note">+ New Credit Note</button>
+      </div>
+      ${renderCnListTable()}
     </div>
   `;
 }
@@ -10126,6 +10560,28 @@ dashboardPreview.addEventListener("click", (event) => {
     lockGstPeriodFromInput();
   } else if (businessAction === "unlock-period") {
     setGstPeriodLock(button.getAttribute("data-period") || "", false);
+  } else if (businessAction === "open-create-credit-note") {
+    openCreditNoteCreate();
+  } else if (businessAction === "add-cn-line") {
+    addCnLine();
+  } else if (businessAction === "remove-cn-line") {
+    removeCnLine(button.getAttribute("data-line-id") || "");
+  } else if (businessAction === "save-credit-note") {
+    submitCreditNote();
+  } else if (businessAction === "cn-back") {
+    setCreditNoteView("list");
+  } else if (businessAction === "view-credit-note") {
+    openCreditNoteDetail(button.getAttribute("data-cn-id") || "");
+  } else if (businessAction === "begin-reverse-cn") {
+    cnReverseOpen = true;
+    rerenderCreditNoteIfActive();
+  } else if (businessAction === "cancel-reverse-cn") {
+    cnReverseOpen = false;
+    rerenderCreditNoteIfActive();
+  } else if (businessAction === "confirm-reverse-cn") {
+    const noteId = button.getAttribute("data-cn-id") || "";
+    const dateInput = document.querySelector("[data-reversal-date]");
+    cancelCreditNote(noteId, dateInput?.value || "");
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
@@ -10133,6 +10589,8 @@ dashboardPreview.addEventListener("input", (event) => {
     updateInvoiceTotalsDisplay();
   } else if (event.target.closest("[data-bill-form]")) {
     updateBillTotalsDisplay();
+  } else if (event.target.closest("[data-cn-form]")) {
+    updateCnTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
@@ -10143,6 +10601,8 @@ dashboardPreview.addEventListener("change", (event) => {
     updateInvoiceTotalsDisplay();
   } else if (event.target.closest("[data-bill-form]")) {
     updateBillTotalsDisplay();
+  } else if (event.target.closest("[data-cn-form]")) {
+    updateCnTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {

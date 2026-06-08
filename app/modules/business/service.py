@@ -19,6 +19,8 @@ from app.db.mongo import get_collection
 from app.modules.business.schemas import (
     CaDocumentCreateRequest,
     CaDocumentUpdateRequest,
+    CreditNoteCancelRequest,
+    CreditNoteCreateRequest,
     GstPeriodLockUpdateRequest,
     INVOICE_STANDARD_FIELDS,
     InvoiceSettings,
@@ -40,6 +42,7 @@ SALES_INVOICES_COLLECTION = "business_sales_invoices"
 PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
 INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
 GST_PERIOD_LOCKS_COLLECTION = "business_gst_period_locks"
+CREDIT_NOTES_COLLECTION = "business_credit_notes"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
 
 _MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -206,6 +209,10 @@ async def ensure_business_indexes() -> None:
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
     period_locks = get_collection(GST_PERIOD_LOCKS_COLLECTION)
     await period_locks.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("period", 1)], unique=True)
+    credit_notes = get_collection(CREDIT_NOTES_COLLECTION)
+    await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("note_date", -1)])
+    await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("credit_note_id", 1)], unique=True)
+    await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -1737,3 +1744,275 @@ async def set_gst_period_lock(
         new_value={**filters, **update_doc},
     )
     return _period_lock_response_doc({**filters, **update_doc})
+
+
+# ===================== Credit Notes (sales-side GST adjustment) =====================
+
+
+async def _reserve_sequence_number(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    doc_type: str,
+    prefix: str,
+    on_date,
+    fallback_collection: str,
+) -> str:
+    financial_year = f"{on_date.year}-{on_date.year + 1}" if on_date.month >= 4 else f"{on_date.year - 1}-{on_date.year}"
+    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:{doc_type}:{financial_year}"
+    counters = get_collection(VOUCHER_COUNTERS_COLLECTION)
+    try:
+        from pymongo import ReturnDocument
+
+        counter = await counters.find_one_and_update(
+            {"_id": counter_id},
+            {
+                "$inc": {"seq": 1},
+                "$setOnInsert": {
+                    "tenant_id": tenant_id,
+                    "app_key": app_key,
+                    "accounting_entity_id": accounting_entity_id,
+                    "voucher_type": doc_type,
+                    "financial_year": financial_year,
+                    "created_at": _now(),
+                },
+                "$set": {"updated_at": _now()},
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        seq = int((counter or {}).get("seq") or 1)
+    except Exception:
+        existing = await get_collection(fallback_collection).count_documents(
+            {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+        )
+        seq = int(existing) + 1
+    return f"{prefix}-{financial_year}-{seq:06d}"
+
+
+def _credit_note_response_doc(doc: dict, *, created: bool = False) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("created", created)
+    return result
+
+
+async def list_credit_notes(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    status: str | None = None,
+    limit: int = 100,
+) -> dict:
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    if status:
+        filters["status"] = status
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(CREDIT_NOTES_COLLECTION)
+        .find(filters)
+        .sort("note_date", -1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    return {"items": [_credit_note_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def get_credit_note(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    credit_note_id: str,
+) -> dict | None:
+    row = await get_collection(CREDIT_NOTES_COLLECTION).find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id, "credit_note_id": credit_note_id}
+    )
+    return _credit_note_response_doc(row) if row else None
+
+
+async def create_credit_note(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    created_by: str,
+    payload: CreditNoteCreateRequest,
+    idempotency_key: str | None,
+) -> dict:
+    if app_key == "mitrabooks":
+        await initialize_default_chart_of_accounts(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            organization_type="BUSINESS",
+        )
+
+    if idempotency_key:
+        existing = await get_collection(CREDIT_NOTES_COLLECTION).find_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "idempotency_key": idempotency_key}
+        )
+        if existing is not None:
+            return _credit_note_response_doc(existing, created=False)
+
+    customer = await get_party(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id, party_id=payload.customer_party_id,
+    )
+    if customer is None:
+        raise AccountingValidationError("Customer party not found for this tenant")
+
+    # A credit note is posted in an open period; block if that month is finalised.
+    if await is_gst_period_locked(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id, period=_period_key(payload.note_date),
+    ):
+        raise AccountingValidationError(
+            f"The {_period_label(_period_key(payload.note_date))} GST period is finalised and locked. Choose a date in an open period."
+        )
+
+    lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, note_total = _compute_invoice_lines(payload)
+    if note_total <= Decimal("0"):
+        raise AccountingValidationError("Credit note total must be greater than zero")
+
+    receivable_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        account_id=None, account_code=SALES_RECEIVABLE_CODE, side="receivable",
+    )
+    income_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        account_id=None, account_code=payload.income_account_code, side="income",
+    )
+
+    # Mirror of a sales invoice: Dr income (reduce) + Dr output GST (reduce liability); Cr receivable (reduce).
+    journal_lines = [
+        JournalLineIn(account_id=income_id, debit=taxable_total, credit=Decimal("0")),
+    ]
+    for gst_amount, code in ((cgst_total, OUTPUT_CGST_CODE), (sgst_total, OUTPUT_SGST_CODE), (igst_total, OUTPUT_IGST_CODE)):
+        if gst_amount > Decimal("0"):
+            gst_account_id = await _resolve_voucher_account_id(
+                session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+                account_id=None, account_code=code, side="output GST",
+            )
+            journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=gst_amount, credit=Decimal("0")))
+    journal_lines.append(JournalLineIn(account_id=receivable_id, debit=Decimal("0"), credit=note_total))
+
+    credit_note_id = str(uuid4())
+    credit_note_number = await _reserve_sequence_number(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        doc_type="credit_note", prefix="CN", on_date=payload.note_date, fallback_collection=CREDIT_NOTES_COLLECTION,
+    )
+    ref_suffix = f" against {payload.original_invoice_number}" if payload.original_invoice_number else ""
+    description = f"Credit Note {credit_note_number} - {customer.get('party_name') or payload.customer_party_id}{ref_suffix}"
+    now = _now()
+    doc = {
+        "credit_note_id": credit_note_id,
+        "credit_note_number": credit_note_number,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "customer_party_id": payload.customer_party_id,
+        "customer_name": customer.get("party_name"),
+        "customer_gstin": customer.get("gstin"),
+        "note_date": payload.note_date.isoformat(),
+        "original_invoice_id": payload.original_invoice_id,
+        "original_invoice_number": payload.original_invoice_number,
+        "reason": payload.reason,
+        "is_inter_state": payload.is_inter_state,
+        "place_of_supply": payload.place_of_supply,
+        "income_account_code": payload.income_account_code,
+        "notes": payload.notes,
+        "line_items": lines,
+        "taxable_total": str(taxable_total),
+        "cgst_total": str(cgst_total),
+        "sgst_total": str(sgst_total),
+        "igst_total": str(igst_total),
+        "gst_total": str(gst_total),
+        "note_total": str(note_total),
+        "status": "posting",
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if idempotency_key:
+        doc["idempotency_key"] = idempotency_key
+    credit_notes = get_collection(CREDIT_NOTES_COLLECTION)
+    await credit_notes.insert_one(doc)
+
+    try:
+        journal_entry, created = await post_journal_entry(
+            session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            payload=JournalPostRequest(
+                entry_date=payload.note_date, description=description, reference=credit_note_number,
+                source_module="business", source_document_type="credit_note", source_document_id=credit_note_id,
+                lines=journal_lines,
+            ),
+            idempotency_key=idempotency_key or f"credit-note:{credit_note_id}",
+        )
+    except Exception:
+        await credit_notes.delete_one({"tenant_id": tenant_id, "app_key": app_key, "credit_note_id": credit_note_id})
+        raise
+
+    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
+    await credit_notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "credit_note_id": credit_note_id}, {"$set": update})
+    doc.update(update)
+    result = _credit_note_response_doc(doc, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id, app_key=app_key, user_id=created_by,
+        action="business_credit_note_posted", entity_type="business_credit_note", entity_id=credit_note_id, new_value=result,
+    )
+    return result
+
+
+async def cancel_credit_note(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    credit_note_id: str,
+    created_by: str,
+    payload: CreditNoteCancelRequest,
+    idempotency_key: str | None,
+) -> dict:
+    credit_notes = get_collection(CREDIT_NOTES_COLLECTION)
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "credit_note_id": credit_note_id}
+    note = await credit_notes.find_one(filters)
+    if note is None:
+        raise AccountingNotFoundError("Credit note not found")
+    if note.get("status") == "cancelled" and note.get("reversal_journal_entry_id"):
+        return _credit_note_response_doc(note, created=False)
+    journal_entry_id = note.get("journal_entry_id")
+    if not journal_entry_id:
+        raise AccountingValidationError("Credit note is not linked to a posted journal entry")
+    if note.get("status") != "posted":
+        raise AccountingValidationError("Only posted credit notes can be reversed")
+
+    reversal_date = payload.cancel_date or date.today()
+    await _validate_reversal_period(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        original_date=note.get("note_date"), reversal_date=reversal_date, document_label="credit note",
+    )
+
+    old_note = _credit_note_response_doc(note)
+    reversal, created = await reverse_journal_entry(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        created_by=created_by, journal_id=int(journal_entry_id), reversal_date=reversal_date,
+        reason=payload.reason, idempotency_key=idempotency_key or f"credit-note-cancel:{credit_note_id}",
+    )
+    update = {
+        "status": "cancelled",
+        "reversal_journal_entry_id": reversal.id,
+        "cancel_reason": payload.reason,
+        "cancelled_at": _now(),
+        "updated_at": _now(),
+    }
+    await credit_notes.update_one(filters, {"$set": update})
+    note.update(update)
+    result = _credit_note_response_doc(note, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id, app_key=app_key, user_id=created_by,
+        action="business_credit_note_cancelled", entity_type="business_credit_note", entity_id=credit_note_id,
+        old_value=old_note, new_value=result,
+    )
+    return result

@@ -12,6 +12,8 @@ from app.modules.business.schemas import (
     CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    CreditNoteCreateRequest,
+    CreditNoteLineItem,
     PurchaseBillCancelRequest,
     PurchaseBillCreateRequest,
     PurchaseBillLineItem,
@@ -953,6 +955,88 @@ async def test_gst_period_lock_blocks_then_unlock_allows(monkeypatch):
     assert await business_service.is_gst_period_locked(
         tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary", period="2026-06",
     ) is False
+
+
+@pytest.mark.asyncio
+async def test_credit_note_posts_mirror_of_invoice(monkeypatch):
+    store = FakeCollection()
+    _seed_customer(store)
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=1001), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_credit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=CreditNoteCreateRequest(
+            customer_party_id="cust-1",
+            note_date=date(2026, 6, 20),
+            original_invoice_number="INV-2026-2027-000001",
+            reason="sales_return",
+            is_inter_state=False,
+            line_items=[CreditNoteLineItem(description="Returned widget", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("1180.00")
+    # Mirror of invoice: income + output GST are DEBITED (reduced); receivable is CREDITED (reduced).
+    debits = {l.account_id: l.debit for l in lines if l.debit > 0}
+    assert debits[_INVOICE_ACCOUNT_IDS["41001"]] == Decimal("1000.00")
+    assert debits[_INVOICE_ACCOUNT_IDS["22001"]] == Decimal("90.00")
+    assert debits[_INVOICE_ACCOUNT_IDS["22002"]] == Decimal("90.00")
+    credits = {l.account_id: l.credit for l in lines if l.credit > 0}
+    assert credits == {_INVOICE_ACCOUNT_IDS["12001"]: Decimal("1180.00")}
+    assert captured["payload"].source_document_type == "credit_note"
+    assert result["credit_note_number"].startswith("CN-2026-2027-")
+    assert result["note_total"] == "1180.00"
+    assert result["status"] == "posted"
+    assert audit_events[0]["action"] == "business_credit_note_posted"
+
+
+@pytest.mark.asyncio
+async def test_credit_note_blocked_in_locked_period(monkeypatch):
+    store = FakeCollection()
+    _seed_customer(store)
+    store.docs.append({"tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary", "period": "2026-06", "locked": True})
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fail_post(*_a, **_k):
+        raise AssertionError("must not post into a locked period")
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fail_post)
+
+    with pytest.raises(business_service.AccountingValidationError, match="finalised and locked"):
+        await business_service.create_credit_note(
+            None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+            payload=CreditNoteCreateRequest(
+                customer_party_id="cust-1", note_date=date(2026, 6, 20),
+                line_items=[CreditNoteLineItem(description="x", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+            ),
+            idempotency_key=None,
+        )
 
 
 def _async_none():
