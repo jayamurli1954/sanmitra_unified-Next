@@ -28,4 +28,4 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Deploy to Vercel staging
-        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
