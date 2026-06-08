@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - "frontend/**"
+  workflow_dispatch:
 
 concurrency:
   group: vercel-staging
