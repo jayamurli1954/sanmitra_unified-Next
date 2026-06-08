@@ -227,3 +227,64 @@ class SalesInvoiceResponse(BaseModel):
 class SalesInvoiceListResponse(BaseModel):
     items: list[SalesInvoiceResponse]
     total: int
+
+
+# ---- Invoice form customization settings (per-tenant) ----
+
+# Standard optional fields that admins can show/hide/require on the invoice form.
+INVOICE_STANDARD_FIELDS = ["due_date", "place_of_supply", "reference", "notes", "hsn_sac"]
+
+
+class InvoiceFieldRule(BaseModel):
+    visible: bool = True
+    required: bool = False
+
+
+class InvoiceNumberingConfig(BaseModel):
+    prefix: str = Field(default="INV", min_length=1, max_length=20)
+    # Token-based format. Supported tokens: {PREFIX} {FY} {FYSHORT} {SEQ}
+    number_format: str = Field(default="{PREFIX}-{FY}-{SEQ}", min_length=1, max_length=80)
+    start_number: int = Field(default=1, ge=1)
+    seq_padding: int = Field(default=6, ge=1, le=12)
+    reset_yearly: bool = True
+
+
+class InvoiceCustomFieldDef(BaseModel):
+    key: str = Field(..., min_length=1, max_length=40, pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$")
+    label: str = Field(..., min_length=1, max_length=60)
+    scope: Literal["header", "line"] = "header"
+    field_type: Literal["text", "number", "date"] = "text"
+    required: bool = False
+
+
+class InvoiceBrandingConfig(BaseModel):
+    business_name: str | None = Field(default=None, max_length=160)
+    address: str | None = Field(default=None, max_length=400)
+    gstin: str | None = Field(default=None, max_length=20)
+    bank_details: str | None = Field(default=None, max_length=400)
+    terms: str | None = Field(default=None, max_length=1000)
+    footer: str | None = Field(default=None, max_length=300)
+    logo_url: str | None = Field(default=None, max_length=400)
+
+
+def _default_field_config() -> dict[str, InvoiceFieldRule]:
+    return {key: InvoiceFieldRule() for key in INVOICE_STANDARD_FIELDS}
+
+
+class InvoiceSettings(BaseModel):
+    field_config: dict[str, InvoiceFieldRule] = Field(default_factory=_default_field_config)
+    numbering: InvoiceNumberingConfig = Field(default_factory=InvoiceNumberingConfig)
+    custom_fields: list[InvoiceCustomFieldDef] = Field(default_factory=list)
+    branding: InvoiceBrandingConfig = Field(default_factory=InvoiceBrandingConfig)
+
+
+class InvoiceSettingsUpdateRequest(InvoiceSettings):
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class InvoiceSettingsResponse(InvoiceSettings):
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    updated_by: str | None = None
+    updated_at: datetime | None = None

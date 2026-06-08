@@ -4870,6 +4870,7 @@ function setBusinessWorkspace(workspace) {
     salesView = "list";
     loadBusinessParties();
     loadBusinessAccounts();
+    loadInvoiceSettings();
     loadBusinessInvoices();
   }
 }
@@ -5490,9 +5491,10 @@ function loadBusinessReportLedgerFromSelect() {
 
 // ========== Business Module: Sales Invoices (GST) ==========
 
-let salesView = "list"; // list | create | detail
+let salesView = "list"; // list | create | detail | settings
 let lastBusinessInvoices = [];
 let lastInvoiceDetail = null;
+let lastInvoiceSettings = null;
 let invoiceLineSeq = 0;
 let invoiceFormLines = [];
 const salesFormHeader = {
@@ -5501,9 +5503,53 @@ const salesFormHeader = {
   due_date: "",
   is_inter_state: false,
   income_account_code: "41001",
+  place_of_supply: "",
   reference: "",
   notes: "",
 };
+
+const INVOICE_STANDARD_FIELD_LABELS = {
+  due_date: "Due date",
+  place_of_supply: "Place of supply",
+  reference: "Reference / PO",
+  notes: "Notes",
+  hsn_sac: "HSN/SAC (line column)",
+};
+
+function isBusinessAdmin() {
+  const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
+  // Show settings to admins; when role is unknown the backend still enforces access on save.
+  return role === "" || role === "tenant_admin" || role === "super_admin";
+}
+
+function invoiceFieldRule(key) {
+  const fc = (lastInvoiceSettings && lastInvoiceSettings.field_config) || {};
+  return fc[key] || { visible: true, required: false };
+}
+
+function invoiceFieldVisible(key) {
+  return invoiceFieldRule(key).visible !== false;
+}
+
+function invoiceFieldRequired(key) {
+  return !!invoiceFieldRule(key).required;
+}
+
+async function loadInvoiceSettings() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", { method: "GET" });
+  if (result.ok) {
+    lastInvoiceSettings = result.payload;
+  } else if (!lastInvoiceSettings) {
+    // Fall back to permissive defaults so the form still renders.
+    lastInvoiceSettings = {
+      field_config: { due_date: { visible: true, required: false }, place_of_supply: { visible: true, required: false }, reference: { visible: true, required: false }, notes: { visible: true, required: false }, hsn_sac: { visible: true, required: false } },
+      numbering: { prefix: "INV", number_format: "{PREFIX}-{FY}-{SEQ}", seq_padding: 6, start_number: 1, reset_yearly: true },
+      custom_fields: [],
+      branding: {},
+    };
+  }
+  rerenderSalesIfActive();
+}
 
 function round2(value) {
   const n = Number(value);
@@ -5560,6 +5606,7 @@ function syncSalesFormFromDom() {
   salesFormHeader.due_date = val("input[name='due_date']");
   salesFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
   salesFormHeader.income_account_code = val("select[name='income_account_code']") || "41001";
+  salesFormHeader.place_of_supply = val("input[name='place_of_supply']");
   salesFormHeader.reference = val("input[name='reference']");
   salesFormHeader.notes = val("textarea[name='notes']");
   invoiceFormLines = Array.from(form.querySelectorAll("[data-invoice-line]")).map((row) => ({
@@ -5621,11 +5668,13 @@ function openInvoiceCreate() {
   salesFormHeader.due_date = "";
   salesFormHeader.is_inter_state = false;
   salesFormHeader.income_account_code = "41001";
+  salesFormHeader.place_of_supply = "";
   salesFormHeader.reference = "";
   salesFormHeader.notes = "";
-  // Make sure customers and accounts are available for the pickers.
+  // Make sure customers, accounts, and settings are available for the form.
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!lastInvoiceSettings) loadInvoiceSettings();
   setBusinessSalesView("create");
 }
 
@@ -5652,6 +5701,13 @@ async function submitInvoice() {
     setLoginStatus("warn", "Customer required", "Select a customer for this invoice.");
     return;
   }
+  // Client-side enforcement of admin-configured required fields (backend re-validates).
+  for (const key of ["due_date", "place_of_supply", "reference", "notes"]) {
+    if (invoiceFieldRequired(key) && !String(salesFormHeader[key] || "").trim()) {
+      setLoginStatus("warn", `${INVOICE_STANDARD_FIELD_LABELS[key]} required`, "This field is required by your invoice settings.");
+      return;
+    }
+  }
   const lineItems = invoiceFormLines
     .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
     .map((l) => ({
@@ -5671,6 +5727,7 @@ async function submitInvoice() {
     due_date: salesFormHeader.due_date || null,
     is_inter_state: !!salesFormHeader.is_inter_state,
     income_account_code: salesFormHeader.income_account_code || "41001",
+    place_of_supply: String(salesFormHeader.place_of_supply || "").trim() || null,
     reference: String(salesFormHeader.reference || "").trim() || null,
     notes: String(salesFormHeader.notes || "").trim() || null,
     line_items: lineItems,
@@ -5763,13 +5820,34 @@ function renderInvoiceListTable() {
   `;
 }
 
+function invoiceFieldLabel(base, key) {
+  return `${base}${invoiceFieldRequired(key) ? " *" : ""}`;
+}
+
+function invoiceNumberPreview() {
+  const n = (lastInvoiceSettings && lastInvoiceSettings.numbering) || {};
+  const now = new Date();
+  const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+  const fy = `${year}-${year + 1}`;
+  const fyShort = `${year}-${String(year + 1).slice(-2)}`;
+  const seq = String(n.start_number || 1).padStart(Number(n.seq_padding || 6), "0");
+  return String(n.number_format || "{PREFIX}-{FY}-{SEQ}")
+    .replace("{PREFIX}", n.prefix || "INV")
+    .replace("{FYSHORT}", fyShort)
+    .replace("{FY}", fy)
+    .replace("{SEQ}", seq);
+}
+
 function renderInvoiceCreateForm() {
   const customers = customerPartyOptions();
   const incomeAccounts = incomeAccountOptions();
+  const hsnVisible = invoiceFieldVisible("hsn_sac");
+  const hsnRequired = invoiceFieldRequired("hsn_sac");
+  const colspan = hsnVisible ? 9 : 8;
   const lineRows = invoiceFormLines.map((l) => `
     <tr data-invoice-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
-      <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
+      ${hsnVisible ? `<td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>` : ""}
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
@@ -5785,7 +5863,7 @@ function renderInvoiceCreateForm() {
       <div class="preview-heading compact">
         <div>
           <h4>New Sales Invoice</h4>
-          <p>Create a GST invoice. It posts to receivables, sales income, and output GST automatically.</p>
+          <p>Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · posts to receivables, sales income, and output GST automatically.</p>
         </div>
         <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
       </div>
@@ -5799,17 +5877,20 @@ function renderInvoiceCreateForm() {
         <label>Invoice date
           <input type="date" name="invoice_date" value="${escapeHtml(salesFormHeader.invoice_date)}">
         </label>
-        <label>Due date
+        ${invoiceFieldVisible("due_date") ? `<label>${escapeHtml(invoiceFieldLabel("Due date", "due_date"))}
           <input type="date" name="due_date" value="${escapeHtml(salesFormHeader.due_date)}">
-        </label>
+        </label>` : ""}
         <label>Income account
           <select name="income_account_code">
             ${incomeAccounts.length ? incomeAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === salesFormHeader.income_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="41001" selected>41001 - Sales</option>`}
           </select>
         </label>
-        <label>Reference / PO
-          <input type="text" name="reference" value="${escapeHtml(salesFormHeader.reference)}" placeholder="Optional">
-        </label>
+        ${invoiceFieldVisible("place_of_supply") ? `<label>${escapeHtml(invoiceFieldLabel("Place of supply", "place_of_supply"))}
+          <input type="text" name="place_of_supply" value="${escapeHtml(salesFormHeader.place_of_supply)}" placeholder="State / code">
+        </label>` : ""}
+        ${invoiceFieldVisible("reference") ? `<label>${escapeHtml(invoiceFieldLabel("Reference / PO", "reference"))}
+          <input type="text" name="reference" value="${escapeHtml(salesFormHeader.reference)}" placeholder="${invoiceFieldRequired("reference") ? "Required" : "Optional"}">
+        </label>` : ""}
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${salesFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -5821,7 +5902,7 @@ function renderInvoiceCreateForm() {
           <thead>
             <tr>
               <th>Description</th>
-              <th>HSN/SAC</th>
+              ${hsnVisible ? `<th>HSN/SAC${hsnRequired ? " *" : ""}</th>` : ""}
               <th>Qty</th>
               <th>Rate</th>
               <th>GST %</th>
@@ -5844,9 +5925,9 @@ function renderInvoiceCreateForm() {
         <div class="invoice-grand"><span>Invoice total</span><strong data-total-invoice>${formatCurrency(0)}</strong></div>
       </div>
 
-      <label class="invoice-notes">Notes
-        <textarea name="notes" rows="2" placeholder="Optional notes shown on the invoice">${escapeHtml(salesFormHeader.notes)}</textarea>
-      </label>
+      ${invoiceFieldVisible("notes") ? `<label class="invoice-notes">${escapeHtml(invoiceFieldLabel("Notes", "notes"))}
+        <textarea name="notes" rows="2" placeholder="${invoiceFieldRequired("notes") ? "Required" : "Optional notes shown on the invoice"}">${escapeHtml(salesFormHeader.notes)}</textarea>
+      </label>` : ""}
 
       <div class="invoice-form-actions">
         <button class="primary" type="button" data-business-action="save-invoice">Post Invoice</button>
@@ -5917,12 +5998,115 @@ function renderInvoiceDetail() {
   `;
 }
 
+function openInvoiceSettings() {
+  if (!lastInvoiceSettings) loadInvoiceSettings();
+  setBusinessSalesView("settings");
+}
+
+async function saveInvoiceSettings() {
+  const panel = document.querySelector("[data-invoice-settings-form]");
+  if (!panel) return;
+  const field_config = {};
+  Object.keys(INVOICE_STANDARD_FIELD_LABELS).forEach((key) => {
+    const visible = panel.querySelector(`input[data-field-visible='${key}']`);
+    const required = panel.querySelector(`input[data-field-required='${key}']`);
+    field_config[key] = { visible: !!visible?.checked, required: !!required?.checked };
+  });
+  const numVal = (name) => panel.querySelector(`[data-numbering='${name}']`)?.value;
+  const numbering = {
+    prefix: (numVal("prefix") || "INV").trim() || "INV",
+    number_format: (numVal("number_format") || "{PREFIX}-{FY}-{SEQ}").trim() || "{PREFIX}-{FY}-{SEQ}",
+    seq_padding: Math.max(1, Math.min(12, Number(numVal("seq_padding") || 6))),
+    start_number: Math.max(1, Number(numVal("start_number") || 1)),
+    reset_yearly: !!panel.querySelector("[data-numbering='reset_yearly']")?.checked,
+  };
+  const body = {
+    field_config,
+    numbering,
+    // Preserve sections managed in Phase 2 (custom fields / branding).
+    custom_fields: (lastInvoiceSettings && lastInvoiceSettings.custom_fields) || [],
+    branding: (lastInvoiceSettings && lastInvoiceSettings.branding) || {},
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    lastInvoiceSettings = result.payload;
+    setLoginStatus("ok", "Invoice settings saved", "New invoices will use these settings.");
+    setBusinessSalesView("list");
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can change invoice settings.");
+  } else {
+    setLoginStatus("danger", "Save failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { save_invoice_settings: { ok: result.ok, status: result.status } });
+}
+
+function renderInvoiceSettingsPanel() {
+  const s = lastInvoiceSettings || {};
+  const fc = s.field_config || {};
+  const n = s.numbering || {};
+  const fieldRows = Object.entries(INVOICE_STANDARD_FIELD_LABELS).map(([key, label]) => {
+    const rule = fc[key] || { visible: true, required: false };
+    return `
+      <tr>
+        <td>${escapeHtml(label)}</td>
+        <td><label class="inline-check"><input type="checkbox" data-field-visible="${key}" ${rule.visible !== false ? "checked" : ""}> Visible</label></td>
+        <td><label class="inline-check"><input type="checkbox" data-field-required="${key}" ${rule.required ? "checked" : ""}> Required</label></td>
+      </tr>
+    `;
+  }).join("");
+
+  return `
+    <div class="verification-panel erp-workspace-panel" data-invoice-settings-form>
+      <div class="preview-heading compact">
+        <div>
+          <h4>Invoice Settings</h4>
+          <p>Configure the sales invoice form for this business. Applies to all users.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
+      </div>
+
+      <h5 class="settings-section-title">Form fields</h5>
+      <p class="muted">Show, hide, or require the optional fields on the invoice form.</p>
+      <div class="table-preview compact-table">
+        <table>
+          <thead><tr><th>Field</th><th>Show on form</th><th>Make mandatory</th></tr></thead>
+          <tbody>${fieldRows}</tbody>
+        </table>
+      </div>
+
+      <h5 class="settings-section-title">Invoice numbering</h5>
+      <p class="muted">Tokens: <code>{PREFIX}</code> <code>{FY}</code> (2026-2027) <code>{FYSHORT}</code> (2026-27) <code>{SEQ}</code></p>
+      <div class="invoice-form-grid">
+        <label>Prefix<input type="text" data-numbering="prefix" value="${escapeHtml(n.prefix || "INV")}"></label>
+        <label>Number format<input type="text" data-numbering="number_format" value="${escapeHtml(n.number_format || "{PREFIX}-{FY}-{SEQ}")}"></label>
+        <label>Sequence digits<input type="number" data-numbering="seq_padding" min="1" max="12" value="${escapeHtml(n.seq_padding || 6)}"></label>
+        <label>Start number<input type="number" data-numbering="start_number" min="1" value="${escapeHtml(n.start_number || 1)}"></label>
+        <label class="invoice-inter-toggle"><input type="checkbox" data-numbering="reset_yearly" ${n.reset_yearly !== false ? "checked" : ""}> Reset sequence each financial year</label>
+      </div>
+      <p class="muted">Preview: <strong>${escapeHtml(invoiceNumberPreview())}</strong></p>
+
+      <p class="muted settings-coming-soon">Custom fields and invoice branding / print template are coming in the next update.</p>
+
+      <div class="invoice-form-actions">
+        <button class="primary" type="button" data-business-action="save-invoice-settings">Save Settings</button>
+        <button class="secondary" type="button" data-business-action="invoice-back">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderBusinessSalesWorkspace() {
   if (salesView === "create") {
     return renderInvoiceCreateForm();
   }
   if (salesView === "detail") {
     return renderInvoiceDetail();
+  }
+  if (salesView === "settings") {
+    return renderInvoiceSettingsPanel();
   }
   return `
     <div class="verification-panel erp-workspace-panel">
@@ -5931,7 +6115,10 @@ function renderBusinessSalesWorkspace() {
           <h4>Sales Invoices</h4>
           <p>GST invoices for customers. Each posting updates receivables, income, and output GST.</p>
         </div>
-        <button class="secondary" type="button" data-business-action="open-create-invoice">+ New Invoice</button>
+        <div class="invoice-detail-actions">
+          ${isBusinessAdmin() ? `<button class="secondary" type="button" data-business-action="open-invoice-settings">⚙ Settings</button>` : ""}
+          <button class="secondary" type="button" data-business-action="open-create-invoice">+ New Invoice</button>
+        </div>
       </div>
       ${renderInvoiceListTable()}
     </div>
@@ -9318,6 +9505,10 @@ dashboardPreview.addEventListener("click", (event) => {
     if (confirm("Cancel this invoice? A reversing journal entry will be posted.")) {
       cancelInvoice(invoiceId);
     }
+  } else if (businessAction === "open-invoice-settings") {
+    openInvoiceSettings();
+  } else if (businessAction === "save-invoice-settings") {
+    saveInvoiceSettings();
   }
 });
 dashboardPreview.addEventListener("input", (event) => {

@@ -11,6 +11,8 @@ from app.modules.business.schemas import (
     CaDocumentListResponse,
     CaDocumentResponse,
     CaDocumentUpdateRequest,
+    InvoiceSettingsResponse,
+    InvoiceSettingsUpdateRequest,
     PartyCreateRequest,
     PartyListResponse,
     PartyResponse,
@@ -30,6 +32,7 @@ from app.modules.business.service import (
     create_party,
     create_sales_invoice,
     deactivate_party,
+    get_invoice_settings,
     get_sales_invoice,
     list_ca_document_metadata,
     get_party,
@@ -39,9 +42,11 @@ from app.modules.business.service import (
     list_vouchers,
     post_typed_voucher,
     reverse_typed_voucher,
+    save_invoice_settings,
     update_ca_document_metadata,
     update_party,
 )
+from app.core.permissions.rbac import Role, require_roles
 
 router = APIRouter(prefix="/business", tags=["business"])
 
@@ -508,3 +513,48 @@ async def cancel_business_sales_invoice(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/invoice-settings", response_model=InvoiceSettingsResponse)
+async def get_business_invoice_settings(
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="invoice settings lookup",
+    )
+    return await get_invoice_settings(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
+
+
+@router.put("/invoice-settings", response_model=InvoiceSettingsResponse)
+async def update_business_invoice_settings(
+    payload: InvoiceSettingsUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="invoice settings update",
+    )
+    return await save_invoice_settings(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        updated_by=_created_by(current_user),
+        payload=payload,
+    )

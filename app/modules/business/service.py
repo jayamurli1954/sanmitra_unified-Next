@@ -19,6 +19,9 @@ from app.db.mongo import get_collection
 from app.modules.business.schemas import (
     CaDocumentCreateRequest,
     CaDocumentUpdateRequest,
+    INVOICE_STANDARD_FIELDS,
+    InvoiceSettings,
+    InvoiceSettingsUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
     SalesInvoiceCancelRequest,
@@ -31,6 +34,7 @@ PARTIES_COLLECTION = "business_parties"
 VOUCHERS_COLLECTION = "business_vouchers"
 VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
 SALES_INVOICES_COLLECTION = "business_sales_invoices"
+INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
 
 # Default Output-GST and receivable account codes from the BUSINESS chart of accounts.
@@ -181,6 +185,8 @@ async def ensure_business_indexes() -> None:
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("invoice_date", -1)])
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("invoice_id", 1)], unique=True)
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
+    invoice_settings = get_collection(INVOICE_SETTINGS_COLLECTION)
+    await invoice_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -843,15 +849,59 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest):
     return lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total
 
 
+def _financial_year_strings(invoice_date):
+    if invoice_date.month >= 4:
+        start, end = invoice_date.year, invoice_date.year + 1
+    else:
+        start, end = invoice_date.year - 1, invoice_date.year
+    full = f"{start}-{end}"
+    short = f"{start}-{str(end)[-2:]}"
+    return full, short
+
+
+def _format_invoice_number(numbering, *, financial_year: str, fy_short: str, seq: int) -> str:
+    padded = str(seq).zfill(int(getattr(numbering, "seq_padding", 6) or 6))
+    return (
+        str(getattr(numbering, "number_format", "{PREFIX}-{FY}-{SEQ}") or "{PREFIX}-{FY}-{SEQ}")
+        .replace("{PREFIX}", str(getattr(numbering, "prefix", "INV") or "INV"))
+        .replace("{FYSHORT}", fy_short)
+        .replace("{FY}", financial_year)
+        .replace("{SEQ}", padded)
+    )
+
+
+def _validate_required_invoice_fields(payload: SalesInvoiceCreateRequest, settings: dict) -> None:
+    """Enforce 'required' rules an admin set on standard optional fields."""
+    field_config = settings.get("field_config") or {}
+    labels = {
+        "due_date": "Due date",
+        "place_of_supply": "Place of supply",
+        "reference": "Reference / PO",
+        "notes": "Notes",
+    }
+    for key in ("due_date", "place_of_supply", "reference", "notes"):
+        rule = field_config.get(key) or {}
+        if rule.get("required") and not getattr(payload, key, None):
+            raise AccountingValidationError(f"{labels[key]} is required by this business's invoice settings")
+    hsn_rule = field_config.get("hsn_sac") or {}
+    if hsn_rule.get("required"):
+        for item in payload.line_items:
+            if not (item.hsn_sac and str(item.hsn_sac).strip()):
+                raise AccountingValidationError("HSN/SAC is required on every line by this business's invoice settings")
+
+
 async def _reserve_invoice_number(
     *,
     tenant_id: str,
     app_key: str,
     accounting_entity_id: str,
     invoice_date,
+    numbering,
 ) -> str:
-    financial_year = f"{invoice_date.year}-{invoice_date.year + 1}" if invoice_date.month >= 4 else f"{invoice_date.year - 1}-{invoice_date.year}"
-    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:sales_invoice:{financial_year}"
+    financial_year, fy_short = _financial_year_strings(invoice_date)
+    reset_yearly = bool(getattr(numbering, "reset_yearly", True))
+    scope = financial_year if reset_yearly else "all"
+    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:sales_invoice:{scope}"
     counters = get_collection(VOUCHER_COUNTERS_COLLECTION)
     try:
         from pymongo import ReturnDocument
@@ -873,13 +923,81 @@ async def _reserve_invoice_number(
             upsert=True,
             return_document=ReturnDocument.AFTER,
         )
-        seq = int((counter or {}).get("seq") or 1)
+        raw_seq = int((counter or {}).get("seq") or 1)
     except Exception:
         existing = await get_collection(SALES_INVOICES_COLLECTION).count_documents(
             {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
         )
-        seq = int(existing) + 1
-    return f"INV-{financial_year}-{seq:06d}"
+        raw_seq = int(existing) + 1
+    # Honor a custom starting number: first invoice == start_number.
+    seq = int(getattr(numbering, "start_number", 1) or 1) + raw_seq - 1
+    return _format_invoice_number(numbering, financial_year=financial_year, fy_short=fy_short, seq=seq)
+
+
+async def get_invoice_settings(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+) -> dict:
+    row = await get_collection(INVOICE_SETTINGS_COLLECTION).find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    )
+    if row is None:
+        settings = InvoiceSettings()
+        result = settings.model_dump()
+    else:
+        # Re-validate stored doc through the model so missing/new keys get defaults.
+        stored = {k: v for k, v in row.items() if k in {"field_config", "numbering", "custom_fields", "branding"}}
+        result = InvoiceSettings(**stored).model_dump()
+    # Backfill any standard field missing from a partially-saved config so the
+    # form and required-field validation always have a complete rule set.
+    field_config = result.get("field_config") or {}
+    for key in INVOICE_STANDARD_FIELDS:
+        field_config.setdefault(key, {"visible": True, "required": False})
+    result["field_config"] = field_config
+    result.update({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "updated_by": (row or {}).get("updated_by"),
+        "updated_at": (row or {}).get("updated_at"),
+    })
+    return result
+
+
+async def save_invoice_settings(
+    *,
+    tenant_id: str,
+    app_key: str,
+    updated_by: str,
+    payload: InvoiceSettingsUpdateRequest,
+) -> dict:
+    accounting_entity_id = payload.accounting_entity_id
+    settings = InvoiceSettings(
+        field_config=payload.field_config,
+        numbering=payload.numbering,
+        custom_fields=payload.custom_fields,
+        branding=payload.branding,
+    )
+    doc = settings.model_dump()
+    doc.update({"updated_by": updated_by, "updated_at": _now()})
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
+        filters,
+        {"$set": doc, "$setOnInsert": {**filters, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=updated_by,
+        action="business_invoice_settings_updated",
+        entity_type="business_invoice_settings",
+        entity_id=accounting_entity_id,
+        new_value=doc,
+    )
+    return await get_invoice_settings(tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id)
 
 
 async def list_sales_invoices(
@@ -965,6 +1083,13 @@ async def create_sales_invoice(
     if customer is None:
         raise AccountingValidationError("Customer party not found for this tenant")
 
+    settings = await get_invoice_settings(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+    )
+    _validate_required_invoice_fields(payload, settings)
+
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total = _compute_invoice_lines(payload)
     if invoice_total <= Decimal("0"):
         raise AccountingValidationError("Invoice total must be greater than zero")
@@ -1010,11 +1135,13 @@ async def create_sales_invoice(
             journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=Decimal("0"), credit=gst_amount))
 
     invoice_id = str(uuid4())
+    numbering = InvoiceSettings(**{k: settings[k] for k in ("field_config", "numbering", "custom_fields", "branding") if k in settings}).numbering
     invoice_number = await _reserve_invoice_number(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
         invoice_date=payload.invoice_date,
+        numbering=numbering,
     )
     description = f"Sales Invoice {invoice_number} - {customer.get('party_name') or payload.customer_party_id}"
     now = _now()

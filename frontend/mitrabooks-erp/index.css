@@ -4131,6 +4131,37 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   margin-top: 16px;
 }
 
+.settings-section-title {
+  margin: 20px 0 4px;
+  font-size: 14px;
+  color: var(--text, #e2e8f0);
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+}
+
+.inline-check input {
+  width: auto;
+}
+
+.settings-coming-soon {
+  margin-top: 20px;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.erp-workspace-panel code {
+  background: rgba(148, 163, 184, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
 
 
 

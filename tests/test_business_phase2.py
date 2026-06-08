@@ -62,11 +62,18 @@ class FakeCollection:
             if not all(doc.get(key) == value for key, value in filters.items())
         ]
 
-    async def update_one(self, filters, update):
+    async def update_one(self, filters, update, upsert=False):
         self.updated.append((dict(filters), dict(update)))
+        matched = False
         for doc in self.docs:
             if all(doc.get(key) == value for key, value in filters.items()):
                 doc.update(update.get("$set", {}))
+                matched = True
+        if not matched and upsert:
+            new_doc = dict(filters)
+            new_doc.update(update.get("$setOnInsert", {}))
+            new_doc.update(update.get("$set", {}))
+            self.docs.append(new_doc)
 
 
 class FakeCursor:
@@ -726,6 +733,85 @@ def _async_none():
     async def _noop():
         return None
     return _noop()
+
+
+@pytest.mark.asyncio
+async def test_invoice_settings_save_and_get_round_trip(monkeypatch):
+    from app.modules.business.schemas import InvoiceSettingsUpdateRequest, InvoiceNumberingConfig, InvoiceFieldRule
+
+    store = FakeCollection()
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    payload = InvoiceSettingsUpdateRequest(
+        field_config={"due_date": InvoiceFieldRule(visible=True, required=True), "hsn_sac": InvoiceFieldRule(visible=False, required=False)},
+        numbering=InvoiceNumberingConfig(prefix="ACME", number_format="{PREFIX}/{FYSHORT}/{SEQ}", seq_padding=4),
+    )
+    saved = await business_service.save_invoice_settings(
+        tenant_id="business-tenant", app_key="mitrabooks", updated_by="admin-1", payload=payload,
+    )
+    assert saved["numbering"]["prefix"] == "ACME"
+    assert saved["field_config"]["due_date"]["required"] is True
+    assert saved["field_config"]["hsn_sac"]["visible"] is False
+    # Unspecified standard fields fall back to defaults (visible).
+    assert saved["field_config"]["reference"]["visible"] is True
+
+    fetched = await business_service.get_invoice_settings(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary",
+    )
+    assert fetched["numbering"]["number_format"] == "{PREFIX}/{FYSHORT}/{SEQ}"
+    assert fetched["updated_by"] == "admin-1"
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_uses_custom_numbering_and_enforces_required(monkeypatch):
+    from app.modules.business.schemas import InvoiceSettingsUpdateRequest, InvoiceNumberingConfig, InvoiceFieldRule
+
+    store = FakeCollection()
+    _seed_customer(store)
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        return SimpleNamespace(id=701), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    # Admin configures custom numbering + makes due_date mandatory.
+    await business_service.save_invoice_settings(
+        tenant_id="business-tenant", app_key="mitrabooks", updated_by="admin-1",
+        payload=InvoiceSettingsUpdateRequest(
+            field_config={"due_date": InvoiceFieldRule(visible=True, required=True)},
+            numbering=InvoiceNumberingConfig(prefix="ACME", number_format="{PREFIX}/{FYSHORT}/{SEQ}", seq_padding=4),
+        ),
+    )
+
+    base = dict(
+        customer_party_id="cust-1",
+        invoice_date=date(2026, 6, 8),
+        line_items=[SalesInvoiceLineItem(description="Widget", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+    )
+
+    # Missing required due_date -> rejected.
+    with pytest.raises(business_service.AccountingValidationError):
+        await business_service.create_sales_invoice(
+            None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+            payload=SalesInvoiceCreateRequest(**base), idempotency_key=None,
+        )
+
+    # With due_date -> posts, and uses the custom number format.
+    result = await business_service.create_sales_invoice(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(due_date=date(2026, 7, 8), **base), idempotency_key=None,
+    )
+    assert result["invoice_number"] == "ACME/2026-27/0001"
+    assert result["status"] == "posted"
 
 
 def test_business_resolver_rejects_wrong_app_key():
