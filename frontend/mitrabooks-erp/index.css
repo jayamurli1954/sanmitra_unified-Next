@@ -1666,6 +1666,164 @@ html[data-theme="light"] select:focus {
   display: none;
 }
 
+/* Dashboard toolbar (Phase 2C.3) */
+.dashboard-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.dashboard-customize-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 5px 11px;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.dashboard-customize-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary, #fff);
+}
+
+/* Widget settings overlay (Phase 2C.3) */
+.widget-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 60px 24px 0;
+  pointer-events: none;
+}
+
+.widget-settings-panel {
+  background: var(--bg-card, #141c35);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  min-width: 280px;
+  max-width: 340px;
+  pointer-events: all;
+  width: 100%;
+}
+
+.widget-settings-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.widget-settings-header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.widget-settings-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  transition: color 0.15s;
+}
+
+.widget-settings-close:hover {
+  color: var(--text-primary, #fff);
+}
+
+.widget-settings-hint {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  font-size: 11px;
+  margin: 0;
+  padding: 10px 16px 6px;
+}
+
+.widget-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 16px 10px;
+}
+
+.widget-settings-row {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+}
+
+.widget-settings-row:last-child {
+  border-bottom: none;
+}
+
+.widget-settings-label {
+  color: var(--text-primary, rgba(255, 255, 255, 0.85));
+  font-size: 12px;
+  flex: 1;
+}
+
+/* Toggle switch (Phase 2C.3) */
+.widget-settings-toggle {
+  display: none;
+}
+
+.widget-settings-switch {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 20px;
+  position: relative;
+  transition: background 0.2s;
+  width: 36px;
+}
+
+.widget-settings-switch::after {
+  background: #fff;
+  border-radius: 50%;
+  content: "";
+  height: 14px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left 0.2s;
+  width: 14px;
+}
+
+.widget-settings-toggle:checked + .widget-settings-switch {
+  background: #4f7cff;
+}
+
+.widget-settings-toggle:checked + .widget-settings-switch::after {
+  left: 19px;
+}
+
+.widget-settings-footer {
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  padding: 12px 16px;
+}
+
+.widget-settings-footer .secondary {
+  font-size: 12px;
+  width: 100%;
+}
+
 /* Grid wrapper for side-by-side widgets */
 .finance-dashboard-grid-wrapper {
   display: grid;

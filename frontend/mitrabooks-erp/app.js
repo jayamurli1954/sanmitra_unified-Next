@@ -172,10 +172,10 @@ const DEFAULT_WIDGET_STATES = {
 function getWidgetStates() {
   try {
     const saved = localStorage.getItem(WIDGET_STATES_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : { ...DEFAULT_WIDGET_STATES };
+    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_WIDGET_STATES));
   } catch (e) {
     console.warn("Failed to parse widget states, using defaults", e);
-    return { ...DEFAULT_WIDGET_STATES };
+    return JSON.parse(JSON.stringify(DEFAULT_WIDGET_STATES));
   }
 }
 
@@ -211,13 +211,28 @@ function toggleWidgetCollapse(widgetId) {
 }
 
 /**
- * Toggle visibility of a widget
+ * Toggle visibility of a widget and re-render the settings panel + dashboard
  */
 function toggleWidgetVisibility(widgetId) {
   const states = getWidgetStates();
   if (states[widgetId]) {
     states[widgetId].visible = !states[widgetId].visible;
     saveWidgetStates(states);
+    // Refresh the settings panel checkboxes in-place
+    const panel = document.getElementById("widget-settings-panel");
+    if (panel) {
+      const checkbox = panel.querySelector(`input[data-widget-id="${widgetId}"]`);
+      if (checkbox) checkbox.checked = states[widgetId].visible;
+    }
+    // Re-render dashboard widgets in place
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
+      const execDash = document.querySelector(".executive-dashboard");
+      if (execDash) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = renderBusinessExecutiveDashboard();
+        execDash.replaceWith(tmp.firstElementChild);
+      }
+    }
   }
 }
 
@@ -225,11 +240,113 @@ function toggleWidgetVisibility(widgetId) {
  * Reset all widgets to default state
  */
 function resetWidgetStates() {
-  saveWidgetStates({ ...DEFAULT_WIDGET_STATES });
-  // Re-render dashboard to apply defaults
+  saveWidgetStates(JSON.parse(JSON.stringify(DEFAULT_WIDGET_STATES)));
+  closeWidgetSettings();
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
+    const execDash = document.querySelector(".executive-dashboard");
+    if (execDash) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = renderBusinessExecutiveDashboard();
+      execDash.replaceWith(tmp.firstElementChild);
+    }
   }
+}
+
+/**
+ * Open the widget customization settings panel
+ */
+function openWidgetSettings() {
+  const existing = document.getElementById("widget-settings-overlay");
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement("div");
+  overlay.id = "widget-settings-overlay";
+  overlay.className = "widget-settings-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "Dashboard widget settings");
+
+  overlay.innerHTML = renderWidgetSettingsPanel();
+  document.body.appendChild(overlay);
+
+  // Close on click outside the panel
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) { closeWidgetSettings(); return; }
+    const btn = e.target.closest("[data-widget-action]");
+    if (!btn) return;
+    const action = btn.getAttribute("data-widget-action");
+    if (action === "close-settings") closeWidgetSettings();
+    else if (action === "reset-widgets") resetWidgetStates();
+  });
+
+  // Toggle visibility on checkbox change
+  overlay.addEventListener("change", (e) => {
+    const input = e.target.closest("input[data-widget-action='toggle-visibility']");
+    if (input) toggleWidgetVisibility(input.getAttribute("data-widget-id") || "");
+  });
+
+  // Close on Escape key
+  const onKey = (e) => {
+    if (e.key === "Escape") { closeWidgetSettings(); document.removeEventListener("keydown", onKey); }
+  };
+  document.addEventListener("keydown", onKey);
+
+  const firstFocus = overlay.querySelector("button, input");
+  if (firstFocus) firstFocus.focus();
+}
+
+/**
+ * Close the widget settings panel
+ */
+function closeWidgetSettings() {
+  const overlay = document.getElementById("widget-settings-overlay");
+  if (overlay) overlay.remove();
+}
+
+/**
+ * Render the widget settings panel HTML
+ */
+function renderWidgetSettingsPanel() {
+  const states = getWidgetStates();
+  const widgetLabels = {
+    "kpi-strip":     "Key Performance Indicators",
+    "finance-chart": "Sales & Expenses Trend",
+    "ceo-panel":     "CEO Insights"
+  };
+
+  const rows = Object.entries(widgetLabels).map(([id, label]) => {
+    const visible = states[id]?.visible !== false;
+    return `
+      <label class="widget-settings-row">
+        <span class="widget-settings-label">${escapeHtml(label)}</span>
+        <input
+          type="checkbox"
+          class="widget-settings-toggle"
+          data-widget-action="toggle-visibility"
+          data-widget-id="${id}"
+          ${visible ? "checked" : ""}
+          aria-label="Show ${escapeHtml(label)}"
+        >
+        <span class="widget-settings-switch" aria-hidden="true"></span>
+      </label>
+    `;
+  }).join("");
+
+  return `
+    <div id="widget-settings-panel" class="widget-settings-panel">
+      <div class="widget-settings-header">
+        <h4>Dashboard Widgets</h4>
+        <button class="widget-settings-close" data-widget-action="close-settings" aria-label="Close settings">✕</button>
+      </div>
+      <p class="widget-settings-hint">Toggle which widgets appear on your executive dashboard.</p>
+      <div class="widget-settings-list">
+        ${rows}
+      </div>
+      <div class="widget-settings-footer">
+        <button class="secondary" type="button" data-widget-action="reset-widgets">Reset to Defaults</button>
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -264,7 +381,8 @@ function createWidgetWrapper(widgetId, title, content, showControls = true) {
     <button
       id="collapse-btn-${widgetId}"
       class="widget-collapse-btn"
-      onclick="toggleWidgetCollapse('${widgetId}')"
+      data-business-action="widget-collapse"
+      data-widget-id="${widgetId}"
       aria-label="${isCollapsed ? 'Expand widget' : 'Collapse widget'}"
       title="${isCollapsed ? 'Expand' : 'Collapse'}"
     >
@@ -1481,6 +1599,15 @@ function renderBusinessExecutiveDashboard() {
 
   return `
     <section class="executive-dashboard" aria-label="MitraBooks executive dashboard">
+      <div class="dashboard-toolbar">
+        <button
+          class="dashboard-customize-btn"
+          type="button"
+          data-business-action="open-widget-settings"
+          aria-label="Customize dashboard widgets"
+          title="Customize widgets"
+        >⚙ Customize</button>
+      </div>
       ${kpiWidget}
       <div class="finance-dashboard-grid-wrapper">
         ${chartWidget}
@@ -8151,6 +8278,10 @@ dashboardPreview.addEventListener("click", (event) => {
       button.getAttribute("data-document-id") || "",
       button.getAttribute("data-status") || "",
     );
+  } else if (businessAction === "widget-collapse") {
+    toggleWidgetCollapse(button.getAttribute("data-widget-id") || "");
+  } else if (businessAction === "open-widget-settings") {
+    openWidgetSettings();
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {
