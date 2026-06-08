@@ -625,6 +625,14 @@
         </div>
         <input id="business-party-edit-id" type="hidden">
         <div class="field">
+          <label for="business-party-edit-type">Party type</label>
+          <select id="business-party-edit-type" required>
+            <option value="customer">Customer</option>
+            <option value="vendor">Vendor</option>
+            <option value="both">Both (Customer &amp; Vendor)</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="business-party-edit-name">Name</label>
           <input id="business-party-edit-name" type="text" required minlength="1" maxlength="160">
         </div>

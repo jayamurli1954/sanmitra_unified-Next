@@ -4337,6 +4337,7 @@ function renderBusinessPartiesTable(rows) {
                       data-business-action="edit-party"
                       data-party-id="${escapeHtml(row.party_id || row.id || "")}"
                       data-party-name="${escapeHtml(partyName)}"
+                      data-party-type="${escapeHtml(row.party_type || "customer")}"
                       data-party-gstin="${escapeHtml(row.gstin || "")}"
                       data-party-city="${escapeHtml(row.city || "")}"
                       data-party-state="${escapeHtml(row.state || "")}"
@@ -4795,6 +4796,9 @@ async function updateBusinessParty(partyId, data) {
     state: data.state?.trim() || null,
     pincode: data.pincode?.trim() || null,
   };
+  if (data.party_type) {
+    payload.party_type = data.party_type;
+  }
 
   const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}`, {
     method: "PATCH",
@@ -4842,6 +4846,7 @@ function openBusinessEditPartyDialog(button) {
 
   const partyId = button.getAttribute("data-party-id") || "";
   const partyName = button.getAttribute("data-party-name") || "";
+  const partyType = button.getAttribute("data-party-type") || "customer";
   const partyGstin = button.getAttribute("data-party-gstin") || "";
   const partyCity = button.getAttribute("data-party-city") || "";
   const partyState = button.getAttribute("data-party-state") || "";
@@ -4849,6 +4854,8 @@ function openBusinessEditPartyDialog(button) {
   const openingBalance = button.getAttribute("data-party-opening-balance") || "0";
 
   document.getElementById("business-party-edit-id").value = partyId;
+  const editTypeSelect = document.getElementById("business-party-edit-type");
+  if (editTypeSelect) editTypeSelect.value = partyType;
   document.getElementById("business-party-edit-name").value = partyName;
   document.getElementById("business-party-edit-gstin").value = partyGstin;
   document.getElementById("business-party-edit-city").value = partyCity;
@@ -10108,6 +10115,7 @@ if (businessPartyEditForm) {
     event.preventDefault();
     const partyId = document.getElementById("business-party-edit-id")?.value || "";
     const name = document.getElementById("business-party-edit-name")?.value || "";
+    const party_type = document.getElementById("business-party-edit-type")?.value || "customer";
     const gstin = document.getElementById("business-party-edit-gstin")?.value || "";
     const city = document.getElementById("business-party-edit-city")?.value || "";
     const state = document.getElementById("business-party-edit-state")?.value || "";
@@ -10119,7 +10127,7 @@ if (businessPartyEditForm) {
       return;
     }
 
-    updateBusinessParty(partyId, { name, gstin, city, state, pincode, opening_balance });
+    updateBusinessParty(partyId, { name, party_type, gstin, city, state, pincode, opening_balance });
   });
 }
 
