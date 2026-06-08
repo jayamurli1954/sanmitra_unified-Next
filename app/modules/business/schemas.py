@@ -562,3 +562,38 @@ class DebitNoteResponse(BaseModel):
 class DebitNoteListResponse(BaseModel):
     items: list[DebitNoteResponse]
     total: int
+
+
+# ---- GST settlement (period-end set-off of output vs input GST) ----
+
+
+class GstHeadAmounts(BaseModel):
+    igst: Decimal = Decimal("0")
+    cgst: Decimal = Decimal("0")
+    sgst: Decimal = Decimal("0")
+
+
+class GstSettlementCreateRequest(BaseModel):
+    period: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM
+    lock_period: bool = True
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class GstSettlementResponse(BaseModel):
+    period: str
+    accounting_entity_id: str
+    output: GstHeadAmounts
+    input_credit: GstHeadAmounts
+    utilized: GstHeadAmounts
+    cash_payable: GstHeadAmounts
+    itc_carry_forward: GstHeadAmounts
+    net_cash_payable: Decimal
+    total_output: Decimal
+    total_input: Decimal
+    status: str  # "preview" | "posted"
+    posted: bool = False
+    period_locked: bool = False
+    journal_entry_id: int | None = None
+    note: str | None = None
+    settled_by: str | None = None
+    settled_at: datetime | None = None

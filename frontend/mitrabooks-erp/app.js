@@ -5002,10 +5002,13 @@ const BUSINESS_REPORT_TABS = [
   { id: "balance-sheet", label: "Balance Sheet" },
   { id: "general-ledger", label: "General Ledger" },
   { id: "receivables-payables", label: "Receivables / Payables" },
+  { id: "gst-settlement", label: "GST Settlement" },
   { id: "period-locks", label: "Period Locks" },
 ];
 
 let lastPeriodLocks = [];
+let lastGstSettlement = null;
+let gstSettlementPeriod = todayIsoDate().slice(0, 7);
 
 function financialYearStartIso() {
   const now = new Date();
@@ -5056,7 +5059,99 @@ async function refreshCurrentBusinessReport() {
     }
   } else if (tab === "period-locks") {
     await loadPeriodLocks();
+  } else if (tab === "gst-settlement") {
+    await loadGstSettlementPreview(gstSettlementPeriod);
   }
+}
+
+async function loadGstSettlementPreview(period) {
+  gstSettlementPeriod = period || gstSettlementPeriod;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/gst-settlement/preview?period=${encodeURIComponent(gstSettlementPeriod)}`, { method: "GET" });
+  lastGstSettlement = result.ok ? result.payload : null;
+  if (!result.ok) setLoginStatus("warn", "GST preview unavailable", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { gst_settlement_preview: { ok: result.ok, period: gstSettlementPeriod } });
+}
+
+function previewGstSettlementFromInput() {
+  const input = document.querySelector("[data-gst-period]");
+  loadGstSettlementPreview(input?.value || gstSettlementPeriod);
+}
+
+async function postGstSettlement() {
+  const periodInput = document.querySelector("[data-gst-period]");
+  const lockInput = document.querySelector("[data-gst-lock]");
+  const period = periodInput?.value || gstSettlementPeriod;
+  const result = await apiRequest("mitrabooks", "/api/v1/business/gst-settlement", {
+    method: "POST",
+    body: JSON.stringify({ period, lock_period: !!lockInput?.checked, accounting_entity_id: "primary" }),
+  });
+  if (result.ok) {
+    lastGstSettlement = result.payload;
+    setLoginStatus("ok", "GST settled", `Settlement posted for ${period}.`);
+    rerenderBusinessReportsIfActive();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can post a GST settlement.");
+  } else {
+    setLoginStatus("danger", "Settlement failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { gst_settlement: { ok: result.ok, status: result.status } });
+}
+
+function renderGstSettlementPanel() {
+  const admin = isBusinessAdmin();
+  const s = lastGstSettlement;
+  const num = (v) => formatCurrency(Number(v || 0));
+  const heads = [["IGST", "igst"], ["CGST", "cgst"], ["SGST", "sgst"]];
+  let body = `<p class="muted">Select a month and preview the output-vs-input set-off before posting.</p>`;
+  if (s && s.period === gstSettlementPeriod) {
+    const posted = String(s.status) === "posted";
+    const rows = heads.map(([label, key]) => `
+      <tr>
+        <td>${label}</td>
+        <td class="amount">${num(s.output?.[key])}</td>
+        <td class="amount">${num(s.input_credit?.[key])}</td>
+        <td class="amount">${num(s.utilized?.[key])}</td>
+        <td class="amount">${num(s.cash_payable?.[key])}</td>
+        <td class="amount">${num(s.itc_carry_forward?.[key])}</td>
+      </tr>
+    `).join("");
+    body = `
+      <div class="preview-heading compact">
+        <div><p>Set-off for ${escapeHtml(gstSettlementPeriod)} (statutory order: IGST credit first).</p></div>
+        ${posted ? `<span class="pill ok">settled${s.period_locked ? " · period locked" : ""}</span>` : `<span class="pill warn">not settled</span>`}
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr><th>Head</th><th class="amount">Output (liability)</th><th class="amount">Input (ITC)</th><th class="amount">ITC used</th><th class="amount">Cash payable</th><th class="amount">ITC c/f</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="invoice-totals">
+        <div><span>Total output GST</span><strong>${num(s.total_output)}</strong></div>
+        <div><span>Total input GST (ITC)</span><strong>${num(s.total_input)}</strong></div>
+        <div class="invoice-grand"><span>Net cash payable</span><strong>${num(s.net_cash_payable)}</strong></div>
+      </div>
+      ${s.note ? `<p class="muted">${escapeHtml(s.note)}</p>` : ""}
+      ${posted ? `<p class="muted">Settled by ${escapeHtml(s.settled_by || "")}. Journal entry #${escapeHtml(s.journal_entry_id || "")} posted.</p>`
+        : (admin && Number(s.total_output || 0) > 0 ? `
+        <div class="report-date-controls">
+          <label class="invoice-inter-toggle"><input type="checkbox" data-gst-lock checked> Lock this period after settlement</label>
+          <button class="primary" type="button" data-business-action="gst-post">Post Settlement</button>
+        </div>
+        <p class="muted reversal-scope-note">Posts the set-off entry: Dr Output GST, Cr Input GST (utilised), Cr GST Payable (net cash).</p>
+        ` : (admin ? "" : `<p class="muted">Only a tenant admin can post the settlement.</p>`))}
+    `;
+  }
+  return `
+    <div class="report-date-controls">
+      <label>GST month <input type="month" data-gst-period value="${escapeHtml(gstSettlementPeriod)}"></label>
+      <button class="secondary" type="button" data-business-action="gst-preview">Preview</button>
+    </div>
+    ${body}
+  `;
 }
 
 async function loadPeriodLocks() {
@@ -5227,6 +5322,8 @@ function renderBusinessReportsWorkspace() {
     body = renderBusinessReceivablesPayables();
   } else if (businessReportState.tab === "period-locks") {
     body = renderPeriodLocksPanel();
+  } else if (businessReportState.tab === "gst-settlement") {
+    body = renderGstSettlementPanel();
   }
 
   return `
@@ -10987,6 +11084,10 @@ dashboardPreview.addEventListener("click", (event) => {
     lockGstPeriodFromInput();
   } else if (businessAction === "unlock-period") {
     setGstPeriodLock(button.getAttribute("data-period") || "", false);
+  } else if (businessAction === "gst-preview") {
+    previewGstSettlementFromInput();
+  } else if (businessAction === "gst-post") {
+    postGstSettlement();
   } else if (businessAction === "open-create-credit-note") {
     openCreditNoteCreate();
   } else if (businessAction === "add-cn-line") {

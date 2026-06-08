@@ -31,6 +31,8 @@ _INVOICE_ACCOUNT_IDS = {
     "12001": 100, "41001": 200, "41002": 201, "22001": 301, "22002": 302, "22003": 303,
     # Purchase side: AP, expense/purchases, Input GST (ITC).
     "21001": 400, "51001": 500, "14001": 601, "14002": 602, "14003": 603,
+    # GST Payable (net) clearing account.
+    "22004": 700,
 }
 
 
@@ -1095,6 +1097,82 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     assert result["note_total"] == "1180.00"
     assert result["status"] == "posted"
     assert audit_events[0]["action"] == "business_debit_note_posted"
+
+
+def test_gst_setoff_follows_statutory_order():
+    from decimal import Decimal as D
+    util, cash, carry = business_service._compute_gst_setoff(
+        {"igst": D("100"), "cgst": D("500"), "sgst": D("500")},
+        {"igst": D("600"), "cgst": D("200"), "sgst": D("100")},
+    )
+    # IGST credit pays IGST then CGST; SGST credit pays SGST; CGST credit unused.
+    assert util == {"igst": D("600"), "cgst": D("0"), "sgst": D("100")}
+    assert cash == {"igst": D("0"), "cgst": D("0"), "sgst": D("400")}
+    assert carry == {"igst": D("0"), "cgst": D("200"), "sgst": D("0")}
+
+
+@pytest.mark.asyncio
+async def test_gst_settlement_posts_balanced_setoff_entry(monkeypatch):
+    from app.modules.business.schemas import GstSettlementCreateRequest
+
+    store = FakeCollection()
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_balances(session, **_kwargs):
+        return {
+            "output": {"igst": Decimal("100"), "cgst": Decimal("500"), "sgst": Decimal("500")},
+            "credit": {"igst": Decimal("600"), "cgst": Decimal("200"), "sgst": Decimal("100")},
+        }
+
+    monkeypatch.setattr(business_service, "_gst_period_balances", fake_balances)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=1201), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_gst_settlement(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="admin-1",
+        payload=GstSettlementCreateRequest(period="2026-06", lock_period=True),
+        idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("1100.00")
+    # Output debited to clear; Input credited by utilized amounts; net cash to GST Payable.
+    debits = {l.account_id: l.debit for l in lines if l.debit > 0}
+    assert debits[_INVOICE_ACCOUNT_IDS["22001"]] == Decimal("500")  # output CGST
+    assert debits[_INVOICE_ACCOUNT_IDS["22003"]] == Decimal("100")  # output IGST
+    credits = {l.account_id: l.credit for l in lines if l.credit > 0}
+    assert credits[_INVOICE_ACCOUNT_IDS["14003"]] == Decimal("600")  # input IGST utilized
+    assert credits[_INVOICE_ACCOUNT_IDS["14002"]] == Decimal("100")  # input SGST utilized
+    assert credits[_INVOICE_ACCOUNT_IDS["22004"]] == Decimal("400")  # net cash payable
+    assert _INVOICE_ACCOUNT_IDS["14001"] not in credits  # CGST credit unused
+
+    assert result["status"] == "posted"
+    assert result["net_cash_payable"] == "400"
+    assert result["period_locked"] is True
+    assert result["journal_entry_id"] == 1201
+    assert audit_events and audit_events[-1]["action"] == "business_gst_settlement_posted"
+    # The period lock doc was written.
+    assert any(d.get("period") == "2026-06" and d.get("locked") for d in store.docs)
 
 
 def _async_none():

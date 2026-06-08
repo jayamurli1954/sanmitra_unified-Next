@@ -243,6 +243,7 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("22001", "Output CGST", "liability", "personal"),
     _default_account("22002", "Output SGST", "liability", "personal"),
     _default_account("22003", "Output IGST", "liability", "personal"),
+    _default_account("22004", "GST Payable (Net)", "liability", "personal", is_payable=True),
     # 23xxx Statutory dues
     _default_account("23001", "TDS Payable", "liability", "personal", is_payable=True),
     _default_account("23002", "Statutory Dues Payable", "liability", "personal", is_payable=True),
