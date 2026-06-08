@@ -73,7 +73,7 @@ function businessNavigationGroups() {
     {
       name: "Intelligence & Reports",
       items: [
-        { label: "Financial Statements", businessWorkspace: "financial-statements", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: false } },
+        { label: "Financial Statements", businessWorkspace: "reports", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: true } },
         { label: "Financial Health", businessWorkspace: "financial-health", icon: "FH", module: { module_key: "analytics", frontend_path: "/business/financial-health", enabled: true }, badge: "Preview" },
         { label: "Analytics", businessWorkspace: "analytics", icon: "AN", module: { module_key: "analytics", frontend_path: "/business/analytics", enabled: false } },
       ],
@@ -4510,6 +4510,9 @@ function renderBusinessWorkspace() {
       </div>
     `;
   }
+  if (activeBusinessWorkspace === "reports") {
+    return renderBusinessReportsWorkspace();
+  }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
   }
@@ -4857,6 +4860,9 @@ function setBusinessWorkspace(workspace) {
     loadAuditEvents();
   } else if (workspace === "accounting") {
     refreshCurrentAccountingDrilldown();
+  } else if (workspace === "reports") {
+    loadBusinessAccounts();
+    refreshCurrentBusinessReport();
   }
 }
 
@@ -4880,6 +4886,7 @@ function syncBusinessNavActiveState() {
       vouchers: "Vouchers",
       audit: "Audit Trail",
       accounting: "Accounting",
+      reports: "Financial Reports",
       "financial-health": "Financial Health",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -4926,6 +4933,493 @@ function pageBusinessList(listKind, direction) {
     businessListState.parties.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
     loadBusinessParties();
   }
+}
+
+// ========== Business Module: Financial Reports ==========
+
+const BUSINESS_REPORT_TABS = [
+  { id: "trial-balance", label: "Trial Balance" },
+  { id: "pnl", label: "Profit & Loss" },
+  { id: "balance-sheet", label: "Balance Sheet" },
+  { id: "general-ledger", label: "General Ledger" },
+  { id: "receivables-payables", label: "Receivables / Payables" },
+];
+
+function financialYearStartIso() {
+  const now = new Date();
+  // Indian financial year starts April 1. Jan-Mar (month index 0-2) belong to the prior FY.
+  const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+  return `${year}-04-01`;
+}
+
+const businessReportState = {
+  tab: "trial-balance",
+  as_of: todayIsoDate(),
+  from_date: financialYearStartIso(),
+  to_date: todayIsoDate(),
+  ledgerAccountId: "",
+};
+
+let lastBusinessTrialBalance = null;
+let lastBusinessProfitLoss = null;
+let lastBusinessBalanceSheet = null;
+let lastBusinessReceivables = null;
+let lastBusinessPayables = null;
+let lastBusinessGeneralLedger = null;
+
+function reportResultPayload(result, extra = {}) {
+  if (result.ok) {
+    return { ok: true, ...(result.payload || {}), ...extra };
+  }
+  return { ok: false, status: result.status, detail: result.payload?.detail || null, ...extra };
+}
+
+async function refreshCurrentBusinessReport() {
+  const tab = businessReportState.tab;
+  if (tab === "trial-balance") {
+    await loadBusinessTrialBalance();
+  } else if (tab === "pnl") {
+    await loadBusinessProfitLoss();
+  } else if (tab === "balance-sheet") {
+    await loadBusinessBalanceSheet();
+  } else if (tab === "receivables-payables") {
+    await loadBusinessReceivablesPayables();
+  } else if (tab === "general-ledger") {
+    if (businessReportState.ledgerAccountId) {
+      await loadBusinessGeneralLedger(businessReportState.ledgerAccountId);
+    } else {
+      rerenderBusinessReportsIfActive();
+    }
+  }
+}
+
+function rerenderBusinessReportsIfActive() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "reports") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function loadBusinessTrialBalance() {
+  const result = await apiRequest("mitrabooks", `/api/v1/accounting/reports/trial-balance?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" });
+  lastBusinessTrialBalance = reportResultPayload(result);
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { trial_balance: { ok: result.ok, status: result.status } });
+}
+
+async function loadBusinessProfitLoss() {
+  const result = await apiRequest("mitrabooks", `/api/v1/accounting/reports/pnl?from_date=${encodeURIComponent(businessReportState.from_date)}&to_date=${encodeURIComponent(businessReportState.to_date)}`, { method: "GET" });
+  lastBusinessProfitLoss = reportResultPayload(result);
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { profit_loss: { ok: result.ok, status: result.status } });
+}
+
+async function loadBusinessBalanceSheet() {
+  const result = await apiRequest("mitrabooks", `/api/v1/accounting/reports/balance-sheet?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" });
+  lastBusinessBalanceSheet = reportResultPayload(result);
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { balance_sheet: { ok: result.ok, status: result.status } });
+}
+
+async function loadBusinessReceivablesPayables() {
+  const [arResult, apResult] = await Promise.all([
+    apiRequest("mitrabooks", `/api/v1/accounting/reports/accounts-receivable?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" }),
+    apiRequest("mitrabooks", `/api/v1/accounting/reports/accounts-payable?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" }),
+  ]);
+  lastBusinessReceivables = reportResultPayload(arResult);
+  lastBusinessPayables = reportResultPayload(apResult);
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { receivables: { ok: arResult.ok }, payables: { ok: apResult.ok } });
+}
+
+async function loadBusinessGeneralLedger(accountId) {
+  businessReportState.ledgerAccountId = String(accountId || "");
+  const account = findBusinessAccountById(accountId);
+  const label = account ? `${account.code} - ${account.name}` : String(accountId);
+  lastBusinessGeneralLedger = { loading: true, account_label: label };
+  rerenderBusinessReportsIfActive();
+  const result = await apiRequest("mitrabooks", `/api/v1/accounting/ledger/${encodeURIComponent(accountId)}`, { method: "GET" });
+  if (result.ok) {
+    const lines = Array.isArray(result.payload) ? result.payload : accountRowsFromPayload(result.payload);
+    lastBusinessGeneralLedger = { ok: true, account_id: accountId, account_label: label, lines };
+  } else {
+    lastBusinessGeneralLedger = { ok: false, account_id: accountId, account_label: label, detail: result.payload?.detail || null };
+  }
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { general_ledger: { ok: result.ok, status: result.status, account_id: accountId } });
+}
+
+function reportDateControls() {
+  const tab = businessReportState.tab;
+  const asOfTabs = ["trial-balance", "balance-sheet", "receivables-payables"];
+  if (tab === "pnl") {
+    return `
+      <div class="report-date-controls" data-business-report-filters>
+        <label>From <input type="date" name="from_date" value="${escapeHtml(businessReportState.from_date)}"></label>
+        <label>To <input type="date" name="to_date" value="${escapeHtml(businessReportState.to_date)}"></label>
+        <button class="secondary" type="button" data-business-action="apply-report-filter">Apply</button>
+      </div>
+    `;
+  }
+  if (asOfTabs.includes(tab)) {
+    return `
+      <div class="report-date-controls" data-business-report-filters>
+        <label>As of <input type="date" name="as_of" value="${escapeHtml(businessReportState.as_of)}"></label>
+        <button class="secondary" type="button" data-business-action="apply-report-filter">Apply</button>
+      </div>
+    `;
+  }
+  return "";
+}
+
+function renderBusinessReportsWorkspace() {
+  const tabs = BUSINESS_REPORT_TABS.map((tab) => `
+    <button
+      class="report-tab ${businessReportState.tab === tab.id ? "active" : ""}"
+      type="button"
+      data-business-action="report-tab"
+      data-report-tab="${escapeHtml(tab.id)}"
+    >${escapeHtml(tab.label)}</button>
+  `).join("");
+
+  let body = "";
+  if (businessReportState.tab === "trial-balance") {
+    body = renderBusinessTrialBalance();
+  } else if (businessReportState.tab === "pnl") {
+    body = renderBusinessProfitLoss();
+  } else if (businessReportState.tab === "balance-sheet") {
+    body = renderBusinessBalanceSheet();
+  } else if (businessReportState.tab === "general-ledger") {
+    body = renderBusinessGeneralLedger();
+  } else if (businessReportState.tab === "receivables-payables") {
+    body = renderBusinessReceivablesPayables();
+  }
+
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Financial Reports</h4>
+          <p>Live reports from posted ledger entries for this tenant.</p>
+        </div>
+      </div>
+      <div class="report-tabs" role="tablist">${tabs}</div>
+      ${reportDateControls()}
+      ${body}
+    </div>
+  `;
+}
+
+function reportUnavailablePanel(title, payload) {
+  const detail = payload?.detail || "Report unavailable. Check accounting access and try again.";
+  return `
+    <div class="table-preview compact-table">
+      <h4>${escapeHtml(title)}</h4>
+      <p class="muted">${escapeHtml(detail)}</p>
+    </div>
+  `;
+}
+
+function renderBusinessTrialBalance() {
+  const payload = lastBusinessTrialBalance;
+  if (!payload) {
+    return `<p class="muted">Loading trial balance...</p>`;
+  }
+  if (payload.ok === false) {
+    return reportUnavailablePanel("Trial Balance", payload);
+  }
+  const rows = Array.isArray(payload.lines) ? payload.lines : [];
+  return `
+    <div class="preview-heading compact">
+      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Debits and credits must match.</p></div>
+      <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
+    </div>
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Account</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
+            <th>Ledger</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map((row) => `
+            <tr>
+              <td>${escapeHtml(row.account_code || "")}</td>
+              <td>${escapeHtml(row.account_name || "")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(row.debit_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(row.credit_total || 0))}</td>
+              <td>
+                <button class="secondary" type="button" data-business-action="report-ledger" data-account-id="${escapeHtml(row.account_id || "")}">Open</button>
+              </td>
+            </tr>
+          `).join("") : `
+            <tr><td colspan="5" class="muted">No posted balances found for this tenant.</td></tr>
+          `}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="2">Total</th>
+            <th class="amount">${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
+            <th class="amount">${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+function renderBusinessProfitLoss() {
+  const payload = lastBusinessProfitLoss;
+  if (!payload) {
+    return `<p class="muted">Loading profit & loss...</p>`;
+  }
+  if (payload.ok === false) {
+    return reportUnavailablePanel("Profit & Loss", payload);
+  }
+  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  return `
+    <div class="preview-heading compact">
+      <div><p>${escapeHtml(payload.from_date || businessReportState.from_date)} to ${escapeHtml(payload.to_date || businessReportState.to_date)}</p></div>
+      <span class="pill ${Number(payload.net_profit || 0) >= 0 ? "ok" : "warn"}">${escapeHtml(formatCurrency(payload.net_profit || 0))}</span>
+    </div>
+    <div class="metric-grid three">
+      ${renderStatCards([
+        ["Income", formatCurrency(payload.income_total || 0), "posted income"],
+        ["Expenses", formatCurrency(payload.expense_total || 0), "posted expenses"],
+        ["Net Profit", formatCurrency(payload.net_profit || 0), "income less expense"],
+      ])}
+    </div>
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Account</th>
+            <th>Type</th>
+            <th class="amount">Debit</th>
+            <th class="amount">Credit</th>
+            <th class="amount">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lines.length ? lines.map((line) => `
+            <tr>
+              <td>${escapeHtml(line.account_code || "")}</td>
+              <td>${escapeHtml(line.account_name || "")}</td>
+              <td>${escapeHtml(line.account_type || "")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.debit_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.credit_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(line.net_amount || 0))}</td>
+            </tr>
+          `).join("") : `
+            <tr><td colspan="6" class="muted">No income or expense rows found for this period.</td></tr>
+          `}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderBusinessBalanceSheet() {
+  const payload = lastBusinessBalanceSheet;
+  if (!payload) {
+    return `<p class="muted">Loading balance sheet...</p>`;
+  }
+  if (payload.ok === false) {
+    return reportUnavailablePanel("Balance Sheet", payload);
+  }
+  const sections = [
+    ["Assets", Array.isArray(payload.assets) ? payload.assets : []],
+    ["Liabilities", Array.isArray(payload.liabilities) ? payload.liabilities : []],
+    ["Equity", Array.isArray(payload.equity) ? payload.equity : []],
+  ];
+  return `
+    <div class="preview-heading compact">
+      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Assets should equal liabilities plus equity.</p></div>
+      <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
+    </div>
+    <div class="metric-grid three">
+      ${renderStatCards([
+        ["Assets", formatCurrency(payload.total_assets || 0), "resources"],
+        ["Liabilities", formatCurrency(payload.total_liabilities || 0), "obligations"],
+        ["Equity", formatCurrency(payload.total_equity || 0), "owner funds"],
+      ])}
+    </div>
+    <div class="dashboard-main-grid platform-grid">
+      ${sections.map(([title, rows]) => `
+        <article>
+          <h4>${escapeHtml(title)}</h4>
+          <div class="table-preview compact-table">
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Account</th><th class="amount">Balance</th></tr>
+              </thead>
+              <tbody>
+                ${rows.length ? rows.map((line) => `
+                  <tr>
+                    <td>${escapeHtml(line.account_code || "")}</td>
+                    <td>${escapeHtml(line.account_name || "")}</td>
+                    <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
+                  </tr>
+                `).join("") : `<tr><td colspan="3" class="muted">No rows.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderBusinessGeneralLedger() {
+  const accounts = businessAccountsForSelection();
+  const selector = `
+    <div class="report-date-controls" data-business-report-ledger>
+      <label>Account
+        <select name="ledger_account" aria-label="Select ledger account">
+          <option value="">Select an account</option>
+          ${accounts.map((acc) => `
+            <option value="${escapeHtml(acc.id)}" ${String(acc.id) === String(businessReportState.ledgerAccountId) ? "selected" : ""}>
+              ${escapeHtml(`${acc.code} - ${acc.name}`)}
+            </option>
+          `).join("")}
+        </select>
+      </label>
+      <button class="secondary" type="button" data-business-action="load-report-ledger">View Ledger</button>
+    </div>
+  `;
+
+  const payload = lastBusinessGeneralLedger;
+  let trace = "";
+  if (!payload) {
+    trace = `<p class="muted">Select an account to view its posted ledger entries.</p>`;
+  } else if (payload.loading) {
+    trace = `<p class="muted">Loading ledger for ${escapeHtml(payload.account_label || "selected account")}...</p>`;
+  } else if (payload.ok === false) {
+    trace = reportUnavailablePanel(`Ledger: ${payload.account_label || ""}`, payload);
+  } else {
+    const lines = Array.isArray(payload.lines) ? payload.lines : [];
+    trace = `
+      <div class="table-preview compact-table">
+        <h4>Ledger: ${escapeHtml(payload.account_label || "")}</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Reference</th>
+              <th>Description</th>
+              <th class="amount">Debit</th>
+              <th class="amount">Credit</th>
+              <th class="amount">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.length ? lines.map((line) => `
+              <tr>
+                <td>${escapeHtml(line.entry_date || "")}</td>
+                <td>${escapeHtml(line.reference || "")}</td>
+                <td>${escapeHtml(line.description || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.debit || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.credit || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.running_balance || 0))}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="6" class="muted">No posted entries for this account.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+  return selector + trace;
+}
+
+function renderReceivablesPayablesSection(title, subtitle, payload) {
+  if (!payload) {
+    return `
+      <article>
+        <h4>${escapeHtml(title)}</h4>
+        <p class="muted">Loading...</p>
+      </article>
+    `;
+  }
+  if (payload.ok === false) {
+    return `
+      <article>
+        <h4>${escapeHtml(title)}</h4>
+        <p class="muted">${escapeHtml(payload.detail || "Report unavailable. Check accounting access and try again.")}</p>
+      </article>
+    `;
+  }
+  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  return `
+    <article>
+      <h4>${escapeHtml(title)} <span class="pill">${escapeHtml(formatCurrency(payload.total_balance || 0))}</span></h4>
+      <p class="muted">${escapeHtml(subtitle)}</p>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr><th>Account</th><th class="amount">Balance</th></tr>
+          </thead>
+          <tbody>
+            ${lines.length ? lines.map((line) => `
+              <tr>
+                <td>${escapeHtml(line.account_name || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="2" class="muted">No outstanding balances.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `;
+}
+
+function renderBusinessReceivablesPayables() {
+  return `
+    <div class="preview-heading compact">
+      <div><p>Outstanding customer and vendor balances as of ${escapeHtml(businessReportState.as_of)}.</p></div>
+    </div>
+    <div class="dashboard-main-grid platform-grid">
+      ${renderReceivablesPayablesSection("Receivables", "Amounts owed by customers (debit balances on receivable accounts).", lastBusinessReceivables)}
+      ${renderReceivablesPayablesSection("Payables", "Amounts owed to vendors (credit balances on payable accounts).", lastBusinessPayables)}
+    </div>
+  `;
+}
+
+function setBusinessReportTab(tab) {
+  if (!BUSINESS_REPORT_TABS.some((t) => t.id === tab)) {
+    return;
+  }
+  businessReportState.tab = tab;
+  rerenderBusinessReportsIfActive();
+  refreshCurrentBusinessReport();
+}
+
+function applyBusinessReportFilter() {
+  const panel = document.querySelector("[data-business-report-filters]");
+  if (panel) {
+    const asOf = panel.querySelector("input[name='as_of']");
+    const fromDate = panel.querySelector("input[name='from_date']");
+    const toDate = panel.querySelector("input[name='to_date']");
+    if (asOf && asOf.value) businessReportState.as_of = asOf.value;
+    if (fromDate && fromDate.value) businessReportState.from_date = fromDate.value;
+    if (toDate && toDate.value) businessReportState.to_date = toDate.value;
+  }
+  refreshCurrentBusinessReport();
+}
+
+function loadBusinessReportLedgerFromSelect() {
+  const panel = document.querySelector("[data-business-report-ledger]");
+  const select = panel?.querySelector("select[name='ledger_account']");
+  const accountId = select?.value || "";
+  if (!accountId) {
+    setLoginStatus("warn", "Select an account", "Choose an account to view its ledger.");
+    return;
+  }
+  loadBusinessGeneralLedger(accountId);
 }
 
 // ========== Business Module: Typed Vouchers ==========
@@ -8282,6 +8776,15 @@ dashboardPreview.addEventListener("click", (event) => {
     toggleWidgetCollapse(button.getAttribute("data-widget-id") || "");
   } else if (businessAction === "open-widget-settings") {
     openWidgetSettings();
+  } else if (businessAction === "report-tab") {
+    setBusinessReportTab(button.getAttribute("data-report-tab") || "trial-balance");
+  } else if (businessAction === "apply-report-filter") {
+    applyBusinessReportFilter();
+  } else if (businessAction === "report-ledger") {
+    setBusinessReportTab("general-ledger");
+    loadBusinessGeneralLedger(button.getAttribute("data-account-id") || "");
+  } else if (businessAction === "load-report-ledger") {
+    loadBusinessReportLedgerFromSelect();
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {

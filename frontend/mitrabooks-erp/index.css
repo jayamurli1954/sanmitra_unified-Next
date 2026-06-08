@@ -3955,6 +3955,67 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   color: #cbd5e1 !important;
 }
 
+/* Financial Reports workspace */
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  border-bottom: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  padding-bottom: 12px;
+}
+
+.report-tab {
+  background: transparent;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.report-tab:hover {
+  border-color: var(--accent, #3b82f6);
+  color: var(--text, #e2e8f0);
+}
+
+.report-tab.active {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+  color: #ffffff;
+}
+
+.report-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.report-date-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.report-date-controls input,
+.report-date-controls select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  background: var(--surface, rgba(15, 23, 42, 0.6));
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+  min-width: 180px;
+}
+
 
 
 
