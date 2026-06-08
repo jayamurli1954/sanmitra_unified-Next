@@ -12,6 +12,9 @@ from app.modules.business.schemas import (
     CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    PurchaseBillCancelRequest,
+    PurchaseBillCreateRequest,
+    PurchaseBillLineItem,
     SalesInvoiceCancelRequest,
     SalesInvoiceCreateRequest,
     SalesInvoiceLineItem,
@@ -20,7 +23,11 @@ from app.modules.business.schemas import (
 )
 
 # Account codes resolved by code in the BUSINESS chart of accounts.
-_INVOICE_ACCOUNT_IDS = {"12001": 100, "41001": 200, "41002": 201, "22001": 301, "22002": 302, "22003": 303}
+_INVOICE_ACCOUNT_IDS = {
+    "12001": 100, "41001": 200, "41002": 201, "22001": 301, "22002": 302, "22003": 303,
+    # Purchase side: AP, expense/purchases, Input GST (ITC).
+    "21001": 400, "51001": 500, "14001": 601, "14002": 602, "14003": 603,
+}
 
 
 class FakeCollection:
@@ -727,6 +734,131 @@ async def test_cancel_sales_invoice_posts_reversal(monkeypatch):
     assert result["reversal_journal_entry_id"] == 601
     assert store.docs[0]["status"] == "cancelled"
     assert audit_events[0]["action"] == "business_sales_invoice_cancelled"
+
+
+def _seed_vendor(collection):
+    collection.docs.append(
+        {
+            "party_id": "vend-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "party_name": "Bharat Supplies",
+            "party_type": "vendor",
+            "party_code": "VEND-001",
+            "gstin": "27AAACB1234C1Z9",
+            "is_active": True,
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_purchase_bill_posts_balanced_itc_journal(monkeypatch):
+    store = FakeCollection()
+    _seed_vendor(store)
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=801), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.create_purchase_bill(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1",
+            bill_number="SUP-2026-77",
+            bill_date=date(2026, 6, 8),
+            is_inter_state=False,
+            line_items=[PurchaseBillLineItem(description="Raw material", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    total_debit = sum(line.debit for line in lines)
+    total_credit = sum(line.credit for line in lines)
+    assert total_debit == total_credit == Decimal("1180.00")
+    # Expense debit = taxable; Input CGST/SGST debited (ITC asset).
+    debits = {line.account_id: line.debit for line in lines if line.debit > 0}
+    assert debits[_INVOICE_ACCOUNT_IDS["51001"]] == Decimal("1000.00")
+    assert debits[_INVOICE_ACCOUNT_IDS["14001"]] == Decimal("90.00")
+    assert debits[_INVOICE_ACCOUNT_IDS["14002"]] == Decimal("90.00")
+    # Accounts Payable credited with the full bill total.
+    credits = {line.account_id: line.credit for line in lines if line.credit > 0}
+    assert credits == {_INVOICE_ACCOUNT_IDS["21001"]: Decimal("1180.00")}
+    assert captured["payload"].source_document_type == "purchase_bill"
+
+    assert result["status"] == "posted"
+    assert result["journal_entry_id"] == 801
+    assert result["bill_number"] == "SUP-2026-77"
+    assert result["vendor_name"] == "Bharat Supplies"
+    assert result["igst_total"] == "0.00"
+    assert result["bill_total"] == "1180.00"
+    assert audit_events[0]["action"] == "business_purchase_bill_posted"
+
+
+@pytest.mark.asyncio
+async def test_cancel_purchase_bill_posts_reversal(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        {
+            "bill_id": "bill-1",
+            "bill_number": "SUP-2026-77",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "vendor_party_id": "vend-1",
+            "bill_date": "2026-06-08",
+            "journal_entry_id": 801,
+            "status": "posted",
+            "bill_total": "1180.00",
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_reverse(session, *, journal_id, **kwargs):
+        captured["journal_id"] = journal_id
+        return SimpleNamespace(id=901), True
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse)
+
+    result = await business_service.cancel_purchase_bill(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id="bill-1",
+        created_by="owner-2",
+        payload=PurchaseBillCancelRequest(reason="Duplicate bill"),
+        idempotency_key=None,
+    )
+
+    assert captured["journal_id"] == 801
+    assert result["status"] == "cancelled"
+    assert result["reversal_journal_entry_id"] == 901
+    assert store.docs[0]["status"] == "cancelled"
 
 
 def _async_none():

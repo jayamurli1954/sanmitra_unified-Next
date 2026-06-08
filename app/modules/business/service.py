@@ -24,6 +24,8 @@ from app.modules.business.schemas import (
     InvoiceSettingsUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    PurchaseBillCancelRequest,
+    PurchaseBillCreateRequest,
     SalesInvoiceCancelRequest,
     SalesInvoiceCreateRequest,
     TypedVoucherCreateRequest,
@@ -34,6 +36,7 @@ PARTIES_COLLECTION = "business_parties"
 VOUCHERS_COLLECTION = "business_vouchers"
 VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
 SALES_INVOICES_COLLECTION = "business_sales_invoices"
+PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
 INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
 
@@ -42,6 +45,12 @@ SALES_RECEIVABLE_CODE = "12001"  # Sundry Debtors
 OUTPUT_CGST_CODE = "22001"
 OUTPUT_SGST_CODE = "22002"
 OUTPUT_IGST_CODE = "22003"
+
+# Purchase-side codes: Accounts Payable and Input GST (ITC, asset).
+PURCHASE_PAYABLE_CODE = "21001"  # Sundry Creditors
+INPUT_CGST_CODE = "14001"
+INPUT_SGST_CODE = "14002"
+INPUT_IGST_CODE = "14003"
 CA_DOCUMENT_DEFAULT_NEXT_ACTION = {
     "uploaded": "Classify document and assign reviewer",
     "under_review": "Review support and raise query if needed",
@@ -187,6 +196,10 @@ async def ensure_business_indexes() -> None:
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
     invoice_settings = get_collection(INVOICE_SETTINGS_COLLECTION)
     await invoice_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
+    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("bill_date", -1)])
+    await bills.create_index([("tenant_id", 1), ("app_key", 1), ("bill_id", 1)], unique=True)
+    await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -1280,6 +1293,287 @@ async def cancel_sales_invoice(
         entity_type="business_sales_invoice",
         entity_id=invoice_id,
         old_value=old_invoice,
+        new_value=result,
+    )
+    return result
+
+
+# ===================== Purchase Bills (Input GST / ITC) =====================
+
+
+def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("created", created)
+    return result
+
+
+async def list_purchase_bills(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    status: str | None = None,
+    limit: int = 100,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+    }
+    if status:
+        filters["status"] = status
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(PURCHASE_BILLS_COLLECTION)
+        .find(filters)
+        .sort("bill_date", -1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    return {"items": [_bill_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def get_purchase_bill(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    bill_id: str,
+) -> dict | None:
+    row = await get_collection(PURCHASE_BILLS_COLLECTION).find_one(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "bill_id": bill_id,
+        }
+    )
+    return _bill_response_doc(row) if row else None
+
+
+async def create_purchase_bill(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    created_by: str,
+    payload: PurchaseBillCreateRequest,
+    idempotency_key: str | None,
+) -> dict:
+    if app_key == "mitrabooks":
+        await initialize_default_chart_of_accounts(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            organization_type="BUSINESS",
+        )
+
+    if idempotency_key:
+        existing = await get_collection(PURCHASE_BILLS_COLLECTION).find_one(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "accounting_entity_id": payload.accounting_entity_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        if existing is not None:
+            return _bill_response_doc(existing, created=False)
+
+    vendor = await get_party(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        party_id=payload.vendor_party_id,
+    )
+    if vendor is None:
+        raise AccountingValidationError("Vendor party not found for this tenant")
+
+    # GST line computation is identical to sales (reads line_items + is_inter_state).
+    lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, bill_total = _compute_invoice_lines(payload)
+    if bill_total <= Decimal("0"):
+        raise AccountingValidationError("Bill total must be greater than zero")
+
+    payable_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=None,
+        account_code=PURCHASE_PAYABLE_CODE,
+        side="payable",
+    )
+    expense_id = await _resolve_voucher_account_id(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        account_id=None,
+        account_code=payload.expense_account_code,
+        side="expense",
+    )
+
+    # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
+    journal_lines = [
+        JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0")),
+    ]
+    for gst_amount, code in (
+        (cgst_total, INPUT_CGST_CODE),
+        (sgst_total, INPUT_SGST_CODE),
+        (igst_total, INPUT_IGST_CODE),
+    ):
+        if gst_amount > Decimal("0"):
+            input_gst_id = await _resolve_voucher_account_id(
+                session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=payload.accounting_entity_id,
+                account_id=None,
+                account_code=code,
+                side="input GST",
+            )
+            journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
+    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total))
+
+    bill_id = str(uuid4())
+    bill_number = payload.bill_number.strip()
+    description = f"Purchase Bill {bill_number} - {vendor.get('party_name') or payload.vendor_party_id}"
+    now = _now()
+    doc = {
+        "bill_id": bill_id,
+        "bill_number": bill_number,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "vendor_party_id": payload.vendor_party_id,
+        "vendor_name": vendor.get("party_name"),
+        "vendor_gstin": vendor.get("gstin"),
+        "bill_date": payload.bill_date.isoformat(),
+        "due_date": payload.due_date.isoformat() if payload.due_date else None,
+        "is_inter_state": payload.is_inter_state,
+        "place_of_supply": payload.place_of_supply,
+        "expense_account_code": payload.expense_account_code,
+        "notes": payload.notes,
+        "line_items": lines,
+        "taxable_total": str(taxable_total),
+        "cgst_total": str(cgst_total),
+        "sgst_total": str(sgst_total),
+        "igst_total": str(igst_total),
+        "gst_total": str(gst_total),
+        "bill_total": str(bill_total),
+        "status": "posting",
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if idempotency_key:
+        doc["idempotency_key"] = idempotency_key
+    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    await bills.insert_one(doc)
+
+    try:
+        journal_entry, created = await post_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            payload=JournalPostRequest(
+                entry_date=payload.bill_date,
+                description=description,
+                reference=bill_number,
+                source_module="business",
+                source_document_type="purchase_bill",
+                source_document_id=bill_id,
+                lines=journal_lines,
+            ),
+            idempotency_key=idempotency_key or f"purchase-bill:{bill_id}",
+        )
+    except Exception:
+        await bills.delete_one({"tenant_id": tenant_id, "app_key": app_key, "bill_id": bill_id})
+        raise
+
+    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
+    await bills.update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "bill_id": bill_id},
+        {"$set": update},
+    )
+    doc.update(update)
+    result = _bill_response_doc(doc, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_purchase_bill_posted",
+        entity_type="business_purchase_bill",
+        entity_id=bill_id,
+        new_value=result,
+    )
+    return result
+
+
+async def cancel_purchase_bill(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    bill_id: str,
+    created_by: str,
+    payload: PurchaseBillCancelRequest,
+    idempotency_key: str | None,
+) -> dict:
+    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "bill_id": bill_id,
+    }
+    bill = await bills.find_one(filters)
+    if bill is None:
+        raise AccountingNotFoundError("Purchase bill not found")
+
+    if bill.get("status") == "cancelled" and bill.get("reversal_journal_entry_id"):
+        return _bill_response_doc(bill, created=False)
+
+    journal_entry_id = bill.get("journal_entry_id")
+    if not journal_entry_id:
+        raise AccountingValidationError("Purchase bill is not linked to a posted journal entry")
+    if bill.get("status") != "posted":
+        raise AccountingValidationError("Only posted purchase bills can be cancelled")
+
+    old_bill = _bill_response_doc(bill)
+    reversal_key = idempotency_key or f"purchase-bill-cancel:{bill_id}"
+    reversal, created = await reverse_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        created_by=created_by,
+        journal_id=int(journal_entry_id),
+        reversal_date=payload.cancel_date or date.today(),
+        reason=payload.reason,
+        idempotency_key=reversal_key,
+    )
+    update = {
+        "status": "cancelled",
+        "reversal_journal_entry_id": reversal.id,
+        "cancel_reason": payload.reason,
+        "cancelled_at": _now(),
+        "updated_at": _now(),
+    }
+    await bills.update_one(filters, {"$set": update})
+    bill.update(update)
+    result = _bill_response_doc(bill, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_purchase_bill_cancelled",
+        entity_type="business_purchase_bill",
+        entity_id=bill_id,
+        old_value=old_bill,
         new_value=result,
     )
     return result

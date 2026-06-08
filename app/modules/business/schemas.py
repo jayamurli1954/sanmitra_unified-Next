@@ -288,3 +288,81 @@ class InvoiceSettingsResponse(InvoiceSettings):
     accounting_entity_id: str
     updated_by: str | None = None
     updated_at: datetime | None = None
+
+
+# ---- Purchase Bills (vendor invoices, with Input GST / ITC) ----
+
+PurchaseBillStatus = Literal["posted", "cancelled"]
+
+
+class PurchaseBillLineItem(BaseModel):
+    description: str = Field(..., min_length=1, max_length=300)
+    hsn_sac: str | None = Field(default=None, max_length=20)
+    quantity: Decimal = Field(..., gt=Decimal("0"))
+    rate: Decimal = Field(..., ge=Decimal("0"))
+    gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+
+
+class PurchaseBillLineResponse(PurchaseBillLineItem):
+    taxable_amount: Decimal
+    cgst: Decimal
+    sgst: Decimal
+    igst: Decimal
+    line_total: Decimal
+
+
+class PurchaseBillCreateRequest(BaseModel):
+    vendor_party_id: str = Field(..., min_length=1, max_length=80)
+    bill_number: str = Field(..., min_length=1, max_length=120)
+    bill_date: date
+    due_date: date | None = None
+    is_inter_state: bool = False
+    expense_account_code: str = Field(default="51001", min_length=1, max_length=50)
+    place_of_supply: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=500)
+    line_items: list[PurchaseBillLineItem] = Field(..., min_length=1)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class PurchaseBillCancelRequest(BaseModel):
+    reason: str = Field(default="Cancellation", min_length=1, max_length=240)
+    cancel_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class PurchaseBillResponse(BaseModel):
+    bill_id: str
+    bill_number: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    vendor_party_id: str
+    vendor_name: str | None = None
+    vendor_gstin: str | None = None
+    bill_date: date
+    due_date: date | None = None
+    is_inter_state: bool
+    place_of_supply: str | None = None
+    expense_account_code: str
+    notes: str | None = None
+    line_items: list[PurchaseBillLineResponse]
+    taxable_total: Decimal
+    cgst_total: Decimal
+    sgst_total: Decimal
+    igst_total: Decimal
+    gst_total: Decimal
+    bill_total: Decimal
+    status: str
+    journal_entry_id: int | None = None
+    reversal_journal_entry_id: int | None = None
+    cancel_reason: str | None = None
+    cancelled_at: datetime | None = None
+    created: bool = False
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PurchaseBillListResponse(BaseModel):
+    items: list[PurchaseBillResponse]
+    total: int

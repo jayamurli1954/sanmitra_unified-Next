@@ -48,7 +48,7 @@ function businessNavigationGroups() {
     {
       name: "Expenses (Purchases)",
       items: [
-        { label: "Bills (Vendor)", businessWorkspace: "bills", icon: "BL", module: { module_key: "purchase", frontend_path: "/business/bills", enabled: false } },
+        { label: "Bills (Vendor)", businessWorkspace: "bills", icon: "BL", module: { module_key: "purchase", frontend_path: "/business/bills", enabled: true } },
         { label: "Purchase Orders", businessWorkspace: "purchase-orders", icon: "PO", module: { module_key: "purchase", frontend_path: "/business/purchase-orders", enabled: false } },
         { label: "Debit Notes", businessWorkspace: "debit-notes", icon: "DN", module: { module_key: "purchase", frontend_path: "/business/debit-notes", enabled: false } },
         { label: "Expenses log", businessWorkspace: "expenses", icon: "EX", module: { module_key: "business", frontend_path: "/business/expenses", enabled: false } },
@@ -4516,6 +4516,9 @@ function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "sales") {
     return renderBusinessSalesWorkspace();
   }
+  if (activeBusinessWorkspace === "bills") {
+    return renderBusinessPurchaseWorkspace();
+  }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
   }
@@ -4872,6 +4875,11 @@ function setBusinessWorkspace(workspace) {
     loadBusinessAccounts();
     loadInvoiceSettings();
     loadBusinessInvoices();
+  } else if (workspace === "bills") {
+    purchaseView = "list";
+    loadBusinessParties();
+    loadBusinessAccounts();
+    loadBusinessBills();
   }
 }
 
@@ -4897,6 +4905,7 @@ function syncBusinessNavActiveState() {
       accounting: "Accounting",
       reports: "Financial Reports",
       sales: "Sales Invoices",
+      bills: "Purchase Bills",
       "financial-health": "Financial Health",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -6121,6 +6130,441 @@ function renderBusinessSalesWorkspace() {
         </div>
       </div>
       ${renderInvoiceListTable()}
+    </div>
+  `;
+}
+
+// ========== Business Module: Purchase Bills (Input GST / ITC) ==========
+
+let purchaseView = "list"; // list | create | detail
+let lastBusinessBills = [];
+let lastBillDetail = null;
+let billLineSeq = 0;
+let billFormLines = [];
+const billFormHeader = {
+  vendor_party_id: "",
+  bill_number: "",
+  bill_date: todayIsoDate(),
+  due_date: "",
+  is_inter_state: false,
+  expense_account_code: "51001",
+  place_of_supply: "",
+  notes: "",
+};
+
+function rerenderPurchaseIfActive() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "bills") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function loadBusinessBills() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bills?limit=100", { method: "GET" });
+  if (result.ok) {
+    lastBusinessBills = Array.isArray(result.payload?.items) ? result.payload.items : [];
+  } else {
+    lastBusinessBills = [];
+    setLoginStatus("danger", "Unable to load bills", statusDetailText(result.payload?.detail) || `Bill list request failed with HTTP ${result.status}.`);
+  }
+  rerenderPurchaseIfActive();
+  renderJson(apiOutput, { bills: { ok: result.ok, status: result.status, count: lastBusinessBills.length } });
+}
+
+function vendorPartyOptions() {
+  return (Array.isArray(lastBusinessParties) ? lastBusinessParties : [])
+    .filter((p) => ["vendor", "both"].includes(String(p.party_type || "").toLowerCase()));
+}
+
+function expenseAccountOptions() {
+  return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("5"));
+}
+
+function syncBillFormFromDom() {
+  const form = document.querySelector("[data-bill-form]");
+  if (!form) return;
+  const val = (sel) => form.querySelector(sel)?.value ?? "";
+  billFormHeader.vendor_party_id = val("select[name='vendor_party_id']");
+  billFormHeader.bill_number = val("input[name='bill_number']");
+  billFormHeader.bill_date = val("input[name='bill_date']") || todayIsoDate();
+  billFormHeader.due_date = val("input[name='due_date']");
+  billFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  billFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
+  billFormHeader.place_of_supply = val("input[name='place_of_supply']");
+  billFormHeader.notes = val("textarea[name='notes']");
+  billFormLines = Array.from(form.querySelectorAll("[data-bill-line]")).map((row) => ({
+    id: row.getAttribute("data-bill-line"),
+    description: row.querySelector("input[name='description']")?.value || "",
+    hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
+    quantity: row.querySelector("input[name='quantity']")?.value || "",
+    rate: row.querySelector("input[name='rate']")?.value || "",
+    gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+  }));
+}
+
+function updateBillTotalsDisplay() {
+  const form = document.querySelector("[data-bill-form]");
+  if (!form) return;
+  const inter = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
+  form.querySelectorAll("[data-bill-line]").forEach((row) => {
+    const c = computeInvoiceLine(
+      row.querySelector("input[name='quantity']")?.value,
+      row.querySelector("input[name='rate']")?.value,
+      row.querySelector("input[name='gst_rate']")?.value,
+      inter,
+    );
+    row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
+    row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
+    row.querySelector("[data-line-total]").textContent = formatCurrency(c.total);
+    taxableTotal += c.taxable; cgstTotal += c.cgst; sgstTotal += c.sgst; igstTotal += c.igst;
+  });
+  const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
+  const billTotal = round2(taxableTotal + gstTotal);
+  const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
+  set("[data-total-taxable]", taxableTotal);
+  set("[data-total-cgst]", cgstTotal);
+  set("[data-total-sgst]", sgstTotal);
+  set("[data-total-igst]", igstTotal);
+  set("[data-total-bill]", billTotal);
+  const cgstRow = form.querySelector("[data-row-cgst]");
+  const sgstRow = form.querySelector("[data-row-sgst]");
+  const igstRow = form.querySelector("[data-row-igst]");
+  if (cgstRow && sgstRow && igstRow) {
+    cgstRow.hidden = inter;
+    sgstRow.hidden = inter;
+    igstRow.hidden = !inter;
+  }
+}
+
+function setBusinessPurchaseView(view) {
+  purchaseView = view;
+  rerenderPurchaseIfActive();
+  if (view === "create") {
+    updateBillTotalsDisplay();
+  }
+}
+
+function openBillCreate() {
+  billFormLines = [{ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  billFormHeader.vendor_party_id = "";
+  billFormHeader.bill_number = "";
+  billFormHeader.bill_date = todayIsoDate();
+  billFormHeader.due_date = "";
+  billFormHeader.is_inter_state = false;
+  billFormHeader.expense_account_code = "51001";
+  billFormHeader.place_of_supply = "";
+  billFormHeader.notes = "";
+  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
+  if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  setBusinessPurchaseView("create");
+}
+
+function addBillLine() {
+  syncBillFormFromDom();
+  billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  rerenderPurchaseIfActive();
+  updateBillTotalsDisplay();
+}
+
+function removeBillLine(lineId) {
+  syncBillFormFromDom();
+  billFormLines = billFormLines.filter((l) => l.id !== lineId);
+  if (billFormLines.length === 0) {
+    billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  }
+  rerenderPurchaseIfActive();
+  updateBillTotalsDisplay();
+}
+
+async function submitBill() {
+  syncBillFormFromDom();
+  if (!billFormHeader.vendor_party_id) {
+    setLoginStatus("warn", "Vendor required", "Select a vendor for this bill.");
+    return;
+  }
+  if (!String(billFormHeader.bill_number || "").trim()) {
+    setLoginStatus("warn", "Bill number required", "Enter the supplier's bill/invoice number.");
+    return;
+  }
+  const lineItems = billFormLines
+    .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
+    .map((l) => ({
+      description: String(l.description).trim(),
+      hsn_sac: String(l.hsn_sac || "").trim() || null,
+      quantity: String(Number(l.quantity)),
+      rate: String(Number(l.rate || 0)),
+      gst_rate: String(Number(l.gst_rate || 0)),
+    }));
+  if (lineItems.length === 0) {
+    setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
+    return;
+  }
+  const body = {
+    vendor_party_id: billFormHeader.vendor_party_id,
+    bill_number: String(billFormHeader.bill_number).trim(),
+    bill_date: billFormHeader.bill_date || todayIsoDate(),
+    due_date: billFormHeader.due_date || null,
+    is_inter_state: !!billFormHeader.is_inter_state,
+    expense_account_code: billFormHeader.expense_account_code || "51001",
+    place_of_supply: String(billFormHeader.place_of_supply || "").trim() || null,
+    notes: String(billFormHeader.notes || "").trim() || null,
+    line_items: lineItems,
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bills", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `purchase-bill-${Date.now()}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Bill posted", `${result.payload?.bill_number || "Bill"} posted to the ledger.`);
+    await loadBusinessBills();
+    setBusinessPurchaseView("list");
+  } else {
+    setLoginStatus("danger", "Bill posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { create_bill: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
+}
+
+async function openBillDetail(billId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}`, { method: "GET" });
+  if (result.ok) {
+    lastBillDetail = result.payload;
+    setBusinessPurchaseView("detail");
+  } else {
+    setLoginStatus("danger", "Unable to load bill", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { bill_detail: { ok: result.ok, status: result.status } });
+}
+
+async function cancelBill(billId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/cancel`, {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `purchase-bill-cancel-${billId}` },
+    body: JSON.stringify({ reason: "Cancellation" }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Bill cancelled", "A reversing journal entry was posted.");
+    await loadBusinessBills();
+    if (lastBillDetail && lastBillDetail.bill_id === billId) {
+      lastBillDetail = result.payload;
+    }
+    rerenderPurchaseIfActive();
+  } else {
+    setLoginStatus("danger", "Cancel failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { cancel_bill: { ok: result.ok, status: result.status } });
+}
+
+function renderBillListTable() {
+  const rows = lastBusinessBills;
+  return `
+    <div class="table-preview compact-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Bill #</th>
+            <th>Date</th>
+            <th>Vendor</th>
+            <th class="amount">Taxable</th>
+            <th class="amount">ITC</th>
+            <th class="amount">Total</th>
+            <th>Status</th>
+            <th>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map((b) => `
+            <tr>
+              <td>${escapeHtml(b.bill_number || "")}</td>
+              <td>${escapeHtml(b.bill_date || "")}</td>
+              <td>${escapeHtml(b.vendor_name || b.vendor_party_id || "")}</td>
+              <td class="amount">${escapeHtml(formatCurrency(b.taxable_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(b.gst_total || 0))}</td>
+              <td class="amount">${escapeHtml(formatCurrency(b.bill_total || 0))}</td>
+              <td>${invoiceStatusPill(b.status)}</td>
+              <td><button class="secondary" type="button" data-business-action="view-bill" data-bill-id="${escapeHtml(b.bill_id)}">View</button></td>
+            </tr>
+          `).join("") : `<tr><td colspan="8" class="muted">No bills yet. Record your first vendor bill.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderBillCreateForm() {
+  const vendors = vendorPartyOptions();
+  const expenseAccounts = expenseAccountOptions();
+  const lineRows = billFormLines.map((l) => `
+    <tr data-bill-line="${escapeHtml(l.id)}">
+      <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
+      <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
+      <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
+      <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
+      <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      <td class="amount" data-line-taxable>—</td>
+      <td class="amount" data-line-gst>—</td>
+      <td class="amount" data-line-total>—</td>
+      <td><button class="secondary" type="button" data-business-action="remove-bill-line" data-line-id="${escapeHtml(l.id)}">✕</button></td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="verification-panel erp-workspace-panel" data-bill-form>
+      <div class="preview-heading compact">
+        <div>
+          <h4>New Purchase Bill</h4>
+          <p>Record a vendor bill. It posts to expenses, input GST (ITC), and accounts payable automatically.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
+      </div>
+      <div class="invoice-form-grid">
+        <label>Vendor
+          <select name="vendor_party_id">
+            <option value="">Select vendor</option>
+            ${vendors.map((v) => `<option value="${escapeHtml(v.party_id)}" ${v.party_id === billFormHeader.vendor_party_id ? "selected" : ""}>${escapeHtml(v.party_name)}${v.gstin ? ` (${escapeHtml(v.gstin)})` : ""}</option>`).join("")}
+          </select>
+        </label>
+        <label>Supplier bill no. *
+          <input type="text" name="bill_number" value="${escapeHtml(billFormHeader.bill_number)}" placeholder="Vendor's invoice number">
+        </label>
+        <label>Bill date
+          <input type="date" name="bill_date" value="${escapeHtml(billFormHeader.bill_date)}">
+        </label>
+        <label>Due date
+          <input type="date" name="due_date" value="${escapeHtml(billFormHeader.due_date)}">
+        </label>
+        <label>Expense account
+          <select name="expense_account_code">
+            ${expenseAccounts.length ? expenseAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === billFormHeader.expense_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="51001" selected>51001 - Purchases</option>`}
+          </select>
+        </label>
+        <label>Place of supply
+          <input type="text" name="place_of_supply" value="${escapeHtml(billFormHeader.place_of_supply)}" placeholder="State / code">
+        </label>
+        <label class="invoice-inter-toggle">
+          <input type="checkbox" name="is_inter_state" ${billFormHeader.is_inter_state ? "checked" : ""}>
+          Inter-state supply (IGST)
+        </label>
+      </div>
+
+      <div class="table-preview compact-table invoice-lines">
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>HSN/SAC</th>
+              <th>Qty</th>
+              <th>Rate</th>
+              <th>GST %</th>
+              <th class="amount">Taxable</th>
+              <th class="amount">ITC</th>
+              <th class="amount">Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${lineRows}</tbody>
+        </table>
+      </div>
+      <button class="secondary" type="button" data-business-action="add-bill-line">+ Add line</button>
+
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
+        <div data-row-cgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input CGST</span><strong data-total-cgst>${formatCurrency(0)}</strong></div>
+        <div data-row-sgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
+        <div data-row-igst ${billFormHeader.is_inter_state ? "" : "hidden"}><span>Input IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand"><span>Bill total</span><strong data-total-bill>${formatCurrency(0)}</strong></div>
+      </div>
+
+      <label class="invoice-notes">Notes
+        <textarea name="notes" rows="2" placeholder="Optional notes">${escapeHtml(billFormHeader.notes)}</textarea>
+      </label>
+
+      <div class="invoice-form-actions">
+        <button class="primary" type="button" data-business-action="save-bill">Post Bill</button>
+        <button class="secondary" type="button" data-business-action="bill-back">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBillDetail() {
+  const b = lastBillDetail;
+  if (!b) {
+    return `<div class="verification-panel erp-workspace-panel"><p class="muted">Bill not found.</p></div>`;
+  }
+  const lines = Array.isArray(b.line_items) ? b.line_items : [];
+  const taxRow = b.is_inter_state
+    ? `<div><span>Input IGST</span><strong>${formatCurrency(b.igst_total || 0)}</strong></div>`
+    : `<div><span>Input CGST</span><strong>${formatCurrency(b.cgst_total || 0)}</strong></div><div><span>Input SGST</span><strong>${formatCurrency(b.sgst_total || 0)}</strong></div>`;
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Bill ${escapeHtml(b.bill_number || "")} ${invoiceStatusPill(b.status)}</h4>
+          <p>${escapeHtml(b.vendor_name || b.vendor_party_id || "")}${b.vendor_gstin ? ` · ${escapeHtml(b.vendor_gstin)}` : ""} · ${escapeHtml(b.bill_date || "")}${b.due_date ? ` · due ${escapeHtml(b.due_date)}` : ""}</p>
+        </div>
+        <div class="invoice-detail-actions">
+          <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
+          ${String(b.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-bill" data-bill-id="${escapeHtml(b.bill_id)}">Cancel Bill</button>` : ""}
+        </div>
+      </div>
+      <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}</p>
+      <div class="table-preview compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>HSN/SAC</th>
+              <th class="amount">Qty</th>
+              <th class="amount">Rate</th>
+              <th class="amount">GST %</th>
+              <th class="amount">Taxable</th>
+              <th class="amount">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.map((l) => `
+              <tr>
+                <td>${escapeHtml(l.description || "")}</td>
+                <td>${escapeHtml(l.hsn_sac || "")}</td>
+                <td class="amount">${escapeHtml(l.quantity || "")}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.rate || 0))}</td>
+                <td class="amount">${escapeHtml(String(l.gst_rate || 0))}%</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.taxable_amount || 0))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(l.line_total || 0))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong>${formatCurrency(b.taxable_total || 0)}</strong></div>
+        ${taxRow}
+        <div class="invoice-grand"><span>Bill total</span><strong>${formatCurrency(b.bill_total || 0)}</strong></div>
+      </div>
+      ${b.notes ? `<p class="muted">${escapeHtml(b.notes)}</p>` : ""}
+      ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Cancelled${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
+    </div>
+  `;
+}
+
+function renderBusinessPurchaseWorkspace() {
+  if (purchaseView === "create") {
+    return renderBillCreateForm();
+  }
+  if (purchaseView === "detail") {
+    return renderBillDetail();
+  }
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Purchase Bills</h4>
+          <p>Vendor bills with input GST. Each posting updates expenses, ITC, and accounts payable.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="open-create-bill">+ New Bill</button>
+      </div>
+      ${renderBillListTable()}
     </div>
   `;
 }
@@ -9509,16 +9953,40 @@ dashboardPreview.addEventListener("click", (event) => {
     openInvoiceSettings();
   } else if (businessAction === "save-invoice-settings") {
     saveInvoiceSettings();
+  } else if (businessAction === "open-create-bill") {
+    openBillCreate();
+  } else if (businessAction === "add-bill-line") {
+    addBillLine();
+  } else if (businessAction === "remove-bill-line") {
+    removeBillLine(button.getAttribute("data-line-id") || "");
+  } else if (businessAction === "save-bill") {
+    submitBill();
+  } else if (businessAction === "bill-back") {
+    setBusinessPurchaseView("list");
+  } else if (businessAction === "view-bill") {
+    openBillDetail(button.getAttribute("data-bill-id") || "");
+  } else if (businessAction === "cancel-bill") {
+    const billId = button.getAttribute("data-bill-id") || "";
+    if (confirm("Cancel this bill? A reversing journal entry will be posted.")) {
+      cancelBill(billId);
+    }
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
   if (event.target.closest("[data-invoice-form]")) {
     updateInvoiceTotalsDisplay();
+  } else if (event.target.closest("[data-bill-form]")) {
+    updateBillTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
-  if (event.target.closest("[data-invoice-form]") && event.target.name === "is_inter_state") {
+  if (event.target.name !== "is_inter_state") {
+    return;
+  }
+  if (event.target.closest("[data-invoice-form]")) {
     updateInvoiceTotalsDisplay();
+  } else if (event.target.closest("[data-bill-form]")) {
+    updateBillTotalsDisplay();
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {
