@@ -18,6 +18,9 @@ class PartyCreateRequest(BaseModel):
     email: str | None = Field(default=None, max_length=160)
     phone: str | None = Field(default=None, max_length=30)
     billing_address: str | None = Field(default=None, max_length=500)
+    city: str | None = Field(default=None, max_length=80)
+    state: str | None = Field(default=None, max_length=80)
+    pincode: str | None = Field(default=None, max_length=12)
     opening_balance: Decimal = Decimal("0")
 
 
@@ -28,6 +31,9 @@ class PartyUpdateRequest(BaseModel):
     email: str | None = Field(default=None, max_length=160)
     phone: str | None = Field(default=None, max_length=30)
     billing_address: str | None = Field(default=None, max_length=500)
+    city: str | None = Field(default=None, max_length=80)
+    state: str | None = Field(default=None, max_length=80)
+    pincode: str | None = Field(default=None, max_length=12)
 
 
 class PartyResponse(BaseModel):
@@ -42,6 +48,9 @@ class PartyResponse(BaseModel):
     email: str | None = None
     phone: str | None = None
     billing_address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    pincode: str | None = None
     opening_balance: Decimal
     current_balance: Decimal
     is_active: bool

@@ -4338,6 +4338,9 @@ function renderBusinessPartiesTable(rows) {
                       data-party-id="${escapeHtml(row.party_id || row.id || "")}"
                       data-party-name="${escapeHtml(partyName)}"
                       data-party-gstin="${escapeHtml(row.gstin || "")}"
+                      data-party-city="${escapeHtml(row.city || "")}"
+                      data-party-state="${escapeHtml(row.state || "")}"
+                      data-party-pincode="${escapeHtml(row.pincode || "")}"
                       data-party-opening-balance="${escapeHtml(openingBalance)}"
                     >Edit</button>
                     ${!isInactive ? `
@@ -4698,6 +4701,9 @@ async function createBusinessParty(data) {
     party_name: data.name,
     party_type: data.party_type,
     gstin: data.gstin || null,
+    city: data.city?.trim() || null,
+    state: data.state?.trim() || null,
+    pincode: data.pincode?.trim() || null,
     opening_balance: String(Number(data.opening_balance) || 0),
   };
 
@@ -4785,6 +4791,9 @@ async function updateBusinessParty(partyId, data) {
   const payload = {
     party_name: data.name,
     gstin: data.gstin || null,
+    city: data.city?.trim() || null,
+    state: data.state?.trim() || null,
+    pincode: data.pincode?.trim() || null,
   };
 
   const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}`, {
@@ -4834,11 +4843,17 @@ function openBusinessEditPartyDialog(button) {
   const partyId = button.getAttribute("data-party-id") || "";
   const partyName = button.getAttribute("data-party-name") || "";
   const partyGstin = button.getAttribute("data-party-gstin") || "";
+  const partyCity = button.getAttribute("data-party-city") || "";
+  const partyState = button.getAttribute("data-party-state") || "";
+  const partyPincode = button.getAttribute("data-party-pincode") || "";
   const openingBalance = button.getAttribute("data-party-opening-balance") || "0";
 
   document.getElementById("business-party-edit-id").value = partyId;
   document.getElementById("business-party-edit-name").value = partyName;
   document.getElementById("business-party-edit-gstin").value = partyGstin;
+  document.getElementById("business-party-edit-city").value = partyCity;
+  document.getElementById("business-party-edit-state").value = partyState;
+  document.getElementById("business-party-edit-pincode").value = partyPincode;
   document.getElementById("business-party-edit-opening-balance").value = openingBalance;
   document.getElementById("business-party-edit-label").textContent = `Editing ${partyName}`;
 
@@ -10074,6 +10089,9 @@ if (businessPartyCreateForm) {
     const name = document.getElementById("business-party-name")?.value || "";
     const party_type = document.getElementById("business-party-type")?.value || "customer";
     const gstin = document.getElementById("business-party-gstin")?.value || "";
+    const city = document.getElementById("business-party-city")?.value || "";
+    const state = document.getElementById("business-party-state")?.value || "";
+    const pincode = document.getElementById("business-party-pincode")?.value || "";
     const opening_balance = document.getElementById("business-party-opening-balance")?.value || "0";
 
     if (!name.trim()) {
@@ -10081,7 +10099,7 @@ if (businessPartyCreateForm) {
       return;
     }
 
-    createBusinessParty({ name, party_type, gstin, opening_balance });
+    createBusinessParty({ name, party_type, gstin, city, state, pincode, opening_balance });
   });
 }
 
@@ -10091,6 +10109,9 @@ if (businessPartyEditForm) {
     const partyId = document.getElementById("business-party-edit-id")?.value || "";
     const name = document.getElementById("business-party-edit-name")?.value || "";
     const gstin = document.getElementById("business-party-edit-gstin")?.value || "";
+    const city = document.getElementById("business-party-edit-city")?.value || "";
+    const state = document.getElementById("business-party-edit-state")?.value || "";
+    const pincode = document.getElementById("business-party-edit-pincode")?.value || "";
     const opening_balance = document.getElementById("business-party-edit-opening-balance")?.value || "0";
 
     if (!name.trim()) {
@@ -10098,7 +10119,7 @@ if (businessPartyEditForm) {
       return;
     }
 
-    updateBusinessParty(partyId, { name, gstin, opening_balance });
+    updateBusinessParty(partyId, { name, gstin, city, state, pincode, opening_balance });
   });
 }
 
