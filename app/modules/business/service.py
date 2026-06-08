@@ -16,11 +16,26 @@ from app.accounting.service import (
 )
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
-from app.modules.business.schemas import PartyCreateRequest, PartyUpdateRequest, TypedVoucherCreateRequest, TypedVoucherReversalRequest
+from app.modules.business.schemas import (
+    CaDocumentCreateRequest,
+    CaDocumentUpdateRequest,
+    PartyCreateRequest,
+    PartyUpdateRequest,
+    TypedVoucherCreateRequest,
+    TypedVoucherReversalRequest,
+)
 
 PARTIES_COLLECTION = "business_parties"
 VOUCHERS_COLLECTION = "business_vouchers"
 VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
+CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+CA_DOCUMENT_DEFAULT_NEXT_ACTION = {
+    "uploaded": "Classify document and assign reviewer",
+    "under_review": "Review support and raise query if needed",
+    "query_raised": "Await client clarification",
+    "reviewed": "Ready for voucher or return posting",
+    "posted": "Linked to posted voucher or return reference",
+}
 
 
 def _now() -> datetime:
@@ -150,6 +165,129 @@ async def ensure_business_indexes() -> None:
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("entry_date", -1)])
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("voucher_id", 1)], unique=True)
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
+    ca_documents = get_collection(CA_DOCUMENTS_COLLECTION)
+    await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("updated_at", -1)])
+    await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True)
+
+
+def _ca_document_response_doc(doc: dict) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("next_action", CA_DOCUMENT_DEFAULT_NEXT_ACTION.get(str(result.get("status") or "uploaded"), "Review document metadata"))
+    return result
+
+
+async def create_ca_document_metadata(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    created_by: str,
+    payload: CaDocumentCreateRequest,
+) -> dict:
+    document_id = str(uuid4())
+    now = _now()
+    doc = {
+        "document_id": document_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "client_name": payload.client_name.strip(),
+        "document_type": payload.document_type.strip(),
+        "period": payload.period.strip(),
+        "status": "uploaded",
+        "assigned_to": payload.assigned_to,
+        "original_file_name": payload.original_file_name,
+        "next_action": CA_DOCUMENT_DEFAULT_NEXT_ACTION["uploaded"],
+        "posting_reference": None,
+        "notes": payload.notes,
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await get_collection(CA_DOCUMENTS_COLLECTION).insert_one(doc)
+    result = _ca_document_response_doc(doc)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_ca_document_metadata_created",
+        entity_type="business_ca_document_metadata",
+        entity_id=document_id,
+        new_value=result,
+    )
+    return result
+
+
+async def list_ca_document_metadata(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    status: str | None = None,
+    limit: int = 100,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+    }
+    if status:
+        filters["status"] = status
+
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(CA_DOCUMENTS_COLLECTION)
+        .find(filters)
+        .sort("updated_at", -1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    return {"items": [_ca_document_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def update_ca_document_metadata(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    document_id: str,
+    updated_by: str,
+    payload: CaDocumentUpdateRequest,
+) -> dict | None:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "document_id": document_id,
+    }
+    collection = get_collection(CA_DOCUMENTS_COLLECTION)
+    existing = await collection.find_one(filters)
+    if existing is None:
+        return None
+
+    patch = payload.model_dump(exclude_unset=True)
+    patch.pop("accounting_entity_id", None)
+    patch = {key: value for key, value in patch.items() if value is not None}
+    status = patch.get("status")
+    if status and not patch.get("next_action"):
+        patch["next_action"] = CA_DOCUMENT_DEFAULT_NEXT_ACTION.get(str(status), "Review document metadata")
+    patch["updated_by"] = updated_by
+    patch["updated_at"] = _now()
+
+    await collection.update_one(filters, {"$set": patch})
+    updated = await collection.find_one(filters)
+    result = _ca_document_response_doc(updated)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=updated_by,
+        action="business_ca_document_metadata_updated",
+        entity_type="business_ca_document_metadata",
+        entity_id=document_id,
+        old_value=_ca_document_response_doc(existing),
+        new_value=result,
+    )
+    return result
 
 
 async def create_party(

@@ -557,6 +557,16 @@ let lastAccountingVoucherDetail = null;
 let lastGruhaData = null;
 let lastBusinessParties = [];
 let lastBusinessAccounts = [];
+let lastCaDocuments = [];
+let lastCaDocumentsResult = null;
+const CA_DOCUMENT_WORKFLOW = ["uploaded", "under_review", "query_raised", "reviewed", "posted"];
+const CA_DOCUMENT_LABELS = {
+  uploaded: "Uploaded",
+  under_review: "Under review",
+  query_raised: "Query raised",
+  reviewed: "Reviewed",
+  posted: "Posted",
+};
 
 const appRoot = document.getElementById("app-root");
 const brandLogo = document.getElementById("brand-logo");
@@ -1053,6 +1063,182 @@ function renderBusinessRecentVoucherRows(rows) {
   `;
 }
 
+function caDocumentStatusLabel(status) {
+  return CA_DOCUMENT_LABELS[status] || String(status || "Uploaded");
+}
+
+function nextCaDocumentStatus(status) {
+  const index = CA_DOCUMENT_WORKFLOW.indexOf(status || "uploaded");
+  if (index < 0 || index >= CA_DOCUMENT_WORKFLOW.length - 1) {
+    return "";
+  }
+  return CA_DOCUMENT_WORKFLOW[index + 1];
+}
+
+function caDocumentMetrics(rows) {
+  const counts = CA_DOCUMENT_WORKFLOW.reduce((acc, status) => {
+    acc[status] = 0;
+    return acc;
+  }, {});
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const status = row.status || "uploaded";
+    counts[status] = (counts[status] || 0) + 1;
+  });
+  return [
+    ["Uploaded", String(counts.uploaded || 0), "Awaiting classification"],
+    ["Under review", String(counts.under_review || 0), "Staff review in progress"],
+    ["Reviewed", String(counts.reviewed || 0), "Ready for posting"],
+    ["Posted", String(counts.posted || 0), "Linked to vouchers or returns"],
+    ["Query raised", String(counts.query_raised || 0), "Needs client clarification"],
+  ];
+}
+
+function renderCaDocumentTable(rows) {
+  if (!lastCaDocumentsResult) {
+    return `
+      <div class="empty-state">
+        <strong>Loading document metadata</strong>
+        <span>Tenant-scoped CA practice records will appear here.</span>
+      </div>
+    `;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `
+      <div class="empty-state">
+        <strong>No CA document metadata yet</strong>
+        <span>Add a client document record. File storage is intentionally deferred.</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="table-preview compact-table erp-table ca-document-status-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Document type</th>
+            <th>Period</th>
+            <th>Status</th>
+            <th>Next action</th>
+            <th>Posting ref</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => {
+            const nextStatus = nextCaDocumentStatus(row.status);
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(row.client_name || "-")}</strong>
+                  <span class="row-subtext">${escapeHtml(row.original_file_name || "metadata only")}</span>
+                </td>
+                <td>${escapeHtml(row.document_type || "-")}</td>
+                <td>${escapeHtml(row.period || "-")}</td>
+                <td><span class="pill">${escapeHtml(caDocumentStatusLabel(row.status))}</span></td>
+                <td>${escapeHtml(row.next_action || "-")}</td>
+                <td>${escapeHtml(row.posting_reference || "-")}</td>
+                <td>
+                  ${nextStatus ? `
+                    <button
+                      class="secondary"
+                      type="button"
+                      data-business-action="ca-doc-status"
+                      data-document-id="${escapeHtml(row.document_id || "")}"
+                      data-status="${escapeHtml(nextStatus)}"
+                    >${escapeHtml(caDocumentStatusLabel(nextStatus))}</button>
+                  ` : `<button class="secondary" type="button" disabled>Posted</button>`}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderCaDocumentIntake(documentIntake) {
+  const metrics = caDocumentMetrics(lastCaDocuments);
+  return `
+    <div class="ca-document-intake">
+      <div class="ca-document-upload-card">
+        <form data-ca-document-form>
+          <span class="workbench-kicker">Document Metadata</span>
+          <h4>${escapeHtml(documentIntake.title)}</h4>
+          <p>${escapeHtml(documentIntake.copy)}</p>
+          <div class="ca-upload-field-grid">
+            <label>
+              <span>Client</span>
+              <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" required>
+            </label>
+            <label>
+              <span>Document type</span>
+              <select name="document_type" required>
+                <option value="">Select type</option>
+                <option>Bank statement</option>
+                <option>Purchase bills</option>
+                <option>Sales invoices</option>
+                <option>GST return</option>
+                <option>TDS file</option>
+                <option>Supporting document</option>
+              </select>
+            </label>
+            <label>
+              <span>Period</span>
+              <input name="period" type="text" maxlength="80" placeholder="May 2026 / FY 2026-27" required>
+            </label>
+            <label>
+              <span>Assigned to</span>
+              <input name="assigned_to" type="text" maxlength="120" placeholder="Reviewer or partner">
+            </label>
+            <label>
+              <span>Original file name</span>
+              <input name="original_file_name" type="text" maxlength="240" placeholder="metadata only, no upload yet">
+            </label>
+            <label>
+              <span>Notes</span>
+              <input name="notes" type="text" maxlength="500" placeholder="Review notes or client instruction">
+            </label>
+          </div>
+          <div class="ca-document-actions">
+            <button type="submit">Add Document Metadata</button>
+            <button class="secondary" type="button" data-business-action="ca-doc-refresh">Refresh</button>
+          </div>
+        </form>
+        <label class="ca-upload-placeholder" aria-disabled="true">
+          <span>Upload placeholder</span>
+          <strong>File storage deferred</strong>
+          <small>Only document metadata is saved in this phase.</small>
+          <input type="file" multiple disabled>
+        </label>
+      </div>
+
+      <div class="ca-document-workflow" aria-label="Document review workflow">
+        ${CA_DOCUMENT_WORKFLOW.map((status, index) => `
+          <span class="${index === 0 ? "active" : ""}">${escapeHtml(caDocumentStatusLabel(status))}</span>
+        `).join("")}
+      </div>
+
+      <div class="ca-document-status-grid">
+        ${metrics.map(([label, value, copy]) => `
+          <article>
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <small>${escapeHtml(copy)}</small>
+          </article>
+        `).join("")}
+      </div>
+
+      ${renderCaDocumentTable(lastCaDocuments)}
+
+      <div class="ca-document-note">
+        Current state: metadata records are tenant-scoped and stored through the MitraBooks business API. Deferred scope: file storage, OCR, voucher posting, and return filing links are not enabled yet.
+      </div>
+    </div>
+  `;
+}
+
 function plannedOrgWorkspaceModel(orgType) {
   if (orgType === "CA_PRACTICE") {
     return {
@@ -1154,76 +1340,7 @@ function renderSelectedOrgWorkspace() {
       </div>
 
       ${model.documentIntake ? `
-        <div class="ca-document-intake">
-          <div class="ca-document-upload-card">
-            <div>
-              <span class="workbench-kicker">Document Upload</span>
-              <h4>${escapeHtml(model.documentIntake.title)}</h4>
-              <p>${escapeHtml(model.documentIntake.copy)}</p>
-              <div class="ca-upload-field-grid">
-                ${model.documentIntake.uploadFields.map(([label, placeholder]) => `
-                  <label>
-                    <span>${escapeHtml(label)}</span>
-                    <input type="text" value="${escapeHtml(placeholder)}" disabled>
-                  </label>
-                `).join("")}
-              </div>
-            </div>
-            <label class="ca-upload-placeholder" aria-disabled="true">
-              <span>Upload placeholder</span>
-              <strong>Drop files or browse</strong>
-              <small>PDF, Excel, image, bank statement</small>
-              <input type="file" multiple disabled>
-            </label>
-          </div>
-
-          <div class="ca-document-workflow" aria-label="Document review workflow">
-            ${model.documentIntake.workflow.map((step, index) => `
-              <span class="${index === 0 ? "active" : ""}">${escapeHtml(step)}</span>
-            `).join("")}
-          </div>
-
-          <div class="ca-document-status-grid">
-            ${model.documentIntake.metrics.map(([label, value, copy]) => `
-              <article>
-                <span>${escapeHtml(label)}</span>
-                <strong>${escapeHtml(value)}</strong>
-                <small>${escapeHtml(copy)}</small>
-              </article>
-            `).join("")}
-          </div>
-
-          <div class="table-preview compact-table erp-table ca-document-status-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Document type</th>
-                  <th>Period</th>
-                  <th>Status</th>
-                  <th>Next action</th>
-                  <th>Posting ref</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${model.documentIntake.rows.map(([client, type, period, status, action, postingRef]) => `
-                  <tr>
-                    <td><strong>${escapeHtml(client)}</strong></td>
-                    <td>${escapeHtml(type)}</td>
-                    <td>${escapeHtml(period)}</td>
-                    <td><span class="pill">${escapeHtml(status)}</span></td>
-                    <td>${escapeHtml(action)}</td>
-                    <td>${escapeHtml(postingRef)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="ca-document-note">
-            Current state: this is a UI placeholder only. Target state: uploaded files will be tenant-scoped, audited, reviewed, and linked to voucher or return references when posting is enabled.
-          </div>
-        </div>
+        ${renderCaDocumentIntake(model.documentIntake)}
       ` : ""}
 
       <div class="planned-org-note">
@@ -4465,6 +4582,66 @@ async function createBusinessParty(data) {
     setLoginStatus("danger", "Create party failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
   renderJson(apiOutput, { create_party: result });
+}
+
+async function loadCaPracticeDocuments() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/ca-documents?limit=100", { method: "GET" });
+  lastCaDocumentsResult = result;
+  if (result.ok) {
+    lastCaDocuments = Array.isArray(result.payload?.items) ? result.payload.items : [];
+    if (currentExperience === "mitrabooks" && activeOrgSelectorType() === "CA_PRACTICE") {
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+    }
+  } else {
+    lastCaDocuments = [];
+    setLoginStatus("warn", "Unable to load CA documents", statusDetailText(result.payload?.detail) || `Document metadata request failed with HTTP ${result.status}.`);
+    if (currentExperience === "mitrabooks" && activeOrgSelectorType() === "CA_PRACTICE") {
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+    }
+  }
+  renderJson(apiOutput, { ca_documents: { ok: result.ok, status: result.status, count: lastCaDocuments.length, detail: result.payload?.detail || null } });
+  return result;
+}
+
+async function createCaPracticeDocument(form) {
+  const formData = new FormData(form);
+  const payload = {
+    client_name: String(formData.get("client_name") || "").trim(),
+    document_type: String(formData.get("document_type") || "").trim(),
+    period: String(formData.get("period") || "").trim(),
+    assigned_to: String(formData.get("assigned_to") || "").trim() || null,
+    original_file_name: String(formData.get("original_file_name") || "").trim() || null,
+    notes: String(formData.get("notes") || "").trim() || null,
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/ca-documents", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (result.ok) {
+    form.reset();
+    setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} is now in the CA review queue.`);
+    await loadCaPracticeDocuments();
+  } else {
+    setLoginStatus("danger", "Document metadata failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
+  }
+  renderJson(apiOutput, { create_ca_document: result });
+}
+
+async function updateCaPracticeDocumentStatus(documentId, status) {
+  if (!documentId || !status) {
+    return;
+  }
+  const result = await apiRequest("mitrabooks", `/api/v1/business/ca-documents/${encodeURIComponent(documentId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Document status updated", `${result.payload?.client_name || "Document"} marked ${caDocumentStatusLabel(status)}.`);
+    await loadCaPracticeDocuments();
+  } else {
+    setLoginStatus("danger", "Status update failed", statusDetailText(result.payload?.detail) || "Try again.");
+  }
+  renderJson(apiOutput, { update_ca_document: result });
 }
 
 async function updateBusinessParty(partyId, data) {
@@ -7967,6 +8144,13 @@ dashboardPreview.addEventListener("click", (event) => {
     resetAuditFilters();
   } else if (businessAction === "page-audit") {
     pageAuditList(button.getAttribute("data-page-direction") || "next");
+  } else if (businessAction === "ca-doc-refresh") {
+    loadCaPracticeDocuments();
+  } else if (businessAction === "ca-doc-status") {
+    updateCaPracticeDocumentStatus(
+      button.getAttribute("data-document-id") || "",
+      button.getAttribute("data-status") || "",
+    );
   }
 });
 dashboardPreview.addEventListener("keydown", (event) => {
@@ -7993,12 +8177,17 @@ dashboardPreview.addEventListener("keydown", (event) => {
   }
 });
 dashboardPreview.addEventListener("submit", (event) => {
-  const form = event.target.closest("[data-mandir-create-form]");
-  if (!form) {
+  const mandirForm = event.target.closest("[data-mandir-create-form]");
+  const caDocumentForm = event.target.closest("[data-ca-document-form]");
+  if (!mandirForm && !caDocumentForm) {
     return;
   }
   event.preventDefault();
-  submitMandirCreateForm(form);
+  if (mandirForm) {
+    submitMandirCreateForm(mandirForm);
+  } else if (caDocumentForm) {
+    createCaPracticeDocument(caDocumentForm);
+  }
 });
 entitlementForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -8195,6 +8384,10 @@ orgOptions.forEach((option) => {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
       if (orgType === "BUSINESS") {
         loadBusinessDashboardStats();
+      } else if (orgType === "CA_PRACTICE") {
+        lastCaDocumentsResult = null;
+        lastCaDocuments = [];
+        loadCaPracticeDocuments();
       }
     }
   });

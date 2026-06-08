@@ -21,10 +21,10 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v10" in index_source
+    assert "app.js?v=mitrabooks-erp-v28" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v3'" in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v12'" in worker_source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -58,7 +58,8 @@ def test_business_workspace_menu_renders_main_preview_directly() -> None:
     end = app_source.index("function syncBusinessNavActiveState()", start)
     workspace_switcher = app_source[start:end]
 
-    assert 'dashboardPreview.innerHTML = renderBusinessWorkspace();' in workspace_switcher
+    assert 'workspace === "overview"' in workspace_switcher
+    assert "renderBusinessWorkspace()" in workspace_switcher
     assert "refreshCurrentAccountingDrilldown();" in workspace_switcher
     assert 'document.getElementById("context-cards")' not in workspace_switcher
 
@@ -127,12 +128,11 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
 
     assert "erp-workspace-panel" in app_source
     assert "erp-table" in app_source
     assert "voucher-line" in app_source
-    assert "voucher-lines-panel" in index_source
+    assert "voucher-lines-panel" in app_source
     assert ".business-dashboard" in css_source
     assert ".voucher-balance-status.balanced" in css_source
     assert "const hasAmount = totalDebit > 0 || totalCredit > 0" in app_source
@@ -252,6 +252,20 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
     assert "/api/v1/accounting/reversals" not in reverse_block
     assert '"X-Idempotency-Key"' in reverse_block
     assert "original_voucher_id" not in reverse_block
+
+
+def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    start = app_source.index("async function loadCaPracticeDocuments")
+    end = app_source.index("async function updateBusinessParty", start)
+    ca_block = app_source[start:end]
+
+    assert "/api/v1/business/ca-documents?limit=100" in ca_block
+    assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
+    assert 'method: "PATCH"' in ca_block
+    assert "File storage deferred" in app_source
+    assert 'type="file" multiple disabled' in app_source
+    assert "data-ca-document-form" in app_source
 
 
 def test_accounting_voucher_detail_surfaces_reversal_links() -> None:

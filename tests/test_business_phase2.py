@@ -7,7 +7,14 @@ from fastapi import HTTPException
 
 import app.modules.business.service as business_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
-from app.modules.business.schemas import PartyCreateRequest, PartyUpdateRequest, TypedVoucherCreateRequest, TypedVoucherReversalRequest
+from app.modules.business.schemas import (
+    CaDocumentCreateRequest,
+    CaDocumentUpdateRequest,
+    PartyCreateRequest,
+    PartyUpdateRequest,
+    TypedVoucherCreateRequest,
+    TypedVoucherReversalRequest,
+)
 
 
 class FakeCollection:
@@ -237,6 +244,11 @@ async def test_typed_voucher_posts_balanced_journal(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
+    async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
+        return int(account_id)
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
+
     result = await business_service.post_typed_voucher(
         None,
         tenant_id="business-tenant",
@@ -280,6 +292,11 @@ async def test_typed_voucher_rolls_back_domain_record_when_posting_fails(monkeyp
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
+    async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
+        return int(account_id)
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
+
     with pytest.raises(ValueError):
         await business_service.post_typed_voucher(
             None,
@@ -311,6 +328,12 @@ async def test_typed_voucher_reuses_idempotent_business_record(monkeypatch):
         return SimpleNamespace(id=88), True
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
+        return int(account_id)
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
+
     payload = TypedVoucherCreateRequest(
         voucher_type="journal",
         entry_date=date(2026, 5, 20),
@@ -534,3 +557,103 @@ def test_business_resolver_blocks_default_tenant_for_writes():
         )
 
     assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
+    documents = FakeCollection()
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.create_ca_document_metadata(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="reviewer-1",
+        payload=CaDocumentCreateRequest(
+            client_name="Jayam Publications",
+            document_type="Bank statement",
+            period="May 2026",
+            assigned_to="Staff A",
+            original_file_name="jayam-bank-may.pdf",
+            notes="For reconciliation",
+        ),
+    )
+
+    documents.docs.append(
+        {
+            **documents.docs[0],
+            "document_id": "other-tenant-doc",
+            "tenant_id": "other-tenant",
+            "client_name": "Other Client",
+        }
+    )
+
+    listed = await business_service.list_ca_document_metadata(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+
+    assert result["tenant_id"] == "business-tenant"
+    assert result["app_key"] == "mitrabooks"
+    assert result["status"] == "uploaded"
+    assert result["next_action"] == "Classify document and assign reviewer"
+    assert [row["client_name"] for row in listed["items"]] == ["Jayam Publications"]
+    assert audit_events[0]["action"] == "business_ca_document_metadata_created"
+    assert audit_events[0]["tenant_id"] == "business-tenant"
+
+
+@pytest.mark.asyncio
+async def test_update_ca_document_metadata_advances_status_with_tenant_scope(monkeypatch):
+    documents = FakeCollection()
+    now = business_service._now()
+    documents.docs = [
+        {
+            "document_id": "doc-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Kartik Enterprises",
+            "document_type": "Purchase bills",
+            "period": "May 2026",
+            "status": "uploaded",
+            "assigned_to": "Staff A",
+            "original_file_name": "kartik-bills.zip",
+            "next_action": "Classify document and assign reviewer",
+            "posting_reference": None,
+            "notes": None,
+            "created_by": "reviewer-1",
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_kwargs: None)
+
+    result = await business_service.update_ca_document_metadata(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        document_id="doc-1",
+        updated_by="partner-1",
+        payload=CaDocumentUpdateRequest(status="under_review"),
+    )
+    wrong_tenant = await business_service.update_ca_document_metadata(
+        tenant_id="other-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        document_id="doc-1",
+        updated_by="partner-1",
+        payload=CaDocumentUpdateRequest(status="posted"),
+    )
+
+    assert result is not None
+    assert result["status"] == "under_review"
+    assert result["next_action"] == "Review support and raise query if needed"
+    assert wrong_tenant is None

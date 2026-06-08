@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 PartyType = Literal["customer", "vendor", "both"]
 VoucherType = Literal["payment", "receipt", "contra", "journal"]
+CaDocumentStatus = Literal["uploaded", "under_review", "query_raised", "reviewed", "posted"]
 
 
 class PartyCreateRequest(BaseModel):
@@ -104,4 +105,48 @@ class TypedVoucherResponse(BaseModel):
 
 class TypedVoucherListResponse(BaseModel):
     items: list[TypedVoucherResponse]
+    total: int
+
+
+class CaDocumentCreateRequest(BaseModel):
+    client_name: str = Field(..., min_length=1, max_length=160)
+    document_type: str = Field(..., min_length=1, max_length=80)
+    period: str = Field(..., min_length=1, max_length=80)
+    assigned_to: str | None = Field(default=None, max_length=120)
+    original_file_name: str | None = Field(default=None, max_length=240)
+    notes: str | None = Field(default=None, max_length=500)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class CaDocumentUpdateRequest(BaseModel):
+    status: CaDocumentStatus | None = None
+    assigned_to: str | None = Field(default=None, max_length=120)
+    next_action: str | None = Field(default=None, max_length=160)
+    posting_reference: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class CaDocumentResponse(BaseModel):
+    document_id: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    client_name: str
+    document_type: str
+    period: str
+    status: str
+    assigned_to: str | None = None
+    original_file_name: str | None = None
+    next_action: str
+    posting_reference: str | None = None
+    notes: str | None = None
+    created_by: str
+    updated_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaDocumentListResponse(BaseModel):
+    items: list[CaDocumentResponse]
     total: int

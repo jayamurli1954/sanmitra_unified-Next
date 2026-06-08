@@ -1146,6 +1146,11 @@ html[data-theme="light"] select:focus {
   padding: 16px;
 }
 
+.ca-document-upload-card form {
+  display: grid;
+  gap: 0;
+}
+
 .ca-document-upload-card h4 {
   color: var(--text-primary, #f8fafc);
   font-size: 20px;
@@ -1176,7 +1181,8 @@ html[data-theme="light"] select:focus {
   text-transform: uppercase;
 }
 
-.ca-upload-field-grid input {
+.ca-upload-field-grid input,
+.ca-upload-field-grid select {
   background: rgba(12, 18, 35, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 7px;
@@ -1184,6 +1190,17 @@ html[data-theme="light"] select:focus {
   font-size: 13px;
   min-height: 40px;
   padding: 0 12px;
+}
+
+.ca-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ca-document-actions button {
+  min-height: 38px;
 }
 
 .ca-upload-placeholder {

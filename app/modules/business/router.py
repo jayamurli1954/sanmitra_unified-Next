@@ -7,6 +7,10 @@ from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.db.postgres import get_async_session
 from app.modules.business.schemas import (
+    CaDocumentCreateRequest,
+    CaDocumentListResponse,
+    CaDocumentResponse,
+    CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyListResponse,
     PartyResponse,
@@ -17,14 +21,17 @@ from app.modules.business.schemas import (
     TypedVoucherResponse,
 )
 from app.modules.business.service import (
+    create_ca_document_metadata,
     create_party,
     deactivate_party,
+    list_ca_document_metadata,
     get_party,
     get_voucher,
     list_parties,
     list_vouchers,
     post_typed_voucher,
     reverse_typed_voucher,
+    update_ca_document_metadata,
     update_party,
 )
 
@@ -171,6 +178,87 @@ async def deactivate_business_party(
     if party is None:
         raise HTTPException(status_code=404, detail="Business party not found")
     return party
+
+
+@router.post("/ca-documents", response_model=CaDocumentResponse)
+async def create_ca_document(
+    payload: CaDocumentCreateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document metadata creation",
+        x_accounting_entity_id=x_accounting_entity_id,
+    )
+    return await create_ca_document_metadata(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
+        created_by=_created_by(current_user),
+        payload=payload,
+    )
+
+
+@router.get("/ca-documents", response_model=CaDocumentListResponse)
+async def list_ca_documents(
+    status: str | None = Query(default=None, pattern="^(uploaded|under_review|query_raised|reviewed|posted)$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    limit: int = Query(default=100, ge=1, le=500),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document metadata listing",
+    )
+    return await list_ca_document_metadata(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        status=status,
+        limit=limit,
+    )
+
+
+@router.patch("/ca-documents/{document_id}", response_model=CaDocumentResponse)
+async def update_ca_document(
+    document_id: str,
+    payload: CaDocumentUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document metadata update",
+    )
+    result = await update_ca_document_metadata(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        document_id=document_id,
+        updated_by=_created_by(current_user),
+        payload=payload,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="CA document metadata not found")
+    return result
 
 
 @router.post("/vouchers", response_model=TypedVoucherResponse)

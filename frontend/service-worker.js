@@ -3,8 +3,8 @@
   PWA caching strategy: Network-first for APIs, Cache-first for assets
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v11';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v11';
+const CACHE_NAME = 'mitrabooks-erp-v12';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v12';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
