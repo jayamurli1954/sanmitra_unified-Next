@@ -5796,21 +5796,23 @@ async function cancelInvoice(invoiceId) {
     body: JSON.stringify({ reason: "Cancellation" }),
   });
   if (result.ok) {
-    setLoginStatus("ok", "Invoice cancelled", "A reversing journal entry was posted.");
+    setLoginStatus("ok", "Invoice reversed", "A reversing journal entry was posted.");
     await loadBusinessInvoices();
     if (lastInvoiceDetail && lastInvoiceDetail.invoice_id === invoiceId) {
       lastInvoiceDetail = result.payload;
     }
     rerenderSalesIfActive();
   } else {
-    setLoginStatus("danger", "Cancel failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { cancel_invoice: { ok: result.ok, status: result.status } });
 }
 
 function invoiceStatusPill(status) {
   const s = String(status || "").toLowerCase();
-  if (s === "cancelled") return `<span class="pill warn">cancelled</span>`;
+  // Backend marks a reversed document as "cancelled"; display it as "reversed"
+  // to match the accounting action (a reversing journal entry was posted).
+  if (s === "cancelled") return `<span class="pill warn">reversed</span>`;
   if (s === "posted") return `<span class="pill ok">posted</span>`;
   return `<span class="pill">${escapeHtml(status || "")}</span>`;
 }
@@ -5986,7 +5988,7 @@ function renderInvoiceDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
-          ${String(inv.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-invoice" data-invoice-id="${escapeHtml(inv.invoice_id)}">Cancel Invoice</button>` : ""}
+          ${String(inv.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-invoice" data-invoice-id="${escapeHtml(inv.invoice_id)}">Reverse Invoice</button>` : ""}
         </div>
       </div>
       <p class="muted">${escapeHtml(inv.is_inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)")}${inv.reference ? ` · Ref: ${escapeHtml(inv.reference)}` : ""}</p>
@@ -6024,7 +6026,7 @@ function renderInvoiceDetail() {
         <div class="invoice-grand"><span>Invoice total</span><strong>${formatCurrency(inv.invoice_total || 0)}</strong></div>
       </div>
       ${inv.notes ? `<p class="muted">${escapeHtml(inv.notes)}</p>` : ""}
-      ${String(inv.status).toLowerCase() === "cancelled" ? `<p class="muted">Cancelled${inv.cancel_reason ? `: ${escapeHtml(inv.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(inv.reversal_journal_entry_id || "")} posted.</p>` : ""}
+      ${String(inv.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${inv.cancel_reason ? `: ${escapeHtml(inv.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(inv.reversal_journal_entry_id || "")} posted.</p>` : ""}
     </div>
   `;
 }
@@ -6365,14 +6367,14 @@ async function cancelBill(billId) {
     body: JSON.stringify({ reason: "Cancellation" }),
   });
   if (result.ok) {
-    setLoginStatus("ok", "Bill cancelled", "A reversing journal entry was posted.");
+    setLoginStatus("ok", "Bill reversed", "A reversing journal entry was posted.");
     await loadBusinessBills();
     if (lastBillDetail && lastBillDetail.bill_id === billId) {
       lastBillDetail = result.payload;
     }
     rerenderPurchaseIfActive();
   } else {
-    setLoginStatus("danger", "Cancel failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { cancel_bill: { ok: result.ok, status: result.status } });
 }
@@ -6527,7 +6529,7 @@ function renderBillDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
-          ${String(b.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-bill" data-bill-id="${escapeHtml(b.bill_id)}">Cancel Bill</button>` : ""}
+          ${String(b.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-bill" data-bill-id="${escapeHtml(b.bill_id)}">Reverse Bill</button>` : ""}
         </div>
       </div>
       <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}</p>
@@ -6565,7 +6567,7 @@ function renderBillDetail() {
         <div class="invoice-grand"><span>Bill total</span><strong>${formatCurrency(b.bill_total || 0)}</strong></div>
       </div>
       ${b.notes ? `<p class="muted">${escapeHtml(b.notes)}</p>` : ""}
-      ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Cancelled${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
+      ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
     </div>
   `;
 }
@@ -9968,7 +9970,7 @@ dashboardPreview.addEventListener("click", (event) => {
     openInvoiceDetail(button.getAttribute("data-invoice-id") || "");
   } else if (businessAction === "cancel-invoice") {
     const invoiceId = button.getAttribute("data-invoice-id") || "";
-    if (confirm("Cancel this invoice? A reversing journal entry will be posted.")) {
+    if (confirm("Reverse this invoice? A reversing journal entry will be posted.")) {
       cancelInvoice(invoiceId);
     }
   } else if (businessAction === "open-invoice-settings") {
@@ -9989,7 +9991,7 @@ dashboardPreview.addEventListener("click", (event) => {
     openBillDetail(button.getAttribute("data-bill-id") || "");
   } else if (businessAction === "cancel-bill") {
     const billId = button.getAttribute("data-bill-id") || "";
-    if (confirm("Cancel this bill? A reversing journal entry will be posted.")) {
+    if (confirm("Reverse this bill? A reversing journal entry will be posted.")) {
       cancelBill(billId);
     }
   }
