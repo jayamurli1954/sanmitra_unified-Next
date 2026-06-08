@@ -11,6 +11,9 @@ from app.modules.business.schemas import (
     CaDocumentListResponse,
     CaDocumentResponse,
     CaDocumentUpdateRequest,
+    GstPeriodLockListResponse,
+    GstPeriodLockResponse,
+    GstPeriodLockUpdateRequest,
     InvoiceSettingsResponse,
     InvoiceSettingsUpdateRequest,
     PartyCreateRequest,
@@ -44,6 +47,7 @@ from app.modules.business.service import (
     list_ca_document_metadata,
     get_party,
     get_voucher,
+    list_gst_period_locks,
     list_parties,
     list_purchase_bills,
     list_sales_invoices,
@@ -51,6 +55,7 @@ from app.modules.business.service import (
     post_typed_voucher,
     reverse_typed_voucher,
     save_invoice_settings,
+    set_gst_period_lock,
     update_ca_document_metadata,
     update_party,
 )
@@ -685,3 +690,48 @@ async def cancel_business_purchase_bill(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/gst-period-locks", response_model=GstPeriodLockListResponse)
+async def list_business_gst_period_locks(
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GST period lock listing",
+    )
+    return await list_gst_period_locks(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
+
+
+@router.put("/gst-period-locks", response_model=GstPeriodLockResponse)
+async def update_business_gst_period_lock(
+    payload: GstPeriodLockUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GST period lock update",
+    )
+    return await set_gst_period_lock(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        updated_by=_created_by(current_user),
+        payload=payload,
+    )

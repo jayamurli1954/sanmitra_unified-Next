@@ -19,6 +19,7 @@ from app.db.mongo import get_collection
 from app.modules.business.schemas import (
     CaDocumentCreateRequest,
     CaDocumentUpdateRequest,
+    GstPeriodLockUpdateRequest,
     INVOICE_STANDARD_FIELDS,
     InvoiceSettings,
     InvoiceSettingsUpdateRequest,
@@ -38,7 +39,10 @@ VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
 SALES_INVOICES_COLLECTION = "business_sales_invoices"
 PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
 INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
+GST_PERIOD_LOCKS_COLLECTION = "business_gst_period_locks"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+
+_MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 # Default Output-GST and receivable account codes from the BUSINESS chart of accounts.
 SALES_RECEIVABLE_CODE = "12001"  # Sundry Debtors
@@ -200,6 +204,8 @@ async def ensure_business_indexes() -> None:
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("bill_date", -1)])
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("bill_id", 1)], unique=True)
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
+    period_locks = get_collection(GST_PERIOD_LOCKS_COLLECTION)
+    await period_locks.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("period", 1)], unique=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -1265,6 +1271,16 @@ async def cancel_sales_invoice(
     if invoice.get("status") != "posted":
         raise AccountingValidationError("Only posted sales invoices can be cancelled")
 
+    reversal_date = payload.cancel_date or date.today()
+    await _validate_reversal_period(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        original_date=invoice.get("invoice_date"),
+        reversal_date=reversal_date,
+        document_label="invoice",
+    )
+
     old_invoice = _invoice_response_doc(invoice)
     reversal_key = idempotency_key or f"sales-invoice-cancel:{invoice_id}"
     reversal, created = await reverse_journal_entry(
@@ -1274,7 +1290,7 @@ async def cancel_sales_invoice(
         accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by,
         journal_id=int(journal_entry_id),
-        reversal_date=payload.cancel_date or date.today(),
+        reversal_date=reversal_date,
         reason=payload.reason,
         idempotency_key=reversal_key,
     )
@@ -1546,6 +1562,16 @@ async def cancel_purchase_bill(
     if bill.get("status") != "posted":
         raise AccountingValidationError("Only posted purchase bills can be cancelled")
 
+    reversal_date = payload.cancel_date or date.today()
+    await _validate_reversal_period(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        original_date=bill.get("bill_date"),
+        reversal_date=reversal_date,
+        document_label="bill",
+    )
+
     old_bill = _bill_response_doc(bill)
     reversal_key = idempotency_key or f"purchase-bill-cancel:{bill_id}"
     reversal, created = await reverse_journal_entry(
@@ -1555,7 +1581,7 @@ async def cancel_purchase_bill(
         accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by,
         journal_id=int(journal_entry_id),
-        reversal_date=payload.cancel_date or date.today(),
+        reversal_date=reversal_date,
         reason=payload.reason,
         idempotency_key=reversal_key,
     )
@@ -1580,3 +1606,134 @@ async def cancel_purchase_bill(
         new_value=result,
     )
     return result
+
+
+# ===================== GST Period Locks (finalised months) =====================
+
+
+def _period_key(value) -> str:
+    """Return the GST tax period 'YYYY-MM' for a date or ISO date string."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value[:7]
+    return f"{value.year:04d}-{value.month:02d}"
+
+
+def _period_label(period: str) -> str:
+    try:
+        year, month = period.split("-")
+        return f"{_MONTH_NAMES[int(month)]} {year}"
+    except Exception:
+        return period
+
+
+async def is_gst_period_locked(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    period: str,
+) -> bool:
+    if not period:
+        return False
+    row = await get_collection(GST_PERIOD_LOCKS_COLLECTION).find_one(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "period": period,
+        }
+    )
+    return bool(row and row.get("locked"))
+
+
+async def _validate_reversal_period(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    original_date,
+    reversal_date,
+    document_label: str,
+) -> None:
+    """Enforce that a reversal stays in the original document's GST tax period and
+    that the period has not been finalised (locked)."""
+    original_period = _period_key(original_date)
+    reversal_period = _period_key(reversal_date)
+    if original_period and reversal_period and reversal_period != original_period:
+        raise AccountingValidationError(
+            f"Reversal must be dated within {_period_label(original_period)} "
+            f"(the {document_label}'s GST period). Cross-period reversals are not allowed."
+        )
+    if await is_gst_period_locked(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        period=original_period,
+    ):
+        raise AccountingValidationError(
+            f"The {_period_label(original_period)} GST period is finalised and locked. "
+            f"Reversals into a filed period are not allowed; raise a credit/debit note in the open period instead."
+        )
+
+
+def _period_lock_response_doc(doc: dict) -> dict:
+    return {
+        "period": doc.get("period"),
+        "locked": bool(doc.get("locked")),
+        "note": doc.get("note"),
+        "updated_by": doc.get("updated_by"),
+        "updated_at": doc.get("updated_at"),
+    }
+
+
+async def list_gst_period_locks(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+) -> dict:
+    rows = (
+        await get_collection(GST_PERIOD_LOCKS_COLLECTION)
+        .find({"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id})
+        .sort("period", -1)
+        .to_list(length=500)
+    )
+    return {"items": [_period_lock_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def set_gst_period_lock(
+    *,
+    tenant_id: str,
+    app_key: str,
+    updated_by: str,
+    payload: GstPeriodLockUpdateRequest,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "period": payload.period,
+    }
+    update_doc = {
+        "locked": bool(payload.locked),
+        "note": payload.note,
+        "updated_by": updated_by,
+        "updated_at": _now(),
+    }
+    await get_collection(GST_PERIOD_LOCKS_COLLECTION).update_one(
+        filters,
+        {"$set": update_doc, "$setOnInsert": {**filters, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=updated_by,
+        action="business_gst_period_lock_updated",
+        entity_type="business_gst_period_lock",
+        entity_id=payload.period,
+        new_value={**filters, **update_doc},
+    )
+    return _period_lock_response_doc({**filters, **update_doc})

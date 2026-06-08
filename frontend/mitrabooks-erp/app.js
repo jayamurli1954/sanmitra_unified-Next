@@ -4984,7 +4984,10 @@ const BUSINESS_REPORT_TABS = [
   { id: "balance-sheet", label: "Balance Sheet" },
   { id: "general-ledger", label: "General Ledger" },
   { id: "receivables-payables", label: "Receivables / Payables" },
+  { id: "period-locks", label: "Period Locks" },
 ];
+
+let lastPeriodLocks = [];
 
 function financialYearStartIso() {
   const now = new Date();
@@ -5033,7 +5036,76 @@ async function refreshCurrentBusinessReport() {
     } else {
       rerenderBusinessReportsIfActive();
     }
+  } else if (tab === "period-locks") {
+    await loadPeriodLocks();
   }
+}
+
+async function loadPeriodLocks() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/gst-period-locks", { method: "GET" });
+  lastPeriodLocks = result.ok && Array.isArray(result.payload?.items) ? result.payload.items : [];
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { period_locks: { ok: result.ok, count: lastPeriodLocks.length } });
+}
+
+async function setGstPeriodLock(period, locked) {
+  if (!period) {
+    setLoginStatus("warn", "Period required", "Enter a month to lock (YYYY-MM).");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/gst-period-locks", {
+    method: "PUT",
+    body: JSON.stringify({ period, locked, accounting_entity_id: "primary" }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", locked ? "Period locked" : "Period unlocked", `${period} is now ${locked ? "finalised" : "open"}.`);
+    await loadPeriodLocks();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can finalise GST periods.");
+  } else {
+    setLoginStatus("danger", "Update failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { set_period_lock: { ok: result.ok, status: result.status } });
+}
+
+function lockGstPeriodFromInput() {
+  const input = document.querySelector("[data-period-lock-input]");
+  const value = input?.value || "";
+  setGstPeriodLock(value, true);
+}
+
+function renderPeriodLocksPanel() {
+  const admin = isBusinessAdmin();
+  const rows = (Array.isArray(lastPeriodLocks) ? lastPeriodLocks : []).filter((p) => p.locked);
+  const nowMonth = todayIsoDate().slice(0, 7);
+  return `
+    <div class="preview-heading compact">
+      <div><p>Finalise a month after filing its GST return. Reversals and back-dated postings into a locked month are blocked.</p></div>
+    </div>
+    ${admin ? `
+      <div class="report-date-controls">
+        <label>Finalise month
+          <input type="month" data-period-lock-input value="${escapeHtml(nowMonth)}">
+        </label>
+        <button class="secondary" type="button" data-business-action="lock-period">Lock month</button>
+      </div>
+    ` : `<p class="muted">Only a tenant admin can finalise or unlock periods.</p>`}
+    <div class="table-preview compact-table">
+      <table>
+        <thead><tr><th>Period</th><th>Status</th><th>Updated by</th>${admin ? "<th>Action</th>" : ""}</tr></thead>
+        <tbody>
+          ${rows.length ? rows.map((p) => `
+            <tr>
+              <td>${escapeHtml(p.period || "")}</td>
+              <td><span class="pill warn">finalised</span></td>
+              <td>${escapeHtml(p.updated_by || "")}</td>
+              ${admin ? `<td><button class="secondary" type="button" data-business-action="unlock-period" data-period="${escapeHtml(p.period)}">Unlock</button></td>` : ""}
+            </tr>
+          `).join("") : `<tr><td colspan="${admin ? 4 : 3}" class="muted">No periods finalised yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function rerenderBusinessReportsIfActive() {
@@ -5135,6 +5207,8 @@ function renderBusinessReportsWorkspace() {
     body = renderBusinessGeneralLedger();
   } else if (businessReportState.tab === "receivables-payables") {
     body = renderBusinessReceivablesPayables();
+  } else if (businessReportState.tab === "period-locks") {
+    body = renderPeriodLocksPanel();
   }
 
   return `
@@ -5588,6 +5662,39 @@ function round2(value) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+let invoiceReverseOpen = false;
+let billReverseOpen = false;
+
+// Reversal must stay within the document's GST month. Returns the date input
+// bounds + a sensible default (today if in-month, else month end).
+function reversalDateBounds(isoDate) {
+  const d = String(isoDate || todayIsoDate());
+  const ym = d.slice(0, 7);
+  const [y, m] = ym.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const start = `${ym}-01`;
+  const end = `${ym}-${String(lastDay).padStart(2, "0")}`;
+  const today = todayIsoDate();
+  const inMonth = today.slice(0, 7) === ym;
+  return { min: start, max: inMonth ? today : end, def: inMonth ? today : end, label: ym };
+}
+
+function reversalPanel(kind, id, isoDate) {
+  const b = reversalDateBounds(isoDate);
+  return `
+    <div class="reversal-panel">
+      <label>Reversal date
+        <input type="date" data-reversal-date value="${escapeHtml(b.def)}" min="${escapeHtml(b.min)}" max="${escapeHtml(b.max)}">
+      </label>
+      <div class="reversal-panel-actions">
+        <button class="primary" type="button" data-business-action="confirm-reverse-${kind}" data-${kind}-id="${escapeHtml(id)}">Confirm reverse</button>
+        <button class="secondary" type="button" data-business-action="cancel-reverse-${kind}">Cancel</button>
+      </div>
+      <p class="muted">Must be dated within the document's GST month (${escapeHtml(b.label)}). A reversing journal entry will be posted on this date.</p>
+    </div>
+  `;
+}
+
 function rerenderSalesIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "sales") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
@@ -5686,6 +5793,7 @@ function updateInvoiceTotalsDisplay() {
 
 function setBusinessSalesView(view) {
   salesView = view;
+  invoiceReverseOpen = false;
   rerenderSalesIfActive();
   if (view === "create") {
     updateInvoiceTotalsDisplay();
@@ -5789,13 +5897,16 @@ async function openInvoiceDetail(invoiceId) {
   renderJson(apiOutput, { invoice_detail: { ok: result.ok, status: result.status } });
 }
 
-async function cancelInvoice(invoiceId) {
+async function cancelInvoice(invoiceId, reversalDate) {
+  const body = { reason: "Reversal" };
+  if (reversalDate) body.cancel_date = reversalDate;
   const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}/cancel`, {
     method: "POST",
-    headers: { "X-Idempotency-Key": `sales-invoice-cancel-${invoiceId}` },
-    body: JSON.stringify({ reason: "Cancellation" }),
+    headers: { "X-Idempotency-Key": `sales-invoice-cancel-${invoiceId}-${reversalDate || "today"}` },
+    body: JSON.stringify(body),
   });
   if (result.ok) {
+    invoiceReverseOpen = false;
     setLoginStatus("ok", "Invoice reversed", "A reversing journal entry was posted.");
     await loadBusinessInvoices();
     if (lastInvoiceDetail && lastInvoiceDetail.invoice_id === invoiceId) {
@@ -5988,9 +6099,10 @@ function renderInvoiceDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
-          ${String(inv.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-invoice" data-invoice-id="${escapeHtml(inv.invoice_id)}">Reverse Invoice</button>` : ""}
+          ${String(inv.status).toLowerCase() === "posted" && !invoiceReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-invoice">Reverse Invoice</button>` : ""}
         </div>
       </div>
+      ${String(inv.status).toLowerCase() === "posted" && invoiceReverseOpen ? reversalPanel("invoice", inv.invoice_id, inv.invoice_date) : ""}
       <p class="muted">${escapeHtml(inv.is_inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)")}${inv.reference ? ` · Ref: ${escapeHtml(inv.reference)}` : ""}</p>
       <div class="table-preview compact-table">
         <table>
@@ -6262,6 +6374,7 @@ function updateBillTotalsDisplay() {
 
 function setBusinessPurchaseView(view) {
   purchaseView = view;
+  billReverseOpen = false;
   rerenderPurchaseIfActive();
   if (view === "create") {
     updateBillTotalsDisplay();
@@ -6360,13 +6473,16 @@ async function openBillDetail(billId) {
   renderJson(apiOutput, { bill_detail: { ok: result.ok, status: result.status } });
 }
 
-async function cancelBill(billId) {
+async function cancelBill(billId, reversalDate) {
+  const body = { reason: "Reversal" };
+  if (reversalDate) body.cancel_date = reversalDate;
   const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/cancel`, {
     method: "POST",
-    headers: { "X-Idempotency-Key": `purchase-bill-cancel-${billId}` },
-    body: JSON.stringify({ reason: "Cancellation" }),
+    headers: { "X-Idempotency-Key": `purchase-bill-cancel-${billId}-${reversalDate || "today"}` },
+    body: JSON.stringify(body),
   });
   if (result.ok) {
+    billReverseOpen = false;
     setLoginStatus("ok", "Bill reversed", "A reversing journal entry was posted.");
     await loadBusinessBills();
     if (lastBillDetail && lastBillDetail.bill_id === billId) {
@@ -6529,9 +6645,10 @@ function renderBillDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
-          ${String(b.status).toLowerCase() === "posted" ? `<button class="secondary" type="button" data-business-action="cancel-bill" data-bill-id="${escapeHtml(b.bill_id)}">Reverse Bill</button>` : ""}
+          ${String(b.status).toLowerCase() === "posted" && !billReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-bill">Reverse Bill</button>` : ""}
         </div>
       </div>
+      ${String(b.status).toLowerCase() === "posted" && billReverseOpen ? reversalPanel("bill", b.bill_id, b.bill_date) : ""}
       <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}</p>
       <div class="table-preview compact-table">
         <table>
@@ -9968,11 +10085,16 @@ dashboardPreview.addEventListener("click", (event) => {
     setBusinessSalesView("list");
   } else if (businessAction === "view-invoice") {
     openInvoiceDetail(button.getAttribute("data-invoice-id") || "");
-  } else if (businessAction === "cancel-invoice") {
+  } else if (businessAction === "begin-reverse-invoice") {
+    invoiceReverseOpen = true;
+    rerenderSalesIfActive();
+  } else if (businessAction === "cancel-reverse-invoice") {
+    invoiceReverseOpen = false;
+    rerenderSalesIfActive();
+  } else if (businessAction === "confirm-reverse-invoice") {
     const invoiceId = button.getAttribute("data-invoice-id") || "";
-    if (confirm("Reverse this invoice? A reversing journal entry will be posted.")) {
-      cancelInvoice(invoiceId);
-    }
+    const dateInput = document.querySelector("[data-reversal-date]");
+    cancelInvoice(invoiceId, dateInput?.value || "");
   } else if (businessAction === "open-invoice-settings") {
     openInvoiceSettings();
   } else if (businessAction === "save-invoice-settings") {
@@ -9989,11 +10111,20 @@ dashboardPreview.addEventListener("click", (event) => {
     setBusinessPurchaseView("list");
   } else if (businessAction === "view-bill") {
     openBillDetail(button.getAttribute("data-bill-id") || "");
-  } else if (businessAction === "cancel-bill") {
+  } else if (businessAction === "begin-reverse-bill") {
+    billReverseOpen = true;
+    rerenderPurchaseIfActive();
+  } else if (businessAction === "cancel-reverse-bill") {
+    billReverseOpen = false;
+    rerenderPurchaseIfActive();
+  } else if (businessAction === "confirm-reverse-bill") {
     const billId = button.getAttribute("data-bill-id") || "";
-    if (confirm("Reverse this bill? A reversing journal entry will be posted.")) {
-      cancelBill(billId);
-    }
+    const dateInput = document.querySelector("[data-reversal-date]");
+    cancelBill(billId, dateInput?.value || "");
+  } else if (businessAction === "lock-period") {
+    lockGstPeriodFromInput();
+  } else if (businessAction === "unlock-period") {
+    setGstPeriodLock(button.getAttribute("data-period") || "", false);
   }
 });
 dashboardPreview.addEventListener("input", (event) => {

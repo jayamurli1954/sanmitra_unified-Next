@@ -725,7 +725,7 @@ async def test_cancel_sales_invoice_posts_reversal(monkeypatch):
         app_key="mitrabooks",
         invoice_id="inv-1",
         created_by="owner-2",
-        payload=SalesInvoiceCancelRequest(reason="Wrong customer"),
+        payload=SalesInvoiceCancelRequest(reason="Wrong customer", cancel_date=date(2026, 6, 20)),
         idempotency_key=None,
     )
 
@@ -851,7 +851,7 @@ async def test_cancel_purchase_bill_posts_reversal(monkeypatch):
         app_key="mitrabooks",
         bill_id="bill-1",
         created_by="owner-2",
-        payload=PurchaseBillCancelRequest(reason="Duplicate bill"),
+        payload=PurchaseBillCancelRequest(reason="Duplicate bill", cancel_date=date(2026, 6, 20)),
         idempotency_key=None,
     )
 
@@ -859,6 +859,100 @@ async def test_cancel_purchase_bill_posts_reversal(monkeypatch):
     assert result["status"] == "cancelled"
     assert result["reversal_journal_entry_id"] == 901
     assert store.docs[0]["status"] == "cancelled"
+
+
+def _posted_invoice_doc():
+    return {
+        "invoice_id": "inv-9",
+        "invoice_number": "INV-2026-2027-000009",
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "customer_party_id": "cust-1",
+        "invoice_date": "2026-06-08",
+        "journal_entry_id": 501,
+        "status": "posted",
+        "invoice_total": "1180.00",
+        "created_by": "owner-1",
+        "created_at": business_service._now(),
+        "updated_at": business_service._now(),
+    }
+
+
+@pytest.mark.asyncio
+async def test_reversal_rejected_when_date_crosses_gst_period(monkeypatch):
+    store = FakeCollection()
+    store.docs = [_posted_invoice_doc()]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fail_reverse(*_a, **_k):
+        raise AssertionError("reverse_journal_entry must not run for a cross-period reversal")
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fail_reverse)
+
+    with pytest.raises(business_service.AccountingValidationError, match="must be dated within June 2026"):
+        await business_service.cancel_sales_invoice(
+            None, tenant_id="business-tenant", app_key="mitrabooks", invoice_id="inv-9",
+            created_by="owner-2",
+            payload=SalesInvoiceCancelRequest(reason="x", cancel_date=date(2026, 7, 1)),
+            idempotency_key=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_reversal_rejected_when_period_is_locked(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        _posted_invoice_doc(),
+        {"tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary", "period": "2026-06", "locked": True},
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fail_reverse(*_a, **_k):
+        raise AssertionError("reverse_journal_entry must not run when the period is locked")
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fail_reverse)
+
+    with pytest.raises(business_service.AccountingValidationError, match="finalised and locked"):
+        await business_service.cancel_sales_invoice(
+            None, tenant_id="business-tenant", app_key="mitrabooks", invoice_id="inv-9",
+            created_by="owner-2",
+            payload=SalesInvoiceCancelRequest(reason="x", cancel_date=date(2026, 6, 20)),
+            idempotency_key=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_gst_period_lock_blocks_then_unlock_allows(monkeypatch):
+    from app.modules.business.schemas import GstPeriodLockUpdateRequest
+
+    store = FakeCollection()
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    await business_service.set_gst_period_lock(
+        tenant_id="business-tenant", app_key="mitrabooks", updated_by="admin-1",
+        payload=GstPeriodLockUpdateRequest(period="2026-06", locked=True),
+    )
+    assert await business_service.is_gst_period_locked(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary", period="2026-06",
+    ) is True
+
+    listed = await business_service.list_gst_period_locks(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary",
+    )
+    assert listed["items"][0]["period"] == "2026-06"
+    assert listed["items"][0]["locked"] is True
+
+    await business_service.set_gst_period_lock(
+        tenant_id="business-tenant", app_key="mitrabooks", updated_by="admin-1",
+        payload=GstPeriodLockUpdateRequest(period="2026-06", locked=False),
+    )
+    assert await business_service.is_gst_period_locked(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary", period="2026-06",
+    ) is False
 
 
 def _async_none():

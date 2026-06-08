@@ -375,3 +375,26 @@ class PurchaseBillResponse(BaseModel):
 class PurchaseBillListResponse(BaseModel):
     items: list[PurchaseBillResponse]
     total: int
+
+
+# ---- GST period locks (finalised months) ----
+
+
+class GstPeriodLockUpdateRequest(BaseModel):
+    period: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM
+    locked: bool = True
+    note: str | None = Field(default=None, max_length=240)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class GstPeriodLockResponse(BaseModel):
+    period: str
+    locked: bool
+    note: str | None = None
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class GstPeriodLockListResponse(BaseModel):
+    items: list[GstPeriodLockResponse]
+    total: int
