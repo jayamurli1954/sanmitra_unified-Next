@@ -19,6 +19,10 @@ __pycache__/
 # Coverage
 .coverage
 htmlcov/
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/
 
 # OS / editor
 .DS_Store
