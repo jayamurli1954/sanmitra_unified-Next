@@ -227,6 +227,7 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("14001", "Input CGST", "asset", "personal"),
     _default_account("14002", "Input SGST", "asset", "personal"),
     _default_account("14003", "Input IGST", "asset", "personal"),
+    _default_account("14004", "ITC Reversed - Rule 37 (Recoverable)", "asset", "personal"),
     # 15xxx Other current assets
     _default_account("15001", "Prepaid Expenses", "asset", "real"),
     _default_account("15002", "Security Deposits Paid", "asset", "real"),
@@ -247,6 +248,7 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     # 23xxx Statutory dues
     _default_account("23001", "TDS Payable", "liability", "personal", is_payable=True),
     _default_account("23002", "Statutory Dues Payable", "liability", "personal", is_payable=True),
+    _default_account("23003", "Interest Payable on GST", "liability", "personal", is_payable=True),
     # 24xxx Advances and loans
     _default_account("24001", "Advance from Customers", "liability", "personal"),
     _default_account("24002", "Loans Payable", "liability", "personal"),
@@ -288,6 +290,7 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("54003", "Depreciation Expense", "expense", "nominal"),
     _default_account("54004", "Discount Allowed", "expense", "nominal"),
     _default_account("54005", "Miscellaneous Expense", "expense", "nominal"),
+    _default_account("54006", "Interest on GST", "expense", "nominal"),
 ]
 
 

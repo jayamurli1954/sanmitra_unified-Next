@@ -33,6 +33,8 @@ _INVOICE_ACCOUNT_IDS = {
     "21001": 400, "51001": 500, "14001": 601, "14002": 602, "14003": 603,
     # GST Payable (net) clearing account.
     "22004": 700,
+    # ITC reversal (Rule 37): recoverable parking, interest expense + payable.
+    "14004": 604, "54006": 801, "23003": 802,
 }
 
 
@@ -1384,3 +1386,235 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
     assert result["status"] == "under_review"
     assert result["next_action"] == "Review support and raise query if needed"
     assert wrong_tenant is None
+
+
+# ===================== ITC Reversal (GST Rule 37) =====================
+
+
+def _posted_bill_doc(**overrides):
+    doc = {
+        "bill_id": "bill-itc",
+        "bill_number": "SUP-2026-90",
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "vendor_party_id": "vend-1",
+        "vendor_name": "Bharat Supplies",
+        "bill_date": "2026-01-01",
+        "journal_entry_id": 801,
+        "status": "posted",
+        "taxable_total": "1000.00",
+        "cgst_total": "90.00",
+        "sgst_total": "90.00",
+        "igst_total": "0.00",
+        "gst_total": "180.00",
+        "bill_total": "1180.00",
+        "payment_status": "unpaid",
+        "created_by": "owner-1",
+        "created_at": business_service._now(),
+        "updated_at": business_service._now(),
+    }
+    doc.update(overrides)
+    return doc
+
+
+def test_itc_interest_computation():
+    # 180 ITC, availed 2026-01-01, reversed 2026-07-01 (181 days) at 18% p.a.
+    interest = business_service._compute_itc_interest(
+        Decimal("180"), date(2026, 1, 1), date(2026, 7, 1)
+    )
+    assert interest == Decimal("16.07")
+    # No interest when the as-of date precedes the bill date.
+    assert business_service._compute_itc_interest(
+        Decimal("180"), date(2026, 7, 1), date(2026, 1, 1)
+    ) == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_mark_bill_payment_sets_status(monkeypatch):
+    from app.modules.business.schemas import BillPaymentUpdateRequest
+
+    store = FakeCollection()
+    store.docs = [_posted_bill_doc()]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    partial = await business_service.mark_bill_payment(
+        tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="owner-1",
+        payload=BillPaymentUpdateRequest(paid_amount=Decimal("500")),
+    )
+    assert partial["payment_status"] == "partial"
+    assert partial["paid_amount"] == "500.00"
+    assert partial["paid_date"] is not None
+
+    full = await business_service.mark_bill_payment(
+        tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="owner-1",
+        payload=BillPaymentUpdateRequest(paid_amount=Decimal("1180"), paid_date=date(2026, 7, 10)),
+    )
+    assert full["payment_status"] == "paid"
+    assert full["paid_date"] == "2026-07-10"
+
+    with pytest.raises(business_service.AccountingValidationError):
+        await business_service.mark_bill_payment(
+            tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="owner-1",
+            payload=BillPaymentUpdateRequest(paid_amount=Decimal("2000")),
+        )
+
+
+@pytest.mark.asyncio
+async def test_itc_reversal_candidate_detected_after_180_days(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        _posted_bill_doc(bill_id="bill-A", bill_number="A", bill_date="2026-01-01"),  # overdue, unpaid
+        _posted_bill_doc(bill_id="bill-B", bill_number="B", bill_date="2026-06-01"),  # within 180 days
+        _posted_bill_doc(bill_id="bill-C", bill_number="C", payment_status="paid"),    # paid
+        _posted_bill_doc(bill_id="bill-D", bill_number="D", itc_reversed=True),        # already reversed
+        _posted_bill_doc(bill_id="bill-E", bill_number="E", cgst_total="0.00", sgst_total="0.00", igst_total="0.00", gst_total="0.00"),  # no ITC
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    preview = await business_service.preview_itc_reversals(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary",
+        as_of=date(2026, 7, 1),
+    )
+    assert preview["count"] == 1
+    cand = preview["candidates"][0]
+    assert cand["bill_id"] == "bill-A"
+    assert cand["due_date"] == "2026-06-30"
+    assert cand["days_overdue"] == 1
+    assert cand["itc_total"] == "180.00"
+    assert cand["interest_amount"] == "16.07"
+    assert cand["gstr3b_ref"] == "4(B)(2)"
+    assert preview["total_itc"] == "180.00"
+    assert preview["total_interest"] == "16.07"
+
+
+@pytest.mark.asyncio
+async def test_itc_reversal_posts_balanced_entry_with_interest(monkeypatch):
+    from app.modules.business.schemas import ItcReversalActionRequest
+
+    store = FakeCollection()
+    store.docs = [_posted_bill_doc()]
+    captured = {}
+    post_calls = {"n": 0}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "is_gst_period_locked", lambda **_k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        post_calls["n"] += 1
+        captured["payload"] = payload
+        return SimpleNamespace(id=1301), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.reverse_itc_for_bill(
+        None, tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="admin-1",
+        payload=ItcReversalActionRequest(reversal_date=date(2026, 7, 1)), idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("196.07")
+    debits = {l.account_id: l.debit for l in lines if l.debit > 0}
+    assert debits[_INVOICE_ACCOUNT_IDS["14004"]] == Decimal("180.00")  # recoverable parking
+    assert debits[_INVOICE_ACCOUNT_IDS["54006"]] == Decimal("16.07")   # interest expense
+    credits = {l.account_id: l.credit for l in lines if l.credit > 0}
+    assert credits[_INVOICE_ACCOUNT_IDS["14001"]] == Decimal("90.00")  # input CGST reversed
+    assert credits[_INVOICE_ACCOUNT_IDS["14002"]] == Decimal("90.00")  # input SGST reversed
+    assert credits[_INVOICE_ACCOUNT_IDS["23003"]] == Decimal("16.07")  # interest payable
+    assert captured["payload"].source_document_type == "itc_reversal"
+
+    assert result["itc_reversed"] is True
+    assert result["itc_interest_amount"] == "16.07"
+    assert result["itc_reversal_journal_entry_id"] == 1301
+    assert audit_events[-1]["action"] == "business_itc_reversed"
+
+    # Idempotent: a second call returns the existing reversal without re-posting.
+    again = await business_service.reverse_itc_for_bill(
+        None, tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="admin-1",
+        payload=ItcReversalActionRequest(reversal_date=date(2026, 7, 1)), idempotency_key=None,
+    )
+    assert post_calls["n"] == 1
+    assert again["itc_reversed"] is True
+
+
+@pytest.mark.asyncio
+async def test_itc_reclaim_restores_credit(monkeypatch):
+    from app.modules.business.schemas import ItcReclaimActionRequest
+
+    store = FakeCollection()
+    store.docs = [
+        _posted_bill_doc(
+            payment_status="paid",
+            itc_reversed=True,
+            itc_reversal_journal_entry_id=1301,
+            itc_reversed_amounts={"igst": "0.00", "cgst": "90.00", "sgst": "90.00"},
+            itc_interest_amount="16.07",
+        )
+    ]
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "is_gst_period_locked", lambda **_k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post_journal_entry(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=1401), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
+    result = await business_service.reclaim_itc_for_bill(
+        None, tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="admin-1",
+        payload=ItcReclaimActionRequest(reclaim_date=date(2026, 7, 15)), idempotency_key=None,
+    )
+
+    lines = captured["payload"].lines
+    assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("180.00")
+    debits = {l.account_id: l.debit for l in lines if l.debit > 0}
+    assert debits[_INVOICE_ACCOUNT_IDS["14001"]] == Decimal("90.00")  # input CGST restored
+    assert debits[_INVOICE_ACCOUNT_IDS["14002"]] == Decimal("90.00")  # input SGST restored
+    credits = {l.account_id: l.credit for l in lines if l.credit > 0}
+    assert credits[_INVOICE_ACCOUNT_IDS["14004"]] == Decimal("180.00")  # recoverable cleared
+    assert captured["payload"].source_document_type == "itc_reclaim"
+    assert result["itc_reclaimed"] is True
+    assert result["itc_reclaim_journal_entry_id"] == 1401
+
+
+@pytest.mark.asyncio
+async def test_itc_reclaim_requires_paid_bill(monkeypatch):
+    from app.modules.business.schemas import ItcReclaimActionRequest
+
+    store = FakeCollection()
+    store.docs = [
+        _posted_bill_doc(
+            itc_reversed=True,
+            itc_reversal_journal_entry_id=1301,
+            itc_reversed_amounts={"igst": "0.00", "cgst": "90.00", "sgst": "90.00"},
+            payment_status="unpaid",
+        )
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "is_gst_period_locked", lambda **_k: _async_none())
+
+    with pytest.raises(business_service.AccountingValidationError):
+        await business_service.reclaim_itc_for_bill(
+            None, tenant_id="business-tenant", app_key="mitrabooks", bill_id="bill-itc", created_by="admin-1",
+            payload=ItcReclaimActionRequest(reclaim_date=date(2026, 7, 15)), idempotency_key=None,
+        )

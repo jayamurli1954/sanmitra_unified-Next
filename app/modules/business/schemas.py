@@ -10,6 +10,12 @@ VoucherType = Literal["payment", "receipt", "contra", "journal"]
 CaDocumentStatus = Literal["uploaded", "under_review", "query_raised", "reviewed", "posted"]
 
 
+class GstHeadAmounts(BaseModel):
+    igst: Decimal = Decimal("0")
+    cgst: Decimal = Decimal("0")
+    sgst: Decimal = Decimal("0")
+
+
 class PartyCreateRequest(BaseModel):
     party_name: str = Field(..., min_length=1, max_length=160)
     party_type: PartyType = "customer"
@@ -366,6 +372,20 @@ class PurchaseBillResponse(BaseModel):
     reversal_journal_entry_id: int | None = None
     cancel_reason: str | None = None
     cancelled_at: datetime | None = None
+    # Payment tracking (drives GST Rule 37 180-day test)
+    payment_status: str = "unpaid"  # "unpaid" | "partial" | "paid"
+    paid_amount: Decimal = Decimal("0")
+    paid_date: date | None = None
+    # ITC reversal / reclaim (GST Rule 37)
+    itc_reversed: bool = False
+    itc_reversal_journal_entry_id: int | None = None
+    itc_reversal_date: date | None = None
+    itc_reversal_period: str | None = None
+    itc_reversed_amounts: GstHeadAmounts | None = None
+    itc_interest_amount: Decimal = Decimal("0")
+    itc_reclaimed: bool = False
+    itc_reclaim_journal_entry_id: int | None = None
+    itc_reclaim_date: date | None = None
     created: bool = False
     created_by: str
     created_at: datetime
@@ -567,12 +587,6 @@ class DebitNoteListResponse(BaseModel):
 # ---- GST settlement (period-end set-off of output vs input GST) ----
 
 
-class GstHeadAmounts(BaseModel):
-    igst: Decimal = Decimal("0")
-    cgst: Decimal = Decimal("0")
-    sgst: Decimal = Decimal("0")
-
-
 class GstSettlementCreateRequest(BaseModel):
     period: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM
     lock_period: bool = True
@@ -597,3 +611,48 @@ class GstSettlementResponse(BaseModel):
     note: str | None = None
     settled_by: str | None = None
     settled_at: datetime | None = None
+
+
+# ---- ITC reversal (GST Rule 37 — non-payment within 180 days) ----
+
+
+class BillPaymentUpdateRequest(BaseModel):
+    paid_amount: Decimal = Field(..., ge=0)
+    paid_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class ItcReversalActionRequest(BaseModel):
+    reversal_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class ItcReclaimActionRequest(BaseModel):
+    reclaim_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class ItcReversalCandidate(BaseModel):
+    bill_id: str
+    bill_number: str
+    vendor_party_id: str
+    vendor_name: str | None = None
+    bill_date: date
+    due_date: date  # bill_date + 180 days
+    days_overdue: int
+    payment_status: str
+    paid_amount: Decimal = Decimal("0")
+    bill_total: Decimal = Decimal("0")
+    itc_amounts: GstHeadAmounts
+    itc_total: Decimal
+    interest_amount: Decimal
+    gstr3b_ref: str = "4(B)(2)"
+
+
+class ItcReversalPreviewResponse(BaseModel):
+    as_of: date
+    accounting_entity_id: str
+    candidates: list[ItcReversalCandidate]
+    total_itc: Decimal
+    total_interest: Decimal
+    count: int
