@@ -3,7 +3,12 @@ from datetime import date
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.accounting.service import AccountingNotFoundError, AccountingValidationError, get_trial_balance
+from app.accounting.service import (
+    AccountingNotFoundError,
+    AccountingValidationError,
+    get_business_dashboard,
+    get_trial_balance,
+)
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
@@ -421,6 +426,24 @@ async def reverse_allocation(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/dashboard")
+async def business_dashboard(
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Live executive dashboard (KPIs, balances, 6-month trend) from the ledger."""
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "dashboard")
+    return await get_business_dashboard(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id, as_of=as_of,
+    )
 
 
 # ===================== Report export (CSV / XLSX / PDF) =====================

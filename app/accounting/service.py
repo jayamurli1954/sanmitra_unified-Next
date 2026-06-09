@@ -2101,6 +2101,140 @@ async def get_party_outstanding(
     return result
 
 
+_MONTH_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _financial_year_start(as_of: date) -> date:
+    """Indian financial year starts 1 April."""
+    year = as_of.year if as_of.month >= 4 else as_of.year - 1
+    return date(year, 4, 1)
+
+
+def _last_months(as_of: date, count: int) -> list[tuple[int, int]]:
+    """List of (year, month) for the last `count` months, oldest first, ending at as_of's month."""
+    out: list[tuple[int, int]] = []
+    y, m = as_of.year, as_of.month
+    for _ in range(count):
+        out.append((y, m))
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return list(reversed(out))
+
+
+def _month_bounds(year: int, month: int) -> tuple[date, date]:
+    start = date(year, month, 1)
+    end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    return start, end - timedelta(days=1)
+
+
+async def get_business_dashboard(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str = "primary",
+    as_of: date | None = None,
+) -> dict:
+    """Live executive dashboard computed from the posted ledger (no hard-coded data).
+
+    P&L figures (income/expense/net) are financial-year-to-date; balance-sheet
+    groups (cash, receivables, payables, GST payable) are as-of balances. A 6-month
+    income-vs-expense trend (in lakhs) backs the dashboard chart. Degrades to zeros
+    (never 500) if the ledger is unavailable."""
+    as_of = as_of or date.today()
+    fy_start = _financial_year_start(as_of)
+
+    async def _sum(*, type_=None, flag=None, code=None, date_from=None, date_to=None):
+        conds = [
+            *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        ]
+        if type_ is not None:
+            conds.append(Account.type == type_)
+        if flag is not None:
+            conds.append(flag.is_(True))
+        if code is not None:
+            conds.append(Account.code == code)
+        if date_from is not None:
+            conds.append(JournalEntry.entry_date >= date_from)
+        if date_to is not None:
+            conds.append(JournalEntry.entry_date <= date_to)
+        stmt = (
+            select(
+                func.coalesce(func.sum(JournalLine.debit), 0),
+                func.coalesce(func.sum(JournalLine.credit), 0),
+            )
+            .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+            .join(Account, Account.id == JournalLine.account_id)
+            .where(and_(*conds))
+        )
+        try:
+            debit_total, credit_total = (await session.execute(stmt)).one()
+        except SQLAlchemyError as exc:
+            await session.rollback()
+            _logger.warning("Dashboard aggregate unavailable (run 'alembic upgrade head'?): %s", exc)
+            return Decimal("0"), Decimal("0")
+        return Decimal(debit_total), Decimal(credit_total)
+
+    # P&L, financial-year-to-date.
+    inc_d, inc_c = await _sum(type_="income", date_from=fy_start, date_to=as_of)
+    exp_d, exp_c = await _sum(type_="expense", date_from=fy_start, date_to=as_of)
+    income = _q(inc_c - inc_d)        # income accounts carry credit balances
+    expense = _q(exp_d - exp_c)       # expense accounts carry debit balances
+    net = _q(income - expense)
+
+    # Balance-sheet groups, as-of.
+    cash_d, cash_c = await _sum(flag=Account.is_cash_bank, date_to=as_of)
+    recv_d, recv_c = await _sum(flag=Account.is_receivable, date_to=as_of)
+    pay_d, pay_c = await _sum(flag=Account.is_payable, date_to=as_of)
+    gst_d, gst_c = await _sum(code="22004", date_to=as_of)
+    cash = _q(cash_d - cash_c)
+    receivable = _q(recv_d - recv_c)
+    payable = _q(pay_c - pay_d)
+    gst_payable = _q(gst_c - gst_d)
+
+    # 6-month income-vs-expense trend (lakhs for the chart).
+    trend: list[list] = []
+    monthly_income: list[Decimal] = []
+    for (y, m) in _last_months(as_of, 6):
+        m_start, m_end = _month_bounds(y, m)
+        m_end = min(m_end, as_of)
+        mi_d, mi_c = await _sum(type_="income", date_from=m_start, date_to=m_end)
+        me_d, me_c = await _sum(type_="expense", date_from=m_start, date_to=m_end)
+        m_income = _q(mi_c - mi_d)
+        m_expense = _q(me_d - me_c)
+        monthly_income.append(m_income)
+        trend.append([
+            _MONTH_ABBR[m],
+            round(float(m_income) / 100000, 2),
+            round(float(m_expense) / 100000, 2),
+        ])
+
+    # Month-over-month income growth (last vs previous month in the trend window).
+    growth = 0.0
+    if len(monthly_income) >= 2 and monthly_income[-2] != 0:
+        growth = float(_q((monthly_income[-1] - monthly_income[-2]) / monthly_income[-2] * 100))
+
+    return {
+        "as_of": as_of.isoformat(),
+        "financial_year_start": fy_start.isoformat(),
+        "income": {
+            "fytd": str(income),
+            "current_month": str(monthly_income[-1]) if monthly_income else "0.00",
+            "ytd_growth": growth,
+        },
+        "expenses": {"fytd": str(expense)},
+        "net_position": {"profit_loss": str(net)},
+        "cash_and_bank": str(cash),
+        "receivables": str(receivable),
+        "payables": str(payable),
+        "gst": {"payable": str(gst_payable), "status": "Due" if gst_payable > 0 else "Nil"},
+        "monthly_trend": trend,
+    }
+
+
 async def list_journal_entries(
     session: AsyncSession,
     *,

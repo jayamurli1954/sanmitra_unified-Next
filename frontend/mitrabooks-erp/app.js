@@ -1474,44 +1474,47 @@ function renderBusinessExecutiveDashboard() {
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
   const accountCount = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts.length : 0;
 
-  // Use live dashboard data if available, otherwise use defaults
+  // Live dashboard data from GET /business/dashboard (computed from the ledger).
+  // No hard-coded fallbacks: before data loads or with an empty ledger we show
+  // real zeros rather than invented figures.
   const dashboardData = lastBusinessDashboardStats || {};
+  const hasDashboard = !!lastBusinessDashboardStats;
 
-  // Extract KPI values (in Rupees, not Lakhs)
-  const incomeVal = Number(dashboardData.income?.current_month || 1280000);
-  const expenseVal = Number(dashboardData.expenses?.current_month || 740000);
-  const netVal = Number(dashboardData.net_position?.profit_loss || 540000);
-  const incomeGrowth = Number(dashboardData.income?.ytd_growth || 18);
+  // KPI values (Rupees). FYTD = financial-year-to-date.
+  const incomeVal = Number(dashboardData.income?.fytd || 0);
+  const expenseVal = Number(dashboardData.expenses?.fytd || 0);
+  const netVal = Number(dashboardData.net_position?.profit_loss || 0);
+  const incomeGrowth = Number(dashboardData.income?.ytd_growth || 0);
+  const cashVal = Number(dashboardData.cash_and_bank || 0);
+  const receivablesVal = Number(dashboardData.receivables || 0);
+  const payablesVal = Number(dashboardData.payables || 0);
+  const gstStatus = dashboardData.gst?.status || "—";
 
-  // Format values for display (convert to Lakhs if needed)
   const incomeDisplay = formatCurrency(incomeVal);
   const expenseDisplay = formatCurrency(expenseVal);
   const netDisplay = formatCurrency(netVal);
 
-  // Chart data - use from API if available, else defaults
-  const months = dashboardData.monthly_trend || [
-    ["Apr", 8.2, 5.1],
-    ["May", 10.4, 6.8],
-    ["Jun", 12.8, 7.4],
-    ["Jul", 11.6, 7.0],
-    ["Aug", 14.2, 8.3],
-    ["Sep", 15.8, 9.1],
-  ];
-
-  const maxValue = Math.max(...months.flatMap(([, income, expense]) => [income, expense]));
-  const bars = months.map(([label, income, expense]) => {
-    const incomeHeight = Math.max(16, Math.round((income / maxValue) * 132));
-    const expenseHeight = Math.max(16, Math.round((expense / maxValue) * 132));
-    return `
+  // 6-month income-vs-expense trend (lakhs) from the ledger; empty when no activity.
+  const months = Array.isArray(dashboardData.monthly_trend) ? dashboardData.monthly_trend : [];
+  const trendValues = months.flatMap(([, income, expense]) => [Number(income) || 0, Number(expense) || 0]);
+  const maxValue = trendValues.length ? Math.max(...trendValues, 0.0001) : 1;
+  const bars = months.length
+    ? months.map(([label, income, expense]) => {
+        const inc = Number(income) || 0;
+        const exp = Number(expense) || 0;
+        const incomeHeight = Math.max(4, Math.round((inc / maxValue) * 132));
+        const expenseHeight = Math.max(4, Math.round((exp / maxValue) * 132));
+        return `
       <div class="finance-bar-group">
-        <div class="finance-bars" aria-label="${label} income Rs. ${income}L and expenses Rs. ${expense}L">
+        <div class="finance-bars" aria-label="${escapeHtml(label)} income Rs. ${inc}L and expenses Rs. ${exp}L">
           <span class="income-bar" style="height: ${incomeHeight}px"></span>
           <span class="expense-bar" style="height: ${expenseHeight}px"></span>
         </div>
-        <small>${label}</small>
+        <small>${escapeHtml(label)}</small>
       </div>
     `;
-  }).join("");
+      }).join("")
+    : `<p class="muted">${hasDashboard ? "No ledger activity in the last 6 months." : "Loading ledger activity…"}</p>`;
 
   // Widget 1: KPI Strip (Phase 2C.2-C.3: Collapsible & Customizable)
   const kpiStripContent = `
@@ -1530,7 +1533,7 @@ function renderBusinessExecutiveDashboard() {
         <article>
           <span>Net Position</span>
           <strong>${escapeHtml(netDisplay)}</strong>
-          <small>Before tax provisions</small>
+          <small>Income − Expenses (FYTD)</small>
         </article>
       </div>
     </div>
@@ -1553,43 +1556,40 @@ function renderBusinessExecutiveDashboard() {
     </div>
   `;
 
-  // Widget 3: CEO Panel (Phase 2C.2-C.3: Collapsible & Customizable)
+  // Widget 3: CEO Panel — real metrics derived from the live ledger figures above.
+  const coverage = payablesVal > 0 ? cashVal / payablesVal : null;
+  const coverageRow = coverage != null
+    ? `<strong>${coverage.toFixed(1)}x coverage</strong><span>Cash & bank (${formatCurrency(cashVal)}) against vendor dues (${formatCurrency(payablesVal)}).</span>`
+    : `<strong>${escapeHtml(formatCurrency(cashVal))}</strong><span>Cash & bank on hand. No outstanding vendor dues.</span>`;
   const ceoPanelContent = `
     <div class="preview-heading compact">
       <div class="ceo-title-block">
         <span class="ceo-orbit" aria-hidden="true"></span>
-        <span class="ai-badge">AI Enabled</span>
-        <p>Real-time ledger analytics and operating summaries.</p>
+        <span class="ai-badge">Live from ledger</span>
+        <p>Key operating figures computed from posted entries (as of ${escapeHtml(dashboardData.as_of || todayIsoDate())}).</p>
       </div>
     </div>
     <div class="ceo-insight-list" role="list">
       <div class="ceo-insight-row" role="listitem">
         <span class="insight-spark" aria-hidden="true"></span>
+        <div class="ceo-insight-copy">${coverageRow}</div>
+      </div>
+      <div class="ceo-insight-row" role="listitem">
+        <span class="insight-spark" aria-hidden="true"></span>
         <div class="ceo-insight-copy">
-          <strong>65.1x coverage</strong>
-          <span>Cash flow is covering pending vendor obligations comfortably.</span>
+          <strong>${escapeHtml(formatCurrency(receivablesVal))}</strong>
+          <span>Outstanding from customers (open receivables).</span>
         </div>
       </div>
       <div class="ceo-insight-row" role="listitem">
         <span class="insight-spark" aria-hidden="true"></span>
         <div class="ceo-insight-copy">
-          <strong>28 days</strong>
-          <span>Receivables collection time has tightened and liquidity has improved.</span>
-        </div>
-      </div>
-      <div class="ceo-insight-row" role="listitem">
-        <span class="insight-spark" aria-hidden="true"></span>
-        <div class="ceo-insight-copy">
-          <strong>4.2x</strong>
-          <span>Consumables inventory is turning at a healthy operating cadence.</span>
+          <strong>${escapeHtml(formatCurrency(netVal))}</strong>
+          <span>Net position this financial year (income − expenses).</span>
         </div>
       </div>
     </div>
-    <div class="ceo-ask-row">
-      <input type="text" value="" placeholder="Ask AI: 'What is our GST exposure?' or 'Rent balance?'" aria-label="Ask AI for ledger insight">
-      <button type="button">Ask</button>
-    </div>
-    <p class="ceo-footnote">${voucherCount} posted voucher(s), ${partyCount} party record(s), and ${accountCount} account(s) are available for the current dashboard context.</p>
+    <p class="ceo-footnote">${voucherCount} posted voucher(s), ${partyCount} party record(s), and ${accountCount} account(s) in this dashboard context. GST: ${escapeHtml(gstStatus)}.</p>
   `;
 
   // Build dashboard with wrapped widgets (Phase 2C.2-C.3)
@@ -4223,6 +4223,11 @@ function renderDashboardPreview(config) {
     if (activeOrgSelectorType() !== "BUSINESS") {
       return renderSelectedOrgWorkspace();
     }
+    const ds = lastBusinessDashboardStats || {};
+    const cashMetric = formatCurrency(Number(ds.cash_and_bank || 0));
+    const recvMetric = formatCurrency(Number(ds.receivables || 0));
+    const payMetric = formatCurrency(Number(ds.payables || 0));
+    const gstMetric = ds.gst?.status || "—";
     return `
       <div class="business-dashboard-clean">
         ${renderBusinessExecutiveDashboard()}
@@ -4249,22 +4254,22 @@ function renderDashboardPreview(config) {
         <div class="business-bottom-metrics">
           <div class="metric-item">
             <span class="metric-label">Cash and Bank</span>
-            <strong class="metric-value">Rs. 8.4L</strong>
+            <strong class="metric-value">${escapeHtml(cashMetric)}</strong>
             <small class="metric-sub">available balance</small>
           </div>
           <div class="metric-item">
             <span class="metric-label">Receivables</span>
-            <strong class="metric-value">Rs. 2.1L</strong>
+            <strong class="metric-value">${escapeHtml(recvMetric)}</strong>
             <small class="metric-sub">open invoices</small>
           </div>
           <div class="metric-item">
             <span class="metric-label">Payables</span>
-            <strong class="metric-value">Rs. 96K</strong>
+            <strong class="metric-value">${escapeHtml(payMetric)}</strong>
             <small class="metric-sub">vendor dues</small>
           </div>
           <div class="metric-item">
             <span class="metric-label">GST Filing</span>
-            <strong class="metric-value">Ready</strong>
+            <strong class="metric-value">${escapeHtml(gstMetric)}</strong>
             <small class="metric-sub">current period</small>
           </div>
         </div>
@@ -8575,7 +8580,7 @@ async function loadBusinessDashboardStats() {
     setLoginStatus(
       "warn",
       "Dashboard data unavailable",
-      "Business dashboard stats could not be loaded. Using default values."
+      "Live dashboard figures could not be loaded; showing zeros until the ledger responds."
     );
   }
 
