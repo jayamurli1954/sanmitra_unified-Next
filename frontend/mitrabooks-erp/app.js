@@ -5457,6 +5457,78 @@ function reportDateControls() {
   return "";
 }
 
+function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
+  const kAttr = kind ? ` data-report-kind="${escapeHtml(kind)}"` : "";
+  const key = escapeHtml(reportKey);
+  const lbl = label ? `<span class="export-label muted">${escapeHtml(label)}</span>` : "";
+  return `
+    <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;">
+      ${lbl}
+      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="csv"${kAttr}>CSV</button>
+      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="xlsx"${kAttr}>Excel</button>
+      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="pdf"${kAttr}>PDF</button>
+      <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
+    </div>`;
+}
+
+// Export/print toolbars per report tab. Backend supports CSV/XLSX/PDF for the
+// core set (trial_balance, party_ledger, itc_reversals, aging); other tabs get
+// Print only for now.
+function businessReportExports() {
+  const tab = businessReportState.tab;
+  if (tab === "trial-balance") return reportExportToolbar("trial_balance");
+  if (tab === "itc-reversals") return reportExportToolbar("itc_reversals");
+  if (tab === "receivables-payables") {
+    return `
+      ${reportExportToolbar("party_ledger", { kind: "receivable", label: "Debtors:" })}
+      ${reportExportToolbar("party_ledger", { kind: "payable", label: "Creditors:" })}`;
+  }
+  return `
+    <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;margin:8px 0;">
+      <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
+    </div>`;
+}
+
+async function downloadBusinessReport(reportKey, format, kind) {
+  if (!reportKey) return;
+  const params = new URLSearchParams();
+  params.set("report", reportKey);
+  params.set("format", format || "csv");
+  if (kind) params.set("kind", kind);
+  if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
+  const filename = `${reportKey}${kind ? "_" + kind : ""}_${businessReportState.as_of}.${format || "csv"}`;
+  const path = `/api/v1/business/reports/export?${params.toString()}`;
+  const result = await downloadApiFile("mitrabooks", path, filename, { timeoutMs: 30000 });
+  if (result.ok) {
+    renderJson(apiOutput, { export: { report: reportKey, format, kind: kind || null, filename } });
+  } else {
+    renderJson(apiOutput, { export_error: { report: reportKey, format, status: result.status, detail: result.payload?.detail || result.payload } });
+  }
+}
+
+// Print the currently rendered report by cloning its HTML into a clean window —
+// avoids fighting the app's global/screen CSS and works across browsers
+// (the user picks "Save as PDF" there too if they prefer a browser-rendered PDF).
+function printBusinessReport() {
+  const node = document.getElementById("business-report-printable");
+  if (!node) { window.print(); return; }
+  const win = window.open("", "_blank", "width=940,height=720");
+  if (!win) { window.print(); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Financial Report</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}
+      h3,h4{margin:0 0 6px;}
+      table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0 18px;}
+      th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}
+      td.amount,th.amount,.amount,.num,td.right{text-align:right;}
+      .muted{color:#666;font-size:11px;}
+      button,.report-export-toolbar,.report-tabs,.report-date-controls,input,select{display:none!important;}
+    </style></head><body>${node.innerHTML}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch (_e) {} }, 300);
+}
+
 function renderBusinessReportsWorkspace() {
   const tabs = BUSINESS_REPORT_TABS.map((tab) => `
     <button
@@ -5496,7 +5568,8 @@ function renderBusinessReportsWorkspace() {
       </div>
       <div class="report-tabs" role="tablist">${tabs}</div>
       ${reportDateControls()}
-      ${body}
+      ${businessReportExports()}
+      <div id="business-report-printable">${body}</div>
     </div>
   `;
 }
@@ -11225,6 +11298,14 @@ dashboardPreview.addEventListener("click", (event) => {
     setBusinessReportTab(button.getAttribute("data-report-tab") || "trial-balance");
   } else if (businessAction === "apply-report-filter") {
     applyBusinessReportFilter();
+  } else if (businessAction === "export-report") {
+    downloadBusinessReport(
+      button.getAttribute("data-report-key") || "",
+      button.getAttribute("data-report-format") || "csv",
+      button.getAttribute("data-report-kind") || "",
+    );
+  } else if (businessAction === "print-report") {
+    printBusinessReport();
   } else if (businessAction === "report-ledger") {
     setBusinessReportTab("general-ledger");
     loadBusinessGeneralLedger(button.getAttribute("data-account-id") || "");
