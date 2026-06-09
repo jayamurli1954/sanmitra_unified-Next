@@ -784,3 +784,20 @@ class ReconciliationResponse(BaseModel):
     difference: Decimal
     balanced: bool
     ledger_unallocated_bucket: Decimal
+
+
+class AgingPartyRow(BaseModel):
+    party_id: str | None = None
+    party_name: str | None = None
+    buckets: dict[str, Decimal]
+    total: Decimal
+
+
+class AgingResponse(BaseModel):
+    kind: AllocationSide
+    as_of: date
+    accounting_entity_id: str
+    buckets_order: list[str]
+    totals: dict[str, Decimal]
+    grand_total: Decimal
+    by_party: list[AgingPartyRow]

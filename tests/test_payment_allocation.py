@@ -12,6 +12,8 @@ import pytest
 from app.accounting.service import AccountingValidationError
 from app.modules.business.allocation_service import (
     _SIDE,
+    aging_bucket,
+    aging_summary,
     compute_open_items,
     compute_unallocated_payments,
     open_item_view,
@@ -189,3 +191,40 @@ def test_reconcile_flags_drift():
     )
     assert result["balanced"] is False
     assert result["difference"] == "50.00"
+
+
+# --------------------------- aging buckets (Phase B) --------------------------- #
+
+def test_aging_bucket_boundaries():
+    assert aging_bucket(0) == "0-30"
+    assert aging_bucket(30) == "0-30"
+    assert aging_bucket(31) == "31-60"
+    assert aging_bucket(60) == "31-60"
+    assert aging_bucket(61) == "61-90"
+    assert aging_bucket(90) == "61-90"
+    assert aging_bucket(91) == "90+"
+    assert aging_bucket(999) == "90+"
+
+
+def test_aging_summary_groups_by_party_and_bucket():
+    open_items = [
+        {"open_item_id": "i1", "party_id": "cust-A", "outstanding": "600.00", "days_overdue": 10},
+        {"open_item_id": "i2", "party_id": "cust-A", "outstanding": "400.00", "days_overdue": 45},
+        {"open_item_id": "i3", "party_id": "cust-B", "outstanding": "1200.00", "days_overdue": 120},
+    ]
+    summary = aging_summary(open_items)
+    assert summary["buckets_order"] == ["0-30", "31-60", "61-90", "90+"]
+    assert summary["grand_total"] == "2200.00"
+    assert summary["totals"] == {"0-30": "600.00", "31-60": "400.00", "61-90": "0.00", "90+": "1200.00"}
+    # Sorted by total desc -> cust-B (1200) first.
+    assert [r["party_id"] for r in summary["by_party"]] == ["cust-B", "cust-A"]
+    cust_a = next(r for r in summary["by_party"] if r["party_id"] == "cust-A")
+    assert cust_a["buckets"]["0-30"] == "600.00"
+    assert cust_a["buckets"]["31-60"] == "400.00"
+    assert cust_a["total"] == "1000.00"
+
+
+def test_aging_summary_empty():
+    summary = aging_summary([])
+    assert summary["grand_total"] == "0.00"
+    assert summary["by_party"] == []

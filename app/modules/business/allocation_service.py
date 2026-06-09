@@ -37,6 +37,7 @@ from app.accounting.service import (
 from app.db.mongo import get_collection
 
 PAYMENT_ALLOCATIONS_COLLECTION = "business_payment_allocations"
+PARTIES_COLLECTION = "business_parties"
 VOUCHERS_COLLECTION = "business_vouchers"
 SALES_INVOICES_COLLECTION = "business_sales_invoices"
 PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
@@ -249,6 +250,54 @@ def reconcile(
         "ledger_balance": str(ledger_balance.quantize(_CENT)),
         "difference": str(difference),
         "balanced": abs(difference) < _CENT,
+    }
+
+
+# Standard AR/AP aging buckets, by days past due (0-30 includes not-yet-due).
+AGING_BUCKETS = ["0-30", "31-60", "61-90", "90+"]
+
+
+def aging_bucket(days_overdue: int) -> str:
+    if days_overdue <= 30:
+        return "0-30"
+    if days_overdue <= 60:
+        return "31-60"
+    if days_overdue <= 90:
+        return "61-90"
+    return "90+"
+
+
+def aging_summary(open_items: list[dict]) -> dict:
+    """Aggregate open-item outstanding into aging buckets, grouped by party.
+    Each open_items entry must carry `outstanding`, `days_overdue`, `party_id`."""
+    totals = {b: Decimal("0.00") for b in AGING_BUCKETS}
+    grand = Decimal("0.00")
+    by_party: dict = {}
+    for it in open_items:
+        amount = _d(it["outstanding"])
+        bucket = aging_bucket(int(it.get("days_overdue") or 0))
+        pid = it.get("party_id")
+        row = by_party.setdefault(
+            pid, {"party_id": pid, "buckets": {b: Decimal("0.00") for b in AGING_BUCKETS}, "total": Decimal("0.00")},
+        )
+        row["buckets"][bucket] += amount
+        row["total"] += amount
+        totals[bucket] += amount
+        grand += amount
+    rows = [
+        {
+            "party_id": r["party_id"],
+            "buckets": {b: str(r["buckets"][b]) for b in AGING_BUCKETS},
+            "total": str(r["total"]),
+        }
+        for r in by_party.values()
+    ]
+    rows.sort(key=lambda r: Decimal(r["total"]), reverse=True)
+    return {
+        "buckets_order": AGING_BUCKETS,
+        "totals": {b: str(totals[b]) for b in AGING_BUCKETS},
+        "grand_total": str(grand),
+        "by_party": rows,
     }
 
 
@@ -499,3 +548,30 @@ async def reconciliation(
         "ledger_unallocated_bucket": str(unallocated_bucket.quantize(_CENT)),
     })
     return result
+
+
+async def ar_ap_aging(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, kind: str,
+    party_id: str | None = None, as_of: date | None = None,
+) -> dict:
+    """AR (receivable) or AP (payable) aging report: open-item outstanding bucketed
+    by days past due, grouped by party (party names enriched from Mongo)."""
+    _require_side(kind)
+    as_of = as_of or date.today()
+    open_items = await list_open_items(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        kind=kind, party_id=party_id, as_of=as_of,
+    )
+    summary = aging_summary(open_items["items"])
+
+    parties = await get_collection(PARTIES_COLLECTION).find(
+        _scope(tenant_id, app_key, accounting_entity_id)
+    ).to_list(length=5000)
+    name_by_id = {p.get("party_id"): p.get("party_name") for p in parties}
+    for row in summary["by_party"]:
+        row["party_name"] = name_by_id.get(row["party_id"])
+
+    summary.update({
+        "kind": kind, "as_of": as_of.isoformat(), "accounting_entity_id": accounting_entity_id,
+    })
+    return summary

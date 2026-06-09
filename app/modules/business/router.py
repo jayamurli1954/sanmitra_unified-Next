@@ -23,6 +23,7 @@ from app.modules.business.schemas import (
     CreditNoteResponse,
     DebitNoteCancelRequest,
     DebitNoteCreateRequest,
+    AgingResponse,
     DebitNoteListResponse,
     DebitNoteResponse,
     FifoSuggestionResponse,
@@ -347,6 +348,28 @@ async def allocation_reconciliation(
     try:
         return await allocation_service.reconciliation(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, kind=kind,
+            party_id=party_id, as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/allocations/aging", response_model=AgingResponse)
+async def allocation_aging(
+    kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
+    party_id: str | None = Query(default=None),
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "aging report")
+    try:
+        return await allocation_service.ar_ap_aging(
+            tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, kind=kind,
             party_id=party_id, as_of=as_of,
         )
