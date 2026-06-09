@@ -1477,6 +1477,8 @@ function renderSelectedOrgWorkspace() {
   `;
 }
 
+let businessDashboardLoadInFlight = false;
+
 function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
@@ -1487,6 +1489,13 @@ function renderBusinessExecutiveDashboard() {
   // real zeros rather than invented figures.
   const dashboardData = lastBusinessDashboardStats || {};
   const hasDashboard = !!lastBusinessDashboardStats;
+
+  // Lazy self-heal: whenever the KPI dashboard renders without data (boot,
+  // refresh, or any path that didn't fetch), kick off the load. Deferred so we
+  // don't re-enter during the current innerHTML render; guarded so it fires once.
+  if (!hasDashboard && !businessDashboardLoadInFlight) {
+    setTimeout(() => { loadBusinessDashboardStats(); }, 0);
+  }
 
   // KPI values (Rupees). FYTD = financial-year-to-date.
   const incomeVal = Number(dashboardData.income?.fytd || 0);
@@ -8598,7 +8607,13 @@ async function loadBusinessAccounts() {
  */
 async function loadBusinessDashboardStats() {
   const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, "/api/v1/business/dashboard", { method: "GET" });
+  businessDashboardLoadInFlight = true;
+  let result;
+  try {
+    result = await apiRequest(appKey, "/api/v1/business/dashboard", { method: "GET" });
+  } finally {
+    businessDashboardLoadInFlight = false;
+  }
 
   // A valid dashboard payload always carries the income block; guard against an
   // empty/partial body (e.g. a transient 0-byte response during a service-worker
