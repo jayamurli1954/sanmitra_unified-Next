@@ -5732,45 +5732,50 @@ function renderBusinessBalanceSheet() {
   if (payload.ok === false) {
     return reportUnavailablePanel("Balance Sheet", payload);
   }
-  const sections = [
-    ["Assets", Array.isArray(payload.assets) ? payload.assets : []],
-    ["Liabilities", Array.isArray(payload.liabilities) ? payload.liabilities : []],
-    ["Equity", Array.isArray(payload.equity) ? payload.equity : []],
-  ];
+  const assets = Array.isArray(payload.assets) ? payload.assets : [];
+  const liabilities = Array.isArray(payload.liabilities) ? payload.liabilities : [];
+  const equity = Array.isArray(payload.equity) ? payload.equity : [];
+  const totalAssets = Number(payload.total_assets || 0);
+  const liabPlusEquity = Number(payload.total_liabilities || 0) + Number(payload.total_equity || 0);
+
+  const bsRows = (rows) => rows.length
+    ? rows.map((line) => `
+        <tr>
+          <td>${escapeHtml(line.account_code || "")}</td>
+          <td>${escapeHtml(line.account_name || "")}</td>
+          <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="3" class="muted">No rows.</td></tr>`;
+  const subHead = (label) => `<tr><td colspan="3" style="font-weight:600;padding-top:8px;">${escapeHtml(label)}</td></tr>`;
+  const totalRow = (label, value) => `
+    <tr style="font-weight:700;border-top:2px solid var(--border, #3a3f4b);">
+      <td colspan="2">${escapeHtml(label)}</td>
+      <td class="amount">${escapeHtml(formatCurrency(value))}</td>
+    </tr>`;
+  const sideTable = (title, bodyHtml) => `
+    <div class="table-preview compact-table">
+      <h4>${escapeHtml(title)}</h4>
+      <table>
+        <thead><tr><th>Code</th><th>Account</th><th class="amount">Amount</th></tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>`;
+
+  // Standard two-sided balance sheet: Liabilities & Equity on the left, Assets on
+  // the right; each side totals to the same figure when balanced. The grid
+  // auto-stacks to one column on narrow screens so it always fits.
   return `
     <div class="preview-heading compact">
-      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Assets should equal liabilities plus equity.</p></div>
+      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Assets = Liabilities + Equity.</p></div>
       <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
     </div>
-    <div class="metric-grid three">
-      ${renderStatCards([
-        ["Assets", formatCurrency(payload.total_assets || 0), "resources"],
-        ["Liabilities", formatCurrency(payload.total_liabilities || 0), "obligations"],
-        ["Equity", formatCurrency(payload.total_equity || 0), "owner funds"],
-      ])}
-    </div>
-    <div class="dashboard-main-grid platform-grid">
-      ${sections.map(([title, rows]) => `
-        <article>
-          <h4>${escapeHtml(title)}</h4>
-          <div class="table-preview compact-table">
-            <table>
-              <thead>
-                <tr><th>Code</th><th>Account</th><th class="amount">Balance</th></tr>
-              </thead>
-              <tbody>
-                ${rows.length ? rows.map((line) => `
-                  <tr>
-                    <td>${escapeHtml(line.account_code || "")}</td>
-                    <td>${escapeHtml(line.account_name || "")}</td>
-                    <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
-                  </tr>
-                `).join("") : `<tr><td colspan="3" class="muted">No rows.</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-        </article>
-      `).join("")}
+    <div class="bs-tformat" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;">
+      ${sideTable("Liabilities & Equity",
+        subHead("Capital & Reserves (Equity)") + bsRows(equity) +
+        subHead("Liabilities") + bsRows(liabilities) +
+        totalRow("Total Liabilities + Equity", liabPlusEquity))}
+      ${sideTable("Assets",
+        bsRows(assets) + totalRow("Total Assets", totalAssets))}
     </div>
   `;
 }
