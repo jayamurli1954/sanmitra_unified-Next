@@ -5488,6 +5488,17 @@ function businessReportExports() {
       ${reportExportToolbar("party_ledger", { kind: "receivable", label: "Debtors:" })}
       ${reportExportToolbar("party_ledger", { kind: "payable", label: "Creditors:" })}`;
   }
+  if (tab === "general-ledger") {
+    const acc = businessReportState.ledgerAccountId;
+    if (acc && acc !== "__all_nonzero__") {
+      return reportExportToolbar("general_ledger");
+    }
+    return `
+      <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;">
+        <span class="muted">Select a single account to download (CSV/Excel/PDF). "All Ledger Accounts" supports Print only.</span>
+        <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
+      </div>`;
+  }
   return `
     <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;margin:8px 0;">
       <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
@@ -5501,6 +5512,14 @@ async function downloadBusinessReport(reportKey, format, kind) {
   params.set("format", format || "csv");
   if (kind) params.set("kind", kind);
   if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
+  if (reportKey === "general_ledger") {
+    const acc = businessReportState.ledgerAccountId;
+    if (!acc || acc === "__all_nonzero__") {
+      renderJson(apiOutput, { export_error: { report: reportKey, detail: "Select a single ledger account before downloading." } });
+      return;
+    }
+    params.set("account_id", acc);
+  }
   const filename = `${reportKey}${kind ? "_" + kind : ""}_${businessReportState.as_of}.${format || "csv"}`;
   const path = `/api/v1/business/reports/export?${params.toString()}`;
   const result = await downloadApiFile("mitrabooks", path, filename, { timeoutMs: 30000 });

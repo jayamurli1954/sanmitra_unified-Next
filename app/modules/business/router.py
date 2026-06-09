@@ -8,6 +8,7 @@ from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
     get_business_dashboard,
+    get_ledger_lines,
     get_trial_balance,
 )
 from app.core.auth.dependencies import get_current_user
@@ -474,7 +475,7 @@ async def _resolve_org_name(tenant_id: str, app_key: str, accounting_entity_id: 
 
 
 async def _build_business_report(
-    report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of,
+    report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of, account_id=None,
 ) -> dict:
     """Assemble (title, columns, rows, footer, meta, org_name, filename_base) for a report."""
     as_of_str = (as_of or date.today()).isoformat()
@@ -578,9 +579,43 @@ async def _build_business_report(
             "filename_base": f"trial_balance_{as_of_str}",
         }
 
+    elif report == "general_ledger":
+        if not account_id:
+            raise AccountingValidationError("account_id is required for the general ledger export")
+        account, lines = await get_ledger_lines(
+            session, tenant_id=tenant_id, account_id=int(account_id),
+            app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+        total_debit = sum((Decimal(str(l["debit"] or 0)) for l in lines), Decimal("0.00"))
+        total_credit = sum((Decimal(str(l["credit"] or 0)) for l in lines), Decimal("0.00"))
+        closing = lines[-1]["running_balance"] if lines else Decimal("0.00")
+        rows = [{
+            "entry_date": l["entry_date"],
+            "description": l["description"],
+            "reference": l["reference"],
+            "debit": l["debit"] or None,
+            "credit": l["credit"] or None,
+            "running_balance": l["running_balance"],
+        } for l in lines]
+        spec = {
+            "title": "General Ledger",
+            "columns": [
+                {"key": "entry_date", "label": "Date"},
+                {"key": "description", "label": "Particulars"},
+                {"key": "reference", "label": "Reference"},
+                {"key": "debit", "label": "Debit", "numeric": True},
+                {"key": "credit", "label": "Credit", "numeric": True},
+                {"key": "running_balance", "label": "Balance", "numeric": True},
+            ],
+            "rows": rows,
+            "footer": {"description": "Total", "debit": total_debit, "credit": total_credit, "running_balance": closing},
+            "meta": [("Account", f"{account.code} - {account.name}"), ("As of", as_of_str)],
+            "filename_base": f"general_ledger_{account.code}_{as_of_str}",
+        }
+
     else:
         raise AccountingValidationError(
-            "report must be one of: party_ledger, aging, itc_reversals, trial_balance"
+            "report must be one of: party_ledger, aging, itc_reversals, trial_balance, general_ledger"
         )
 
     spec["org_name"] = org_name
@@ -589,10 +624,11 @@ async def _build_business_report(
 
 @router.get("/reports/export")
 async def export_business_report(
-    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance)$"),
+    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger)$"),
     format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
     kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
     as_of: date | None = Query(default=None),
+    account_id: int | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
     session: AsyncSession = Depends(get_async_session),
@@ -604,7 +640,7 @@ async def export_business_report(
     try:
         spec = await _build_business_report(
             report, session=session, tenant_id=context.tenant_id, app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
+            accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of, account_id=account_id,
         )
         return report_export.export_report(format, **spec)
     except AccountingValidationError as exc:
