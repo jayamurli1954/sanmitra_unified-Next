@@ -683,3 +683,104 @@ class PartyOutstandingResponse(BaseModel):
     as_of: date
     receivable: Decimal
     payable: Decimal
+
+
+# ---- Payment allocation (open-item AR/AP) ----
+
+AllocationSide = Literal["receivable", "payable"]
+
+
+class OpenItem(BaseModel):
+    open_item_id: str
+    open_item_number: str | None = None
+    party_id: str | None = None
+    item_date: str | None = None
+    due_date: str | None = None
+    total: Decimal
+    allocated: Decimal
+    outstanding: Decimal
+    days_overdue: int
+
+
+class OpenItemListResponse(BaseModel):
+    kind: AllocationSide
+    as_of: date
+    accounting_entity_id: str
+    items: list[OpenItem]
+    count: int
+    total_outstanding: Decimal
+
+
+class UnallocatedPayment(BaseModel):
+    payment_id: str
+    payment_number: str | None = None
+    party_id: str | None = None
+    payment_date: str | None = None
+    amount: Decimal
+    allocated: Decimal
+    unallocated: Decimal
+
+
+class UnallocatedPaymentListResponse(BaseModel):
+    kind: AllocationSide
+    accounting_entity_id: str
+    items: list[UnallocatedPayment]
+    count: int
+    total_unallocated: Decimal
+
+
+class AllocationLineInput(BaseModel):
+    open_item_id: str = Field(..., min_length=1)
+    allocated_amount: Decimal = Field(..., gt=0)
+
+
+class AllocationCreateRequest(BaseModel):
+    kind: AllocationSide
+    payment_id: str = Field(..., min_length=1)
+    allocations: list[AllocationLineInput] = Field(..., min_length=1)
+
+
+class AllocationRecord(BaseModel):
+    allocation_id: str
+    side: AllocationSide
+    party_id: str | None = None
+    payment_id: str
+    payment_number: str | None = None
+    open_item_id: str
+    open_item_number: str | None = None
+    allocated_amount: Decimal
+    allocated_date: str | None = None
+    status: str
+
+
+class AllocationCreateResponse(BaseModel):
+    payment_id: str
+    allocations: list[AllocationRecord]
+    count: int
+
+
+class FifoSuggestionLine(BaseModel):
+    open_item_id: str
+    open_item_number: str | None = None
+    allocated_amount: Decimal
+
+
+class FifoSuggestionResponse(BaseModel):
+    payment_id: str
+    payment_number: str | None = None
+    party_id: str | None = None
+    unallocated: Decimal
+    allocations: list[FifoSuggestionLine]
+
+
+class ReconciliationResponse(BaseModel):
+    kind: AllocationSide
+    as_of: date
+    party_id: str | None = None
+    open_items_outstanding: Decimal
+    unallocated_payments: Decimal
+    computed_net: Decimal
+    ledger_balance: Decimal
+    difference: Decimal
+    balanced: bool
+    ledger_unallocated_bucket: Decimal
