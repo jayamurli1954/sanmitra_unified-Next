@@ -162,6 +162,25 @@ async def on_startup() -> None:
 
         if settings.PG_AUTO_CREATE_TABLES:
             await create_postgres_tables(Base.metadata)
+
+        # Warn loudly if DB migrations are behind. The party sub-ledger column is the
+        # latest additive change; its absence means ledger postings 500 until migrated.
+        try:
+            from sqlalchemy import inspect as _sa_inspect
+
+            async with get_session_factory()() as _mig_session:
+                _conn = await _mig_session.connection()
+                _jl_cols = await _conn.run_sync(
+                    lambda c: [col["name"] for col in _sa_inspect(c).get_columns("journal_lines")]
+                )
+            if "party_id" not in _jl_cols:
+                _startup_logger.warning(
+                    "DB MIGRATIONS BEHIND: journal_lines.party_id is missing. "
+                    "Run 'alembic upgrade head' on this database. Ledger postings "
+                    "(invoices/bills/vouchers) will fail with HTTP 500 until applied."
+                )
+        except Exception as mig_exc:  # never block startup on the check itself
+            _startup_logger.warning("Migration-state check skipped: %s", mig_exc)
         if settings.DEMO_MITRABOOKS_E2E_SEED_ENABLED:
             session_factory = get_session_factory()
             async with session_factory() as session:

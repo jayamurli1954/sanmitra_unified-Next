@@ -1,11 +1,15 @@
+import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import Select, and_, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.decorators import async_audit_logger
+
+_logger = logging.getLogger(__name__)
 
 from app.accounting.models import Account, CoaMapping, CoaSourceAccount, JournalEntry, JournalLine
 from app.accounting.schemas import (
@@ -2034,7 +2038,14 @@ async def get_party_wise_balances(
         .where(and_(*conditions))
         .group_by(JournalLine.party_id)
     )
-    rows = (await session.execute(stmt)).all()
+    try:
+        rows = (await session.execute(stmt)).all()
+    except SQLAlchemyError as exc:
+        # Degrade gracefully if the party_id sub-ledger column is missing (DB migrations
+        # behind). Return an empty party-wise view instead of a 500.
+        await session.rollback()
+        _logger.warning("Party-wise balances unavailable (run 'alembic upgrade head'?): %s", exc)
+        return [], Decimal("0.00")
 
     lines: list[dict] = []
     total_balance = Decimal("0")
@@ -2077,7 +2088,13 @@ async def get_party_outstanding(
             .join(Account, Account.id == JournalLine.account_id)
             .where(and_(*conditions))
         )
-        debit_total, credit_total = (await session.execute(stmt)).one()
+        try:
+            debit_total, credit_total = (await session.execute(stmt)).one()
+        except SQLAlchemyError as exc:
+            # Degrade gracefully if the party_id sub-ledger column is missing.
+            await session.rollback()
+            _logger.warning("Party outstanding unavailable (run 'alembic upgrade head'?): %s", exc)
+            return {"receivable": Decimal("0.00"), "payable": Decimal("0.00")}
         debit = _q(Decimal(debit_total))
         credit = _q(Decimal(credit_total))
         result[kind] = _q(debit - credit) if kind == "receivable" else _q(credit - debit)

@@ -158,3 +158,29 @@ async def test_party_wise_rejects_bad_kind(async_session: AsyncSession):
             async_session, tenant_id="t", as_of=date(2026, 6, 30), kind="bogus",
             app_key=APP_KEY, accounting_entity_id=ENTITY_ID,
         )
+
+
+@pytest.mark.asyncio
+async def test_party_queries_degrade_gracefully_when_column_missing():
+    """If the party_id column is absent (DB migrations behind), report/outstanding
+    return empty/zero instead of raising a 500."""
+    from sqlalchemy.exc import ProgrammingError
+
+    class _BoomSession:
+        async def execute(self, *a, **k):
+            raise ProgrammingError("SELECT ...", {}, Exception('column "party_id" does not exist'))
+
+        async def rollback(self):
+            return None
+
+    lines, total = await get_party_wise_balances(
+        _BoomSession(), tenant_id="t", as_of=date(2026, 6, 30), kind="receivable",
+        app_key=APP_KEY, accounting_entity_id=ENTITY_ID,
+    )
+    assert lines == [] and total == Decimal("0.00")
+
+    out = await get_party_outstanding(
+        _BoomSession(), tenant_id="t", party_id="x", as_of=date(2026, 6, 30),
+        app_key=APP_KEY, accounting_entity_id=ENTITY_ID,
+    )
+    assert out == {"receivable": Decimal("0.00"), "payable": Decimal("0.00")}
