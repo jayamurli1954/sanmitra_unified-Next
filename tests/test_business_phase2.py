@@ -1384,3 +1384,97 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
     assert result["status"] == "under_review"
     assert result["next_action"] == "Review support and raise query if needed"
     assert wrong_tenant is None
+
+
+# ===================== Party sub-ledger tagging at posting sites =====================
+
+
+def _party_tag_mocks(monkeypatch, store, captured):
+    async def fake_init_coa(*_a, **_k):
+        return None
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", fake_init_coa)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_id=None, account_code=None, **_kwargs):
+        return int(account_id) if account_id is not None else _INVOICE_ACCOUNT_IDS[account_code]
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+
+    async def fake_post(session, *, payload, **kwargs):
+        captured["payload"] = payload
+        return SimpleNamespace(id=999), True
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post)
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_tags_receivable_line_with_customer(monkeypatch):
+    store = FakeCollection(); _seed_customer(store); captured = {}
+    _party_tag_mocks(monkeypatch, store, captured)
+    await business_service.create_sales_invoice(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(
+            customer_party_id="cust-1", invoice_date=date(2026, 6, 8), is_inter_state=False,
+            line_items=[SalesInvoiceLineItem(description="W", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+    lines = captured["payload"].lines
+    receivable = lines[0]  # Dr receivable is first
+    assert receivable.account_id == _INVOICE_ACCOUNT_IDS["12001"]
+    assert receivable.party_id == "cust-1"
+    # Income/GST lines carry no party tag.
+    assert all(l.party_id is None for l in lines[1:])
+
+
+@pytest.mark.asyncio
+async def test_purchase_bill_tags_payable_line_with_vendor(monkeypatch):
+    store = FakeCollection(); _seed_vendor(store); captured = {}
+    _party_tag_mocks(monkeypatch, store, captured)
+    await business_service.create_purchase_bill(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1", bill_number="B-1", bill_date=date(2026, 6, 8), is_inter_state=False,
+            line_items=[PurchaseBillLineItem(description="G", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key=None,
+    )
+    lines = captured["payload"].lines
+    payable = [l for l in lines if l.account_id == _INVOICE_ACCOUNT_IDS["21001"]][0]
+    assert payable.credit == Decimal("118.00")
+    assert payable.party_id == "vend-1"
+    assert all(l.party_id is None for l in lines if l.account_id != _INVOICE_ACCOUNT_IDS["21001"])
+
+
+@pytest.mark.asyncio
+async def test_receipt_voucher_tags_credit_line_payment_tags_debit(monkeypatch):
+    # Receipt → party on the credit (customer/receivable) line.
+    store = FakeCollection(); captured = {}
+    _party_tag_mocks(monkeypatch, store, captured)
+    await business_service.post_typed_voucher(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=TypedVoucherCreateRequest(
+            voucher_type="receipt", entry_date=date(2026, 6, 8), amount=Decimal("500"),
+            debit_account_id=10, credit_account_id=20, party_id="cust-1", reference="RV-9",
+            description="Receipt from customer",
+        ),
+        idempotency_key=None,
+    )
+    rlines = captured["payload"].lines
+    assert rlines[0].party_id is None          # debit (bank) untagged
+    assert rlines[1].party_id == "cust-1"      # credit (customer) tagged
+
+    # Payment → party on the debit (vendor/payable) line.
+    store2 = FakeCollection(); captured2 = {}
+    _party_tag_mocks(monkeypatch, store2, captured2)
+    await business_service.post_typed_voucher(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=TypedVoucherCreateRequest(
+            voucher_type="payment", entry_date=date(2026, 6, 8), amount=Decimal("500"),
+            debit_account_id=30, credit_account_id=40, party_id="vend-1", reference="PV-9",
+            description="Payment to vendor",
+        ),
+        idempotency_key=None,
+    )
+    plines = captured2["payload"].lines
+    assert plines[0].party_id == "vend-1"      # debit (vendor) tagged
+    assert plines[1].party_id is None          # credit (bank) untagged

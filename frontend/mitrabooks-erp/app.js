@@ -5249,9 +5249,11 @@ async function loadBusinessBalanceSheet() {
 }
 
 async function loadBusinessReceivablesPayables() {
+  // Party-wise Sundry Debtors / Creditors; totals tie to the matching Trial Balance account.
+  const asOf = encodeURIComponent(businessReportState.as_of);
   const [arResult, apResult] = await Promise.all([
-    apiRequest("mitrabooks", `/api/v1/accounting/reports/accounts-receivable?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" }),
-    apiRequest("mitrabooks", `/api/v1/accounting/reports/accounts-payable?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" }),
+    apiRequest("mitrabooks", `/api/v1/business/party-ledger?kind=receivable&as_of=${asOf}`, { method: "GET" }),
+    apiRequest("mitrabooks", `/api/v1/business/party-ledger?kind=payable&as_of=${asOf}`, { method: "GET" }),
   ]);
   lastBusinessReceivables = reportResultPayload(arResult);
   lastBusinessPayables = reportResultPayload(apResult);
@@ -5360,9 +5362,30 @@ function renderBusinessTrialBalance() {
     return reportUnavailablePanel("Trial Balance", payload);
   }
   const rows = Array.isArray(payload.lines) ? payload.lines : [];
+  // Show the NET balance per account in its natural column (Dr if positive, Cr if negative).
+  // Totals are the sums of those nets, which still balance.
+  let netDebitTotal = 0;
+  let netCreditTotal = 0;
+  const bodyRows = rows.map((row) => {
+    const net = Number(row.net_balance != null ? row.net_balance : (Number(row.debit_total || 0) - Number(row.credit_total || 0)));
+    const debitCell = net >= 0 ? net : 0;
+    const creditCell = net < 0 ? -net : 0;
+    netDebitTotal += debitCell;
+    netCreditTotal += creditCell;
+    return `
+      <tr>
+        <td>${escapeHtml(row.account_code || "")}</td>
+        <td>${escapeHtml(row.account_name || "")}</td>
+        <td class="amount">${debitCell ? escapeHtml(formatCurrency(debitCell)) : ""}</td>
+        <td class="amount">${creditCell ? escapeHtml(formatCurrency(creditCell)) : ""}</td>
+        <td>
+          <button class="secondary" type="button" data-business-action="report-ledger" data-account-id="${escapeHtml(row.account_id || "")}">Open</button>
+        </td>
+      </tr>`;
+  }).join("");
   return `
     <div class="preview-heading compact">
-      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Debits and credits must match.</p></div>
+      <div><p>As of ${escapeHtml(payload.as_of || businessReportState.as_of)}. Net balance per account; debit and credit totals must match.</p></div>
       <span class="pill ${payload.balanced ? "ok" : "warn"}">${payload.balanced ? "balanced" : "not balanced"}</span>
     </div>
     <div class="table-preview compact-table">
@@ -5377,25 +5400,15 @@ function renderBusinessTrialBalance() {
           </tr>
         </thead>
         <tbody>
-          ${rows.length ? rows.map((row) => `
-            <tr>
-              <td>${escapeHtml(row.account_code || "")}</td>
-              <td>${escapeHtml(row.account_name || "")}</td>
-              <td class="amount">${escapeHtml(formatCurrency(row.debit_total || 0))}</td>
-              <td class="amount">${escapeHtml(formatCurrency(row.credit_total || 0))}</td>
-              <td>
-                <button class="secondary" type="button" data-business-action="report-ledger" data-account-id="${escapeHtml(row.account_id || "")}">Open</button>
-              </td>
-            </tr>
-          `).join("") : `
+          ${rows.length ? bodyRows : `
             <tr><td colspan="5" class="muted">No posted balances found for this tenant.</td></tr>
           `}
         </tbody>
         <tfoot>
           <tr>
             <th colspan="2">Total</th>
-            <th class="amount">${escapeHtml(formatCurrency(payload.total_debit || 0))}</th>
-            <th class="amount">${escapeHtml(formatCurrency(payload.total_credit || 0))}</th>
+            <th class="amount">${escapeHtml(formatCurrency(netDebitTotal))}</th>
+            <th class="amount">${escapeHtml(formatCurrency(netCreditTotal))}</th>
             <th></th>
           </tr>
         </tfoot>
@@ -5636,7 +5649,9 @@ function renderReceivablesPayablesSection(title, subtitle, payload) {
       </article>
     `;
   }
-  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  // Party-wise rows from /business/party-ledger (items: party_name + balance);
+  // falls back to legacy account-level "lines" if present.
+  const lines = Array.isArray(payload.items) ? payload.items : (Array.isArray(payload.lines) ? payload.lines : []);
   return `
     <article>
       <h4>${escapeHtml(title)} <span class="pill">${escapeHtml(formatCurrency(payload.total_balance || 0))}</span></h4>
@@ -5644,12 +5659,12 @@ function renderReceivablesPayablesSection(title, subtitle, payload) {
       <div class="table-preview compact-table">
         <table>
           <thead>
-            <tr><th>Account</th><th class="amount">Balance</th></tr>
+            <tr><th>Party</th><th class="amount">Balance</th></tr>
           </thead>
           <tbody>
             ${lines.length ? lines.map((line) => `
               <tr>
-                <td>${escapeHtml(line.account_name || "")}</td>
+                <td>${escapeHtml(line.party_name || line.account_name || "")}</td>
                 <td class="amount">${escapeHtml(formatCurrency(line.balance || 0))}</td>
               </tr>
             `).join("") : `<tr><td colspan="2" class="muted">No outstanding balances.</td></tr>`}
@@ -5663,11 +5678,11 @@ function renderReceivablesPayablesSection(title, subtitle, payload) {
 function renderBusinessReceivablesPayables() {
   return `
     <div class="preview-heading compact">
-      <div><p>Outstanding customer and vendor balances as of ${escapeHtml(businessReportState.as_of)}.</p></div>
+      <div><p>Party-wise outstanding as of ${escapeHtml(businessReportState.as_of)}. Totals tie to the Sundry Debtors / Creditors balances in the Trial Balance.</p></div>
     </div>
     <div class="dashboard-main-grid platform-grid">
-      ${renderReceivablesPayablesSection("Receivables", "Amounts owed by customers (debit balances on receivable accounts).", lastBusinessReceivables)}
-      ${renderReceivablesPayablesSection("Payables", "Amounts owed to vendors (credit balances on payable accounts).", lastBusinessPayables)}
+      ${renderReceivablesPayablesSection("Sundry Debtors", "Amounts owed by customers, party-wise. 'Unallocated' = direct entries with no party tag.", lastBusinessReceivables)}
+      ${renderReceivablesPayablesSection("Sundry Creditors", "Amounts owed to vendors, party-wise. 'Unallocated' = direct entries with no party tag.", lastBusinessPayables)}
     </div>
   `;
 }
@@ -8541,6 +8556,10 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target && event.target.id === "business-voucher-party") {
+    loadVoucherPartyOutstanding(event.target.value, event.target.getAttribute("data-voucher-type") || "");
+    return;
+  }
   const accountSelect = event.target.closest(".account-picker-select");
   if (!accountSelect) {
     return;
@@ -8550,6 +8569,25 @@ document.addEventListener("change", (event) => {
     selectBusinessAccount(fieldId, accountSelect.value);
   }
 });
+
+async function loadVoucherPartyOutstanding(partyId, voucherType) {
+  const box = document.getElementById("business-voucher-outstanding");
+  if (!box) return;
+  if (!partyId) { box.textContent = ""; return; }
+  box.textContent = "Loading outstanding…";
+  const result = await apiRequest("mitrabooks", `/api/v1/business/parties/${encodeURIComponent(partyId)}/outstanding`, { method: "GET" });
+  if (!result.ok) { box.textContent = ""; return; }
+  const recv = Number(result.payload?.receivable || 0);
+  const pay = Number(result.payload?.payable || 0);
+  // Emphasise the side relevant to the voucher: receipt → receivable, payment → payable.
+  const primary = voucherType === "payment"
+    ? `Outstanding payable: <strong>${escapeHtml(formatCurrency(pay))}</strong>`
+    : `Outstanding receivable: <strong>${escapeHtml(formatCurrency(recv))}</strong>`;
+  const secondary = voucherType === "payment"
+    ? `receivable ${escapeHtml(formatCurrency(recv))}`
+    : `payable ${escapeHtml(formatCurrency(pay))}`;
+  box.innerHTML = `${primary} <span class="muted">(${secondary})</span>`;
+}
 
 document.addEventListener("click", (event) => {
   const suggestion = event.target.closest(".account-suggestion-item");
@@ -8938,6 +8976,7 @@ function renderVoucherTypeForm(voucherType) {
               `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
             ).join('') : ''}
           </select>
+          <div id="business-voucher-outstanding" class="muted voucher-outstanding" data-voucher-type="${voucherType}"></div>
         </div>
         <div class="field">
           <label for="business-voucher-amount">Amount (₹)</label>
@@ -9000,6 +9039,7 @@ function renderVoucherTypeForm(voucherType) {
               `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
             ).join('') : ''}
           </select>
+          <div id="business-voucher-outstanding" class="muted voucher-outstanding" data-voucher-type="${voucherType}"></div>
         </div>
         <div class="field">
           <label for="business-voucher-amount">Amount (₹)</label>

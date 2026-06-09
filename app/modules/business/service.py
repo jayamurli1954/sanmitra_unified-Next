@@ -10,6 +10,8 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
+    get_party_outstanding,
+    get_party_wise_balances,
     initialize_default_chart_of_accounts,
     post_journal_entry,
     reverse_journal_entry,
@@ -802,8 +804,16 @@ async def post_typed_voucher(
                 description=payload.description,
                 reference=reference,
                 lines=[
-                    JournalLineIn(account_id=debit_account_id, debit=amount, credit=Decimal("0")),
-                    JournalLineIn(account_id=credit_account_id, debit=Decimal("0"), credit=amount),
+                    JournalLineIn(
+                        account_id=debit_account_id, debit=amount, credit=Decimal("0"),
+                        # Payment: debit line hits the vendor (payable) sub-ledger.
+                        party_id=payload.party_id if payload.voucher_type == "payment" else None,
+                    ),
+                    JournalLineIn(
+                        account_id=credit_account_id, debit=Decimal("0"), credit=amount,
+                        # Receipt: credit line hits the customer (receivable) sub-ledger.
+                        party_id=payload.party_id if payload.voucher_type == "receipt" else None,
+                    ),
                 ],
             ),
             idempotency_key=idempotency_key or f"business-voucher:{voucher_id}",
@@ -1156,7 +1166,7 @@ async def create_sales_invoice(
     )
 
     journal_lines = [
-        JournalLineIn(account_id=receivable_id, debit=invoice_total, credit=Decimal("0")),
+        JournalLineIn(account_id=receivable_id, debit=invoice_total, credit=Decimal("0"), party_id=payload.customer_party_id),
         JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
     ]
     for gst_amount, code in (
@@ -1473,7 +1483,7 @@ async def create_purchase_bill(
                 side="input GST",
             )
             journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
-    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total))
+    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id))
 
     bill_id = str(uuid4())
     bill_number = payload.bill_number.strip()
@@ -1908,7 +1918,7 @@ async def create_credit_note(
                 account_id=None, account_code=code, side="output GST",
             )
             journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=gst_amount, credit=Decimal("0")))
-    journal_lines.append(JournalLineIn(account_id=receivable_id, debit=Decimal("0"), credit=note_total))
+    journal_lines.append(JournalLineIn(account_id=receivable_id, debit=Decimal("0"), credit=note_total, party_id=payload.customer_party_id))
 
     credit_note_id = str(uuid4())
     credit_note_number = await _reserve_sequence_number(
@@ -2128,7 +2138,7 @@ async def create_debit_note(
 
     # Mirror of a purchase bill: Dr payable (reduce); Cr expense (reduce) + Cr Input GST (reduce ITC).
     journal_lines = [
-        JournalLineIn(account_id=payable_id, debit=note_total, credit=Decimal("0")),
+        JournalLineIn(account_id=payable_id, debit=note_total, credit=Decimal("0"), party_id=payload.vendor_party_id),
         JournalLineIn(account_id=expense_id, debit=Decimal("0"), credit=taxable_total),
     ]
     for gst_amount, code in ((cgst_total, INPUT_CGST_CODE), (sgst_total, INPUT_SGST_CODE), (igst_total, INPUT_IGST_CODE)):
@@ -2539,3 +2549,83 @@ async def create_gst_settlement(
         action="business_gst_settlement_posted", entity_type="business_gst_settlement", entity_id=period, new_value=result,
     )
     return result
+
+
+# ============ Party sub-ledger (party-wise Debtors / Creditors) ============
+
+
+async def party_wise_ledger(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    kind: str,
+    as_of: date | None = None,
+) -> dict:
+    """Party-wise Sundry Debtors (receivable) / Creditors (payable), enriched with
+    party names from Mongo. Ties to the matching Trial Balance account total."""
+    as_of = as_of or date.today()
+    lines, total = await get_party_wise_balances(
+        session, tenant_id=tenant_id, as_of=as_of, kind=kind, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    party_ids = [l["party_id"] for l in lines if l["party_id"]]
+    names: dict[str, str | None] = {}
+    if party_ids:
+        rows = await (
+            get_collection(PARTIES_COLLECTION)
+            .find({
+                "tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id,
+                "party_id": {"$in": party_ids},
+            })
+            .to_list(length=len(party_ids))
+        )
+        names = {r["party_id"]: r.get("party_name") for r in rows}
+
+    items = []
+    for l in lines:
+        pid = l["party_id"]
+        items.append({
+            "party_id": pid,
+            "party_name": (names.get(pid) or pid) if pid else "Unallocated (direct entries)",
+            "balance": str(l["balance"]),
+        })
+    # Named parties first (largest balance on top); the Unallocated bucket last.
+    items.sort(key=lambda x: (x["party_id"] is None, -Decimal(x["balance"])))
+    return {
+        "as_of": as_of.isoformat(),
+        "kind": kind,
+        "accounting_entity_id": accounting_entity_id,
+        "items": items,
+        "total_balance": str(total),
+        "count": len(items),
+    }
+
+
+async def party_outstanding_summary(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    party_id: str,
+    as_of: date | None = None,
+) -> dict:
+    """Net receivable and payable outstanding for one party (for the voucher form)."""
+    as_of = as_of or date.today()
+    party = await get_party(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id, party_id=party_id,
+    )
+    if party is None:
+        raise AccountingNotFoundError("Party not found")
+    balances = await get_party_outstanding(
+        session, tenant_id=tenant_id, party_id=party_id, as_of=as_of, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    return {
+        "party_id": party_id,
+        "party_name": party.get("party_name"),
+        "party_type": party.get("party_type"),
+        "as_of": as_of.isoformat(),
+        "receivable": str(balances["receivable"]),
+        "payable": str(balances["payable"]),
+    }

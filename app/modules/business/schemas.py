@@ -597,3 +597,30 @@ class GstSettlementResponse(BaseModel):
     note: str | None = None
     settled_by: str | None = None
     settled_at: datetime | None = None
+
+
+# ---- Party sub-ledger (party-wise Debtors / Creditors + outstanding) ----
+
+
+class PartyLedgerLine(BaseModel):
+    party_id: str | None = None
+    party_name: str
+    balance: Decimal
+
+
+class PartyLedgerResponse(BaseModel):
+    as_of: date
+    kind: str  # "receivable" | "payable"
+    accounting_entity_id: str
+    items: list[PartyLedgerLine]
+    total_balance: Decimal
+    count: int
+
+
+class PartyOutstandingResponse(BaseModel):
+    party_id: str
+    party_name: str | None = None
+    party_type: str | None = None
+    as_of: date
+    receivable: Decimal
+    payable: Decimal
