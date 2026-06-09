@@ -1,10 +1,12 @@
 /*
   MitraBooks ERP - Service Worker
-  PWA caching strategy: Network-first for APIs, Cache-first for assets
+  PWA caching strategy: API calls bypass the SW entirely (never cached — live
+  financial data must always be fresh); code assets are network-first; other
+  static assets are cache-first.
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v12';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v12';
+const CACHE_NAME = 'mitrabooks-erp-v13';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v13';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
@@ -79,9 +81,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - network-first (prefer live data)
+  // API requests - bypass the service worker entirely. Returning without
+  // calling respondWith() lets the browser fetch directly, so dynamic data
+  // (dashboard, reports, balances) is NEVER served from a stale/empty cache.
   if (isApiRequest(url)) {
-    event.respondWith(networkFirstStrategy(request));
     return;
   }
 
