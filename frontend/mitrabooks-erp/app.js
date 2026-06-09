@@ -818,6 +818,14 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   moduleList.innerHTML = "";
   dashboardPreview.innerHTML = renderDashboardPreview(config);
 
+  // On a fresh page load / refresh the dashboard overview must fetch its live
+  // KPIs. The nav-click and org-select paths call this, but the boot render
+  // (renderModules) did not — so a refresh showed Rs 0 until you navigated.
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview"
+      && activeOrgSelectorType() === "BUSINESS") {
+    loadBusinessDashboardStats();
+  }
+
   const navItems = currentExperience === "mandir"
     ? mandirNavigationItems()
     : currentExperience === "gruha"
