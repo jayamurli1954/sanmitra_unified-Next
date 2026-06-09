@@ -55,6 +55,10 @@ SanMitra_Unified_Backend_PRD.docx
 SanMitra_eco_system-merging-note.txt
 START_LEGALMITRA_UNIFIED.bat
 
+# Local-only reference / strategy notes — keep out of GitHub (local reference only)
+docs/FOSS_CONCEPTUAL_BORROWING.md
+docs/ITC_REVERSAL_RULE37_PLAN.md
+
 
 # Keep tracked legacy COA payload for Mandir compat
 !app/modules/mandir_compat/data/
