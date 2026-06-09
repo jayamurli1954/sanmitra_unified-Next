@@ -46,6 +46,8 @@ class JournalLineIn(BaseModel):
     account_id: int
     debit: Decimal = Decimal("0")
     credit: Decimal = Decimal("0")
+    # Optional sub-ledger party (customer/vendor) for receivable/payable lines.
+    party_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("debit", "credit")
     @classmethod

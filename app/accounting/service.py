@@ -717,7 +717,8 @@ async def post_journal_entry(
     )
     session.add(journal_entry)
 
-    for account_id, debit, credit in normalized_lines:
+    # normalized_lines preserves payload order, so zip to carry the party sub-ledger tag.
+    for (account_id, debit, credit), source_line in zip(normalized_lines, payload.lines):
         journal_entry.lines.append(
             JournalLine(
                 app_key=app_key,
@@ -726,6 +727,7 @@ async def post_journal_entry(
                 account_id=account_id,
                 debit=debit,
                 credit=credit,
+                party_id=getattr(source_line, "party_id", None),
             )
         )
 
@@ -782,7 +784,7 @@ async def reverse_journal_entry(
         reference = f"{reference}-{original.reference}"[:120]
 
     reversal_lines = [
-        JournalLineIn(account_id=line.account_id, debit=line.credit, credit=line.debit)
+        JournalLineIn(account_id=line.account_id, debit=line.credit, credit=line.debit, party_id=line.party_id)
         for line in original.lines
     ]
     reversal_payload = JournalPostRequest(
@@ -1997,6 +1999,89 @@ async def get_accounts_payable(
         )
 
     return lines, _q(total_balance)
+
+
+async def get_party_wise_balances(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    as_of: date,
+    kind: str,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+):
+    """Party-wise net balances over receivable (or payable) accounts, grouped by the
+    journal-line party sub-ledger. Lines with no party_id collapse into a single
+    NULL bucket so the grand total equals the account-level total (ties to the TB)."""
+    if kind not in ("receivable", "payable"):
+        raise AccountingValidationError("kind must be 'receivable' or 'payable'")
+
+    conditions = [
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        JournalEntry.entry_date <= as_of,
+        (Account.is_receivable.is_(True) if kind == "receivable" else Account.is_payable.is_(True)),
+    ]
+    stmt = (
+        select(
+            JournalLine.party_id.label("party_id"),
+            func.coalesce(func.sum(JournalLine.debit), 0).label("debit_total"),
+            func.coalesce(func.sum(JournalLine.credit), 0).label("credit_total"),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(and_(*conditions))
+        .group_by(JournalLine.party_id)
+    )
+    rows = (await session.execute(stmt)).all()
+
+    lines: list[dict] = []
+    total_balance = Decimal("0")
+    for row in rows:
+        debit = _q(Decimal(row.debit_total))
+        credit = _q(Decimal(row.credit_total))
+        balance = _q(debit - credit) if kind == "receivable" else _q(credit - debit)
+        total_balance += balance
+        lines.append({"party_id": row.party_id, "balance": balance})
+
+    return lines, _q(total_balance)
+
+
+async def get_party_outstanding(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    party_id: str,
+    as_of: date,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+) -> dict:
+    """Net receivable and payable outstanding for a single party as of a date."""
+    result: dict[str, Decimal] = {}
+    for kind, flag in (("receivable", Account.is_receivable), ("payable", Account.is_payable)):
+        conditions = [
+            *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+            JournalEntry.entry_date <= as_of,
+            flag.is_(True),
+            JournalLine.party_id == party_id,
+        ]
+        stmt = (
+            select(
+                func.coalesce(func.sum(JournalLine.debit), 0),
+                func.coalesce(func.sum(JournalLine.credit), 0),
+            )
+            .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+            .join(Account, Account.id == JournalLine.account_id)
+            .where(and_(*conditions))
+        )
+        debit_total, credit_total = (await session.execute(stmt)).one()
+        debit = _q(Decimal(debit_total))
+        credit = _q(Decimal(credit_total))
+        result[kind] = _q(debit - credit) if kind == "receivable" else _q(credit - debit)
+    return result
 
 
 async def list_journal_entries(
