@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+from app.accounting.service import AccountingNotFoundError, AccountingValidationError, get_trial_balance
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
@@ -60,6 +60,7 @@ from app.modules.business.schemas import (
     UnallocatedPaymentListResponse,
 )
 from app.modules.business import allocation_service
+from app.modules.business import report_export
 from app.modules.business.service import (
     cancel_credit_note,
     cancel_debit_note,
@@ -420,6 +421,124 @@ async def reverse_allocation(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ===================== Report export (CSV / XLSX / PDF) =====================
+
+
+async def _build_business_report(
+    report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of,
+) -> dict:
+    """Assemble (title, columns, rows, footer, meta, filename_base) for a report."""
+    as_of_str = (as_of or date.today()).isoformat()
+
+    if report == "party_ledger":
+        data = await party_wise_ledger(
+            session, tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
+        )
+        title = "Sundry Debtors" if kind == "receivable" else "Sundry Creditors"
+        return {
+            "title": title,
+            "columns": [{"key": "party_name", "label": "Party"},
+                        {"key": "balance", "label": "Balance", "numeric": True}],
+            "rows": data["items"],
+            "footer": {"party_name": "Total", "balance": data.get("total_balance")},
+            "meta": [("As of", as_of_str), ("Type", kind)],
+            "filename_base": f"{'debtors' if kind == 'receivable' else 'creditors'}_{as_of_str}",
+        }
+
+    if report == "aging":
+        data = await allocation_service.ar_ap_aging(
+            tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
+        )
+        order = data["buckets_order"]
+        columns = [{"key": "party_name", "label": "Party"}]
+        columns += [{"key": b, "label": b, "numeric": True} for b in order]
+        columns += [{"key": "total", "label": "Total", "numeric": True}]
+        rows = [{"party_name": r.get("party_name") or "Unallocated",
+                 **r["buckets"], "total": r["total"]} for r in data["by_party"]]
+        footer = {"party_name": "Total", **data["totals"], "total": data["grand_total"]}
+        title = "Receivables Aging" if kind == "receivable" else "Payables Aging"
+        return {
+            "title": title, "columns": columns, "rows": rows, "footer": footer,
+            "meta": [("As of", as_of_str), ("Type", kind)],
+            "filename_base": f"aging_{kind}_{as_of_str}",
+        }
+
+    if report == "itc_reversals":
+        data = await preview_itc_reversals(
+            tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, as_of=as_of,
+        )
+        data = data if isinstance(data, dict) else data.model_dump()
+        return {
+            "title": "ITC Reversals (GST Rule 37)",
+            "columns": [
+                {"key": "bill_number", "label": "Bill No."},
+                {"key": "vendor_name", "label": "Vendor"},
+                {"key": "bill_date", "label": "Bill Date"},
+                {"key": "days_overdue", "label": "Days Overdue", "numeric": True},
+                {"key": "itc_total", "label": "ITC Total", "numeric": True},
+                {"key": "interest_amount", "label": "Interest", "numeric": True},
+            ],
+            "rows": data.get("candidates", []),
+            "footer": {"bill_number": "Total", "itc_total": data.get("total_itc"),
+                       "interest_amount": data.get("total_interest")},
+            "meta": [("As of", as_of_str)],
+            "filename_base": f"itc_reversals_{as_of_str}",
+        }
+
+    if report == "trial_balance":
+        lines, total_debit, total_credit = await get_trial_balance(
+            session, tenant_id=tenant_id, as_of=(as_of or date.today()),
+            app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+        return {
+            "title": "Trial Balance",
+            "columns": [
+                {"key": "account_code", "label": "Code"},
+                {"key": "account_name", "label": "Account"},
+                {"key": "debit_total", "label": "Debit", "numeric": True},
+                {"key": "credit_total", "label": "Credit", "numeric": True},
+                {"key": "net_balance", "label": "Net", "numeric": True},
+            ],
+            "rows": lines,
+            "footer": {"account_name": "Total", "debit_total": total_debit, "credit_total": total_credit},
+            "meta": [("As of", as_of_str)],
+            "filename_base": f"trial_balance_{as_of_str}",
+        }
+
+    raise AccountingValidationError(
+        "report must be one of: party_ledger, aging, itc_reversals, trial_balance"
+    )
+
+
+@router.get("/reports/export")
+async def export_business_report(
+    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance)$"),
+    format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
+    kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "report export")
+    try:
+        spec = await _build_business_report(
+            report, session=session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
+        )
+        return report_export.export_report(format, **spec)
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch("/parties/{party_id}", response_model=PartyResponse)
