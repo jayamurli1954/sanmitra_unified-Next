@@ -8592,15 +8592,21 @@ async function loadBusinessDashboardStats() {
   const appKey = "mitrabooks";
   const result = await apiRequest(appKey, "/api/v1/business/dashboard", { method: "GET" });
 
-  if (result.ok && result.payload) {
-    lastBusinessDashboardStats = result.payload;
+  // A valid dashboard payload always carries the income block; guard against an
+  // empty/partial body (e.g. a transient 0-byte response during a service-worker
+  // swap) so it can't blank out good data we already rendered.
+  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object" && result.payload.income;
 
-    // Re-render dashboard with new data if we're on the business overview
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "overview") {
+  if (hasValidPayload) {
+    lastBusinessDashboardStats = result.payload;
+    // Re-render whenever we're in the MitraBooks experience; renderDashboardPreview
+    // itself routes to the right view (overview vs other workspaces).
+    if (currentExperience === "mitrabooks") {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
     }
-  } else {
-    lastBusinessDashboardStats = null;
+  } else if (!lastBusinessDashboardStats) {
+    // Only surface "unavailable" when we have no prior good data — never clobber a
+    // working dashboard with a transient failure.
     setLoginStatus(
       "warn",
       "Dashboard data unavailable",
