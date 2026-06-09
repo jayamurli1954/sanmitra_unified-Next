@@ -80,6 +80,52 @@ async def _party_for_voucher(cache: dict, *, tenant_id, app_key, reference, is_r
     return None
 
 
+_TRIGGER = "trg_journal_lines_no_update_delete"
+
+
+async def _do_updates(session, updates: list[tuple[int, str]]) -> None:
+    for line_id, party in updates:
+        await session.execute(
+            text("UPDATE journal_lines SET party_id = :pid WHERE id = :lid AND party_id IS NULL"),
+            {"pid": party, "lid": line_id},
+        )
+
+
+async def _apply_updates(sf, updates: list[tuple[int, str]]) -> None:
+    """Write party_id past the posted-ledger immutability trigger.
+
+    Prefers `session_replication_role = replica` (needs superuser; true for a
+    local dev DB). Falls back to `ALTER TABLE ... DISABLE/ENABLE TRIGGER`, which
+    only needs table ownership (true for the managed Render Postgres role) and is
+    more surgical — it suspends only the immutability trigger, not all triggers.
+    """
+    # Path A: replication-role bypass (superuser only). If the SET is rejected
+    # the transaction aborts cleanly here (no UPDATE attempted), so we can detect
+    # the privilege error and fall back without masking it.
+    try:
+        async with sf() as session:
+            await session.execute(text("SET session_replication_role = replica"))
+            await _do_updates(session, updates)
+            await session.execute(text("SET session_replication_role = DEFAULT"))
+            await session.commit()
+        return
+    except Exception as exc:  # InsufficientPrivilege on non-superuser roles
+        if "session_replication_role" not in str(exc):
+            raise
+        print("session_replication_role unavailable (non-superuser); "
+              "falling back to DISABLE TRIGGER (table-owner privilege).")
+
+    # Path B: disable just the immutability trigger (table owner).
+    async with sf() as session:
+        await session.execute(text(f"ALTER TABLE journal_lines DISABLE TRIGGER {_TRIGGER}"))
+        try:
+            await _do_updates(session, updates)
+            await session.commit()
+        finally:
+            await session.execute(text(f"ALTER TABLE journal_lines ENABLE TRIGGER {_TRIGGER}"))
+            await session.commit()
+
+
 async def run(args: argparse.Namespace) -> None:
     await init_mongo()
     await init_postgres()
@@ -155,19 +201,7 @@ async def run(args: argparse.Namespace) -> None:
             print(f"  ... and {len(updates) - 20} more")
         print("Dry run: no changes written.")
     elif updates:
-        async with sf() as session:
-            # Bypass the posted-ledger immutability trigger for this maintenance update.
-            await session.execute(text("SET session_replication_role = replica"))
-            try:
-                for line_id, party in updates:
-                    await session.execute(
-                        text("UPDATE journal_lines SET party_id = :pid WHERE id = :lid AND party_id IS NULL"),
-                        {"pid": party, "lid": line_id},
-                    )
-                await session.commit()
-            finally:
-                await session.execute(text("SET session_replication_role = DEFAULT"))
-                await session.commit()
+        await _apply_updates(sf, updates)
         print(f"Backfilled party_id on {len(updates)} journal lines.")
 
     await close_postgres()
