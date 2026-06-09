@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +67,7 @@ from app.modules.business.schemas import (
 )
 from app.modules.business import allocation_service
 from app.modules.business import report_export
+from app.core.tenants.service import get_tenant
 from app.modules.business.service import (
     cancel_credit_note,
     cancel_debit_note,
@@ -449,11 +451,34 @@ async def business_dashboard(
 # ===================== Report export (CSV / XLSX / PDF) =====================
 
 
+async def _resolve_org_name(tenant_id: str, app_key: str, accounting_entity_id: str) -> str | None:
+    """Company name for report headers: invoice-settings business name, else the
+    tenant's display name."""
+    try:
+        settings = await get_invoice_settings(
+            tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+        name = ((settings or {}).get("branding") or {}).get("business_name")
+        if name and str(name).strip():
+            return str(name).strip()
+    except Exception:
+        pass
+    try:
+        tenant = await get_tenant(tenant_id)
+        name = (tenant or {}).get("display_name")
+        if name and str(name).strip():
+            return str(name).strip()
+    except Exception:
+        pass
+    return None
+
+
 async def _build_business_report(
     report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of,
 ) -> dict:
-    """Assemble (title, columns, rows, footer, meta, filename_base) for a report."""
+    """Assemble (title, columns, rows, footer, meta, org_name, filename_base) for a report."""
     as_of_str = (as_of or date.today()).isoformat()
+    org_name = await _resolve_org_name(tenant_id, app_key, accounting_entity_id)
 
     if report == "party_ledger":
         data = await party_wise_ledger(
@@ -461,7 +486,7 @@ async def _build_business_report(
             accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
         )
         title = "Sundry Debtors" if kind == "receivable" else "Sundry Creditors"
-        return {
+        spec = {
             "title": title,
             "columns": [{"key": "party_name", "label": "Party"},
                         {"key": "balance", "label": "Balance", "numeric": True}],
@@ -471,7 +496,7 @@ async def _build_business_report(
             "filename_base": f"{'debtors' if kind == 'receivable' else 'creditors'}_{as_of_str}",
         }
 
-    if report == "aging":
+    elif report == "aging":
         data = await allocation_service.ar_ap_aging(
             tenant_id=tenant_id, app_key=app_key,
             accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of,
@@ -484,19 +509,19 @@ async def _build_business_report(
                  **r["buckets"], "total": r["total"]} for r in data["by_party"]]
         footer = {"party_name": "Total", **data["totals"], "total": data["grand_total"]}
         title = "Receivables Aging" if kind == "receivable" else "Payables Aging"
-        return {
+        spec = {
             "title": title, "columns": columns, "rows": rows, "footer": footer,
             "meta": [("As of", as_of_str), ("Type", kind)],
             "filename_base": f"aging_{kind}_{as_of_str}",
         }
 
-    if report == "itc_reversals":
+    elif report == "itc_reversals":
         data = await preview_itc_reversals(
             tenant_id=tenant_id, app_key=app_key,
             accounting_entity_id=accounting_entity_id, as_of=as_of,
         )
         data = data if isinstance(data, dict) else data.model_dump()
-        return {
+        spec = {
             "title": "ITC Reversals (GST Rule 37)",
             "columns": [
                 {"key": "bill_number", "label": "Bill No."},
@@ -513,29 +538,53 @@ async def _build_business_report(
             "filename_base": f"itc_reversals_{as_of_str}",
         }
 
-    if report == "trial_balance":
-        lines, total_debit, total_credit = await get_trial_balance(
+    elif report == "trial_balance":
+        lines, _total_debit, _total_credit = await get_trial_balance(
             session, tenant_id=tenant_id, as_of=(as_of or date.today()),
             app_key=app_key, accounting_entity_id=accounting_entity_id,
         )
-        return {
+        # Match the on-screen Trial Balance: show each account's NET in its natural
+        # column (Dr if positive, Cr if negative) — not raw debit + credit + net.
+        rows = []
+        net_debit_total = Decimal("0.00")
+        net_credit_total = Decimal("0.00")
+        for line in lines:
+            net = line.get("net_balance")
+            net = Decimal(str(net if net is not None
+                             else Decimal(str(line.get("debit_total") or 0)) - Decimal(str(line.get("credit_total") or 0))))
+            debit_cell = net if net > 0 else None
+            credit_cell = -net if net < 0 else None
+            if debit_cell:
+                net_debit_total += debit_cell
+            if credit_cell:
+                net_credit_total += credit_cell
+            rows.append({
+                "account_code": line.get("account_code"),
+                "account_name": line.get("account_name"),
+                "debit": debit_cell,
+                "credit": credit_cell,
+            })
+        spec = {
             "title": "Trial Balance",
             "columns": [
                 {"key": "account_code", "label": "Code"},
                 {"key": "account_name", "label": "Account"},
-                {"key": "debit_total", "label": "Debit", "numeric": True},
-                {"key": "credit_total", "label": "Credit", "numeric": True},
-                {"key": "net_balance", "label": "Net", "numeric": True},
+                {"key": "debit", "label": "Debit", "numeric": True},
+                {"key": "credit", "label": "Credit", "numeric": True},
             ],
-            "rows": lines,
-            "footer": {"account_name": "Total", "debit_total": total_debit, "credit_total": total_credit},
+            "rows": rows,
+            "footer": {"account_name": "Total", "debit": net_debit_total, "credit": net_credit_total},
             "meta": [("As of", as_of_str)],
             "filename_base": f"trial_balance_{as_of_str}",
         }
 
-    raise AccountingValidationError(
-        "report must be one of: party_ledger, aging, itc_reversals, trial_balance"
-    )
+    else:
+        raise AccountingValidationError(
+            "report must be one of: party_ledger, aging, itc_reversals, trial_balance"
+        )
+
+    spec["org_name"] = org_name
+    return spec
 
 
 @router.get("/reports/export")

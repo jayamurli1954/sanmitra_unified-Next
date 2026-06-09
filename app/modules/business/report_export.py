@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi.responses import StreamingResponse
@@ -32,10 +32,6 @@ CSV_MEDIA = "text/csv"
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF_MEDIA = "application/pdf"
 _MEDIA = {"csv": CSV_MEDIA, "xlsx": XLSX_MEDIA, "pdf": PDF_MEDIA}
-
-
-def _now_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _cell(value) -> str:
@@ -56,13 +52,14 @@ def _pdf_text(value) -> str:
 # Format builders
 # --------------------------------------------------------------------------- #
 
-def build_csv(*, title, columns, rows, footer=None, meta=None) -> bytes:
+def build_csv(*, title, columns, rows, footer=None, meta=None, org_name=None) -> bytes:
     sio = io.StringIO()
     writer = csv.writer(sio)
+    if org_name:
+        writer.writerow([org_name])
     writer.writerow([title])
     for label, value in (meta or []):
         writer.writerow([label, _cell(value)])
-    writer.writerow(["Generated", _now_stamp()])
     writer.writerow([])
     writer.writerow([c["label"] for c in columns])
     for row in rows:
@@ -72,7 +69,7 @@ def build_csv(*, title, columns, rows, footer=None, meta=None) -> bytes:
     return sio.getvalue().encode("utf-8-sig")  # BOM so Excel reads UTF-8
 
 
-def build_xlsx(*, title, columns, rows, footer=None, meta=None) -> bytes:
+def build_xlsx(*, title, columns, rows, footer=None, meta=None, org_name=None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = (title or "Report")[:31]
@@ -83,15 +80,16 @@ def build_xlsx(*, title, columns, rows, footer=None, meta=None) -> bytes:
     right = Alignment(horizontal="right")
 
     r = 1
+    if org_name:
+        ws.cell(row=r, column=1, value=org_name).font = Font(bold=True, size=12)
+        r += 1
     ws.cell(row=r, column=1, value=title).font = Font(bold=True, size=14)
     r += 1
     for label, value in (meta or []):
         ws.cell(row=r, column=1, value=label).font = bold
         ws.cell(row=r, column=2, value=_cell(value))
         r += 1
-    ws.cell(row=r, column=1, value="Generated").font = bold
-    ws.cell(row=r, column=2, value=_now_stamp())
-    r += 2
+    r += 1
 
     header_row = r
     for ci, col in enumerate(columns, start=1):
@@ -145,7 +143,7 @@ def _to_number(value):
         return None
 
 
-def build_pdf(*, title, columns, rows, footer=None, meta=None) -> bytes:
+def build_pdf(*, title, columns, rows, footer=None, meta=None, org_name=None) -> bytes:
     # Landscape when there are many/wide columns so everything fits.
     pagesize = landscape(A4) if len(columns) > 5 else A4
     buffer = io.BytesIO()
@@ -162,6 +160,10 @@ def build_pdf(*, title, columns, rows, footer=None, meta=None) -> bytes:
     x_right = [left + sum(col_w[:i + 1]) - 4 for i in range(len(columns))]
 
     def header(y):
+        if org_name:
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(left, y, _pdf_text(org_name))
+            y -= 15
         pdf.setFont("Helvetica-Bold", 14)
         pdf.drawString(left, y, _pdf_text(title))
         y -= 16
@@ -169,8 +171,7 @@ def build_pdf(*, title, columns, rows, footer=None, meta=None) -> bytes:
         for label, value in (meta or []):
             pdf.drawString(left, y, _pdf_text(f"{label}: {_cell(value)}"))
             y -= 11
-        pdf.drawString(left, y, _pdf_text(f"Generated: {_now_stamp()}"))
-        y -= 14
+        y -= 3
         return _col_headers(y)
 
     def _col_headers(y):
@@ -218,13 +219,14 @@ _BUILDERS = {"csv": build_csv, "xlsx": build_xlsx, "pdf": build_pdf}
 
 def export_report(
     fmt: str, *, title: str, columns: list[dict], rows: list[dict],
-    footer: dict | None = None, meta: list | None = None, filename_base: str = "report",
+    footer: dict | None = None, meta: list | None = None, org_name: str | None = None,
+    filename_base: str = "report",
 ) -> StreamingResponse:
     fmt = (fmt or "").lower()
     builder = _BUILDERS.get(fmt)
     if builder is None:
         raise ValueError("format must be one of: csv, xlsx, pdf")
-    content = builder(title=title, columns=columns, rows=rows, footer=footer, meta=meta)
+    content = builder(title=title, columns=columns, rows=rows, footer=footer, meta=meta, org_name=org_name)
     filename = f"{filename_base}.{fmt}"
     return StreamingResponse(
         io.BytesIO(content),

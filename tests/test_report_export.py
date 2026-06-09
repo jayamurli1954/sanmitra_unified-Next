@@ -72,6 +72,25 @@ def test_export_report_rejects_unknown_format():
         export_report("docx", filename_base="x", **_kw())
 
 
+def test_no_generated_timestamp_in_any_format():
+    # Time/UTC stamp was removed — must not appear in any export.
+    assert b"Generated" not in build_csv(**_kw())
+    assert b"Generated" not in build_xlsx(**_kw())
+    assert b"UTC" not in build_pdf(**_kw())
+
+
+def test_org_name_appears_as_first_csv_line():
+    text = build_csv(org_name="Acme Traders Pvt Ltd", **_kw()).decode("utf-8-sig")
+    lines = text.splitlines()
+    assert lines[0] == "Acme Traders Pvt Ltd"
+    assert lines[1] == "Sundry Debtors"  # title follows the company name
+
+
+def test_org_name_optional():
+    # Without org_name the title is still the first line (no blank/None row).
+    assert build_csv(**_kw()).decode("utf-8-sig").splitlines()[0] == "Sundry Debtors"
+
+
 def test_empty_rows_still_produce_files():
     kw = dict(title="Empty", columns=COLUMNS, rows=[], footer=None, meta=None)
     assert build_csv(**kw).decode("utf-8-sig").splitlines()[0] == "Empty"
