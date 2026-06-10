@@ -66,7 +66,7 @@ function businessNavigationGroups() {
       name: "Taxes & Compliance",
       items: [
         { label: "GST Returns", businessWorkspace: "gst-returns", icon: "GT", module: { module_key: "gst", frontend_path: "/gst/returns", enabled: true } },
-        { label: "TDS / TCS", businessWorkspace: "tds-tcs", icon: "TD", module: { module_key: "tax", frontend_path: "/tax/tds-tcs", enabled: false } },
+        { label: "TDS / TCS", businessWorkspace: "tds-tcs", icon: "TD", module: { module_key: "tax", frontend_path: "/tax/tds-tcs", enabled: true } },
         { label: "CA Access Portal", businessWorkspace: "ca-access", icon: "CA", module: { module_key: "ca_access", frontend_path: "/business/ca-access", enabled: false } },
       ],
     },
@@ -4367,6 +4367,7 @@ function renderBusinessPartiesTable(rows) {
                       data-party-name="${escapeHtml(partyName)}"
                       data-party-type="${escapeHtml(row.party_type || "customer")}"
                       data-party-gstin="${escapeHtml(row.gstin || "")}"
+                      data-party-pan="${escapeHtml(row.pan || "")}"
                       data-party-city="${escapeHtml(row.city || "")}"
                       data-party-state="${escapeHtml(row.state || "")}"
                       data-party-pincode="${escapeHtml(row.pincode || "")}"
@@ -4542,11 +4543,12 @@ function renderBusinessWorkspace() {
       </div>
     `;
   }
-  // "gst-returns" and "reconciliation" are sidebar shortcuts into the reports
-  // workspace (which hosts those tabs); the tab is pre-selected in setBusinessWorkspace.
+  // "gst-returns", "reconciliation" and "tds-tcs" are sidebar shortcuts into the
+  // reports workspace (which hosts those tabs); the tab is pre-selected in setBusinessWorkspace.
   if (activeBusinessWorkspace === "reports"
       || activeBusinessWorkspace === "gst-returns"
-      || activeBusinessWorkspace === "reconciliation") {
+      || activeBusinessWorkspace === "reconciliation"
+      || activeBusinessWorkspace === "tds-tcs") {
     return renderBusinessReportsWorkspace();
   }
   if (activeBusinessWorkspace === "sales") {
@@ -4788,6 +4790,7 @@ async function createBusinessParty(data) {
     party_name: data.name,
     party_type: data.party_type,
     gstin: data.gstin || null,
+    pan: data.pan?.trim().toUpperCase() || null,
     city: data.city?.trim() || null,
     state: data.state?.trim() || null,
     pincode: data.pincode?.trim() || null,
@@ -4878,6 +4881,7 @@ async function updateBusinessParty(partyId, data) {
   const payload = {
     party_name: data.name,
     gstin: data.gstin || null,
+    pan: data.pan?.trim().toUpperCase() || null,
     city: data.city?.trim() || null,
     state: data.state?.trim() || null,
     pincode: data.pincode?.trim() || null,
@@ -4934,6 +4938,7 @@ function openBusinessEditPartyDialog(button) {
   const partyName = button.getAttribute("data-party-name") || "";
   const partyType = button.getAttribute("data-party-type") || "customer";
   const partyGstin = button.getAttribute("data-party-gstin") || "";
+  const partyPan = button.getAttribute("data-party-pan") || "";
   const partyCity = button.getAttribute("data-party-city") || "";
   const partyState = button.getAttribute("data-party-state") || "";
   const partyPincode = button.getAttribute("data-party-pincode") || "";
@@ -4944,6 +4949,8 @@ function openBusinessEditPartyDialog(button) {
   if (editTypeSelect) editTypeSelect.value = partyType;
   document.getElementById("business-party-edit-name").value = partyName;
   document.getElementById("business-party-edit-gstin").value = partyGstin;
+  const editPanInput = document.getElementById("business-party-edit-pan");
+  if (editPanInput) editPanInput.value = partyPan;
   document.getElementById("business-party-edit-city").value = partyCity;
   document.getElementById("business-party-edit-state").value = partyState;
   document.getElementById("business-party-edit-pincode").value = partyPincode;
@@ -4974,10 +4981,11 @@ function setBusinessWorkspace(workspace) {
     loadAuditEvents();
   } else if (workspace === "accounting") {
     refreshCurrentAccountingDrilldown();
-  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation") {
+  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation" || workspace === "tds-tcs") {
     // Sidebar shortcuts open the reports workspace on a specific tab.
     if (workspace === "gst-returns") businessReportState.tab = "gst-returns";
     else if (workspace === "reconciliation") businessReportState.tab = "payment-allocation";
+    else if (workspace === "tds-tcs") businessReportState.tab = "tds";
     loadBusinessAccounts();
     refreshCurrentBusinessReport();
   } else if (workspace === "sales") {
@@ -5032,6 +5040,7 @@ function syncBusinessNavActiveState() {
       "financial-health": "Financial Health",
       "gst-returns": "GST Returns",
       "reconciliation": "Reconciliation",
+      "tds-tcs": "TDS / TCS",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
     const label = isPlannedOrgWorkspace
@@ -5091,6 +5100,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "payment-allocation", label: "Payment Allocation" },
   { id: "gst-settlement", label: "GST Settlement" },
   { id: "gst-returns", label: "GST Returns" },
+  { id: "tds", label: "TDS / TCS" },
   { id: "itc-reversals", label: "ITC Reversals" },
   { id: "period-locks", label: "Period Locks" },
 ];
@@ -5108,6 +5118,8 @@ let gstr3bPeriod = todayIsoDate().slice(0, 7);
 let cmp08Quarter = currentFyQuarter();
 let gstr4Fy = currentFinancialYear();
 let lastItcReversal = null;
+let lastTdsRegister = null;
+let tdsQuarter = currentFyQuarter();
 
 // Current Indian financial year as "YYYY-YY" (FY starts April).
 function currentFinancialYear() {
@@ -5230,6 +5242,8 @@ async function refreshCurrentBusinessReport() {
     else { await loadGstr3b(gstr3bPeriod); }
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
+  } else if (tab === "tds") {
+    await loadTdsRegister(tdsQuarter);
   }
 }
 
@@ -5699,6 +5713,87 @@ function renderCmp08Panel() {
 }
 
 // ---- GSTR-1 outward-supplies return ------------------------------------- //
+// ---- TDS / TCS quarterly register (Form 26Q / 27EQ working paper) -------- //
+async function loadTdsRegister(quarter) {
+  tdsQuarter = quarter || tdsQuarter;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/tds/register?quarter=${encodeURIComponent(tdsQuarter)}`, { method: "GET" });
+  lastTdsRegister = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { tds_register: { ok: result.ok, quarter: tdsQuarter } });
+}
+
+function previewTdsRegisterFromInput() {
+  const input = document.querySelector("[data-tds-quarter]");
+  loadTdsRegister(input?.value || tdsQuarter);
+}
+
+function renderTdsRegisterSide(side, kindLabel, partyHeading) {
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  if (!side || !side.entry_count) {
+    return `<div class="table-preview compact-table"><h4>${escapeHtml(kindLabel)}</h4><p class="muted">No ${escapeHtml(kindLabel)} entries this quarter.</p></div>`;
+  }
+  const sections = (side.sections || []).map((sec) => {
+    const rows = (sec.entries || []).map((e) => `
+      <tr>
+        <td>${escapeHtml(e.doc_date || "")}</td>
+        <td>${escapeHtml(e.doc_number || "")}</td>
+        <td>${escapeHtml(e.party_name || "")}</td>
+        <td>${e.pan_missing ? `<span class="pill warn">PAN missing</span>` : escapeHtml(e.pan || "")}</td>
+        <td class="amount">${num(e.base_amount)}</td>
+        <td class="amount">${escapeHtml(String(e.rate ?? ""))}%</td>
+        <td class="amount">${num(e.tax_amount)}</td>
+      </tr>`).join("");
+    return `
+      <div class="table-preview compact-table">
+        <h4>${escapeHtml(`${sec.section} — ${sec.label}`)}</h4>
+        <table>
+          <thead><tr><th>Date</th><th>Document</th><th>${escapeHtml(partyHeading)}</th><th>PAN</th><th class="amount">Base</th><th class="amount">Rate</th><th class="amount">${escapeHtml(kindLabel)}</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><th colspan="4">Section total</th><td class="amount">${num(sec.total_base)}</td><td></td><td class="amount"><strong>${num(sec.total_tax)}</strong></td></tr></tfoot>
+        </table>
+      </div>`;
+  }).join("");
+  return sections;
+}
+
+function renderTdsRegisterPanel() {
+  const quarterOpts = recentFyQuarters(6).map((q) =>
+    `<option value="${q}" ${q === tdsQuarter ? "selected" : ""}>${q}</option>`).join("");
+  const controls = `
+    <div class="report-date-controls">
+      <label>Quarter <select data-tds-quarter>${quarterOpts}</select></label>
+      <button class="secondary" type="button" data-business-action="tds-load">Load</button>
+    </div>`;
+  const r = lastTdsRegister;
+  if (!r) return `${controls}<p class="muted">Loading TDS/TCS register...</p>`;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("TDS/TCS register", r)}`;
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const panMissing = Number(r.tds?.pan_missing_count || 0) + Number(r.tcs?.pan_missing_count || 0);
+
+  const cards = [
+    ["TDS deducted (26Q)", r.tds?.total_tax, `${r.tds?.entry_count || 0} document(s) · base ${formatCurrency(Number(r.tds?.total_base || 0))}`],
+    ["TCS collected (27EQ)", r.tcs?.total_tax, `${r.tcs?.entry_count || 0} document(s) · base ${formatCurrency(Number(r.tcs?.total_base || 0))}`],
+  ].map(([title, val, sub]) => `
+    <article>
+      <h4>${escapeHtml(title)}</h4>
+      <div class="invoice-totals"><div class="invoice-grand"><span>${escapeHtml(sub)}</span><strong>${num(val)}</strong></div></div>
+    </article>`).join("");
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>TDS/TCS register for ${escapeHtml(r.quarter || tdsQuarter)} (${escapeHtml(r.period_start || "")} → ${escapeHtml(r.period_end || "")}). Section-wise working paper for Form 26Q / 27EQ.</p></div>
+      <span class="pill ${panMissing > 0 ? "warn" : "ok"}">${panMissing > 0 ? `${panMissing} PAN missing` : "PANs complete"}</span>
+    </div>
+    <div class="dashboard-main-grid platform-grid">${cards}</div>
+    <h4 style="margin:14px 0 6px;">TDS on purchases (Form 26Q)</h4>
+    ${renderTdsRegisterSide(r.tds, "TDS", "Deductee (vendor)")}
+    <h4 style="margin:14px 0 6px;">TCS on sales (Form 27EQ)</h4>
+    ${renderTdsRegisterSide(r.tcs, "TCS", "Collectee (customer)")}
+    ${(r.generated_notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
+}
+
 async function loadGstr1(period) {
   gstr3bPeriod = period || gstr3bPeriod;
   const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-1?period=${encodeURIComponent(gstr3bPeriod)}`, { method: "GET" });
@@ -5891,7 +5986,7 @@ function renderItcReversalPanel() {
         <td><span class="pill warn">${escapeHtml(c.payment_status || "unpaid")}</span></td>
         <td>${escapeHtml(c.gstr3b_ref || "4(B)(2)")}</td>
         <td>
-          <button class="secondary" type="button" data-business-action="bill-mark-paid" data-bill-id="${escapeHtml(c.bill_id || "")}" data-bill-amount="${escapeHtml(c.bill_total || "0")}">Mark paid</button>
+          <button class="secondary" type="button" data-business-action="bill-mark-paid" data-bill-id="${escapeHtml(c.bill_id || "")}" data-bill-amount="${escapeHtml(c.net_payable || c.bill_total || "0")}">Mark paid</button>
           ${admin ? `<button class="primary" type="button" data-business-action="itc-reverse" data-bill-id="${escapeHtml(c.bill_id || "")}">Reverse ITC</button>` : ""}
         </td>
       </tr>
@@ -5928,7 +6023,7 @@ function renderItcReversalPanel() {
         <td>
           ${paid
             ? (admin ? `<button class="primary" type="button" data-business-action="itc-reclaim" data-bill-id="${escapeHtml(b.bill_id || "")}">Reclaim ITC</button>` : `<span class="muted">admin only</span>`)
-            : `<button class="secondary" type="button" data-business-action="bill-mark-paid" data-bill-id="${escapeHtml(b.bill_id || "")}" data-bill-amount="${escapeHtml(b.bill_total || "0")}">Mark paid</button>`}
+            : `<button class="secondary" type="button" data-business-action="bill-mark-paid" data-bill-id="${escapeHtml(b.bill_id || "")}" data-bill-amount="${escapeHtml(b.net_payable || b.bill_total || "0")}">Mark paid</button>`}
         </td>
       </tr>`;
     }).join("");
@@ -6023,7 +6118,7 @@ function renderPeriodLocksPanel() {
 }
 
 function rerenderBusinessReportsIfActive() {
-  const reportWorkspaces = ["reports", "gst-returns", "reconciliation"];
+  const reportWorkspaces = ["reports", "gst-returns", "reconciliation", "tds-tcs"];
   if (currentExperience === "mitrabooks" && reportWorkspaces.includes(activeBusinessWorkspace)) {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
@@ -6360,6 +6455,8 @@ function renderBusinessReportsWorkspace() {
     body = renderGstReturns();
   } else if (businessReportState.tab === "itc-reversals") {
     body = renderItcReversalPanel();
+  } else if (businessReportState.tab === "tds") {
+    body = renderTdsRegisterPanel();
   }
 
   return `
@@ -6928,7 +7025,31 @@ const salesFormHeader = {
   place_of_supply: "",
   reference: "",
   notes: "",
+  tcs_section: "",
 };
+
+// TDS/TCS section masters from GET /business/tds/sections (cached per session).
+let tdsSectionsCache = null;
+async function loadTdsSections() {
+  if (tdsSectionsCache) return tdsSectionsCache;
+  const result = await apiRequest("mitrabooks", "/api/v1/business/tds/sections", { method: "GET" });
+  if (result.ok) tdsSectionsCache = result.payload;
+  return tdsSectionsCache;
+}
+
+function tdsSectionRate(kind, section) {
+  const rows = tdsSectionsCache?.[kind] || [];
+  const hit = rows.find((r) => r.section === section);
+  return hit ? Number(hit.rate) : 0;
+}
+
+function tdsSectionOptions(kind, selected) {
+  const rows = tdsSectionsCache?.[kind] || [];
+  const none = `<option value="">No ${kind === "tds" ? "TDS" : "TCS"}</option>`;
+  return none + rows.map((r) =>
+    `<option value="${escapeHtml(r.section)}" ${r.section === selected ? "selected" : ""}>${escapeHtml(`${r.section} · ${r.label} @ ${r.rate}%`)}</option>`
+  ).join("");
+}
 
 const INVOICE_STANDARD_FIELD_LABELS = {
   due_date: "Due date",
@@ -7065,6 +7186,7 @@ function syncSalesFormFromDom() {
   salesFormHeader.place_of_supply = val("input[name='place_of_supply']");
   salesFormHeader.reference = val("input[name='reference']");
   salesFormHeader.notes = val("textarea[name='notes']");
+  salesFormHeader.tcs_section = val("select[name='tcs_section']");
   invoiceFormLines = Array.from(form.querySelectorAll("[data-invoice-line]")).map((row) => ({
     id: row.getAttribute("data-invoice-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -7093,12 +7215,21 @@ function updateInvoiceTotalsDisplay() {
   });
   const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
   const invoiceTotal = round2(taxableTotal + gstTotal);
+  // TCS (206C) is computed on the GST-inclusive invoice total.
+  const tcsSection = form.querySelector("select[name='tcs_section']")?.value || "";
+  const tcsAmount = tcsSection ? round2(invoiceTotal * tdsSectionRate("tcs", tcsSection) / 100) : 0;
   const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
   set("[data-total-taxable]", taxableTotal);
   set("[data-total-cgst]", cgstTotal);
   set("[data-total-sgst]", sgstTotal);
   set("[data-total-igst]", igstTotal);
   set("[data-total-invoice]", invoiceTotal);
+  set("[data-total-tcs]", tcsAmount);
+  set("[data-total-grand]", round2(invoiceTotal + tcsAmount));
+  const tcsRow = form.querySelector("[data-row-tcs]");
+  const grandRow = form.querySelector("[data-row-grand]");
+  if (tcsRow) tcsRow.hidden = !tcsSection;
+  if (grandRow) grandRow.hidden = !tcsSection;
   // Toggle CGST/SGST vs IGST total rows based on supply type
   const cgstRow = form.querySelector("[data-row-cgst]");
   const sgstRow = form.querySelector("[data-row-sgst]");
@@ -7129,10 +7260,12 @@ function openInvoiceCreate() {
   salesFormHeader.place_of_supply = "";
   salesFormHeader.reference = "";
   salesFormHeader.notes = "";
+  salesFormHeader.tcs_section = "";
   // Make sure customers, accounts, and settings are available for the form.
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
   if (!lastInvoiceSettings) loadInvoiceSettings();
+  if (!tdsSectionsCache) loadTdsSections().then(() => rerenderSalesIfActive());
   setBusinessSalesView("create");
 }
 
@@ -7190,6 +7323,7 @@ async function submitInvoice() {
     reference: String(salesFormHeader.reference || "").trim() || null,
     notes: String(salesFormHeader.notes || "").trim() || null,
     line_items: lineItems,
+    tcs_section: salesFormHeader.tcs_section || null,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/invoices", {
     method: "POST",
@@ -7365,6 +7499,9 @@ function renderInvoiceCreateForm() {
         ${invoiceFieldVisible("reference") ? `<label>${escapeHtml(invoiceFieldLabel("Reference / PO", "reference"))}
           <input type="text" name="reference" value="${escapeHtml(salesFormHeader.reference)}" placeholder="${invoiceFieldRequired("reference") ? "Required" : "Optional"}">
         </label>` : ""}
+        <label>TCS (income-tax, on sale consideration)
+          <select name="tcs_section">${tdsSectionOptions("tcs", salesFormHeader.tcs_section)}</select>
+        </label>
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${salesFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -7398,6 +7535,8 @@ function renderInvoiceCreateForm() {
         <div data-row-sgst ${salesFormHeader.is_inter_state ? "hidden" : ""}><span>SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
         <div data-row-igst ${salesFormHeader.is_inter_state ? "" : "hidden"}><span>IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
         <div class="invoice-grand"><span>Invoice total</span><strong data-total-invoice>${formatCurrency(0)}</strong></div>
+        <div data-row-tcs ${salesFormHeader.tcs_section ? "" : "hidden"}><span>TCS</span><strong data-total-tcs>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand" data-row-grand ${salesFormHeader.tcs_section ? "" : "hidden"}><span>Amount receivable</span><strong data-total-grand>${formatCurrency(0)}</strong></div>
       </div>
 
       ${invoiceFieldVisible("notes") ? `<label class="invoice-notes">${escapeHtml(invoiceFieldLabel("Notes", "notes"))}
@@ -7467,7 +7606,11 @@ function renderInvoiceDetail() {
         <div><span>Taxable</span><strong>${formatCurrency(inv.taxable_total || 0)}</strong></div>
         ${taxRow}
         <div class="invoice-grand"><span>Invoice total</span><strong>${formatCurrency(inv.invoice_total || 0)}</strong></div>
+        ${Number(inv.tcs_amount || 0) > 0 ? `
+        <div><span>TCS ${escapeHtml(inv.tcs_section || "")} @ ${escapeHtml(String(inv.tcs_rate || 0))}%</span><strong>${formatCurrency(inv.tcs_amount || 0)}</strong></div>
+        <div class="invoice-grand"><span>Amount receivable</span><strong>${formatCurrency(inv.grand_total || inv.invoice_total || 0)}</strong></div>` : ""}
       </div>
+      ${inv.collectee_pan_missing ? `<p class="muted">⚠ Customer PAN missing — section 206AA prescribes a higher TCS rate. Capture the PAN on the party record.</p>` : ""}
       ${inv.notes ? `<p class="muted">${escapeHtml(inv.notes)}</p>` : ""}
       ${String(inv.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${inv.cancel_reason ? `: ${escapeHtml(inv.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(inv.reversal_journal_entry_id || "")} posted.</p>` : ""}
     </div>
@@ -7643,6 +7786,7 @@ const billFormHeader = {
   expense_account_code: "51001",
   place_of_supply: "",
   notes: "",
+  tds_section: "",
 };
 
 function rerenderPurchaseIfActive() {
@@ -7684,6 +7828,7 @@ function syncBillFormFromDom() {
   billFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
   billFormHeader.place_of_supply = val("input[name='place_of_supply']");
   billFormHeader.notes = val("textarea[name='notes']");
+  billFormHeader.tds_section = val("select[name='tds_section']");
   billFormLines = Array.from(form.querySelectorAll("[data-bill-line]")).map((row) => ({
     id: row.getAttribute("data-bill-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -7713,12 +7858,21 @@ function updateBillTotalsDisplay() {
   });
   const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
   const billTotal = round2(taxableTotal + gstTotal);
+  // TDS is deducted on the GST-exclusive taxable value (Circular 23/2017).
+  const tdsSection = form.querySelector("select[name='tds_section']")?.value || "";
+  const tdsAmount = tdsSection ? round2(taxableTotal * tdsSectionRate("tds", tdsSection) / 100) : 0;
   const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
   set("[data-total-taxable]", taxableTotal);
   set("[data-total-cgst]", cgstTotal);
   set("[data-total-sgst]", sgstTotal);
   set("[data-total-igst]", igstTotal);
   set("[data-total-bill]", billTotal);
+  set("[data-total-tds]", tdsAmount);
+  set("[data-total-net-payable]", round2(billTotal - tdsAmount));
+  const tdsRow = form.querySelector("[data-row-tds]");
+  const netRow = form.querySelector("[data-row-net-payable]");
+  if (tdsRow) tdsRow.hidden = !tdsSection;
+  if (netRow) netRow.hidden = !tdsSection;
   const cgstRow = form.querySelector("[data-row-cgst]");
   const sgstRow = form.querySelector("[data-row-sgst]");
   const igstRow = form.querySelector("[data-row-igst]");
@@ -7748,8 +7902,10 @@ function openBillCreate() {
   billFormHeader.expense_account_code = "51001";
   billFormHeader.place_of_supply = "";
   billFormHeader.notes = "";
+  billFormHeader.tds_section = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!tdsSectionsCache) loadTdsSections().then(() => rerenderPurchaseIfActive());
   setBusinessPurchaseView("create");
 }
 
@@ -7803,6 +7959,7 @@ async function submitBill() {
     place_of_supply: String(billFormHeader.place_of_supply || "").trim() || null,
     notes: String(billFormHeader.notes || "").trim() || null,
     line_items: lineItems,
+    tds_section: billFormHeader.tds_section || null,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/bills", {
     method: "POST",
@@ -7938,6 +8095,9 @@ function renderBillCreateForm() {
         <label>Place of supply
           <input type="text" name="place_of_supply" value="${escapeHtml(billFormHeader.place_of_supply)}" placeholder="State / code">
         </label>
+        <label>TDS (income-tax, on taxable value)
+          <select name="tds_section">${tdsSectionOptions("tds", billFormHeader.tds_section)}</select>
+        </label>
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${billFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -7970,6 +8130,8 @@ function renderBillCreateForm() {
         <div data-row-sgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
         <div data-row-igst ${billFormHeader.is_inter_state ? "" : "hidden"}><span>Input IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
         <div class="invoice-grand"><span>Bill total</span><strong data-total-bill>${formatCurrency(0)}</strong></div>
+        <div data-row-tds ${billFormHeader.tds_section ? "" : "hidden"}><span>TDS deducted</span><strong data-total-tds>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand" data-row-net-payable ${billFormHeader.tds_section ? "" : "hidden"}><span>Net payable to vendor</span><strong data-total-net-payable>${formatCurrency(0)}</strong></div>
       </div>
 
       <label class="invoice-notes">Notes
@@ -8039,7 +8201,11 @@ function renderBillDetail() {
         <div><span>Taxable</span><strong>${formatCurrency(b.taxable_total || 0)}</strong></div>
         ${taxRow}
         <div class="invoice-grand"><span>Bill total</span><strong>${formatCurrency(b.bill_total || 0)}</strong></div>
+        ${Number(b.tds_amount || 0) > 0 ? `
+        <div><span>TDS ${escapeHtml(b.tds_section || "")} @ ${escapeHtml(String(b.tds_rate || 0))}%</span><strong>${formatCurrency(b.tds_amount || 0)}</strong></div>
+        <div class="invoice-grand"><span>Net payable to vendor</span><strong>${formatCurrency(b.net_payable || b.bill_total || 0)}</strong></div>` : ""}
       </div>
+      ${b.deductee_pan_missing ? `<p class="muted">⚠ Vendor PAN missing — section 206AA prescribes deduction at 20%. Capture the PAN on the party record.</p>` : ""}
       ${b.notes ? `<p class="muted">${escapeHtml(b.notes)}</p>` : ""}
       ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
     </div>
@@ -12450,6 +12616,8 @@ dashboardPreview.addEventListener("click", (event) => {
     downloadGstr4Json();
   } else if (businessAction === "gstr2b-reconcile") {
     reconcileGstr2b();
+  } else if (businessAction === "tds-load") {
+    previewTdsRegisterFromInput();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
@@ -12516,7 +12684,7 @@ dashboardPreview.addEventListener("input", (event) => {
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
-  if (event.target.name !== "is_inter_state") {
+  if (!["is_inter_state", "tds_section", "tcs_section"].includes(event.target.name)) {
     return;
   }
   if (event.target.closest("[data-invoice-form]")) {
@@ -12614,6 +12782,7 @@ if (businessPartyCreateForm) {
     const name = document.getElementById("business-party-name")?.value || "";
     const party_type = document.getElementById("business-party-type")?.value || "customer";
     const gstin = document.getElementById("business-party-gstin")?.value || "";
+    const pan = document.getElementById("business-party-pan")?.value || "";
     const city = document.getElementById("business-party-city")?.value || "";
     const state = document.getElementById("business-party-state")?.value || "";
     const pincode = document.getElementById("business-party-pincode")?.value || "";
@@ -12624,7 +12793,7 @@ if (businessPartyCreateForm) {
       return;
     }
 
-    createBusinessParty({ name, party_type, gstin, city, state, pincode, opening_balance });
+    createBusinessParty({ name, party_type, gstin, pan, city, state, pincode, opening_balance });
   });
 }
 
@@ -12635,6 +12804,7 @@ if (businessPartyEditForm) {
     const name = document.getElementById("business-party-edit-name")?.value || "";
     const party_type = document.getElementById("business-party-edit-type")?.value || "customer";
     const gstin = document.getElementById("business-party-edit-gstin")?.value || "";
+    const pan = document.getElementById("business-party-edit-pan")?.value || "";
     const city = document.getElementById("business-party-edit-city")?.value || "";
     const state = document.getElementById("business-party-edit-state")?.value || "";
     const pincode = document.getElementById("business-party-edit-pincode")?.value || "";
@@ -12645,7 +12815,7 @@ if (businessPartyEditForm) {
       return;
     }
 
-    updateBusinessParty(partyId, { name, party_type, gstin, city, state, pincode, opening_balance });
+    updateBusinessParty(partyId, { name, party_type, gstin, pan, city, state, pincode, opening_balance });
   });
 }
 
