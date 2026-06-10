@@ -3,8 +3,11 @@ assembler (B2B / B2CL / B2CS / CDNR / HSN / DOCS), no DB needed."""
 from decimal import Decimal
 
 from app.modules.business.gst_states import resolve_state_code, state_label
-from app.modules.business.gst_returns import assemble_gstr1, assemble_cmp08, _quarter_bounds
+from app.modules.business.gst_returns import (
+    assemble_gstr1, assemble_cmp08, assemble_gstr4, _quarter_bounds, _fy_bounds,
+)
 from datetime import date
+from decimal import Decimal
 
 
 # --------------------------------------------------------------------------- #
@@ -149,8 +152,48 @@ def test_cmp08_tax_is_rate_times_turnover_split_cgst_sgst():
 
 
 def test_cmp08_flags_non_composition_entity():
-    from decimal import Decimal
     r = assemble_cmp08(gstin=None, quarter="2026-Q1", category=None, rate=0,
                        outward_turnover=Decimal("50000"), is_composition=False)
     assert r["tax_payable"]["total"] == Decimal("0.00")
     assert any("not registered under the composition" in n for n in r["notes"])
+
+
+# --------------------------------------------------------------------------- #
+# GSTR-4 (composition annual)
+# --------------------------------------------------------------------------- #
+def test_fy_bounds():
+    assert _fy_bounds("2026-27") == (2026, date(2026, 4, 1), date(2027, 3, 31))
+
+
+def test_gstr4_consolidates_quarters_outward_and_inward():
+    # Goods @ 1%, four quarters of turnover; one registered + one unregistered purchase bucket.
+    r = assemble_gstr4(
+        gstin="29SELLER1234F1Z5", financial_year="2026-27", category="goods", rate=Decimal("1"),
+        quarter_turnovers={"Q1": Decimal("100000"), "Q2": Decimal("150000"),
+                           "Q3": Decimal("0"), "Q4": Decimal("250000")},
+        inward_registered={Decimal("18"): {"txval": Decimal("50000"), "iamt": Decimal("0"),
+                                            "camt": Decimal("4500"), "samt": Decimal("4500")}},
+        inward_unregistered={Decimal("5"): {"txval": Decimal("10000"), "iamt": Decimal("0"),
+                                            "camt": Decimal("250"), "samt": Decimal("250")}},
+        is_composition=True,
+    )
+    # Table 5 — annual turnover 5,00,000; tax @1% = 5,000 (2,500 + 2,500).
+    s = r["cmp08_summary"]
+    assert s["total_turnover"] == Decimal("500000.00")
+    assert s["cgst"] == Decimal("2500.00") and s["sgst"] == Decimal("2500.00")
+    assert s["total_tax"] == Decimal("5000.00")
+    assert len(s["quarters"]) == 4 and s["quarters"][3]["quarter"] == "Q4"
+
+    # Table 6 — outward liability ties to table 5.
+    assert r["outward_supplies"]["total_tax"] == Decimal("5000.00")
+
+    # Table 4 — inward split.
+    assert r["inward_supplies"]["registered"]["taxable_value"] == Decimal("50000.00")
+    assert r["inward_supplies"]["registered"]["tax"] == Decimal("9000.00")
+    assert r["inward_supplies"]["unregistered"]["taxable_value"] == Decimal("10000.00")
+
+    j = r["gstn_json"]
+    assert j["fy"] == "2026-27"
+    assert j["txos"][0] == {"rt": 1.0, "txval": 500000.0, "iamt": 0.0, "camt": 2500.0, "samt": 2500.0, "csamt": 0.0}
+    assert len(j["cmp08_summ"]) == 4
+    assert {row["sup_typ"] for row in j["inward_sup"]} == {"REG", "UNREG"}

@@ -1842,3 +1842,32 @@ async def business_cmp08_return(
         quarter=quarter,
         gstin=gstin,
     )
+
+
+@router.get("/returns/gstr-4")
+async def business_gstr4_return(
+    financial_year: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Form GSTR-4 — annual composition return for a financial year ('YYYY-YY',
+    e.g. '2026-27'). Consolidates the four CMP-08 quarters, the annual outward
+    liability, and inward purchases (registered / unregistered)."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GSTR-4 return",
+    )
+    gstin = await _resolve_business_gstin(context.tenant_id, context.app_key, accounting_entity_id)
+    return await gst_returns.build_gstr4(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        financial_year=financial_year,
+        gstin=gstin,
+    )

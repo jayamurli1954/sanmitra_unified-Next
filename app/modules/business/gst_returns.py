@@ -32,6 +32,7 @@ from app.modules.business.service import (
     OUTPUT_SGST_CODE,
     SALES_INVOICES_COLLECTION,
     CREDIT_NOTES_COLLECTION,
+    PURCHASE_BILLS_COLLECTION,
     _compute_gst_setoff,
     _period_bounds,
     get_gst_profile,
@@ -621,5 +622,155 @@ async def build_cmp08(
     return assemble_cmp08(
         gstin=gstin, quarter=quarter, category=profile.get("composition_category"),
         rate=profile.get("composition_rate") or 0, outward_turnover=turnover,
+        is_composition=profile.get("is_composition", False),
+    )
+
+
+# =========================================================================== #
+# GSTR-4 — annual return for composition dealers (Section 10), due 30 June
+# =========================================================================== #
+def _fy_bounds(financial_year: str) -> tuple[int, date, date]:
+    """'YYYY-YY' (e.g. '2026-27') -> (start_year, Apr 1, next Mar 31)."""
+    start_year = int(str(financial_year)[:4])
+    return start_year, date(start_year, 4, 1), date(start_year + 1, 3, 31)
+
+
+def _inward_rate_rows(buckets: dict) -> list[dict]:
+    return [
+        {"rate": rt, "taxable_value": _q(b["txval"]), "igst": _q(b["iamt"]),
+         "cgst": _q(b["camt"]), "sgst": _q(b["samt"])}
+        for rt, b in sorted(buckets.items())
+    ]
+
+
+def assemble_gstr4(
+    *, gstin: str | None, financial_year: str, category: str | None, rate,
+    quarter_turnovers: dict, inward_registered: dict, inward_unregistered: dict, is_composition: bool,
+) -> dict:
+    """Annual composition return. Table 5 = the four CMP-08 self-assessed
+    liabilities; Table 6 = annual outward turnover x composition rate; Table 4 =
+    inward supplies split registered (4A) / unregistered (4C), rate-wise.
+    Reverse-charge / imports (4B/4D) are zero until tracked."""
+    rate_d = Decimal(str(rate or 0))
+
+    # Table 5 — per-quarter self-assessed liability (from CMP-08).
+    table5 = []
+    annual_turnover = Decimal("0")
+    t5_cgst = t5_sgst = Decimal("0")
+    for q in ("Q1", "Q2", "Q3", "Q4"):
+        turnover = _q(_D(quarter_turnovers.get(q)))
+        tax = _q(turnover * rate_d / Decimal("100"))
+        cgst = _q(tax / Decimal("2"))
+        sgst = _q(tax - cgst)
+        annual_turnover += turnover
+        t5_cgst += cgst
+        t5_sgst += sgst
+        table5.append({"quarter": q, "turnover": turnover, "cgst": cgst, "sgst": sgst, "total_tax": tax})
+
+    # Table 6 — annual outward liability at the composition rate.
+    annual_turnover = _q(annual_turnover)
+    out_tax = _q(annual_turnover * rate_d / Decimal("100"))
+    out_cgst = _q(out_tax / Decimal("2"))
+    out_sgst = _q(out_tax - out_cgst)
+
+    def _sum_tax(rows):
+        return _q(sum((r["igst"] + r["cgst"] + r["sgst"] for r in rows), Decimal("0")))
+
+    reg_rows = _inward_rate_rows(inward_registered)
+    unreg_rows = _inward_rate_rows(inward_unregistered)
+
+    report = {
+        "return_type": "GSTR-4",
+        "gstin": gstin,
+        "financial_year": financial_year,
+        "composition_category": category,
+        "composition_rate": rate_d,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        # Table 5 — summary of self-assessed liability (CMP-08).
+        "cmp08_summary": {
+            "quarters": table5,
+            "total_turnover": annual_turnover,
+            "cgst": _q(t5_cgst), "sgst": _q(t5_sgst), "total_tax": _q(t5_cgst + t5_sgst),
+        },
+        # Table 6 — outward supplies (composition liability).
+        "outward_supplies": {
+            "turnover": annual_turnover, "rate": rate_d,
+            "cgst": out_cgst, "sgst": out_sgst, "total_tax": out_tax,
+        },
+        # Table 4 — inward supplies.
+        "inward_supplies": {
+            "registered": {"rows": reg_rows,
+                           "taxable_value": _q(sum((r["taxable_value"] for r in reg_rows), Decimal("0"))),
+                           "tax": _sum_tax(reg_rows)},
+            "unregistered": {"rows": unreg_rows,
+                             "taxable_value": _q(sum((r["taxable_value"] for r in unreg_rows), Decimal("0"))),
+                             "tax": _sum_tax(unreg_rows)},
+        },
+        "notes": [],
+    }
+    if not is_composition:
+        report["notes"].append("This entity is not registered under the composition scheme; "
+                                "GSTR-4 applies only to composition dealers.")
+    report["notes"].append("Reverse-charge (4B) and import-of-services (4D) inward supplies are "
+                            "reported as zero until those flows are tracked.")
+
+    def _amt(c, s, i=Decimal("0")):
+        return {"iamt": float(i), "camt": float(c), "samt": float(s), "csamt": 0.0}
+
+    report["gstn_json"] = {
+        "gstin": gstin,
+        "fy": financial_year,
+        "txos": [{"rt": float(rate_d), "txval": float(annual_turnover), **_amt(out_cgst, out_sgst)}],
+        "inward_sup": (
+            [{"sup_typ": "REG", "rt": float(r["rate"]), "txval": float(r["taxable_value"]),
+              **_amt(r["cgst"], r["sgst"], r["igst"])} for r in reg_rows]
+            + [{"sup_typ": "UNREG", "rt": float(r["rate"]), "txval": float(r["taxable_value"]),
+                **_amt(r["cgst"], r["sgst"], r["igst"])} for r in unreg_rows]
+        ),
+        "cmp08_summ": [
+            {"quarter": t["quarter"], "txval": float(t["turnover"]), **_amt(t["cgst"], t["sgst"])}
+            for t in table5
+        ],
+    }
+    return report
+
+
+async def build_gstr4(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, financial_year: str, gstin: str | None = None,
+) -> dict:
+    """Assemble GSTR-4 for a financial year ('YYYY-YY') from the four quarters'
+    composition turnover and the year's inward purchases."""
+    start_year, fy_first, fy_last = _fy_bounds(financial_year)
+    profile = await get_gst_profile(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+
+    quarter_turnovers: dict[str, Decimal] = {}
+    for q in (1, 2, 3, 4):
+        first, last = _quarter_bounds(f"{start_year}-Q{q}")
+        sales = await _posted_in_period(
+            SALES_INVOICES_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="invoice_date",
+        )
+        quarter_turnovers[f"Q{q}"] = sum((_D(s.get("taxable_total")) for s in sales), Decimal("0"))
+
+    bills = await _posted_in_period(
+        PURCHASE_BILLS_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=fy_first, last=fy_last, date_field="bill_date",
+    )
+    inward_registered: dict = {}
+    inward_unregistered: dict = {}
+    for bill in bills:
+        target = inward_registered if str(bill.get("vendor_gstin") or "").strip() else inward_unregistered
+        for rt, b in _rate_buckets(bill.get("line_items") or []).items():
+            agg = target.setdefault(rt, {"txval": Decimal("0"), "iamt": Decimal("0"),
+                                         "camt": Decimal("0"), "samt": Decimal("0")})
+            for k in ("txval", "iamt", "camt", "samt"):
+                agg[k] += b[k]
+
+    return assemble_gstr4(
+        gstin=gstin, financial_year=financial_year, category=profile.get("composition_category"),
+        rate=profile.get("composition_rate") or 0, quarter_turnovers=quarter_turnovers,
+        inward_registered=inward_registered, inward_unregistered=inward_unregistered,
         is_composition=profile.get("is_composition", False),
     )

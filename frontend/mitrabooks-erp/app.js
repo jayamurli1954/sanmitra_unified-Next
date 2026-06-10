@@ -5038,10 +5038,29 @@ let gstSettlementPeriod = todayIsoDate().slice(0, 7);
 let lastGstr3b = null;
 let lastGstr1 = null;
 let lastCmp08 = null;
-let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1" | "cmp08"
+let lastGstr4 = null;
+let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1" | "cmp08" | "gstr4"
 let gstr3bPeriod = todayIsoDate().slice(0, 7);
 let cmp08Quarter = currentFyQuarter();
+let gstr4Fy = currentFinancialYear();
 let lastItcReversal = null;
+
+// Current Indian financial year as "YYYY-YY" (FY starts April).
+function currentFinancialYear() {
+  const d = new Date();
+  const startYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+  return `${startYear}-${String(startYear + 1).slice(-2)}`;
+}
+
+function recentFinancialYears(count = 4) {
+  let startYear = Number(currentFinancialYear().slice(0, 4));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(`${startYear}-${String(startYear + 1).slice(-2)}`);
+    startYear -= 1;
+  }
+  return out;
+}
 
 // Current Indian-FY quarter as "YYYY-Q[1-4]" (FY starts April; Q1 = Apr-Jun).
 function currentFyQuarter() {
@@ -5142,6 +5161,7 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "gst-returns") {
     if (gstReturnType === "gstr1") { await loadGstr1(gstr3bPeriod); }
     else if (gstReturnType === "cmp08") { await loadCmp08(cmp08Quarter); }
+    else if (gstReturnType === "gstr4") { await loadGstr4(gstr4Fy); }
     else { await loadGstr3b(gstr3bPeriod); }
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
@@ -5355,13 +5375,99 @@ function renderGstReturns() {
     <button class="report-tab ${gstReturnType === id ? "active" : ""}" type="button"
       data-business-action="gst-return-type" data-return-type="${id}">${label}</button>`;
   const toggle = `<div class="report-tabs" role="tablist" style="margin:0 0 10px;">
-    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}${tabBtn("cmp08", "CMP-08 (composition)")}
+    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}${tabBtn("cmp08", "CMP-08 (composition)")}${tabBtn("gstr4", "GSTR-4 (annual)")}
   </div>`;
   let panel;
   if (gstReturnType === "gstr1") panel = renderGstr1Panel();
   else if (gstReturnType === "cmp08") panel = renderCmp08Panel();
+  else if (gstReturnType === "gstr4") panel = renderGstr4Panel();
   else panel = renderGstr3bPanel();
   return `${toggle}${panel}`;
+}
+
+// ---- GSTR-4 annual composition return ----------------------------------- //
+async function loadGstr4(fy) {
+  gstr4Fy = fy || gstr4Fy;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-4?financial_year=${encodeURIComponent(gstr4Fy)}`, { method: "GET" });
+  lastGstr4 = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { gstr4: { ok: result.ok, fy: gstr4Fy } });
+}
+
+function previewGstr4FromInput() {
+  const input = document.querySelector("[data-gstr4-fy]");
+  loadGstr4(input?.value || gstr4Fy);
+}
+
+function downloadGstr4Json() {
+  const j = lastGstr4?.gstn_json;
+  if (!j) { setLoginStatus("warn", "Nothing to download", "Load a GSTR-4 financial year first."); return; }
+  const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `gstr4_${gstr4Fy}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  renderJson(apiOutput, { gstr4_download: { fy: gstr4Fy } });
+}
+
+function renderGstr4Panel() {
+  const fyOpts = recentFinancialYears(4).map((fy) =>
+    `<option value="${fy}" ${fy === gstr4Fy ? "selected" : ""}>FY ${fy}</option>`).join("");
+  const controls = `
+    <div class="report-date-controls">
+      <label>Financial year <select data-gstr4-fy>${fyOpts}</select></label>
+      <button class="secondary" type="button" data-business-action="gstr4-load">Load</button>
+      <button class="secondary" type="button" data-business-action="gstr4-download-json">Download GSTN JSON</button>
+    </div>`;
+  const r = lastGstr4;
+  if (!r) return `${controls}<p class="muted">Loading GSTR-4...</p>`;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("GSTR-4", r)}`;
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const s = r.cmp08_summary || {};
+  const out = r.outward_supplies || {};
+  const inw = r.inward_supplies || {};
+  const rateLabel = r.composition_rate != null ? `${escapeHtml(String(r.composition_rate))}%` : "—";
+
+  const qRows = (s.quarters || []).map((q) => `
+    <tr><td>${escapeHtml(q.quarter)}</td><td class="amount">${num(q.turnover)}</td><td class="amount">${num(q.cgst)}</td><td class="amount">${num(q.sgst)}</td><td class="amount">${num(q.total_tax)}</td></tr>`).join("");
+  const inwRows = (kind, block) => (block?.rows || []).map((row) => `
+    <tr><td>${escapeHtml(kind)}</td><td class="amount">${escapeHtml(String(row.rate ?? ""))}%</td><td class="amount">${num(row.taxable_value)}</td><td class="amount">${num(row.igst)}</td><td class="amount">${num(row.cgst)}</td><td class="amount">${num(row.sgst)}</td></tr>`).join("");
+  const inwardBody = `${inwRows("Registered", inw.registered)}${inwRows("Unregistered", inw.unregistered)}`;
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>GSTR-4 annual return for FY ${escapeHtml(r.financial_year || gstr4Fy)}${r.gstin ? ` · GSTIN ${escapeHtml(r.gstin)}` : ""} · ${escapeHtml(r.composition_category || "composition")} @ ${rateLabel}.</p></div>
+      <span class="pill">Annual tax ${num(out.total_tax)}</span>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>Table 5 — self-assessed liability (CMP-08, quarter-wise)</h4>
+      <table>
+        <thead><tr><th>Quarter</th><th class="amount">Turnover</th><th class="amount">CGST</th><th class="amount">SGST</th><th class="amount">Tax</th></tr></thead>
+        <tbody>${qRows}</tbody>
+        <tfoot><tr><th>Total</th><td class="amount">${num(s.total_turnover)}</td><td class="amount">${num(s.cgst)}</td><td class="amount">${num(s.sgst)}</td><td class="amount"><strong>${num(s.total_tax)}</strong></td></tr></tfoot>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>Table 6 — outward supplies (composition liability)</h4>
+      <table>
+        <thead><tr><th class="amount">Turnover</th><th class="amount">Rate</th><th class="amount">CGST</th><th class="amount">SGST</th><th class="amount">Tax</th></tr></thead>
+        <tbody><tr><td class="amount">${num(out.turnover)}</td><td class="amount">${rateLabel}</td><td class="amount">${num(out.cgst)}</td><td class="amount">${num(out.sgst)}</td><td class="amount"><strong>${num(out.total_tax)}</strong></td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>Table 4 — inward supplies (purchases)</h4>
+      <table>
+        <thead><tr><th>Supplier</th><th class="amount">Rate</th><th class="amount">Taxable</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody>${inwardBody || `<tr><td colspan="6" class="muted">No inward supplies recorded.</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
 }
 
 // ---- CMP-08 quarterly composition statement ----------------------------- //
@@ -12129,7 +12235,7 @@ dashboardPreview.addEventListener("click", (event) => {
     downloadGstr3bJson();
   } else if (businessAction === "gst-return-type") {
     const rt = button.getAttribute("data-return-type");
-    gstReturnType = (rt === "gstr1" || rt === "cmp08") ? rt : "gstr3b";
+    gstReturnType = ["gstr1", "cmp08", "gstr4"].includes(rt) ? rt : "gstr3b";
     rerenderBusinessReportsIfActive();
     refreshCurrentBusinessReport();
   } else if (businessAction === "gstr1-load") {
@@ -12140,6 +12246,10 @@ dashboardPreview.addEventListener("click", (event) => {
     previewCmp08FromInput();
   } else if (businessAction === "cmp08-download-json") {
     downloadCmp08Json();
+  } else if (businessAction === "gstr4-load") {
+    previewGstr4FromInput();
+  } else if (businessAction === "gstr4-download-json") {
+    downloadGstr4Json();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
