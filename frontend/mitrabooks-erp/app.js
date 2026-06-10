@@ -59,13 +59,13 @@ function businessNavigationGroups() {
       items: [
         { label: "Bank Feeds", businessWorkspace: "bank-feeds", icon: "BF", module: { module_key: "banking", frontend_path: "/business/bank-feeds", enabled: false } },
         { label: "UPI / QR Payments", businessWorkspace: "upi-payments", icon: "UP", module: { module_key: "payments", frontend_path: "/business/upi-payments", enabled: false } },
-        { label: "Reconciliation", businessWorkspace: "reconciliation", icon: "RC", module: { module_key: "accounting", frontend_path: "/accounting/reconciliation", enabled: false }, badge: "3" },
+        { label: "Reconciliation", businessWorkspace: "reconciliation", icon: "RC", module: { module_key: "accounting", frontend_path: "/accounting/reconciliation", enabled: true } },
       ],
     },
     {
       name: "Taxes & Compliance",
       items: [
-        { label: "GST Returns", businessWorkspace: "gst-returns", icon: "GT", module: { module_key: "gst", frontend_path: "/gst/returns", enabled: false } },
+        { label: "GST Returns", businessWorkspace: "gst-returns", icon: "GT", module: { module_key: "gst", frontend_path: "/gst/returns", enabled: true } },
         { label: "TDS / TCS", businessWorkspace: "tds-tcs", icon: "TD", module: { module_key: "tax", frontend_path: "/tax/tds-tcs", enabled: false } },
         { label: "CA Access Portal", businessWorkspace: "ca-access", icon: "CA", module: { module_key: "ca_access", frontend_path: "/business/ca-access", enabled: false } },
       ],
@@ -4536,7 +4536,11 @@ function renderBusinessWorkspace() {
       </div>
     `;
   }
-  if (activeBusinessWorkspace === "reports") {
+  // "gst-returns" and "reconciliation" are sidebar shortcuts into the reports
+  // workspace (which hosts those tabs); the tab is pre-selected in setBusinessWorkspace.
+  if (activeBusinessWorkspace === "reports"
+      || activeBusinessWorkspace === "gst-returns"
+      || activeBusinessWorkspace === "reconciliation") {
     return renderBusinessReportsWorkspace();
   }
   if (activeBusinessWorkspace === "sales") {
@@ -4916,7 +4920,10 @@ function setBusinessWorkspace(workspace) {
     loadAuditEvents();
   } else if (workspace === "accounting") {
     refreshCurrentAccountingDrilldown();
-  } else if (workspace === "reports") {
+  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation") {
+    // Sidebar shortcuts open the reports workspace on a specific tab.
+    if (workspace === "gst-returns") businessReportState.tab = "gst-returns";
+    else if (workspace === "reconciliation") businessReportState.tab = "payment-allocation";
     loadBusinessAccounts();
     refreshCurrentBusinessReport();
   } else if (workspace === "sales") {
@@ -4969,6 +4976,8 @@ function syncBusinessNavActiveState() {
       "credit-notes": "Credit Notes",
       "debit-notes": "Debit Notes",
       "financial-health": "Financial Health",
+      "gst-returns": "GST Returns",
+      "reconciliation": "Reconciliation",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
     const label = isPlannedOrgWorkspace
@@ -5960,7 +5969,8 @@ function renderPeriodLocksPanel() {
 }
 
 function rerenderBusinessReportsIfActive() {
-  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "reports") {
+  const reportWorkspaces = ["reports", "gst-returns", "reconciliation"];
+  if (currentExperience === "mitrabooks" && reportWorkspaces.includes(activeBusinessWorkspace)) {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
 }
