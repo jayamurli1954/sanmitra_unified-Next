@@ -74,6 +74,7 @@ from app.modules.business import financial_health
 from app.modules.business import gst_returns
 from app.modules.business import report_export
 from app.modules.business import bank_recon
+from app.modules.business import statements
 from app.modules.business import tds as tds_module
 from app.core.tenants.service import get_tenant
 from app.modules.business.service import (
@@ -511,7 +512,7 @@ async def _resolve_org_name(tenant_id: str, app_key: str, accounting_entity_id: 
 
 async def _build_business_report(
     report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of,
-    account_id=None, from_date=None, to_date=None,
+    account_id=None, from_date=None, to_date=None, party_id=None,
 ) -> dict:
     """Assemble (title, columns, rows, footer, meta, org_name, filename_base) for a report."""
     as_of_str = (as_of or date.today()).isoformat()
@@ -727,9 +728,46 @@ async def _build_business_report(
             "filename_base": f"general_ledger_{account.code}_{as_of_str}",
         }
 
+    elif report == "statement":
+        if not party_id:
+            raise AccountingValidationError("party_id is required for the statement export")
+        data = await statements.build_party_statement(
+            session, tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, party_id=party_id,
+            kind=kind, from_date=from_date, to_date=to_date or as_of,
+        )
+        rows = [{
+            "entry_date": r["entry_date"], "document_type": r["document_type"],
+            "reference": r["reference"], "description": r["description"],
+            "debit": r["debit"] if Decimal(str(r["debit"] or 0)) else None,
+            "credit": r["credit"] if Decimal(str(r["credit"] or 0)) else None,
+            "balance": r["balance"],
+        } for r in data["transactions"]]
+        rows.insert(0, {"entry_date": data["from_date"], "document_type": "",
+                        "reference": "", "description": "Opening balance",
+                        "debit": None, "credit": None, "balance": data["opening_balance"]})
+        spec = {
+            "title": f"Statement of Account — {data['party']['party_name']}",
+            "columns": [
+                {"key": "entry_date", "label": "Date"},
+                {"key": "document_type", "label": "Document"},
+                {"key": "reference", "label": "Reference"},
+                {"key": "description", "label": "Particulars"},
+                {"key": "debit", "label": "Debit", "numeric": True},
+                {"key": "credit", "label": "Credit", "numeric": True},
+                {"key": "balance", "label": "Balance", "numeric": True},
+            ],
+            "rows": rows,
+            "footer": {"description": "Closing balance", "debit": data["total_debit"],
+                       "credit": data["total_credit"], "balance": data["closing_balance"]},
+            "meta": [("Party", data["party"]["party_name"]), ("Type", kind),
+                     ("From", data["from_date"]), ("To", data["to_date"])],
+            "filename_base": f"statement_{party_id}_{data['to_date']}",
+        }
+
     else:
         raise AccountingValidationError(
-            "report must be one of: party_ledger, aging, itc_reversals, trial_balance, general_ledger"
+            "report must be one of: party_ledger, aging, itc_reversals, trial_balance, general_ledger, statement"
         )
 
     spec["org_name"] = org_name
@@ -738,13 +776,14 @@ async def _build_business_report(
 
 @router.get("/reports/export")
 async def export_business_report(
-    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger|balance_sheet|profit_loss)$"),
+    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger|balance_sheet|profit_loss|statement)$"),
     format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
     kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
     as_of: date | None = Query(default=None),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
     account_id: int | None = Query(default=None),
+    party_id: str | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
     session: AsyncSession = Depends(get_async_session),
@@ -757,7 +796,7 @@ async def export_business_report(
         spec = await _build_business_report(
             report, session=session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of, account_id=account_id,
-            from_date=from_date, to_date=to_date,
+            from_date=from_date, to_date=to_date, party_id=party_id,
         )
         return report_export.export_report(format, **spec)
     except AccountingValidationError as exc:
@@ -2105,5 +2144,79 @@ async def business_bank_recon_unmatch(
         )
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/statements/{party_id}")
+async def business_party_statement(
+    party_id: str,
+    kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Statement of account for one customer/vendor: opening balance, dated
+    transactions with running balance, closing balance, open items with aging,
+    and (for receivables) the dunning suggestion + reminder letter + log."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="party statement",
+    )
+    try:
+        return await statements.build_party_statement(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            party_id=party_id,
+            kind=kind,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/statements/{party_id}/dunning")
+async def business_record_dunning(
+    party_id: str,
+    payload: dict = Body(..., description='{"level": 1-3, "note": "...", "overdue_total": "..."}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Record that a payment reminder was sent (sending itself is manual —
+    print/email/WhatsApp). Builds the dunning audit trail for the party."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="dunning record",
+    )
+    try:
+        return await statements.record_dunning_sent(
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            party_id=party_id,
+            level=int(payload.get("level") or 0),
+            note=payload.get("note"),
+            overdue_total=payload.get("overdue_total"),
+            created_by=_created_by(current_user),
+        )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

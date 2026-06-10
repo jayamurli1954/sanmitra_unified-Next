@@ -2062,6 +2062,86 @@ async def get_party_wise_balances(
     return lines, _q(total_balance)
 
 
+async def get_party_ledger_lines(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    party_id: str,
+    kind: str,
+    from_date: date,
+    to_date: date,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+) -> tuple[Decimal, list[dict]]:
+    """(opening_balance, transactions) for one party's receivable or payable
+    sub-ledger over a period — the data behind a statement of account.
+
+    Opening balance is the party's net balance before `from_date` in the
+    natural sign for the side (receivable: debit−credit; payable: credit−debit).
+    """
+    flag = Account.is_receivable if kind == "receivable" else Account.is_payable
+    base_conditions = [
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        flag.is_(True),
+        JournalLine.party_id == party_id,
+    ]
+
+    opening_stmt = (
+        select(
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(and_(*base_conditions, JournalEntry.entry_date < from_date))
+    )
+    lines_stmt = (
+        select(
+            JournalLine.journal_id,
+            JournalLine.debit,
+            JournalLine.credit,
+            JournalEntry.entry_date,
+            JournalEntry.reference,
+            JournalEntry.description,
+            JournalEntry.source_document_type,
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(and_(*base_conditions, JournalEntry.entry_date >= from_date, JournalEntry.entry_date <= to_date))
+        .order_by(JournalEntry.entry_date.asc(), JournalLine.id.asc())
+    )
+    try:
+        debit_total, credit_total = (await session.execute(opening_stmt)).one()
+        rows = (await session.execute(lines_stmt)).all()
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        _logger.warning("Party statement unavailable (run 'alembic upgrade head'?): %s", exc)
+        return Decimal("0.00"), []
+
+    opening_debit = _q(Decimal(debit_total))
+    opening_credit = _q(Decimal(credit_total))
+    opening = _q(opening_debit - opening_credit) if kind == "receivable" else _q(opening_credit - opening_debit)
+
+    transactions: list[dict] = []
+    for row in rows:
+        entry_date_val = row.entry_date
+        entry_date_str = (
+            entry_date_val.isoformat() if hasattr(entry_date_val, "isoformat") else str(entry_date_val)[:10]
+        )
+        transactions.append({
+            "journal_id": row.journal_id,
+            "entry_date": entry_date_str,
+            "reference": row.reference,
+            "description": row.description,
+            "document_type": row.source_document_type,
+            "debit": _q(Decimal(row.debit)),
+            "credit": _q(Decimal(row.credit)),
+        })
+    return opening, transactions
+
+
 async def get_party_outstanding(
     session: AsyncSession,
     *,
