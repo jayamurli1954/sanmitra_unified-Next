@@ -1044,6 +1044,12 @@ function renderGroupedNav(groups) {
   nav.innerHTML = "";
 
   groups.forEach((group, groupIndex) => {
+    // Hide not-yet-built items (enabled:false roadmap stubs) so the sidebar shows
+    // only working features. Config is left intact — flip a stub to enabled:true
+    // when it ships and it reappears. Groups with nothing built are skipped.
+    const visibleItems = group.items.filter((item) => item.module.enabled !== false);
+    if (visibleItems.length === 0) return;
+
     const groupId = `business-nav-group-${groupIndex}`;
     const header = document.createElement("button");
     header.className = "nav-group-toggle";
@@ -1058,7 +1064,7 @@ function renderGroupedNav(groups) {
     panel.className = "nav-group-items";
     panel.id = groupId;
     panel.dataset.navGroupItems = groupId;
-    group.items.forEach(item => {
+    visibleItems.forEach(item => {
       const link = document.createElement("a");
       link.href = "#";
       link.className = item.module.enabled ? "erp-nav-link" : "erp-nav-link locked";
