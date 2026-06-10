@@ -3,7 +3,8 @@ assembler (B2B / B2CL / B2CS / CDNR / HSN / DOCS), no DB needed."""
 from decimal import Decimal
 
 from app.modules.business.gst_states import resolve_state_code, state_label
-from app.modules.business.gst_returns import assemble_gstr1
+from app.modules.business.gst_returns import assemble_gstr1, assemble_cmp08, _quarter_bounds
+from datetime import date
 
 
 # --------------------------------------------------------------------------- #
@@ -119,3 +120,37 @@ def test_gstr1_empty_period():
     assert r["sections"]["docs"] == {"total": 0, "from": None, "to": None}
     assert r["gstn_json"]["b2b"] == []
     assert r["gstn_json"]["doc_issue"] == {"doc_det": []}
+
+
+# --------------------------------------------------------------------------- #
+# CMP-08 (composition quarterly)
+# --------------------------------------------------------------------------- #
+def test_quarter_bounds_fy_quarters():
+    assert _quarter_bounds("2026-Q1") == (date(2026, 4, 1), date(2026, 6, 30))
+    assert _quarter_bounds("2026-Q2") == (date(2026, 7, 1), date(2026, 9, 30))
+    assert _quarter_bounds("2026-Q3") == (date(2026, 10, 1), date(2026, 12, 31))
+    assert _quarter_bounds("2026-Q4") == (date(2027, 1, 1), date(2027, 3, 31))
+
+
+def test_cmp08_tax_is_rate_times_turnover_split_cgst_sgst():
+    from decimal import Decimal
+    # Restaurant @ 5% on a quarter's turnover of 2,00,000 -> 10,000 (5k + 5k).
+    r = assemble_cmp08(gstin="29SELLER1234F1Z5", quarter="2026-Q1", category="restaurant",
+                       rate=Decimal("5"), outward_turnover=Decimal("200000"), is_composition=True)
+    assert r["outward_supplies"]["turnover"] == Decimal("200000.00")
+    assert r["outward_supplies"]["cgst"] == Decimal("5000.00")
+    assert r["outward_supplies"]["sgst"] == Decimal("5000.00")
+    assert r["outward_supplies"]["igst"] == Decimal("0.00")     # composition is intra-state only
+    assert r["tax_payable"]["total"] == Decimal("10000.00")
+    j = r["gstn_json"]
+    assert j["ret_period"] == "2026-Q1"
+    os_row = next(x for x in j["summ"]["typ_summ"] if x["typ"] == "OS")
+    assert os_row == {"typ": "OS", "txval": 200000.0, "iamt": 0.0, "camt": 5000.0, "samt": 5000.0, "csamt": 0.0}
+
+
+def test_cmp08_flags_non_composition_entity():
+    from decimal import Decimal
+    r = assemble_cmp08(gstin=None, quarter="2026-Q1", category=None, rate=0,
+                       outward_turnover=Decimal("50000"), is_composition=False)
+    assert r["tax_payable"]["total"] == Decimal("0.00")
+    assert any("not registered under the composition" in n for n in r["notes"])

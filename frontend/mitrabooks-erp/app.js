@@ -5037,9 +5037,35 @@ let lastGstSettlement = null;
 let gstSettlementPeriod = todayIsoDate().slice(0, 7);
 let lastGstr3b = null;
 let lastGstr1 = null;
-let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1"
+let lastCmp08 = null;
+let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1" | "cmp08"
 let gstr3bPeriod = todayIsoDate().slice(0, 7);
+let cmp08Quarter = currentFyQuarter();
 let lastItcReversal = null;
+
+// Current Indian-FY quarter as "YYYY-Q[1-4]" (FY starts April; Q1 = Apr-Jun).
+function currentFyQuarter() {
+  const d = new Date();
+  const m = d.getMonth(); // 0-11
+  const y = d.getFullYear();
+  if (m >= 3 && m <= 5) return `${y}-Q1`;
+  if (m >= 6 && m <= 8) return `${y}-Q2`;
+  if (m >= 9 && m <= 11) return `${y}-Q3`;
+  return `${y - 1}-Q4`;       // Jan-Mar belongs to the FY that started the prior April
+}
+
+// A handful of recent FY quarters for the CMP-08 picker.
+function recentFyQuarters(count = 6) {
+  const cur = currentFyQuarter();
+  let [fy, q] = cur.split("-Q").map((x, i) => (i === 0 ? Number(x) : Number(x)));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(`${fy}-Q${q}`);
+    q -= 1;
+    if (q < 1) { q = 4; fy -= 1; }
+  }
+  return out;
+}
 let lastItcReversedBills = [];
 let itcReversalAsOf = todayIsoDate();
 
@@ -5115,6 +5141,7 @@ async function refreshCurrentBusinessReport() {
     await loadGstSettlementPreview(gstSettlementPeriod);
   } else if (tab === "gst-returns") {
     if (gstReturnType === "gstr1") { await loadGstr1(gstr3bPeriod); }
+    else if (gstReturnType === "cmp08") { await loadCmp08(cmp08Quarter); }
     else { await loadGstr3b(gstr3bPeriod); }
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
@@ -5328,9 +5355,79 @@ function renderGstReturns() {
     <button class="report-tab ${gstReturnType === id ? "active" : ""}" type="button"
       data-business-action="gst-return-type" data-return-type="${id}">${label}</button>`;
   const toggle = `<div class="report-tabs" role="tablist" style="margin:0 0 10px;">
-    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}
+    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}${tabBtn("cmp08", "CMP-08 (composition)")}
   </div>`;
-  return `${toggle}${gstReturnType === "gstr1" ? renderGstr1Panel() : renderGstr3bPanel()}`;
+  let panel;
+  if (gstReturnType === "gstr1") panel = renderGstr1Panel();
+  else if (gstReturnType === "cmp08") panel = renderCmp08Panel();
+  else panel = renderGstr3bPanel();
+  return `${toggle}${panel}`;
+}
+
+// ---- CMP-08 quarterly composition statement ----------------------------- //
+async function loadCmp08(quarter) {
+  cmp08Quarter = quarter || cmp08Quarter;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/returns/cmp-08?quarter=${encodeURIComponent(cmp08Quarter)}`, { method: "GET" });
+  lastCmp08 = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { cmp08: { ok: result.ok, quarter: cmp08Quarter } });
+}
+
+function previewCmp08FromInput() {
+  const input = document.querySelector("[data-cmp08-quarter]");
+  loadCmp08(input?.value || cmp08Quarter);
+}
+
+function downloadCmp08Json() {
+  const j = lastCmp08?.gstn_json;
+  if (!j) { setLoginStatus("warn", "Nothing to download", "Load a CMP-08 quarter first."); return; }
+  const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `cmp08_${cmp08Quarter}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  renderJson(apiOutput, { cmp08_download: { quarter: cmp08Quarter } });
+}
+
+function renderCmp08Panel() {
+  const quarterOpts = recentFyQuarters(6).map((q) =>
+    `<option value="${q}" ${q === cmp08Quarter ? "selected" : ""}>${q.replace("-Q", " · Q")}</option>`).join("");
+  const controls = `
+    <div class="report-date-controls">
+      <label>Quarter <select data-cmp08-quarter>${quarterOpts}</select></label>
+      <button class="secondary" type="button" data-business-action="cmp08-load">Load</button>
+      <button class="secondary" type="button" data-business-action="cmp08-download-json">Download GSTN JSON</button>
+    </div>`;
+  const r = lastCmp08;
+  if (!r) return `${controls}<p class="muted">Loading CMP-08...</p>`;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("CMP-08", r)}`;
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const out = r.outward_supplies || {};
+  const pay = r.tax_payable || {};
+  const rateLabel = r.composition_rate != null ? `${escapeHtml(String(r.composition_rate))}%` : "—";
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>CMP-08 for ${escapeHtml(r.quarter || cmp08Quarter)}${r.gstin ? ` · GSTIN ${escapeHtml(r.gstin)}` : ""} · ${escapeHtml(r.composition_category || "composition")} @ ${rateLabel}.</p></div>
+      <span class="pill">Payable ${num(pay.total)}</span>
+    </div>
+    <div class="table-preview compact-table">
+      <h4>Table 3 — self-assessed liability</h4>
+      <table>
+        <thead><tr><th>Particulars</th><th class="amount">Value</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody>
+          <tr><td>Outward supplies (incl. composition turnover)</td><td class="amount">${num(out.turnover)}</td><td class="amount">${num(out.igst)}</td><td class="amount">${num(out.cgst)}</td><td class="amount">${num(out.sgst)}</td></tr>
+          <tr><td>Inward supplies (reverse charge)</td><td class="amount">—</td><td class="amount">${num(r.inward_reverse_charge?.igst)}</td><td class="amount">${num(r.inward_reverse_charge?.cgst)}</td><td class="amount">${num(r.inward_reverse_charge?.sgst)}</td></tr>
+        </tbody>
+        <tfoot><tr><th colspan="2">Tax payable (incl. interest ${num(pay.interest)})</th><td class="amount">${num(pay.igst)}</td><td class="amount">${num(pay.cgst)}</td><td class="amount">${num(pay.sgst)}</td></tr></tfoot>
+      </table>
+    </div>
+    <div class="invoice-totals">
+      <div class="invoice-grand"><span>Total tax payable</span><strong>${num(pay.total)}</strong></div>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
 }
 
 // ---- GSTR-1 outward-supplies return ------------------------------------- //
@@ -12031,13 +12128,18 @@ dashboardPreview.addEventListener("click", (event) => {
   } else if (businessAction === "gstr3b-download-json") {
     downloadGstr3bJson();
   } else if (businessAction === "gst-return-type") {
-    gstReturnType = button.getAttribute("data-return-type") === "gstr1" ? "gstr1" : "gstr3b";
+    const rt = button.getAttribute("data-return-type");
+    gstReturnType = (rt === "gstr1" || rt === "cmp08") ? rt : "gstr3b";
     rerenderBusinessReportsIfActive();
     refreshCurrentBusinessReport();
   } else if (businessAction === "gstr1-load") {
     previewGstr1FromInput();
   } else if (businessAction === "gstr1-download-json") {
     downloadGstr1Json();
+  } else if (businessAction === "cmp08-load") {
+    previewCmp08FromInput();
+  } else if (businessAction === "cmp08-download-json") {
+    downloadCmp08Json();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {

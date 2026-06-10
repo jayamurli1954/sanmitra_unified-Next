@@ -1814,3 +1814,31 @@ async def business_gstr1_return(
         period=period,
         gstin=gstin,
     )
+
+
+@router.get("/returns/cmp-08")
+async def business_cmp08_return(
+    quarter: str = Query(..., pattern=r"^\d{4}-Q[1-4]$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Form CMP-08 — quarterly self-assessed liability for a composition dealer
+    ('YYYY-Q1'..'YYYY-Q4', FY quarters). Tax = turnover x composition rate."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CMP-08 return",
+    )
+    gstin = await _resolve_business_gstin(context.tenant_id, context.app_key, accounting_entity_id)
+    return await gst_returns.build_cmp08(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        quarter=quarter,
+        gstin=gstin,
+    )

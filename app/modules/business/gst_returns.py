@@ -14,7 +14,7 @@ Design mirrors the GST settlement engine:
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import and_, func, select
@@ -34,6 +34,7 @@ from app.modules.business.service import (
     CREDIT_NOTES_COLLECTION,
     _compute_gst_setoff,
     _period_bounds,
+    get_gst_profile,
 )
 
 HEADS = ("igst", "cgst", "sgst")
@@ -528,3 +529,97 @@ async def build_gstr1(
         accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="note_date",
     )
     return assemble_gstr1(gstin=gstin, period=period, invoices=invoices, credit_notes=credit_notes)
+
+
+# =========================================================================== #
+# CMP-08 — quarterly statement-cum-challan for composition dealers (Section 10)
+# =========================================================================== #
+def _quarter_bounds(quarter: str) -> tuple[date, date]:
+    """'YYYY-Q[1-4]' (FY quarters, Q1 = Apr-Jun) -> (first_day, last_day)."""
+    year_s, q_s = quarter.upper().split("-Q")
+    year, q = int(year_s), int(q_s)
+    start_month = {1: 4, 2: 7, 3: 10, 4: 1}[q]
+    start_year = year if q < 4 else year + 1
+    first = date(start_year, start_month, 1)
+    end_month = start_month + 2
+    if end_month >= 12:
+        last = date(start_year, 12, 31) if end_month == 12 else date(start_year, end_month + 1, 1) - timedelta(days=1)
+    else:
+        last = date(start_year, end_month + 1, 1) - timedelta(days=1)
+    return first, last
+
+
+def assemble_cmp08(
+    *, gstin: str | None, quarter: str, category: str | None, rate, outward_turnover, is_composition: bool,
+) -> dict:
+    """Form GST CMP-08 (self-assessed quarterly liability) for a composition
+    dealer. Tax = turnover x composition rate, split equally CGST/SGST (a
+    composition dealer's outward supply is always intra-state). Inward reverse-
+    charge tax is reported as zero until RCM is tracked."""
+    rate_d = Decimal(str(rate or 0))
+    turnover = _q(_D(outward_turnover))
+    out_tax = _q(turnover * rate_d / Decimal("100"))
+    cgst = _q(out_tax / Decimal("2"))
+    sgst = _q(out_tax - cgst)
+    rcm = {"igst": Decimal("0.00"), "cgst": Decimal("0.00"), "sgst": Decimal("0.00")}
+    total_tax = _q(out_tax + sum(rcm.values()))
+
+    notes = []
+    if not is_composition:
+        notes.append("This entity is not registered under the composition scheme; "
+                      "CMP-08 applies only to composition dealers.")
+    notes.append("Inward supplies under reverse charge are reported as zero until RCM is tracked.")
+
+    report = {
+        "return_type": "CMP-08",
+        "gstin": gstin,
+        "quarter": quarter,
+        "composition_category": category,
+        "composition_rate": rate_d,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        # Table 3 — summary of self-assessed liability.
+        "outward_supplies": {
+            "turnover": turnover,
+            "igst": Decimal("0.00"), "cgst": cgst, "sgst": sgst, "total_tax": out_tax,
+        },
+        "inward_reverse_charge": rcm,
+        "tax_payable": {
+            "igst": Decimal("0.00"), "cgst": cgst, "sgst": sgst,
+            "interest": Decimal("0.00"), "total": total_tax,
+        },
+        "notes": notes,
+    }
+    report["gstn_json"] = {
+        "gstin": gstin,
+        "ret_period": quarter,
+        "summ": {
+            "typ_summ": [
+                {"typ": "OS", "txval": float(turnover), "iamt": 0.0,
+                 "camt": float(cgst), "samt": float(sgst), "csamt": 0.0},
+                {"typ": "RC", "txval": 0.0, "iamt": 0.0, "camt": 0.0, "samt": 0.0, "csamt": 0.0},
+            ],
+            "intr_ltfee": {"iamt": 0.0, "camt": 0.0, "samt": 0.0, "csamt": 0.0},
+        },
+    }
+    return report
+
+
+async def build_cmp08(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, quarter: str, gstin: str | None = None,
+) -> dict:
+    """Assemble CMP-08 for an FY quarter from the composition turnover (posted
+    sales / bills of supply) and the entity's composition rate."""
+    first, last = _quarter_bounds(quarter)
+    profile = await get_gst_profile(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    sales = await _posted_in_period(
+        SALES_INVOICES_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="invoice_date",
+    )
+    turnover = sum((_D(s.get("taxable_total")) for s in sales), Decimal("0"))
+    return assemble_cmp08(
+        gstin=gstin, quarter=quarter, category=profile.get("composition_category"),
+        rate=profile.get("composition_rate") or 0, outward_turnover=turnover,
+        is_composition=profile.get("is_composition", False),
+    )
