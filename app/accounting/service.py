@@ -2145,7 +2145,7 @@ async def get_business_dashboard(
     as_of = as_of or date.today()
     fy_start = _financial_year_start(as_of)
 
-    async def _sum(*, type_=None, flag=None, code=None, date_from=None, date_to=None):
+    async def _sum(*, type_=None, flag=None, code=None, codes=None, date_from=None, date_to=None):
         conds = [
             *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
             *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
@@ -2157,6 +2157,8 @@ async def get_business_dashboard(
             conds.append(flag.is_(True))
         if code is not None:
             conds.append(Account.code == code)
+        if codes is not None:
+            conds.append(Account.code.in_(codes))
         if date_from is not None:
             conds.append(JournalEntry.entry_date >= date_from)
         if date_to is not None:
@@ -2189,7 +2191,15 @@ async def get_business_dashboard(
     cash_d, cash_c = await _sum(flag=Account.is_cash_bank, date_to=as_of)
     recv_d, recv_c = await _sum(flag=Account.is_receivable, date_to=as_of)
     pay_d, pay_c = await _sum(flag=Account.is_payable, date_to=as_of)
-    gst_d, gst_c = await _sum(code="22004", date_to=as_of)
+    # Net GST liability = Output GST (22001/22002/23003) less Input ITC
+    # (14001/14002/14003) plus the net clearing account (22004) after set-off.
+    # Summing all heads gives the correct running position whether or not a GST
+    # set-off journal has been posted (pre-settlement the balance sits in the
+    # Output/Input heads; post-settlement it moves to 22004).
+    gst_d, gst_c = await _sum(
+        codes=("22001", "22002", "22003", "22004", "14001", "14002", "14003"),
+        date_to=as_of,
+    )
     cash = _q(cash_d - cash_c)
     receivable = _q(recv_d - recv_c)
     payable = _q(pay_c - pay_d)

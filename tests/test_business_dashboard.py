@@ -46,7 +46,7 @@ async def test_dashboard_computes_from_ledger(async_session: AsyncSession):
                          account_type="income", classification="nominal")
     expense = await _acct(async_session, tenant_id=tenant, code="51001", name="Purchases",
                           account_type="expense", classification="nominal")
-    payable = await _acct(async_session, tenant_id=tenant, code="22001", name="Sundry Creditors",
+    payable = await _acct(async_session, tenant_id=tenant, code="21001", name="Sundry Creditors",
                           account_type="liability", classification="personal", is_payable=True)
     gst = await _acct(async_session, tenant_id=tenant, code="22004", name="GST Payable",
                       account_type="liability")
@@ -88,6 +88,43 @@ async def test_dashboard_computes_from_ledger(async_session: AsyncSession):
     assert dash["monthly_trend"][-1][1] == round(1000 / 100000, 2)   # income in lakhs
     # Earlier months in the FY window have no postings.
     assert dash["monthly_trend"][0][1] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_gst_from_output_and_input_pre_settlement(async_session: AsyncSession):
+    """Before a GST set-off journal moves the balance to 22004, the net GST
+    liability sits in the Output GST heads net of Input ITC. The tile must
+    reflect that running position, not just the (still-empty) 22004 clearing acct."""
+    tenant = "tenant-dash-gst"
+    cash = await _acct(async_session, tenant_id=tenant, code="11010", name="Bank",
+                       account_type="asset", is_cash_bank=True)
+    out_cgst = await _acct(async_session, tenant_id=tenant, code="22001", name="Output CGST",
+                           account_type="liability", classification="personal")
+    out_sgst = await _acct(async_session, tenant_id=tenant, code="22002", name="Output SGST",
+                           account_type="liability", classification="personal")
+    in_cgst = await _acct(async_session, tenant_id=tenant, code="14001", name="Input CGST",
+                          account_type="asset", classification="personal")
+    in_sgst = await _acct(async_session, tenant_id=tenant, code="14002", name="Input SGST",
+                          account_type="asset", classification="personal")
+    await async_session.commit()
+
+    # Output GST collected 90 (45+45); Input ITC available 30 (15+15). Net = 60.
+    await _post(async_session, tenant, key="sale-gst", entry_date=date(2026, 6, 3), lines=[
+        JournalLineIn(account_id=cash.id, debit=Decimal("90"), credit=Decimal("0")),
+        JournalLineIn(account_id=out_cgst.id, debit=Decimal("0"), credit=Decimal("45")),
+        JournalLineIn(account_id=out_sgst.id, debit=Decimal("0"), credit=Decimal("45")),
+    ])
+    await _post(async_session, tenant, key="buy-gst", entry_date=date(2026, 6, 4), lines=[
+        JournalLineIn(account_id=in_cgst.id, debit=Decimal("15"), credit=Decimal("0")),
+        JournalLineIn(account_id=in_sgst.id, debit=Decimal("15"), credit=Decimal("0")),
+        JournalLineIn(account_id=cash.id, debit=Decimal("0"), credit=Decimal("30")),
+    ])
+
+    dash = await get_business_dashboard(
+        async_session, tenant_id=tenant, app_key=APP_KEY, accounting_entity_id=ENTITY_ID, as_of=AS_OF,
+    )
+    assert dash["gst"]["payable"] == "60.00"   # 90 output - 30 input ITC
+    assert dash["gst"]["status"] == "Due"
 
 
 @pytest.mark.asyncio
