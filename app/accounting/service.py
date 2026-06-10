@@ -253,6 +253,7 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("23001", "TDS Payable", "liability", "personal", is_payable=True),
     _default_account("23002", "Statutory Dues Payable", "liability", "personal", is_payable=True),
     _default_account("23003", "Interest Payable on GST", "liability", "personal", is_payable=True),
+    _default_account("23004", "TCS Payable", "liability", "personal", is_payable=True),
     # 24xxx Advances and loans
     _default_account("24001", "Advance from Customers", "liability", "personal"),
     _default_account("24002", "Loans Payable", "liability", "personal"),

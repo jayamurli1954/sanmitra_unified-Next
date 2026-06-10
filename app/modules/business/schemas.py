@@ -21,6 +21,7 @@ class PartyCreateRequest(BaseModel):
     party_type: PartyType = "customer"
     party_code: str | None = Field(default=None, max_length=40)
     gstin: str | None = Field(default=None, max_length=15)
+    pan: str | None = Field(default=None, max_length=10)
     email: str | None = Field(default=None, max_length=160)
     phone: str | None = Field(default=None, max_length=30)
     billing_address: str | None = Field(default=None, max_length=500)
@@ -34,6 +35,7 @@ class PartyUpdateRequest(BaseModel):
     party_name: str | None = Field(default=None, min_length=1, max_length=160)
     party_type: PartyType | None = None
     gstin: str | None = Field(default=None, max_length=15)
+    pan: str | None = Field(default=None, max_length=10)
     email: str | None = Field(default=None, max_length=160)
     phone: str | None = Field(default=None, max_length=30)
     billing_address: str | None = Field(default=None, max_length=500)
@@ -51,6 +53,7 @@ class PartyResponse(BaseModel):
     party_type: str
     party_code: str
     gstin: str | None = None
+    pan: str | None = None
     email: str | None = None
     phone: str | None = None
     billing_address: str | None = None
@@ -203,6 +206,9 @@ class SalesInvoiceCreateRequest(BaseModel):
     reference: str | None = Field(default=None, max_length=120)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[SalesInvoiceLineItem] = Field(..., min_length=1)
+    # TCS (Income-tax 206C): section key from TCS_SECTIONS; rate overridable.
+    tcs_section: str | None = Field(default=None, max_length=20)
+    tcs_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -237,6 +243,14 @@ class SalesInvoiceResponse(BaseModel):
     igst_total: Decimal
     gst_total: Decimal
     invoice_total: Decimal
+    # TCS collected on top of the invoice total (customer owes grand_total).
+    tcs_section: str | None = None
+    tcs_rate: Decimal | None = None
+    tcs_base_amount: Decimal | None = None
+    tcs_amount: Decimal = Decimal("0")
+    grand_total: Decimal | None = None
+    collectee_pan: str | None = None
+    collectee_pan_missing: bool = False
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
@@ -353,6 +367,10 @@ class PurchaseBillCreateRequest(BaseModel):
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[PurchaseBillLineItem] = Field(..., min_length=1)
+    # TDS (Income-tax): section key from TDS_SECTIONS; rate defaults from the
+    # section master, overridable (rates change by Finance Act / 206AA no-PAN 20%).
+    tds_section: str | None = Field(default=None, max_length=20)
+    tds_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -384,6 +402,14 @@ class PurchaseBillResponse(BaseModel):
     igst_total: Decimal
     gst_total: Decimal
     bill_total: Decimal
+    # TDS deducted at credit time (vendor is owed net_payable = total - TDS).
+    tds_section: str | None = None
+    tds_rate: Decimal | None = None
+    tds_base_amount: Decimal | None = None
+    tds_amount: Decimal = Decimal("0")
+    net_payable: Decimal | None = None
+    deductee_pan: str | None = None
+    deductee_pan_missing: bool = False
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None

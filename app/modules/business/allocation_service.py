@@ -44,12 +44,15 @@ PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
 
 # Per side: (open-item collection, id field, number field, total field, date field,
 #            party field, voucher_type that pays it down)
+# settle_field overrides total_field when present on the document: a TCS invoice
+# is owed grand_total (incl. TCS); a TDS bill is owed only net_payable.
 _SIDE = {
     "receivable": {
         "collection": SALES_INVOICES_COLLECTION,
         "id_field": "invoice_id",
         "number_field": "invoice_number",
         "total_field": "invoice_total",
+        "settle_field": "grand_total",
         "date_field": "invoice_date",
         "party_field": "customer_party_id",
         "voucher_type": "receipt",
@@ -59,6 +62,7 @@ _SIDE = {
         "id_field": "bill_id",
         "number_field": "bill_number",
         "total_field": "bill_total",
+        "settle_field": "net_payable",
         "date_field": "bill_date",
         "party_field": "vendor_party_id",
         "voucher_type": "payment",
@@ -119,7 +123,7 @@ def open_item_view(
     as_of: date,
 ) -> dict:
     """Shape one open item (invoice/bill) with its outstanding + age."""
-    total = _d(item.get(spec["total_field"]))
+    total = _d(item.get(spec["settle_field"]) or item.get(spec["total_field"]))
     allocated = sum_allocated(allocs_for_item)
     outstanding = (total - allocated).quantize(_CENT)
     item_date = item.get(spec["date_field"])

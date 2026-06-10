@@ -18,6 +18,7 @@ from app.accounting.service import (
 )
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
+from app.modules.business.tds import compute_tcs, compute_tds
 from app.modules.business.schemas import (
     BillPaymentUpdateRequest,
     CaDocumentCreateRequest,
@@ -77,6 +78,10 @@ GST_INTEREST_PAYABLE_CODE = "23003"
 GST_INTEREST_EXPENSE_CODE = "54006"
 ITC_REVERSAL_DAYS = 180
 ITC_INTEREST_RATE = Decimal("0.18")  # 18% p.a. under Section 50
+
+# Income-tax TDS/TCS statutory dues accounts.
+TDS_PAYABLE_CODE = "23001"
+TCS_PAYABLE_CODE = "23004"
 
 # GST Composition Scheme (Section 10) — tax rate by category, on turnover.
 # Manufacturers/traders 1%, restaurants 5%, other services 6%.
@@ -395,6 +400,7 @@ async def create_party(
         "party_type": payload.party_type,
         "party_code": code,
         "gstin": payload.gstin,
+        "pan": payload.pan,
         "email": payload.email,
         "phone": payload.phone,
         "billing_address": payload.billing_address,
@@ -1212,6 +1218,16 @@ async def create_sales_invoice(
     if invoice_total <= Decimal("0"):
         raise AccountingValidationError("Invoice total must be greater than zero")
 
+    # TCS (206C) is collected on the GST-inclusive consideration (Circular
+    # 17/2020), so its base is the invoice total; the customer owes grand_total.
+    tcs_rate = tcs_amount = None
+    if payload.tcs_section:
+        try:
+            tcs_rate, tcs_amount = compute_tcs(payload.tcs_section, invoice_total, payload.tcs_rate)
+        except ValueError as exc:
+            raise AccountingValidationError(str(exc))
+    grand_total = invoice_total + (tcs_amount or Decimal("0"))
+
     receivable_id = await _resolve_voucher_account_id(
         session,
         tenant_id=tenant_id,
@@ -1232,9 +1248,21 @@ async def create_sales_invoice(
     )
 
     journal_lines = [
-        JournalLineIn(account_id=receivable_id, debit=invoice_total, credit=Decimal("0"), party_id=payload.customer_party_id),
+        JournalLineIn(account_id=receivable_id, debit=grand_total, credit=Decimal("0"), party_id=payload.customer_party_id),
         JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
     ]
+    if tcs_amount and tcs_amount > Decimal("0"):
+        # Cr TCS Payable — collected from the customer, owed to the department.
+        tcs_payable_id = await _resolve_voucher_account_id(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            account_id=None,
+            account_code=TCS_PAYABLE_CODE,
+            side="TCS payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=tcs_payable_id, debit=Decimal("0"), credit=tcs_amount))
     for gst_amount, code in (
         (cgst_total, OUTPUT_CGST_CODE),
         (sgst_total, OUTPUT_SGST_CODE),
@@ -1289,6 +1317,14 @@ async def create_sales_invoice(
         "igst_total": str(igst_total),
         "gst_total": str(gst_total),
         "invoice_total": str(invoice_total),
+        # TCS collected on top of the invoice value (None section => none).
+        "tcs_section": payload.tcs_section,
+        "tcs_rate": str(tcs_rate) if tcs_rate is not None else None,
+        "tcs_base_amount": str(invoice_total) if payload.tcs_section else None,
+        "tcs_amount": str(tcs_amount) if tcs_amount is not None else "0",
+        "grand_total": str(grand_total),
+        "collectee_pan": customer.get("pan"),
+        "collectee_pan_missing": bool(payload.tcs_section) and not customer.get("pan"),
         "status": "posting",
         "created_by": created_by,
         "created_at": now,
@@ -1525,6 +1561,19 @@ async def create_purchase_bill(
     )
     is_composition = profile["is_composition"]
 
+    # TDS (Income-tax) — deducted at credit time on the GST-exclusive taxable
+    # value (Circular 23/2017). For composition entities GST is part of cost,
+    # so the books' taxable_total (pre-GST) is still the correct TDS base.
+    tds_rate = tds_amount = None
+    if payload.tds_section:
+        try:
+            tds_rate, tds_amount = compute_tds(payload.tds_section, taxable_total, payload.tds_rate)
+        except ValueError as exc:
+            raise AccountingValidationError(str(exc))
+        if tds_amount >= bill_total:
+            raise AccountingValidationError("TDS deduction cannot equal or exceed the bill total")
+    net_payable = bill_total - (tds_amount or Decimal("0"))
+
     payable_id = await _resolve_voucher_account_id(
         session,
         tenant_id=tenant_id,
@@ -1549,7 +1598,6 @@ async def create_purchase_bill(
         # Dr expense (full bill incl. GST); Cr Accounts Payable. No Input-GST legs.
         journal_lines = [
             JournalLineIn(account_id=expense_id, debit=bill_total, credit=Decimal("0")),
-            JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id),
         ]
     else:
         # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
@@ -1572,7 +1620,19 @@ async def create_purchase_bill(
                     side="input GST",
                 )
                 journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
-        journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id))
+    if tds_amount and tds_amount > Decimal("0"):
+        # Cr TDS Payable for the deduction; the vendor is only owed the net.
+        tds_payable_id = await _resolve_voucher_account_id(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            account_id=None,
+            account_code=TDS_PAYABLE_CODE,
+            side="TDS payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=tds_payable_id, debit=Decimal("0"), credit=tds_amount))
+    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=net_payable, party_id=payload.vendor_party_id))
 
     bill_id = str(uuid4())
     bill_number = payload.bill_number.strip()
@@ -1600,6 +1660,14 @@ async def create_purchase_bill(
         "igst_total": str(igst_total),
         "gst_total": str(gst_total),
         "bill_total": str(bill_total),
+        # TDS deducted at source (None section => no deduction, net == total).
+        "tds_section": payload.tds_section,
+        "tds_rate": str(tds_rate) if tds_rate is not None else None,
+        "tds_base_amount": str(taxable_total) if payload.tds_section else None,
+        "tds_amount": str(tds_amount) if tds_amount is not None else "0",
+        "net_payable": str(net_payable),
+        "deductee_pan": vendor.get("pan"),
+        "deductee_pan_missing": bool(payload.tds_section) and not vendor.get("pan"),
         # Composition dealers capitalise input GST into cost (no ITC claimed).
         "itc_claimed": not is_composition,
         "status": "posting",
@@ -1790,15 +1858,18 @@ async def mark_bill_payment(
         raise AccountingValidationError("Only posted purchase bills can record payments")
 
     bill_total = Decimal(str(bill.get("bill_total") or "0"))
+    # With TDS the vendor is only owed the net; the deducted tax is discharged
+    # via the TDS challan, so full settlement is reached at net_payable.
+    settle_total = Decimal(str(bill.get("net_payable") or bill_total))
     paid_amount = Decimal(payload.paid_amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if paid_amount < 0:
         raise AccountingValidationError("Paid amount cannot be negative")
-    if paid_amount > bill_total:
-        raise AccountingValidationError("Paid amount cannot exceed the bill total")
+    if paid_amount > settle_total:
+        raise AccountingValidationError("Paid amount cannot exceed the amount payable on the bill")
 
     if paid_amount <= 0:
         payment_status = "unpaid"
-    elif paid_amount >= bill_total:
+    elif paid_amount >= settle_total:
         payment_status = "paid"
     else:
         payment_status = "partial"
@@ -1887,6 +1958,8 @@ async def preview_itc_reversals(
                 "payment_status": bill.get("payment_status", "unpaid"),
                 "paid_amount": str(bill.get("paid_amount") or "0"),
                 "bill_total": str(bill.get("bill_total") or "0"),
+                # Full settlement target — net of TDS when the bill deducted any.
+                "net_payable": str(bill.get("net_payable") or bill.get("bill_total") or "0"),
                 "itc_amounts": {h: str(split[h]) for h in ("igst", "cgst", "sgst")},
                 "itc_total": str(itc_total),
                 "interest_amount": str(interest),

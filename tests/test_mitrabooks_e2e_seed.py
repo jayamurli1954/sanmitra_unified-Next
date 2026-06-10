@@ -89,6 +89,8 @@ def _fake_business_collections() -> dict[str, FakeCollection]:
         business_service.PARTIES_COLLECTION: FakeCollection(),
         business_service.VOUCHERS_COLLECTION: FakeCollection(),
         business_service.VOUCHER_COUNTERS_COLLECTION: FakeCollection(),
+        business_service.SALES_INVOICES_COLLECTION: FakeCollection(),
+        business_service.CA_DOCUMENTS_COLLECTION: FakeCollection(),
     }
 
 
@@ -99,7 +101,10 @@ async def test_mitrabooks_e2e_seed_creates_report_ready_business_tenant(async_se
     async def noop_audit_event(**_kwargs):
         return None
 
-    monkeypatch.setattr(business_service, "get_collection", lambda name: collections[name])
+    # setdefault: the seed path touches auxiliary collections (invoice settings,
+    # period locks, ...) that grow over time — back any unlisted name with an
+    # empty FakeCollection instead of KeyError-ing on each new feature.
+    monkeypatch.setattr(business_service, "get_collection", lambda name: collections.setdefault(name, FakeCollection()))
     monkeypatch.setattr(business_service, "log_audit_event", noop_audit_event)
 
     first = await business_seed.ensure_mitrabooks_e2e_seed(
