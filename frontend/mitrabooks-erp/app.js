@@ -57,7 +57,7 @@ function businessNavigationGroups() {
     {
       name: "Banking & Treasury",
       items: [
-        { label: "Bank Feeds", businessWorkspace: "bank-feeds", icon: "BF", module: { module_key: "banking", frontend_path: "/business/bank-feeds", enabled: false } },
+        { label: "Bank Reconciliation", businessWorkspace: "bank-recon", icon: "BR", module: { module_key: "banking", frontend_path: "/business/bank-recon", enabled: true } },
         { label: "UPI / QR Payments", businessWorkspace: "upi-payments", icon: "UP", module: { module_key: "payments", frontend_path: "/business/upi-payments", enabled: false } },
         { label: "Reconciliation", businessWorkspace: "reconciliation", icon: "RC", module: { module_key: "accounting", frontend_path: "/accounting/reconciliation", enabled: true } },
       ],
@@ -4548,7 +4548,8 @@ function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "reports"
       || activeBusinessWorkspace === "gst-returns"
       || activeBusinessWorkspace === "reconciliation"
-      || activeBusinessWorkspace === "tds-tcs") {
+      || activeBusinessWorkspace === "tds-tcs"
+      || activeBusinessWorkspace === "bank-recon") {
     return renderBusinessReportsWorkspace();
   }
   if (activeBusinessWorkspace === "sales") {
@@ -4981,11 +4982,12 @@ function setBusinessWorkspace(workspace) {
     loadAuditEvents();
   } else if (workspace === "accounting") {
     refreshCurrentAccountingDrilldown();
-  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation" || workspace === "tds-tcs") {
+  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation" || workspace === "tds-tcs" || workspace === "bank-recon") {
     // Sidebar shortcuts open the reports workspace on a specific tab.
     if (workspace === "gst-returns") businessReportState.tab = "gst-returns";
     else if (workspace === "reconciliation") businessReportState.tab = "payment-allocation";
     else if (workspace === "tds-tcs") businessReportState.tab = "tds";
+    else if (workspace === "bank-recon") businessReportState.tab = "bank-recon";
     loadBusinessAccounts();
     refreshCurrentBusinessReport();
   } else if (workspace === "sales") {
@@ -5041,6 +5043,7 @@ function syncBusinessNavActiveState() {
       "gst-returns": "GST Returns",
       "reconciliation": "Reconciliation",
       "tds-tcs": "TDS / TCS",
+      "bank-recon": "Bank Reconciliation",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
     const label = isPlannedOrgWorkspace
@@ -5101,6 +5104,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "gst-settlement", label: "GST Settlement" },
   { id: "gst-returns", label: "GST Returns" },
   { id: "tds", label: "TDS / TCS" },
+  { id: "bank-recon", label: "Bank Reconciliation" },
   { id: "itc-reversals", label: "ITC Reversals" },
   { id: "period-locks", label: "Period Locks" },
 ];
@@ -5120,6 +5124,8 @@ let gstr4Fy = currentFinancialYear();
 let lastItcReversal = null;
 let lastTdsRegister = null;
 let tdsQuarter = currentFyQuarter();
+let lastBankRecon = null;
+let bankReconAccountId = "";
 
 // Current Indian financial year as "YYYY-YY" (FY starts April).
 function currentFinancialYear() {
@@ -5244,6 +5250,10 @@ async function refreshCurrentBusinessReport() {
     await loadItcReversalPreview(itcReversalAsOf);
   } else if (tab === "tds") {
     await loadTdsRegister(tdsQuarter);
+  } else if (tab === "bank-recon") {
+    if (!hasLoadedBusinessAccounts()) await loadBusinessAccounts();
+    if (bankReconAccountId) await loadBankReconciliation(bankReconAccountId);
+    else rerenderBusinessReportsIfActive();
   }
 }
 
@@ -5713,6 +5723,193 @@ function renderCmp08Panel() {
 }
 
 // ---- GSTR-1 outward-supplies return ------------------------------------- //
+// ---- Bank reconciliation (statement CSV vs bank-account ledger) ---------- //
+function bankAccountOptions() {
+  // Cash/bank accounts live in the 11xxx subclass of the business COA.
+  return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("11"));
+}
+
+async function loadBankReconciliation(accountId) {
+  bankReconAccountId = String(accountId || bankReconAccountId || "");
+  if (!bankReconAccountId) { rerenderBusinessReportsIfActive(); return; }
+  const result = await apiRequest("mitrabooks", `/api/v1/business/bank-recon?account_id=${encodeURIComponent(bankReconAccountId)}`, { method: "GET" });
+  lastBankRecon = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { bank_recon: { ok: result.ok, account_id: bankReconAccountId } });
+}
+
+async function uploadBankStatementFile() {
+  const accountSel = document.querySelector("[data-bankrecon-account]");
+  const fileInput = document.querySelector("[data-bankrecon-file]");
+  const accountId = accountSel?.value || bankReconAccountId;
+  if (!accountId) {
+    setLoginStatus("warn", "Pick a bank account", "Choose which ledger bank account this statement belongs to.");
+    return;
+  }
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    setLoginStatus("warn", "Choose a file", "Upload the bank statement CSV exported from net banking.");
+    return;
+  }
+  const csvText = await file.text();
+  bankReconAccountId = accountId;
+  const result = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/bank-recon/statement?account_id=${encodeURIComponent(accountId)}`,
+    { method: "POST", body: JSON.stringify({ csv: csvText }) },
+  );
+  if (result.ok) {
+    const r = result.payload || {};
+    setLoginStatus("ok", "Statement imported", `${r.inserted || 0} line(s) added, ${r.skipped_duplicates || 0} duplicate(s) skipped.`);
+    await loadBankReconciliation(accountId);
+  } else {
+    setLoginStatus("danger", "Import failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { bank_statement_upload: { ok: result.ok, status: result.status } });
+}
+
+async function confirmBankReconMatch(statementLineId, lineId) {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bank-recon/match", {
+    method: "POST",
+    body: JSON.stringify({
+      account_id: Number(bankReconAccountId),
+      statement_line_id: statementLineId,
+      line_id: Number(lineId),
+    }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Matched", "Statement line matched to the book entry.");
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Match failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { bank_recon_match: { ok: result.ok, status: result.status } });
+}
+
+async function reverseBankReconMatch(matchId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/bank-recon/match/${encodeURIComponent(matchId)}/reverse`, { method: "POST" });
+  if (result.ok) {
+    setLoginStatus("ok", "Unmatched", "The match was reversed; both lines are open again.");
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Unmatch failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { bank_recon_unmatch: { ok: result.ok, status: result.status } });
+}
+
+function renderBankReconPanel() {
+  const accounts = bankAccountOptions();
+  const options = `<option value="">Select bank account</option>` + accounts.map((a) =>
+    `<option value="${escapeHtml(String(a.id))}" ${String(a.id) === String(bankReconAccountId) ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("");
+  const controls = `
+    <div class="report-date-controls">
+      <label>Bank account <select data-bankrecon-account>${options}</select></label>
+      <button class="secondary" type="button" data-business-action="bankrecon-load">Load</button>
+      <label>Statement CSV <input type="file" accept=".csv,text/csv" data-bankrecon-file></label>
+      <button class="secondary" type="button" data-business-action="bankrecon-upload">Import statement</button>
+    </div>
+    <p class="muted">Export the account statement as CSV from net banking and import it here. Lines are matched against the posted ledger; confirming a match never changes the books.</p>`;
+  if (!bankReconAccountId) return `${controls}<p class="muted">Select a bank account to begin.</p>`;
+  const r = lastBankRecon;
+  if (!r) return `${controls}<p class="muted">Loading bank reconciliation...</p>`;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("Bank Reconciliation", r)}`;
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const s = r.summary || {};
+  const diff = s.difference;
+  const clean = diff !== null && diff !== undefined && Number(diff) === 0;
+
+  const cards = [
+    ["Balance as per books", s.book_balance, `${s.book_lines_total || 0} ledger line(s)`],
+    ["Balance as per bank", s.statement_balance, `${s.statement_lines_total || 0} statement line(s)`],
+    ["Expected bank balance", s.expected_statement_balance, "books + reconciling items"],
+    ["Difference", diff, clean ? "fully reconciled" : "investigate unmatched lines"],
+  ].map(([title, val, sub]) => `
+    <article>
+      <h4>${escapeHtml(title)}</h4>
+      <div class="invoice-totals"><div class="invoice-grand"><span>${escapeHtml(sub)}</span><strong>${val === null || val === undefined ? "—" : num(val)}</strong></div></div>
+    </article>`).join("");
+
+  const suggestionRows = (r.suggestions || []).map((g) => `
+    <tr>
+      <td>${escapeHtml(g.statement?.txn_date || "")}</td>
+      <td>${escapeHtml(g.statement?.description || g.statement?.ref || "")}</td>
+      <td>${escapeHtml(g.book?.entry_date || "")}</td>
+      <td>${escapeHtml(g.book?.reference || g.book?.description || "")}</td>
+      <td class="amount">${num(g.amount)}</td>
+      <td><span class="pill ${g.confidence === "ref" ? "ok" : ""}">${escapeHtml(g.confidence === "ref" ? "reference" : `±${g.date_diff_days}d`)}</span></td>
+      <td><button class="primary" type="button" data-business-action="bankrecon-match" data-stmt-id="${escapeHtml(g.statement_line_id || "")}" data-line-id="${escapeHtml(String(g.line_id || ""))}">Match</button></td>
+    </tr>`).join("");
+
+  const bankOnlyRows = (r.in_bank_not_in_books || []).map((l) => `
+    <tr>
+      <td>${escapeHtml(l.txn_date || "")}</td>
+      <td>${escapeHtml(l.description || "")}</td>
+      <td>${escapeHtml(l.ref || "")}</td>
+      <td class="amount">${Number(l.deposit || 0) > 0 ? num(l.deposit) : ""}</td>
+      <td class="amount">${Number(l.withdrawal || 0) > 0 ? num(l.withdrawal) : ""}</td>
+    </tr>`).join("");
+
+  const bookOnlyRows = (r.in_books_not_in_bank || []).map((l) => `
+    <tr>
+      <td>${escapeHtml(l.entry_date || "")}</td>
+      <td>${escapeHtml(l.reference || "")}</td>
+      <td>${escapeHtml(l.description || "")}</td>
+      <td class="amount">${Number(l.debit || 0) > 0 ? num(l.debit) : ""}</td>
+      <td class="amount">${Number(l.credit || 0) > 0 ? num(l.credit) : ""}</td>
+    </tr>`).join("");
+
+  const matchedRows = (r.matched || []).map((m) => `
+    <tr>
+      <td>${escapeHtml(m.statement_txn_date || "")}</td>
+      <td>${escapeHtml(m.book_entry_date || "")}</td>
+      <td>${escapeHtml(m.side || "")}</td>
+      <td class="amount">${num(m.amount)}</td>
+      <td><button class="secondary" type="button" data-business-action="bankrecon-unmatch" data-match-id="${escapeHtml(m.match_id || "")}">Unmatch</button></td>
+    </tr>`).join("");
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>${escapeHtml(`${r.account?.code || ""} - ${r.account?.name || ""}`)} as of ${escapeHtml(r.as_of || "")} · ${escapeHtml(String(s.matched_count || 0))} matched.</p></div>
+      <span class="pill ${clean ? "ok" : "warn"}">${clean ? "reconciled" : (diff === null || diff === undefined ? "no statement balance" : "difference " + formatCurrency(Number(diff)))}</span>
+    </div>
+    <div class="dashboard-main-grid platform-grid">${cards}</div>
+
+    <div class="table-preview compact-table">
+      <h4>Suggested matches (confirm each — nothing is applied automatically)</h4>
+      <table>
+        <thead><tr><th>Bank date</th><th>Bank narration</th><th>Book date</th><th>Book entry</th><th class="amount">Amount</th><th>Basis</th><th></th></tr></thead>
+        <tbody>${suggestionRows || `<tr><td colspan="7" class="muted">No suggestions — nothing left that agrees on amount within the date window.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>In bank, not in books (${escapeHtml(String((r.in_bank_not_in_books || []).length))}) — post these (charges, interest, direct credits)</h4>
+      <table>
+        <thead><tr><th>Date</th><th>Narration</th><th>Ref</th><th class="amount">Deposit</th><th class="amount">Withdrawal</th></tr></thead>
+        <tbody>${bankOnlyRows || `<tr><td colspan="5" class="muted">Every bank line is matched or suggested.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>In books, not in bank (${escapeHtml(String((r.in_books_not_in_bank || []).length))}) — uncleared cheques / deposits in transit</h4>
+      <table>
+        <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
+        <tbody>${bookOnlyRows || `<tr><td colspan="5" class="muted">Every book line is reflected in the bank statement.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>Matched (${escapeHtml(String((r.matched || []).length))})</h4>
+      <table>
+        <thead><tr><th>Bank date</th><th>Book date</th><th>Side</th><th class="amount">Amount</th><th></th></tr></thead>
+        <tbody>${matchedRows || `<tr><td colspan="5" class="muted">No confirmed matches yet.</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
+}
+
 // ---- TDS / TCS quarterly register (Form 26Q / 27EQ working paper) -------- //
 async function loadTdsRegister(quarter) {
   tdsQuarter = quarter || tdsQuarter;
@@ -6118,7 +6315,7 @@ function renderPeriodLocksPanel() {
 }
 
 function rerenderBusinessReportsIfActive() {
-  const reportWorkspaces = ["reports", "gst-returns", "reconciliation", "tds-tcs"];
+  const reportWorkspaces = ["reports", "gst-returns", "reconciliation", "tds-tcs", "bank-recon"];
   if (currentExperience === "mitrabooks" && reportWorkspaces.includes(activeBusinessWorkspace)) {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
@@ -6457,6 +6654,8 @@ function renderBusinessReportsWorkspace() {
     body = renderItcReversalPanel();
   } else if (businessReportState.tab === "tds") {
     body = renderTdsRegisterPanel();
+  } else if (businessReportState.tab === "bank-recon") {
+    body = renderBankReconPanel();
   }
 
   return `
@@ -12618,6 +12817,14 @@ dashboardPreview.addEventListener("click", (event) => {
     reconcileGstr2b();
   } else if (businessAction === "tds-load") {
     previewTdsRegisterFromInput();
+  } else if (businessAction === "bankrecon-load") {
+    loadBankReconciliation(document.querySelector("[data-bankrecon-account]")?.value || "");
+  } else if (businessAction === "bankrecon-upload") {
+    uploadBankStatementFile();
+  } else if (businessAction === "bankrecon-match") {
+    confirmBankReconMatch(button.getAttribute("data-stmt-id") || "", button.getAttribute("data-line-id") || "");
+  } else if (businessAction === "bankrecon-unmatch") {
+    reverseBankReconMatch(button.getAttribute("data-match-id") || "");
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
