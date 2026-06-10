@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -1870,4 +1870,34 @@ async def business_gstr4_return(
         accounting_entity_id=accounting_entity_id,
         financial_year=financial_year,
         gstin=gstin,
+    )
+
+
+@router.post("/returns/gstr-2b/reconcile")
+async def business_gstr2b_reconcile(
+    period: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    gstr2b: dict = Body(..., description="The GSTR-2B JSON downloaded from the GST portal."),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Reconcile an uploaded GSTR-2B JSON for a 'YYYY-MM' period against the input
+    GST booked on posted purchase bills. Classifies matched / mismatch / available-
+    not-booked / at-risk (booked but not in 2B, per Section 16(2)(aa))."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GSTR-2B reconciliation",
+    )
+    return await gst_returns.build_gstr2b_reconciliation(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        period=period,
+        gstr2b_payload=gstr2b,
     )

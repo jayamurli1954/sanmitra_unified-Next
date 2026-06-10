@@ -774,3 +774,131 @@ async def build_gstr4(
         inward_registered=inward_registered, inward_unregistered=inward_unregistered,
         is_composition=profile.get("is_composition", False),
     )
+
+
+# =========================================================================== #
+# GSTR-2B / ITC reconciliation — match the portal's auto-drafted ITC statement
+# against the input GST we actually booked (Section 16(2)(aa) / Rule 36(4))
+# =========================================================================== #
+def _norm_inv(num) -> str:
+    return "".join(str(num or "").split()).upper()
+
+
+def parse_gstr2b(payload: dict) -> list[dict]:
+    """Normalise an uploaded GSTR-2B JSON into supplier B2B invoices with ITC.
+
+    Tolerant of the portal's nesting (`data.docdata.b2b`) and of the per-item tax
+    keys being either igst/cgst/sgst or iamt/camt/samt.
+    """
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    docdata = data.get("docdata") if isinstance(data.get("docdata"), dict) else data
+    rows: list[dict] = []
+    for sup in docdata.get("b2b") or []:
+        ctin = str(sup.get("ctin") or "").strip()
+        for inv in sup.get("inv") or []:
+            igst = cgst = sgst = Decimal("0")
+            for itm in inv.get("itms") or []:
+                d = itm.get("itm_det") if isinstance(itm.get("itm_det"), dict) else itm
+                igst += _D(d.get("igst") if d.get("igst") is not None else d.get("iamt"))
+                cgst += _D(d.get("cgst") if d.get("cgst") is not None else d.get("camt"))
+                sgst += _D(d.get("sgst") if d.get("sgst") is not None else d.get("samt"))
+            rows.append({
+                "gstin": ctin,
+                "invoice_number": str(inv.get("inum") or "").strip(),
+                "date": str(inv.get("dt") or inv.get("idt") or "")[:10],
+                "value": _q(_D(inv.get("val"))),
+                "igst": _q(igst), "cgst": _q(cgst), "sgst": _q(sgst),
+                "tax_total": _q(igst + cgst + sgst),
+            })
+    return rows
+
+
+def reconcile_gstr2b(
+    *, period: str, gstr2b_invoices: list[dict], book_invoices: list[dict], tolerance=Decimal("1.00"),
+) -> dict:
+    """Match GSTR-2B supplier invoices against booked purchases by (GSTIN, invoice
+    no.) and classify: matched, mismatch (amounts differ), in 2B only (available,
+    not booked), in books only (ITC claimed but not reflected — at risk)."""
+    by_2b = {(g["gstin"], _norm_inv(g["invoice_number"])): g for g in gstr2b_invoices}
+    by_book = {(b["gstin"], _norm_inv(b["invoice_number"])): b for b in book_invoices}
+
+    matched, mismatch, only_2b, only_books = [], [], [], []
+    for key, g in by_2b.items():
+        b = by_book.get(key)
+        if b is None:
+            only_2b.append(g)
+        elif abs(g["tax_total"] - b["tax_total"]) <= tolerance:
+            matched.append({"gstin": g["gstin"], "invoice_number": g["invoice_number"],
+                            "itc": g["tax_total"], "book_bill_id": b.get("bill_id")})
+        else:
+            mismatch.append({"gstin": g["gstin"], "invoice_number": g["invoice_number"],
+                             "itc_2b": g["tax_total"], "itc_books": b["tax_total"],
+                             "difference": _q(g["tax_total"] - b["tax_total"]),
+                             "book_bill_id": b.get("bill_id")})
+    for key, b in by_book.items():
+        if key not in by_2b:
+            only_books.append(b)
+
+    def _sum(rows, field):
+        return _q(sum((r[field] for r in rows), Decimal("0")))
+
+    itc_2b = _q(sum((g["tax_total"] for g in gstr2b_invoices), Decimal("0")))
+    itc_books = _q(sum((b["tax_total"] for b in book_invoices), Decimal("0")))
+    matched_itc = _sum(matched, "itc")
+    return {
+        "report_type": "GSTR-2B-reconciliation",
+        "period": period,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "itc_as_per_2b": itc_2b,
+            "itc_as_per_books": itc_books,
+            "matched_itc": matched_itc,
+            "matched_count": len(matched),
+            "mismatch_count": len(mismatch),
+            "mismatch_itc_difference": _sum(mismatch, "difference"),
+            # In 2B but not booked: ITC available you may have missed recording.
+            "available_not_booked": _sum(only_2b, "tax_total"),
+            "available_not_booked_count": len(only_2b),
+            # Booked but absent from 2B: ITC at risk / not yet eligible.
+            "at_risk_not_in_2b": _sum(only_books, "tax_total"),
+            "at_risk_count": len(only_books),
+        },
+        "matched": matched,
+        "mismatch": mismatch,
+        "in_2b_not_in_books": only_2b,
+        "in_books_not_in_2b": only_books,
+        "notes": [
+            "ITC under 'in books, not in 2B' is at risk under Section 16(2)(aa) — "
+            "claim only what is reflected in GSTR-2B.",
+            "Matching is by supplier GSTIN + invoice number; amounts within "
+            f"Rs {tolerance} are treated as agreeing.",
+        ],
+    }
+
+
+async def build_gstr2b_reconciliation(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, period: str, gstr2b_payload: dict,
+) -> dict:
+    """Reconcile an uploaded GSTR-2B for a 'YYYY-MM' period against the input GST
+    booked on posted purchase bills (ITC-claimed, registered suppliers) that month."""
+    first, last = _period_bounds(period)
+    bills = await _posted_in_period(
+        PURCHASE_BILLS_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="bill_date",
+    )
+    book_invoices = []
+    for bill in bills:
+        if bill.get("itc_claimed") is False:           # composition bills claim no ITC
+            continue
+        gstin = str(bill.get("vendor_gstin") or "").strip()
+        if not gstin:                                  # 2B only carries registered suppliers
+            continue
+        igst, cgst, sgst = _D(bill.get("igst_total")), _D(bill.get("cgst_total")), _D(bill.get("sgst_total"))
+        book_invoices.append({
+            "gstin": gstin, "invoice_number": str(bill.get("bill_number") or "").strip(),
+            "date": str(bill.get("bill_date") or "")[:10], "bill_id": bill.get("bill_id"),
+            "igst": _q(igst), "cgst": _q(cgst), "sgst": _q(sgst), "tax_total": _q(igst + cgst + sgst),
+        })
+    return reconcile_gstr2b(
+        period=period, gstr2b_invoices=parse_gstr2b(gstr2b_payload or {}), book_invoices=book_invoices,
+    )

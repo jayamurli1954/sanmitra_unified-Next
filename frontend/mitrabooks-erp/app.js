@@ -5039,7 +5039,8 @@ let lastGstr3b = null;
 let lastGstr1 = null;
 let lastCmp08 = null;
 let lastGstr4 = null;
-let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1" | "cmp08" | "gstr4"
+let lastGstr2bRecon = null;
+let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1" | "cmp08" | "gstr4" | "gstr2b"
 let gstr3bPeriod = todayIsoDate().slice(0, 7);
 let cmp08Quarter = currentFyQuarter();
 let gstr4Fy = currentFinancialYear();
@@ -5162,6 +5163,7 @@ async function refreshCurrentBusinessReport() {
     if (gstReturnType === "gstr1") { await loadGstr1(gstr3bPeriod); }
     else if (gstReturnType === "cmp08") { await loadCmp08(cmp08Quarter); }
     else if (gstReturnType === "gstr4") { await loadGstr4(gstr4Fy); }
+    else if (gstReturnType === "gstr2b") { rerenderBusinessReportsIfActive(); }  // upload-driven
     else { await loadGstr3b(gstr3bPeriod); }
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
@@ -5375,14 +5377,111 @@ function renderGstReturns() {
     <button class="report-tab ${gstReturnType === id ? "active" : ""}" type="button"
       data-business-action="gst-return-type" data-return-type="${id}">${label}</button>`;
   const toggle = `<div class="report-tabs" role="tablist" style="margin:0 0 10px;">
-    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}${tabBtn("cmp08", "CMP-08 (composition)")}${tabBtn("gstr4", "GSTR-4 (annual)")}
+    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}${tabBtn("cmp08", "CMP-08 (composition)")}${tabBtn("gstr4", "GSTR-4 (annual)")}${tabBtn("gstr2b", "GSTR-2B (ITC recon)")}
   </div>`;
   let panel;
   if (gstReturnType === "gstr1") panel = renderGstr1Panel();
   else if (gstReturnType === "cmp08") panel = renderCmp08Panel();
   else if (gstReturnType === "gstr4") panel = renderGstr4Panel();
+  else if (gstReturnType === "gstr2b") panel = renderGstr2bPanel();
   else panel = renderGstr3bPanel();
   return `${toggle}${panel}`;
+}
+
+// ---- GSTR-2B / ITC reconciliation (upload the portal JSON) --------------- //
+async function reconcileGstr2b() {
+  const fileInput = document.querySelector("[data-gstr2b-file]");
+  const periodInput = document.querySelector("[data-gstr2b-period]");
+  const period = periodInput?.value || gstr3bPeriod;
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    setLoginStatus("warn", "Choose a file", "Upload the GSTR-2B JSON downloaded from the GST portal.");
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (_e) {
+    setLoginStatus("danger", "Invalid JSON", "Could not parse the uploaded file as JSON.");
+    return;
+  }
+  gstr3bPeriod = period;
+  const result = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/returns/gstr-2b/reconcile?period=${encodeURIComponent(period)}`,
+    { method: "POST", body: JSON.stringify(parsed) },
+  );
+  lastGstr2bRecon = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { gstr2b_recon: { ok: result.ok, period } });
+}
+
+function renderGstr2bPanel() {
+  const controls = `
+    <div class="report-date-controls">
+      <label>Return month <input type="month" data-gstr2b-period value="${escapeHtml(gstr3bPeriod)}"></label>
+      <label>GSTR-2B JSON <input type="file" accept="application/json,.json" data-gstr2b-file></label>
+      <button class="secondary" type="button" data-business-action="gstr2b-reconcile">Reconcile</button>
+    </div>
+    <p class="muted">Download GSTR-2B for the month from the GST portal and upload the JSON. It is matched against the input GST booked on your purchase bills.</p>`;
+  const r = lastGstr2bRecon;
+  if (!r) return controls;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("GSTR-2B reconciliation", r)}`;
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const s = r.summary || {};
+
+  const cards = [
+    ["ITC as per 2B", s.itc_as_per_2b, "Total ITC the portal shows available"],
+    ["ITC as per books", s.itc_as_per_books, "Input GST you have booked"],
+    ["Matched", s.matched_itc, `${s.matched_count || 0} invoice(s) agree`],
+    ["Available, not booked", s.available_not_booked, `${s.available_not_booked_count || 0} in 2B, missing in books`],
+    ["At risk (not in 2B)", s.at_risk_not_in_2b, `${s.at_risk_count || 0} booked, absent from 2B`],
+  ].map(([title, val, sub]) => `
+    <article>
+      <h4>${escapeHtml(title)}</h4>
+      <div class="invoice-totals"><div class="invoice-grand"><span>${escapeHtml(sub)}</span><strong>${num(val)}</strong></div></div>
+    </article>`).join("");
+
+  const mismatchRows = (r.mismatch || []).map((m) => `
+    <tr><td>${escapeHtml(m.gstin)}</td><td>${escapeHtml(m.invoice_number)}</td><td class="amount">${num(m.itc_2b)}</td><td class="amount">${num(m.itc_books)}</td><td class="amount">${num(m.difference)}</td></tr>`).join("");
+  const only2bRows = (r.in_2b_not_in_books || []).map((g) => `
+    <tr><td>${escapeHtml(g.gstin)}</td><td>${escapeHtml(g.invoice_number)}</td><td class="amount">${num(g.tax_total)}</td></tr>`).join("");
+  const onlyBookRows = (r.in_books_not_in_2b || []).map((b) => `
+    <tr><td>${escapeHtml(b.gstin)}</td><td>${escapeHtml(b.invoice_number)}</td><td class="amount">${num(b.tax_total)}</td></tr>`).join("");
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>GSTR-2B reconciliation for ${escapeHtml(r.period || gstr3bPeriod)}.</p></div>
+      <span class="pill ${Number(s.at_risk_not_in_2b || 0) > 0 ? "warn" : "ok"}">${Number(s.at_risk_not_in_2b || 0) > 0 ? "ITC at risk" : "clean"}</span>
+    </div>
+    <div class="dashboard-main-grid platform-grid">${cards}</div>
+
+    <div class="table-preview compact-table">
+      <h4>Mismatches (in both, amounts differ)</h4>
+      <table>
+        <thead><tr><th>Supplier GSTIN</th><th>Invoice</th><th class="amount">ITC (2B)</th><th class="amount">ITC (books)</th><th class="amount">Difference</th></tr></thead>
+        <tbody>${mismatchRows || `<tr><td colspan="5" class="muted">No mismatches.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>In 2B, not in books (ITC available you may have missed)</h4>
+      <table>
+        <thead><tr><th>Supplier GSTIN</th><th>Invoice</th><th class="amount">ITC</th></tr></thead>
+        <tbody>${only2bRows || `<tr><td colspan="3" class="muted">Nothing unbooked.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>In books, not in 2B (ITC at risk — Section 16(2)(aa))</h4>
+      <table>
+        <thead><tr><th>Supplier GSTIN</th><th>Invoice</th><th class="amount">ITC</th></tr></thead>
+        <tbody>${onlyBookRows || `<tr><td colspan="3" class="muted">All booked ITC is reflected in 2B.</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
 }
 
 // ---- GSTR-4 annual composition return ----------------------------------- //
@@ -12235,7 +12334,7 @@ dashboardPreview.addEventListener("click", (event) => {
     downloadGstr3bJson();
   } else if (businessAction === "gst-return-type") {
     const rt = button.getAttribute("data-return-type");
-    gstReturnType = ["gstr1", "cmp08", "gstr4"].includes(rt) ? rt : "gstr3b";
+    gstReturnType = ["gstr1", "cmp08", "gstr4", "gstr2b"].includes(rt) ? rt : "gstr3b";
     rerenderBusinessReportsIfActive();
     refreshCurrentBusinessReport();
   } else if (businessAction === "gstr1-load") {
@@ -12250,6 +12349,8 @@ dashboardPreview.addEventListener("click", (event) => {
     previewGstr4FromInput();
   } else if (businessAction === "gstr4-download-json") {
     downloadGstr4Json();
+  } else if (businessAction === "gstr2b-reconcile") {
+    reconcileGstr2b();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
