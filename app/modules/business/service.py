@@ -1520,6 +1520,11 @@ async def create_purchase_bill(
     if bill_total <= Decimal("0"):
         raise AccountingValidationError("Bill total must be greater than zero")
 
+    profile = await get_gst_profile(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+    )
+    is_composition = profile["is_composition"]
+
     payable_id = await _resolve_voucher_account_id(
         session,
         tenant_id=tenant_id,
@@ -1539,27 +1544,35 @@ async def create_purchase_bill(
         side="expense",
     )
 
-    # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
-    journal_lines = [
-        JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0")),
-    ]
-    for gst_amount, code in (
-        (cgst_total, INPUT_CGST_CODE),
-        (sgst_total, INPUT_SGST_CODE),
-        (igst_total, INPUT_IGST_CODE),
-    ):
-        if gst_amount > Decimal("0"):
-            input_gst_id = await _resolve_voucher_account_id(
-                session,
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=payload.accounting_entity_id,
-                account_id=None,
-                account_code=code,
-                side="input GST",
-            )
-            journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
-    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id))
+    if is_composition:
+        # Composition dealers cannot claim ITC — the vendor's GST is part of cost.
+        # Dr expense (full bill incl. GST); Cr Accounts Payable. No Input-GST legs.
+        journal_lines = [
+            JournalLineIn(account_id=expense_id, debit=bill_total, credit=Decimal("0")),
+            JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id),
+        ]
+    else:
+        # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
+        journal_lines = [
+            JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0")),
+        ]
+        for gst_amount, code in (
+            (cgst_total, INPUT_CGST_CODE),
+            (sgst_total, INPUT_SGST_CODE),
+            (igst_total, INPUT_IGST_CODE),
+        ):
+            if gst_amount > Decimal("0"):
+                input_gst_id = await _resolve_voucher_account_id(
+                    session,
+                    tenant_id=tenant_id,
+                    app_key=app_key,
+                    accounting_entity_id=payload.accounting_entity_id,
+                    account_id=None,
+                    account_code=code,
+                    side="input GST",
+                )
+                journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
+        journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=bill_total, party_id=payload.vendor_party_id))
 
     bill_id = str(uuid4())
     bill_number = payload.bill_number.strip()
@@ -1587,6 +1600,8 @@ async def create_purchase_bill(
         "igst_total": str(igst_total),
         "gst_total": str(gst_total),
         "bill_total": str(bill_total),
+        # Composition dealers capitalise input GST into cost (no ITC claimed).
+        "itc_claimed": not is_composition,
         "status": "posting",
         "created_by": created_by,
         "created_at": now,

@@ -12,10 +12,20 @@ from app.modules.business.service import (
     COMPOSITION_RATES,
     _compute_invoice_lines,
 )
-from app.modules.business.schemas import SalesInvoiceCreateRequest, SalesInvoiceLineItem
+from app.modules.business.schemas import (
+    PurchaseBillCreateRequest,
+    PurchaseBillLineItem,
+    SalesInvoiceCreateRequest,
+    SalesInvoiceLineItem,
+)
 
 # Reuse the in-memory collection + account-id map patterns from the phase-2 suite.
-from tests.test_business_phase2 import FakeCollection, _seed_customer, _INVOICE_ACCOUNT_IDS
+from tests.test_business_phase2 import (
+    FakeCollection,
+    _seed_customer,
+    _seed_vendor,
+    _INVOICE_ACCOUNT_IDS,
+)
 
 
 def _payload(*, is_inter_state=False):
@@ -116,3 +126,36 @@ async def test_composition_blocks_inter_state_supply(monkeypatch):
             None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
             payload=_payload(is_inter_state=True), idempotency_key="bos-2",
         )
+
+
+@pytest.mark.asyncio
+async def test_composition_purchase_capitalises_gst_no_itc(monkeypatch):
+    store = FakeCollection()
+    _seed_vendor(store)
+    captured = {}
+    _patch_common(monkeypatch, store, captured, category="goods")
+
+    result = await business_service.create_purchase_bill(
+        None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1",
+            bill_number="BILL-1",
+            bill_date=date(2026, 6, 8),
+            is_inter_state=False,
+            line_items=[PurchaseBillLineItem(description="Raw material", quantity=Decimal("10"),
+                                             rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key="cbill-1",
+    )
+
+    # Composition: GST folded into expense, no Input-GST (ITC) legs.
+    lines = captured["payload"].lines
+    assert len(lines) == 2
+    assert lines[0].account_id == _INVOICE_ACCOUNT_IDS["51001"]
+    assert lines[0].debit == Decimal("1180.00")          # taxable 1000 + GST 180, all cost
+    assert lines[1].account_id == _INVOICE_ACCOUNT_IDS["21001"]
+    assert lines[1].credit == Decimal("1180.00")
+    # No 14001/14002/14003 ITC asset lines.
+    itc_ids = {_INVOICE_ACCOUNT_IDS["14001"], _INVOICE_ACCOUNT_IDS["14002"], _INVOICE_ACCOUNT_IDS["14003"]}
+    assert not any(l.account_id in itc_ids for l in lines)
+    assert result["itc_claimed"] is False
