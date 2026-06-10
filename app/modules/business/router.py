@@ -70,6 +70,7 @@ from app.modules.business.schemas import (
     UnallocatedPaymentListResponse,
 )
 from app.modules.business import allocation_service
+from app.modules.business import gst_returns
 from app.modules.business import report_export
 from app.core.tenants.service import get_tenant
 from app.modules.business.service import (
@@ -1739,3 +1740,48 @@ async def create_business_gst_settlement(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+async def _resolve_business_gstin(tenant_id: str, app_key: str, accounting_entity_id: str) -> str | None:
+    """Seller GSTIN for return headers, from invoice-settings branding (if set)."""
+    try:
+        settings = await get_invoice_settings(
+            tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+        gstin = ((settings or {}).get("branding") or {}).get("gstin")
+        if gstin and str(gstin).strip():
+            return str(gstin).strip()
+    except Exception:
+        pass
+    return None
+
+
+@router.get("/returns/gstr-3b")
+async def business_gstr3b_return(
+    period: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """GSTR-3B monthly summary return for a 'YYYY-MM' period. Tax heads come from
+    the immutable ledger (reusing the settlement set-off); taxable value from the
+    posted sales-invoice/credit-note documents. Includes the GSTN JSON shape."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GSTR-3B return",
+    )
+    gstin = await _resolve_business_gstin(context.tenant_id, context.app_key, accounting_entity_id)
+    return await gst_returns.build_gstr3b(
+        session,
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        period=period,
+        gstin=gstin,
+    )

@@ -5027,6 +5027,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "aging", label: "AR/AP Aging" },
   { id: "payment-allocation", label: "Payment Allocation" },
   { id: "gst-settlement", label: "GST Settlement" },
+  { id: "gst-returns", label: "GST Returns" },
   { id: "itc-reversals", label: "ITC Reversals" },
   { id: "period-locks", label: "Period Locks" },
 ];
@@ -5034,6 +5035,8 @@ const BUSINESS_REPORT_TABS = [
 let lastPeriodLocks = [];
 let lastGstSettlement = null;
 let gstSettlementPeriod = todayIsoDate().slice(0, 7);
+let lastGstr3b = null;
+let gstr3bPeriod = todayIsoDate().slice(0, 7);
 let lastItcReversal = null;
 let lastItcReversedBills = [];
 let itcReversalAsOf = todayIsoDate();
@@ -5108,6 +5111,8 @@ async function refreshCurrentBusinessReport() {
     await loadPeriodLocks();
   } else if (tab === "gst-settlement") {
     await loadGstSettlementPreview(gstSettlementPeriod);
+  } else if (tab === "gst-returns") {
+    await loadGstr3b(gstr3bPeriod);
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
   }
@@ -5200,6 +5205,117 @@ function renderGstSettlementPanel() {
       <button class="secondary" type="button" data-business-action="gst-preview">Preview</button>
     </div>
     ${body}
+  `;
+}
+
+// ---- GSTR-3B monthly summary return ------------------------------------- //
+async function loadGstr3b(period) {
+  gstr3bPeriod = period || gstr3bPeriod;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-3b?period=${encodeURIComponent(gstr3bPeriod)}`, { method: "GET" });
+  lastGstr3b = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { gstr3b: { ok: result.ok, period: gstr3bPeriod } });
+}
+
+function previewGstr3bFromInput() {
+  const input = document.querySelector("[data-gstr3b-period]");
+  loadGstr3b(input?.value || gstr3bPeriod);
+}
+
+function downloadGstr3bJson() {
+  const j = lastGstr3b?.gstn_json;
+  if (!j) { setLoginStatus("warn", "Nothing to download", "Load a GSTR-3B period first."); return; }
+  const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gstr3b_${gstr3bPeriod}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  renderJson(apiOutput, { gstr3b_download: { period: gstr3bPeriod } });
+}
+
+function renderGstr3bPanel() {
+  const period = gstr3bPeriod;
+  const controls = `
+    <div class="report-date-controls">
+      <label>Return month <input type="month" data-gstr3b-period value="${escapeHtml(period)}"></label>
+      <button class="secondary" type="button" data-business-action="gstr3b-load">Load</button>
+      <button class="secondary" type="button" data-business-action="gstr3b-download-json">Download GSTN JSON</button>
+    </div>`;
+  const r = lastGstr3b;
+  if (!r) {
+    return `${controls}<p class="muted">Loading GSTR-3B...</p>`;
+  }
+  if (r.ok === false) {
+    return `${controls}${reportUnavailablePanel("GSTR-3B", r)}`;
+  }
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const heads = [["IGST", "igst"], ["CGST", "cgst"], ["SGST", "sgst"]];
+  const out = r.outward_supplies?.taxable || {};
+  const itc = r.itc || {};
+  const pay = r.tax_payment || {};
+  const totals = r.totals || {};
+
+  const itcRows = heads.map(([label, key]) => `
+    <tr>
+      <td>${label}</td>
+      <td class="amount">${num(itc.available_all_other?.[key])}</td>
+      <td class="amount">${num(itc.reversed_others?.[key])}</td>
+      <td class="amount"><strong>${num(itc.net_available?.[key])}</strong></td>
+    </tr>`).join("");
+  const payRows = heads.map(([label, key]) => `
+    <tr>
+      <td>${label}</td>
+      <td class="amount">${num(pay[key]?.tax_payable)}</td>
+      <td class="amount">${num(pay[key]?.paid_through_itc)}</td>
+      <td class="amount">${num(pay[key]?.paid_in_cash)}</td>
+    </tr>`).join("");
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>GSTR-3B summary for ${escapeHtml(period)}${r.gstin ? ` · GSTIN ${escapeHtml(r.gstin)}` : ""}. Tax heads from the ledger; taxable value from posted invoices.</p></div>
+      <span class="pill">Net cash ${num(totals.total_cash_payable)}</span>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>3.1 Outward taxable supplies</h4>
+      <table>
+        <thead><tr><th>Taxable value</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody><tr>
+          <td class="amount">${num(out.taxable_value)}</td>
+          <td class="amount">${num(out.igst)}</td>
+          <td class="amount">${num(out.cgst)}</td>
+          <td class="amount">${num(out.sgst)}</td>
+        </tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>4. Eligible ITC</h4>
+      <table>
+        <thead><tr><th>Head</th><th class="amount">Available (4A)</th><th class="amount">Reversed (4B)</th><th class="amount">Net (4C)</th></tr></thead>
+        <tbody>${itcRows}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>6.1 Payment of tax</h4>
+      <table>
+        <thead><tr><th>Head</th><th class="amount">Tax payable</th><th class="amount">Paid via ITC</th><th class="amount">Paid in cash</th></tr></thead>
+        <tbody>${payRows}</tbody>
+      </table>
+    </div>
+
+    <div class="invoice-totals">
+      <div><span>Total output tax</span><strong>${num(totals.total_output_tax)}</strong></div>
+      <div><span>Net ITC</span><strong>${num(totals.total_itc_net)}</strong></div>
+      <div class="invoice-grand"><span>Net cash payable</span><strong>${num(totals.total_cash_payable)}</strong></div>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
   `;
 }
 
@@ -5753,6 +5869,8 @@ function renderBusinessReportsWorkspace() {
     body = renderPeriodLocksPanel();
   } else if (businessReportState.tab === "gst-settlement") {
     body = renderGstSettlementPanel();
+  } else if (businessReportState.tab === "gst-returns") {
+    body = renderGstr3bPanel();
   } else if (businessReportState.tab === "itc-reversals") {
     body = renderItcReversalPanel();
   }
@@ -11748,6 +11866,10 @@ dashboardPreview.addEventListener("click", (event) => {
     previewGstSettlementFromInput();
   } else if (businessAction === "gst-post") {
     postGstSettlement();
+  } else if (businessAction === "gstr3b-load") {
+    previewGstr3bFromInput();
+  } else if (businessAction === "gstr3b-download-json") {
+    downloadGstr3bJson();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
