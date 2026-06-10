@@ -18,13 +18,19 @@ would only rewrite prose, never the figures or the chart renderer.
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import get_business_dashboard
+from app.config import get_settings
 from app.modules.business import allocation_service
+
+_logger = logging.getLogger(__name__)
 
 # Aging buckets considered "overdue" (past the current 0-30 window) and "at risk".
 _OVERDUE_BUCKETS = ("31-60", "61-90", "90+")
@@ -268,6 +274,92 @@ def assemble_financial_health(*, dashboard: dict, ar_aging: dict, ap_aging: dict
     }
 
 
+# --------------------------------------------------------------------------- #
+# AI narration — the "narrate" step. The model only rewrites the already-computed
+# figures into a CFO-style narrative; it never invents numbers. Privacy guardrail:
+# we send aggregate KPIs/alerts only — no party names, invoice numbers or PII.
+# --------------------------------------------------------------------------- #
+
+_NARRATION_SYSTEM_PROMPT = (
+    "You are a CFO advisor for an Indian small business inside MitraBooks. You are "
+    "given a JSON snapshot of financial figures that were computed deterministically "
+    "from the company's accounting ledger. Write a short, plain-English narrative "
+    "(at most 120 words, 2-3 short paragraphs or a few bullet points) highlighting "
+    "what is going well, what needs attention, and one or two concrete next actions. "
+    "CRITICAL RULES: use ONLY the numbers given to you — never invent, estimate, or "
+    "extrapolate any figure. Quote amounts exactly as provided (they are in INR). "
+    "Do not give tax or legal advice. Be direct and practical."
+)
+
+
+def build_narration_prompt(payload: dict) -> str:
+    """Compact, figure-only prompt for the narrator. Pure: deterministic snapshot
+    of the KPIs, alerts and headline — nothing the model could contradict."""
+    snapshot = {
+        "as_of": payload.get("as_of"),
+        "financial_year_start": payload.get("financial_year_start"),
+        "headline": payload.get("summary"),
+        "kpis": [
+            {"label": k.get("label"), "value": k.get("value"),
+             "unit": k.get("unit"), "tone": k.get("tone")}
+            for k in payload.get("kpis", [])
+        ],
+        "alerts": [
+            {"severity": a.get("severity"), "title": a.get("title"),
+             "message": a.get("message")}
+            for a in payload.get("alerts", [])
+        ],
+    }
+    return (
+        "Here is the financial snapshot (all figures already computed from the ledger):\n\n"
+        + json.dumps(snapshot, ensure_ascii=False, indent=2)
+        + "\n\nWrite the CFO narrative now."
+    )
+
+
+async def narrate_financial_health(payload: dict) -> str | None:
+    """Call Claude to narrate the snapshot. Returns None (caller falls back to the
+    deterministic summary) when disabled, unkeyed, or on any error."""
+    settings = get_settings()
+    if not settings.FINANCIAL_HEALTH_AI_ENABLED:
+        return None
+    api_key = settings.ANTHROPIC_API_KEY
+    if not api_key:
+        _logger.info("financial_health narration skipped: ANTHROPIC_API_KEY not configured")
+        return None
+
+    api_base = settings.ANTHROPIC_API_BASE.rstrip("/")
+    model = settings.FINANCIAL_HEALTH_AI_MODEL
+    body = {
+        "model": model,
+        "max_tokens": settings.FINANCIAL_HEALTH_AI_MAX_TOKENS,
+        "temperature": 0.3,
+        "system": _NARRATION_SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": build_narration_prompt(payload)}],
+    }
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{api_base}/messages", headers=headers, json=body)
+        if response.status_code >= 400:
+            _logger.error("financial_health narration http_error status=%d body=%s",
+                          response.status_code, (response.text or "")[:300])
+            return None
+        content = response.json().get("content") or []
+        text = "\n".join(
+            str(part.get("text") or "") for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ).strip()
+        return text or None
+    except Exception as exc:
+        _logger.exception("financial_health narration exception: %s", exc)
+        return None
+
+
 async def build_financial_health(
     session: AsyncSession,
     *,
@@ -275,8 +367,11 @@ async def build_financial_health(
     app_key: str,
     accounting_entity_id: str = "primary",
     as_of: date | None = None,
+    narrate: bool = True,
 ) -> dict:
-    """Gather the trusted ledger figures and assemble the Financial Health view."""
+    """Gather the trusted ledger figures, assemble the Financial Health view, and
+    (optionally) attach an AI narrative. The narrative is advisory prose only — the
+    deterministic ``summary`` and all figures remain authoritative."""
     as_of = as_of or date.today()
     dashboard = await get_business_dashboard(
         session, tenant_id=tenant_id, app_key=app_key,
@@ -290,6 +385,8 @@ async def build_financial_health(
         tenant_id=tenant_id, app_key=app_key,
         accounting_entity_id=accounting_entity_id, kind="payable", as_of=as_of,
     )
-    return assemble_financial_health(
+    payload = assemble_financial_health(
         dashboard=dashboard, ar_aging=ar_aging, ap_aging=ap_aging, as_of=as_of,
     )
+    payload["narrative"] = await narrate_financial_health(payload) if narrate else None
+    return payload

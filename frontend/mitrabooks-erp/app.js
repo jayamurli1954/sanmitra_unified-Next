@@ -4672,6 +4672,30 @@ function renderFhAlert(alert) {
     </li>`;
 }
 
+// Render the model's plain-text narrative safely: escape everything, then turn
+// blank-line-separated blocks into paragraphs and "-"/"•" lines into list items.
+function fhFormatNarrative(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let listItems = [];
+  const flushList = () => {
+    if (listItems.length) { out.push(`<ul>${listItems.join("")}</ul>`); listItems = []; }
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushList(); continue; }
+    const bullet = line.match(/^[-*•]\s+(.*)$/);
+    if (bullet) {
+      listItems.push(`<li>${escapeHtml(bullet[1])}</li>`);
+    } else {
+      flushList();
+      out.push(`<p>${escapeHtml(line)}</p>`);
+    }
+  }
+  flushList();
+  return out.join("");
+}
+
 function renderFinancialHealthWorkspace() {
   const data = lastFinancialHealth;
 
@@ -4693,6 +4717,16 @@ function renderFinancialHealthWorkspace() {
   const charts = (data.charts || []).map(renderFhBarChart).join("");
   const alerts = (data.alerts || []).map(renderFhAlert).join("");
 
+  // AI narrative is advisory prose over the same trusted figures; render the
+  // model's text as paragraphs/bullets with a clear "AI-generated" disclaimer.
+  const narrativeCard = data.narrative
+    ? `
+      <div class="fh-narrative">
+        <div class="fh-narrative-head"><span class="pill ok">AI summary</span><small>Generated from the figures below — verify before acting.</small></div>
+        <div class="fh-narrative-body">${fhFormatNarrative(data.narrative)}</div>
+      </div>`
+    : "";
+
   return `
     <section class="financial-health-workspace erp-workspace-panel" aria-label="Financial Health">
       <div class="preview-heading compact">
@@ -4702,6 +4736,7 @@ function renderFinancialHealthWorkspace() {
         </div>
         <button class="secondary" type="button" data-business-action="refresh-financial-health">Refresh</button>
       </div>
+      ${narrativeCard}
       <div class="fh-kpi-grid">${kpis}</div>
       <div class="fh-section">
         <h5 class="fh-section-title">Alerts &amp; signals</h5>

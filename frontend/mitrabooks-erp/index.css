@@ -2530,6 +2530,32 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   vertical-align: middle;
 }
 
+.fh-narrative {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), rgba(15, 23, 42, 0.42));
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.fh-narrative-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.fh-narrative-head small { color: var(--text-secondary, #94a3b8); font-size: 11px; }
+
+.fh-narrative-body p {
+  color: var(--text-primary, #e2e8f0);
+  font-size: 13px;
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.fh-narrative-body ul { margin: 0 0 8px 18px; padding: 0; }
+.fh-narrative-body li { color: var(--text-primary, #e2e8f0); font-size: 13px; line-height: 1.5; }
+
 .fh-footnote {
   color: var(--text-secondary, #94a3b8);
   font-size: 11px;

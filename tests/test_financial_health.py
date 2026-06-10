@@ -1,9 +1,17 @@
 """Financial Health assembler — derives KPIs, chart specs and alerts purely from
 already-computed ledger figures (the dashboard + AR/AP aging). Pure function, no
 DB: it must never invent numbers, only reshape the trusted inputs."""
+import json
 from datetime import date
 
-from app.modules.business.financial_health import assemble_financial_health
+import pytest
+
+from app.modules.business import financial_health
+from app.modules.business.financial_health import (
+    assemble_financial_health,
+    build_narration_prompt,
+    narrate_financial_health,
+)
 
 AS_OF = date(2026, 6, 30)
 
@@ -117,3 +125,50 @@ def test_zero_revenue_does_not_divide_by_zero():
     assert kpis["current_ratio"]["value"] == "—"
     assert kpis["cash_runway"]["value"] == "—"
     assert kpis["debtor_days"]["value"] == "—"
+
+
+# --- AI narration ---------------------------------------------------------- #
+
+def _payload():
+    return assemble_financial_health(
+        dashboard=_dashboard(),
+        ar_aging=_aging({"0-30": "200000.00", "31-60": "50000.00"}),
+        ap_aging=_aging({"0-30": "150000.00"}),
+        as_of=AS_OF,
+    )
+
+
+def test_narration_prompt_is_figure_only_and_parseable():
+    prompt = build_narration_prompt(_payload())
+    # The prompt embeds a JSON snapshot of the trusted figures.
+    start = prompt.index("{")
+    end = prompt.rindex("}") + 1
+    snapshot = json.loads(prompt[start:end])
+    assert snapshot["as_of"] == AS_OF.isoformat()
+    labels = {k["label"] for k in snapshot["kpis"]}
+    assert "Revenue (FYTD)" in labels and "Net profit (FYTD)" in labels
+    assert "Write the CFO narrative now." in prompt
+
+
+class _FakeSettings:
+    def __init__(self, *, enabled, key):
+        self.FINANCIAL_HEALTH_AI_ENABLED = enabled
+        self.ANTHROPIC_API_KEY = key
+        self.ANTHROPIC_API_BASE = "https://api.anthropic.com/v1"
+        self.FINANCIAL_HEALTH_AI_MODEL = "claude-haiku-4-5"
+        self.FINANCIAL_HEALTH_AI_MAX_TOKENS = 400
+
+
+@pytest.mark.asyncio
+async def test_narration_disabled_returns_none(monkeypatch):
+    monkeypatch.setattr(financial_health, "get_settings",
+                        lambda: _FakeSettings(enabled=False, key="sk-test"))
+    assert await narrate_financial_health(_payload()) is None
+
+
+@pytest.mark.asyncio
+async def test_narration_without_api_key_returns_none(monkeypatch):
+    # Enabled but unkeyed must short-circuit before any HTTP call.
+    monkeypatch.setattr(financial_health, "get_settings",
+                        lambda: _FakeSettings(enabled=True, key=""))
+    assert await narrate_financial_health(_payload()) is None

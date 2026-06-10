@@ -458,22 +458,25 @@ async def business_dashboard(
 async def business_financial_health(
     as_of: date | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    narrate: bool = Query(default=True),
     _module_context: dict = Depends(require_enabled_module("business")),
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    """CFO-Insight Financial Health: ledger-backed KPIs, charts and alerts.
+    """CFO-Insight Financial Health: ledger-backed KPIs, charts and alerts, plus an
+    optional AI narrative.
 
     Every figure is computed deterministically from the posted ledger (see
     ``financial_health.assemble_financial_health``); the response is a fixed
-    chart-spec vocabulary the frontend renders directly."""
+    chart-spec vocabulary the frontend renders directly. The AI narrative only
+    rewrites those figures into prose and never invents numbers."""
     context = _alloc_context(current_user, x_tenant_id, x_app_key, "financial health")
     try:
         return await financial_health.build_financial_health(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id, as_of=as_of,
+            accounting_entity_id=accounting_entity_id, as_of=as_of, narrate=narrate,
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

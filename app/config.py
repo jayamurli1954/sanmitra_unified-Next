@@ -160,6 +160,14 @@ class Settings:
     CLAUDE_LEGAL_COUNSEL_MODEL = os.getenv("CLAUDE_LEGAL_COUNSEL_MODEL", "claude-3-5-sonnet-latest").strip()
     ANTHROPIC_API_BASE = os.getenv("ANTHROPIC_API_BASE", "https://api.anthropic.com/v1").strip()
     LEGAL_FALLBACK_GEMINI_MODEL = os.getenv("LEGAL_FALLBACK_GEMINI_MODEL", "gemini-2.5-flash").strip()
+
+    # MitraBooks Financial Health — AI narration of the CFO-Insight figures.
+    # Reuses ANTHROPIC_API_KEY / ANTHROPIC_API_BASE. The model only rewrites the
+    # already-computed figures as prose; it never invents numbers. Degrades to the
+    # deterministic summary when disabled, unkeyed, or the call fails.
+    FINANCIAL_HEALTH_AI_ENABLED = os.getenv("FINANCIAL_HEALTH_AI_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    FINANCIAL_HEALTH_AI_MODEL = os.getenv("FINANCIAL_HEALTH_AI_MODEL", "claude-haiku-4-5").strip()
+    FINANCIAL_HEALTH_AI_MAX_TOKENS = int(os.getenv("FINANCIAL_HEALTH_AI_MAX_TOKENS", "400"))
     # Raised from 900 — Gemini fallback answers were truncating mid-sentence
     # because the prompt requests 5-6 structured sections (Quick Answer,
     # Business Impact, Key Rules, Action Plan, Risks, If You Want I Can).
