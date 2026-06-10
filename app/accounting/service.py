@@ -1389,6 +1389,7 @@ async def get_ledger_lines(
 
     stmt = (
         select(
+            JournalLine.id.label("line_id"),
             JournalLine.journal_id,
             JournalLine.debit,
             JournalLine.credit,
@@ -1422,6 +1423,7 @@ async def get_ledger_lines(
         )
         output.append(
             {
+                "line_id": row.line_id,
                 "journal_id": row.journal_id,
                 "entry_date": entry_date_str,
                 "reference": row.reference,
