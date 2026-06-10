@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
+    get_balance_sheet,
     get_business_dashboard,
     get_ledger_lines,
+    get_profit_loss,
     get_trial_balance,
 )
+from app.accounting.service import _financial_year_start
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
@@ -475,7 +478,8 @@ async def _resolve_org_name(tenant_id: str, app_key: str, accounting_entity_id: 
 
 
 async def _build_business_report(
-    report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of, account_id=None,
+    report: str, *, session, tenant_id, app_key, accounting_entity_id, kind, as_of,
+    account_id=None, from_date=None, to_date=None,
 ) -> dict:
     """Assemble (title, columns, rows, footer, meta, org_name, filename_base) for a report."""
     as_of_str = (as_of or date.today()).isoformat()
@@ -537,6 +541,84 @@ async def _build_business_report(
                        "interest_amount": data.get("total_interest")},
             "meta": [("As of", as_of_str)],
             "filename_base": f"itc_reversals_{as_of_str}",
+        }
+
+    elif report == "balance_sheet":
+        assets, liabilities, equity, total_assets, total_liabilities, total_equity = await get_balance_sheet(
+            session, tenant_id=tenant_id, as_of=(as_of or date.today()),
+            app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+
+        def _bs_section(section_label, items, subtotal_label, subtotal_value):
+            section_rows = [{
+                "section": section_label,
+                "account_code": item.get("account_code"),
+                "account_name": item.get("account_name"),
+                "amount": item.get("balance"),
+            } for item in items]
+            section_rows.append({
+                "section": "", "account_code": "", "account_name": subtotal_label, "amount": subtotal_value,
+            })
+            return section_rows
+
+        rows = (
+            _bs_section("Assets", assets, "Total Assets", total_assets)
+            + _bs_section("Liabilities", liabilities, "Total Liabilities", total_liabilities)
+            + _bs_section("Equity", equity, "Total Equity", total_equity)
+        )
+        spec = {
+            "title": "Balance Sheet",
+            "columns": [
+                {"key": "section", "label": "Section"},
+                {"key": "account_code", "label": "Code"},
+                {"key": "account_name", "label": "Account"},
+                {"key": "amount", "label": "Amount", "numeric": True},
+            ],
+            "rows": rows,
+            "footer": {"account_name": "Total Liabilities + Equity",
+                       "amount": total_liabilities + total_equity},
+            "meta": [("As of", as_of_str)],
+            "filename_base": f"balance_sheet_{as_of_str}",
+        }
+
+    elif report == "profit_loss":
+        pnl_from = from_date or _financial_year_start(as_of or date.today())
+        pnl_to = to_date or as_of or date.today()
+        lines, income_total, expense_total, net_profit = await get_profit_loss(
+            session, tenant_id=tenant_id, from_date=pnl_from, to_date=pnl_to,
+            app_key=app_key, accounting_entity_id=accounting_entity_id,
+        )
+        income_lines = [l for l in lines if l.get("account_type") == "income"]
+        expense_lines = [l for l in lines if l.get("account_type") == "expense"]
+
+        def _pnl_section(section_label, items, subtotal_label, subtotal_value):
+            section_rows = [{
+                "section": section_label,
+                "account_code": item.get("account_code"),
+                "account_name": item.get("account_name"),
+                "amount": item.get("net_amount"),
+            } for item in items]
+            section_rows.append({
+                "section": "", "account_code": "", "account_name": subtotal_label, "amount": subtotal_value,
+            })
+            return section_rows
+
+        rows = (
+            _pnl_section("Income", income_lines, "Total Income", income_total)
+            + _pnl_section("Expenses", expense_lines, "Total Expenses", expense_total)
+        )
+        spec = {
+            "title": "Profit and Loss",
+            "columns": [
+                {"key": "section", "label": "Section"},
+                {"key": "account_code", "label": "Code"},
+                {"key": "account_name", "label": "Account"},
+                {"key": "amount", "label": "Amount", "numeric": True},
+            ],
+            "rows": rows,
+            "footer": {"account_name": "Net Profit", "amount": net_profit},
+            "meta": [("From", pnl_from.isoformat()), ("To", pnl_to.isoformat())],
+            "filename_base": f"profit_loss_{pnl_from.isoformat()}_{pnl_to.isoformat()}",
         }
 
     elif report == "trial_balance":
@@ -624,10 +706,12 @@ async def _build_business_report(
 
 @router.get("/reports/export")
 async def export_business_report(
-    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger)$"),
+    report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger|balance_sheet|profit_loss)$"),
     format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
     kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
     as_of: date | None = Query(default=None),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
     account_id: int | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
@@ -641,6 +725,7 @@ async def export_business_report(
         spec = await _build_business_report(
             report, session=session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of, account_id=account_id,
+            from_date=from_date, to_date=to_date,
         )
         return report_export.export_report(format, **spec)
     except AccountingValidationError as exc:

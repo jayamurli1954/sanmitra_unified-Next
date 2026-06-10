@@ -5494,11 +5494,13 @@ function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
 }
 
 // Export/print toolbars per report tab. Backend supports CSV/XLSX/PDF for the
-// core set (trial_balance, party_ledger, itc_reversals, aging); other tabs get
-// Print only for now.
+// core set (trial_balance, party_ledger, itc_reversals, aging, balance_sheet,
+// profit_loss); other tabs get Print only for now.
 function businessReportExports() {
   const tab = businessReportState.tab;
   if (tab === "trial-balance") return reportExportToolbar("trial_balance");
+  if (tab === "balance-sheet") return reportExportToolbar("balance_sheet");
+  if (tab === "pnl") return reportExportToolbar("profit_loss");
   if (tab === "itc-reversals") return reportExportToolbar("itc_reversals");
   if (tab === "receivables-payables") {
     return `
@@ -5529,6 +5531,10 @@ async function downloadBusinessReport(reportKey, format, kind) {
   params.set("format", format || "csv");
   if (kind) params.set("kind", kind);
   if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
+  if (reportKey === "profit_loss") {
+    if (businessReportState.from_date) params.set("from_date", businessReportState.from_date);
+    if (businessReportState.to_date) params.set("to_date", businessReportState.to_date);
+  }
   if (reportKey === "general_ledger") {
     const acc = businessReportState.ledgerAccountId;
     if (!acc || acc === "__all_nonzero__") {
@@ -5537,7 +5543,10 @@ async function downloadBusinessReport(reportKey, format, kind) {
     }
     params.set("account_id", acc);
   }
-  const filename = `${reportKey}${kind ? "_" + kind : ""}_${businessReportState.as_of}.${format || "csv"}`;
+  const periodStamp = reportKey === "profit_loss"
+    ? `${businessReportState.from_date}_${businessReportState.to_date}`
+    : businessReportState.as_of;
+  const filename = `${reportKey}${kind ? "_" + kind : ""}_${periodStamp}.${format || "csv"}`;
   const path = `/api/v1/business/reports/export?${params.toString()}`;
   const result = await downloadApiFile("mitrabooks", path, filename, { timeoutMs: 30000 });
   if (result.ok) {
