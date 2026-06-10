@@ -2385,6 +2385,162 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   }
 }
 
+/* Financial Health — live CFO Insight (KPIs, alerts, charts) */
+.fh-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fh-kpi {
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-left: 3px solid rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.fh-kpi-label {
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.fh-kpi-value {
+  color: var(--text-primary, #f8fafc);
+  font-size: 18px;
+}
+
+.fh-kpi-hint {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+}
+
+.fh-tone-good { border-left-color: #22c55e; }
+.fh-tone-warn { border-left-color: #f59e0b; }
+.fh-tone-bad { border-left-color: #ef4444; }
+.fh-tone-good .fh-kpi-value { color: #4ade80; }
+.fh-tone-bad .fh-kpi-value { color: #f87171; }
+
+.fh-section-title {
+  color: var(--text-primary, #f8fafc);
+  font-size: 14px;
+  margin: 4px 0 10px;
+}
+
+.fh-alerts {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fh-alert {
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-left: 3px solid rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 2px;
+}
+
+.fh-alert strong { color: var(--text-primary, #f8fafc); font-size: 13px; }
+.fh-alert span { color: var(--text-secondary, #94a3b8); font-size: 13px; }
+.fh-alert-danger { border-left-color: #ef4444; }
+.fh-alert-warning { border-left-color: #f59e0b; }
+.fh-alert-info { border-left-color: #38bdf8; }
+
+.fh-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.fh-chart-card {
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.fh-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.fh-chart-head h5 { color: var(--text-primary, #f8fafc); font-size: 14px; margin: 0; }
+.fh-unit { color: var(--text-secondary, #94a3b8); font-size: 11px; }
+
+.fh-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 140px;
+  padding-top: 8px;
+}
+
+.fh-bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.fh-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 124px;
+}
+
+.fh-bar {
+  width: 14px;
+  border-radius: 3px 3px 0 0;
+  display: block;
+}
+
+.fh-bar-a { background: #38bdf8; }
+.fh-bar-b { background: #f59e0b; }
+.fh-bar-neg { background: #ef4444; opacity: 0.85; }
+.fh-bar-group small { color: var(--text-secondary, #94a3b8); font-size: 11px; }
+
+.fh-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.fh-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.fh-footnote {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  margin: 4px 0 0;
+}
+
+@media (max-width: 980px) {
+  .fh-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fh-charts-grid { grid-template-columns: 1fr; }
+}
+
 /* Executive Dashboard Section */
 .business-dashboard-clean .executive-dashboard {
   gap: 20px;

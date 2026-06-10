@@ -74,7 +74,7 @@ function businessNavigationGroups() {
       name: "Intelligence & Reports",
       items: [
         { label: "Financial Statements", businessWorkspace: "reports", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: true } },
-        { label: "Financial Health", businessWorkspace: "financial-health", icon: "FH", module: { module_key: "analytics", frontend_path: "/business/financial-health", enabled: true }, badge: "Preview" },
+        { label: "Financial Health", businessWorkspace: "financial-health", icon: "FH", module: { module_key: "analytics", frontend_path: "/business/financial-health", enabled: true } },
         { label: "Analytics", businessWorkspace: "analytics", icon: "AN", module: { module_key: "analytics", frontend_path: "/business/analytics", enabled: false } },
       ],
     },
@@ -4606,96 +4606,109 @@ function renderBusinessWorkspace() {
   `;
 }
 
-function financialHealthFeatureList(items) {
-  return items.map((item) => `
-    <li>
-      <strong>${escapeHtml(item[0])}</strong>
-      <span>${escapeHtml(item[1])}</span>
-    </li>
-  `).join("");
+// Financial Health (CFO Insight) — every figure is computed server-side from the
+// posted ledger (see app/modules/business/financial_health.py). The frontend only
+// renders the trusted KPI/chart/alert payload; it never derives figures itself.
+
+function fhKpiDisplay(kpi) {
+  const unit = kpi.unit || "";
+  const value = kpi.value;
+  if (value === "—" || value === null || value === undefined || value === "") return "—";
+  if (unit === "₹") return formatCurrency(value);
+  if (unit === "%") return `${value}%`;
+  if (unit === "x") return `${value}×`;
+  return `${value}${unit ? " " + unit : ""}`;
+}
+
+function renderFhKpiCard(kpi) {
+  return `
+    <article class="fh-kpi fh-tone-${escapeHtml(kpi.tone || "neutral")}">
+      <span class="fh-kpi-label">${escapeHtml(kpi.label)}</span>
+      <strong class="fh-kpi-value">${escapeHtml(fhKpiDisplay(kpi))}</strong>
+      <small class="fh-kpi-hint">${escapeHtml(kpi.hint || "")}</small>
+    </article>
+  `;
+}
+
+function renderFhBarChart(chart) {
+  const series = Array.isArray(chart.series) ? chart.series : [];
+  const labels = Array.isArray(chart.x) ? chart.x : [];
+  const all = series.flatMap((s) => (s.data || []).map((v) => Math.abs(Number(v) || 0)));
+  const maxValue = all.length ? Math.max(...all, 0.0001) : 1;
+  const seriesClass = ["fh-bar-a", "fh-bar-b"];
+
+  const groups = labels.map((label, i) => {
+    const bars = series.map((s, si) => {
+      const raw = Number((s.data || [])[i]) || 0;
+      const height = Math.max(3, Math.round((Math.abs(raw) / maxValue) * 120));
+      const neg = raw < 0 ? " fh-bar-neg" : "";
+      return `<span class="fh-bar ${seriesClass[si] || "fh-bar-a"}${neg}" style="height:${height}px" title="${escapeHtml(s.name)}: ${escapeHtml(raw)}"></span>`;
+    }).join("");
+    return `
+      <div class="fh-bar-group">
+        <div class="fh-bars">${bars}</div>
+        <small>${escapeHtml(label)}</small>
+      </div>`;
+  }).join("");
+
+  const legend = series.length > 1
+    ? `<div class="fh-legend">${series.map((s, si) =>
+        `<span><i class="fh-dot ${seriesClass[si] || "fh-bar-a"}"></i>${escapeHtml(s.name)}</span>`).join("")}</div>`
+    : "";
+
+  return `
+    <article class="fh-chart-card">
+      <div class="fh-chart-head"><h5>${escapeHtml(chart.title)}</h5><span class="fh-unit">${escapeHtml(chart.unit || "")}</span></div>
+      <div class="fh-chart" role="img" aria-label="${escapeHtml(chart.title)}">${groups || '<p class="muted">No data.</p>'}</div>
+      ${legend}
+    </article>`;
+}
+
+function renderFhAlert(alert) {
+  return `
+    <li class="fh-alert fh-alert-${escapeHtml(alert.severity || "info")}">
+      <strong>${escapeHtml(alert.title || "")}</strong>
+      <span>${escapeHtml(alert.message || "")}</span>
+    </li>`;
 }
 
 function renderFinancialHealthWorkspace() {
-  const charts = [
-    ["Cash flow", "Operating inflow/outflow trend from posted ledger entries."],
-    ["Receivables aging", "Customer balances grouped by overdue bucket."],
-    ["Payables aging", "Vendor obligations grouped by due bucket."],
-    ["Revenue vs expenses", "Monthly income and cost comparison."],
-    ["Profit trend", "Gross and net profit movement over time."],
-  ];
-  const kpis = [
-    ["Gross margin", "Revenue less direct costs as a percentage of revenue."],
-    ["Net profit", "Posted revenue minus posted expenses."],
-    ["Cash runway", "Available cash divided by average monthly burn."],
-    ["Debtor days", "Average collection period for receivables."],
-    ["Creditor days", "Average payment period for payables."],
-    ["Inventory turnover", "COGS or consumption compared with average inventory."],
-  ];
-  const reports = [
-    ["Monthly financial summary", "Income, expense, cash, receivables, payables, and margin snapshot."],
-    ["Branch/company performance", "Segmented performance once branch/company dimensions are available."],
-  ];
-  const alerts = [
-    ["Low cash", "Cash balance or runway below configured threshold."],
-    ["Overdue receivables", "Invoices crossing due-date buckets."],
-    ["High expenses", "Expense variance above period baseline."],
-    ["Negative margins", "Gross or net margin below zero."],
-  ];
+  const data = lastFinancialHealth;
+
+  // Lazy self-heal: fetch once whenever we render without data.
+  if (!data && !financialHealthLoadInFlight) {
+    setTimeout(() => { loadFinancialHealth(); }, 0);
+  }
+
+  if (!data) {
+    return `
+      <section class="financial-health-workspace erp-workspace-panel" aria-label="Financial Health">
+        <div class="preview-heading compact">
+          <div><h4>Financial Health</h4><p>Loading ledger-backed insights…</p></div>
+        </div>
+      </section>`;
+  }
+
+  const kpis = (data.kpis || []).map(renderFhKpiCard).join("");
+  const charts = (data.charts || []).map(renderFhBarChart).join("");
+  const alerts = (data.alerts || []).map(renderFhAlert).join("");
 
   return `
-    <section class="financial-health-workspace erp-workspace-panel" aria-label="Financial Health Dashboard preview">
+    <section class="financial-health-workspace erp-workspace-panel" aria-label="Financial Health">
       <div class="preview-heading compact">
         <div>
-          <h4>Financial Health Dashboard</h4>
-          <p>Preview workspace for value-added financial intelligence inside MitraBooks ERP.</p>
+          <h4>Financial Health</h4>
+          <p>${escapeHtml(data.summary || "")}</p>
         </div>
-        <span class="pill warn">Preview</span>
+        <button class="secondary" type="button" data-business-action="refresh-financial-health">Refresh</button>
       </div>
-      <div class="financial-health-status-grid">
-        <article>
-          <span>Current state</span>
-          <strong>Workspace shell added</strong>
-          <p>Navigation and preview sections are available in Intelligence & Reports.</p>
-        </article>
-        <article>
-          <span>Target state</span>
-          <strong>Ledger-backed dashboard</strong>
-          <p>KPIs, charts, alerts, exports, and AI summary should be generated from posted accounting data.</p>
-        </article>
-        <article>
-          <span>Gap</span>
-          <strong>Backend aggregation APIs</strong>
-          <p>Financial health endpoints, export generation, thresholds, and branch/company dimensions are not yet implemented.</p>
-        </article>
+      <div class="fh-kpi-grid">${kpis}</div>
+      <div class="fh-section">
+        <h5 class="fh-section-title">Alerts &amp; signals</h5>
+        <ul class="fh-alerts">${alerts}</ul>
       </div>
-      <div class="financial-health-grid">
-        <article>
-          <h5>Graphs</h5>
-          <ul>${financialHealthFeatureList(charts)}</ul>
-        </article>
-        <article>
-          <h5>KPIs</h5>
-          <ul>${financialHealthFeatureList(kpis)}</ul>
-        </article>
-        <article>
-          <h5>Reports</h5>
-          <ul>${financialHealthFeatureList(reports)}</ul>
-        </article>
-        <article>
-          <h5>Alerts</h5>
-          <ul>${financialHealthFeatureList(alerts)}</ul>
-        </article>
-      </div>
-      <div class="financial-health-roadmap">
-        <h5>Implementation sequence</h5>
-        <ol>
-          <li>Backend: add tenant-scoped financial aggregation APIs from posted ledgers.</li>
-          <li>Frontend: replace preview cards with live charts and KPI widgets.</li>
-          <li>Export service: generate PDF, Excel, and PPT from reviewed report templates.</li>
-          <li>Optional AI layer: financial health summary with risks, assumptions, and recommendations.</li>
-        </ol>
-        <p>Deferred scope: this preview does not calculate live financial health, export files, or generate AI advice yet.</p>
-      </div>
+      <div class="fh-charts-grid">${charts}</div>
+      <p class="fh-footnote">As of ${escapeHtml(data.as_of || "")} · financial year from ${escapeHtml(data.financial_year_start || "")}. All figures computed from the posted ledger.</p>
     </section>
   `;
 }
@@ -8863,6 +8876,8 @@ let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
 let lastBusinessDashboardStats = null;
+let lastFinancialHealth = null;
+let financialHealthLoadInFlight = false;
 
 const voucherLineState = [];
 
@@ -9533,6 +9548,37 @@ async function loadBusinessDashboardStats() {
   }
 
   renderJson(apiOutput, { dashboard: { ok: result.ok, hasData: !!lastBusinessDashboardStats } });
+}
+
+async function loadFinancialHealth() {
+  const appKey = "mitrabooks";
+  financialHealthLoadInFlight = true;
+  let result;
+  try {
+    result = await apiRequest(appKey, "/api/v1/business/financial-health", { method: "GET" });
+  } finally {
+    financialHealthLoadInFlight = false;
+  }
+
+  // A valid payload always carries the kpis array; guard against an empty/partial
+  // body so a transient failure can't blank out data we already rendered.
+  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object"
+    && Array.isArray(result.payload.kpis);
+
+  if (hasValidPayload) {
+    lastFinancialHealth = result.payload;
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "financial-health") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else if (!lastFinancialHealth) {
+    setLoginStatus(
+      "warn",
+      "Financial Health unavailable",
+      result.payload?.detail || "Live financial-health figures could not be loaded.",
+    );
+  }
+
+  renderJson(apiOutput, { financialHealth: { ok: result.ok, hasData: !!lastFinancialHealth } });
 }
 
 // ========== Account Selector Component (Searchable) ==========
@@ -12246,6 +12292,8 @@ dashboardPreview.addEventListener("click", (event) => {
     pageAuditList(button.getAttribute("data-page-direction") || "next");
   } else if (businessAction === "ca-doc-refresh") {
     loadCaPracticeDocuments();
+  } else if (businessAction === "refresh-financial-health") {
+    loadFinancialHealth();
   } else if (businessAction === "ca-doc-status") {
     updateCaPracticeDocumentStatus(
       button.getAttribute("data-document-id") || "",
