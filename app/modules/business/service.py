@@ -77,6 +77,15 @@ GST_INTEREST_PAYABLE_CODE = "23003"
 GST_INTEREST_EXPENSE_CODE = "54006"
 ITC_REVERSAL_DAYS = 180
 ITC_INTEREST_RATE = Decimal("0.18")  # 18% p.a. under Section 50
+
+# GST Composition Scheme (Section 10) — tax rate by category, on turnover.
+# Manufacturers/traders 1%, restaurants 5%, other services 6%.
+COMPOSITION_RATES = {
+    "goods": Decimal("1"),
+    "restaurant": Decimal("5"),
+    "services": Decimal("6"),
+}
+COMPOSITION_DECLARATION = "Composition taxable person, not eligible to collect tax on supplies"
 CA_DOCUMENT_DEFAULT_NEXT_ACTION = {
     "uploaded": "Classify document and assign reviewer",
     "under_review": "Review support and raise query if needed",
@@ -870,7 +879,7 @@ def _invoice_response_doc(doc: dict, *, created: bool = False) -> dict:
     return result
 
 
-def _compute_invoice_lines(payload: SalesInvoiceCreateRequest):
+def _compute_invoice_lines(payload: SalesInvoiceCreateRequest, *, composition: bool = False):
     """Compute per-line taxable + GST split and roll up invoice totals.
 
     Each monetary value is quantized to 2dp; totals are sums of rounded line
@@ -885,7 +894,9 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest):
     igst_total = Decimal("0.00")
     for item in payload.line_items:
         taxable = _q2(Decimal(item.quantity) * Decimal(item.rate))
-        gst_amount = _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
+        # Composition dealers issue a Bill of Supply — no GST is charged or split,
+        # whatever rate is on the line. gst_amount of 0 zeroes every head below.
+        gst_amount = Decimal("0.00") if composition else _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
         if payload.is_inter_state:
             cgst = Decimal("0.00")
             sgst = Decimal("0.00")
@@ -1035,6 +1046,32 @@ async def get_invoice_settings(
     return result
 
 
+async def get_gst_profile(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+) -> dict:
+    """The entity's GST regime, read from invoice-settings branding.
+
+    Returns registration_type ("regular"|"composition"), the composition
+    category, and the derived composition tax rate (None for regular dealers).
+    """
+    settings = await get_invoice_settings(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    branding = (settings or {}).get("branding") or {}
+    reg_type = str(branding.get("gst_registration_type") or "regular")
+    category = branding.get("composition_category")
+    rate = COMPOSITION_RATES.get(category) if reg_type == "composition" else None
+    return {
+        "registration_type": reg_type,
+        "composition_category": category,
+        "composition_rate": rate,
+        "is_composition": reg_type == "composition",
+    }
+
+
 async def save_invoice_settings(
     *,
     tenant_id: str,
@@ -1159,7 +1196,19 @@ async def create_sales_invoice(
     )
     _validate_required_invoice_fields(payload, settings)
 
-    lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total = _compute_invoice_lines(payload)
+    profile = await get_gst_profile(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+    )
+    is_composition = profile["is_composition"]
+    if is_composition and payload.is_inter_state:
+        raise AccountingValidationError(
+            "Composition dealers cannot make inter-state outward supplies. "
+            "Issue an intra-state Bill of Supply only."
+        )
+
+    lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total = _compute_invoice_lines(
+        payload, composition=is_composition,
+    )
     if invoice_total <= Decimal("0"):
         raise AccountingValidationError("Invoice total must be greater than zero")
 
@@ -1212,7 +1261,8 @@ async def create_sales_invoice(
         invoice_date=payload.invoice_date,
         numbering=numbering,
     )
-    description = f"Sales Invoice {invoice_number} - {customer.get('party_name') or payload.customer_party_id}"
+    doc_label = "Bill of Supply" if is_composition else "Sales Invoice"
+    description = f"{doc_label} {invoice_number} - {customer.get('party_name') or payload.customer_party_id}"
     now = _now()
     doc = {
         "invoice_id": invoice_id,
@@ -1228,6 +1278,8 @@ async def create_sales_invoice(
         "is_inter_state": payload.is_inter_state,
         "place_of_supply": payload.place_of_supply,
         "income_account_code": payload.income_account_code,
+        "document_type": "bill_of_supply" if is_composition else "tax_invoice",
+        "is_composition": is_composition,
         "reference": payload.reference,
         "notes": payload.notes,
         "line_items": lines,

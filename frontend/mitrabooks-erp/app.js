@@ -6957,15 +6957,24 @@ function renderInvoiceCreateForm() {
     </tr>
   `).join("");
 
+  const isComposition = (lastInvoiceSettings?.branding?.gst_registration_type === "composition");
+  const docTitle = isComposition ? "New Bill of Supply" : "New Sales Invoice";
+  const docSubtitle = isComposition
+    ? `Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · composition dealer — no GST is collected; posts to receivables and income only.`
+    : `Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · posts to receivables, sales income, and output GST automatically.`;
+  const compositionBanner = isComposition
+    ? `<p class="muted" style="padding:8px 10px;border:1px solid #f59e0b;border-radius:6px;background:#fffbeb;">⚠ Composition taxable person, not eligible to collect tax on supplies. GST rates entered below are ignored; inter-state sales are blocked.</p>`
+    : "";
   return `
     <div class="verification-panel erp-workspace-panel" data-invoice-form>
       <div class="preview-heading compact">
         <div>
-          <h4>New Sales Invoice</h4>
-          <p>Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · posts to receivables, sales income, and output GST automatically.</p>
+          <h4>${escapeHtml(docTitle)}</h4>
+          <p>${docSubtitle}</p>
         </div>
         <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
       </div>
+      ${compositionBanner}
       <div class="invoice-form-grid">
         <label>Customer
           <select name="customer_party_id">
@@ -7050,7 +7059,7 @@ function renderInvoiceDetail() {
     <div class="verification-panel erp-workspace-panel">
       <div class="preview-heading compact">
         <div>
-          <h4>Invoice ${escapeHtml(inv.invoice_number || "")} ${invoiceStatusPill(inv.status)}</h4>
+          <h4>${escapeHtml(inv.is_composition || inv.document_type === "bill_of_supply" ? "Bill of Supply" : "Invoice")} ${escapeHtml(inv.invoice_number || "")} ${invoiceStatusPill(inv.status)}${inv.is_composition || inv.document_type === "bill_of_supply" ? ` <span class="pill">composition</span>` : ""}</h4>
           <p>${escapeHtml(inv.customer_name || inv.customer_party_id || "")}${inv.customer_gstin ? ` · ${escapeHtml(inv.customer_gstin)}` : ""} · ${escapeHtml(inv.invoice_date || "")}${inv.due_date ? ` · due ${escapeHtml(inv.due_date)}` : ""}</p>
         </div>
         <div class="invoice-detail-actions">
@@ -7059,7 +7068,7 @@ function renderInvoiceDetail() {
         </div>
       </div>
       ${String(inv.status).toLowerCase() === "posted" && invoiceReverseOpen ? reversalPanel("invoice", inv.invoice_id, inv.invoice_date) : ""}
-      <p class="muted">${escapeHtml(inv.is_inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)")}${inv.reference ? ` · Ref: ${escapeHtml(inv.reference)}` : ""}</p>
+      <p class="muted">${escapeHtml(inv.is_composition || inv.document_type === "bill_of_supply" ? "Composition taxable person, not eligible to collect tax on supplies" : (inv.is_inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)"))}${inv.reference ? ` · Ref: ${escapeHtml(inv.reference)}` : ""}</p>
       <div class="table-preview compact-table">
         <table>
           <thead>
@@ -7121,12 +7130,20 @@ async function saveInvoiceSettings() {
     start_number: Math.max(1, Number(numVal("start_number") || 1)),
     reset_yearly: !!panel.querySelector("[data-numbering='reset_yearly']")?.checked,
   };
+  // Merge the GST registration choices into branding, preserving other fields.
+  const regType = panel.querySelector("[data-gst-reg='type']")?.value === "composition" ? "composition" : "regular";
+  const regCategory = panel.querySelector("[data-gst-reg='category']")?.value || "goods";
+  const branding = {
+    ...((lastInvoiceSettings && lastInvoiceSettings.branding) || {}),
+    gst_registration_type: regType,
+    composition_category: regType === "composition" ? regCategory : null,
+  };
   const body = {
     field_config,
     numbering,
-    // Preserve sections managed in Phase 2 (custom fields / branding).
+    // Preserve sections managed in Phase 2 (custom fields).
     custom_fields: (lastInvoiceSettings && lastInvoiceSettings.custom_fields) || [],
-    branding: (lastInvoiceSettings && lastInvoiceSettings.branding) || {},
+    branding,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", {
     method: "PUT",
@@ -7188,6 +7205,24 @@ function renderInvoiceSettingsPanel() {
         <label class="invoice-inter-toggle"><input type="checkbox" data-numbering="reset_yearly" ${n.reset_yearly !== false ? "checked" : ""}> Reset sequence each financial year</label>
       </div>
       <p class="muted">Preview: <strong>${escapeHtml(invoiceNumberPreview())}</strong></p>
+
+      <h5 class="settings-section-title">GST registration</h5>
+      <p class="muted">Composition dealers (Section 10) issue a <strong>Bill of Supply</strong>, do not collect GST, and cannot claim ITC. Inter-state sales are not allowed.</p>
+      <div class="invoice-form-grid">
+        <label>Registration type
+          <select data-gst-reg="type">
+            <option value="regular" ${(s.branding?.gst_registration_type || "regular") !== "composition" ? "selected" : ""}>Regular (collect GST, claim ITC)</option>
+            <option value="composition" ${s.branding?.gst_registration_type === "composition" ? "selected" : ""}>Composition (Bill of Supply)</option>
+          </select>
+        </label>
+        <label>Composition category
+          <select data-gst-reg="category">
+            <option value="goods" ${(s.branding?.composition_category || "goods") === "goods" ? "selected" : ""}>Manufacturer / Trader — 1%</option>
+            <option value="restaurant" ${s.branding?.composition_category === "restaurant" ? "selected" : ""}>Restaurant (non-alcoholic) — 5%</option>
+            <option value="services" ${s.branding?.composition_category === "services" ? "selected" : ""}>Other services — 6%</option>
+          </select>
+        </label>
+      </div>
 
       <p class="muted settings-coming-soon">Custom fields and invoice branding / print template are coming in the next update.</p>
 

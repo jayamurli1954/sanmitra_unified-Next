@@ -226,6 +226,8 @@ class SalesInvoiceResponse(BaseModel):
     is_inter_state: bool
     place_of_supply: str | None = None
     income_account_code: str
+    document_type: str = "tax_invoice"   # "bill_of_supply" for composition dealers
+    is_composition: bool = False
     reference: str | None = None
     notes: str | None = None
     line_items: list[SalesInvoiceLineResponse]
@@ -279,6 +281,12 @@ class InvoiceCustomFieldDef(BaseModel):
     required: bool = False
 
 
+# GST registration regime for this entity. "composition" dealers issue a Bill of
+# Supply (no tax collected), cannot claim ITC, and file CMP-08 / GSTR-4.
+GstRegistrationType = Literal["regular", "composition"]
+CompositionCategory = Literal["goods", "restaurant", "services"]
+
+
 class InvoiceBrandingConfig(BaseModel):
     business_name: str | None = Field(default=None, max_length=160)
     address: str | None = Field(default=None, max_length=400)
@@ -287,6 +295,8 @@ class InvoiceBrandingConfig(BaseModel):
     terms: str | None = Field(default=None, max_length=1000)
     footer: str | None = Field(default=None, max_length=300)
     logo_url: str | None = Field(default=None, max_length=400)
+    gst_registration_type: GstRegistrationType = "regular"
+    composition_category: CompositionCategory | None = None
 
 
 def _default_field_config() -> dict[str, InvoiceFieldRule]:
