@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models import Account, JournalEntry, JournalLine
 from app.db.mongo import get_collection
+from app.modules.business.gst_states import resolve_state_code, state_label
 from app.modules.business.service import (
     INPUT_CGST_CODE,
     INPUT_IGST_CODE,
@@ -36,6 +37,11 @@ from app.modules.business.service import (
 )
 
 HEADS = ("igst", "cgst", "sgst")
+
+# GSTR-1 B2C Large threshold: inter-state B2C invoices above this go to B2CL (5),
+# the rest are summarised in B2CS (7). (Rationalised to Rs 1,00,000 from 2024;
+# kept configurable here.)
+B2CL_THRESHOLD = Decimal("100000")
 
 # Ledger account code -> (side, head) for the six GST accounts.
 _GST_CODE_MAP = {
@@ -274,3 +280,251 @@ async def build_gstr3b(
         gstin=gstin, period=period, output=output, itc_available=itc_available,
         itc_reversed=itc_reversed, outward_taxable_value=taxable_value,
     )
+
+
+# =========================================================================== #
+# GSTR-1 — outward supplies detail (B2B / B2CL / B2CS / CDNR / HSN / DOCS)
+# =========================================================================== #
+def _D(value) -> Decimal:
+    try:
+        return Decimal(str(value if value not in (None, "") else 0))
+    except Exception:
+        return Decimal("0")
+
+
+def _rate_buckets(line_items: list[dict]) -> dict:
+    """Group a document's lines by GST rate -> summed taxable + tax per head."""
+    buckets: dict[Decimal, dict] = {}
+    for ln in line_items or []:
+        rt = _D(ln.get("gst_rate"))
+        b = buckets.setdefault(rt, {"txval": Decimal("0"), "iamt": Decimal("0"),
+                                    "camt": Decimal("0"), "samt": Decimal("0")})
+        b["txval"] += _D(ln.get("taxable_amount"))
+        b["iamt"] += _D(ln.get("igst"))
+        b["camt"] += _D(ln.get("cgst"))
+        b["samt"] += _D(ln.get("sgst"))
+    return buckets
+
+
+def _itms(line_items: list[dict]) -> list[dict]:
+    """GSTN rate-wise itms array for an invoice/note."""
+    out = []
+    for i, (rt, b) in enumerate(sorted(_rate_buckets(line_items).items()), start=1):
+        out.append({"num": i, "itm_det": {
+            "rt": float(rt), "txval": float(_q(b["txval"])),
+            "iamt": float(_q(b["iamt"])), "camt": float(_q(b["camt"])),
+            "samt": float(_q(b["samt"])), "csamt": 0.0,
+        }})
+    return out
+
+
+def _doc_tax_totals(line_items: list[dict]) -> dict:
+    t = {"txval": Decimal("0"), "iamt": Decimal("0"), "camt": Decimal("0"), "samt": Decimal("0")}
+    for b in _rate_buckets(line_items).values():
+        for k in t:
+            t[k] += b[k]
+    return {k: _q(v) for k, v in t.items()}
+
+
+def assemble_gstr1(*, gstin: str | None, period: str, invoices: list[dict], credit_notes: list[dict]) -> dict:
+    """Build the GSTR-1 sections + GSTN JSON from posted invoice/credit-note docs.
+
+    Sections: B2B (4A), B2CL (5), B2CS (7), CDNR (9B), HSN (12), DOCS (13).
+    Export/SEZ (zero-rated) sections are out of scope for v1 (domestic supply);
+    a note flags it. Each figure comes from the stored documents.
+    """
+    b2b: dict[str, list] = {}            # ctin -> [inv...]
+    b2cl: dict[str, list] = {}           # pos  -> [inv...]
+    b2cs: dict[tuple, dict] = {}         # (pos, sply_ty, rate) -> aggregate
+    hsn: dict[tuple, dict] = {}          # (hsn, uqc, rate) -> aggregate
+    inv_numbers: list[str] = []
+
+    def _accumulate_hsn(line_items, sign=Decimal("1")):
+        for ln in line_items or []:
+            key = (str(ln.get("hsn_sac") or "").strip(), str(ln.get("uqc") or "OTH").strip().upper() or "OTH", _D(ln.get("gst_rate")))
+            h = hsn.setdefault(key, {"qty": Decimal("0"), "txval": Decimal("0"),
+                                     "iamt": Decimal("0"), "camt": Decimal("0"), "samt": Decimal("0")})
+            h["qty"] += sign * _D(ln.get("quantity"))
+            h["txval"] += sign * _D(ln.get("taxable_amount"))
+            h["iamt"] += sign * _D(ln.get("igst"))
+            h["camt"] += sign * _D(ln.get("cgst"))
+            h["samt"] += sign * _D(ln.get("sgst"))
+
+    for inv in invoices:
+        gst = str(inv.get("customer_gstin") or "").strip()
+        pos = resolve_state_code(inv.get("place_of_supply"), gst)
+        val = _q(_D(inv.get("invoice_total")))
+        line_items = inv.get("line_items") or []
+        inv_numbers.append(str(inv.get("invoice_number") or ""))
+        _accumulate_hsn(line_items)
+        record = {
+            "number": inv.get("invoice_number"), "date": str(inv.get("invoice_date") or "")[:10],
+            "value": val, "pos": pos, "line_items": line_items,
+        }
+        if gst:
+            b2b.setdefault(gst, []).append(record)
+        elif bool(inv.get("is_inter_state")) and val > B2CL_THRESHOLD:
+            b2cl.setdefault(pos, []).append(record)
+        else:
+            sply_ty = "INTER" if inv.get("is_inter_state") else "INTRA"
+            for rt, b in _rate_buckets(line_items).items():
+                key = (pos, sply_ty, rt)
+                agg = b2cs.setdefault(key, {"txval": Decimal("0"), "iamt": Decimal("0"),
+                                            "camt": Decimal("0"), "samt": Decimal("0")})
+                for k in ("txval", "iamt", "camt", "samt"):
+                    agg[k] += b[k]
+
+    cdnr: dict[str, list] = {}
+    for note in credit_notes:
+        gst = str(note.get("customer_gstin") or "").strip()
+        pos = resolve_state_code(note.get("place_of_supply"), gst)
+        line_items = note.get("line_items") or []
+        _accumulate_hsn(line_items, sign=Decimal("-1"))  # credit notes reduce HSN totals
+        if gst:
+            cdnr.setdefault(gst, []).append({
+                "number": note.get("credit_note_number"), "date": str(note.get("note_date") or "")[:10],
+                "value": _q(_D(note.get("note_total"))), "pos": pos, "line_items": line_items,
+            })
+
+    report = _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers)
+    report["gstn_json"] = _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers)
+    return report
+
+
+def _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dict:
+    def _section_total(line_item_groups):
+        tot = {"txval": Decimal("0"), "tax": Decimal("0")}
+        for recs in line_item_groups:
+            for rec in recs:
+                t = _doc_tax_totals(rec["line_items"])
+                tot["txval"] += t["txval"]
+                tot["tax"] += t["iamt"] + t["camt"] + t["samt"]
+        return {"taxable_value": _q(tot["txval"]), "tax": _q(tot["tax"])}
+
+    b2cs_txval = sum((v["txval"] for v in b2cs.values()), Decimal("0"))
+    b2cs_tax = sum((v["iamt"] + v["camt"] + v["samt"] for v in b2cs.values()), Decimal("0"))
+    issued = [n for n in inv_numbers if n]
+
+    return {
+        "return_type": "GSTR-1",
+        "gstin": gstin,
+        "period": period,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "sections": {
+            "b2b": {"recipients": len(b2b), "invoices": sum(len(v) for v in b2b.values()),
+                    **_section_total(b2b.values())},
+            "b2cl": {"places": len(b2cl), "invoices": sum(len(v) for v in b2cl.values()),
+                     **_section_total(b2cl.values())},
+            "b2cs": {"rows": len(b2cs), "taxable_value": _q(b2cs_txval), "tax": _q(b2cs_tax)},
+            "cdnr": {"recipients": len(cdnr), "notes": sum(len(v) for v in cdnr.values()),
+                     **_section_total(cdnr.values())},
+            "hsn": {"rows": len(hsn),
+                    "taxable_value": _q(sum((h["txval"] for h in hsn.values()), Decimal("0"))),
+                    "tax": _q(sum((h["iamt"] + h["camt"] + h["samt"] for h in hsn.values()), Decimal("0")))},
+            "docs": {"total": len(issued), "from": min(issued) if issued else None,
+                     "to": max(issued) if issued else None},
+        },
+        "b2cs_rows": [
+            {"pos": state_label(pos), "supply_type": sply_ty, "rate": rt,
+             "taxable_value": _q(v["txval"]), "igst": _q(v["iamt"]),
+             "cgst": _q(v["camt"]), "sgst": _q(v["samt"])}
+            for (pos, sply_ty, rt), v in sorted(b2cs.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2]))
+        ],
+        "hsn_rows": [
+            {"hsn_sac": k[0], "uqc": k[1], "rate": k[2], "quantity": _q(v["qty"]),
+             "taxable_value": _q(v["txval"]), "igst": _q(v["iamt"]),
+             "cgst": _q(v["camt"]), "sgst": _q(v["samt"])}
+            for k, v in sorted(hsn.items(), key=lambda kv: (str(kv[0][0]), kv[0][2]))
+        ],
+        "notes": [
+            "Export / SEZ (zero-rated) supplies are out of scope in this v1 and are "
+            "not split into a separate section.",
+        ],
+    }
+
+
+def _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dict:
+    b2b_json = [
+        {"ctin": ctin, "inv": [
+            {"inum": r["number"], "idt": r["date"], "val": float(r["value"]), "pos": r["pos"],
+             "rchrg": "N", "inv_typ": "R", "itms": _itms(r["line_items"])}
+            for r in recs
+        ]}
+        for ctin, recs in b2b.items()
+    ]
+    b2cl_json = [
+        {"pos": pos, "inv": [
+            {"inum": r["number"], "idt": r["date"], "val": float(r["value"]), "itms": _itms(r["line_items"])}
+            for r in recs
+        ]}
+        for pos, recs in b2cl.items()
+    ]
+    b2cs_json = [
+        {"sply_ty": sply_ty, "pos": pos, "typ": "OE", "rt": float(rt),
+         "txval": float(_q(v["txval"])), "iamt": float(_q(v["iamt"])),
+         "camt": float(_q(v["camt"])), "samt": float(_q(v["samt"])), "csamt": 0.0}
+        for (pos, sply_ty, rt), v in b2cs.items()
+    ]
+    cdnr_json = [
+        {"ctin": ctin, "nt": [
+            {"ntty": "C", "nt_num": r["number"], "nt_dt": r["date"], "val": float(r["value"]),
+             "pos": r["pos"], "rchrg": "N", "inv_typ": "R", "itms": _itms(r["line_items"])}
+            for r in recs
+        ]}
+        for ctin, recs in cdnr.items()
+    ]
+    hsn_json = [
+        {"num": i, "hsn_sc": k[0], "uqc": k[1], "qty": float(_q(v["qty"])),
+         "txval": float(_q(v["txval"])), "iamt": float(_q(v["iamt"])),
+         "camt": float(_q(v["camt"])), "samt": float(_q(v["samt"])), "csamt": 0.0, "rt": float(k[2])}
+        for i, (k, v) in enumerate(sorted(hsn.items(), key=lambda kv: (str(kv[0][0]), kv[0][2])), start=1)
+    ]
+    issued = sorted(n for n in inv_numbers if n)
+    doc_issue = {"doc_det": [{"doc_num": 1, "docs": [
+        {"num": 1, "from": issued[0] if issued else "", "to": issued[-1] if issued else "",
+         "totnum": len(issued), "cancel": 0, "net_issue": len(issued)}
+    ]}]} if issued else {"doc_det": []}
+
+    return {
+        "gstin": gstin,
+        "fp": _ret_period(period),
+        "b2b": b2b_json,
+        "b2cl": b2cl_json,
+        "b2cs": b2cs_json,
+        "cdnr": cdnr_json,
+        "hsn": {"data": hsn_json},
+        "doc_issue": doc_issue,
+    }
+
+
+async def _posted_in_period(collection: str, *, tenant_id, app_key, accounting_entity_id, first, last, date_field):
+    scope = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    rows = await get_collection(collection).find(scope).to_list(length=20000)
+    out = []
+    for row in rows:
+        if str(row.get("status") or "posted").lower() == "cancelled":
+            continue
+        raw = str(row.get(date_field) or "")[:10]
+        try:
+            d = date.fromisoformat(raw)
+        except ValueError:
+            continue
+        if first <= d <= last:
+            out.append(row)
+    return out
+
+
+async def build_gstr1(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, period: str, gstin: str | None = None,
+) -> dict:
+    """Assemble GSTR-1 for a 'YYYY-MM' period from posted invoices + credit notes."""
+    first, last = _period_bounds(period)
+    invoices = await _posted_in_period(
+        SALES_INVOICES_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="invoice_date",
+    )
+    credit_notes = await _posted_in_period(
+        CREDIT_NOTES_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="note_date",
+    )
+    return assemble_gstr1(gstin=gstin, period=period, invoices=invoices, credit_notes=credit_notes)

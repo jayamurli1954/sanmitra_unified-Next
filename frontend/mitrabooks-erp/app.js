@@ -5036,6 +5036,8 @@ let lastPeriodLocks = [];
 let lastGstSettlement = null;
 let gstSettlementPeriod = todayIsoDate().slice(0, 7);
 let lastGstr3b = null;
+let lastGstr1 = null;
+let gstReturnType = "gstr3b";   // "gstr3b" | "gstr1"
 let gstr3bPeriod = todayIsoDate().slice(0, 7);
 let lastItcReversal = null;
 let lastItcReversedBills = [];
@@ -5112,7 +5114,8 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "gst-settlement") {
     await loadGstSettlementPreview(gstSettlementPeriod);
   } else if (tab === "gst-returns") {
-    await loadGstr3b(gstr3bPeriod);
+    if (gstReturnType === "gstr1") { await loadGstr1(gstr3bPeriod); }
+    else { await loadGstr3b(gstr3bPeriod); }
   } else if (tab === "itc-reversals") {
     await loadItcReversalPreview(itcReversalAsOf);
   }
@@ -5314,6 +5317,124 @@ function renderGstr3bPanel() {
       <div><span>Total output tax</span><strong>${num(totals.total_output_tax)}</strong></div>
       <div><span>Net ITC</span><strong>${num(totals.total_itc_net)}</strong></div>
       <div class="invoice-grand"><span>Net cash payable</span><strong>${num(totals.total_cash_payable)}</strong></div>
+    </div>
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
+}
+
+// Wrapper: choose the return (GSTR-3B summary vs GSTR-1 outward detail).
+function renderGstReturns() {
+  const tabBtn = (id, label) => `
+    <button class="report-tab ${gstReturnType === id ? "active" : ""}" type="button"
+      data-business-action="gst-return-type" data-return-type="${id}">${label}</button>`;
+  const toggle = `<div class="report-tabs" role="tablist" style="margin:0 0 10px;">
+    ${tabBtn("gstr3b", "GSTR-3B (summary)")}${tabBtn("gstr1", "GSTR-1 (outward)")}
+  </div>`;
+  return `${toggle}${gstReturnType === "gstr1" ? renderGstr1Panel() : renderGstr3bPanel()}`;
+}
+
+// ---- GSTR-1 outward-supplies return ------------------------------------- //
+async function loadGstr1(period) {
+  gstr3bPeriod = period || gstr3bPeriod;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-1?period=${encodeURIComponent(gstr3bPeriod)}`, { method: "GET" });
+  lastGstr1 = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { gstr1: { ok: result.ok, period: gstr3bPeriod } });
+}
+
+function previewGstr1FromInput() {
+  const input = document.querySelector("[data-gstr1-period]");
+  loadGstr1(input?.value || gstr3bPeriod);
+}
+
+function downloadGstr1Json() {
+  const j = lastGstr1?.gstn_json;
+  if (!j) { setLoginStatus("warn", "Nothing to download", "Load a GSTR-1 period first."); return; }
+  const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gstr1_${gstr3bPeriod}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  renderJson(apiOutput, { gstr1_download: { period: gstr3bPeriod } });
+}
+
+function renderGstr1Panel() {
+  const period = gstr3bPeriod;
+  const controls = `
+    <div class="report-date-controls">
+      <label>Return month <input type="month" data-gstr1-period value="${escapeHtml(period)}"></label>
+      <button class="secondary" type="button" data-business-action="gstr1-load">Load</button>
+      <button class="secondary" type="button" data-business-action="gstr1-download-json">Download GSTN JSON</button>
+    </div>`;
+  const r = lastGstr1;
+  if (!r) { return `${controls}<p class="muted">Loading GSTR-1...</p>`; }
+  if (r.ok === false) { return `${controls}${reportUnavailablePanel("GSTR-1", r)}`; }
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const s = r.sections || {};
+
+  const sectionCards = [
+    ["B2B (4A)", `${s.b2b?.invoices || 0} inv · ${s.b2b?.recipients || 0} GSTIN`, s.b2b?.taxable_value, s.b2b?.tax],
+    ["B2C Large (5)", `${s.b2cl?.invoices || 0} inv`, s.b2cl?.taxable_value, s.b2cl?.tax],
+    ["B2C Small (7)", `${s.b2cs?.rows || 0} rows`, s.b2cs?.taxable_value, s.b2cs?.tax],
+    ["Credit Notes (9B)", `${s.cdnr?.notes || 0} notes`, s.cdnr?.taxable_value, s.cdnr?.tax],
+    ["HSN (12)", `${s.hsn?.rows || 0} rows`, s.hsn?.taxable_value, s.hsn?.tax],
+  ].map(([title, sub, txval, tax]) => `
+    <article>
+      <h4>${escapeHtml(title)}</h4>
+      <p class="muted">${escapeHtml(sub)}</p>
+      <div class="invoice-totals">
+        <div><span>Taxable</span><strong>${num(txval)}</strong></div>
+        <div><span>Tax</span><strong>${num(tax)}</strong></div>
+      </div>
+    </article>`).join("");
+
+  const b2csRows = (r.b2cs_rows || []).map((row) => `
+    <tr>
+      <td>${escapeHtml(row.pos || "")}</td>
+      <td>${escapeHtml(row.supply_type || "")}</td>
+      <td class="amount">${escapeHtml(String(row.rate ?? ""))}%</td>
+      <td class="amount">${num(row.taxable_value)}</td>
+      <td class="amount">${num(row.igst)}</td>
+      <td class="amount">${num(row.cgst)}</td>
+      <td class="amount">${num(row.sgst)}</td>
+    </tr>`).join("");
+  const hsnRows = (r.hsn_rows || []).map((row) => `
+    <tr>
+      <td>${escapeHtml(row.hsn_sac || "")}</td>
+      <td>${escapeHtml(row.uqc || "")}</td>
+      <td class="amount">${escapeHtml(String(row.rate ?? ""))}%</td>
+      <td class="amount">${escapeHtml(String(row.quantity ?? ""))}</td>
+      <td class="amount">${num(row.taxable_value)}</td>
+      <td class="amount">${num(row.igst)}</td>
+      <td class="amount">${num(row.cgst)}</td>
+      <td class="amount">${num(row.sgst)}</td>
+    </tr>`).join("");
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>GSTR-1 outward supplies for ${escapeHtml(period)}${r.gstin ? ` · GSTIN ${escapeHtml(r.gstin)}` : ""}. Built from posted invoices and credit notes. Docs ${escapeHtml(String(s.docs?.total || 0))} (${escapeHtml(s.docs?.from || "-")} → ${escapeHtml(s.docs?.to || "-")}).</p></div>
+    </div>
+    <div class="dashboard-main-grid platform-grid">${sectionCards}</div>
+
+    <div class="table-preview compact-table">
+      <h4>B2C Small (7) — rate-wise by place of supply</h4>
+      <table>
+        <thead><tr><th>Place of supply</th><th>Type</th><th class="amount">Rate</th><th class="amount">Taxable</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody>${b2csRows || `<tr><td colspan="7" class="muted">No B2C-small supplies.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="table-preview compact-table">
+      <h4>HSN summary (12)</h4>
+      <table>
+        <thead><tr><th>HSN/SAC</th><th>UQC</th><th class="amount">Rate</th><th class="amount">Qty</th><th class="amount">Taxable</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody>${hsnRows || `<tr><td colspan="8" class="muted">No HSN data.</td></tr>`}</tbody>
+      </table>
     </div>
     ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
   `;
@@ -5870,7 +5991,7 @@ function renderBusinessReportsWorkspace() {
   } else if (businessReportState.tab === "gst-settlement") {
     body = renderGstSettlementPanel();
   } else if (businessReportState.tab === "gst-returns") {
-    body = renderGstr3bPanel();
+    body = renderGstReturns();
   } else if (businessReportState.tab === "itc-reversals") {
     body = renderItcReversalPanel();
   }
@@ -6582,6 +6703,7 @@ function syncSalesFormFromDom() {
     id: row.getAttribute("data-invoice-line"),
     description: row.querySelector("input[name='description']")?.value || "",
     hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
+    uqc: row.querySelector("input[name='uqc']")?.value || "",
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
@@ -6632,7 +6754,7 @@ function setBusinessSalesView(view) {
 }
 
 function openInvoiceCreate() {
-  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" }];
   salesFormHeader.customer_party_id = "";
   salesFormHeader.invoice_date = todayIsoDate();
   salesFormHeader.due_date = "";
@@ -6650,7 +6772,7 @@ function openInvoiceCreate() {
 
 function addInvoiceLine() {
   syncSalesFormFromDom();
-  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
 }
@@ -6659,7 +6781,7 @@ function removeInvoiceLine(lineId) {
   syncSalesFormFromDom();
   invoiceFormLines = invoiceFormLines.filter((l) => l.id !== lineId);
   if (invoiceFormLines.length === 0) {
-    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
   }
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
@@ -6683,6 +6805,7 @@ async function submitInvoice() {
     .map((l) => ({
       description: String(l.description).trim(),
       hsn_sac: String(l.hsn_sac || "").trim() || null,
+      uqc: String(l.uqc || "").trim() || null,
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
@@ -6823,6 +6946,7 @@ function renderInvoiceCreateForm() {
     <tr data-invoice-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
       ${hsnVisible ? `<td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>` : ""}
+      ${hsnVisible ? `<td><input type="text" name="uqc" value="${escapeHtml(l.uqc || "")}" placeholder="UQC" style="width:70px;"></td>` : ""}
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
@@ -6878,6 +7002,7 @@ function renderInvoiceCreateForm() {
             <tr>
               <th>Description</th>
               ${hsnVisible ? `<th>HSN/SAC${hsnRequired ? " *" : ""}</th>` : ""}
+              ${hsnVisible ? `<th>UQC</th>` : ""}
               <th>Qty</th>
               <th>Rate</th>
               <th>GST %</th>
@@ -11870,6 +11995,14 @@ dashboardPreview.addEventListener("click", (event) => {
     previewGstr3bFromInput();
   } else if (businessAction === "gstr3b-download-json") {
     downloadGstr3bJson();
+  } else if (businessAction === "gst-return-type") {
+    gstReturnType = button.getAttribute("data-return-type") === "gstr1" ? "gstr1" : "gstr3b";
+    rerenderBusinessReportsIfActive();
+    refreshCurrentBusinessReport();
+  } else if (businessAction === "gstr1-load") {
+    previewGstr1FromInput();
+  } else if (businessAction === "gstr1-download-json") {
+    downloadGstr1Json();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {

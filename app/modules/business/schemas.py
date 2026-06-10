@@ -170,9 +170,16 @@ class CaDocumentListResponse(BaseModel):
 SalesInvoiceStatus = Literal["posted", "cancelled"]
 
 
+# Supply-type classification for GST returns. "taxable" is the default; the
+# others let GSTR-1/3B distinguish 0%-rated from genuinely exempt/non-GST supply.
+GstSupplyType = Literal["taxable", "exempt", "nil_rated", "non_gst"]
+
+
 class SalesInvoiceLineItem(BaseModel):
     description: str = Field(..., min_length=1, max_length=300)
     hsn_sac: str | None = Field(default=None, max_length=20)
+    uqc: str | None = Field(default=None, max_length=10)  # unit quantity code, e.g. NOS/KGS
+    supply_type: GstSupplyType = "taxable"
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
     gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
@@ -429,6 +436,8 @@ CreditNoteReason = Literal["sales_return", "discount", "price_revision", "defici
 class CreditNoteLineItem(BaseModel):
     description: str = Field(..., min_length=1, max_length=300)
     hsn_sac: str | None = Field(default=None, max_length=20)
+    uqc: str | None = Field(default=None, max_length=10)
+    supply_type: GstSupplyType = "taxable"
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
     gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))

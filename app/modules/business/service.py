@@ -898,6 +898,8 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest):
         lines.append({
             "description": item.description.strip(),
             "hsn_sac": item.hsn_sac,
+            "uqc": getattr(item, "uqc", None),
+            "supply_type": getattr(item, "supply_type", "taxable"),
             "quantity": str(Decimal(item.quantity)),
             "rate": _money(item.rate),
             "gst_rate": str(Decimal(item.gst_rate)),
