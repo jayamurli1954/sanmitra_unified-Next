@@ -117,6 +117,20 @@ def test_assemble_gstr3b_rcm_inward_and_itc_split():
     }
 
 
+def test_assemble_gstr3b_zero_rated_31b():
+    report = assemble_gstr3b(
+        gstin=None, period="2026-05",
+        output={}, itc_available={}, itc_reversed={},
+        outward_taxable_value=Decimal("20000"),
+        zero_rated_taxable_value=Decimal("50000"),
+    )
+    assert report["outward_supplies"]["zero_rated"]["taxable_value"] == Decimal("50000.00")
+    assert report["outward_supplies"]["zero_rated"]["igst"] == Decimal("0.00")
+    j = report["gstn_json"]["sup_details"]
+    assert j["osup_zero"]["txval"] == 50000.0
+    assert j["osup_det"]["txval"] == 20000.0
+
+
 def test_ret_period_format():
     assert _ret_period("2026-05") == "052026"
     assert _ret_period("2026-12") == "122026"

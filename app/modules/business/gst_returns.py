@@ -83,6 +83,7 @@ def assemble_gstr3b(
     outward_taxable_value: Decimal,
     rcm_inward: dict | None = None,   # {"taxable_value", igst, cgst, sgst} from RCM bills
     itc_rcm: dict | None = None,      # heads — the 4(A)(3) split of the ITC above
+    zero_rated_taxable_value: Decimal | None = None,  # 3.1(b) export/SEZ under LUT
 ) -> dict:
     """Build the GSTR-3B structured report and GSTN JSON from computed figures.
 
@@ -122,7 +123,7 @@ def assemble_gstr3b(
                 "taxable_value": _q(outward_taxable_value),
                 **output,
             },
-            "zero_rated": {"taxable_value": Decimal("0.00"), **_zero_heads()},
+            "zero_rated": {"taxable_value": _q(zero_rated_taxable_value or 0), **_zero_heads()},
             "nil_exempt": {"taxable_value": Decimal("0.00")},
             "inward_reverse_charge": rcm_block,
             "non_gst": {"taxable_value": Decimal("0.00")},
@@ -151,8 +152,9 @@ def assemble_gstr3b(
             "total_cash_payable": _q(sum(cash_payable.values())),
         },
         "notes": [
-            "Zero-rated, nil/exempt and non-GST outward supplies are reported as "
-            "zero until those supply types are flagged on documents.",
+            "3.1(b) zero-rated comes from invoice lines flagged 'zero_rated' "
+            "(export/SEZ under LUT — no tax). Nil/exempt and non-GST outward "
+            "supplies stay zero until those supply types are flagged on documents.",
             "3.1(d) and 4(A)(3) come from purchase bills flagged 'reverse charge'. "
             "The RCM liability must be paid in cash (account 22005) — it cannot be "
             "set off against ITC.",
@@ -183,7 +185,7 @@ def _gstn_json(report: dict) -> dict:
         "ret_period": _ret_period(report["period"]),
         "sup_details": {
             "osup_det": {"txval": float(osup["taxable"]["taxable_value"]), **_amt(osup["taxable"])},
-            "osup_zero": {"txval": 0.0, **_amt(osup["zero_rated"])},
+            "osup_zero": {"txval": float(osup["zero_rated"]["taxable_value"]), **_amt(osup["zero_rated"])},
             "osup_nil_exmp": {"txval": 0.0},
             "isup_rev": {"txval": float(osup["inward_reverse_charge"]["taxable_value"]), **_amt(osup["inward_reverse_charge"])},
             "osup_nongst": {"txval": 0.0},
@@ -325,10 +327,22 @@ async def build_gstr3b(
     # 4(A)(3): the ITC arising from those RCM bills (booked on the Input GST
     # accounts at posting, so it is already inside the ledger itc_available).
     itc_rcm = {h: rcm_inward[h] for h in ("igst", "cgst", "sgst")}
+    # 3.1(b): zero-rated (export/SEZ) lines on posted invoices in the period.
+    invoices = await _posted_in_period(
+        SALES_INVOICES_COLLECTION, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="invoice_date",
+    )
+    zero_rated_value = Decimal("0")
+    for inv in invoices:
+        for ln in inv.get("line_items") or []:
+            if str(ln.get("supply_type") or "") == "zero_rated":
+                zero_rated_value += _D(ln.get("taxable_amount"))
+    # 3.1(a) is "outward taxable supplies OTHER THAN zero-rated/nil/exempt".
+    taxable_value = max(taxable_value - zero_rated_value, Decimal("0"))
     return assemble_gstr3b(
         gstin=gstin, period=period, output=output, itc_available=itc_available,
         itc_reversed=itc_reversed, outward_taxable_value=taxable_value,
-        rcm_inward=rcm_inward, itc_rcm=itc_rcm,
+        rcm_inward=rcm_inward, itc_rcm=itc_rcm, zero_rated_taxable_value=zero_rated_value,
     )
 
 
@@ -379,13 +393,15 @@ def _doc_tax_totals(line_items: list[dict]) -> dict:
 def assemble_gstr1(*, gstin: str | None, period: str, invoices: list[dict], credit_notes: list[dict]) -> dict:
     """Build the GSTR-1 sections + GSTN JSON from posted invoice/credit-note docs.
 
-    Sections: B2B (4A), B2CL (5), B2CS (7), CDNR (9B), HSN (12), DOCS (13).
-    Export/SEZ (zero-rated) sections are out of scope for v1 (domestic supply);
-    a note flags it. Each figure comes from the stored documents.
+    Sections: B2B (4A), B2CL (5), B2CS (7), EXP (6A, zero-rated under LUT),
+    CDNR (9B), HSN (12), DOCS (13). An invoice with any zero-rated line is
+    treated as an export/SEZ invoice (don't mix zero-rated and domestic lines
+    on one document). Each figure comes from the stored documents.
     """
     b2b: dict[str, list] = {}            # ctin -> [inv...]
     b2cl: dict[str, list] = {}           # pos  -> [inv...]
     b2cs: dict[tuple, dict] = {}         # (pos, sply_ty, rate) -> aggregate
+    exp: list[dict] = []                 # zero-rated (export/SEZ) invoices
     hsn: dict[tuple, dict] = {}          # (hsn, uqc, rate) -> aggregate
     inv_numbers: list[str] = []
 
@@ -411,7 +427,9 @@ def assemble_gstr1(*, gstin: str | None, period: str, invoices: list[dict], cred
             "number": inv.get("invoice_number"), "date": str(inv.get("invoice_date") or "")[:10],
             "value": val, "pos": pos, "line_items": line_items,
         }
-        if gst:
+        if any(str(ln.get("supply_type") or "") == "zero_rated" for ln in line_items):
+            exp.append(record)
+        elif gst:
             b2b.setdefault(gst, []).append(record)
         elif bool(inv.get("is_inter_state")) and val > B2CL_THRESHOLD:
             b2cl.setdefault(pos, []).append(record)
@@ -436,12 +454,12 @@ def assemble_gstr1(*, gstin: str | None, period: str, invoices: list[dict], cred
                 "value": _q(_D(note.get("note_total"))), "pos": pos, "line_items": line_items,
             })
 
-    report = _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers)
-    report["gstn_json"] = _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers)
+    report = _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers, exp)
+    report["gstn_json"] = _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers, exp)
     return report
 
 
-def _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dict:
+def _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers, exp) -> dict:
     def _section_total(line_item_groups):
         tot = {"txval": Decimal("0"), "tax": Decimal("0")}
         for recs in line_item_groups:
@@ -466,6 +484,7 @@ def _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dic
             "b2cl": {"places": len(b2cl), "invoices": sum(len(v) for v in b2cl.values()),
                      **_section_total(b2cl.values())},
             "b2cs": {"rows": len(b2cs), "taxable_value": _q(b2cs_txval), "tax": _q(b2cs_tax)},
+            "exp": {"invoices": len(exp), **_section_total([exp])},
             "cdnr": {"recipients": len(cdnr), "notes": sum(len(v) for v in cdnr.values()),
                      **_section_total(cdnr.values())},
             "hsn": {"rows": len(hsn),
@@ -487,13 +506,15 @@ def _gstr1_report(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dic
             for k, v in sorted(hsn.items(), key=lambda kv: (str(kv[0][0]), kv[0][2]))
         ],
         "notes": [
-            "Export / SEZ (zero-rated) supplies are out of scope in this v1 and are "
-            "not split into a separate section.",
+            "EXP (6A) covers invoices with zero-rated lines, reported WOPAY (supply "
+            "under LUT, no tax). Shipping-bill/port details are not captured yet — "
+            "fill them in the offline utility before filing. Exports with payment "
+            "of IGST are out of scope.",
         ],
     }
 
 
-def _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> dict:
+def _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers, exp) -> dict:
     b2b_json = [
         {"ctin": ctin, "inv": [
             {"inum": r["number"], "idt": r["date"], "val": float(r["value"]), "pos": r["pos"],
@@ -529,6 +550,12 @@ def _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> 
          "camt": float(_q(v["camt"])), "samt": float(_q(v["samt"])), "csamt": 0.0, "rt": float(k[2])}
         for i, (k, v) in enumerate(sorted(hsn.items(), key=lambda kv: (str(kv[0][0]), kv[0][2])), start=1)
     ]
+    # 6A exports/SEZ, reported WOPAY (supply under LUT — no tax). Shipping-bill
+    # details are not captured; the offline utility accepts them blank.
+    exp_json = [{"exp_typ": "WOPAY", "inv": [
+        {"inum": r["number"], "idt": r["date"], "val": float(r["value"]), "itms": _itms(r["line_items"])}
+        for r in exp
+    ]}] if exp else []
     issued = sorted(n for n in inv_numbers if n)
     doc_issue = {"doc_det": [{"doc_num": 1, "docs": [
         {"num": 1, "from": issued[0] if issued else "", "to": issued[-1] if issued else "",
@@ -541,6 +568,7 @@ def _gstr1_gstn_json(gstin, period, b2b, b2cl, b2cs, cdnr, hsn, inv_numbers) -> 
         "b2b": b2b_json,
         "b2cl": b2cl_json,
         "b2cs": b2cs_json,
+        "exp": exp_json,
         "cdnr": cdnr_json,
         "hsn": {"data": hsn_json},
         "doc_issue": doc_issue,
@@ -600,24 +628,27 @@ def _quarter_bounds(quarter: str) -> tuple[date, date]:
 
 def assemble_cmp08(
     *, gstin: str | None, quarter: str, category: str | None, rate, outward_turnover, is_composition: bool,
+    rcm_inward: dict | None = None,
 ) -> dict:
     """Form GST CMP-08 (self-assessed quarterly liability) for a composition
     dealer. Tax = turnover x composition rate, split equally CGST/SGST (a
-    composition dealer's outward supply is always intra-state). Inward reverse-
-    charge tax is reported as zero until RCM is tracked."""
+    composition dealer's outward supply is always intra-state). Inward
+    reverse-charge tax comes from RCM-flagged purchase bills in the quarter."""
     rate_d = Decimal(str(rate or 0))
     turnover = _q(_D(outward_turnover))
     out_tax = _q(turnover * rate_d / Decimal("100"))
     cgst = _q(out_tax / Decimal("2"))
     sgst = _q(out_tax - cgst)
-    rcm = {"igst": Decimal("0.00"), "cgst": Decimal("0.00"), "sgst": Decimal("0.00")}
+    rcm_src = rcm_inward or {}
+    rcm = {h: _q(rcm_src.get(h, 0)) for h in ("igst", "cgst", "sgst")}
     total_tax = _q(out_tax + sum(rcm.values()))
 
     notes = []
     if not is_composition:
         notes.append("This entity is not registered under the composition scheme; "
                       "CMP-08 applies only to composition dealers.")
-    notes.append("Inward supplies under reverse charge are reported as zero until RCM is tracked.")
+    notes.append("Inward reverse-charge tax comes from purchase bills flagged RCM; "
+                 "it is already booked to GST Payable under RCM (22005) at bill time.")
 
     report = {
         "return_type": "CMP-08",
@@ -633,7 +664,7 @@ def assemble_cmp08(
         },
         "inward_reverse_charge": rcm,
         "tax_payable": {
-            "igst": Decimal("0.00"), "cgst": cgst, "sgst": sgst,
+            "igst": rcm["igst"], "cgst": _q(cgst + rcm["cgst"]), "sgst": _q(sgst + rcm["sgst"]),
             "interest": Decimal("0.00"), "total": total_tax,
         },
         "notes": notes,
@@ -645,7 +676,9 @@ def assemble_cmp08(
             "typ_summ": [
                 {"typ": "OS", "txval": float(turnover), "iamt": 0.0,
                  "camt": float(cgst), "samt": float(sgst), "csamt": 0.0},
-                {"typ": "RC", "txval": 0.0, "iamt": 0.0, "camt": 0.0, "samt": 0.0, "csamt": 0.0},
+                {"typ": "RC", "txval": float(_q(rcm_src.get("taxable_value", 0))),
+                 "iamt": float(rcm["igst"]), "camt": float(rcm["cgst"]),
+                 "samt": float(rcm["sgst"]), "csamt": 0.0},
             ],
             "intr_ltfee": {"iamt": 0.0, "camt": 0.0, "samt": 0.0, "csamt": 0.0},
         },
@@ -667,11 +700,119 @@ async def build_cmp08(
         accounting_entity_id=accounting_entity_id, first=first, last=last, date_field="invoice_date",
     )
     turnover = sum((_D(s.get("taxable_total")) for s in sales), Decimal("0"))
+    rcm_inward = await _rcm_inward_for_period(
+        tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last,
+    )
     return assemble_cmp08(
         gstin=gstin, quarter=quarter, category=profile.get("composition_category"),
         rate=profile.get("composition_rate") or 0, outward_turnover=turnover,
-        is_composition=profile.get("is_composition", False),
+        is_composition=profile.get("is_composition", False), rcm_inward=rcm_inward,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Composition liability posting — book the CMP-08 outward tax in the ledger.
+# --------------------------------------------------------------------------- #
+COMPOSITION_GST_EXPENSE_CODE = "54007"
+GST_NET_PAYABLE_CODE = "22004"
+
+
+async def find_cmp08_posting(
+    session: AsyncSession, *, tenant_id: str, app_key: str, accounting_entity_id: str, quarter: str,
+) -> list[dict]:
+    rows = (await session.execute(
+        select(JournalEntry.id, JournalEntry.entry_date).where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.app_key == app_key,
+            JournalEntry.accounting_entity_id == accounting_entity_id,
+            JournalEntry.source_document_type == "cmp08_liability",
+            JournalEntry.source_document_id == f"cmp08:{quarter}",
+        ).order_by(JournalEntry.id.asc())
+    )).all()
+    return [{"journal_entry_id": r.id,
+             "entry_date": r.entry_date.isoformat() if hasattr(r.entry_date, "isoformat") else str(r.entry_date)}
+            for r in rows]
+
+
+async def post_cmp08_liability(
+    session: AsyncSession, *, tenant_id: str, app_key: str, accounting_entity_id: str,
+    quarter: str, created_by: str, idempotency_key: str | None = None,
+) -> dict:
+    """Book the quarter's composition levy: Dr GST Expense (Composition) 54007,
+    Cr GST Payable (Net) 22004 on the quarter-end date. The levy is the
+    dealer's own cost (never collected from buyers). Only the OUTWARD tax is
+    posted — RCM tax was already credited to 22005 when each bill posted.
+    Idempotent per quarter; reverse the journal to redo."""
+    from app.accounting.schemas import JournalLineIn, JournalPostRequest
+    from app.accounting.service import (
+        AccountingValidationError,
+        initialize_default_chart_of_accounts,
+        post_journal_entry,
+    )
+    from app.modules.business.opening_close import _account_lookups
+
+    report = await build_cmp08(
+        tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, quarter=quarter,
+    )
+    out_tax = Decimal(str(report["outward_supplies"]["total_tax"]))
+    if out_tax <= 0:
+        raise AccountingValidationError(f"No composition liability to post for {quarter}")
+    existing = await find_cmp08_posting(
+        session, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, quarter=quarter,
+    )
+    if existing:
+        first_e = existing[0]
+        raise AccountingValidationError(
+            f"CMP-08 liability for {quarter} is already posted "
+            f"(entry #{first_e['journal_entry_id']}). Reverse it to redo."
+        )
+
+    if app_key == "mitrabooks":
+        await initialize_default_chart_of_accounts(
+            session, tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id=accounting_entity_id, organization_type="BUSINESS",
+        )
+    accounts_by_code, _ = await _account_lookups(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    expense = accounts_by_code.get(COMPOSITION_GST_EXPENSE_CODE)
+    payable = accounts_by_code.get(GST_NET_PAYABLE_CODE)
+    if expense is None or payable is None:
+        raise AccountingValidationError(
+            f"Composition posting accounts missing ({COMPOSITION_GST_EXPENSE_CODE} / {GST_NET_PAYABLE_CODE})"
+        )
+
+    quarter_end = _quarter_bounds(quarter)[1]
+    journal_entry, created = await post_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        created_by=created_by,
+        payload=JournalPostRequest(
+            entry_date=quarter_end,
+            description=f"Composition GST liability {quarter} (CMP-08)",
+            reference=f"CMP08-{quarter}",
+            source_module="business",
+            source_document_type="cmp08_liability",
+            source_document_id=f"cmp08:{quarter}",
+            lines=[
+                JournalLineIn(account_id=expense["account_id"], debit=out_tax, credit=Decimal("0")),
+                JournalLineIn(account_id=payable["account_id"], debit=Decimal("0"), credit=out_tax),
+            ],
+        ),
+        idempotency_key=idempotency_key or f"cmp08-liability:{accounting_entity_id}:{quarter}",
+    )
+    return {
+        "journal_entry_id": journal_entry.id,
+        "created": created,
+        "quarter": quarter,
+        "entry_date": quarter_end.isoformat(),
+        "amount": str(out_tax),
+    }
 
 
 # =========================================================================== #

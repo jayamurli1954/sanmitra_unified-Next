@@ -173,9 +173,10 @@ class CaDocumentListResponse(BaseModel):
 SalesInvoiceStatus = Literal["posted", "cancelled"]
 
 
-# Supply-type classification for GST returns. "taxable" is the default; the
-# others let GSTR-1/3B distinguish 0%-rated from genuinely exempt/non-GST supply.
-GstSupplyType = Literal["taxable", "exempt", "nil_rated", "non_gst"]
+# Supply-type classification for GST returns. "taxable" is the default;
+# "zero_rated" marks export/SEZ supply (GSTR-1 6A, 3B 3.1(b) — no tax under
+# LUT); the others distinguish 0%-rated from genuinely exempt/non-GST supply.
+GstSupplyType = Literal["taxable", "zero_rated", "exempt", "nil_rated", "non_gst"]
 
 
 class SalesInvoiceLineItem(BaseModel):

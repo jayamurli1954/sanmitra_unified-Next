@@ -1894,6 +1894,7 @@ async def business_cmp08_return(
     quarter: str = Query(..., pattern=r"^\d{4}-Q[1-4]$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
@@ -1908,13 +1909,49 @@ async def business_cmp08_return(
         operation="CMP-08 return",
     )
     gstin = await _resolve_business_gstin(context.tenant_id, context.app_key, accounting_entity_id)
-    return await gst_returns.build_cmp08(
+    report = await gst_returns.build_cmp08(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
         quarter=quarter,
         gstin=gstin,
     )
+    report["liability_posting"] = await gst_returns.find_cmp08_posting(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id, quarter=quarter,
+    )
+    return report
+
+
+@router.post("/returns/cmp-08/post")
+async def business_cmp08_post_liability(
+    payload: dict = Body(..., description='{"quarter": "YYYY-Q1"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Book the quarter's composition levy in the ledger (admin only):
+    Dr GST Expense (Composition) 54007 / Cr GST Payable (Net) 22004 on the
+    quarter-end date. Idempotent per quarter; reverse the journal to redo."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="CMP-08 liability posting",
+    )
+    quarter = str(payload.get("quarter") or "").strip().upper()
+    if not re.fullmatch(r"\d{4}-Q[1-4]", quarter):
+        raise HTTPException(status_code=422, detail="quarter must be 'YYYY-Q1'..'YYYY-Q4'")
+    try:
+        return await gst_returns.post_cmp08_liability(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, quarter=quarter,
+            created_by=_created_by(current_user), idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/returns/gstr-4")

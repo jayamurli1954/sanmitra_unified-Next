@@ -921,7 +921,9 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest, *, composition: b
         taxable = _q2(Decimal(item.quantity) * Decimal(item.rate))
         # Composition dealers issue a Bill of Supply — no GST is charged or split,
         # whatever rate is on the line. gst_amount of 0 zeroes every head below.
-        gst_amount = Decimal("0.00") if composition else _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
+        # Zero-rated (export/SEZ under LUT) lines likewise carry no tax.
+        is_zero_rated = getattr(item, "supply_type", "taxable") == "zero_rated"
+        gst_amount = Decimal("0.00") if (composition or is_zero_rated) else _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
         if payload.is_inter_state:
             cgst = Decimal("0.00")
             sgst = Decimal("0.00")

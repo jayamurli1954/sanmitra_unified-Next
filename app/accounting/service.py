@@ -300,6 +300,8 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("54004", "Discount Allowed", "expense", "nominal"),
     _default_account("54005", "Miscellaneous Expense", "expense", "nominal"),
     _default_account("54006", "Interest on GST", "expense", "nominal"),
+    # Composition levy is the dealer's own cost (it is never collected from buyers).
+    _default_account("54007", "GST Expense (Composition)", "expense", "nominal"),
 ]
 
 

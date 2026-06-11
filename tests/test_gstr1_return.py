@@ -117,6 +117,36 @@ def test_gstr1_gstn_json_shape():
     assert j["doc_issue"]["doc_det"][0]["docs"][0]["totnum"] == 3
 
 
+def test_gstr1_zero_rated_goes_to_exp_section():
+    invoices = [
+        # Export under LUT — zero-rated lines carry no tax.
+        {"invoice_number": "EXP-1", "invoice_date": "2026-05-15", "invoice_total": "50000",
+         "customer_gstin": None, "place_of_supply": None, "is_inter_state": True,
+         "line_items": [dict(_line(0, 50000), supply_type="zero_rated")]},
+        # Normal domestic B2CS invoice stays where it was.
+        {"invoice_number": "INV-9", "invoice_date": "2026-05-16", "invoice_total": "590",
+         "customer_gstin": None, "place_of_supply": "29", "is_inter_state": False,
+         "line_items": [_line(18, 500, cgst=45, sgst=45)]},
+    ]
+    r = assemble_gstr1(gstin=None, period="2026-05", invoices=invoices, credit_notes=[])
+    assert r["sections"]["exp"] == {"invoices": 1, "taxable_value": Decimal("50000.00"),
+                                    "tax": Decimal("0.00")}
+    assert r["sections"]["b2cs"]["taxable_value"] == Decimal("500.00")
+    # GSTN JSON: one WOPAY (LUT) bucket with the export invoice.
+    exp = r["gstn_json"]["exp"]
+    assert exp[0]["exp_typ"] == "WOPAY"
+    assert exp[0]["inv"][0]["inum"] == "EXP-1"
+    assert exp[0]["inv"][0]["val"] == 50000.0
+    # A registered SEZ customer's zero-rated invoice also lands in EXP, not B2B.
+    sez = assemble_gstr1(gstin=None, period="2026-05", credit_notes=[], invoices=[
+        {"invoice_number": "SEZ-1", "invoice_date": "2026-05-20", "invoice_total": "1000",
+         "customer_gstin": "27SEZAB1234C1Z9", "place_of_supply": "27", "is_inter_state": True,
+         "line_items": [dict(_line(0, 1000), supply_type="zero_rated")]},
+    ])
+    assert sez["sections"]["exp"]["invoices"] == 1
+    assert sez["sections"]["b2b"]["invoices"] == 0
+
+
 def test_gstr1_empty_period():
     r = assemble_gstr1(gstin=None, period="2026-04", invoices=[], credit_notes=[])
     assert r["sections"]["b2b"]["invoices"] == 0
@@ -161,6 +191,23 @@ def test_cmp08_flags_non_composition_entity():
 # --------------------------------------------------------------------------- #
 # GSTR-4 (composition annual)
 # --------------------------------------------------------------------------- #
+def test_cmp08_includes_rcm_inward():
+    r = assemble_cmp08(
+        gstin=None, quarter="2026-Q1", category="goods", rate=1,
+        outward_turnover=Decimal("100000"), is_composition=True,
+        rcm_inward={"taxable_value": Decimal("5000"), "igst": Decimal("0"),
+                    "cgst": Decimal("450"), "sgst": Decimal("450")},
+    )
+    # Outward levy 1% of 1L = 1000 (500/500) + RCM 900 = 1900 total payable.
+    assert r["outward_supplies"]["total_tax"] == Decimal("1000.00")
+    assert r["inward_reverse_charge"]["cgst"] == Decimal("450.00")
+    assert r["tax_payable"]["cgst"] == Decimal("950.00")
+    assert r["tax_payable"]["total"] == Decimal("1900.00")
+    rc_row = r["gstn_json"]["summ"]["typ_summ"][1]
+    assert rc_row == {"typ": "RC", "txval": 5000.0, "iamt": 0.0,
+                      "camt": 450.0, "samt": 450.0, "csamt": 0.0}
+
+
 def test_fy_bounds():
     assert _fy_bounds("2026-27") == (2026, date(2026, 4, 1), date(2027, 3, 31))
 
