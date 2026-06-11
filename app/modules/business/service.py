@@ -83,6 +83,9 @@ ITC_INTEREST_RATE = Decimal("0.18")  # 18% p.a. under Section 50
 TDS_PAYABLE_CODE = "23001"
 TCS_PAYABLE_CODE = "23004"
 
+# GST reverse charge (9(3)/9(4)) — recipient's own liability, cash-only.
+RCM_PAYABLE_CODE = "22005"
+
 # GST Composition Scheme (Section 10) — tax rate by category, on turnover.
 # Manufacturers/traders 1%, restaurants 5%, other services 6%.
 COMPOSITION_RATES = {
@@ -1588,7 +1591,11 @@ async def create_purchase_bill(
             raise AccountingValidationError(str(exc))
         if tds_amount >= bill_total:
             raise AccountingValidationError("TDS deduction cannot equal or exceed the bill total")
-    net_payable = bill_total - (tds_amount or Decimal("0"))
+    # Under reverse charge the vendor is owed the taxable value only — the GST
+    # is the recipient's own liability (Cr RCM Payable), settled in cash.
+    is_rcm = bool(payload.is_reverse_charge)
+    vendor_owed = taxable_total if is_rcm else bill_total
+    net_payable = vendor_owed - (tds_amount or Decimal("0"))
 
     payable_id = await _resolve_voucher_account_id(
         session,
@@ -1612,11 +1619,14 @@ async def create_purchase_bill(
     if is_composition:
         # Composition dealers cannot claim ITC — the vendor's GST is part of cost.
         # Dr expense (full bill incl. GST); Cr Accounts Payable. No Input-GST legs.
+        # Under RCM the same holds: the self-assessed tax is also cost.
         journal_lines = [
             JournalLineIn(account_id=expense_id, debit=bill_total, credit=Decimal("0")),
         ]
     else:
         # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
+        # Under RCM the ITC legs are unchanged (the recipient claims the credit of
+        # the tax it self-pays); only the credit side moves from AP to RCM Payable.
         journal_lines = [
             JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0")),
         ]
@@ -1636,6 +1646,18 @@ async def create_purchase_bill(
                     side="input GST",
                 )
                 journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
+    if is_rcm and gst_total > Decimal("0"):
+        # Cr GST Payable under RCM — discharged by cash challan, never by ITC.
+        rcm_payable_id = await _resolve_voucher_account_id(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            account_id=None,
+            account_code=RCM_PAYABLE_CODE,
+            side="RCM payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=rcm_payable_id, debit=Decimal("0"), credit=gst_total))
     if tds_amount and tds_amount > Decimal("0"):
         # Cr TDS Payable for the deduction; the vendor is only owed the net.
         tds_payable_id = await _resolve_voucher_account_id(
@@ -1666,6 +1688,8 @@ async def create_purchase_bill(
         "bill_date": payload.bill_date.isoformat(),
         "due_date": payload.due_date.isoformat() if payload.due_date else None,
         "is_inter_state": payload.is_inter_state,
+        "is_reverse_charge": is_rcm,
+        "rcm_payable": str(gst_total) if is_rcm else "0",
         "place_of_supply": payload.place_of_supply,
         "expense_account_code": payload.expense_account_code,
         "notes": payload.notes,
@@ -1947,6 +1971,10 @@ async def preview_itc_reversals(
     total_interest = Decimal("0")
     for bill in rows:
         if bill.get("itc_reversed"):
+            continue
+        if bill.get("is_reverse_charge"):
+            # Rule 37 proviso: the 180-day payment test does not apply to
+            # supplies taxed under reverse charge (the recipient paid the tax).
             continue
         if bill.get("payment_status") == "paid":
             continue

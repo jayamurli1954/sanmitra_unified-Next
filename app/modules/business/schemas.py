@@ -363,6 +363,9 @@ class PurchaseBillCreateRequest(BaseModel):
     bill_date: date
     due_date: date | None = None
     is_inter_state: bool = False
+    # Reverse charge (GST 9(3)/9(4)): the recipient owes the GST, not the
+    # vendor — the vendor is paid the taxable value only.
+    is_reverse_charge: bool = False
     expense_account_code: str = Field(default="51001", min_length=1, max_length=50)
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
@@ -392,6 +395,8 @@ class PurchaseBillResponse(BaseModel):
     bill_date: date
     due_date: date | None = None
     is_inter_state: bool
+    is_reverse_charge: bool = False
+    rcm_payable: Decimal = Decimal("0")
     place_of_supply: str | None = None
     expense_account_code: str
     notes: str | None = None

@@ -78,21 +78,33 @@ def assemble_gstr3b(
     gstin: str | None,
     period: str,
     output: dict,            # net output tax per head (liability)
-    itc_available: dict,     # gross ITC per head
+    itc_available: dict,     # gross ITC per head (incl. any RCM ITC in the ledger)
     itc_reversed: dict,      # ITC reversed per head (Rule 37 etc.)
     outward_taxable_value: Decimal,
+    rcm_inward: dict | None = None,   # {"taxable_value", igst, cgst, sgst} from RCM bills
+    itc_rcm: dict | None = None,      # heads — the 4(A)(3) split of the ITC above
 ) -> dict:
     """Build the GSTR-3B structured report and GSTN JSON from computed figures.
 
-    Coverage note (v1): populates 3.1(a) outward taxable supplies, 4 eligible
-    ITC (4A "all other ITC", 4B "others" reversal, 4C net), and 6.1 payment of
-    tax. Zero-rated/nil/exempt (3.1 b/c/e) and inward-RCM (3.1 d) are reported
-    as zero with a note until those supply types are flagged on documents.
+    Coverage: 3.1(a) outward taxable supplies, 3.1(d) inward supplies liable
+    to reverse charge (from RCM-flagged purchase bills), 4 eligible ITC
+    (4A(3) RCM ITC split out of 4A(5) all-other), 4B reversal, 4C net, and
+    6.1 payment of tax. Zero-rated/nil/exempt (3.1 b/c/e) stay zero with a
+    note until those supply types are flagged on documents.
     """
     output = {h: _q(output.get(h, 0)) for h in HEADS}
     itc_available = {h: _q(itc_available.get(h, 0)) for h in HEADS}
     itc_reversed = {h: _q(itc_reversed.get(h, 0)) for h in HEADS}
     itc_net = {h: _q(itc_available[h] - itc_reversed[h]) for h in HEADS}
+    itc_rcm = {h: _q((itc_rcm or {}).get(h, 0)) for h in HEADS}
+    # 4A(5) "all other ITC" = ledger ITC minus the RCM portion (never negative).
+    itc_all_other = {h: max(_q(itc_available[h] - itc_rcm[h]), Decimal("0")) for h in HEADS}
+    rcm = rcm_inward or {}
+    rcm_block = {
+        "taxable_value": _q(rcm.get("taxable_value", 0)),
+        **{h: _q(rcm.get(h, 0)) for h in HEADS},
+    }
+    rcm_tax_total = _q(sum(rcm_block[h] for h in HEADS))
 
     # Set-off: how much liability is met by ITC vs cash (statutory order).
     _utilized, cash_payable, _carry = _compute_gst_setoff(output, itc_net)
@@ -112,15 +124,18 @@ def assemble_gstr3b(
             },
             "zero_rated": {"taxable_value": Decimal("0.00"), **_zero_heads()},
             "nil_exempt": {"taxable_value": Decimal("0.00")},
-            "inward_reverse_charge": {"taxable_value": Decimal("0.00"), **_zero_heads()},
+            "inward_reverse_charge": rcm_block,
             "non_gst": {"taxable_value": Decimal("0.00")},
         },
         # 4. Eligible ITC.
         "itc": {
-            "available_all_other": itc_available,
+            "available_rcm": itc_rcm,                # 4(A)(3)
+            "available_all_other": itc_all_other,    # 4(A)(5)
             "reversed_others": itc_reversed,
             "net_available": itc_net,
         },
+        # 3.1(d) liability is discharged in CASH only (no ITC set-off).
+        "rcm_cash_payable": rcm_tax_total,
         # 6.1 Payment of tax.
         "tax_payment": {
             h: {
@@ -136,8 +151,11 @@ def assemble_gstr3b(
             "total_cash_payable": _q(sum(cash_payable.values())),
         },
         "notes": [
-            "Zero-rated, nil/exempt, non-GST outward and inward-RCM supplies are "
-            "reported as zero until those supply types are flagged on documents.",
+            "Zero-rated, nil/exempt and non-GST outward supplies are reported as "
+            "zero until those supply types are flagged on documents.",
+            "3.1(d) and 4(A)(3) come from purchase bills flagged 'reverse charge'. "
+            "The RCM liability must be paid in cash (account 22005) — it cannot be "
+            "set off against ITC.",
         ],
     }
     report["gstn_json"] = _gstn_json(report)
@@ -167,11 +185,14 @@ def _gstn_json(report: dict) -> dict:
             "osup_det": {"txval": float(osup["taxable"]["taxable_value"]), **_amt(osup["taxable"])},
             "osup_zero": {"txval": 0.0, **_amt(osup["zero_rated"])},
             "osup_nil_exmp": {"txval": 0.0},
-            "isup_rev": {"txval": 0.0, **_amt(osup["inward_reverse_charge"])},
+            "isup_rev": {"txval": float(osup["inward_reverse_charge"]["taxable_value"]), **_amt(osup["inward_reverse_charge"])},
             "osup_nongst": {"txval": 0.0},
         },
         "itc_elg": {
-            "itc_avl": [{"ty": "OTH", **_amt(itc["available_all_other"])}],
+            "itc_avl": [
+                {"ty": "ISRC", **_amt(itc["available_rcm"])},
+                {"ty": "OTH", **_amt(itc["available_all_other"])},
+            ],
             "itc_rev": [{"ty": "OTH", **_amt(itc["reversed_others"])}],
             "itc_net": _amt(itc["net_available"]),
         },
@@ -264,6 +285,25 @@ async def _outward_taxable_value(
     return total if total > 0 else Decimal("0")
 
 
+async def _rcm_inward_for_period(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, first: date, last: date,
+) -> dict:
+    """3.1(d) figures: taxable value + tax heads from posted reverse-charge
+    purchase bills in the period."""
+    scope = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    totals = {"taxable_value": Decimal("0"), "igst": Decimal("0"), "cgst": Decimal("0"), "sgst": Decimal("0")}
+    bills = await get_collection(PURCHASE_BILLS_COLLECTION).find(
+        {**scope, "status": "posted", "is_reverse_charge": True,
+         "bill_date": {"$gte": first.isoformat(), "$lte": last.isoformat()}}
+    ).to_list(length=20000)
+    for bill in bills:
+        totals["taxable_value"] += Decimal(str(bill.get("taxable_total") or 0))
+        totals["igst"] += Decimal(str(bill.get("igst_total") or 0))
+        totals["cgst"] += Decimal(str(bill.get("cgst_total") or 0))
+        totals["sgst"] += Decimal(str(bill.get("sgst_total") or 0))
+    return totals
+
+
 async def build_gstr3b(
     session: AsyncSession, *, tenant_id: str, app_key: str,
     accounting_entity_id: str, period: str, gstin: str | None = None,
@@ -278,9 +318,17 @@ async def build_gstr3b(
         tenant_id=tenant_id, app_key=app_key,
         accounting_entity_id=accounting_entity_id, first=first, last=last,
     )
+    rcm_inward = await _rcm_inward_for_period(
+        tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id=accounting_entity_id, first=first, last=last,
+    )
+    # 4(A)(3): the ITC arising from those RCM bills (booked on the Input GST
+    # accounts at posting, so it is already inside the ledger itc_available).
+    itc_rcm = {h: rcm_inward[h] for h in ("igst", "cgst", "sgst")}
     return assemble_gstr3b(
         gstin=gstin, period=period, output=output, itc_available=itc_available,
         itc_reversed=itc_reversed, outward_taxable_value=taxable_value,
+        rcm_inward=rcm_inward, itc_rcm=itc_rcm,
     )
 
 

@@ -73,12 +73,48 @@ def test_assemble_gstr3b_gstn_json_shape():
     assert j["sup_details"]["osup_det"] == {
         "txval": 50000.0, "iamt": 1000.0, "camt": 500.0, "samt": 500.0, "csamt": 0.0
     }
+    # ITC available rows: 4(A)(3) RCM first (zero here), then 4(A)(5) all-other.
     assert j["itc_elg"]["itc_avl"][0] == {
+        "ty": "ISRC", "iamt": 0.0, "camt": 0.0, "samt": 0.0, "csamt": 0.0
+    }
+    assert j["itc_elg"]["itc_avl"][1] == {
         "ty": "OTH", "iamt": 300.0, "camt": 200.0, "samt": 200.0, "csamt": 0.0
     }
     assert j["itc_elg"]["itc_rev"][0]["camt"] == 50.0
     igst_pmt = next(p for p in j["tx_pmt"]["tx_pd"] if p["ty"] == "IGST")
     assert igst_pmt == {"ty": "IGST", "tx_payable": 1000.0, "tx_paid_itc": 300.0, "tx_paid_cash": 700.0}
+
+
+def test_assemble_gstr3b_rcm_inward_and_itc_split():
+    report = assemble_gstr3b(
+        gstin=None, period="2026-05",
+        output={"igst": Decimal("0"), "cgst": Decimal("500"), "sgst": Decimal("500")},
+        # Ledger ITC includes the RCM ITC (booked on Input GST at posting).
+        itc_available={"igst": Decimal("0"), "cgst": Decimal("950"), "sgst": Decimal("950")},
+        itc_reversed={}, outward_taxable_value=Decimal("20000"),
+        rcm_inward={"taxable_value": Decimal("10000"), "igst": Decimal("0"),
+                    "cgst": Decimal("900"), "sgst": Decimal("900")},
+        itc_rcm={"igst": Decimal("0"), "cgst": Decimal("900"), "sgst": Decimal("900")},
+    )
+    # 3.1(d) shows the RCM inward supply with its self-assessed tax.
+    rcm = report["outward_supplies"]["inward_reverse_charge"]
+    assert rcm["taxable_value"] == Decimal("10000.00")
+    assert rcm["cgst"] == Decimal("900.00")
+    # 4(A)(3) vs 4(A)(5): the RCM portion is split out of the ledger total.
+    assert report["itc"]["available_rcm"]["cgst"] == Decimal("900.00")
+    assert report["itc"]["available_all_other"]["cgst"] == Decimal("50.00")
+    # Net ITC for set-off still uses the full ledger figure.
+    assert report["itc"]["net_available"]["cgst"] == Decimal("950.00")
+    # The 3.1(d) liability is cash-only and reported separately.
+    assert report["rcm_cash_payable"] == Decimal("1800.00")
+    # GSTN JSON carries the RCM rows.
+    j = report["gstn_json"]
+    assert j["sup_details"]["isup_rev"] == {
+        "txval": 10000.0, "iamt": 0.0, "camt": 900.0, "samt": 900.0, "csamt": 0.0
+    }
+    assert j["itc_elg"]["itc_avl"][0] == {
+        "ty": "ISRC", "iamt": 0.0, "camt": 900.0, "samt": 900.0, "csamt": 0.0
+    }
 
 
 def test_ret_period_format():
