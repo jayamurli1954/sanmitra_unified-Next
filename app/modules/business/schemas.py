@@ -183,6 +183,7 @@ class SalesInvoiceLineItem(BaseModel):
     description: str = Field(..., min_length=1, max_length=300)
     hsn_sac: str | None = Field(default=None, max_length=20)
     uqc: str | None = Field(default=None, max_length=10)  # unit quantity code, e.g. NOS/KGS
+    item_id: str | None = Field(default=None, max_length=80)  # inventory item (when enabled)
     supply_type: GstSupplyType = "taxable"
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
@@ -328,6 +329,10 @@ class InvoiceSettings(BaseModel):
     numbering: InvoiceNumberingConfig = Field(default_factory=InvoiceNumberingConfig)
     custom_fields: list[InvoiceCustomFieldDef] = Field(default_factory=list)
     branding: InvoiceBrandingConfig = Field(default_factory=InvoiceBrandingConfig)
+    # Opt-in inventory accounting. OFF (default): purchases stay pure expense,
+    # no stock screens anywhere — service businesses see no change. ON: item
+    # master, stock register and the periodic closing-stock journal light up.
+    inventory_enabled: bool = False
 
 
 class InvoiceSettingsUpdateRequest(InvoiceSettings):
@@ -350,6 +355,7 @@ PurchaseBillStatus = Literal["posted", "cancelled"]
 class PurchaseBillLineItem(BaseModel):
     description: str = Field(..., min_length=1, max_length=300)
     hsn_sac: str | None = Field(default=None, max_length=20)
+    item_id: str | None = Field(default=None, max_length=80)  # inventory item (when enabled)
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
     gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))

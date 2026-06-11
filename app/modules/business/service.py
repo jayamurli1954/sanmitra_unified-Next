@@ -19,6 +19,7 @@ from app.accounting.service import (
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
 from app.modules.business.dimensions import validate_dimension_refs
+from app.modules.business.inventory import validate_item_refs
 from app.modules.business.tds import compute_tcs, compute_tds
 from app.modules.business.schemas import (
     BillPaymentUpdateRequest,
@@ -280,6 +281,9 @@ async def ensure_business_indexes() -> None:
     dimensions_col = get_collection("business_dimensions")
     await dimensions_col.create_index([("tenant_id", 1), ("app_key", 1), ("dimension_id", 1)], unique=True)
     await dimensions_col.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("dimension_type", 1), ("code", 1)], unique=True)
+    items_col = get_collection("business_items")
+    await items_col.create_index([("tenant_id", 1), ("app_key", 1), ("item_id", 1)], unique=True)
+    await items_col.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("code", 1)], unique=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -942,6 +946,7 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest, *, composition: b
             "hsn_sac": item.hsn_sac,
             "uqc": getattr(item, "uqc", None),
             "supply_type": getattr(item, "supply_type", "taxable"),
+            "item_id": getattr(item, "item_id", None),
             "quantity": str(Decimal(item.quantity)),
             "rate": _money(item.rate),
             "gst_rate": str(Decimal(item.gst_rate)),
@@ -1230,6 +1235,10 @@ async def create_sales_invoice(
     await validate_dimension_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
+    )
+    await validate_item_refs(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        line_items=payload.line_items,
     )
 
     profile = await get_gst_profile(
@@ -1586,6 +1595,10 @@ async def create_purchase_bill(
     await validate_dimension_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
+    )
+    await validate_item_refs(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        line_items=payload.line_items,
     )
 
     # GST line computation is identical to sales (reads line_items + is_inter_state).
