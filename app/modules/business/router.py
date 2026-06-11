@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -74,6 +75,7 @@ from app.modules.business import financial_health
 from app.modules.business import gst_returns
 from app.modules.business import report_export
 from app.modules.business import bank_recon
+from app.modules.business import opening_close
 from app.modules.business import statements
 from app.modules.business import tds as tds_module
 from app.core.tenants.service import get_tenant
@@ -2217,6 +2219,149 @@ async def business_record_dunning(
             note=payload.get("note"),
             overdue_total=payload.get("overdue_total"),
             created_by=_created_by(current_user),
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/opening-balances/template")
+async def business_opening_balance_template(
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Sample CSV for the opening-balance import."""
+    resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="opening balance template",
+    )
+    from fastapi.responses import Response
+    return Response(
+        content=opening_close.csv_template(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="opening_balances_template.csv"'},
+    )
+
+
+@router.post("/opening-balances/preview")
+async def business_opening_balance_preview(
+    payload: dict = Body(..., description='{"csv": "<opening balance CSV>", "as_of": "YYYY-MM-DD"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Parse + resolve the uploaded opening-balance CSV WITHOUT posting:
+    resolved lines, row errors, totals and the Opening-Balance-Equity
+    balancing line. Posting requires zero errors (maker-checker)."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="opening balance preview",
+    )
+    as_of_raw = str(payload.get("as_of") or "").strip()
+    try:
+        as_of = date.fromisoformat(as_of_raw) if as_of_raw else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="as_of must be YYYY-MM-DD")
+    try:
+        return await opening_close.build_opening_preview(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            csv_text=str(payload.get("csv") or ""), as_of=as_of,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/opening-balances")
+async def business_post_opening_balances(
+    payload: dict = Body(..., description='{"csv": "...", "as_of": "YYYY-MM-DD", "allow_duplicate": false}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Post the opening balances as ONE journal entry (admin only). Any
+    debit/credit difference goes to Opening Balance Equity; party rows carry
+    party_id so they flow into aging/statements/allocation."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="opening balance posting",
+    )
+    as_of_raw = str(payload.get("as_of") or "").strip()
+    try:
+        as_of = date.fromisoformat(as_of_raw) if as_of_raw else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="as_of must be YYYY-MM-DD")
+    try:
+        return await opening_close.post_opening_balances(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            csv_text=str(payload.get("csv") or ""), as_of=as_of,
+            allow_duplicate=bool(payload.get("allow_duplicate")),
+            created_by=_created_by(current_user),
+            idempotency_key=x_idempotency_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/year-end/preview")
+async def business_year_end_preview(
+    financial_year: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Year-end close preview for 'YYYY-YY': per-account closing lines, the
+    Retained Earnings movement, and whether the FY is already closed."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="year-end preview",
+    )
+    return await opening_close.build_year_end_preview(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id, financial_year=financial_year,
+    )
+
+
+@router.post("/year-end/close")
+async def business_year_end_close(
+    payload: dict = Body(..., description='{"financial_year": "YYYY-YY"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Post the year-end closing journal (admin only): income/expense accounts
+    zeroed to Retained Earnings on 31 March. Idempotent per financial year;
+    reverse the entry to reopen the year."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="year-end close",
+    )
+    financial_year = str(payload.get("financial_year") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", financial_year):
+        raise HTTPException(status_code=422, detail="financial_year must be 'YYYY-YY' (e.g. 2026-27)")
+    try:
+        return await opening_close.post_year_end_close(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, financial_year=financial_year,
+            created_by=_created_by(current_user), idempotency_key=x_idempotency_key,
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

@@ -60,7 +60,8 @@ _DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%d
 
 
 def _norm_header(name: str) -> str:
-    return re.sub(r"[^a-z/. ]", "", str(name or "").strip().lower()).strip()
+    text = re.sub(r"[_\-]+", " ", str(name or "").strip().lower())
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z/. ]", "", text)).strip()
 
 
 def _map_headers(fieldnames: list[str]) -> dict[str, str]:
