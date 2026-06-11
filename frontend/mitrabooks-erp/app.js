@@ -5106,6 +5106,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "gst-returns", label: "GST Returns" },
   { id: "tds", label: "TDS / TCS" },
   { id: "bank-recon", label: "Bank Reconciliation" },
+  { id: "opening-yearend", label: "Opening & Year-End" },
   { id: "itc-reversals", label: "ITC Reversals" },
   { id: "period-locks", label: "Period Locks" },
 ];
@@ -5132,6 +5133,10 @@ let statementPartyId = "";
 let statementKind = "receivable";
 let statementFromDate = "";
 let statementToDate = "";
+let lastObPreview = null;
+let obCsvText = "";
+let lastYePreview = null;
+let yeFy = currentFinancialYear();
 
 // Current Indian financial year as "YYYY-YY" (FY starts April).
 function currentFinancialYear() {
@@ -5264,6 +5269,9 @@ async function refreshCurrentBusinessReport() {
     if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) await loadBusinessParties();
     if (statementPartyId) await loadPartyStatement();
     else rerenderBusinessReportsIfActive();
+  } else if (tab === "opening-yearend") {
+    // Workflow tab — both halves load on demand (Preview buttons).
+    rerenderBusinessReportsIfActive();
   }
 }
 
@@ -5733,6 +5741,203 @@ function renderCmp08Panel() {
 }
 
 // ---- GSTR-1 outward-supplies return ------------------------------------- //
+// ---- Opening balances (CSV import) + year-end close ----------------------- //
+async function downloadObTemplate() {
+  const result = await downloadApiFile("mitrabooks", "/api/v1/business/opening-balances/template", "opening_balances_template.csv");
+  renderJson(apiOutput, { ob_template: { ok: result.ok } });
+}
+
+async function previewOpeningBalances() {
+  const fileInput = document.querySelector("[data-ob-file]");
+  const asOfInput = document.querySelector("[data-ob-asof]");
+  const file = fileInput?.files?.[0];
+  if (!file && !obCsvText) {
+    setLoginStatus("warn", "Choose a file", "Upload the opening-balance CSV (download the template for the format).");
+    return;
+  }
+  if (file) obCsvText = await file.text();
+  const body = { csv: obCsvText };
+  if (asOfInput?.value) body.as_of = asOfInput.value;
+  const result = await apiRequest("mitrabooks", "/api/v1/business/opening-balances/preview", {
+    method: "POST", body: JSON.stringify(body),
+  });
+  lastObPreview = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { ob_preview: { ok: result.ok, status: result.status } });
+}
+
+async function postOpeningBalances() {
+  if (!obCsvText || !lastObPreview || lastObPreview.ok === false || !lastObPreview.can_post) {
+    setLoginStatus("warn", "Preview first", "Upload and preview a clean file (zero errors) before posting.");
+    return;
+  }
+  const allowDup = !!document.querySelector("[data-ob-allow-duplicate]")?.checked;
+  const body = { csv: obCsvText, as_of: lastObPreview.as_of, allow_duplicate: allowDup };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/opening-balances", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `opening-balance-${Date.now()}` },
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Opening balances posted", `Journal entry #${result.payload?.journal_entry_id} with ${result.payload?.line_count} line(s).`);
+    obCsvText = "";
+    lastObPreview = null;
+    rerenderBusinessReportsIfActive();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can post opening balances.");
+  } else {
+    setLoginStatus("danger", "Posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { ob_post: { ok: result.ok, status: result.status } });
+}
+
+async function previewYearEnd() {
+  const fySel = document.querySelector("[data-ye-fy]");
+  yeFy = fySel?.value || yeFy;
+  const result = await apiRequest("mitrabooks", `/api/v1/business/year-end/preview?financial_year=${encodeURIComponent(yeFy)}`, { method: "GET" });
+  lastYePreview = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { ye_preview: { ok: result.ok, fy: yeFy } });
+}
+
+async function postYearEndClose() {
+  if (!lastYePreview || lastYePreview.ok === false || !lastYePreview.can_post) {
+    setLoginStatus("warn", "Preview first", "Load a year-end preview that is ready to close.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/year-end/close", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `year-end-${yeFy}` },
+    body: JSON.stringify({ financial_year: yeFy }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Year closed", `FY ${yeFy} closed — journal entry #${result.payload?.journal_entry_id}, net result ${formatCurrency(Number(result.payload?.net_profit || 0))}.`);
+    await previewYearEnd();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can post the year-end close.");
+  } else {
+    setLoginStatus("danger", "Close failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { ye_close: { ok: result.ok, status: result.status } });
+}
+
+function renderOpeningBalancesSection() {
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const controls = `
+    <div class="report-date-controls">
+      <label>Opening date <input type="date" data-ob-asof value="${escapeHtml(lastObPreview?.as_of || "")}" placeholder="FY start"></label>
+      <label>Balances CSV <input type="file" accept=".csv,text/csv" data-ob-file></label>
+      <button class="secondary" type="button" data-business-action="ob-preview">Preview</button>
+      <button class="secondary" type="button" data-business-action="ob-template">Download template</button>
+    </div>
+    <p class="muted">Upload account-wise opening balances (party-wise for Sundry Debtors/Creditors). Nothing posts until you confirm the preview. Leave the date empty for the financial-year start.</p>`;
+  const r = lastObPreview;
+  if (!r) return `${controls}`;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("Opening balances", r)}`;
+
+  const errorRows = (r.errors || []).map((e) => `
+    <tr><td>${escapeHtml(String(e.row_number || ""))}</td><td>${escapeHtml(e.account || "")}</td><td>${escapeHtml((e.problems || []).join("; "))}</td></tr>`).join("");
+  const lineRows = (r.lines || []).map((l) => `
+    <tr>
+      <td>${escapeHtml(`${l.account_code} - ${l.account_name}`)}</td>
+      <td>${escapeHtml(l.party_name || "")}</td>
+      <td class="amount">${Number(l.debit || 0) ? num(l.debit) : ""}</td>
+      <td class="amount">${Number(l.credit || 0) ? num(l.credit) : ""}</td>
+    </tr>`).join("");
+  const bal = r.balancing_line;
+  const existing = r.existing_opening_entries || [];
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>${escapeHtml(String(r.line_count))} line(s) resolved as of ${escapeHtml(r.as_of)} · debit ${num(r.total_debit)} · credit ${num(r.total_credit)}.</p></div>
+      <span class="pill ${r.can_post ? "ok" : "warn"}">${r.can_post ? "ready to post" : `${escapeHtml(String(r.error_count))} error(s)`}</span>
+    </div>
+    ${errorRows ? `
+    <div class="table-preview compact-table">
+      <h4>Fix these rows and re-upload</h4>
+      <table><thead><tr><th>CSV row</th><th>Account</th><th>Problem</th></tr></thead><tbody>${errorRows}</tbody></table>
+    </div>` : ""}
+    <div class="table-preview compact-table">
+      <h4>Opening journal preview</h4>
+      <table>
+        <thead><tr><th>Account</th><th>Party</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
+        <tbody>
+          ${lineRows}
+          ${bal ? `<tr><td><em>${escapeHtml(`${bal.account_code} - ${bal.account_name}`)} (balancing)</em></td><td></td><td class="amount">${Number(bal.debit || 0) ? num(bal.debit) : ""}</td><td class="amount">${Number(bal.credit || 0) ? num(bal.credit) : ""}</td></tr>` : ""}
+        </tbody>
+      </table>
+    </div>
+    ${existing.length ? `<p class="muted">⚠ Opening journal already posted: entry #${escapeHtml(String(existing[0].journal_entry_id))} dated ${escapeHtml(existing[0].entry_date)}. Reverse it first, or tick the override.
+      <label style="display:inline-flex;gap:4px;align-items:center;margin-left:8px;"><input type="checkbox" data-ob-allow-duplicate> Post anyway</label></p>` : ""}
+    ${r.can_post && isBusinessAdmin() ? `
+    <div class="report-date-controls">
+      <button class="primary" type="button" data-business-action="ob-post">Post opening balances</button>
+    </div>` : (r.can_post ? `<p class="muted">Only a tenant admin can post opening balances.</p>` : "")}
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
+}
+
+function renderYearEndSection() {
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const fyOpts = recentFinancialYears(4).map((fy) =>
+    `<option value="${fy}" ${fy === yeFy ? "selected" : ""}>FY ${fy}</option>`).join("");
+  const controls = `
+    <div class="report-date-controls">
+      <label>Financial year <select data-ye-fy>${fyOpts}</select></label>
+      <button class="secondary" type="button" data-business-action="ye-preview">Preview close</button>
+    </div>
+    <p class="muted">Closing zeroes the year's income and expense accounts into Retained Earnings on 31 March. Post all adjustments (depreciation, provisions) first.</p>`;
+  const r = lastYePreview;
+  if (!r) return controls;
+  if (r.ok === false) return `${controls}${reportUnavailablePanel("Year-end close", r)}`;
+
+  const lineRows = (r.closing_lines || []).map((l) => `
+    <tr>
+      <td>${escapeHtml(`${l.account_code} - ${l.account_name}`)}</td>
+      <td>${escapeHtml(l.account_type || "")}</td>
+      <td class="amount">${Number(l.debit || 0) ? num(l.debit) : ""}</td>
+      <td class="amount">${Number(l.credit || 0) ? num(l.credit) : ""}</td>
+    </tr>`).join("");
+  const re = r.retained_earnings || {};
+  const closed = (r.already_closed || []).length > 0;
+  const profit = Number(r.net_profit || 0) >= 0;
+
+  return `
+    ${controls}
+    <div class="preview-heading compact">
+      <div><p>FY ${escapeHtml(r.financial_year)} (${escapeHtml(r.from_date)} → ${escapeHtml(r.to_date)}): income ${num(r.income_total)} − expenses ${num(r.expense_total)} = <strong>${profit ? "profit" : "loss"} ${num(r.net_profit)}</strong>.</p></div>
+      <span class="pill ${closed ? "warn" : (r.can_post ? "ok" : "")}">${closed ? "already closed" : (r.can_post ? "ready to close" : "no activity")}</span>
+    </div>
+    ${closed ? `<p class="muted">⚠ FY ${escapeHtml(r.financial_year)} was closed by journal entry #${escapeHtml(String(r.already_closed[0].journal_entry_id))}. Reverse that entry to reopen the year.</p>` : ""}
+    <div class="table-preview compact-table">
+      <h4>Closing journal preview (31 March)</h4>
+      <table>
+        <thead><tr><th>Account</th><th>Type</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
+        <tbody>
+          ${lineRows || `<tr><td colspan="4" class="muted">No income or expense activity this year.</td></tr>`}
+          ${(Number(re.debit || 0) || Number(re.credit || 0)) ? `<tr><td><em>${escapeHtml(`${re.account_code} - ${re.account_name}`)}</em></td><td>equity</td><td class="amount">${Number(re.debit || 0) ? num(re.debit) : ""}</td><td class="amount">${Number(re.credit || 0) ? num(re.credit) : ""}</td></tr>` : ""}
+        </tbody>
+      </table>
+    </div>
+    ${r.can_post && isBusinessAdmin() ? `
+    <div class="report-date-controls">
+      <button class="primary" type="button" data-business-action="ye-post">Post year-end close</button>
+    </div>` : (r.can_post ? `<p class="muted">Only a tenant admin can post the year-end close.</p>` : "")}
+    ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
+  `;
+}
+
+function renderOpeningYearEndPanel() {
+  return `
+    <div class="table-preview compact-table"><h4>Opening balances (CSV import)</h4></div>
+    ${renderOpeningBalancesSection()}
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
+    <div class="table-preview compact-table"><h4>Year-end close</h4></div>
+    ${renderYearEndSection()}
+  `;
+}
+
 // ---- Customer/vendor statements + dunning (Phase D) ----------------------- //
 async function loadPartyStatement() {
   const partySel = document.querySelector("[data-stmt-party]");
@@ -6837,6 +7042,8 @@ function renderBusinessReportsWorkspace() {
     body = renderBankReconPanel();
   } else if (businessReportState.tab === "statements") {
     body = renderStatementsPanel();
+  } else if (businessReportState.tab === "opening-yearend") {
+    body = renderOpeningYearEndPanel();
   }
 
   return `
@@ -13012,6 +13219,16 @@ dashboardPreview.addEventListener("click", (event) => {
     recordDunningSent();
   } else if (businessAction === "dunning-copy") {
     copyDunningLetter();
+  } else if (businessAction === "ob-template") {
+    downloadObTemplate();
+  } else if (businessAction === "ob-preview") {
+    previewOpeningBalances();
+  } else if (businessAction === "ob-post") {
+    postOpeningBalances();
+  } else if (businessAction === "ye-preview") {
+    previewYearEnd();
+  } else if (businessAction === "ye-post") {
+    postYearEndClose();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
