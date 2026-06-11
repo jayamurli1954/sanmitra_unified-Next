@@ -5763,8 +5763,32 @@ function renderCmp08Panel() {
     <div class="invoice-totals">
       <div class="invoice-grand"><span>Total tax payable</span><strong>${num(pay.total)}</strong></div>
     </div>
+    ${(r.liability_posting || []).length ? `
+    <p class="muted">✓ Liability posted: journal entry #${escapeHtml(String(r.liability_posting[0].journal_entry_id))} dated ${escapeHtml(r.liability_posting[0].entry_date)}. Reverse it to redo.</p>`
+    : (Number(out.total_tax || 0) > 0 && isBusinessAdmin() ? `
+    <div class="report-date-controls">
+      <button class="primary" type="button" data-business-action="cmp08-post">Post liability to ledger</button>
+      <span class="muted">Dr 54007 GST Expense (Composition) / Cr 22004 GST Payable — outward levy only; RCM is already booked per bill.</span>
+    </div>` : "")}
     ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
   `;
+}
+
+async function postCmp08Liability() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/returns/cmp-08/post", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `cmp08-${cmp08Quarter}` },
+    body: JSON.stringify({ quarter: cmp08Quarter }),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Liability posted", `CMP-08 ${cmp08Quarter}: ${formatCurrency(Number(result.payload?.amount || 0))} — journal entry #${result.payload?.journal_entry_id}.`);
+    await loadCmp08(cmp08Quarter);
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can post the composition liability.");
+  } else {
+    setLoginStatus("danger", "Posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { cmp08_post: { ok: result.ok, status: result.status } });
 }
 
 // ---- GSTR-1 outward-supplies return ------------------------------------- //
@@ -6621,6 +6645,7 @@ function renderGstr1Panel() {
     ["B2B (4A)", `${s.b2b?.invoices || 0} inv · ${s.b2b?.recipients || 0} GSTIN`, s.b2b?.taxable_value, s.b2b?.tax],
     ["B2C Large (5)", `${s.b2cl?.invoices || 0} inv`, s.b2cl?.taxable_value, s.b2cl?.tax],
     ["B2C Small (7)", `${s.b2cs?.rows || 0} rows`, s.b2cs?.taxable_value, s.b2cs?.tax],
+    ["Exports/SEZ (6A)", `${s.exp?.invoices || 0} inv · zero-rated`, s.exp?.taxable_value, s.exp?.tax],
     ["Credit Notes (9B)", `${s.cdnr?.notes || 0} notes`, s.cdnr?.taxable_value, s.cdnr?.tax],
     ["HSN (12)", `${s.hsn?.rows || 0} rows`, s.hsn?.taxable_value, s.hsn?.tax],
   ].map(([title, sub, txval, tax]) => `
@@ -7994,6 +8019,7 @@ function syncSalesFormFromDom() {
     description: row.querySelector("input[name='description']")?.value || "",
     hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
     uqc: row.querySelector("input[name='uqc']")?.value || "",
+    supply_type: row.querySelector("select[name='supply_type']")?.value || "taxable",
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
@@ -8008,7 +8034,9 @@ function updateInvoiceTotalsDisplay() {
   form.querySelectorAll("[data-invoice-line]").forEach((row) => {
     const qty = row.querySelector("input[name='quantity']")?.value;
     const rate = row.querySelector("input[name='rate']")?.value;
-    const gstRate = row.querySelector("input[name='gst_rate']")?.value;
+    // Zero-rated (export/SEZ under LUT) lines carry no tax regardless of rate.
+    const supplyType = row.querySelector("select[name='supply_type']")?.value || "taxable";
+    const gstRate = supplyType === "zero_rated" ? 0 : row.querySelector("input[name='gst_rate']")?.value;
     const c = computeInvoiceLine(qty, rate, gstRate, inter);
     row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
     row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
@@ -8053,7 +8081,7 @@ function setBusinessSalesView(view) {
 }
 
 function openInvoiceCreate() {
-  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" }];
+  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" }];
   salesFormHeader.customer_party_id = "";
   salesFormHeader.invoice_date = todayIsoDate();
   salesFormHeader.due_date = "";
@@ -8073,7 +8101,7 @@ function openInvoiceCreate() {
 
 function addInvoiceLine() {
   syncSalesFormFromDom();
-  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
+  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" });
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
 }
@@ -8082,7 +8110,7 @@ function removeInvoiceLine(lineId) {
   syncSalesFormFromDom();
   invoiceFormLines = invoiceFormLines.filter((l) => l.id !== lineId);
   if (invoiceFormLines.length === 0) {
-    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
+    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" });
   }
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
@@ -8106,7 +8134,8 @@ async function submitInvoice() {
     .map((l) => ({
       description: String(l.description).trim(),
       hsn_sac: String(l.hsn_sac || "").trim() || null,
-      uqc: String(l.uqc || "").trim() || null,
+      uqc: String(l.uqc || "").trim().toUpperCase() || null,
+      supply_type: l.supply_type || "taxable",
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
@@ -8249,6 +8278,10 @@ function renderInvoiceCreateForm() {
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
       ${hsnVisible ? `<td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>` : ""}
       ${hsnVisible ? `<td><input type="text" name="uqc" value="${escapeHtml(l.uqc || "")}" placeholder="UQC" style="width:70px;"></td>` : ""}
+      <td><select name="supply_type" style="min-width:96px;">
+        ${[["taxable", "Taxable"], ["zero_rated", "Zero-rated (exp/SEZ)"], ["exempt", "Exempt"], ["nil_rated", "Nil-rated"], ["non_gst", "Non-GST"]].map(([v, t]) =>
+          `<option value="${v}" ${(l.supply_type || "taxable") === v ? "selected" : ""}>${t}</option>`).join("")}
+      </select></td>
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
@@ -8317,6 +8350,7 @@ function renderInvoiceCreateForm() {
               <th>Description</th>
               ${hsnVisible ? `<th>HSN/SAC${hsnRequired ? " *" : ""}</th>` : ""}
               ${hsnVisible ? `<th>UQC</th>` : ""}
+              <th>Type</th>
               <th>Qty</th>
               <th>Rate</th>
               <th>GST %</th>
@@ -9110,6 +9144,7 @@ function syncCnFormFromDom() {
     id: row.getAttribute("data-cn-line"),
     description: row.querySelector("input[name='description']")?.value || "",
     hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
+    uqc: row.querySelector("input[name='uqc']")?.value || "",
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
@@ -9161,7 +9196,7 @@ function setCreditNoteView(view) {
 }
 
 function openCreditNoteCreate() {
-  cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" }];
   cnFormHeader.customer_party_id = "";
   cnFormHeader.note_date = todayIsoDate();
   cnFormHeader.original_invoice_number = "";
@@ -9177,7 +9212,7 @@ function openCreditNoteCreate() {
 
 function addCnLine() {
   syncCnFormFromDom();
-  cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
   rerenderCreditNoteIfActive();
   updateCnTotalsDisplay();
 }
@@ -9186,7 +9221,7 @@ function removeCnLine(lineId) {
   syncCnFormFromDom();
   cnFormLines = cnFormLines.filter((l) => l.id !== lineId);
   if (cnFormLines.length === 0) {
-    cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+    cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
   }
   rerenderCreditNoteIfActive();
   updateCnTotalsDisplay();
@@ -9203,6 +9238,7 @@ async function submitCreditNote() {
     .map((l) => ({
       description: String(l.description).trim(),
       hsn_sac: String(l.hsn_sac || "").trim() || null,
+      uqc: String(l.uqc || "").trim().toUpperCase() || null,
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
@@ -9320,6 +9356,7 @@ function renderCreditNoteCreateForm() {
     <tr data-cn-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
       <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
+      <td><input type="text" name="uqc" value="${escapeHtml(l.uqc || "")}" placeholder="UQC" style="width:70px;"></td>
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
@@ -9375,7 +9412,7 @@ function renderCreditNoteCreateForm() {
         <table>
           <thead>
             <tr>
-              <th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST %</th>
+              <th>Description</th><th>HSN/SAC</th><th>UQC</th><th>Qty</th><th>Rate</th><th>GST %</th>
               <th class="amount">Taxable</th><th class="amount">GST</th><th class="amount">Total</th><th></th>
             </tr>
           </thead>
@@ -13431,6 +13468,8 @@ dashboardPreview.addEventListener("click", (event) => {
     previewCmp08FromInput();
   } else if (businessAction === "cmp08-download-json") {
     downloadCmp08Json();
+  } else if (businessAction === "cmp08-post") {
+    postCmp08Liability();
   } else if (businessAction === "gstr4-load") {
     previewGstr4FromInput();
   } else if (businessAction === "gstr4-download-json") {
@@ -13538,7 +13577,7 @@ dashboardPreview.addEventListener("input", (event) => {
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
-  if (!["is_inter_state", "is_reverse_charge", "tds_section", "tcs_section"].includes(event.target.name)) {
+  if (!["is_inter_state", "is_reverse_charge", "tds_section", "tcs_section", "supply_type"].includes(event.target.name)) {
     return;
   }
   if (event.target.closest("[data-invoice-form]")) {
