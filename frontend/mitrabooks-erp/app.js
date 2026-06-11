@@ -81,6 +81,7 @@ function businessNavigationGroups() {
     {
       name: "Configuration & Extensions",
       items: [
+        { label: "Settings", businessWorkspace: "settings", icon: "ST", module: { module_key: "business", frontend_path: "/business/settings", enabled: true } },
         { label: "Future Hub & Add-ons", businessWorkspace: "addons", icon: "FH", module: { module_key: "addons", frontend_path: "/business/addons", enabled: false }, badge: "New" },
         { label: "+ Custom Menu", businessWorkspace: "custom-menu", icon: "CM", module: { module_key: "custom_menu", frontend_path: "/business/custom-menu", enabled: false } },
       ],
@@ -4310,6 +4311,56 @@ function renderDashboardPreview(config) {
 
 let activeBusinessWorkspace = "overview";
 let lastBusinessPartiesResult = null;
+const MITRABOOKS_SETTINGS_GROUPS = [
+  {
+    title: "Core Settings",
+    description: "Always visible for MitraBooks business tenants.",
+    items: [
+      { title: "Organization", status: "Planned", detail: "Legal name, trade name, GSTIN, PAN, TAN, CIN/LLPIN, address, contact details, financial year, currency, time zone, and logo.", visibility: "Owner, Admin, CA Partner" },
+      { title: "Branches", status: "Planned", detail: "Branch code, GST registration per branch, address, contact details, warehouse mapping, and cost centre mapping.", visibility: "Multi-location businesses" },
+      { title: "Users & Roles", status: "Planned", detail: "Invite, disable, and manage Super Admin, Admin, Accountant, Cashier, Auditor, and Viewer roles.", visibility: "Owner, Admin" },
+      { title: "Permissions", status: "Planned", detail: "Granular access for vouchers, inventory, banking, approvals, reports, and payment controls.", visibility: "Owner, Admin" },
+      { title: "Chart of Accounts", status: "Implemented", detail: "Default business chart, protected system accounts, ledger drill-down, and opening balances through journal posting.", visibility: "Accounting users", workspace: "accounting" },
+      { title: "Tax & Compliance", status: "Implemented", detail: "GST registration mode, GST reports, GSTR preparation, TDS/TCS sections, period locks, and reconciliation workflows.", visibility: "Accountant, CA", workspace: "gst-returns" },
+      { title: "Voucher Configuration", status: "Partial", detail: "Journal, receipt, payment, and contra posting exists. Numbering and approval matrix are planned.", visibility: "Owner, Admin, Accountant", workspace: "vouchers" },
+      { title: "Security", status: "Planned", detail: "MFA, password policy, login history, device management, and session controls.", visibility: "Owner, Admin" },
+    ],
+  },
+  {
+    title: "Module Settings",
+    description: "Visible when the corresponding MitraBooks module or business mode is enabled.",
+    items: [
+      { title: "Invoice Settings", status: "Implemented", detail: "Sales invoice fields, numbering pattern, GST registration type, composition category, and inventory accounting toggle.", visibility: "Admin", workspace: "sales" },
+      { title: "Inventory", status: "Partial", detail: "Item master and stock register exist. UOM, godowns, valuation policy, and stock approvals are planned.", visibility: "Inventory businesses", workspace: "reports" },
+      { title: "Banking", status: "Partial", detail: "Manual bank reconciliation exists. Bank account setup, gateway mapping, and bank API sync are planned.", visibility: "Banking users", workspace: "bank-recon" },
+      { title: "Financial Controls", status: "Partial", detail: "Posted-entry immutability and reversals exist. Voucher locking, backdated-entry approval, and closing controls need explicit settings.", visibility: "Owner, Auditor", workspace: "audit" },
+      { title: "Templates", status: "Planned", detail: "Invoice, receipt, payment voucher, statement, and report templates with tenant branding.", visibility: "Owner, Admin" },
+      { title: "Notifications", status: "Planned", detail: "Email, SMS, WhatsApp, due-date, approval, and compliance reminder rules.", visibility: "Owner, Admin" },
+    ],
+  },
+  {
+    title: "Professional Practice Settings",
+    description: "For CA firms and bookkeepers handling many client companies from one login.",
+    items: [
+      { title: "Client Management", status: "Planned", detail: "Add clients, capture GSTIN/PAN/contact person, and classify engagement type.", visibility: "CA Partner, Practice Admin" },
+      { title: "Multi-Company Dashboard", status: "Planned", detail: "Switch between client companies such as traders, manufacturers, societies, and trusts.", visibility: "CA Partner, Staff" },
+      { title: "Client Access Control", status: "Planned", detail: "Client-level permissions for view only, data entry, full access, and restricted filing visibility.", visibility: "CA Partner" },
+      { title: "Compliance Tracking", status: "Planned", detail: "GST, TDS, income tax, audit due dates, assignment status, and exception queue.", visibility: "CA Partner, Staff" },
+      { title: "Work Assignment", status: "Planned", detail: "Assign clients and tasks to staff for bookkeeping, GST filing, TDS, audit, and review.", visibility: "Practice Admin" },
+    ],
+  },
+  {
+    title: "Platform Settings",
+    description: "Controlled settings for subscription, integrations, audit, and AI enablement.",
+    items: [
+      { title: "Subscription & Billing", status: "Planned", detail: "Plan, renewals, invoices, usage metrics, limits, and upgrade path.", visibility: "Owner, Platform Admin" },
+      { title: "Integrations", status: "Planned", detail: "GST portal, banking APIs, WhatsApp, email, payment gateway, UPI, and import/export connectors.", visibility: "Owner, Admin" },
+      { title: "Audit & Logs", status: "Implemented", detail: "Party, voucher, account, document, and lifecycle events are visible through audit trail.", visibility: "Owner, Auditor", workspace: "audit" },
+      { title: "AI Settings", status: "Planned", detail: "AI MIS, document upload, OCR extraction, categorization, reconciliation, and forecasting controls. Human review required before posting.", visibility: "Owner, Admin" },
+    ],
+  },
+];
+
 const businessListState = {
   parties: {
     offset: 0,
@@ -4485,7 +4536,70 @@ function renderBusinessVouchersTable(rows) {
   `;
 }
 
+function settingsStatusClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "implemented") return "ok";
+  if (normalized === "partial") return "warn";
+  return "neutral";
+}
+
+function renderMitraBooksSettingsCard(item) {
+  const action = item.workspace
+    ? `<button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open Related Area</button>`
+    : `<button class="secondary" type="button" disabled>Needs Backend Contract</button>`;
+  return `
+    <article class="settings-menu-card">
+      <div class="settings-card-head">
+        <h5>${escapeHtml(item.title)}</h5>
+        <span class="pill ${settingsStatusClass(item.status)}">${escapeHtml(item.status)}</span>
+      </div>
+      <p>${escapeHtml(item.detail)}</p>
+      <div class="settings-card-meta">
+        <span>${escapeHtml(item.visibility)}</span>
+        ${action}
+      </div>
+    </article>
+  `;
+}
+
+function renderMitraBooksSettingsWorkspace() {
+  return `
+    <div class="verification-panel erp-workspace-panel mitrabooks-settings-workspace">
+      <div class="preview-heading compact">
+        <div>
+          <h4>MitraBooks Settings</h4>
+          <p>Business-only settings for accounting, compliance, controls, CA practice management, billing, integrations, and AI readiness.</p>
+        </div>
+        <span class="pill ok">Business suite</span>
+      </div>
+      <div class="settings-visibility-strip">
+        <span><strong>Core</strong> everyone sees</span>
+        <span><strong>Module</strong> shown by enabled workflow</span>
+        <span><strong>Platform</strong> owner/admin controlled</span>
+      </div>
+      ${MITRABOOKS_SETTINGS_GROUPS.map((group) => `
+        <section class="settings-menu-section">
+          <div class="settings-section-heading">
+            <h5>${escapeHtml(group.title)}</h5>
+            <p>${escapeHtml(group.description)}</p>
+          </div>
+          <div class="settings-menu-grid">
+            ${group.items.map(renderMitraBooksSettingsCard).join("")}
+          </div>
+        </section>
+      `).join("")}
+      <div class="settings-boundary-note">
+        <strong>Accounting guardrail:</strong>
+        Live financial balances, opening balances, posted entries, tax reports, and reconciliations must continue to come from posted journals and controlled workflows. Settings must not directly mutate ledger balances.
+      </div>
+    </div>
+  `;
+}
+
 function renderBusinessWorkspace() {
+  if (activeBusinessWorkspace === "settings") {
+    return renderMitraBooksSettingsWorkspace();
+  }
   if (activeBusinessWorkspace === "parties") {
     return `
       <div class="verification-panel erp-workspace-panel">
@@ -5040,6 +5154,7 @@ function syncBusinessNavActiveState() {
       "reconciliation": "Reconciliation",
       "tds-tcs": "TDS / TCS",
       "bank-recon": "Bank Reconciliation",
+      settings: "Settings",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
     const label = isPlannedOrgWorkspace

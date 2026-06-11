@@ -98,6 +98,68 @@ def test_business_loaders_refresh_active_workspace_panel() -> None:
     assert app_source.count("dashboardPreview.innerHTML = renderBusinessWorkspace();") >= 3
 
 
+def test_mitrabooks_settings_menu_is_business_specific() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'businessWorkspace: "settings"' in app_source
+    assert 'activeBusinessWorkspace === "settings"' in app_source
+    assert "MitraBooks Settings" in app_source
+    assert "Core Settings" in app_source
+    assert "Module Settings" in app_source
+    assert "Professional Practice Settings" in app_source
+    assert "Client Management" in app_source
+    assert "Multi-Company Dashboard" in app_source
+    assert "AI Settings" in app_source
+    assert "Accounting guardrail:" in app_source
+    assert "Housing Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
+    assert "Temple Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
+
+
+def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
+    landing_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "landing.html").read_text(encoding="utf-8")
+
+    assert "MitraBooks" in landing_source
+    assert "Cloud ERP and double-entry accounting" in landing_source
+    assert "./index.html" in landing_source
+    assert "GST-ready invoicing" in landing_source
+    assert "Document upload and OCR extraction" in landing_source
+    assert "Single User - Multi Company" in landing_source
+    assert "Multi User - Multi Company" in landing_source
+    assert "CA/bookkeeper practice" in landing_source
+    assert "Free" in landing_source
+    assert "Basic" in landing_source
+    assert "Starter" in landing_source
+    assert "Growth" in landing_source
+    assert "One-time implementation, migration, and training fee: get quote" in landing_source
+    assert "not a live GST filing portal" in landing_source
+    assert "Human review before ledger posting" in landing_source
+    assert "./about.html" in landing_source
+    assert "./contact.html" in landing_source
+    assert "./privacy.html" in landing_source
+    assert "./terms.html" in landing_source
+
+
+def test_mitrabooks_public_pages_are_product_scoped() -> None:
+    public_pages = ("about.html", "contact.html", "privacy.html", "terms.html")
+
+    for page in public_pages:
+        source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / page).read_text(encoding="utf-8")
+        assert "MitraBooks" in source
+        assert "SanMitra Platform" in source
+        assert "./landing.html" in source
+        assert "./index.html" in source
+        assert "Privacy Policy" in source
+        assert "Terms of Use" in source
+        assert "GruhaMitra" not in source
+        assert "MandirMitra" not in source
+
+    terms_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "terms.html").read_text(encoding="utf-8")
+    assert "One-time implementation, migration, and training fee: get quote" in terms_source
+
+    contact_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "contact.html").read_text(encoding="utf-8")
+    assert "contact@sanmitratech.in" in contact_source
+
+
 def test_business_voucher_accounts_use_backend_account_contract() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

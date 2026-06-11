@@ -34,6 +34,7 @@ class ProductPricing:
 
 GRUHAMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 MANDIRMITRA_PLAN_KEYS = ("starter", "growth", "professional")
+MITRABOOKS_PLAN_KEYS = ("free", "basic", "starter", "growth")
 
 GRUHAMITRA_PRICING = ProductPricing(
     app_key="gruhamitra",
@@ -115,9 +116,100 @@ MANDIRMITRA_PRICING = ProductPricing(
     ),
 )
 
+MITRABOOKS_PRICING = ProductPricing(
+    app_key="mitrabooks",
+    product_name="MitraBooks",
+    currency="INR",
+    one_time_fee_paise=0,
+    one_time_fee_label="One-time implementation, migration, and training fee: get quote",
+    plans=(
+        ProductPlan(
+            key="free",
+            name="Free",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 0 / month", price_paise=0),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 0 / year", price_paise=0),
+            ),
+            fair_use={
+                "companies": 1,
+                "users": 1,
+                "invoices_per_month": 25,
+                "ocr_documents_per_month": 0,
+            },
+            features=(
+                "Single-company books",
+                "Basic parties, vouchers, invoices, and reports",
+                "Manual data entry only",
+                "Community/self-service support",
+            ),
+        ),
+        ProductPlan(
+            key="basic",
+            name="Basic",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 499 / month", price_paise=49900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 4,999 / year", price_paise=499900),
+            ),
+            fair_use={
+                "companies": 1,
+                "users": 1,
+                "invoices_per_month": 250,
+                "ocr_documents_per_month": 25,
+            },
+            features=(
+                "Single-user, single-company accounting",
+                "GST preparation reports and TDS/TCS tracking",
+                "Basic document upload and OCR queue",
+                "Email support",
+            ),
+        ),
+        ProductPlan(
+            key="starter",
+            name="Starter",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 999 / month", price_paise=99900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 9,999 / year", price_paise=999900),
+            ),
+            fair_use={
+                "companies": 3,
+                "users": 3,
+                "invoices_per_month": 1000,
+                "ocr_documents_per_month": 100,
+            },
+            features=(
+                "Single user with up to 3 companies or small internal team",
+                "Bank reconciliation, ageing, statements, and inventory basics",
+                "AI categorization suggestions with human review",
+                "Priority email support",
+            ),
+        ),
+        ProductPlan(
+            key="growth",
+            name="Growth",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 2,999 / month", price_paise=299900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 29,999 / year", price_paise=2999900),
+            ),
+            fair_use={
+                "companies": 25,
+                "users": 10,
+                "invoices_per_month": 5000,
+                "ocr_documents_per_month": 500,
+            },
+            features=(
+                "CA practice or bookkeeper multi-user, multi-company workspace",
+                "Client assignment, compliance tracking, and review queues",
+                "AI MIS, document upload, OCR extraction, and reconciliation assistance",
+                "Priority support and onboarding review",
+            ),
+        ),
+    ),
+)
+
 PRODUCT_PRICING = {
     GRUHAMITRA_PRICING.app_key: GRUHAMITRA_PRICING,
     MANDIRMITRA_PRICING.app_key: MANDIRMITRA_PRICING,
+    MITRABOOKS_PRICING.app_key: MITRABOOKS_PRICING,
 }
 
 

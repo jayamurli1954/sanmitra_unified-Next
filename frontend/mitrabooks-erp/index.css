@@ -4338,6 +4338,112 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   opacity: 0.8;
 }
 
+.mitrabooks-settings-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-visibility-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-visibility-strip span,
+.settings-boundary-note {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+  color: var(--text-muted, #94a3b8);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.settings-visibility-strip strong,
+.settings-boundary-note strong {
+  color: var(--text, #e2e8f0);
+}
+
+.settings-menu-section {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-section-heading h5 {
+  margin: 0;
+  color: var(--text, #e2e8f0);
+  font-size: 16px;
+}
+
+.settings-section-heading p {
+  margin: 4px 0 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+}
+
+.settings-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.settings-menu-card {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.2);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  min-height: 190px;
+}
+
+.settings-card-head,
+.settings-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-card-head h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text, #e2e8f0);
+}
+
+.settings-menu-card p {
+  margin: 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-card-meta {
+  margin-top: auto;
+}
+
+.settings-card-meta span {
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+}
+
+.pill.neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted, #94a3b8);
+}
+
+@media (max-width: 760px) {
+  .settings-visibility-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-card-head,
+  .settings-card-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .erp-workspace-panel code {
   background: rgba(148, 163, 184, 0.15);
   padding: 1px 5px;
