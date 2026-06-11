@@ -75,6 +75,7 @@ from app.modules.business import financial_health
 from app.modules.business import gst_returns
 from app.modules.business import report_export
 from app.modules.business import bank_recon
+from app.modules.business import fixed_assets
 from app.modules.business import opening_close
 from app.modules.business import statements
 from app.modules.business import tds as tds_module
@@ -2359,6 +2360,100 @@ async def business_year_end_close(
         raise HTTPException(status_code=422, detail="financial_year must be 'YYYY-YY' (e.g. 2026-27)")
     try:
         return await opening_close.post_year_end_close(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, financial_year=financial_year,
+            created_by=_created_by(current_user), idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/fixed-assets")
+async def business_create_fixed_asset(
+    payload: dict = Body(...),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Register a fixed asset (metadata only — the purchase posts via the
+    normal bill/voucher to its 16xxx account)."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="fixed asset create",
+    )
+    try:
+        return await fixed_assets.create_fixed_asset(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            payload=payload, created_by=_created_by(current_user),
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/fixed-assets")
+async def business_list_fixed_assets(
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Fixed-asset register with accumulated depreciation and book value."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="fixed asset list",
+    )
+    return await fixed_assets.list_fixed_assets(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
+
+
+@router.get("/depreciation/preview")
+async def business_depreciation_preview(
+    financial_year: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Per-asset depreciation schedule for the FY (SLM/WDV, day-prorated)."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="depreciation preview",
+    )
+    return await fixed_assets.build_depreciation_preview(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id, financial_year=financial_year,
+    )
+
+
+@router.post("/depreciation/run")
+async def business_depreciation_run(
+    payload: dict = Body(..., description='{"financial_year": "YYYY-YY"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Post the FY depreciation journal (admin only): Dr Depreciation Expense,
+    Cr Accumulated Depreciation. Idempotent per financial year."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="depreciation run",
+    )
+    financial_year = str(payload.get("financial_year") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", financial_year):
+        raise HTTPException(status_code=422, detail="financial_year must be 'YYYY-YY' (e.g. 2026-27)")
+    try:
+        return await fixed_assets.post_depreciation_run(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, financial_year=financial_year,
             created_by=_created_by(current_user), idempotency_key=x_idempotency_key,

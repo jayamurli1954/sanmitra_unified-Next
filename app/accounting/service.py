@@ -240,6 +240,8 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("16002", "Office Equipment", "asset", "real"),
     _default_account("16003", "Plant and Machinery", "asset", "real"),
     _default_account("16004", "Computers", "asset", "real"),
+    # Contra-asset: credited by the periodic depreciation run.
+    _default_account("16099", "Accumulated Depreciation", "asset", "real"),
     # Liabilities (2xxxx) ------------------------------------------------------
     # 21xxx Payables
     _default_account("21001", "Sundry Creditors", "liability", "personal", is_payable=True),
