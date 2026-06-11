@@ -5108,6 +5108,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "bank-recon", label: "Bank Reconciliation" },
   { id: "opening-yearend", label: "Opening & Year-End" },
   { id: "fixed-assets", label: "Fixed Assets" },
+  { id: "dimensions", label: "Dimensions" },
   { id: "itc-reversals", label: "ITC Reversals" },
   { id: "period-locks", label: "Period Locks" },
 ];
@@ -5142,6 +5143,9 @@ let lastFixedAssets = null;
 let lastDepPreview = null;
 let depFy = currentFinancialYear();
 let faFormOpen = false;
+let lastDimensions = null;       // masters cache (also feeds the form selects)
+let lastDimensionReport = null;
+let dimensionReportType = "cost_centre";
 
 // Current Indian financial year as "YYYY-YY" (FY starts April).
 function currentFinancialYear() {
@@ -5280,6 +5284,9 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "fixed-assets") {
     if (!hasLoadedBusinessAccounts()) await loadBusinessAccounts();
     await loadFixedAssets();
+  } else if (tab === "dimensions") {
+    await loadDimensions();
+    await loadDimensionReport();
   }
 }
 
@@ -6172,6 +6179,151 @@ function renderFixedAssetsPanel() {
       <button class="secondary" type="button" data-business-action="dep-preview">Preview depreciation</button>
     </div>
     ${depBody}
+  `;
+}
+
+// ---- Accounting dimensions (cost centres / projects) ----------------------- //
+async function loadDimensions() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/dimensions", { method: "GET" });
+  lastDimensions = result.ok ? result.payload : null;
+  renderJson(apiOutput, { dimensions: { ok: result.ok, count: result.payload?.count || 0 } });
+  return lastDimensions;
+}
+
+function dimensionOptions(kind, selected) {
+  const rows = (kind === "cost_centre" ? lastDimensions?.cost_centres : lastDimensions?.projects) || [];
+  if (!rows.length) return null;  // no masters -> hide the select entirely
+  const none = `<option value="">No ${kind === "cost_centre" ? "cost centre" : "project"}</option>`;
+  return none + rows.map((d) =>
+    `<option value="${escapeHtml(d.dimension_id)}" ${d.dimension_id === selected ? "selected" : ""}>${escapeHtml(`${d.code} - ${d.name}`)}</option>`).join("");
+}
+
+async function createDimensionFromForm() {
+  const form = document.querySelector("[data-dim-form]");
+  if (!form) return;
+  const body = {
+    dimension_type: form.querySelector("select[name='dim_type']")?.value || "cost_centre",
+    code: form.querySelector("input[name='dim_code']")?.value || "",
+    name: form.querySelector("input[name='dim_name']")?.value || "",
+  };
+  if (!body.name.trim()) {
+    setLoginStatus("warn", "Name required", "Give the cost centre / project a name.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/dimensions", {
+    method: "POST", body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Dimension created", `${result.payload?.code} — ${result.payload?.name}`);
+    await loadDimensions();
+    await loadDimensionReport();
+  } else {
+    setLoginStatus("danger", "Create failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { dimension_create: { ok: result.ok, status: result.status } });
+}
+
+async function deactivateDimension(dimensionId) {
+  const result = await apiRequest("mitrabooks", `/api/v1/business/dimensions/${encodeURIComponent(dimensionId)}/deactivate`, { method: "PATCH" });
+  if (result.ok) {
+    setLoginStatus("ok", "Dimension deactivated", "Existing documents keep the tag; new ones stop offering it.");
+    await loadDimensions();
+    await loadDimensionReport();
+  } else {
+    setLoginStatus("danger", "Deactivate failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { dimension_deactivate: { ok: result.ok, status: result.status } });
+}
+
+async function loadDimensionReport() {
+  const typeSel = document.querySelector("[data-dim-report-type]");
+  const fromInput = document.querySelector("[data-dim-from]");
+  const toInput = document.querySelector("[data-dim-to]");
+  if (typeSel) dimensionReportType = typeSel.value || dimensionReportType;
+  const params = new URLSearchParams({ dimension_type: dimensionReportType });
+  if (fromInput?.value) params.set("from_date", fromInput.value);
+  if (toInput?.value) params.set("to_date", toInput.value);
+  const result = await apiRequest("mitrabooks", `/api/v1/business/dimensions/report?${params.toString()}`, { method: "GET" });
+  lastDimensionReport = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { dimension_report: { ok: result.ok, type: dimensionReportType } });
+}
+
+function renderDimensionsPanel() {
+  const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
+  const dims = lastDimensions;
+  const masterRows = (dims?.items || []).map((d) => `
+    <tr>
+      <td>${escapeHtml(d.dimension_type === "cost_centre" ? "Cost centre" : "Project")}</td>
+      <td>${escapeHtml(d.code || "")}</td>
+      <td>${escapeHtml(d.name || "")}</td>
+      <td><button class="secondary" type="button" data-business-action="dim-deactivate" data-dimension-id="${escapeHtml(d.dimension_id)}">Deactivate</button></td>
+    </tr>`).join("");
+
+  const manage = `
+    <div class="report-date-controls" data-dim-form>
+      <label>Type <select name="dim_type">
+        <option value="cost_centre">Cost centre</option>
+        <option value="project">Project</option>
+      </select></label>
+      <label>Code <input type="text" name="dim_code" maxlength="20" placeholder="e.g. BLR" style="width:90px;text-transform:uppercase;"></label>
+      <label>Name <input type="text" name="dim_name" maxlength="120" placeholder="e.g. Bengaluru branch"></label>
+      <button class="primary" type="button" data-business-action="dim-create">Add</button>
+    </div>
+    <div class="table-preview compact-table">
+      <table>
+        <thead><tr><th>Type</th><th>Code</th><th>Name</th><th></th></tr></thead>
+        <tbody>${masterRows || `<tr><td colspan="4" class="muted">No dimensions yet — add a cost centre or project above. They then appear as tags on the invoice and bill forms.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+
+  const r = lastDimensionReport;
+  let reportBody = "";
+  if (r && r.ok === false) {
+    reportBody = reportUnavailablePanel("Dimension report", r);
+  } else if (r) {
+    const rows = (r.rows || []).map((row) => `
+      <tr>
+        <td>${escapeHtml(`${row.code} - ${row.name}`)}</td>
+        <td class="amount">${num(row.income)}</td>
+        <td class="amount">${num(row.expense)}</td>
+        <td class="amount"><strong>${num(row.net)}</strong></td>
+      </tr>`).join("");
+    const u = r.untagged || {};
+    const t = r.totals || {};
+    reportBody = `
+      <div class="preview-heading compact">
+        <div><p>${escapeHtml(r.from_date)} → ${escapeHtml(r.to_date)} · ${escapeHtml(String(r.document_counts?.invoices || 0))} invoice(s), ${escapeHtml(String(r.document_counts?.bills || 0))} bill(s).</p></div>
+        <span class="pill">Net ${num(t.net)}</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead><tr><th>${dimensionReportType === "cost_centre" ? "Cost centre" : "Project"}</th><th class="amount">Income</th><th class="amount">Expense</th><th class="amount">Net</th></tr></thead>
+          <tbody>
+            ${rows || `<tr><td colspan="4" class="muted">No tagged documents in this period.</td></tr>`}
+            <tr><td><em>Untagged</em></td><td class="amount">${num(u.income)}</td><td class="amount">${num(u.expense)}</td><td class="amount">${num(u.net)}</td></tr>
+          </tbody>
+          <tfoot><tr><th>Total</th><td class="amount">${num(t.income)}</td><td class="amount">${num(t.expense)}</td><td class="amount"><strong>${num(t.net)}</strong></td></tr></tfoot>
+        </table>
+      </div>
+      ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}`;
+  }
+
+  return `
+    <div class="table-preview compact-table"><h4>Cost centres &amp; projects</h4></div>
+    ${manage}
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
+    <div class="table-preview compact-table"><h4>Income / expense by dimension</h4></div>
+    <div class="report-date-controls">
+      <label>View by <select data-dim-report-type>
+        <option value="cost_centre" ${dimensionReportType === "cost_centre" ? "selected" : ""}>Cost centre</option>
+        <option value="project" ${dimensionReportType === "project" ? "selected" : ""}>Project</option>
+      </select></label>
+      <label>From <input type="date" data-dim-from></label>
+      <label>To <input type="date" data-dim-to></label>
+      <button class="secondary" type="button" data-business-action="dim-report-load">Load</button>
+    </div>
+    ${reportBody || `<p class="muted">Loading dimension report...</p>`}
   `;
 }
 
@@ -7284,6 +7436,8 @@ function renderBusinessReportsWorkspace() {
     body = renderOpeningYearEndPanel();
   } else if (businessReportState.tab === "fixed-assets") {
     body = renderFixedAssetsPanel();
+  } else if (businessReportState.tab === "dimensions") {
+    body = renderDimensionsPanel();
   }
 
   return `
@@ -7853,6 +8007,8 @@ const salesFormHeader = {
   reference: "",
   notes: "",
   tcs_section: "",
+  cost_centre_id: "",
+  project_id: "",
 };
 
 // TDS/TCS section masters from GET /business/tds/sections (cached per session).
@@ -8014,6 +8170,8 @@ function syncSalesFormFromDom() {
   salesFormHeader.reference = val("input[name='reference']");
   salesFormHeader.notes = val("textarea[name='notes']");
   salesFormHeader.tcs_section = val("select[name='tcs_section']");
+  salesFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
+  salesFormHeader.project_id = val("select[name='project_id']");
   invoiceFormLines = Array.from(form.querySelectorAll("[data-invoice-line]")).map((row) => ({
     id: row.getAttribute("data-invoice-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -8091,11 +8249,14 @@ function openInvoiceCreate() {
   salesFormHeader.reference = "";
   salesFormHeader.notes = "";
   salesFormHeader.tcs_section = "";
+  salesFormHeader.cost_centre_id = "";
+  salesFormHeader.project_id = "";
   // Make sure customers, accounts, and settings are available for the form.
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
   if (!lastInvoiceSettings) loadInvoiceSettings();
   if (!tdsSectionsCache) loadTdsSections().then(() => rerenderSalesIfActive());
+  if (!lastDimensions) loadDimensions().then(() => rerenderSalesIfActive());
   setBusinessSalesView("create");
 }
 
@@ -8155,6 +8316,8 @@ async function submitInvoice() {
     notes: String(salesFormHeader.notes || "").trim() || null,
     line_items: lineItems,
     tcs_section: salesFormHeader.tcs_section || null,
+    cost_centre_id: salesFormHeader.cost_centre_id || null,
+    project_id: salesFormHeader.project_id || null,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/invoices", {
     method: "POST",
@@ -8337,6 +8500,12 @@ function renderInvoiceCreateForm() {
         <label>TCS (income-tax, on sale consideration)
           <select name="tcs_section">${tdsSectionOptions("tcs", salesFormHeader.tcs_section)}</select>
         </label>
+        ${dimensionOptions("cost_centre", salesFormHeader.cost_centre_id) ? `<label>Cost centre
+          <select name="cost_centre_id">${dimensionOptions("cost_centre", salesFormHeader.cost_centre_id)}</select>
+        </label>` : ""}
+        ${dimensionOptions("project", salesFormHeader.project_id) ? `<label>Project
+          <select name="project_id">${dimensionOptions("project", salesFormHeader.project_id)}</select>
+        </label>` : ""}
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${salesFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -8624,6 +8793,8 @@ const billFormHeader = {
   place_of_supply: "",
   notes: "",
   tds_section: "",
+  cost_centre_id: "",
+  project_id: "",
 };
 
 function rerenderPurchaseIfActive() {
@@ -8667,6 +8838,8 @@ function syncBillFormFromDom() {
   billFormHeader.place_of_supply = val("input[name='place_of_supply']");
   billFormHeader.notes = val("textarea[name='notes']");
   billFormHeader.tds_section = val("select[name='tds_section']");
+  billFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
+  billFormHeader.project_id = val("select[name='project_id']");
   billFormLines = Array.from(form.querySelectorAll("[data-bill-line]")).map((row) => ({
     id: row.getAttribute("data-bill-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -8749,9 +8922,12 @@ function openBillCreate() {
   billFormHeader.place_of_supply = "";
   billFormHeader.notes = "";
   billFormHeader.tds_section = "";
+  billFormHeader.cost_centre_id = "";
+  billFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
   if (!tdsSectionsCache) loadTdsSections().then(() => rerenderPurchaseIfActive());
+  if (!lastDimensions) loadDimensions().then(() => rerenderPurchaseIfActive());
   setBusinessPurchaseView("create");
 }
 
@@ -8807,6 +8983,8 @@ async function submitBill() {
     notes: String(billFormHeader.notes || "").trim() || null,
     line_items: lineItems,
     tds_section: billFormHeader.tds_section || null,
+    cost_centre_id: billFormHeader.cost_centre_id || null,
+    project_id: billFormHeader.project_id || null,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/bills", {
     method: "POST",
@@ -8945,6 +9123,12 @@ function renderBillCreateForm() {
         <label>TDS (income-tax, on taxable value)
           <select name="tds_section">${tdsSectionOptions("tds", billFormHeader.tds_section)}</select>
         </label>
+        ${dimensionOptions("cost_centre", billFormHeader.cost_centre_id) ? `<label>Cost centre
+          <select name="cost_centre_id">${dimensionOptions("cost_centre", billFormHeader.cost_centre_id)}</select>
+        </label>` : ""}
+        ${dimensionOptions("project", billFormHeader.project_id) ? `<label>Project
+          <select name="project_id">${dimensionOptions("project", billFormHeader.project_id)}</select>
+        </label>` : ""}
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${billFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -13511,6 +13695,12 @@ dashboardPreview.addEventListener("click", (event) => {
     previewDepreciation();
   } else if (businessAction === "dep-post") {
     postDepreciationRun();
+  } else if (businessAction === "dim-create") {
+    createDimensionFromForm();
+  } else if (businessAction === "dim-deactivate") {
+    deactivateDimension(button.getAttribute("data-dimension-id") || "");
+  } else if (businessAction === "dim-report-load") {
+    loadDimensionReport();
   } else if (businessAction === "itc-preview") {
     previewItcReversalsFromInput();
   } else if (businessAction === "itc-reverse") {
