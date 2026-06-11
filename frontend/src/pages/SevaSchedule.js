@@ -60,7 +60,7 @@ function SevaSchedule() {
       'Seva Name': s.seva_name,
       'Devotee Name': s.devotee_name,
       'Mobile': s.devotee_mobile || 'N/A',
-      'Amount (â‚¹)': s.amount,
+      'Amount (₹)': s.amount,
       'Status': s.status,
       'Special Request': s.special_request || 'N/A',
     }));
@@ -162,7 +162,7 @@ function SevaSchedule() {
                     <TableCell><strong>Seva Name</strong></TableCell>
                     <TableCell><strong>Devotee Name</strong></TableCell>
                     <TableCell><strong>Mobile</strong></TableCell>
-                    <TableCell align="right"><strong>Amount (â‚¹)</strong></TableCell>
+                    <TableCell align="right"><strong>Amount (₹)</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
                     <TableCell><strong>Special Request</strong></TableCell>
                   </TableRow>

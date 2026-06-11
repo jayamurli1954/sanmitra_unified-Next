@@ -94,3 +94,80 @@ async def test_create_transaction_rolls_back_mongo_when_accounting_post_fails(mo
     assert exc_info.value.status_code == 500
     assert "Failed to post transaction to accounting" in str(exc_info.value.detail)
     assert collections["mb_transactions"].docs == []
+
+
+def _current_user():
+    return {
+        "sub": "user-1",
+        "user_id": "user-1",
+        "role": "tenant_admin",
+        "tenant_id": "tenant-1",
+        "app_key": "mitrabooks",
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_transaction_blocks_posted_compat_record(monkeypatch):
+    transactions = FakeCollection()
+    await transactions.insert_one({
+        "id": 10,
+        "tenant_id": "tenant-1",
+        "app_key": "mitrabooks",
+        "company_id": 1,
+        "status": "posted",
+        "journal_entry_id": 99,
+    })
+    monkeypatch.setattr(mitrabooks_router, "get_collection", lambda name: transactions)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await mitrabooks_router.update_transaction(
+            txn_id=10,
+            payload={"description": "edited after posting"},
+            company_id=1,
+            current_user=_current_user(),
+            x_tenant_id=None,
+            x_app_key="mitrabooks",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "description" not in transactions.docs[0]
+
+
+@pytest.mark.asyncio
+async def test_delete_invoice_blocks_posted_compat_record(monkeypatch):
+    invoices = FakeCollection()
+    await invoices.insert_one({
+        "id": 7,
+        "tenant_id": "tenant-1",
+        "app_key": "mitrabooks",
+        "company_id": 1,
+        "status": "posted",
+    })
+    monkeypatch.setattr(mitrabooks_router, "get_collection", lambda name: invoices)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await mitrabooks_router.delete_invoice(
+            invoice_id=7,
+            company_id=1,
+            current_user=_current_user(),
+            x_tenant_id=None,
+            x_app_key="mitrabooks",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert len(invoices.docs) == 1
+
+
+@pytest.mark.asyncio
+async def test_compat_invoice_posting_is_blocked_without_accounting_entry():
+    with pytest.raises(HTTPException) as exc_info:
+        await mitrabooks_router.post_invoice(
+            invoice_id=7,
+            company_id=1,
+            current_user=_current_user(),
+            x_tenant_id=None,
+            x_app_key="mitrabooks",
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "does not create accounting entries" in exc_info.value.detail

@@ -48,6 +48,23 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _is_financially_posted(doc: dict[str, Any] | None) -> bool:
+    if not doc:
+        return False
+    status = str(doc.get("status") or "").strip().lower()
+    return status in {"posted", "reversed"} or bool(doc.get("journal_entry_id"))
+
+
+def _ensure_compat_record_mutable(doc: dict[str, Any] | None, *, label: str) -> None:
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"{label} not found")
+    if _is_financially_posted(doc):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Posted {label.lower()} records are immutable in compatibility routes; use reversal or canonical business APIs.",
+        )
+
+
 def _as_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -417,20 +434,30 @@ async def update_invoice(invoice_id: int, payload: dict[str, Any], company_id: i
     patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
     patch["updated_at"] = _now_iso()
     col = get_collection("mb_invoices")
-    await col.update_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id}, {"$set": patch})
-    return await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id}
+    existing = await col.find_one(filters)
+    _ensure_compat_record_mutable(existing, label="Invoice")
+    await col.update_one(filters, {"$set": patch})
+    return await col.find_one(filters)
 
 
 @router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
-    await get_collection("mb_invoices").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id}
+    col = get_collection("mb_invoices")
+    existing = await col.find_one(filters)
+    _ensure_compat_record_mutable(existing, label="Invoice")
+    await col.delete_one(filters)
     return {"status": "deleted", "id": invoice_id}
 
 
 @router.post("/invoices/{invoice_id}/post")
 async def post_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
-    return await update_invoice(invoice_id, {"status": "posted"}, company_id, current_user, x_tenant_id, x_app_key)
+    raise HTTPException(
+        status_code=422,
+        detail="Compatibility invoice posting does not create accounting entries; use /api/v1/business/invoices.",
+    )
 
 
 @router.post("/invoices/{invoice_id}/cancel")
@@ -787,14 +814,21 @@ async def update_transaction(txn_id: int, payload: dict[str, Any], company_id: i
     patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
     patch["updated_at"] = _now_iso()
     col = get_collection("mb_transactions")
-    await col.update_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}, {"$set": patch})
-    return _json_safe(await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}))
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}
+    existing = await col.find_one(filters)
+    _ensure_compat_record_mutable(existing, label="Transaction")
+    await col.update_one(filters, {"$set": patch})
+    return _json_safe(await col.find_one(filters))
 
 
 @router.delete("/transactions/{txn_id}")
 async def delete_transaction(txn_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
-    await get_collection("mb_transactions").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id})
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}
+    col = get_collection("mb_transactions")
+    existing = await col.find_one(filters)
+    _ensure_compat_record_mutable(existing, label="Transaction")
+    await col.delete_one(filters)
     return {"status": "deleted", "id": txn_id}
 
 
@@ -852,7 +886,7 @@ async def post_transaction(
     )
 
     try:
-        await post_journal_entry(
+        journal_entry, _created = await post_journal_entry(
             session=session,
             app_key=app_key,
             tenant_id=tenant_id,
@@ -866,8 +900,19 @@ async def post_transaction(
             detail=f"Failed to post transaction to accounting: {str(exc)}"
         ) from exc
 
-    # Update transaction status to "posted"
-    return await update_transaction(txn_id, {"status": "posted"}, company_id, current_user, x_tenant_id, x_app_key)
+    update_fields = {"status": "posted", "updated_at": _now_iso()}
+    if journal_entry is not None:
+        update_fields["journal_entry_id"] = int(journal_entry.id)
+    await get_collection("mb_transactions").update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id},
+        {"$set": update_fields},
+    )
+    return _json_safe(await get_collection("mb_transactions").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "id": txn_id,
+    }))
 
 
 @router.post("/transactions/{txn_id}/cancel")
@@ -882,6 +927,20 @@ async def cancel_transaction(
 ):
     payload = payload or {}
     cancel_reason = reason or payload.get("cancellation_reason") or payload.get("reason") or ""
+    tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
+    existing = await get_collection("mb_transactions").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "company_id": company_id,
+        "id": txn_id,
+    })
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Transaction {txn_id} not found")
+    if _is_financially_posted(existing):
+        raise HTTPException(
+            status_code=409,
+            detail="Posted transactions cannot be cancelled in place; use the reverse endpoint.",
+        )
     return await update_transaction(
         txn_id,
         {"status": "cancelled", "cancellation_reason": cancel_reason},

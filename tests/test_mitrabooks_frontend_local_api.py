@@ -24,7 +24,7 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     assert "app.js?v=mitrabooks-erp-v28" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v12'" in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v13'" in worker_source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -83,7 +83,7 @@ def test_business_party_payload_matches_backend_schema() -> None:
     update_block = app_source[create_end:update_end]
 
     assert "party_name: data.name" in create_block
-    assert "opening_balance: String(Number(data.opening_balance) || 0)" in create_block
+    assert "opening_balance: String(Number(data.opening_balance) || 0)" not in create_block
     assert "opening_balance_paise" not in create_block
     assert "party_name: data.name" in update_block
     assert "opening_balance_paise" not in update_block

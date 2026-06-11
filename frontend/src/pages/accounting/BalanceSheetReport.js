@@ -34,12 +34,12 @@ const BalanceSheetReport = ({ token }) => {
                         {group.accounts && group.accounts.map((acc, i) => (
                             <TableRow key={i}>
                                 <TableCell sx={{ borderBottom: 'none' }}>{acc.account_name}</TableCell>
-                                <TableCell align="right" sx={{ borderBottom: 'none' }}>â‚¹{acc.current_year.toFixed(2)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none' }}>₹{acc.current_year.toFixed(2)}</TableCell>
                             </TableRow>
                         ))}
                         <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                             <TableCell><strong>{group.group_name} Total</strong></TableCell>
-                            <TableCell align="right"><strong>â‚¹{group.group_total.toFixed(2)}</strong></TableCell>
+                            <TableCell align="right"><strong>₹{group.group_total.toFixed(2)}</strong></TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>
@@ -76,7 +76,7 @@ const BalanceSheetReport = ({ token }) => {
                 <Box>
                     <Alert severity={report.is_balanced ? "success" : "error"} sx={{ mb: 2 }}>
                         Balance Sheet as of {new Date(report.as_of_date).toLocaleDateString()}
-                        {!report.is_balanced && ` - WARNING: Not Balanced! Difference: â‚¹${report.difference.toFixed(2)}`}
+                        {!report.is_balanced && ` - WARNING: Not Balanced! Difference: ₹${report.difference.toFixed(2)}`}
                     </Alert>
 
                     <Grid container spacing={4}>
@@ -95,7 +95,7 @@ const BalanceSheetReport = ({ token }) => {
                                                 <TableBody>
                                                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                                                         <TableCell><strong>Corpus Fund Total</strong></TableCell>
-                                                        <TableCell align="right"><strong>â‚¹{(report.corpus_fund || 0).toFixed(2)}</strong></TableCell>
+                                                        <TableCell align="right"><strong>₹{(report.corpus_fund || 0).toFixed(2)}</strong></TableCell>
                                                     </TableRow>
                                                 </TableBody>
                                             </Table>
@@ -108,7 +108,7 @@ const BalanceSheetReport = ({ token }) => {
 
                                 <Box sx={{ mt: 'auto', bgcolor: '#FF9933', color: 'white', p: 1.5, display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="h6"><strong>Total</strong></Typography>
-                                    <Typography variant="h6"><strong>â‚¹{(report.total_liabilities_and_funds || 0).toFixed(2)}</strong></Typography>
+                                    <Typography variant="h6"><strong>₹{(report.total_liabilities_and_funds || 0).toFixed(2)}</strong></Typography>
                                 </Box>
                             </Paper>
                         </Grid>
@@ -127,7 +127,7 @@ const BalanceSheetReport = ({ token }) => {
 
                                 <Box sx={{ mt: 'auto', bgcolor: '#FF9933', color: 'white', p: 1.5, display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="h6"><strong>Total</strong></Typography>
-                                    <Typography variant="h6"><strong>â‚¹{(report.total_assets || 0).toFixed(2)}</strong></Typography>
+                                    <Typography variant="h6"><strong>₹{(report.total_assets || 0).toFixed(2)}</strong></Typography>
                                 </Box>
                             </Paper>
                         </Grid>

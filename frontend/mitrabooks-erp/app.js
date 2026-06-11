@@ -4337,7 +4337,7 @@ function renderBusinessPartiesTable(rows) {
             <th>Name</th>
             <th>Type</th>
             <th>GSTIN</th>
-            <th>Opening Balance</th>
+            <th>Balance Source</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -4346,7 +4346,7 @@ function renderBusinessPartiesTable(rows) {
           ${rows.slice(0, 20).map((row) => {
             const isInactive = row.is_inactive || row.status === "inactive";
             const partyName = row.party_name || row.name || "Unnamed";
-            const openingBalance = Number(row.opening_balance ?? (row.opening_balance_paise ? row.opening_balance_paise / 100 : 0)) || 0;
+            const balanceSource = row.balance_source === "ledger_reports" ? "Ledger reports" : "Profile";
             return `
               <tr>
                 <td>
@@ -4355,7 +4355,7 @@ function renderBusinessPartiesTable(rows) {
                 </td>
                 <td><span class="type-chip">${escapeHtml(row.party_type || row.type || "unknown")}</span></td>
                 <td>${escapeHtml(row.gstin || "-")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(openingBalance))}</td>
+                <td><span class="row-subtext">${escapeHtml(balanceSource)}</span></td>
                 <td><span class="pill ${isInactive ? "warn" : "ok"}">${isInactive ? "Inactive" : "Active"}</span></td>
                 <td>
                   <div class="action-row">
@@ -4371,7 +4371,6 @@ function renderBusinessPartiesTable(rows) {
                       data-party-city="${escapeHtml(row.city || "")}"
                       data-party-state="${escapeHtml(row.state || "")}"
                       data-party-pincode="${escapeHtml(row.pincode || "")}"
-                      data-party-opening-balance="${escapeHtml(openingBalance)}"
                     >Edit</button>
                     ${!isInactive ? `
                       <button
@@ -4795,7 +4794,6 @@ async function createBusinessParty(data) {
     city: data.city?.trim() || null,
     state: data.state?.trim() || null,
     pincode: data.pincode?.trim() || null,
-    opening_balance: String(Number(data.opening_balance) || 0),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/parties", {
@@ -4943,7 +4941,6 @@ function openBusinessEditPartyDialog(button) {
   const partyCity = button.getAttribute("data-party-city") || "";
   const partyState = button.getAttribute("data-party-state") || "";
   const partyPincode = button.getAttribute("data-party-pincode") || "";
-  const openingBalance = button.getAttribute("data-party-opening-balance") || "0";
 
   document.getElementById("business-party-edit-id").value = partyId;
   const editTypeSelect = document.getElementById("business-party-edit-type");
@@ -4955,7 +4952,6 @@ function openBusinessEditPartyDialog(button) {
   document.getElementById("business-party-edit-city").value = partyCity;
   document.getElementById("business-party-edit-state").value = partyState;
   document.getElementById("business-party-edit-pincode").value = partyPincode;
-  document.getElementById("business-party-edit-opening-balance").value = openingBalance;
   document.getElementById("business-party-edit-label").textContent = `Editing ${partyName}`;
 
   dialog?.showModal();
@@ -14187,14 +14183,12 @@ if (businessPartyCreateForm) {
     const city = document.getElementById("business-party-city")?.value || "";
     const state = document.getElementById("business-party-state")?.value || "";
     const pincode = document.getElementById("business-party-pincode")?.value || "";
-    const opening_balance = document.getElementById("business-party-opening-balance")?.value || "0";
-
     if (!name.trim()) {
       setLoginStatus("warn", "Party name required", "Enter a name for the party.");
       return;
     }
 
-    createBusinessParty({ name, party_type, gstin, pan, city, state, pincode, opening_balance });
+    createBusinessParty({ name, party_type, gstin, pan, city, state, pincode });
   });
 }
 
@@ -14209,14 +14203,12 @@ if (businessPartyEditForm) {
     const city = document.getElementById("business-party-edit-city")?.value || "";
     const state = document.getElementById("business-party-edit-state")?.value || "";
     const pincode = document.getElementById("business-party-edit-pincode")?.value || "";
-    const opening_balance = document.getElementById("business-party-edit-opening-balance")?.value || "0";
-
     if (!name.trim()) {
       setLoginStatus("warn", "Party name required", "Enter a name for the party.");
       return;
     }
 
-    updateBusinessParty(partyId, { name, party_type, gstin, pan, city, state, pincode, opening_balance });
+    updateBusinessParty(partyId, { name, party_type, gstin, pan, city, state, pincode });
   });
 }
 

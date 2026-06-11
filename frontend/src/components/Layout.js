@@ -556,7 +556,7 @@ function Layout({ children }) {
           MandirMitra v1.2.0
         </Typography>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ textAlign: 'center', fontSize: '0.7rem' }}>
-          Stable Release Â· April 2026
+          Stable Release - April 2026
         </Typography>
       </Box>
     </Box>
@@ -693,7 +693,7 @@ function Layout({ children }) {
         {/* Footer */}
         <Box sx={{ mt: 4, pt: 2, borderTop: '1px solid #ddd', textAlign: 'center' }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-            Powered by Sanmitra Tech Â· {' '}
+            Powered by Sanmitra Tech - {' '}
             <Button
               size="small"
               onClick={() => navigate('/settings/release-notes')}

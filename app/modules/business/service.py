@@ -123,6 +123,19 @@ def _voucher_response_doc(doc: dict, *, created: bool = False) -> dict:
     return result
 
 
+def _party_response_doc(doc: dict | None) -> dict | None:
+    if doc is None:
+        return None
+    result = _json_safe_doc(doc)
+    # Party master data is not the accounting source of truth. Real receivable
+    # and payable balances come from posted journal lines via party-ledger and
+    # outstanding endpoints.
+    result["opening_balance"] = "0.00"
+    result["current_balance"] = "0.00"
+    result["balance_source"] = "ledger_reports"
+    return result
+
+
 def _voucher_prefix(voucher_type: str) -> str:
     return {
         "payment": "PV",
@@ -434,8 +447,8 @@ async def create_party(
         "city": payload.city,
         "state": payload.state,
         "pincode": payload.pincode,
-        "opening_balance": opening_balance,
-        "current_balance": opening_balance,
+        "legacy_opening_balance_input": opening_balance,
+        "balance_source": "ledger_reports",
         "is_active": True,
         "created_by": created_by,
         "created_at": now,
@@ -449,9 +462,9 @@ async def create_party(
         action="business_party_created",
         entity_type="business_party",
         entity_id=party_id,
-        new_value=_json_safe_doc(doc),
+        new_value=_party_response_doc(doc),
     )
-    return _json_safe_doc(doc)
+    return _party_response_doc(doc)
 
 
 async def list_parties(
@@ -479,7 +492,7 @@ async def list_parties(
         .limit(safe_limit)
         .to_list(length=safe_limit)
     )
-    return {"items": [_json_safe_doc(row) for row in rows], "total": len(rows)}
+    return {"items": [_party_response_doc(row) for row in rows], "total": len(rows)}
 
 
 async def get_party(
@@ -497,7 +510,7 @@ async def get_party(
             "party_id": party_id,
         }
     )
-    return _json_safe_doc(row) if row else None
+    return _party_response_doc(row) if row else None
 
 
 async def update_party(

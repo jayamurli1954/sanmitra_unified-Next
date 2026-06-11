@@ -28,7 +28,10 @@ class PartyCreateRequest(BaseModel):
     city: str | None = Field(default=None, max_length=80)
     state: str | None = Field(default=None, max_length=80)
     pincode: str | None = Field(default=None, max_length=12)
-    opening_balance: Decimal = Decimal("0")
+    opening_balance: Decimal = Field(
+        default=Decimal("0"),
+        description="Legacy profile input only. Live opening balances must be posted through the opening-balance journal flow.",
+    )
 
 
 class PartyUpdateRequest(BaseModel):
@@ -60,8 +63,9 @@ class PartyResponse(BaseModel):
     city: str | None = None
     state: str | None = None
     pincode: str | None = None
-    opening_balance: Decimal
-    current_balance: Decimal
+    opening_balance: Decimal = Decimal("0")
+    current_balance: Decimal = Decimal("0")
+    balance_source: str = "ledger_reports"
     is_active: bool
     created_by: str
     updated_by: str | None = None

@@ -136,7 +136,7 @@ function Assets() {
                             </Avatar>
                             <Box>
                                 <Typography color="textSecondary" variant="caption">Net Asset Value</Typography>
-                                <Typography variant="h5" fontWeight="bold">ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹{summary?.net_asset_value?.toLocaleString('en-IN')}</Typography>
+                                <Typography variant="h5" fontWeight="bold">₹{summary?.net_asset_value?.toLocaleString('en-IN')}</Typography>
                             </Box>
                         </Stack>
                     </CardContent>
@@ -181,7 +181,7 @@ function Assets() {
                             </Avatar>
                             <Box>
                                 <Typography color="textSecondary" variant="caption">Total Investment</Typography>
-                                <Typography variant="h5" fontWeight="bold">ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹{summary?.total_cost?.toLocaleString('en-IN')}</Typography>
+                                <Typography variant="h5" fontWeight="bold">₹{summary?.total_cost?.toLocaleString('en-IN')}</Typography>
                             </Box>
                         </Stack>
                     </CardContent>
@@ -211,7 +211,7 @@ function Assets() {
                             <TableCell sx={{ fontWeight: 'bold' }}>Asset Details</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Classification</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Physical Specs</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Market Value (ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹)</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Market Value (₹)</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                         </TableRow>
@@ -323,8 +323,8 @@ function Assets() {
                             <TableCell sx={{ fontWeight: 'bold' }}>Project #</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Project Name</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Start Date</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Budget (ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Expenditure (ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹)</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Budget (₹)</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Expenditure (₹)</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                         </TableRow>
@@ -389,7 +389,7 @@ function Assets() {
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4}>
                     <Box>
                         <Typography variant="h4" fontWeight="bold" sx={{ color: '#FF9933', mb: 1 }}>
-                            ÃƒÂ°Ã…Â¸Ã‚ÂÃ¢â‚¬ÂºÃƒÂ¯Ã‚Â¸Ã‚Â Asset Management
+                            Asset Management
                         </Typography>
                         <Typography variant="body1" color="textSecondary">
                             Track, value, and manage temple properties, ornaments, and idols.
@@ -445,14 +445,14 @@ function Assets() {
                             Asset: <strong>{selectedAsset?.name}</strong> ({selectedAsset?.asset_number})
                         </Typography>
                         <Typography variant="body2" color="textSecondary" mb={3}>
-                            Current Book Value: ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹{selectedAsset?.current_book_value?.toLocaleString('en-IN')}
+                            Current Book Value: ₹{selectedAsset?.current_book_value?.toLocaleString('en-IN')}
                         </Typography>
 
                         <Grid container spacing={2}>
                             <Grid item xs={12}>
                                 <TextField
                                     fullWidth
-                                    label="New Revalued Amount (ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¹)"
+                                    label="New Revalued Amount (₹)"
                                     type="number"
                                     value={revalData.revalued_amount}
                                     onChange={(e) => setRevalData({ ...revalData, revalued_amount: e.target.value })}

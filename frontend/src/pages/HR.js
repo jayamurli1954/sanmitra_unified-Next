@@ -191,7 +191,7 @@ function HR() {
         <Layout>
             <Box sx={{ p: 3 }}>
                 <Typography variant="h4" gutterBottom fontWeight="bold" sx={{ color: '#FF9933' }}>
-                    ÃƒÂ°Ã…Â¸Ã¢â‚¬ËœÃ‚Â¥ HR & Salary Management
+                    HR & Salary Management
                 </Typography>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

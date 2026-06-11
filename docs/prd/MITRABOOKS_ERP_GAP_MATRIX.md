@@ -42,8 +42,8 @@ The current workspace already has foundation pieces for the unified platform:
 
 Current gap:
 
-- MitraBooks business workflows are not yet detailed enough for implementation.
-- GST, inventory, sales, purchases, receivables, payables, MIS, data health, and export scope are named but not fully broken into buildable phases.
+- MitraBooks business workflows now have implemented backend slices for parties, typed vouchers, sales invoices, purchase bills, credit/debit notes, GST preparation reports, TDS/TCS, payment allocation, statements, bank reconciliation, fixed assets, dimensions, inventory, opening balances, and year-end close.
+- Remaining gaps are production-hardening, browser E2E coverage, compliance review, role/approval depth, advanced inventory, data health, MIS, export portability, CA/bookkeeper practice modeling, and AI/document workflows.
 - The legacy desktop plan contains useful product ideas but incompatible architecture assumptions.
 
 ## Progress Log
@@ -111,12 +111,7 @@ Allowed before MandirMitra/GruhaMitra live:
 
 Deferred before MandirMitra/GruhaMitra live:
 
-- Business party master UI and deep workflow expansion.
-- Sales/purchase invoice implementation.
-- GST return preparation.
-- Inventory and stock valuation.
-- AR/AP ageing.
-- MIS, data health score, exports, CA/bookkeeper practice model, document inbox, and AI bookkeeping.
+- CA/bookkeeper multi-client practice model, client upload inbox, AI bookkeeping, data health score, advanced MIS, advanced inventory, Tally XML export, bank API sync, and production filing integrations.
 
 ## Envisaged Operating Models
 
@@ -165,20 +160,23 @@ Key modeling rule:
 | Chart of Accounts | Default accounts and source account mapping exist | Business-type COA templates for retail, trading, services, professional, temple, housing | Add template selection and migration-safe onboarding | Phase 1 |
 | MandirMitra onboarding | Module-wise temple first-login onboarding exists | Temple/trust onboarding remains module-wise, requires explicit `X-App-Key`, and creates a `TEMPLE` tenant with `temple`, `accounting`, and `audit` modules | Keep central onboarding as legacy/admin support, not the primary MandirMitra path | Phase 1 |
 | Platform owner dashboard | Backend contract exists at `GET /api/v1/platform-owner/dashboard`; UI preview can call existing super-admin approve/reject onboarding endpoints; approval derives tenant org/modules/app keys from onboarding `app_key`; tenant entitlement endpoint and structured UI action can update subscription plan and enabled modules | Cross-module owner dashboard for MandirMitra, GruhaMitra, and MitraBooks onboarding status, approvals, subscriptions, module enablement, and KPIs | Add full browser E2E after a super-admin login path is available in the current environment | Phase 1 |
-| Voucher entry | Generic journal posting exists; initial `/api/v1/business/vouchers` facade posts payment, receipt, contra, and journal vouchers through the accounting service with generated voucher numbers, idempotency-key reuse, listing, detail lookup, accounting-backed reversal, backend route-contract coverage, lifecycle audit events, and tenant/app-scoped audit event query support | Tally-familiar payment, receipt, contra, journal, sales, purchase voucher flows | Add frontend integration, cancel/update policy, reversal UX, frontend manifest coverage, audit UI expansion, and browser E2E | Phase 2 |
-| Parties | Initial target API slice exists under `/api/v1/business/parties` for tenant/app-key scoped party creation, listing, lookup, profile update, soft deactivation, backend route-contract coverage, lifecycle audit events, and tenant/app-scoped audit event query support; profile updates do not mutate balances | Unified party/customer/vendor/client master with GSTIN, payment terms, opening balance | Add frontend integration, frontend manifest coverage, audit UI expansion, and professional/client labels | Phase 2 |
-| Sales invoices | Planned only | Draft, post, cancel, receipt-linked sales invoice with GST calculation | Implement invoice domain record plus GL posting rules | Phase 3 |
-| Purchase invoices | Planned only | Draft, post, cancel, payment-linked purchase invoice with GST/ITC fields | Implement purchase workflow and payable posting | Phase 3 |
-| Credit/debit notes | Legacy planned | Adjustment documents linked to invoices and GL reversals/adjustments | Add after invoice posting is stable | Phase 4 |
-| GST setup | Registry has `gst`; docs mention readiness | Tenant GST profile, state/place-of-supply logic, GSTIN validation, HSN/SAC basics | Define compliance boundaries and validation rules | Phase 3 |
-| GST reports | Planned | GSTR-1 and GSTR-3B preparation reports, export readiness | Build report layer after invoice data is reliable | Phase 4 |
-| E-invoice/e-way bill | Legacy planned | Optional integration-ready design | Defer until GST reports and compliance review pass | Deferred |
-| Inventory | Registry has `inventory`; no detailed workflow | Item/service master, units, HSN/SAC, FIFO stock movement, stock valuation | Build after invoices and posting rules are stable | Phase 4 |
+| Voucher entry | `/api/v1/business/vouchers` posts payment, receipt, contra, and journal vouchers through the accounting service with generated numbers, idempotency, listing, detail lookup, accounting-backed reversal, frontend integration, audit events, and route-contract coverage | Tally-familiar voucher speed with approval/cancel policy depth | Add browser E2E, keyboard-first entry polish, and richer audit UI | Phase 2 |
+| Parties | `/api/v1/business/parties` supports tenant/app-key scoped party creation, listing, lookup, profile update, soft deactivation, frontend integration, audit events, and route-contract coverage; live balances are derived from party-ledger/outstanding reports, not Mongo party fields | Unified party/customer/vendor/client master with payment terms and ledger-derived balances | Add payment terms, credit limits, professional/client labels, and browser E2E | Phase 2 |
+| Sales invoices | Implemented under `/api/v1/business/invoices`; posts immutable GL entries with GST/TCS handling, settings-driven numbering/fields, cancellation reversal, e-invoice readiness view, and frontend forms | Production-ready sales lifecycle with approval, receipts allocation, compliance review, and print/export polish | Add browser E2E, compliance signoff, approval workflow, and richer invoice templates | Phase 3 |
+| Purchase invoices | Implemented under `/api/v1/business/bills`; posts payable/expense/ITC/RCM/TDS entries, payment marking, ITC reversal/reclaim, cancellation reversal, and frontend forms | Production-ready purchase lifecycle with approvals, vendor payment planning, and compliance review | Add browser E2E, approval workflow, attachment/document support, and compliance signoff | Phase 3 |
+| Credit/debit notes | Implemented under `/api/v1/business/credit-notes` and `/api/v1/business/debit-notes` with GL posting and cancellation reversal | Adjustment documents linked tightly to source invoices/bills and return workflows | Add source-document enforcement, browser E2E, and print/export polish | Phase 4 |
+| GST setup | Invoice settings and GST/TDS modules support GSTIN/place-of-supply/HSN/SAC basics, GST period locks, RCM, composition, settlement, and e-invoice readiness | Tenant GST profile with reviewed jurisdiction/effective-date rules and production filing boundaries | Add compliance review, effective-date tax configuration, and stronger tenant GST profile UX | Phase 3 |
+| GST reports | Implemented GSTR-1, GSTR-3B, GSTR-2B reconciliation, CMP-08, GSTR-4, GST settlement, and export/report UI slices | Production-ready preparation reports that reconcile to posted invoices and ledger with reviewed filing semantics | Add browser E2E, compliance signoff, and filing/export format hardening | Phase 4 |
+| E-invoice/e-way bill | E-invoice readiness, INV-01 payload, and manual IRN recording are implemented; live IRP/e-way bill API integration is not enabled | Optional integration-ready design with tenant policy, credentials, and provider failure handling | Defer live IRP/e-way bill API integration until GST compliance review passes | Deferred |
+| Inventory | Implemented opt-in inventory accounting, item master, stock register, item tags on document lines, and closing-stock journal posting with weighted-average valuation | Inventory module with configurable valuation, stock movement audit, multi-location, and advanced item controls | Add browser E2E, valuation policy settings, stock issue/adjustment workflows, and multi-location later | Phase 4 |
 | Batch/serial/multi-location inventory | Legacy planned | Advanced inventory for larger businesses | Defer until basic inventory has passing E2E | Deferred |
-| Receivables | GL reports exist | Customer outstanding, ageing buckets, collection status | Needs invoice/payment linkage | Phase 3 |
-| Payables | GL reports exist | Vendor outstanding, ageing buckets, payment planning | Needs purchase/payment linkage | Phase 3 |
-| Banking and reconciliation | Basic cash/bank report support exists | Bank book, cash book, manual reconciliation, import-ready statement matching | Start manual; defer API bank sync | Phase 4 |
-| MIS | GL reports exist | KPI summary, monthly sales/purchase trend, top customers/vendors, working capital, overdue dashboards | Build deterministic report services first | Phase 5 |
+| Receivables | Party sub-ledger, customer statements, dunning, open-item allocation, FIFO suggestions, reconciliation, and ageing are implemented | Collection workflows with approvals, reminders, and dispute tracking | Add browser E2E, communication workflow depth, and collection status UX | Phase 3 |
+| Payables | Vendor statements, open-item allocation, payable ageing, bill payment marking, TDS, and payment planning primitives are implemented | Vendor payment operations with approvals, payment batches, and due-date planning | Add browser E2E, approval workflow, and payout/export depth | Phase 3 |
+| Banking and reconciliation | Manual bank statement CSV import, matching, reversal, and reconciliation summary are implemented against posted ledger lines | Bank book, cash book, manual reconciliation, and import-ready statement matching | Add browser E2E, bank book/cash book polish, and defer API bank sync | Phase 4 |
+| Fixed assets | Fixed-asset register, SLM/WDV depreciation preview, and depreciation journal posting are implemented | Asset lifecycle with acquisition/disposal, depreciation, and audit reporting | Add disposal workflow, browser E2E, and compliance review | Phase 4 |
+| Dimensions | Cost-centre and project masters, document tags, and income/expense/net dimension reports are implemented | Reporting dimensions across vouchers, invoices, bills, notes, and exports | Expand tagging coverage where missing and add browser E2E | Phase 4 |
+| Opening and year-end close | CSV opening-balance preview/posting and year-end close preview/posting are implemented through controlled journals | Migration-safe opening balances and auditable financial-year close | Add browser E2E, maker-checker workflow, and rollback/reversal runbook examples | Phase 3 |
+| MIS | Ledger-backed dashboard and financial-health summary exist | KPI summary, monthly sales/purchase trend, top customers/vendors, working capital, overdue dashboards | Expand deterministic MIS contracts before AI summaries | Phase 5 |
 | AI MIS | Legacy planned | Source-backed AI summaries over deterministic reports | Defer until MIS data contracts are stable | Deferred |
 | Data Health Score | Legacy planned only | Data quality dashboard for missing GSTIN, unposted drafts, stale reconciliation, duplicate invoices, overdue exposure | Define scoring rules and issue list | Phase 5 |
 | Data portability | Legacy emphasized exports | Tenant-safe Excel/PDF/JSON exports and planned Tally XML export | Define export permissions, audit, and scope | Phase 5 |

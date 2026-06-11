@@ -135,8 +135,11 @@ async def test_business_party_is_tenant_and_app_scoped(monkeypatch):
     assert result["app_key"] == "mitrabooks"
     assert result["accounting_entity_id"] == "primary"
     assert result["party_code"] == "CUST-001"
-    assert result["opening_balance"] == "125.50"
-    assert parties.docs[0]["current_balance"] == "125.50"
+    assert result["opening_balance"] == "0.00"
+    assert result["current_balance"] == "0.00"
+    assert result["balance_source"] == "ledger_reports"
+    assert parties.docs[0]["legacy_opening_balance_input"] == "125.50"
+    assert "current_balance" not in parties.docs[0]
     assert audit_events[0]["tenant_id"] == "business-tenant"
     assert audit_events[0]["product"] == "mitrabooks"
     assert audit_events[0]["action"] == "business_party_created"
@@ -156,8 +159,7 @@ async def test_update_business_party_does_not_mutate_balances(monkeypatch):
             "party_name": "Old Name",
             "party_type": "customer",
             "party_code": "CUST-001",
-            "opening_balance": "125.50",
-            "current_balance": "125.50",
+            "legacy_opening_balance_input": "125.50",
             "is_active": True,
             "created_by": "owner-1",
             "created_at": business_service._now(),
@@ -187,8 +189,9 @@ async def test_update_business_party_does_not_mutate_balances(monkeypatch):
     assert result["party_name"] == "New Name"
     assert result["party_type"] == "both"
     assert result["phone"] == "9999999999"
-    assert result["opening_balance"] == "125.50"
-    assert result["current_balance"] == "125.50"
+    assert result["opening_balance"] == "0.00"
+    assert result["current_balance"] == "0.00"
+    assert result["balance_source"] == "ledger_reports"
     assert result["updated_by"] == "owner-2"
     assert audit_events[0]["action"] == "business_party_updated"
     assert audit_events[0]["old_value"]["party_name"] == "Old Name"
