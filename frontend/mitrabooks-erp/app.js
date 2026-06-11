@@ -5427,10 +5427,14 @@ function renderGstr3bPanel() {
   const itcRows = heads.map(([label, key]) => `
     <tr>
       <td>${label}</td>
+      <td class="amount">${num(itc.available_rcm?.[key])}</td>
       <td class="amount">${num(itc.available_all_other?.[key])}</td>
       <td class="amount">${num(itc.reversed_others?.[key])}</td>
       <td class="amount"><strong>${num(itc.net_available?.[key])}</strong></td>
     </tr>`).join("");
+  const rcm = r.outward_supplies?.inward_reverse_charge || {};
+  const hasRcm = Number(rcm.taxable_value || 0) > 0
+    || ["igst", "cgst", "sgst"].some((k) => Number(rcm[k] || 0) > 0);
   const payRows = heads.map(([label, key]) => `
     <tr>
       <td>${label}</td>
@@ -5459,10 +5463,25 @@ function renderGstr3bPanel() {
       </table>
     </div>
 
+    ${hasRcm ? `
+    <div class="table-preview compact-table">
+      <h4>3.1(d) Inward supplies liable to reverse charge</h4>
+      <table>
+        <thead><tr><th>Taxable value</th><th class="amount">IGST</th><th class="amount">CGST</th><th class="amount">SGST</th></tr></thead>
+        <tbody><tr>
+          <td class="amount">${num(rcm.taxable_value)}</td>
+          <td class="amount">${num(rcm.igst)}</td>
+          <td class="amount">${num(rcm.cgst)}</td>
+          <td class="amount">${num(rcm.sgst)}</td>
+        </tr></tbody>
+      </table>
+      <p class="muted">RCM liability of ${num(r.rcm_cash_payable)} must be paid in cash (account 22005) — it cannot be set off against ITC.</p>
+    </div>` : ""}
+
     <div class="table-preview compact-table">
       <h4>4. Eligible ITC</h4>
       <table>
-        <thead><tr><th>Head</th><th class="amount">Available (4A)</th><th class="amount">Reversed (4B)</th><th class="amount">Net (4C)</th></tr></thead>
+        <thead><tr><th>Head</th><th class="amount">RCM (4A3)</th><th class="amount">All other (4A5)</th><th class="amount">Reversed (4B)</th><th class="amount">Net (4C)</th></tr></thead>
         <tbody>${itcRows}</tbody>
       </table>
     </div>
@@ -8566,6 +8585,7 @@ const billFormHeader = {
   bill_date: todayIsoDate(),
   due_date: "",
   is_inter_state: false,
+  is_reverse_charge: false,
   expense_account_code: "51001",
   place_of_supply: "",
   notes: "",
@@ -8608,6 +8628,7 @@ function syncBillFormFromDom() {
   billFormHeader.bill_date = val("input[name='bill_date']") || todayIsoDate();
   billFormHeader.due_date = val("input[name='due_date']");
   billFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
+  billFormHeader.is_reverse_charge = !!form.querySelector("input[name='is_reverse_charge']")?.checked;
   billFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
   billFormHeader.place_of_supply = val("input[name='place_of_supply']");
   billFormHeader.notes = val("textarea[name='notes']");
@@ -8644,18 +8665,25 @@ function updateBillTotalsDisplay() {
   // TDS is deducted on the GST-exclusive taxable value (Circular 23/2017).
   const tdsSection = form.querySelector("select[name='tds_section']")?.value || "";
   const tdsAmount = tdsSection ? round2(taxableTotal * tdsSectionRate("tds", tdsSection) / 100) : 0;
+  // Under RCM the vendor is owed the taxable value only; the GST is our own
+  // (cash-only) liability shown on its own row.
+  const isRcm = !!form.querySelector("input[name='is_reverse_charge']")?.checked;
+  const vendorOwed = isRcm ? taxableTotal : billTotal;
   const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
   set("[data-total-taxable]", taxableTotal);
   set("[data-total-cgst]", cgstTotal);
   set("[data-total-sgst]", sgstTotal);
   set("[data-total-igst]", igstTotal);
   set("[data-total-bill]", billTotal);
+  set("[data-total-rcm]", gstTotal);
   set("[data-total-tds]", tdsAmount);
-  set("[data-total-net-payable]", round2(billTotal - tdsAmount));
+  set("[data-total-net-payable]", round2(vendorOwed - tdsAmount));
+  const rcmRow = form.querySelector("[data-row-rcm]");
   const tdsRow = form.querySelector("[data-row-tds]");
   const netRow = form.querySelector("[data-row-net-payable]");
+  if (rcmRow) rcmRow.hidden = !isRcm;
   if (tdsRow) tdsRow.hidden = !tdsSection;
-  if (netRow) netRow.hidden = !tdsSection;
+  if (netRow) netRow.hidden = !(tdsSection || isRcm);
   const cgstRow = form.querySelector("[data-row-cgst]");
   const sgstRow = form.querySelector("[data-row-sgst]");
   const igstRow = form.querySelector("[data-row-igst]");
@@ -8682,6 +8710,7 @@ function openBillCreate() {
   billFormHeader.bill_date = todayIsoDate();
   billFormHeader.due_date = "";
   billFormHeader.is_inter_state = false;
+  billFormHeader.is_reverse_charge = false;
   billFormHeader.expense_account_code = "51001";
   billFormHeader.place_of_supply = "";
   billFormHeader.notes = "";
@@ -8738,6 +8767,7 @@ async function submitBill() {
     bill_date: billFormHeader.bill_date || todayIsoDate(),
     due_date: billFormHeader.due_date || null,
     is_inter_state: !!billFormHeader.is_inter_state,
+    is_reverse_charge: !!billFormHeader.is_reverse_charge,
     expense_account_code: billFormHeader.expense_account_code || "51001",
     place_of_supply: String(billFormHeader.place_of_supply || "").trim() || null,
     notes: String(billFormHeader.notes || "").trim() || null,
@@ -8885,6 +8915,10 @@ function renderBillCreateForm() {
           <input type="checkbox" name="is_inter_state" ${billFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
         </label>
+        <label class="invoice-inter-toggle">
+          <input type="checkbox" name="is_reverse_charge" ${billFormHeader.is_reverse_charge ? "checked" : ""}>
+          Reverse charge (RCM) — you pay the GST, not the vendor
+        </label>
       </div>
 
       <div class="table-preview compact-table invoice-lines">
@@ -8913,8 +8947,9 @@ function renderBillCreateForm() {
         <div data-row-sgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
         <div data-row-igst ${billFormHeader.is_inter_state ? "" : "hidden"}><span>Input IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
         <div class="invoice-grand"><span>Bill total</span><strong data-total-bill>${formatCurrency(0)}</strong></div>
+        <div data-row-rcm ${billFormHeader.is_reverse_charge ? "" : "hidden"}><span>GST payable under RCM (cash)</span><strong data-total-rcm>${formatCurrency(0)}</strong></div>
         <div data-row-tds ${billFormHeader.tds_section ? "" : "hidden"}><span>TDS deducted</span><strong data-total-tds>${formatCurrency(0)}</strong></div>
-        <div class="invoice-grand" data-row-net-payable ${billFormHeader.tds_section ? "" : "hidden"}><span>Net payable to vendor</span><strong data-total-net-payable>${formatCurrency(0)}</strong></div>
+        <div class="invoice-grand" data-row-net-payable ${(billFormHeader.tds_section || billFormHeader.is_reverse_charge) ? "" : "hidden"}><span>Net payable to vendor</span><strong data-total-net-payable>${formatCurrency(0)}</strong></div>
       </div>
 
       <label class="invoice-notes">Notes
@@ -8951,7 +8986,7 @@ function renderBillDetail() {
         </div>
       </div>
       ${String(b.status).toLowerCase() === "posted" && billReverseOpen ? reversalPanel("bill", b.bill_id, b.bill_date) : ""}
-      <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}</p>
+      <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}${b.is_reverse_charge ? ` · <strong>Reverse charge</strong> — GST self-assessed, payable in cash` : ""}</p>
       <div class="table-preview compact-table">
         <table>
           <thead>
@@ -8984,8 +9019,11 @@ function renderBillDetail() {
         <div><span>Taxable</span><strong>${formatCurrency(b.taxable_total || 0)}</strong></div>
         ${taxRow}
         <div class="invoice-grand"><span>Bill total</span><strong>${formatCurrency(b.bill_total || 0)}</strong></div>
+        ${b.is_reverse_charge ? `
+        <div><span>GST payable under RCM (cash)</span><strong>${formatCurrency(b.rcm_payable || 0)}</strong></div>` : ""}
         ${Number(b.tds_amount || 0) > 0 ? `
-        <div><span>TDS ${escapeHtml(b.tds_section || "")} @ ${escapeHtml(String(b.tds_rate || 0))}%</span><strong>${formatCurrency(b.tds_amount || 0)}</strong></div>
+        <div><span>TDS ${escapeHtml(b.tds_section || "")} @ ${escapeHtml(String(b.tds_rate || 0))}%</span><strong>${formatCurrency(b.tds_amount || 0)}</strong></div>` : ""}
+        ${(b.is_reverse_charge || Number(b.tds_amount || 0) > 0) ? `
         <div class="invoice-grand"><span>Net payable to vendor</span><strong>${formatCurrency(b.net_payable || b.bill_total || 0)}</strong></div>` : ""}
       </div>
       ${b.deductee_pan_missing ? `<p class="muted">⚠ Vendor PAN missing — section 206AA prescribes deduction at 20%. Capture the PAN on the party record.</p>` : ""}
@@ -13500,7 +13538,7 @@ dashboardPreview.addEventListener("input", (event) => {
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
-  if (!["is_inter_state", "tds_section", "tcs_section"].includes(event.target.name)) {
+  if (!["is_inter_state", "is_reverse_charge", "tds_section", "tcs_section"].includes(event.target.name)) {
     return;
   }
   if (event.target.closest("[data-invoice-form]")) {
