@@ -18,6 +18,7 @@ from app.accounting.service import (
 )
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
+from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.tds import compute_tcs, compute_tds
 from app.modules.business.schemas import (
     BillPaymentUpdateRequest,
@@ -276,6 +277,9 @@ async def ensure_business_indexes() -> None:
     depreciation_runs = get_collection("business_depreciation_runs")
     await depreciation_runs.create_index([("tenant_id", 1), ("app_key", 1), ("run_id", 1)], unique=True)
     await depreciation_runs.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("financial_year", 1), ("status", 1)])
+    dimensions_col = get_collection("business_dimensions")
+    await dimensions_col.create_index([("tenant_id", 1), ("app_key", 1), ("dimension_id", 1)], unique=True)
+    await dimensions_col.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("dimension_type", 1), ("code", 1)], unique=True)
 
 
 def _ca_document_response_doc(doc: dict) -> dict:
@@ -1223,6 +1227,11 @@ async def create_sales_invoice(
     )
     _validate_required_invoice_fields(payload, settings)
 
+    await validate_dimension_refs(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
+    )
+
     profile = await get_gst_profile(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
     )
@@ -1346,6 +1355,8 @@ async def create_sales_invoice(
         "grand_total": str(grand_total),
         "collectee_pan": customer.get("pan"),
         "collectee_pan_missing": bool(payload.tcs_section) and not customer.get("pan"),
+        "cost_centre_id": payload.cost_centre_id,
+        "project_id": payload.project_id,
         "status": "posting",
         "created_by": created_by,
         "created_at": now,
@@ -1572,6 +1583,11 @@ async def create_purchase_bill(
     if vendor is None:
         raise AccountingValidationError("Vendor party not found for this tenant")
 
+    await validate_dimension_refs(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+        cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
+    )
+
     # GST line computation is identical to sales (reads line_items + is_inter_state).
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, bill_total = _compute_invoice_lines(payload)
     if bill_total <= Decimal("0"):
@@ -1710,6 +1726,8 @@ async def create_purchase_bill(
         "net_payable": str(net_payable),
         "deductee_pan": vendor.get("pan"),
         "deductee_pan_missing": bool(payload.tds_section) and not vendor.get("pan"),
+        "cost_centre_id": payload.cost_centre_id,
+        "project_id": payload.project_id,
         # Composition dealers capitalise input GST into cost (no ITC claimed).
         "itc_claimed": not is_composition,
         "status": "posting",

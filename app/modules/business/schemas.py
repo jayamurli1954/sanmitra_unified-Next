@@ -210,6 +210,9 @@ class SalesInvoiceCreateRequest(BaseModel):
     # TCS (Income-tax 206C): section key from TCS_SECTIONS; rate overridable.
     tcs_section: str | None = Field(default=None, max_length=20)
     tcs_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))
+    # Accounting dimensions (tags for reporting; no ledger impact).
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -252,6 +255,8 @@ class SalesInvoiceResponse(BaseModel):
     grand_total: Decimal | None = None
     collectee_pan: str | None = None
     collectee_pan_missing: bool = False
+    cost_centre_id: str | None = None
+    project_id: str | None = None
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
@@ -375,6 +380,9 @@ class PurchaseBillCreateRequest(BaseModel):
     # section master, overridable (rates change by Finance Act / 206AA no-PAN 20%).
     tds_section: str | None = Field(default=None, max_length=20)
     tds_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("100"))
+    # Accounting dimensions (tags for reporting; no ledger impact).
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -416,6 +424,8 @@ class PurchaseBillResponse(BaseModel):
     net_payable: Decimal | None = None
     deductee_pan: str | None = None
     deductee_pan_missing: bool = False
+    cost_centre_id: str | None = None
+    project_id: str | None = None
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
