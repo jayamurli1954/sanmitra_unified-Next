@@ -62,7 +62,7 @@ def test_legalmitra_pricing_catalog_is_available_for_shared_billing() -> None:
     assert pricing["app_key"] == "legalmitra"
     assert pricing["product_name"] == "LegalMitra"
     assert pricing["payment_provider"] == "razorpay"
-    assert pricing["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert pricing["merchant_account"] == "Sanmita Tech Solutions"
     assert pricing["merchant_scope"] == "sanmitra_platform"
 
     plans = {plan["key"]: plan for plan in pricing["plans"]}
@@ -109,7 +109,7 @@ def test_razorpay_config_endpoint_uses_one_sanmitra_account_for_all_products() -
         payload = response.json()
         assert payload["app_key"] == app_key
         assert payload["provider"] == "razorpay"
-        assert payload["merchant_account"] == "SanMitra Technologies Private Limited"
+        assert payload["merchant_account"] == "Sanmita Tech Solutions"
         assert payload["merchant_scope"] == "sanmitra_platform"
         assert payload["shared_platform_account"] is True
         assert set(payload["supported_app_keys"]) >= {"legalmitra", "mandirmitra", "gruhamitra", "mitrabooks"}

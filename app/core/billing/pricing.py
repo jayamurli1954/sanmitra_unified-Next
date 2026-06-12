@@ -31,7 +31,7 @@ class ProductPricing:
     one_time_fee_label: str
     plans: tuple[ProductPlan, ...]
     payment_provider: str = "razorpay"
-    merchant_account: str = "SanMitra Technologies Private Limited"
+    merchant_account: str = "Sanmita Tech Solutions"
     merchant_scope: str = "sanmitra_platform"
 
 

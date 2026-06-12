@@ -33,7 +33,7 @@ Runtime configuration must come from environment variables:
 RAZORPAY_KEY_ID
 RAZORPAY_KEY_SECRET
 RAZORPAY_WEBHOOK_SECRET
-RAZORPAY_ACCOUNT_OWNER=SanMitra Technologies Private Limited
+RAZORPAY_ACCOUNT_OWNER=Sanmita Tech Solutions
 RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 ```
 

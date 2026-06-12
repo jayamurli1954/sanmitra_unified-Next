@@ -81,7 +81,7 @@ class BillingService:
         return {
             "app_key": normalized_app_key,
             "provider": "razorpay",
-            "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "SanMitra Technologies Private Limited"),
+            "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "Sanmita Tech Solutions"),
             "merchant_scope": getattr(settings, "RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform"),
             "shared_platform_account": True,
             "supported_app_keys": sorted(PRODUCT_PRICING.keys()),
@@ -133,7 +133,7 @@ class BillingService:
                 "app_key": app_key,
                 "plan": plan,
                 "tenant_id": str(notes.get("tenant_id") or "").strip() or None,
-                "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "SanMitra Technologies Private Limited"),
+                "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "Sanmita Tech Solutions"),
                 "merchant_scope": getattr(settings, "RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform"),
                 "shared_platform_account": True,
                 "razorpay_payment_id": payment_entity.get("id"),

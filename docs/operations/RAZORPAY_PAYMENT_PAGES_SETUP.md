@@ -84,7 +84,7 @@ Set these backend environment variables in the deployment provider, never in com
 RAZORPAY_KEY_ID=<public key id>
 RAZORPAY_KEY_SECRET=<secret key>
 RAZORPAY_WEBHOOK_SECRET=<dashboard webhook secret>
-RAZORPAY_ACCOUNT_OWNER=SanMitra Technologies Private Limited
+RAZORPAY_ACCOUNT_OWNER=Sanmita Tech Solutions
 RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 ```
 

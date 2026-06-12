@@ -72,7 +72,7 @@ def test_billing_public_config_uses_shared_sanmitra_razorpay_account(monkeypatch
     class _Settings:
         RAZORPAY_KEY_ID = "rzp_test_public"
         RAZORPAY_WEBHOOK_SECRET = "webhook-secret"
-        RAZORPAY_ACCOUNT_OWNER = "SanMitra Technologies Private Limited"
+        RAZORPAY_ACCOUNT_OWNER = "Sanmita Tech Solutions"
         RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
 
     monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
@@ -80,7 +80,7 @@ def test_billing_public_config_uses_shared_sanmitra_razorpay_account(monkeypatch
     config = BillingService.razorpay_public_config("mitrabooks")
 
     assert config["provider"] == "razorpay"
-    assert config["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert config["merchant_account"] == "Sanmita Tech Solutions"
     assert config["merchant_scope"] == "sanmitra_platform"
     assert config["shared_platform_account"] is True
     assert config["key_id"] == "rzp_test_public"
@@ -98,7 +98,7 @@ async def test_billing_records_product_metadata_for_shared_razorpay_account(monk
         return billing if name == "core_billing_transactions" else users
 
     class _Settings:
-        RAZORPAY_ACCOUNT_OWNER = "SanMitra Technologies Private Limited"
+        RAZORPAY_ACCOUNT_OWNER = "Sanmita Tech Solutions"
         RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
 
     monkeypatch.setattr("app.core.billing.service.get_collection", fake_get_collection)
@@ -134,7 +134,7 @@ async def test_billing_records_product_metadata_for_shared_razorpay_account(monk
     assert billing.inserted["app_key"] == "mitrabooks"
     assert billing.inserted["plan"] == "growth"
     assert billing.inserted["tenant_id"] == "tenant-1"
-    assert billing.inserted["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert billing.inserted["merchant_account"] == "Sanmita Tech Solutions"
     assert billing.inserted["shared_platform_account"] is True
 
 
