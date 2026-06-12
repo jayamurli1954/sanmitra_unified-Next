@@ -2,7 +2,7 @@
 
 ## Current State
 
-SanMitra uses one shared Razorpay merchant account for LegalMitra, MandirMitra, GruhaMitra, and MitraBooks. The backend already exposes shared Razorpay metadata through `/api/v1/payments/razorpay/config/{app_key}` and records payment webhook metadata such as `app_key`, `plan`, `tenant_id`, merchant account, and merchant scope.
+SanMitra uses one shared live Razorpay merchant account for LegalMitra, MandirMitra, GruhaMitra, and MitraBooks. The backend already exposes shared Razorpay metadata through `/api/v1/payments/razorpay/config/{app_key}` and records payment webhook metadata such as `app_key`, `plan`, `tenant_id`, merchant account, and merchant scope.
 
 No Razorpay secrets, webhook secrets, live page links, payment data, or customer payment details should be committed to the repository.
 
@@ -23,8 +23,8 @@ One-time implementation, migration, and training fee remains quote-based where a
 Use the official Razorpay Payment Pages flow: <https://razorpay.com/docs/payments/payment-pages/create/>.
 
 1. Sign in to the Razorpay Dashboard using the SanMitra Technologies account.
-2. Start in Test Mode.
-3. Open Payment Pages and choose Create Payment Page.
+2. Stay in Live Mode if the dashboard/account no longer exposes a separate Test Mode.
+3. Open Payment Pages and choose Create Payment Page, but do not share the page publicly yet.
 4. Create separate Payment Pages for clean reconciliation:
    - LegalMitra Subscriptions
    - MandirMitra Subscriptions
@@ -48,9 +48,10 @@ Use the official Razorpay Payment Pages flow: <https://razorpay.com/docs/payment
    - Tenant ID or onboarding reference, if already created
 8. Add custom terms text that payment activates subscription access only after successful payment verification.
 9. Set the successful-payment action to redirect back to the relevant SanMitra product page.
-10. Save and publish the Test Mode page.
-11. Run a test payment and keep the Razorpay page ID and payment ID for backend verification.
-12. Repeat the same setup in Live Mode only after Test Mode webhook verification passes.
+10. Save the live page and keep the link private until verification is complete.
+11. Run one controlled low-value live payment from a SanMitra-owned payment method and keep the Razorpay page ID, payment ID, amount, email, and selected plan for backend verification.
+12. Refund or internally account for the verification payment according to the Razorpay settlement/refund workflow.
+13. Publish the page link only after webhook verification, subscription update, and billing transaction recording are confirmed.
 
 ## Recommended Page Metadata
 
@@ -64,7 +65,7 @@ Razorpay Payment Pages are configured in the dashboard. If the page supports pas
 | `tenant_id` | Tenant ID from onboarding | If available |
 | `onboarding_reference` | SanMitra onboarding request ID | If tenant is not yet created |
 
-After the first test payment, inspect the Razorpay webhook payload. If Payment Page custom fields do not arrive under `payment.entity.notes`, add a backend mapping table from Razorpay page ID or selected price field to `app_key`, `plan`, and `billing_cycle`.
+After the first controlled live payment, inspect the Razorpay webhook payload. If Payment Page custom fields do not arrive under `payment.entity.notes`, add a backend mapping table from Razorpay page ID or selected price field to `app_key`, `plan`, and `billing_cycle` before publishing the link broadly.
 
 ## Webhook Setup
 
@@ -96,11 +97,12 @@ RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 2. Open `/api/v1/payments/pricing/legalmitra` and confirm Growth and Professional have rupee amounts.
 3. Open `/api/v1/payments/pricing/mandirmitra` and confirm there is no Free plan.
 4. Open `/api/v1/payments/pricing/gruhamitra` and confirm there is no Free plan.
-5. Make one Test Mode payment from a Payment Page.
+5. Make one controlled low-value live payment from a private Payment Page link.
 6. Confirm Razorpay sends the webhook and the backend accepts the signature.
 7. Confirm `core_billing_transactions` records `email`, `amount_paise`, `app_key`, `plan`, `merchant_account`, and Razorpay payment ID.
 8. Confirm the user subscription is upgraded only after a successful verified webhook.
-9. Repeat the same payment path in Live Mode with a small controlled transaction before publishing public payment links.
+9. Refund or internally account for the controlled live payment.
+10. Publish public payment links only after the controlled live payment path passes.
 
 ## Deferred Scope
 
