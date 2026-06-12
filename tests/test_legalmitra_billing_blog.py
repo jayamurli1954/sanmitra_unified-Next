@@ -152,7 +152,24 @@ async def test_billing_records_product_metadata_for_shared_razorpay_account(monk
 
 
 @pytest.mark.asyncio
-async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("page_id", "amount_paise", "plan", "billing_cycle", "subscription_days", "expected_tier"),
+    [
+        ("pl_T0f5if7cZZxXYf", 39900, "growth", "monthly", 30, "growth"),
+        ("pl_T0IIA3gIcKWr9y", 399900, "growth", "yearly", 365, "growth"),
+        ("pl_T0mNwxh7rvpXf9", 89900, "professional", "monthly", 30, "pro"),
+        ("pl_T0mPFYkQ3JVNkG", 899900, "professional", "yearly", 365, "pro"),
+    ],
+)
+async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+    page_id: str,
+    amount_paise: int,
+    plan: str,
+    billing_cycle: str,
+    subscription_days: int,
+    expected_tier: str,
+) -> None:
     users = _FakeUsersCollection({"email": "jayanthimr56@gmail.com"})
     billing = _FakeBillingCollection()
 
@@ -177,10 +194,10 @@ async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(monkeypatch
                         "id": "pay_T0gOCO2xZ5EYcl",
                         "order_id": "order_T0fzIAn3HMw8MD",
                         "email": "JAYANTHIMR56@GMAIL.COM",
-                        "amount": 39900,
+                        "amount": amount_paise,
                         "currency": "INR",
                         "created_at": created_at,
-                        "payment_page_id": "pl_T0f5if7cZZxXYf",
+                        "payment_page_id": page_id,
                         "notes": {},
                     }
                 }
@@ -189,22 +206,23 @@ async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(monkeypatch
     )
 
     expected_start = datetime.fromtimestamp(created_at, tz=timezone.utc)
-    expected_expiry = expected_start + timedelta(days=30)
+    expected_expiry = expected_start + timedelta(days=subscription_days)
     assert result["status"] == "success"
     assert result["app_key"] == "legalmitra"
-    assert result["plan"] == "growth"
-    assert result["billing_cycle"] == "monthly"
-    assert result["tier"] == "growth"
+    assert result["plan"] == plan
+    assert result["billing_cycle"] == billing_cycle
+    assert result["tier"] == expected_tier
     assert result["subscription_expires_at"] == expected_expiry.isoformat()
     assert users.update_filter == {"email": "jayanthimr56@gmail.com"}
     assert users.update_query["$set"]["billing_app_key"] == "legalmitra"
-    assert users.update_query["$set"]["billing_plan"] == "growth"
-    assert users.update_query["$set"]["billing_cycle"] == "monthly"
+    assert users.update_query["$set"]["billing_plan"] == plan
+    assert users.update_query["$set"]["billing_cycle"] == billing_cycle
+    assert users.update_query["$set"]["subscription_tier"] == expected_tier
     assert users.update_query["$set"]["subscription_started_at"] == expected_start
     assert users.update_query["$set"]["subscription_expires_at"] == expected_expiry
-    assert users.update_query["$set"]["razorpay_payment_page_id"] == "pl_T0f5if7cZZxXYf"
-    assert billing.inserted["razorpay_payment_page_id"] == "pl_T0f5if7cZZxXYf"
-    assert billing.inserted["billing_cycle"] == "monthly"
+    assert users.update_query["$set"]["razorpay_payment_page_id"] == page_id
+    assert billing.inserted["razorpay_payment_page_id"] == page_id
+    assert billing.inserted["billing_cycle"] == billing_cycle
     assert billing.inserted["subscription_expires_at"] == expected_expiry
 
 

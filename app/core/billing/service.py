@@ -18,6 +18,27 @@ DEFAULT_PAYMENT_PAGE_MAP = {
         "amount_paise": 39900,
         "subscription_days": 30,
     },
+    "pl_T0IIA3gIcKWr9y": {
+        "app_key": "legalmitra",
+        "plan": "growth",
+        "billing_cycle": "yearly",
+        "amount_paise": 399900,
+        "subscription_days": 365,
+    },
+    "pl_T0mNwxh7rvpXf9": {
+        "app_key": "legalmitra",
+        "plan": "professional",
+        "billing_cycle": "monthly",
+        "amount_paise": 89900,
+        "subscription_days": 30,
+    },
+    "pl_T0mPFYkQ3JVNkG": {
+        "app_key": "legalmitra",
+        "plan": "professional",
+        "billing_cycle": "yearly",
+        "amount_paise": 899900,
+        "subscription_days": 365,
+    },
 }
 PLAN_TO_LEGACY_USER_TIER = {
     "free": "free",

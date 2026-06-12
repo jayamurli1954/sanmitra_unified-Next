@@ -66,11 +66,14 @@ Because each subscription amount has its own Payment Page, keep a private page-I
 
 Current live page mapping:
 
-| Razorpay Page ID | Product | Plan | Billing cycle | Amount paise | Subscription days |
-| --- | --- | --- | --- | --- | --- |
-| `pl_T0f5if7cZZxXYf` | LegalMitra | Growth | Monthly | `39900` | `30` |
+| Razorpay Page ID | Payment URL | Product | Plan | Billing cycle | Amount paise | Subscription days |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pl_T0f5if7cZZxXYf` | `https://rzp.io/rzp/d3cGen18` | LegalMitra | Growth | Monthly | `39900` | `30` |
+| `pl_T0IIA3gIcKWr9y` | `https://rzp.io/rzp/GL2uoA7` | LegalMitra | Growth | Yearly | `399900` | `365` |
+| `pl_T0mNwxh7rvpXf9` | `https://rzp.io/rzp/ffmtLtfK` | LegalMitra | Professional | Monthly | `89900` | `30` |
+| `pl_T0mPFYkQ3JVNkG` | `https://rzp.io/rzp/br2LmKM` | LegalMitra | Professional | Yearly | `899900` | `365` |
 
-The backend contains this current LegalMitra Growth Monthly mapping as a default. Add future page IDs through the deployment environment variable below, using the same structure:
+The backend contains these four current LegalMitra mappings as defaults. Add future product/page IDs through the deployment environment variable below, using the same structure:
 
 ```json
 {
