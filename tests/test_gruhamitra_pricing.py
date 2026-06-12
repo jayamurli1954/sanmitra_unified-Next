@@ -10,6 +10,11 @@ from app.core.billing.pricing import (
 from app.main import app
 
 
+def _monthly_price_configured(plan: dict) -> bool:
+    monthly_cycle = plan["cycles"][0]
+    return bool(monthly_cycle.get("price_paise") or monthly_cycle.get("price_per_flat_paise"))
+
+
 def test_gruhamitra_pricing_catalog_matches_approved_tiers() -> None:
     pricing = get_product_pricing("gruhamitra")
 
@@ -20,6 +25,7 @@ def test_gruhamitra_pricing_catalog_matches_approved_tiers() -> None:
 
     plans = {plan["key"]: plan for plan in pricing["plans"]}
     assert tuple(plans) == GRUHAMITRA_PLAN_KEYS
+    assert "free" not in plans
 
     assert plans["starter"]["min_flats"] == 25
     assert plans["starter"]["max_flats"] == 50
@@ -61,9 +67,26 @@ def test_legalmitra_pricing_catalog_is_available_for_shared_billing() -> None:
 
     plans = {plan["key"]: plan for plan in pricing["plans"]}
     assert tuple(plans) == LEGALMITRA_PLAN_KEYS
+    assert plans["starter"]["cycles"][0]["price_paise"] == 0
+    assert plans["growth"]["cycles"][0]["display_price"] == "Rs. 399"
+    assert plans["growth"]["cycles"][0]["price_paise"] == 39900
+    assert plans["growth"]["cycles"][1]["price_paise"] == 399900
+    assert plans["professional"]["cycles"][0]["display_price"] == "Rs. 899"
+    assert plans["professional"]["cycles"][0]["price_paise"] == 89900
+    assert plans["professional"]["cycles"][1]["price_paise"] == 899900
     assert plans["starter"]["fair_use"]["daily_research_queries"] == 5
     assert plans["growth"]["fair_use"]["daily_research_queries"] == 50
     assert plans["professional"]["fair_use"]["monthly_templates"] == 200
+
+
+def test_mandirmitra_and_gruhamitra_do_not_expose_free_plan() -> None:
+    for product_key in ("mandirmitra", "gruhamitra"):
+        pricing = get_product_pricing(product_key)
+        plans = {plan["key"]: plan for plan in pricing["plans"]}
+
+        assert "free" not in plans
+        assert set(plans) == {"starter", "growth", "professional"}
+        assert all(_monthly_price_configured(plan) for plan in plans.values())
 
 
 def test_legalmitra_pricing_endpoint_is_public_and_product_scoped() -> None:

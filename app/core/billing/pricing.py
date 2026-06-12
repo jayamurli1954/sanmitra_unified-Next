@@ -46,14 +46,14 @@ LEGALMITRA_PRICING = ProductPricing(
     product_name="LegalMitra",
     currency="INR",
     one_time_fee_paise=0,
-    one_time_fee_label="Payment gateway enablement may be phased; plan pricing is configured commercially",
+    one_time_fee_label="No one-time setup fee for self-service LegalMitra plans",
     plans=(
         ProductPlan(
             key="starter",
             name="Starter",
             cycles=(
-                BillingCyclePrice(cycle="monthly", display_price="Launch access / quote", price_paise=None),
-                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+                BillingCyclePrice(cycle="monthly", display_price="Free", price_paise=0),
+                BillingCyclePrice(cycle="yearly", display_price="Free", price_paise=0),
             ),
             fair_use={
                 "daily_research_queries": 5,
@@ -71,8 +71,8 @@ LEGALMITRA_PRICING = ProductPricing(
             key="growth",
             name="Growth",
             cycles=(
-                BillingCyclePrice(cycle="monthly", display_price="Quote", price_paise=None),
-                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 399", price_paise=39900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 3,999", price_paise=399900),
             ),
             fair_use={
                 "daily_research_queries": 50,
@@ -90,8 +90,8 @@ LEGALMITRA_PRICING = ProductPricing(
             key="professional",
             name="Professional",
             cycles=(
-                BillingCyclePrice(cycle="monthly", display_price="Quote", price_paise=None),
-                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 899", price_paise=89900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 8,999", price_paise=899900),
             ),
             fair_use={
                 "daily_research_queries": 0,
