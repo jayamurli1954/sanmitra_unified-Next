@@ -31,6 +31,18 @@ Use it for:
 
 Do not edit `D:\sanmitra-backend` unless the user explicitly asks.
 
+### Legacy Product Repositories
+
+The old standalone product repositories are no longer active deployment sources for normal SanMitra work:
+
+- `jayamurli1954/LegalMitra`
+- `jayamurli1954/GruhaMitra`
+- `jayamurli1954/MandirMitra`
+- `jayamurli1954/MitraBooks`
+- `jayamurli1954/InvestMitra`
+
+Do not clone, edit, commit, push, or deploy from these legacy repositories unless the user explicitly asks for that repository by name and confirms it is intentional. All current product work for GruhaMitra, LegalMitra, MandirMitra, MitraBooks, and InvestMitra belongs in `D:\sanmitra_unified-Next` and the GitHub repository `jayamurli1954/sanmitra_unified-Next`.
+
 ### C Drive Restriction
 
 Do not use `C:\` for project source, generated project files, copied backend code, or persistent project artifacts. Temporary tool/runtime internals may exist there, but SanMitra project work belongs in `D:\sanmitra_unified-Next`.
