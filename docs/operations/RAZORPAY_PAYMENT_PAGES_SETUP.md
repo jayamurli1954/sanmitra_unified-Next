@@ -25,33 +25,30 @@ Use the official Razorpay Payment Pages flow: <https://razorpay.com/docs/payment
 1. Sign in to the Razorpay Dashboard using the SanMitra Technologies account.
 2. Stay in Live Mode if the dashboard/account no longer exposes a separate Test Mode.
 3. Open Payment Pages and choose Create Payment Page, but do not share the page publicly yet.
-4. Create separate Payment Pages for clean reconciliation:
-   - LegalMitra Subscriptions
-   - MandirMitra Subscriptions
-   - GruhaMitra Subscriptions
-   - MitraBooks Business Subscriptions
-   - MitraBooks CA Practice Subscriptions
-5. Keep currency as INR.
-6. Add plan price fields:
-   - LegalMitra Growth monthly: Rs. 399
-   - LegalMitra Growth yearly: Rs. 3,999
-   - LegalMitra Professional monthly: Rs. 899
-   - LegalMitra Professional yearly: Rs. 8,999
-   - Do not add a payment field for LegalMitra Starter because it is free signup, not a payment transaction.
-7. Add required customer fields:
+4. Create one Payment Page for each subscription amount. Do not club multiple plans or billing cycles into one Razorpay page because the live dropdown/price-field behavior can confuse customers and reconciliation.
+5. For LegalMitra, create these four live pages:
+   - LegalMitra Growth Monthly - Rs. 399
+   - LegalMitra Growth Yearly - Rs. 3,999
+   - LegalMitra Professional Monthly - Rs. 899
+   - LegalMitra Professional Yearly - Rs. 8,999
+6. Apply the same one-page-per-amount rule for MandirMitra, GruhaMitra, MitraBooks Business, and MitraBooks CA Practice.
+7. Keep currency as INR.
+8. Add exactly one fixed amount field on each page:
+   - The page title, amount label, and amount must match the selected plan.
+   - Quantity should be disabled or fixed to 1 where Razorpay allows it.
+   - Customer-entered amount should not be enabled for subscriptions.
+   - LegalMitra Starter should not get a payment page because it is free signup, not a payment transaction.
+9. Add required customer fields:
    - Customer name
    - Email
    - Phone
-   - Product
-   - Plan
-   - Billing cycle
    - Tenant ID or onboarding reference, if already created
-8. Add custom terms text that payment activates subscription access only after successful payment verification.
-9. Set the successful-payment action to redirect back to the relevant SanMitra product page.
-10. Save the live page and keep the link private until verification is complete.
-11. Run one controlled low-value live payment from a SanMitra-owned payment method and keep the Razorpay page ID, payment ID, amount, email, and selected plan for backend verification.
-12. Refund or internally account for the verification payment according to the Razorpay settlement/refund workflow.
-13. Publish the page link only after webhook verification, subscription update, and billing transaction recording are confirmed.
+10. Add custom terms text that payment activates subscription access only after successful payment verification.
+11. Set the successful-payment action to redirect back to the relevant SanMitra product page.
+12. Save the live page and keep the link private until verification is complete.
+13. Run one controlled low-value live payment from a SanMitra-owned payment method and keep the Razorpay page ID, payment ID, amount, email, and selected plan for backend verification.
+14. Refund or internally account for the verification payment according to the Razorpay settlement/refund workflow.
+15. Publish the page link only after webhook verification, subscription update, and billing transaction recording are confirmed.
 
 ## Recommended Page Metadata
 
@@ -65,7 +62,7 @@ Razorpay Payment Pages are configured in the dashboard. If the page supports pas
 | `tenant_id` | Tenant ID from onboarding | If available |
 | `onboarding_reference` | SanMitra onboarding request ID | If tenant is not yet created |
 
-After the first controlled live payment, inspect the Razorpay webhook payload. If Payment Page custom fields do not arrive under `payment.entity.notes`, add a backend mapping table from Razorpay page ID or selected price field to `app_key`, `plan`, and `billing_cycle` before publishing the link broadly.
+Because each subscription amount has its own Payment Page, keep a private page-ID mapping sheet after creation. After the first controlled live payment, inspect the Razorpay webhook payload. If Payment Page custom fields do not arrive under `payment.entity.notes`, add a backend mapping table from Razorpay page ID to `app_key`, `plan`, `billing_cycle`, and expected amount before publishing the link broadly.
 
 ## Webhook Setup
 
@@ -97,7 +94,7 @@ RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 2. Open `/api/v1/payments/pricing/legalmitra` and confirm Growth and Professional have rupee amounts.
 3. Open `/api/v1/payments/pricing/mandirmitra` and confirm there is no Free plan.
 4. Open `/api/v1/payments/pricing/gruhamitra` and confirm there is no Free plan.
-5. Make one controlled low-value live payment from a private Payment Page link.
+5. Make one controlled low-value live payment from one private Payment Page link.
 6. Confirm Razorpay sends the webhook and the backend accepts the signature.
 7. Confirm `core_billing_transactions` records `email`, `amount_paise`, `app_key`, `plan`, `merchant_account`, and Razorpay payment ID.
 8. Confirm the user subscription is upgraded only after a successful verified webhook.
@@ -107,5 +104,5 @@ RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 ## Deferred Scope
 
 - Storing Razorpay Payment Page IDs in code is deferred until dashboard pages are created and test payloads are inspected.
-- Automatic reconciliation from Payment Page custom fields is deferred if Razorpay does not send those fields in `payment.entity.notes`.
+- Automatic reconciliation from Razorpay page ID is deferred until the live Payment Page IDs are created and shared internally.
 - Direct frontend checkout integration is deferred; Payment Pages are the current operational path.
