@@ -62,6 +62,7 @@ async function run() {
 
   copyStaticDir('assets');
   copyStaticDir('shared');
+  copyStaticDir('legalmitra');
   copyStaticDir('mitrabooks-erp');
   copyStaticFile('service-worker.js');
   copyStaticFile('sw-register.js');

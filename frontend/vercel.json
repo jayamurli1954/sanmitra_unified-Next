@@ -16,6 +16,27 @@
       "permanent": false
     },
     {
+      "source": "/legalmitra",
+      "destination": "/legalmitra/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "www.legalmitra.sanmitratech.in" }
+      ],
+      "destination": "/legalmitra/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "legalmitra.sanmitratech.in" }
+      ],
+      "destination": "/legalmitra/",
+      "permanent": false
+    },
+    {
       "source": "/",
       "has": [
         { "type": "host", "value": "www.mitrabooks.sanmitratech.in" }
@@ -85,6 +106,10 @@
       "destination": "/gruhamitra/index.html"
     },
     {
+      "source": "/legalmitra/:path((?!.*\\.).*)",
+      "destination": "/legalmitra/index.html"
+    },
+    {
       "source": "/mitrabooks-erp/:path((?!.*\\.).*)",
       "destination": "/mitrabooks-erp/index.html"
     },
@@ -102,6 +127,18 @@
     },
     {
       "source": "/mitrabooks-erp/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/legalmitra/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/legalmitra/app.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
