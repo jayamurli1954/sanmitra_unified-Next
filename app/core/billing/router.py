@@ -16,6 +16,14 @@ async def product_pricing(app_key: str):
         raise HTTPException(status_code=404, detail="Pricing product not found")
 
 
+@router.get("/razorpay/config/{app_key}")
+async def razorpay_public_config(app_key: str):
+    try:
+        return billing_service.razorpay_public_config(app_key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Pricing product not found")
+
+
 @router.post("/webhook")
 async def razorpay_webhook(request: Request, x_razorpay_signature: str = Header(None)):
     """

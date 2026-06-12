@@ -4361,6 +4361,14 @@ const MITRABOOKS_SETTINGS_GROUPS = [
   },
 ];
 
+const MITRABOOKS_COMPLETION_PHASES = [
+  ["Phase 2A", "Jun 12-14", "Landing pricing, shared SanMitra Razorpay configuration, billing metadata"],
+  ["Phase 2B", "Jun 15-21", "Core settings backend contracts and tenant-scoped saves"],
+  ["Phase 2C", "Jun 22-30", "CA practice client onboarding, multi-company access, and work queues"],
+  ["Phase 2D", "Jul 1-12", "Integrations, document storage, OCR, AI settings, and provider controls"],
+  ["Phase 2E", "Jul 13-19", "Browser E2E, tenant isolation, accounting guardrails, and staging validation"],
+];
+
 const businessListState = {
   parties: {
     offset: 0,
@@ -4571,6 +4579,15 @@ function renderMitraBooksSettingsWorkspace() {
           <p>Business-only settings for accounting, compliance, controls, CA practice management, billing, integrations, and AI readiness.</p>
         </div>
         <span class="pill ok">Business suite</span>
+      </div>
+      <div class="settings-roadmap-strip" aria-label="MitraBooks completion roadmap">
+        ${MITRABOOKS_COMPLETION_PHASES.map(([phase, date, scope]) => `
+          <article>
+            <strong>${escapeHtml(phase)}</strong>
+            <span>${escapeHtml(date)}</span>
+            <small>${escapeHtml(scope)}</small>
+          </article>
+        `).join("")}
       </div>
       <div class="settings-visibility-strip">
         <span><strong>Core</strong> everyone sees</span>

@@ -204,6 +204,8 @@ class Settings:
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
+    RAZORPAY_ACCOUNT_OWNER = os.getenv("RAZORPAY_ACCOUNT_OWNER", "SanMitra Technologies Private Limited").strip()
+    RAZORPAY_MERCHANT_SCOPE = os.getenv("RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform").strip()
 
     _IS_PRODUCTION = ENVIRONMENT in {"production", "prod"}
 

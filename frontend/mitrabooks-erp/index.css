@@ -4349,6 +4349,37 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   gap: 10px;
 }
 
+.settings-roadmap-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.settings-roadmap-strip article {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-roadmap-strip strong {
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+}
+
+.settings-roadmap-strip span {
+  color: var(--accent, #60a5fa);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-roadmap-strip small {
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.4;
+}
+
 .settings-visibility-strip span,
 .settings-boundary-note {
   border: 1px solid var(--border, rgba(148, 163, 184, 0.25));

@@ -30,11 +30,82 @@ class ProductPricing:
     one_time_fee_paise: int
     one_time_fee_label: str
     plans: tuple[ProductPlan, ...]
+    payment_provider: str = "razorpay"
+    merchant_account: str = "SanMitra Technologies Private Limited"
+    merchant_scope: str = "sanmitra_platform"
 
 
+LEGALMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 GRUHAMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 MANDIRMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 MITRABOOKS_PLAN_KEYS = ("free", "basic", "starter", "growth")
+
+LEGALMITRA_PRICING = ProductPricing(
+    app_key="legalmitra",
+    product_name="LegalMitra",
+    currency="INR",
+    one_time_fee_paise=0,
+    one_time_fee_label="Payment gateway enablement may be phased; plan pricing is configured commercially",
+    plans=(
+        ProductPlan(
+            key="starter",
+            name="Starter",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Launch access / quote", price_paise=None),
+                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+            ),
+            fair_use={
+                "daily_research_queries": 5,
+                "monthly_templates": 5,
+                "compliance_tracker_records": 10,
+                "retention_days": 30,
+            },
+            features=(
+                "Light legal research and basic tools",
+                "Limited template drafts",
+                "GST Rate Finder and Limitation Calculator",
+            ),
+        ),
+        ProductPlan(
+            key="growth",
+            name="Growth",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Quote", price_paise=None),
+                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+            ),
+            fair_use={
+                "daily_research_queries": 50,
+                "monthly_templates": 30,
+                "compliance_tracker_records": 100,
+                "retention_days": 150,
+            },
+            features=(
+                "Daily research, drafting, and tracker usage",
+                "All Legal Tools",
+                "Response save, share, and download actions",
+            ),
+        ),
+        ProductPlan(
+            key="professional",
+            name="Professional",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Quote", price_paise=None),
+                BillingCyclePrice(cycle="yearly", display_price="Quote", price_paise=None),
+            ),
+            fair_use={
+                "daily_research_queries": 0,
+                "monthly_templates": 200,
+                "compliance_tracker_records": 0,
+                "retention_days": 300,
+            },
+            features=(
+                "High-volume legal workflow capacity",
+                "Official PDF upload and auto-fill workflow",
+                "Priority workflow capacity",
+            ),
+        ),
+    ),
+)
 
 GRUHAMITRA_PRICING = ProductPricing(
     app_key="gruhamitra",
@@ -207,6 +278,7 @@ MITRABOOKS_PRICING = ProductPricing(
 )
 
 PRODUCT_PRICING = {
+    LEGALMITRA_PRICING.app_key: LEGALMITRA_PRICING,
     GRUHAMITRA_PRICING.app_key: GRUHAMITRA_PRICING,
     MANDIRMITRA_PRICING.app_key: MANDIRMITRA_PRICING,
     MITRABOOKS_PRICING.app_key: MITRABOOKS_PRICING,

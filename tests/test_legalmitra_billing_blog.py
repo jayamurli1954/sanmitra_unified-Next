@@ -25,6 +25,14 @@ class _FakeUsersCollection:
         self.update_query = update
 
 
+class _FakeBillingCollection:
+    def __init__(self):
+        self.inserted = None
+
+    async def insert_one(self, doc: dict):
+        self.inserted = doc
+
+
 class _FakeBlogCollection:
     def __init__(self):
         self.query = None
@@ -58,6 +66,76 @@ def test_billing_resolves_visible_pricing_tiers() -> None:
     assert BillingService._resolve_tier({"notes": {}}, 399) == "basic"
     assert BillingService._resolve_tier({"notes": {}}, 899) == "pro"
     assert BillingService._resolve_tier({"notes": {}}, 99) == "free"
+
+
+def test_billing_public_config_uses_shared_sanmitra_razorpay_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Settings:
+        RAZORPAY_KEY_ID = "rzp_test_public"
+        RAZORPAY_WEBHOOK_SECRET = "webhook-secret"
+        RAZORPAY_ACCOUNT_OWNER = "SanMitra Technologies Private Limited"
+        RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
+
+    monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
+
+    config = BillingService.razorpay_public_config("mitrabooks")
+
+    assert config["provider"] == "razorpay"
+    assert config["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert config["merchant_scope"] == "sanmitra_platform"
+    assert config["shared_platform_account"] is True
+    assert config["key_id"] == "rzp_test_public"
+    assert config["key_id_configured"] is True
+    assert config["webhook_configured"] is True
+    assert set(config["supported_app_keys"]) >= {"legalmitra", "mandirmitra", "gruhamitra", "mitrabooks"}
+
+
+@pytest.mark.asyncio
+async def test_billing_records_product_metadata_for_shared_razorpay_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    users = _FakeUsersCollection({"email": "owner@example.test"})
+    billing = _FakeBillingCollection()
+
+    def fake_get_collection(name: str):
+        return billing if name == "core_billing_transactions" else users
+
+    class _Settings:
+        RAZORPAY_ACCOUNT_OWNER = "SanMitra Technologies Private Limited"
+        RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
+
+    monkeypatch.setattr("app.core.billing.service.get_collection", fake_get_collection)
+    monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
+
+    result = await BillingService.handle_payment_success(
+        {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_123",
+                        "order_id": "order_123",
+                        "customer_id": "cust_123",
+                        "email": "OWNER@EXAMPLE.TEST",
+                        "amount": 299900,
+                        "currency": "INR",
+                        "notes": {
+                            "app_key": "mitrabooks",
+                            "plan": "growth",
+                            "tenant_id": "tenant-1",
+                        },
+                    }
+                }
+            },
+        }
+    )
+
+    assert result == {"status": "success", "app_key": "mitrabooks", "plan": "growth", "tier": "growth"}
+    assert users.update_filter == {"email": "owner@example.test"}
+    assert users.update_query["$set"]["billing_app_key"] == "mitrabooks"
+    assert users.update_query["$set"]["billing_plan"] == "growth"
+    assert billing.inserted["app_key"] == "mitrabooks"
+    assert billing.inserted["plan"] == "growth"
+    assert billing.inserted["tenant_id"] == "tenant-1"
+    assert billing.inserted["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert billing.inserted["shared_platform_account"] is True
 
 
 @pytest.mark.asyncio

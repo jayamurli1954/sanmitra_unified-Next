@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.core.billing.pricing import GRUHAMITRA_PLAN_KEYS, MITRABOOKS_PLAN_KEYS, get_product_pricing
+from app.core.billing.pricing import GRUHAMITRA_PLAN_KEYS, LEGALMITRA_PLAN_KEYS, MITRABOOKS_PLAN_KEYS, get_product_pricing
 from app.main import app
 
 
@@ -42,6 +42,50 @@ def test_gruhamitra_pricing_endpoint_is_public_and_product_scoped() -> None:
     assert response.status_code == 200
     assert response.json()["app_key"] == "gruhamitra"
     assert [plan["key"] for plan in response.json()["plans"]] == list(GRUHAMITRA_PLAN_KEYS)
+
+
+def test_legalmitra_pricing_catalog_is_available_for_shared_billing() -> None:
+    pricing = get_product_pricing("legalmitra")
+
+    assert pricing["app_key"] == "legalmitra"
+    assert pricing["product_name"] == "LegalMitra"
+    assert pricing["payment_provider"] == "razorpay"
+    assert pricing["merchant_account"] == "SanMitra Technologies Private Limited"
+    assert pricing["merchant_scope"] == "sanmitra_platform"
+
+    plans = {plan["key"]: plan for plan in pricing["plans"]}
+    assert tuple(plans) == LEGALMITRA_PLAN_KEYS
+    assert plans["starter"]["fair_use"]["daily_research_queries"] == 5
+    assert plans["growth"]["fair_use"]["daily_research_queries"] == 50
+    assert plans["professional"]["fair_use"]["monthly_templates"] == 200
+
+
+def test_legalmitra_pricing_endpoint_is_public_and_product_scoped() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/v1/payments/pricing/legalmitra")
+
+    assert response.status_code == 200
+    assert response.json()["app_key"] == "legalmitra"
+    assert [plan["key"] for plan in response.json()["plans"]] == list(LEGALMITRA_PLAN_KEYS)
+
+
+def test_razorpay_config_endpoint_uses_one_sanmitra_account_for_all_products() -> None:
+    client = TestClient(app)
+
+    for app_key in ("legalmitra", "mandirmitra", "gruhamitra", "mitrabooks"):
+        response = client.get(f"/api/v1/payments/razorpay/config/{app_key}")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["app_key"] == app_key
+        assert payload["provider"] == "razorpay"
+        assert payload["merchant_account"] == "SanMitra Technologies Private Limited"
+        assert payload["merchant_scope"] == "sanmitra_platform"
+        assert payload["shared_platform_account"] is True
+        assert set(payload["supported_app_keys"]) >= {"legalmitra", "mandirmitra", "gruhamitra", "mitrabooks"}
+        assert "key_id_configured" in payload
+        assert "webhook_configured" in payload
 
 
 def test_mitrabooks_pricing_catalog_supports_business_and_ca_practice_modes() -> None:

@@ -245,6 +245,13 @@ footer {
   margin-bottom: 10px;
 }
 
+.pricing-grid small {
+  display: block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .split {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);

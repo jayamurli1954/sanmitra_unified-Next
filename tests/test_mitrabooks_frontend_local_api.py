@@ -110,6 +110,9 @@ def test_mitrabooks_settings_menu_is_business_specific() -> None:
     assert "Client Management" in app_source
     assert "Multi-Company Dashboard" in app_source
     assert "AI Settings" in app_source
+    assert "MITRABOOKS_COMPLETION_PHASES" in app_source
+    assert "Jun 15-21" in app_source
+    assert "Jul 13-19" in app_source
     assert "Accounting guardrail:" in app_source
     assert "Housing Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
     assert "Temple Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
@@ -130,7 +133,9 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert "Basic" in landing_source
     assert "Starter" in landing_source
     assert "Growth" in landing_source
+    assert "Yearly: Rs. 29,999." in landing_source
     assert "One-time implementation, migration, and training fee: get quote" in landing_source
+    assert "SanMitra Technologies Razorpay account" in landing_source
     assert "not a live GST filing portal" in landing_source
     assert "Human review before ledger posting" in landing_source
     assert "./about.html" in landing_source
