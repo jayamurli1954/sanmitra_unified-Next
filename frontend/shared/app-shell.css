@@ -4730,6 +4730,34 @@ button.danger {
   text-decoration: none;
 }
 
+.legal-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.legal-plan-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid rgba(231, 199, 124, 0.58);
+  border-radius: 10px;
+  background: rgba(231, 199, 124, 0.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.legal-plan-actions a:hover {
+  background: #e7c77c;
+  color: #111827;
+}
+
 .legal-upgrade-overlay {
   position: fixed;
   inset: 0;

@@ -31,3 +31,7 @@ def test_legalmitra_public_pages_show_visible_pricing_amounts() -> None:
         assert "Rs. 3,999" in source
         assert "Rs. 899" in source
         assert "Rs. 8,999" in source
+        assert "https://rzp.io/rzp/d3cGen18" in source
+        assert "https://rzp.io/rzp/GL2uoA7" in source
+        assert "https://rzp.io/rzp/ffmtLtfK" in source
+        assert "https://rzp.io/rzp/br2LmKM" in source
