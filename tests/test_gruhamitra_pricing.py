@@ -1,6 +1,12 @@
 from fastapi.testclient import TestClient
 
-from app.core.billing.pricing import GRUHAMITRA_PLAN_KEYS, LEGALMITRA_PLAN_KEYS, MITRABOOKS_PLAN_KEYS, get_product_pricing
+from app.core.billing.pricing import (
+    GRUHAMITRA_PLAN_KEYS,
+    LEGALMITRA_PLAN_KEYS,
+    MITRABOOKS_CA_PRACTICE_PLAN_KEYS,
+    MITRABOOKS_PLAN_KEYS,
+    get_product_pricing,
+)
 from app.main import app
 
 
@@ -103,12 +109,40 @@ def test_mitrabooks_pricing_catalog_supports_business_and_ca_practice_modes() ->
     assert plans["free"]["fair_use"]["companies"] == 1
     assert plans["basic"]["cycles"][0]["price_paise"] == 49900
     assert plans["basic"]["fair_use"]["ocr_documents_per_month"] == 25
-    assert plans["starter"]["fair_use"]["companies"] == 3
-    assert "Single user with up to 3 companies or small internal team" in plans["starter"]["features"]
+    assert plans["starter"]["fair_use"]["companies"] == 5
+    assert plans["starter"]["fair_use"]["users"] == 1
+    assert "Single business user with up to 5 companies" in plans["starter"]["features"]
+    assert plans["growth"]["cycles"][0]["price_paise"] == 149900
+    assert plans["growth"]["cycles"][1]["price_paise"] == 1499900
+    assert plans["growth"]["fair_use"]["companies"] == 10
+    assert plans["growth"]["fair_use"]["users"] == 1
+    assert plans["growth"]["fair_use"]["ocr_documents_per_month"] == 100
+    assert "Regular business multi-company workspace" in plans["growth"]["features"]
+
+
+def test_mitrabooks_ca_practice_pricing_is_separate_from_regular_business() -> None:
+    pricing = get_product_pricing("mitrabooks-ca-practice")
+
+    assert pricing["app_key"] == "mitrabooks-ca-practice"
+    assert pricing["product_name"] == "MitraBooks CA Practice / Bookkeepers"
+    assert pricing["currency"] == "INR"
+
+    plans = {plan["key"]: plan for plan in pricing["plans"]}
+    assert tuple(plans) == MITRABOOKS_CA_PRACTICE_PLAN_KEYS
+
+    assert plans["basic"]["cycles"][0]["price_paise"] == 49900
+    assert plans["basic"]["fair_use"]["client_companies"] == 5
+    assert plans["basic"]["fair_use"]["practice_users"] == 1
+    assert plans["basic"]["fair_use"]["ocr_documents_per_month"] == 0
+    assert plans["starter"]["cycles"][0]["price_paise"] == 99900
+    assert plans["starter"]["fair_use"]["client_companies"] == 25
+    assert plans["starter"]["fair_use"]["practice_users"] == 5
+    assert plans["starter"]["fair_use"]["ocr_documents_per_month"] == 500
     assert plans["growth"]["cycles"][0]["price_paise"] == 299900
-    assert plans["growth"]["fair_use"]["companies"] == 25
-    assert plans["growth"]["fair_use"]["users"] == 10
-    assert "CA practice or bookkeeper multi-user, multi-company workspace" in plans["growth"]["features"]
+    assert plans["growth"]["cycles"][1]["price_paise"] == 2999900
+    assert plans["growth"]["fair_use"]["client_companies"] == 50
+    assert plans["growth"]["fair_use"]["practice_users"] == 15
+    assert "Full CA/bookkeeper multi-user, multi-company workspace" in plans["growth"]["features"]
 
 
 def test_mitrabooks_pricing_endpoint_is_public_and_product_scoped() -> None:
@@ -119,6 +153,16 @@ def test_mitrabooks_pricing_endpoint_is_public_and_product_scoped() -> None:
     assert response.status_code == 200
     assert response.json()["app_key"] == "mitrabooks"
     assert [plan["key"] for plan in response.json()["plans"]] == list(MITRABOOKS_PLAN_KEYS)
+
+
+def test_mitrabooks_ca_practice_pricing_endpoint_is_public_and_product_scoped() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/v1/payments/pricing/mitrabooks-ca-practice")
+
+    assert response.status_code == 200
+    assert response.json()["app_key"] == "mitrabooks-ca-practice"
+    assert [plan["key"] for plan in response.json()["plans"]] == list(MITRABOOKS_CA_PRACTICE_PLAN_KEYS)
 
 
 def test_unknown_pricing_product_returns_404() -> None:

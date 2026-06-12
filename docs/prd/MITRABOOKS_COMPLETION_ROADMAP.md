@@ -12,7 +12,7 @@ The settings screen intentionally shows several items as planned because the UI 
 
 | Phase | Dates | Scope | Completion Definition |
 | --- | --- | --- | --- |
-| Phase 2A | 2026-06-12 to 2026-06-14 | Landing page pricing polish, LegalMitra/MandirMitra/GruhaMitra/MitraBooks shared Razorpay account configuration, and billing metadata capture | Pricing is visible, all four product pricing endpoints exist, Razorpay config uses the SanMitra account env, and webhook transactions record app/plan metadata |
+| Phase 2A | 2026-06-12 to 2026-06-14 | Landing page pricing polish, separate regular-business and CA/bookkeeper pricing, LegalMitra/MandirMitra/GruhaMitra/MitraBooks shared Razorpay account configuration, and billing metadata capture | Pricing is visible, all four product pricing endpoints exist, MitraBooks business and CA practice pricing are separate, Razorpay config uses the SanMitra account env, and webhook transactions record app/plan metadata |
 | Phase 2B | 2026-06-15 to 2026-06-21 | Core settings backend contracts: organization profile, branches, roles, permissions, voucher numbering, financial locks, templates, notifications | Settings cards stop saying only "Needs Backend Contract" and either save tenant-scoped settings or route to implemented workspaces |
 | Phase 2C | 2026-06-22 to 2026-06-30 | CA practice onboarding: client master, multi-company dashboard, client access controls, compliance tracking, and work assignment | CA Practice Portal supports tenant-safe client records, staff assignment, document review queues, and company switching |
 | Phase 2D | 2026-07-01 to 2026-07-12 | Integrations and automation: payment gateway mapping, document storage, OCR pipeline, AI settings, GST/bank/WhatsApp/email configuration shells | Integrations are tenant-configurable, secrets are not exposed to the frontend, and AI/OCR remains review-first |
@@ -48,6 +48,27 @@ Razorpay notes should include:
 ```
 
 Do not commit Razorpay secrets.
+
+## MitraBooks Pricing Direction
+
+Regular business account pricing and CA Practice / Bookkeeper pricing must stay separate.
+
+### Regular Business Account
+
+| Plan | Monthly | Yearly | Companies | Users | OCR documents |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Free | Rs. 0 | Rs. 0 | 1 | 1 | 0 |
+| Basic | Rs. 499 | Rs. 4,999 | 1 | 1 | 25 |
+| Starter | Rs. 999 | Rs. 9,999 | 5 | 1 | 25 |
+| Growth | Rs. 1,499 | Rs. 14,999 | 10 | 1 | 100 |
+
+### CA Practice / Bookkeepers
+
+| Plan | Monthly | Yearly | Client companies | Practice users | OCR documents |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Basic | Rs. 499 | Rs. 4,999 | 5 | 1 | 0 |
+| Starter | Rs. 999 | Rs. 9,999 | 25 | 5 | 500 |
+| Growth | Rs. 2,999 | Rs. 29,999 | 50 | 15 | Unlimited subject to fair-use |
 
 ## Planned Settings Breakdown
 

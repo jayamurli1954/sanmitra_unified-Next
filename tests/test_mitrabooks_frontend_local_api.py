@@ -128,11 +128,15 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert "Document upload and OCR extraction" in landing_source
     assert "Single User - Multi Company" in landing_source
     assert "Multi User - Multi Company" in landing_source
-    assert "CA/bookkeeper practice" in landing_source
+    assert "Regular Business Account" in landing_source
+    assert "CA Practice / Bookkeepers" in landing_source
     assert "Free" in landing_source
     assert "Basic" in landing_source
     assert "Starter" in landing_source
     assert "Growth" in landing_source
+    assert "Rs. 1,499/mo" in landing_source
+    assert "Rs. 2,999/mo" in landing_source
+    assert "15 practice users" in landing_source
     assert "Yearly: Rs. 29,999." in landing_source
     assert "One-time implementation, migration, and training fee: get quote" in landing_source
     assert "SanMitra Technologies Razorpay account" in landing_source

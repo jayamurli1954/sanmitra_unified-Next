@@ -39,6 +39,7 @@ LEGALMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 GRUHAMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 MANDIRMITRA_PLAN_KEYS = ("starter", "growth", "professional")
 MITRABOOKS_PLAN_KEYS = ("free", "basic", "starter", "growth")
+MITRABOOKS_CA_PRACTICE_PLAN_KEYS = ("basic", "starter", "growth")
 
 LEGALMITRA_PRICING = ProductPricing(
     app_key="legalmitra",
@@ -242,16 +243,82 @@ MITRABOOKS_PRICING = ProductPricing(
                 BillingCyclePrice(cycle="yearly", display_price="Rs. 9,999 / year", price_paise=999900),
             ),
             fair_use={
-                "companies": 3,
-                "users": 3,
+                "companies": 5,
+                "users": 1,
                 "invoices_per_month": 1000,
-                "ocr_documents_per_month": 100,
+                "ocr_documents_per_month": 25,
             },
             features=(
-                "Single user with up to 3 companies or small internal team",
+                "Single business user with up to 5 companies",
                 "Bank reconciliation, ageing, statements, and inventory basics",
                 "AI categorization suggestions with human review",
                 "Priority email support",
+            ),
+        ),
+        ProductPlan(
+            key="growth",
+            name="Growth",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 1,499 / month", price_paise=149900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 14,999 / year", price_paise=1499900),
+            ),
+            fair_use={
+                "companies": 10,
+                "users": 1,
+                "invoices_per_month": 5000,
+                "ocr_documents_per_month": 100,
+            },
+            features=(
+                "Regular business multi-company workspace",
+                "Higher business document limits",
+                "AI MIS, document upload, OCR extraction, and reconciliation assistance with review",
+                "Priority support",
+            ),
+        ),
+    ),
+)
+
+MITRABOOKS_CA_PRACTICE_PRICING = ProductPricing(
+    app_key="mitrabooks-ca-practice",
+    product_name="MitraBooks CA Practice / Bookkeepers",
+    currency="INR",
+    one_time_fee_paise=0,
+    one_time_fee_label="One-time implementation, migration, and training fee: get quote",
+    plans=(
+        ProductPlan(
+            key="basic",
+            name="Basic",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 499 / month", price_paise=49900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 4,999 / year", price_paise=499900),
+            ),
+            fair_use={
+                "practice_users": 1,
+                "client_companies": 5,
+                "ocr_documents_per_month": 0,
+            },
+            features=(
+                "Single practitioner workspace",
+                "Up to 5 client companies",
+                "Manual document and client tracking",
+            ),
+        ),
+        ProductPlan(
+            key="starter",
+            name="Starter",
+            cycles=(
+                BillingCyclePrice(cycle="monthly", display_price="Rs. 999 / month", price_paise=99900),
+                BillingCyclePrice(cycle="yearly", display_price="Rs. 9,999 / year", price_paise=999900),
+            ),
+            fair_use={
+                "practice_users": 5,
+                "client_companies": 25,
+                "ocr_documents_per_month": 500,
+            },
+            features=(
+                "Small CA/bookkeeper team workspace",
+                "Client document queues and review status",
+                "Compliance tracking and staff assignment",
             ),
         ),
         ProductPlan(
@@ -262,15 +329,14 @@ MITRABOOKS_PRICING = ProductPricing(
                 BillingCyclePrice(cycle="yearly", display_price="Rs. 29,999 / year", price_paise=2999900),
             ),
             fair_use={
-                "companies": 25,
-                "users": 10,
-                "invoices_per_month": 5000,
-                "ocr_documents_per_month": 500,
+                "practice_users": 15,
+                "client_companies": 50,
+                "ocr_documents_per_month": 0,
             },
             features=(
-                "CA practice or bookkeeper multi-user, multi-company workspace",
-                "Client assignment, compliance tracking, and review queues",
-                "AI MIS, document upload, OCR extraction, and reconciliation assistance",
+                "Full CA/bookkeeper multi-user, multi-company workspace",
+                "Up to 50 client companies",
+                "Unlimited OCR subject to fair-use and provider controls",
                 "Priority support and onboarding review",
             ),
         ),
@@ -282,6 +348,7 @@ PRODUCT_PRICING = {
     GRUHAMITRA_PRICING.app_key: GRUHAMITRA_PRICING,
     MANDIRMITRA_PRICING.app_key: MANDIRMITRA_PRICING,
     MITRABOOKS_PRICING.app_key: MITRABOOKS_PRICING,
+    MITRABOOKS_CA_PRACTICE_PRICING.app_key: MITRABOOKS_CA_PRACTICE_PRICING,
 }
 
 

@@ -112,12 +112,22 @@ Target provisioning:
 
 All prices are recommended launch prices in INR. Taxes extra where applicable.
 
+### Regular Business Account
+
 | Plan | Target user | Monthly | Yearly | Companies | Users | OCR / AI documents | Included scope |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Free | Trial, very small business | Rs. 0 | Rs. 0 | 1 | 1 | 0/month | Basic parties, vouchers, invoices, and reports with manual entry |
 | Basic | Single-user business | Rs. 499 | Rs. 4,999 | 1 | 1 | 25/month | GST prep, TDS/TCS tracking, basic OCR queue, email support |
-| Starter | Growing business or single-user multi-company | Rs. 999 | Rs. 9,999 | 3 | 3 | 100/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
-| Growth | CA/bookkeeper practice | Rs. 2,999 | Rs. 29,999 | 25 | 10 | 500/month | Multi-client workspace, staff assignment, compliance tracking, AI MIS, OCR, reconciliation assistance |
+| Starter | Growing business or single-user multi-company | Rs. 999 | Rs. 9,999 | 5 | 1 | 25/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
+| Growth | Larger single-user business account | Rs. 1,499 | Rs. 14,999 | 10 | 1 | 100/month | Higher business document limits, AI MIS, OCR, reconciliation assistance |
+
+### CA Practice / Bookkeepers
+
+| Plan | Target user | Monthly | Yearly | Client companies | Practice users | OCR / AI documents | Included scope |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Basic | Single practitioner | Rs. 499 | Rs. 4,999 | 5 | 1 | 0/month | Manual client tracking and multi-company access |
+| Starter | Small CA/bookkeeper team | Rs. 999 | Rs. 9,999 | 25 | 5 | 500/month | Client document queues, compliance tracking, staff assignment |
+| Growth | Larger CA/bookkeeper practice | Rs. 2,999 | Rs. 29,999 | 50 | 15 | Unlimited subject to fair-use | Full practice workspace, AI MIS, priority support and onboarding review |
 
 Recommended add-ons:
 
@@ -157,11 +167,9 @@ Recommended add-ons:
 
 ### Growth
 
-- CA/bookkeeper multi-company workspace.
-- Up to 25 companies and 10 users.
-- Client assignment.
-- Client access control.
-- Compliance tracking.
+- Regular business account: up to 10 companies and 1 user.
+- CA/bookkeeper practice account: up to 50 client companies and 15 practice users.
+- Client assignment and client access control belong to the CA/bookkeeper pricing track, not the regular business track.
 - AI MIS, OCR extraction, reconciliation assistance, and document queue.
 - Human approval before any ledger posting.
 
