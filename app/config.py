@@ -206,6 +206,7 @@ class Settings:
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
     RAZORPAY_ACCOUNT_OWNER = os.getenv("RAZORPAY_ACCOUNT_OWNER", "Sanmita Tech Solutions").strip()
     RAZORPAY_MERCHANT_SCOPE = os.getenv("RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform").strip()
+    RAZORPAY_PAYMENT_PAGE_MAP_JSON = os.getenv("RAZORPAY_PAYMENT_PAGE_MAP_JSON", "").strip()
 
     _IS_PRODUCTION = ENVIRONMENT in {"production", "prod"}
 

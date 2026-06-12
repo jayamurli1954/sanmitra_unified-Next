@@ -1,6 +1,6 @@
 import inspect
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -66,6 +66,10 @@ def test_billing_resolves_visible_pricing_tiers() -> None:
     assert BillingService._resolve_tier({"notes": {}}, 399) == "basic"
     assert BillingService._resolve_tier({"notes": {}}, 899) == "pro"
     assert BillingService._resolve_tier({"notes": {}}, 99) == "free"
+    assert BillingService._resolve_plan({"notes": {}}, 399) == "growth"
+    assert BillingService._resolve_plan({"notes": {}}, 3999) == "growth"
+    assert BillingService._resolve_plan({"notes": {}}, 899) == "professional"
+    assert BillingService._resolve_plan({"notes": {}}, 8999) == "professional"
 
 
 def test_billing_public_config_uses_shared_sanmitra_razorpay_account(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,15 +131,120 @@ async def test_billing_records_product_metadata_for_shared_razorpay_account(monk
         }
     )
 
-    assert result == {"status": "success", "app_key": "mitrabooks", "plan": "growth", "tier": "growth"}
+    assert result["status"] == "success"
+    assert result["app_key"] == "mitrabooks"
+    assert result["plan"] == "growth"
+    assert result["billing_cycle"] == "monthly"
+    assert result["tier"] == "growth"
+    assert result["subscription_expires_at"]
     assert users.update_filter == {"email": "owner@example.test"}
     assert users.update_query["$set"]["billing_app_key"] == "mitrabooks"
     assert users.update_query["$set"]["billing_plan"] == "growth"
+    assert users.update_query["$set"]["billing_cycle"] == "monthly"
+    assert users.update_query["$set"]["subscription_status"] == "active"
+    assert users.update_query["$set"]["subscription_expires_at"] > users.update_query["$set"]["subscription_started_at"]
     assert billing.inserted["app_key"] == "mitrabooks"
     assert billing.inserted["plan"] == "growth"
+    assert billing.inserted["billing_cycle"] == "monthly"
     assert billing.inserted["tenant_id"] == "tenant-1"
     assert billing.inserted["merchant_account"] == "Sanmita Tech Solutions"
     assert billing.inserted["shared_platform_account"] is True
+
+
+@pytest.mark.asyncio
+async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+    users = _FakeUsersCollection({"email": "jayanthimr56@gmail.com"})
+    billing = _FakeBillingCollection()
+
+    def fake_get_collection(name: str):
+        return billing if name == "core_billing_transactions" else users
+
+    class _Settings:
+        RAZORPAY_ACCOUNT_OWNER = "Sanmita Tech Solutions"
+        RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
+        RAZORPAY_PAYMENT_PAGE_MAP_JSON = ""
+
+    monkeypatch.setattr("app.core.billing.service.get_collection", fake_get_collection)
+    monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
+
+    created_at = 1780572000
+    result = await BillingService.handle_payment_success(
+        {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_T0gOCO2xZ5EYcl",
+                        "order_id": "order_T0fzIAn3HMw8MD",
+                        "email": "JAYANTHIMR56@GMAIL.COM",
+                        "amount": 39900,
+                        "currency": "INR",
+                        "created_at": created_at,
+                        "payment_page_id": "pl_T0f5if7cZZxXYf",
+                        "notes": {},
+                    }
+                }
+            },
+        }
+    )
+
+    expected_start = datetime.fromtimestamp(created_at, tz=timezone.utc)
+    expected_expiry = expected_start + timedelta(days=30)
+    assert result["status"] == "success"
+    assert result["app_key"] == "legalmitra"
+    assert result["plan"] == "growth"
+    assert result["billing_cycle"] == "monthly"
+    assert result["tier"] == "growth"
+    assert result["subscription_expires_at"] == expected_expiry.isoformat()
+    assert users.update_filter == {"email": "jayanthimr56@gmail.com"}
+    assert users.update_query["$set"]["billing_app_key"] == "legalmitra"
+    assert users.update_query["$set"]["billing_plan"] == "growth"
+    assert users.update_query["$set"]["billing_cycle"] == "monthly"
+    assert users.update_query["$set"]["subscription_started_at"] == expected_start
+    assert users.update_query["$set"]["subscription_expires_at"] == expected_expiry
+    assert users.update_query["$set"]["razorpay_payment_page_id"] == "pl_T0f5if7cZZxXYf"
+    assert billing.inserted["razorpay_payment_page_id"] == "pl_T0f5if7cZZxXYf"
+    assert billing.inserted["billing_cycle"] == "monthly"
+    assert billing.inserted["subscription_expires_at"] == expected_expiry
+
+
+@pytest.mark.asyncio
+async def test_payment_page_mapping_rejects_amount_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    users = _FakeUsersCollection({"email": "payer@example.test"})
+    billing = _FakeBillingCollection()
+
+    def fake_get_collection(name: str):
+        return billing if name == "core_billing_transactions" else users
+
+    class _Settings:
+        RAZORPAY_PAYMENT_PAGE_MAP_JSON = ""
+
+    monkeypatch.setattr("app.core.billing.service.get_collection", fake_get_collection)
+    monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
+
+    result = await BillingService.handle_payment_success(
+        {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_bad_amount",
+                        "email": "payer@example.test",
+                        "amount": 89900,
+                        "payment_page_id": "pl_T0f5if7cZZxXYf",
+                    }
+                }
+            },
+        }
+    )
+
+    assert result == {
+        "status": "error",
+        "message": "Payment amount does not match configured payment page amount",
+        "razorpay_payment_page_id": "pl_T0f5if7cZZxXYf",
+    }
+    assert users.update_query is None
+    assert billing.inserted is None
 
 
 @pytest.mark.asyncio

@@ -64,6 +64,47 @@ Razorpay Payment Pages are configured in the dashboard. If the page supports pas
 
 Because each subscription amount has its own Payment Page, keep a private page-ID mapping sheet after creation. After the first controlled live payment, inspect the Razorpay webhook payload. If Payment Page custom fields do not arrive under `payment.entity.notes`, add a backend mapping table from Razorpay page ID to `app_key`, `plan`, `billing_cycle`, and expected amount before publishing the link broadly.
 
+Current live page mapping:
+
+| Razorpay Page ID | Product | Plan | Billing cycle | Amount paise | Subscription days |
+| --- | --- | --- | --- | --- | --- |
+| `pl_T0f5if7cZZxXYf` | LegalMitra | Growth | Monthly | `39900` | `30` |
+
+The backend contains this current LegalMitra Growth Monthly mapping as a default. Add future page IDs through the deployment environment variable below, using the same structure:
+
+```json
+{
+  "pl_growth_yearly_page_id": {
+    "app_key": "legalmitra",
+    "plan": "growth",
+    "billing_cycle": "yearly",
+    "amount_paise": 399900,
+    "subscription_days": 365
+  },
+  "pl_professional_monthly_page_id": {
+    "app_key": "legalmitra",
+    "plan": "professional",
+    "billing_cycle": "monthly",
+    "amount_paise": 89900,
+    "subscription_days": 30
+  }
+}
+```
+
+```text
+RAZORPAY_PAYMENT_PAGE_MAP_JSON=<json object above, compacted to one line for deployment env>
+```
+
+On successful webhook processing, the backend now stores these fields on both the user record and the billing transaction:
+
+```text
+billing_plan
+billing_cycle
+subscription_started_at
+subscription_expires_at
+razorpay_payment_page_id
+```
+
 ## Webhook Setup
 
 Configure the Razorpay webhook in the dashboard:
@@ -86,6 +127,7 @@ RAZORPAY_KEY_SECRET=<secret key>
 RAZORPAY_WEBHOOK_SECRET=<dashboard webhook secret>
 RAZORPAY_ACCOUNT_OWNER=Sanmita Tech Solutions
 RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
+RAZORPAY_PAYMENT_PAGE_MAP_JSON=<one-line JSON mapping for future page IDs>
 ```
 
 ## Validation Checklist
@@ -104,5 +146,5 @@ RAZORPAY_MERCHANT_SCOPE=sanmitra_platform
 ## Deferred Scope
 
 - Storing Razorpay Payment Page IDs in code is deferred until dashboard pages are created and test payloads are inspected.
-- Automatic reconciliation from Razorpay page ID is deferred until the live Payment Page IDs are created and shared internally.
+- Automatic reconciliation from Razorpay page ID is active for the current LegalMitra Growth Monthly page and should be extended as new live page IDs are created.
 - Direct frontend checkout integration is deferred; Payment Pages are the current operational path.
