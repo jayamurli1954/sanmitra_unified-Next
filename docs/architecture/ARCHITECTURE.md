@@ -35,7 +35,6 @@ app/
     temple/
     housing/
     legal/
-    investment/
   accounting/
     models/
     journal/
@@ -75,7 +74,6 @@ app/
     business/
     professional/
     legal/
-    investment/
   ai/
     rag/
     insights/
@@ -128,7 +126,6 @@ Use MongoDB for flexible domain and operational data:
 - Residents.
 - Devotees.
 - Legal cases.
-- Investment holdings.
 - Audit events.
 - RAG documents.
 
@@ -152,7 +149,6 @@ Every protected request should resolve:
 - `mandirmitra`
 - `mitrabooks`
 - `legalmitra`
-- `investmitra`
 
 `organization_type` identifies the tenant's business category:
 
@@ -161,7 +157,6 @@ Every protected request should resolve:
 - `BUSINESS`
 - `PROFESSIONAL`
 - `LEGAL`
-- `INVESTMENT`
 
 Both are useful. Do not collapse them into one field.
 
@@ -171,7 +166,7 @@ Target frontends:
 
 - MitraBooks Unified ERP: handles GruhaMitra, MandirMitra, MitraBooks accounting workflows.
 - LegalMitra: remains separate.
-- InvestMitra: remains separate.
+InvestMitra is excluded from SanMitra unified backend and deployment scope. It may be developed separately for personal use only.
 
 The MitraBooks frontend should load menus and routes from API-provided module access, not hardcoded product assumptions.
 
@@ -185,22 +180,6 @@ frontend
     -> integration adapter
       -> external tool/provider
 ```
-
-### InvestMitra Research Adapters
-
-Planned adapters:
-
-- `fincept_terminal`: investment research, analytics, economic data, report generation.
-- `zerodha_kite_mcp`: authenticated market and portfolio context for research only.
-
-Rules:
-
-- Read-only by default.
-- No order execution methods.
-- Broker credentials and tokens must never be logged.
-- Every request must be tenant-scoped and user-authorized.
-- Provider responses must be cached only when allowed by provider terms.
-- Generated research must show data source and timestamp.
 
 ### LegalMitra Legal AI Adapter
 

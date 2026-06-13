@@ -187,7 +187,7 @@ The MitraBooks landing page should explain:
 
 ## Non-Goals
 
-- Do not merge LegalMitra or InvestMitra into MitraBooks.
+- Do not merge LegalMitra into MitraBooks. InvestMitra is out of SanMitra unified backend and deployment scope.
 - Do not expose broker/trading or legal research workflows inside MitraBooks.
 - Do not auto-file statutory returns without reviewed integrations.
 - Do not allow AI/OCR to directly mutate posted accounting records.

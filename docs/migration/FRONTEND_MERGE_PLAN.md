@@ -2,7 +2,7 @@
 
 ## Objective
 
-Merge the accounting-heavy frontend experiences into a single MitraBooks Unified ERP shell while keeping LegalMitra and InvestMitra separate.
+Merge the accounting-heavy frontend experiences into a single MitraBooks Unified ERP shell while keeping LegalMitra as a separate deployable frontend. InvestMitra is excluded from SanMitra unified backend and deployment scope.
 
 ## Current Frontend Model
 
@@ -10,7 +10,7 @@ Merge the accounting-heavy frontend experiences into a single MitraBooks Unified
 - MandirMitra frontend.
 - MitraBooks frontend.
 - LegalMitra frontend.
-- InvestMitra frontend.
+- InvestMitra is out of scope for SanMitra unified deployment.
 
 ## Target Frontend Model
 
@@ -19,7 +19,6 @@ Merge the accounting-heavy frontend experiences into a single MitraBooks Unified
   - MandirMitra temple modules.
   - MitraBooks business/professional modules.
 - LegalMitra frontend.
-- InvestMitra frontend.
 
 ## Merge Sequence
 
@@ -83,7 +82,7 @@ Rules:
 - Render navigation from `enabled_modules`.
 - Use `available_modules` for locked/future modules only when the product wants to show upsell or disabled features.
 - Do not hardcode product names to decide menus.
-- Do not show trading actions for InvestMitra research modules.
+- Do not add InvestMitra or trading/research modules to the unified frontend contract.
 - Do not show LegalMitra AI assistant unless `legal_ai` is enabled.
 
 ## Unified Shell Contract v1
@@ -93,13 +92,11 @@ The frontend shell should use `navigation` as its primary menu source.
 Navigation group order:
 
 1. Operations
-2. Portfolio
-3. Finance
-4. Compliance
-5. Legal
-6. Research
-7. AI Assistant
-8. Administration
+2. Finance
+3. Compliance
+4. Legal
+5. AI Assistant
+6. Administration
 
 Expected module-to-menu mapping:
 
@@ -116,10 +113,6 @@ Expected module-to-menu mapping:
 | `compliance` | Compliance | LegalMitra compliance |
 | `legal` | Legal | Legal cases/documents |
 | `rag` | Legal | Legal research |
-| `investment` | Portfolio | Holdings and asset classes |
-| `portfolio` | Portfolio | Portfolio analytics |
-| `investment_research` | Research | FinceptTerminal research, disabled by default |
-| `broker_research` | Research | Zerodha Kite MCP read-only research, disabled by default |
 | `legal_ai` | AI Assistant | Claude for Legal, disabled by default |
 | `audit` | Administration | Audit trail |
 
@@ -153,7 +146,6 @@ Required order:
 3. MandirMitra in MitraBooks ERP: validate donations, receipts, seva booking, devotees, and accounting posting.
 4. GruhaMitra in MitraBooks ERP: validate flats/residents, maintenance billing, collections, complaints where implemented, and accounting posting.
 5. Combined MitraBooks ERP regression: validate MitraBooks, MandirMitra, and GruhaMitra together with module access and accounting invariants.
-6. InvestMitra: validate portfolio, P&L, analytics, and read-only research integrations after ERP is stable.
 
 Do not expand to a later stage until the previous stage has a passing smoke/E2E checklist or a documented exception.
 

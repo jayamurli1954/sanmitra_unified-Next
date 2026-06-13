@@ -8,7 +8,7 @@ Prepare the backend and documentation for later frontend consolidation without t
 
 ### Documentation
 
-- Normalize branding to `GruhaMitra`, `MandirMitra`, `MitraBooks`, `LegalMitra`, `InvestMitra`.
+- Normalize branding to `GruhaMitra`, `MandirMitra`, `MitraBooks`, and `LegalMitra` for unified scope. Mark InvestMitra as separate personal-use scope.
 - Clearly separate current state, target state, and gap.
 - Document module registry and organization type strategy.
 - Document frontend merge sequence.
@@ -21,9 +21,7 @@ Prepare the backend and documentation for later frontend consolidation without t
 - Add module access helper.
 - Add tests for module access rules.
 - Add tenant isolation tests where missing.
-- Reserve feature/module flags for future integrations:
-  - `investment_research`
-  - `broker_research`
+- Reserve feature/module flags for future LegalMitra integrations:
   - `legal_ai`
 
 ## Out of Scope
@@ -34,8 +32,7 @@ Prepare the backend and documentation for later frontend consolidation without t
 - Large route renaming.
 - Microservices extraction.
 - Changes to `D:\sanmitra-backend` unless explicitly requested.
-- FinceptTerminal production integration.
-- Zerodha Kite MCP production integration.
+- InvestMitra, FinceptTerminal, or Zerodha Kite MCP integration in SanMitra unified backend.
 - Claude for Legal production integration.
 
 These three integrations should be documented and reserved in the module registry, but implemented only after the core foundation is stable.

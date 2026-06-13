@@ -41,7 +41,9 @@ The old standalone product repositories are no longer active deployment sources 
 - `jayamurli1954/MitraBooks`
 - `jayamurli1954/InvestMitra`
 
-Do not clone, edit, commit, push, or deploy from these legacy repositories unless the user explicitly asks for that repository by name and confirms it is intentional. All current product work for GruhaMitra, LegalMitra, MandirMitra, MitraBooks, and InvestMitra belongs in `D:\sanmitra_unified-Next` and the GitHub repository `jayamurli1954/sanmitra_unified-Next`.
+Do not clone, edit, commit, push, or deploy from these legacy repositories unless the user explicitly asks for that repository by name and confirms it is intentional. Current unified product work for GruhaMitra, LegalMitra, MandirMitra, and MitraBooks belongs in `D:\sanmitra_unified-Next` and the GitHub repository `jayamurli1954/sanmitra_unified-Next`.
+
+InvestMitra is an exception to the unified-backend direction. It is no longer part of SanMitra unified backend or deployment scope. Treat InvestMitra as a separate personal-use project unless the user explicitly opens a separate InvestMitra workstream.
 
 ### C Drive Restriction
 
@@ -69,13 +71,21 @@ API compatibility may still require existing lowercase app keys:
 
 ## 3. Platform Direction
 
-SanMitra is moving from five separate product frontends toward three frontend experiences:
+SanMitra unified backend now covers four product lines:
+
+- LegalMitra
+- MandirMitra
+- GruhaMitra
+- MitraBooks
+
+InvestMitra is excluded from the SanMitra unified backend and deployment scope for personal reasons. It may be developed separately for personal use only.
+
+SanMitra is moving from the remaining product frontends toward two deployable frontend experiences:
 
 | Frontend | Scope |
 | --- | --- |
 | MitraBooks Unified ERP | GruhaMitra, MandirMitra, and MitraBooks accounting/business workflows |
 | LegalMitra | Legal research, legal workflow, RAG, compliance |
-| InvestMitra | Investment, portfolio, screening, analytics |
 
 The backend direction is a modular monolith with a shared accounting engine.
 
@@ -130,7 +140,7 @@ The target is one unified backend platform with a split database strategy, not o
 | Store | Ownership |
 | --- | --- |
 | PostgreSQL | Accounting data: accounts, journals, journal lines, ledger, financial reports, tax records |
-| MongoDB | Tenants, users, module/domain data, residents, devotees, legal cases, investment holdings, audit records, RAG documents |
+| MongoDB | Tenants, users, module/domain data, residents, devotees, legal cases, audit records, RAG documents |
 | Redis | Cache, sessions, background job coordination where applicable |
 
 PostgreSQL must remain the source of truth for financial postings. MongoDB must remain flexible domain storage.
@@ -230,7 +240,7 @@ Core rules:
 - Ledger entries are append-only; use reversals or soft-delete/audit where needed.
 - Every account must belong to the tenant.
 - Financial posting endpoints should support idempotency.
-- Accounting logic must not be duplicated inside GruhaMitra, MandirMitra, business, legal, or investment modules.
+- Accounting logic must not be duplicated inside GruhaMitra, MandirMitra, business, or legal modules.
 - Use high-precision amount storage. Do not use floating-point types for money. Use integer minor units or fixed-precision decimal types.
 - Wrap every posting in one database transaction so all debit and credit lines succeed or fail together.
 - Validate `sum(debits) - sum(credits) = 0` before committing any entry.
@@ -373,9 +383,21 @@ Rules:
 - Store prompts/responses only according to tenant retention and confidentiality policy.
 - Do not enable production tenants until LegalMitra E2E, tenant policy, API key handling, logging, and source-attribution checks pass.
 
-## 14. InvestMitra Guardrails
+## 14. InvestMitra Exclusion
 
-InvestMitra remains a separate product experience.
+InvestMitra is no longer part of SanMitra unified backend, frontend deployment, E2E sequencing, tenant/module registry, or production release planning. It may be developed separately for personal use only.
+
+Unified SanMitra work must not:
+
+- Add InvestMitra routes, modules, tenant entitlements, billing plans, deployment domains, or E2E gates.
+- Include investment holdings, broker integrations, market research integrations, or portfolio analytics in unified backend scope.
+- Deploy InvestMitra through SanMitra unified Vercel/Render projects.
+
+Historical InvestMitra notes may remain as archived reference, but new implementation plans must mark them out of scope.
+
+### Personal-Use InvestMitra Guardrails
+
+If the user explicitly opens a separate InvestMitra workstream, keep it outside this unified backend deployment.
 
 Core areas:
 
@@ -391,11 +413,11 @@ Rules:
 - Trading/broker tokens must never be logged.
 - Investment data must be tenant-scoped.
 - Aggregated P&L should be reproducible from source transactions/holdings.
-- Keep InvestMitra frontend separate from MitraBooks Unified ERP.
+- Keep InvestMitra separate from SanMitra unified backend and deployments.
 
-### InvestMitra External Research Integrations
+### Personal-Use InvestMitra External Research Integrations
 
-Planned integrations:
+Possible separate personal-use integrations:
 
 - FinceptTerminal: investment research, financial analytics, macro/economic data, and report generation.
 - Zerodha Kite MCP: authenticated market/portfolio context for research.
@@ -407,7 +429,7 @@ Rules:
 - Do not expose order execution tools in UI or backend adapters.
 - Do not call broker APIs directly from frontend code.
 - Do not log broker credentials, access tokens, request tokens, holdings exports, or personal financial data.
-- Every request must be tenant-scoped and user-authorized.
+- Every request must be user-authorized and isolated from SanMitra unified tenants.
 - Every research output must show source and timestamp where available.
 - Check FinceptTerminal licensing before internal/commercial use.
 
@@ -489,7 +511,7 @@ Required order:
 3. MandirMitra workflows inside MitraBooks ERP.
 4. GruhaMitra workflows inside MitraBooks ERP.
 5. Combined MitraBooks ERP regression across MitraBooks, MandirMitra, and GruhaMitra.
-6. InvestMitra last.
+6. InvestMitra is excluded from this staged E2E plan.
 
 Do not expand to a later E2E stage until the previous stage has a passing smoke/E2E checklist or an explicitly documented exception.
 
@@ -527,9 +549,9 @@ Sequence:
 4. Migrate MitraBooks business workflows.
 5. Migrate MandirMitra temple workflows.
 6. Migrate GruhaMitra housing workflows.
-7. Keep LegalMitra and InvestMitra separate.
+7. Keep LegalMitra separate from MitraBooks ERP; InvestMitra is out of unified scope.
 
-E2E sequence must follow the staged E2E policy: LegalMitra baseline first, MitraBooks ERP core second, MandirMitra third, GruhaMitra fourth, combined ERP regression fifth, InvestMitra last.
+E2E sequence must follow the staged E2E policy: LegalMitra baseline first, MitraBooks ERP core second, MandirMitra third, GruhaMitra fourth, combined ERP regression fifth. InvestMitra is excluded.
 
 Frontend rule:
 
@@ -603,7 +625,7 @@ Load the relevant skill before editing code or docs in that area:
 | Tenant context, auth, app key, module access, RBAC, protected data queries | `tenant-context-routing` |
 | Journals, ledgers, money, tax, payments, receipts, donations, collections, reports | `accounting-doctrine` |
 | LegalMitra cases, documents, templates, RAG, provider integrations, legal compliance | `legalmitra-compliance` |
-| InvestMitra holdings, transactions, market data, portfolio analytics, research integrations | `investmitra-portfolio` |
+| InvestMitra holdings, transactions, market data, portfolio analytics, research integrations | Out of unified scope; use only for a separately authorized personal-use InvestMitra workstream |
 | MitraBooks ERP documents, parties, vouchers, inventory, GST/TDS, reports, route contracts | `mitrabooks-erp` |
 | MandirMitra donations, sevas, receipts, devotees, trust/fund compliance | `mandirmitra-admin` |
 | GruhaMitra housing society units, residents, maintenance billing, complaints, vendors | `gruhamitra-housing` |
@@ -620,7 +642,7 @@ Required checklist:
 - Accounting invariants: financial changes preserve double-entry integrity, fixed-precision money, idempotency where applicable, append-only posted entries, and no direct balance mutation.
 - Cross-database consistency: workflows touching MongoDB and PostgreSQL document the completion boundary and do not leave a domain transaction completed when accounting posting fails.
 - Current state vs target state: docs, comments, and release notes distinguish what exists now from planned target behavior, known gaps, and deferred scope.
-- Frontend migration discipline: changes avoid broad frontend merger, preserve LegalMitra and InvestMitra separation, and do not disturb stable MandirMitra/GruhaMitra behavior without scoped tests.
+- Frontend migration discipline: changes avoid broad frontend merger, preserve LegalMitra separation, exclude InvestMitra from unified scope, and do not disturb stable MandirMitra/GruhaMitra behavior without scoped tests.
 - Security and privacy: no secrets, tokens, payment data, broker credentials, legal documents, PII exports, or database dumps are committed or logged.
 - Release and rollback: schema, migration, accounting, or tenant-risk changes include rollback/reversal notes or an explicit reason they are not needed.
 - Tests: CI-relevant tests are added or updated for the changed risk area, or the PR states why tests are not applicable.

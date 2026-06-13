@@ -12,7 +12,7 @@ The goal is to isolate failures, reduce troubleshooting load, and build confiden
 - MitraBooks ERP is the planned unified shell for MitraBooks, MandirMitra, and GruhaMitra workflows.
 - Current execution priority is MandirMitra live-readiness first, after only the minimum MitraBooks ERP/accounting foundation required to host it safely.
 - GruhaMitra starts after the MandirMitra live-ready gate passes, because both MandirMitra and GruhaMitra already have live legacy frontends and should be migrated one at a time.
-- InvestMitra remains a separate product experience.
+- InvestMitra is excluded from SanMitra unified backend, deployment, and E2E scope. It may be developed separately for personal use only.
 - Full combined E2E across every product would create too much support and debugging surface for one maintainer.
 
 ## Target State
@@ -161,21 +161,6 @@ Validate:
 
 Gate: the unified ERP can be maintained as one product surface.
 
-### Stage 6: InvestMitra
-
-Goal: validate InvestMitra after the ERP path is stable.
-
-Validate:
-
-- Portfolio and holding workflows.
-- P&L and analytics workflows.
-- Tenant-scoped investment data.
-- Read-only external research integrations where implemented.
-- No live trade placement, modification, cancellation, or automation.
-- No broker tokens or financial data in logs.
-
-Gate: InvestMitra remains a separate, read-safe investment product experience.
-
 ## Gap
 
 The repo still needs stage-specific E2E checklists and scripts. Until those exist, use this plan as the manual validation order and record pass/fail notes per stage.
@@ -183,6 +168,6 @@ The repo still needs stage-specific E2E checklists and scripts. Until those exis
 ## Non-Goals
 
 - Do not merge all frontends before staged E2E passes.
-- Do not require InvestMitra E2E before MitraBooks ERP core is stable.
+- Do not include InvestMitra in SanMitra unified E2E.
 - Do not treat planned integrations as implemented.
 - Do not troubleshoot all products in one combined pass unless each prior stage is already green.

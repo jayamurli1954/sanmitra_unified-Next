@@ -5,8 +5,8 @@ This document prevents ambiguity during implementation. Treat current state as w
 | Area | Current State | Target State | Foundation Gap |
 | --- | --- | --- | --- |
 | Workspace | Active work is in `D:\sanmitra_unified-Next`; reference backend is in `D:\sanmitra-backend` | All new unified work happens in `D:\sanmitra_unified-Next` | Copy/reference only what is needed; do not alter live/reference backend |
-| Brands | Five brands exist: GruhaMitra, MandirMitra, MitraBooks, LegalMitra, InvestMitra | Same five brands remain | Normalize all new docs/code to `GruhaMitra` spelling |
-| Frontends | Five separate frontend experiences | Three frontend experiences: MitraBooks Unified ERP, LegalMitra, InvestMitra | Define API contract for menus/modules before merging UI |
+| Brands | Four unified brands are in scope: GruhaMitra, MandirMitra, MitraBooks, LegalMitra. InvestMitra is separate personal-use scope. | Unified backend and deployment cover GruhaMitra, MandirMitra, MitraBooks, and LegalMitra only | Normalize all new docs/code to `GruhaMitra` spelling and keep InvestMitra out of unified delivery plans |
+| Frontends | Product frontend experiences are being consolidated for the four unified brands | Two deployable frontend experiences: MitraBooks Unified ERP and LegalMitra | Define API contract for menus/modules before merging UI |
 | Backend | Unified FastAPI modular monolith exists in reference backend | Continue modular monolith | Add module registry and explicit module access checks |
 | Accounting | Shared PostgreSQL accounting foundation exists | All accounting-heavy modules use shared accounting engine | Keep module logic from bypassing accounting service |
 | MitraBooks business scope | Core accounting foundation exists; business workflows are only partially specified | Business/professional workflows include parties, typed vouchers, sales, purchases, GST, inventory, AR/AP, MIS, data health, and exports | Use `docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md` to phase scope and reject desktop-era assumptions |

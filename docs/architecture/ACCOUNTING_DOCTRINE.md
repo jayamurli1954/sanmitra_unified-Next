@@ -89,4 +89,6 @@ Every posting must retain:
 
 ## Cross-Module Rule
 
-GruhaMitra, MandirMitra, MitraBooks business, LegalMitra billing, and InvestMitra billing must not implement their own accounting engines. They must call the shared MitraBooks accounting service for financial postings.
+GruhaMitra, MandirMitra, MitraBooks business, and LegalMitra billing must not implement their own accounting engines. They must call the shared MitraBooks accounting service for financial postings.
+
+InvestMitra is excluded from SanMitra unified backend and deployment scope.

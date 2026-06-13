@@ -10,7 +10,8 @@ Create a clear foundation for merging the accounting-heavy product experiences i
 - MandirMitra: temples, trusts, NGOs, donation and seva workflows.
 - MitraBooks: businesses, SMEs, professionals, retailers, accounting users.
 - LegalMitra: legal research, legal workflow, compliance.
-- InvestMitra: portfolio tracking and investment intelligence.
+
+InvestMitra is no longer part of the SanMitra unified backend or deployment scope. It may be developed separately for personal use only and must not be included in unified backend, Vercel, Render, tenant/module registry, billing, or E2E release planning.
 
 ## Current State
 
@@ -27,7 +28,7 @@ The reference backend at `D:\sanmitra-backend` already provides a unified backen
 - COA mapping APIs.
 - MandirMitra donation accounting flow.
 - GruhaMitra maintenance accounting flow.
-- LegalMitra and InvestMitra tenant-scoped route stubs.
+- LegalMitra tenant-scoped route stubs.
 
 Current limitation: accounting-oriented frontends are still treated as separate product applications, creating duplicate UI and support effort.
 
@@ -71,13 +72,12 @@ Rules:
 
 ## Target State
 
-Move to three frontend experiences:
+Move to two deployable frontend experiences:
 
 | Frontend | Scope |
 | --- | --- |
 | MitraBooks Unified ERP | GruhaMitra, MandirMitra, MitraBooks business/professional workflows |
 | LegalMitra | Legal workflow and RAG product experience |
-| InvestMitra | Investment and portfolio product experience |
 
 The unified MitraBooks frontend should dynamically show modules based on organization type, subscription plan, user role, and feature access.
 
@@ -89,8 +89,8 @@ The unified MitraBooks frontend should dynamically show modules based on organiz
 - Keep tenant and product isolation explicit.
 - Allow each organization to activate only relevant modules.
 - Preserve brand-specific terminology where it improves user experience.
-- Keep LegalMitra and InvestMitra separate because their workflows are not primarily accounting ERP workflows.
-- Validate E2E stage by stage: LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, combined ERP regression, then InvestMitra.
+- Keep LegalMitra separate because its workflows are not primarily accounting ERP workflows.
+- Validate E2E stage by stage: LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, then combined ERP regression.
 - Current execution priority: after the minimum MitraBooks ERP/accounting foundation needed for tenant context, modules, and postings, finish MandirMitra to live-ready parity before expanding GruhaMitra. Broad MitraBooks business features must not distract from the MandirMitra live-ready gate.
 
 ## Active Delivery Workflow
@@ -120,7 +120,6 @@ Use these canonical values:
 | `BUSINESS` | MitraBooks Unified ERP | `business`, `accounting`, `gst`, `inventory`, `audit` |
 | `PROFESSIONAL` | MitraBooks Unified ERP | `professional`, `accounting`, `billing`, `audit` |
 | `LEGAL` | LegalMitra | `legal`, `rag`, `compliance`, `legal_ai`, `audit` |
-| `INVESTMENT` | InvestMitra | `investment`, `portfolio`, `investment_research`, `broker_research`, `audit` |
 
 ## Functional Requirements
 
@@ -314,18 +313,6 @@ Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assum
 - Claude Legal Counsel provider-gated research/drafting support, with human review and source attribution.
 - Client billing integration where needed.
 
-### InvestMitra
-
-- Holdings.
-- Asset classes.
-- Portfolio performance.
-- XIRR/P&L calculations.
-- Investment insights.
-- FinceptTerminal research integration readiness.
-- Zerodha Kite MCP research integration readiness.
-
-InvestMitra integrations are for investment research only. They must not place, modify, cancel, or automate trades.
-
 ## Non-Functional Requirements
 
 - Tenant isolation on every query.
@@ -343,41 +330,12 @@ InvestMitra integrations are for investment research only. They must not place, 
 - Do not migrate production data.
 - Do not create microservices.
 - Do not change live app repositories.
-- Do not implement FinceptTerminal production integration.
-- Do not implement Zerodha Kite MCP production integration.
+- Do not implement InvestMitra, FinceptTerminal, or Zerodha Kite MCP in SanMitra unified backend.
 - Do not enable Claude Legal Counsel for production tenants without confidentiality, retention, source-attribution, and human-review approval.
 
 ## Strategic Integration Roadmap
 
-These integrations were discussed earlier and are now reserved in the product roadmap. They are planned incremental enhancements, not first-PR scope.
-
-### InvestMitra: FinceptTerminal
-
-Purpose:
-
-- Use FinceptTerminal as a research and analytics source for InvestMitra.
-- Support equity research, macro/economic research, portfolio analytics, screeners, and AI-assisted research summaries.
-
-Boundary:
-
-- Research only.
-- No broker execution.
-- No order placement, modification, cancellation, or automated trading.
-- Licensing must be reviewed before any internal or commercial use.
-
-### InvestMitra: Zerodha Kite MCP
-
-Purpose:
-
-- Use Zerodha Kite MCP only for authenticated, user-authorized market and portfolio context.
-- Support holdings-aware research, watchlist enrichment, instrument lookup, quotes, and historical data where allowed.
-
-Boundary:
-
-- Read-only research use.
-- Disable or omit all order placement tools.
-- No financial advice framed as guaranteed outcome.
-- Broker credentials and tokens must never be logged.
+LegalMitra provider integrations remain planned incremental enhancements, not first-PR scope. InvestMitra integrations are out of SanMitra unified scope and may be handled only in a separate personal-use workstream.
 
 ### LegalMitra: Claude Legal Counsel
 

@@ -2,16 +2,14 @@
 
 ## Purpose
 
-This document captures external integrations discussed for InvestMitra and LegalMitra so they are not lost during the unified-platform refactor.
+This document captures external integrations discussed for LegalMitra in the unified platform. InvestMitra integrations are intentionally out of SanMitra unified backend and deployment scope.
 
-Current state: LegalMitra now has a provider-gated Claude Legal Counsel call path in the legal research pipeline. InvestMitra external integrations remain planned.
+Current state: LegalMitra now has a provider-gated Claude Legal Counsel call path in the legal research pipeline. InvestMitra may be developed separately for personal use only.
 
 ## Summary
 
 | Integration | Product | Purpose | Execution Boundary |
 | --- | --- | --- | --- |
-| FinceptTerminal | InvestMitra | Investment research, analytics, economic data, research reports | Research only, no trading |
-| Zerodha Kite MCP | InvestMitra | User-authorized market/portfolio context for research | Read-only, no order tools |
 | Claude for Legal | LegalMitra | Legal workflow assistant, drafting/review/research support | Human review, source attribution, confidentiality |
 
 ## Phase 0: Documentation and Risk Review
@@ -33,12 +31,6 @@ Suggested shape:
 
 ```text
 app/integrations/
-  investment_research/
-    base.py
-    fincept_terminal.py
-  broker_research/
-    base.py
-    zerodha_kite_mcp.py
   legal_ai/
     base.py
     claude_for_legal.py
@@ -47,20 +39,6 @@ app/integrations/
 No external tool should be called directly from frontend code.
 
 ## Phase 2: Read-Only Proofs of Concept
-
-### FinceptTerminal POC
-
-- Pull or ingest research outputs.
-- Generate a sample research summary.
-- Validate licensing and attribution.
-- Avoid dependency on desktop-only UI if backend integration is required.
-
-### Zerodha Kite MCP POC
-
-- Authenticate in a user-controlled way.
-- Read instruments, holdings, quotes, or historical data where allowed.
-- Explicitly disable or omit order placement tools.
-- Audit every access.
 
 ### Claude Legal Counsel POC
 
@@ -72,18 +50,6 @@ No external tool should be called directly from frontend code.
 - Validate tenant isolation and confidentiality.
 
 ## Phase 3: Product Integration
-
-### InvestMitra
-
-Add research screens:
-
-- Research dashboard.
-- Watchlist enrichment.
-- Portfolio-aware research notes.
-- Holding risk/concentration.
-- Fundamental and macro summaries.
-
-No trading workflow should be exposed.
 
 ### LegalMitra
 
@@ -104,22 +70,11 @@ Current gap:
 
 Enable integrations only via module flags:
 
-- `investment_research`
-- `broker_research`
 - `legal_ai`
 
 Default should be off at the module registry level until each integration passes security, licensing, and workflow review. The LegalMitra backend provider path can still be tested locally with explicit API key configuration before module-wide enablement.
 
 ## Non-Negotiable Guardrails
-
-### InvestMitra
-
-- No buy orders.
-- No sell orders.
-- No modify/cancel order operations.
-- No automated trading.
-- No financial advice phrased as guaranteed outcome.
-- Show data source and timestamp.
 
 ### LegalMitra
 

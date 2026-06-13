@@ -30,7 +30,7 @@ GruhaMitra should be usable in production for housing operations while preservin
 
 ## Deferred Scope (Not Part of This Checklist)
 
-- LegalMitra/InvestMitra flows.
+- LegalMitra flows and any out-of-scope InvestMitra workstream.
 - Broad MitraBooks business ERP workflows outside GruhaMitra needs.
 - Payment gateway onboarding and provider-specific notification setup.
 
@@ -87,4 +87,3 @@ Stage 4 can be marked ready when:
 2. Billing-to-accounting path is verified with evidence.
 3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains.
 4. Result is recorded in `docs/operations/E2E_VERIFICATION_REPORT.md` under GruhaMitra section.
-

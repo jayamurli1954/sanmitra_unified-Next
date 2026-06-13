@@ -37,8 +37,8 @@ The current workspace already has foundation pieces for the unified platform:
 - Organization type and app-key separation.
 - Shared accounting engine with tenant-scoped accounts, journals, journal lines, ledger reports, trial balance, profit and loss, receipts and payments, and balance sheet.
 - Idempotent journal posting and journal reversal support.
-- Staged E2E plan for LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, combined ERP regression, and InvestMitra.
-- Lightweight target frontend shells for MitraBooks ERP, LegalMitra, and InvestMitra.
+- Staged E2E plan for LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, and combined ERP regression.
+- Lightweight target frontend shells for MitraBooks ERP and LegalMitra.
 
 Current gap:
 

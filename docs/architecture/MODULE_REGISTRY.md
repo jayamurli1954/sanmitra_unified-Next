@@ -45,10 +45,9 @@ These are always available to active tenants:
 | `business` | `BUSINESS` | MitraBooks business workflows |
 | `professional` | `PROFESSIONAL` | MitraBooks professional workflows |
 | `legal` | `LEGAL` | LegalMitra workflows |
-| `investment` | `INVESTMENT` | InvestMitra workflows |
-| `investment_research` | `INVESTMENT` | FinceptTerminal and read-only market research integrations |
-| `broker_research` | `INVESTMENT` | Read-only Zerodha Kite MCP research context |
 | `legal_ai` | `LEGAL` | Claude for Legal and legal assistant integrations |
+
+InvestMitra modules are excluded from the SanMitra unified registry. Do not add `investment`, `portfolio`, `investment_research`, or `broker_research` to unified tenant entitlements unless the platform owner explicitly reverses the InvestMitra exclusion decision.
 
 ## Access Decision
 
@@ -72,6 +71,4 @@ External integrations should be feature/module gated separately from base produc
 
 | module_key | Default | Reason |
 | --- | --- | --- |
-| `investment_research` | Off | Requires licensing, data-source review, and research workflow approval |
-| `broker_research` | Off | Requires explicit user authorization and strict no-trading controls |
 | `legal_ai` | Off | Requires confidentiality, legal-source, and lawyer-review workflow approval |

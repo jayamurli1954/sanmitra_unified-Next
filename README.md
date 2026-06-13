@@ -4,15 +4,16 @@ This workspace is for the next unified SanMitra platform foundation. It is separ
 
 ## Product Scope
 
-SanMitra has five product brands:
+SanMitra unified backend currently includes four product brands:
 
 - GruhaMitra
 - MandirMitra
 - MitraBooks
 - LegalMitra
-- InvestMitra
 
-The target platform keeps all five brands, but reduces accounting frontend duplication.
+InvestMitra is excluded from the SanMitra unified backend and deployment scope. It may be developed separately for personal use only.
+
+The target platform keeps the four active unified brands and reduces accounting frontend duplication.
 
 ## Current State
 
@@ -28,20 +29,19 @@ The existing backend in `D:\sanmitra-backend` is the reference implementation. I
 - COA mapping APIs.
 - MandirMitra donation posting into accounting.
 - GruhaMitra maintenance collection posting into accounting.
-- LegalMitra and InvestMitra tenant-scoped route stubs.
+- LegalMitra tenant-scoped route stubs.
 
-The current frontend landscape still treats GruhaMitra, MandirMitra, MitraBooks, LegalMitra, and InvestMitra as separate products.
+The current frontend landscape is being consolidated for GruhaMitra, MandirMitra, MitraBooks, and LegalMitra only.
 
 ## Target State
 
-The target is a unified platform with three frontend experiences:
+The target is a unified platform with two deployable frontend experiences:
 
 - MitraBooks unified ERP frontend, covering:
   - GruhaMitra housing society workflows.
   - MandirMitra temple and trust workflows.
   - MitraBooks business, SME, and professional accounting workflows.
 - LegalMitra separate frontend.
-- InvestMitra separate frontend.
 
 The accounting engine remains shared. Domain modules remain modular.
 
@@ -52,7 +52,7 @@ This is not one physical database.
 The target is one unified backend platform with a split database strategy:
 
 - PostgreSQL: accounting, ledger, journals, reports, tax, financial invariants.
-- MongoDB: tenants, users, module data, operational records, legal data, investment data, audit records.
+- MongoDB: tenants, users, module data, operational records, legal data, audit records.
 
 ## Immediate Gap
 
