@@ -83,7 +83,17 @@ jobs:
         working-directory: frontend
         env:
           E2E_BASE_URL: http://127.0.0.1:3300
-        run: npx playwright test e2e/mitrabooks-shell.spec.js --project=chromium
+        run: npx playwright test e2e/mitrabooks-shell.spec.js --project=chromium --timeout=90000
+
+      - name: Upload Playwright Failure Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitrabooks-shell-smoke-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
 
       - name: Stop Static Frontend Server
         if: always()
