@@ -466,9 +466,9 @@ const orgSelectorMeta = {
   },
   CA_PRACTICE: {
     label: "CA Practice Portal",
-    subtitle: "Planned multi-client books",
-    statusTitle: "CA Practice Portal planned",
-    statusCopy: "Multi-client books will be enabled after the backend exposes the CA practice tenant context.",
+    subtitle: "Client document workflow",
+    statusTitle: "CA Practice Portal active",
+    statusCopy: "Using tenant-scoped document metadata, review queue, staff assignment, and compliance tracking.",
   },
 };
 
@@ -1554,18 +1554,18 @@ function plannedOrgWorkspaceModel(orgType) {
   if (orgType === "CA_PRACTICE") {
     return {
       label: "CA Practice Portal",
-      eyebrow: "Planned multi-client books",
-      lead: "Practice-level workspace for client books, compliance reviews, and consolidated reporting. This shell is visible now; backend tenant switching is still planned.",
+      eyebrow: "Client document workflow",
+      lead: "Practice-level workspace for client document intake, review status tracking, staff assignment, client-access flags, and compliance metadata.",
       kpis: [
-        ["Client Books", "Planned", "Multi-client ledger access"],
-        ["Review Queue", "Planned", "Voucher and return review workflow"],
-        ["Compliance", "Planned", "GST, TDS, and filing calendar"],
+        ["Client Tracking", "Active", "Tenant-scoped client document metadata"],
+        ["Review Queue", "Active", "Document review status workflow"],
+        ["Compliance", "Active", "GST, TDS, audit, ROC, and bookkeeping metadata"],
       ],
       modules: [
-        ["Client ledger access", "Open each client book with tenant-safe context before showing accounting data.", "Planned"],
-        ["GST and TDS workbench", "Track return status, due dates, reconciliation, and filing readiness.", "Planned"],
-        ["Review queue", "Route vouchers, invoices, and adjustments for partner review before final posting.", "Planned"],
-        ["Consolidated reports", "Practice-wide receivables, workload, client health, and team productivity.", "Planned"],
+        ["Client document tracking", "Track each client book through tenant-scoped metadata before any future client tenant switching.", "Active"],
+        ["GST and TDS metadata", "Tag documents by compliance area, due date, priority, and reviewer.", "Active"],
+        ["Review queue", "Move uploaded metadata through under review, query raised, reviewed, and posted states.", "Active"],
+        ["Workload summary", "Summarize client counts, staff assignment, priority work, and compliance areas from the current queue.", "Active"],
       ],
       documentIntake: {
         title: "Client document intake",
@@ -1591,7 +1591,7 @@ function plannedOrgWorkspaceModel(orgType) {
           ["Stellar Logistics", "Sales invoices", "May 2026", "Reviewed", "Ready for posting", "-"],
         ],
       },
-      note: "No accounting data is posted from this planned workspace until the backend exposes CA practice module access.",
+      note: "Current state: tenant-scoped document metadata and review workflow are active. Deferred scope: file storage, OCR, client tenant switching, voucher posting, and filing links.",
     };
   }
 
@@ -1616,6 +1616,9 @@ function plannedOrgWorkspaceModel(orgType) {
 
 function renderSelectedOrgWorkspace() {
   const orgType = activeOrgSelectorType();
+  if (orgType === "CA_PRACTICE") {
+    return renderCaPracticePortalWorkspace();
+  }
   const model = plannedOrgWorkspaceModel(orgType);
   return `
     <div class="planned-org-workspace erp-workspace-panel">
@@ -4856,6 +4859,7 @@ function renderMitraBooksSettingsWorkspace() {
 
 function renderCaPracticePortalWorkspace() {
   const model = plannedOrgWorkspaceModel("CA_PRACTICE");
+  const summary = caPracticeSummary(lastCaDocuments);
   return `
     <div class="verification-panel erp-workspace-panel ca-practice-workspace">
       <div class="preview-heading compact">
@@ -4864,13 +4868,13 @@ function renderCaPracticePortalWorkspace() {
           <h4>CA Practice Portal</h4>
           <p>Client document intake, review queue, and compliance workflow for CA firms and bookkeepers.</p>
         </div>
-        <span class="pill warn">Controlled rollout</span>
+        <span class="pill ok">Metadata workflow active</span>
       </div>
       <div class="planned-org-kpis">
         <article>
-          <span>Client Books</span>
-          <strong>Planned</strong>
-          <small>Tenant-safe multi-company switching is not enabled yet.</small>
+          <span>Client Tracking</span>
+          <strong>${escapeHtml(String(summary.clientCount))}</strong>
+          <small>Client books represented in this tenant queue.</small>
         </article>
         <article>
           <span>Review Queue</span>
@@ -4879,8 +4883,8 @@ function renderCaPracticePortalWorkspace() {
         </article>
         <article>
           <span>Compliance</span>
-          <strong>Planned</strong>
-          <small>GST, TDS, audit due dates, and filing calendar.</small>
+          <strong>${escapeHtml(String(summary.compliance.length))}</strong>
+          <small>Compliance areas tracked through document metadata.</small>
         </article>
       </div>
       <div class="settings-boundary-note">

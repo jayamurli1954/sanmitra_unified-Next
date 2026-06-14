@@ -375,6 +375,10 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     assert "client_owner" in ca_block
     assert "client_access_enabled" in ca_block
     assert "renderCaPracticeOperations" in app_source
+    assert 'subtitle: "Client document workflow"' in app_source
+    assert 'return renderCaPracticePortalWorkspace();' in app_source
+    assert "CA Practice Portal planned" not in app_source
+    assert "Planned multi-client books" not in app_source
 
 
 def test_accounting_voucher_detail_surfaces_reversal_links() -> None:
