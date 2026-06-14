@@ -1500,7 +1500,7 @@ function renderBusinessExecutiveDashboard() {
   // Lazy self-heal: whenever the KPI dashboard renders without data (boot,
   // refresh, or any path that didn't fetch), kick off the load. Deferred so we
   // don't re-enter during the current innerHTML render; guarded so it fires once.
-  if (!hasDashboard && !businessDashboardLoadInFlight) {
+  if (hasTrustedSession() && !hasDashboard && !businessDashboardLoadInFlight) {
     setTimeout(() => { loadBusinessDashboardStats(); }, 0);
   }
 
@@ -5211,7 +5211,7 @@ function setBusinessWorkspace(workspace) {
   dashboardPreview.innerHTML = workspace === "overview"
     ? renderDashboardPreview(experienceConfig.mitrabooks)
     : renderBusinessWorkspace();
-  if (workspace === "overview") {
+  if (workspace === "overview" && hasTrustedSession()) {
     loadBusinessDashboardStats();
   } else if (workspace === "parties") {
     loadBusinessParties();
@@ -11320,6 +11320,9 @@ async function loadBusinessAccounts() {
  * Fetches live KPI data: income, expenses, net position, GST, cash, receivables, payables
  */
 async function loadBusinessDashboardStats() {
+  if (!hasTrustedSession()) {
+    return;
+  }
   const appKey = "mitrabooks";
   businessDashboardLoadInFlight = true;
   let result;
@@ -14587,7 +14590,7 @@ orgOptions.forEach((option) => {
       activeBusinessWorkspace = "overview";
       syncBusinessNavActiveState();
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-      if (orgType === "BUSINESS") {
+      if (orgType === "BUSINESS" && hasTrustedSession()) {
         loadBusinessDashboardStats();
       } else if (orgType === "CA_PRACTICE") {
         lastCaDocumentsResult = null;
