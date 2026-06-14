@@ -58,6 +58,27 @@ jobs:
           python scripts/serve_frontends.py --host 127.0.0.1 --port 3300 &
           echo $! > /tmp/sanmitra_frontend_server.pid
 
+      - name: Wait for Static Frontend Server
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.request
+
+          url = "http://127.0.0.1:3300/mitrabooks-erp/login.html"
+          last_error = None
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200:
+                          print(f"Static frontend server is ready: {url}")
+                          break
+              except Exception as exc:
+                  last_error = exc
+                  time.sleep(1)
+          else:
+              raise SystemExit(f"Static frontend server did not become ready: {last_error}")
+          PY
+
       - name: Run MitraBooks Shell Smoke
         working-directory: frontend
         env:
