@@ -200,7 +200,27 @@ function TempleRegistration() {
               <Grid item xs={12} md={4}><TextField fullWidth label="Primary Admin Phone" value={form.admin_phone} onChange={(e) => updateField('admin_phone', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Full Name" value={form.admin_full_name} onChange={(e) => updateField('admin_full_name', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Email" value={form.admin_email} onChange={(e) => updateField('admin_email', e.target.value)} /></Grid>
-              <Grid item xs={12} md={6}><TextField fullWidth select SelectProps={{ native: true }} label="Designation / Authority" value={form.authority_designation} onChange={(e) => updateField('authority_designation', e.target.value)}><option value="">Select designation</option><option value="Trustee">Trustee</option><option value="Admin">Admin</option><option value="Treasurer">Treasurer</option><option value="Secretary">Secretary</option><option value="President">President</option><option value="Authorized Signatory">Authorized Signatory</option><option value="Manager">Manager</option><option value="Other">Other</option></TextField></Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  select
+                  SelectProps={{ native: true }}
+                  InputLabelProps={{ shrink: true }}
+                  label="Designation / Authority"
+                  value={form.authority_designation}
+                  onChange={(e) => updateField('authority_designation', e.target.value)}
+                >
+                  <option value="">Select designation</option>
+                  <option value="Trustee">Trustee</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Treasurer">Treasurer</option>
+                  <option value="Secretary">Secretary</option>
+                  <option value="President">President</option>
+                  <option value="Authorized Signatory">Authorized Signatory</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Other">Other</option>
+                </TextField>
+              </Grid>
               {form.authority_designation === 'Other' && (
                 <Grid item xs={12} md={6}><TextField fullWidth label="Other Designation / Authority" value={form.authority_designation_other} onChange={(e) => updateField('authority_designation_other', e.target.value)} /></Grid>
               )}
