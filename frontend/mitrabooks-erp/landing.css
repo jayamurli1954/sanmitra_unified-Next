@@ -163,6 +163,28 @@ footer {
   margin-top: 28px;
 }
 
+.hero-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.hero-proof span,
+.close-flow span,
+.step {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hero-proof span {
+  padding: 8px 10px;
+}
+
 .product-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -235,6 +257,18 @@ footer {
   color: var(--accent-2);
 }
 
+.close-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.close-flow span {
+  padding: 9px 8px;
+  text-align: center;
+}
+
 .section {
   padding: 56px 0;
   border-top: 1px solid var(--line);
@@ -256,6 +290,45 @@ footer {
 
 .practice-pricing-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workflow-grid,
+.fit-grid,
+.transparency-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.workflow-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fit-grid,
+.transparency-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fit-grid article:first-child {
+  grid-column: span 2;
+}
+
+.workflow-grid article,
+.fit-grid article,
+.transparency-grid article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 18px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 30px;
+  margin-bottom: 14px;
+  color: var(--accent);
 }
 
 .pricing-group-title {
@@ -404,8 +477,19 @@ footer small {
   .feature-grid,
   .practice-grid,
   .pricing-grid,
+  .workflow-grid,
+  .fit-grid,
+  .transparency-grid,
   .metric-row,
   .contact-grid {
     grid-template-columns: 1fr;
+  }
+
+  .fit-grid article:first-child {
+    grid-column: auto;
+  }
+
+  .close-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
