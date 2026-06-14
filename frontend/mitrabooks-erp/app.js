@@ -678,6 +678,12 @@ let lastBusinessParties = [];
 let lastBusinessAccounts = [];
 let lastCaDocuments = [];
 let lastCaDocumentsResult = null;
+let caPracticeFilters = {
+  status: "",
+  client_name: "",
+  assigned_to: "",
+  priority: "",
+};
 const CA_DOCUMENT_WORKFLOW = ["uploaded", "under_review", "query_raised", "reviewed", "posted"];
 const CA_DOCUMENT_LABELS = {
   uploaded: "Uploaded",
@@ -685,6 +691,12 @@ const CA_DOCUMENT_LABELS = {
   query_raised: "Query raised",
   reviewed: "Reviewed",
   posted: "Posted",
+};
+const CA_DOCUMENT_PRIORITY_LABELS = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+  urgent: "Urgent",
 };
 
 const appRoot = document.getElementById("app-root");
@@ -1226,6 +1238,123 @@ function caDocumentMetrics(rows) {
   ];
 }
 
+function caDocumentPriorityLabel(priority) {
+  return CA_DOCUMENT_PRIORITY_LABELS[priority] || "Normal";
+}
+
+function caPracticeSummary(rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const clients = new Set();
+  const assignees = new Map();
+  const compliance = new Map();
+  let clientAccess = 0;
+  let urgent = 0;
+  safeRows.forEach((row) => {
+    if (row.client_name) {
+      clients.add(row.client_name);
+    }
+    const owner = row.assigned_to || "Unassigned";
+    assignees.set(owner, (assignees.get(owner) || 0) + 1);
+    const area = row.compliance_area || "General";
+    compliance.set(area, (compliance.get(area) || 0) + 1);
+    if (row.client_access_enabled) {
+      clientAccess += 1;
+    }
+    if (row.priority === "urgent" || row.priority === "high") {
+      urgent += 1;
+    }
+  });
+  return {
+    clientCount: clients.size,
+    clientAccess,
+    urgent,
+    assignees: Array.from(assignees.entries()).sort((a, b) => b[1] - a[1]),
+    compliance: Array.from(compliance.entries()).sort((a, b) => b[1] - a[1]),
+  };
+}
+
+function renderCaPracticeFilters() {
+  return `
+    <form class="ca-practice-filter-panel" data-ca-filter-form>
+      <label>
+        <span>Status</span>
+        <select name="status">
+          <option value="">All statuses</option>
+          ${CA_DOCUMENT_WORKFLOW.map((status) => `
+            <option value="${escapeHtml(status)}" ${caPracticeFilters.status === status ? "selected" : ""}>${escapeHtml(caDocumentStatusLabel(status))}</option>
+          `).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Client</span>
+        <input name="client_name" type="search" maxlength="160" value="${escapeHtml(caPracticeFilters.client_name)}" placeholder="Client or company">
+      </label>
+      <label>
+        <span>Assigned to</span>
+        <input name="assigned_to" type="search" maxlength="120" value="${escapeHtml(caPracticeFilters.assigned_to)}" placeholder="Staff or partner">
+      </label>
+      <label>
+        <span>Priority</span>
+        <select name="priority">
+          <option value="">All priorities</option>
+          ${Object.entries(CA_DOCUMENT_PRIORITY_LABELS).map(([value, label]) => `
+            <option value="${escapeHtml(value)}" ${caPracticeFilters.priority === value ? "selected" : ""}>${escapeHtml(label)}</option>
+          `).join("")}
+        </select>
+      </label>
+      <div class="ca-practice-filter-actions">
+        <button type="submit" class="secondary">Apply Filters</button>
+        <button type="button" class="secondary" data-business-action="ca-doc-clear-filters">Clear</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderCaPracticeOperations(rows) {
+  const summary = caPracticeSummary(rows);
+  const assigneeRows = summary.assignees.length ? summary.assignees : [["Unassigned", 0]];
+  const complianceRows = summary.compliance.length ? summary.compliance : [["General", 0]];
+  return `
+    <div class="ca-practice-operations-grid">
+      <article>
+        <span>Client Tracking</span>
+        <strong>${escapeHtml(String(summary.clientCount))}</strong>
+        <small>Client books represented in this tenant queue.</small>
+      </article>
+      <article>
+        <span>Client Access</span>
+        <strong>${escapeHtml(String(summary.clientAccess))}</strong>
+        <small>Metadata records flagged for client visibility when access rules are enabled.</small>
+      </article>
+      <article>
+        <span>Priority Work</span>
+        <strong>${escapeHtml(String(summary.urgent))}</strong>
+        <small>High or urgent records needing staff attention.</small>
+      </article>
+    </div>
+    <div class="ca-practice-workload-grid">
+      <section>
+        <h5>Staff Assignment</h5>
+        ${assigneeRows.map(([name, count]) => `
+          <div class="ca-practice-row">
+            <span>${escapeHtml(name)}</span>
+            <strong>${escapeHtml(String(count))}</strong>
+          </div>
+        `).join("")}
+      </section>
+      <section>
+        <h5>Compliance Dashboard</h5>
+        ${complianceRows.map(([name, count]) => `
+          <div class="ca-practice-row">
+            <span>${escapeHtml(name)}</span>
+            <strong>${escapeHtml(String(count))}</strong>
+          </div>
+        `).join("")}
+      </section>
+    </div>
+  `;
+}
+
 function renderCaDocumentTable(rows) {
   if (!lastCaDocumentsResult) {
     return `
@@ -1251,6 +1380,8 @@ function renderCaDocumentTable(rows) {
             <th>Client</th>
             <th>Document type</th>
             <th>Period</th>
+            <th>Owner / Staff</th>
+            <th>Priority</th>
             <th>Status</th>
             <th>Next action</th>
             <th>Posting ref</th>
@@ -1268,8 +1399,19 @@ function renderCaDocumentTable(rows) {
                 </td>
                 <td>${escapeHtml(row.document_type || "-")}</td>
                 <td>${escapeHtml(row.period || "-")}</td>
+                <td>
+                  <strong>${escapeHtml(row.client_owner || "-")}</strong>
+                  <span class="row-subtext">${escapeHtml(row.assigned_to || "Unassigned")}</span>
+                </td>
+                <td>
+                  <span class="pill ${row.priority === "urgent" || row.priority === "high" ? "warn" : ""}">${escapeHtml(caDocumentPriorityLabel(row.priority))}</span>
+                  <span class="row-subtext">${escapeHtml(row.due_date || "No due date")}</span>
+                </td>
                 <td><span class="pill">${escapeHtml(caDocumentStatusLabel(row.status))}</span></td>
-                <td>${escapeHtml(row.next_action || "-")}</td>
+                <td>
+                  ${escapeHtml(row.next_action || "-")}
+                  <span class="row-subtext">${escapeHtml(row.compliance_area || "General")} ${row.client_access_enabled ? " | Client access flagged" : ""}</span>
+                </td>
                 <td>${escapeHtml(row.posting_reference || "-")}</td>
                 <td>
                   ${nextStatus ? `
@@ -1326,12 +1468,45 @@ function renderCaDocumentIntake(documentIntake) {
               <input name="assigned_to" type="text" maxlength="120" placeholder="Reviewer or partner">
             </label>
             <label>
+              <span>Client owner</span>
+              <input name="client_owner" type="text" maxlength="120" placeholder="Partner or manager">
+            </label>
+            <label>
+              <span>Priority</span>
+              <select name="priority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label>
+              <span>Due date</span>
+              <input name="due_date" type="date">
+            </label>
+            <label>
+              <span>Compliance area</span>
+              <select name="compliance_area">
+                <option value="">General</option>
+                <option>GST</option>
+                <option>TDS</option>
+                <option>Income tax</option>
+                <option>Audit</option>
+                <option>ROC</option>
+                <option>Bookkeeping</option>
+              </select>
+            </label>
+            <label>
               <span>Original file name</span>
               <input name="original_file_name" type="text" maxlength="240" placeholder="metadata only, no upload yet">
             </label>
             <label>
               <span>Notes</span>
               <input name="notes" type="text" maxlength="500" placeholder="Review notes or client instruction">
+            </label>
+            <label class="ca-checkbox-field">
+              <input name="client_access_enabled" type="checkbox" value="true">
+              <span>Flag for future client access</span>
             </label>
           </div>
           <div class="ca-document-actions">
@@ -1362,6 +1537,9 @@ function renderCaDocumentIntake(documentIntake) {
           </article>
         `).join("")}
       </div>
+
+      ${renderCaPracticeFilters()}
+      ${renderCaPracticeOperations(lastCaDocuments)}
 
       ${renderCaDocumentTable(lastCaDocuments)}
 
@@ -5051,7 +5229,14 @@ async function createBusinessParty(data) {
 }
 
 async function loadCaPracticeDocuments() {
-  const result = await apiRequest("mitrabooks", "/api/v1/business/ca-documents?limit=100", { method: "GET" });
+  const params = new URLSearchParams({ limit: "100" });
+  Object.entries(caPracticeFilters).forEach(([key, value]) => {
+    const normalized = String(value || "").trim();
+    if (normalized) {
+      params.set(key, normalized);
+    }
+  });
+  const result = await apiRequest("mitrabooks", `/api/v1/business/ca-documents?${params.toString()}`, { method: "GET" });
   lastCaDocumentsResult = result;
   if (result.ok) {
     lastCaDocuments = Array.isArray(result.payload?.items) ? result.payload.items : [];
@@ -5082,6 +5267,11 @@ async function createCaPracticeDocument(form) {
     document_type: String(formData.get("document_type") || "").trim(),
     period: String(formData.get("period") || "").trim(),
     assigned_to: String(formData.get("assigned_to") || "").trim() || null,
+    client_owner: String(formData.get("client_owner") || "").trim() || null,
+    priority: String(formData.get("priority") || "normal").trim() || "normal",
+    due_date: String(formData.get("due_date") || "").trim() || null,
+    compliance_area: String(formData.get("compliance_area") || "").trim() || null,
+    client_access_enabled: formData.get("client_access_enabled") === "true",
     original_file_name: String(formData.get("original_file_name") || "").trim() || null,
     notes: String(formData.get("notes") || "").trim() || null,
   };
@@ -14105,6 +14295,9 @@ dashboardPreview.addEventListener("click", (event) => {
     pageAuditList(button.getAttribute("data-page-direction") || "next");
   } else if (businessAction === "ca-doc-refresh") {
     loadCaPracticeDocuments();
+  } else if (businessAction === "ca-doc-clear-filters") {
+    caPracticeFilters = { status: "", client_name: "", assigned_to: "", priority: "" };
+    loadCaPracticeDocuments();
   } else if (businessAction === "refresh-financial-health") {
     loadFinancialHealth();
   } else if (businessAction === "ca-doc-status") {
@@ -14382,7 +14575,8 @@ dashboardPreview.addEventListener("keydown", (event) => {
 dashboardPreview.addEventListener("submit", (event) => {
   const mandirForm = event.target.closest("[data-mandir-create-form]");
   const caDocumentForm = event.target.closest("[data-ca-document-form]");
-  if (!mandirForm && !caDocumentForm) {
+  const caFilterForm = event.target.closest("[data-ca-filter-form]");
+  if (!mandirForm && !caDocumentForm && !caFilterForm) {
     return;
   }
   event.preventDefault();
@@ -14390,6 +14584,15 @@ dashboardPreview.addEventListener("submit", (event) => {
     submitMandirCreateForm(mandirForm);
   } else if (caDocumentForm) {
     createCaPracticeDocument(caDocumentForm);
+  } else if (caFilterForm) {
+    const formData = new FormData(caFilterForm);
+    caPracticeFilters = {
+      status: String(formData.get("status") || "").trim(),
+      client_name: String(formData.get("client_name") || "").trim(),
+      assigned_to: String(formData.get("assigned_to") || "").trim(),
+      priority: String(formData.get("priority") || "").trim(),
+    };
+    loadCaPracticeDocuments();
   }
 });
 entitlementForm.addEventListener("submit", (event) => {

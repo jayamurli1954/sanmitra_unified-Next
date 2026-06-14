@@ -302,6 +302,11 @@ async def ensure_business_indexes() -> None:
 def _ca_document_response_doc(doc: dict) -> dict:
     result = _json_safe_doc(doc)
     result.setdefault("next_action", CA_DOCUMENT_DEFAULT_NEXT_ACTION.get(str(result.get("status") or "uploaded"), "Review document metadata"))
+    result.setdefault("client_owner", None)
+    result.setdefault("priority", "normal")
+    result.setdefault("due_date", None)
+    result.setdefault("compliance_area", None)
+    result.setdefault("client_access_enabled", False)
     return result
 
 
@@ -324,11 +329,16 @@ async def create_ca_document_metadata(
         "document_type": payload.document_type.strip(),
         "period": payload.period.strip(),
         "status": "uploaded",
-        "assigned_to": payload.assigned_to,
-        "original_file_name": payload.original_file_name,
+        "assigned_to": payload.assigned_to.strip() if payload.assigned_to else None,
+        "client_owner": payload.client_owner.strip() if payload.client_owner else None,
+        "priority": payload.priority,
+        "due_date": payload.due_date.strip() if payload.due_date else None,
+        "compliance_area": payload.compliance_area.strip() if payload.compliance_area else None,
+        "client_access_enabled": bool(payload.client_access_enabled),
+        "original_file_name": payload.original_file_name.strip() if payload.original_file_name else None,
         "next_action": CA_DOCUMENT_DEFAULT_NEXT_ACTION["uploaded"],
         "posting_reference": None,
-        "notes": payload.notes,
+        "notes": payload.notes.strip() if payload.notes else None,
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -353,6 +363,9 @@ async def list_ca_document_metadata(
     app_key: str,
     accounting_entity_id: str,
     status: str | None = None,
+    client_name: str | None = None,
+    assigned_to: str | None = None,
+    priority: str | None = None,
     limit: int = 100,
 ) -> dict:
     filters = {
@@ -362,6 +375,10 @@ async def list_ca_document_metadata(
     }
     if status:
         filters["status"] = status
+    if assigned_to:
+        filters["assigned_to"] = assigned_to
+    if priority:
+        filters["priority"] = priority
 
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
@@ -371,6 +388,13 @@ async def list_ca_document_metadata(
         .limit(safe_limit)
         .to_list(length=safe_limit)
     )
+    if client_name:
+        normalized_client = client_name.strip().lower()
+        rows = [
+            row
+            for row in rows
+            if normalized_client in str(row.get("client_name") or "").lower()
+        ]
     return {"items": [_ca_document_response_doc(row) for row in rows], "total": len(rows)}
 
 

@@ -898,6 +898,9 @@ async def create_ca_document(
 @router.get("/ca-documents", response_model=CaDocumentListResponse)
 async def list_ca_documents(
     status: str | None = Query(default=None, pattern="^(uploaded|under_review|query_raised|reviewed|posted)$"),
+    client_name: str | None = Query(default=None, min_length=1, max_length=160),
+    assigned_to: str | None = Query(default=None, min_length=1, max_length=120),
+    priority: str | None = Query(default=None, pattern="^(low|normal|high|urgent)$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
     _module_context: dict = Depends(require_enabled_module("business")),
@@ -917,6 +920,9 @@ async def list_ca_documents(
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
         status=status,
+        client_name=client_name,
+        assigned_to=assigned_to,
+        priority=priority,
         limit=limit,
     )
 

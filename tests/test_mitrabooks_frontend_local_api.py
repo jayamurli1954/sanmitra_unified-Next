@@ -358,7 +358,8 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     end = app_source.index("async function updateBusinessParty", start)
     ca_block = app_source[start:end]
 
-    assert "/api/v1/business/ca-documents?limit=100" in ca_block
+    assert 'new URLSearchParams({ limit: "100" })' in ca_block
+    assert "/api/v1/business/ca-documents?${params.toString()}" in ca_block
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
     assert 'method: "PATCH"' in ca_block
     assert 'label: "CA Practice Portal"' in app_source
@@ -370,6 +371,10 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     assert "File storage deferred" in app_source
     assert 'type="file" multiple disabled' in app_source
     assert "data-ca-document-form" in app_source
+    assert "data-ca-filter-form" in app_source
+    assert "client_owner" in ca_block
+    assert "client_access_enabled" in ca_block
+    assert "renderCaPracticeOperations" in app_source
 
 
 def test_accounting_voucher_detail_surfaces_reversal_links() -> None:

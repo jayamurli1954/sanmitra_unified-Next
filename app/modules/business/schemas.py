@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 PartyType = Literal["customer", "vendor", "both"]
 VoucherType = Literal["payment", "receipt", "contra", "journal"]
 CaDocumentStatus = Literal["uploaded", "under_review", "query_raised", "reviewed", "posted"]
+CaDocumentPriority = Literal["low", "normal", "high", "urgent"]
 
 
 class GstHeadAmounts(BaseModel):
@@ -135,6 +136,11 @@ class CaDocumentCreateRequest(BaseModel):
     document_type: str = Field(..., min_length=1, max_length=80)
     period: str = Field(..., min_length=1, max_length=80)
     assigned_to: str | None = Field(default=None, max_length=120)
+    client_owner: str | None = Field(default=None, max_length=120)
+    priority: CaDocumentPriority = "normal"
+    due_date: str | None = Field(default=None, max_length=20)
+    compliance_area: str | None = Field(default=None, max_length=80)
+    client_access_enabled: bool = False
     original_file_name: str | None = Field(default=None, max_length=240)
     notes: str | None = Field(default=None, max_length=500)
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
@@ -143,6 +149,11 @@ class CaDocumentCreateRequest(BaseModel):
 class CaDocumentUpdateRequest(BaseModel):
     status: CaDocumentStatus | None = None
     assigned_to: str | None = Field(default=None, max_length=120)
+    client_owner: str | None = Field(default=None, max_length=120)
+    priority: CaDocumentPriority | None = None
+    due_date: str | None = Field(default=None, max_length=20)
+    compliance_area: str | None = Field(default=None, max_length=80)
+    client_access_enabled: bool | None = None
     next_action: str | None = Field(default=None, max_length=160)
     posting_reference: str | None = Field(default=None, max_length=120)
     notes: str | None = Field(default=None, max_length=500)
@@ -159,6 +170,11 @@ class CaDocumentResponse(BaseModel):
     period: str
     status: str
     assigned_to: str | None = None
+    client_owner: str | None = None
+    priority: str = "normal"
+    due_date: str | None = None
+    compliance_area: str | None = None
+    client_access_enabled: bool = False
     original_file_name: str | None = None
     next_action: str
     posting_reference: str | None = None

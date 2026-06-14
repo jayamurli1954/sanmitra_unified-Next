@@ -1446,6 +1446,11 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
             document_type="Bank statement",
             period="May 2026",
             assigned_to="Staff A",
+            client_owner="Partner A",
+            priority="high",
+            due_date="2026-06-20",
+            compliance_area="GST",
+            client_access_enabled=True,
             original_file_name="jayam-bank-may.pdf",
             notes="For reconciliation",
         ),
@@ -1469,6 +1474,11 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
     assert result["tenant_id"] == "business-tenant"
     assert result["app_key"] == "mitrabooks"
     assert result["status"] == "uploaded"
+    assert result["client_owner"] == "Partner A"
+    assert result["priority"] == "high"
+    assert result["due_date"] == "2026-06-20"
+    assert result["compliance_area"] == "GST"
+    assert result["client_access_enabled"] is True
     assert result["next_action"] == "Classify document and assign reviewer"
     assert [row["client_name"] for row in listed["items"]] == ["Jayam Publications"]
     assert audit_events[0]["action"] == "business_ca_document_metadata_created"
@@ -1490,6 +1500,11 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
             "period": "May 2026",
             "status": "uploaded",
             "assigned_to": "Staff A",
+            "client_owner": "Partner A",
+            "priority": "normal",
+            "due_date": None,
+            "compliance_area": "GST",
+            "client_access_enabled": False,
             "original_file_name": "kartik-bills.zip",
             "next_action": "Classify document and assign reviewer",
             "posting_reference": None,
@@ -1508,7 +1523,13 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
         accounting_entity_id="primary",
         document_id="doc-1",
         updated_by="partner-1",
-        payload=CaDocumentUpdateRequest(status="under_review"),
+        payload=CaDocumentUpdateRequest(
+            status="under_review",
+            assigned_to="Staff B",
+            priority="urgent",
+            due_date="2026-06-18",
+            client_access_enabled=True,
+        ),
     )
     wrong_tenant = await business_service.update_ca_document_metadata(
         tenant_id="other-tenant",
@@ -1521,8 +1542,90 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
 
     assert result is not None
     assert result["status"] == "under_review"
+    assert result["assigned_to"] == "Staff B"
+    assert result["priority"] == "urgent"
+    assert result["due_date"] == "2026-06-18"
+    assert result["client_access_enabled"] is True
     assert result["next_action"] == "Review support and raise query if needed"
     assert wrong_tenant is None
+
+
+@pytest.mark.asyncio
+async def test_list_ca_document_metadata_filters_inside_tenant_scope(monkeypatch):
+    documents = FakeCollection()
+    now = business_service._now()
+    documents.docs = [
+        {
+            "document_id": "doc-high",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Jayam Publications",
+            "document_type": "Bank statement",
+            "period": "May 2026",
+            "status": "under_review",
+            "assigned_to": "Staff A",
+            "client_owner": "Partner A",
+            "priority": "high",
+            "due_date": "2026-06-20",
+            "compliance_area": "GST",
+            "client_access_enabled": True,
+            "original_file_name": "jayam-bank.pdf",
+            "next_action": "Review support and raise query if needed",
+            "posting_reference": None,
+            "notes": None,
+            "created_by": "reviewer-1",
+            "created_at": now,
+            "updated_at": now,
+        },
+        {
+            "document_id": "doc-normal",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Other Books",
+            "document_type": "Sales invoices",
+            "period": "May 2026",
+            "status": "uploaded",
+            "assigned_to": "Staff B",
+            "priority": "normal",
+            "next_action": "Classify document and assign reviewer",
+            "created_by": "reviewer-1",
+            "created_at": now,
+            "updated_at": now,
+        },
+        {
+            "document_id": "doc-other-tenant",
+            "tenant_id": "other-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Jayam Publications",
+            "document_type": "GST return",
+            "period": "May 2026",
+            "status": "under_review",
+            "assigned_to": "Staff A",
+            "priority": "high",
+            "next_action": "Review support and raise query if needed",
+            "created_by": "reviewer-1",
+            "created_at": now,
+            "updated_at": now,
+        },
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
+
+    result = await business_service.list_ca_document_metadata(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        status="under_review",
+        client_name="jayam",
+        assigned_to="Staff A",
+        priority="high",
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["document_id"] == "doc-high"
+    assert result["items"][0]["tenant_id"] == "business-tenant"
 
 
 # ===================== ITC Reversal (GST Rule 37) =====================
