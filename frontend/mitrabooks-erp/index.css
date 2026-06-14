@@ -4458,6 +4458,47 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   font-size: 12px;
 }
 
+.settings-detail-panel {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.settings-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.settings-detail-grid article {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+  padding: 12px;
+}
+
+.settings-detail-grid strong {
+  display: block;
+  color: var(--text, #e2e8f0);
+  margin-bottom: 6px;
+}
+
+.settings-detail-grid p {
+  margin: 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .pill.neutral {
   background: rgba(148, 163, 184, 0.16);
   color: var(--text-muted, #94a3b8);

@@ -34,6 +34,7 @@ ONBOARDING_APP_NAMES = {
     "investmitra": "InvestMitra",
     "mitrabooks": "MitraBooks",
 }
+ONBOARDING_PUBLIC_APP_KEYS = {"mandirmitra", "gruhamitra", "mitrabooks"}
 _ONBOARDING_INDEXES_READY = False
 _onboarding_logger = logging.getLogger(__name__)
 
@@ -59,6 +60,14 @@ def _serialize_request(doc: dict) -> dict:
         "request_id": request_id,
         "status": doc.get("status", "pending"),
         "tenant_name": doc.get("tenant_name") or "",
+        "organization_name": doc.get("organization_name"),
+        "organization_type": doc.get("organization_type"),
+        "authority_designation": doc.get("authority_designation"),
+        "request_intent": doc.get("request_intent"),
+        "selected_plan": doc.get("selected_plan"),
+        "plan_timing": doc.get("plan_timing"),
+        "verification_channel": doc.get("verification_channel"),
+        "terms_accepted": doc.get("terms_accepted"),
         "temple_name": doc.get("temple_name"),
         "trust_name": doc.get("trust_name"),
         "temple_slug": doc.get("temple_slug"),
@@ -116,6 +125,19 @@ def _resolve_app_display_name(app_key: str | None) -> str:
     if normalized in ONBOARDING_APP_NAMES:
         return ONBOARDING_APP_NAMES[normalized]
     return "SanMitra"
+
+
+def normalize_public_onboarding_app_key(value: str | None) -> str:
+    raw = str(value or "").strip().lower()
+    aliases = {
+        "gharmitra": "gruhamitra",
+        "ghar-mitra": "gruhamitra",
+        "gruha-mitra": "gruhamitra",
+    }
+    normalized = aliases.get(raw, raw)
+    if normalized not in ONBOARDING_PUBLIC_APP_KEYS:
+        raise ValueError("Valid X-App-Key header is required for onboarding")
+    return normalized
 
 
 async def _allocate_tenant_id(base_hint: str) -> str:
@@ -317,17 +339,18 @@ async def _persist_email_meta(*, requests, request_id: str, email_sent: bool, em
         )
 
 
-async def create_onboarding_request(payload: OnboardingRequestCreate) -> dict:
+async def create_onboarding_request(payload: OnboardingRequestCreate, *, app_key: str | None = None) -> dict:
     await ensure_onboarding_indexes()
     requests = get_collection(ONBOARDING_REQUESTS_COLLECTION)
 
     admin_email = payload.admin_email.strip().lower()
-    tenant_name = payload.temple_name or payload.trust_name or ""
-    app_key = get_app_key()
+    app_key = normalize_public_onboarding_app_key(app_key or get_app_key())
+    tenant_name = payload.organization_name or payload.temple_name or payload.trust_name or ""
 
     existing = await requests.find_one(
         {
             "admin_email": admin_email,
+            "app_key": app_key,
             "status": {"$in": ["pending", "approved"]},
         }
     )
@@ -344,6 +367,15 @@ async def create_onboarding_request(payload: OnboardingRequestCreate) -> dict:
         "submitted_at": now,
         "updated_at": now,
         "tenant_name": tenant_name,
+        "organization_name": payload.organization_name,
+        "organization_type": payload.organization_type,
+        "authority_designation": payload.authority_designation,
+        "request_intent": payload.request_intent,
+        "selected_plan": payload.selected_plan,
+        "plan_timing": payload.plan_timing,
+        "verification_channel": payload.verification_channel,
+        "terms_accepted": payload.terms_accepted,
+        "terms_accepted_at": now,
         "temple_name": payload.temple_name,
         "trust_name": payload.trust_name,
         "temple_slug": payload.temple_slug,
@@ -416,7 +448,7 @@ async def approve_onboarding_request(*, request_id: str, approved_by: str, paylo
     tenant_name = str(doc.get("tenant_name") or doc.get("temple_name") or doc.get("trust_name") or "").strip() or "New Tenant"
 
     app_key = str(doc.get("app_key") or get_app_key() or "mandirmitra").strip().lower()
-    organization_type = normalize_organization_type(None, app_key=app_key)
+    organization_type = normalize_organization_type(doc.get("organization_type"), app_key=app_key)
     enabled_modules = derive_enabled_modules(organization_type=organization_type)
 
     requested_tenant_id = payload.tenant_id

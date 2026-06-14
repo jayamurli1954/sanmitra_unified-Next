@@ -4,9 +4,19 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 OnboardingStatus = Literal["pending", "approved", "rejected"]
+OnboardingIntent = Literal["register", "demo"]
+OnboardingVerificationChannel = Literal["email", "mobile"]
 
 
 class OnboardingRequestCreate(BaseModel):
+    organization_name: str | None = Field(default=None, max_length=200)
+    organization_type: str | None = Field(default=None, max_length=40)
+    authority_designation: str | None = Field(default=None, max_length=120)
+    request_intent: OnboardingIntent = "register"
+    selected_plan: str | None = Field(default=None, max_length=80)
+    plan_timing: str | None = Field(default=None, max_length=80)
+    verification_channel: OnboardingVerificationChannel = "email"
+    terms_accepted: bool = False
     temple_name: str | None = Field(default=None, max_length=200)
     trust_name: str | None = Field(default=None, max_length=200)
     temple_slug: str | None = Field(default=None, max_length=120)
@@ -23,10 +33,18 @@ class OnboardingRequestCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_names(self):
+        organization_name = (self.organization_name or "").strip()
         temple_name = (self.temple_name or "").strip()
         trust_name = (self.trust_name or "").strip()
-        if not temple_name and not trust_name:
-            raise ValueError("temple_name or trust_name is required")
+        if not organization_name and not temple_name and not trust_name:
+            raise ValueError("organization_name, temple_name, or trust_name is required")
+        if not self.terms_accepted:
+            raise ValueError("terms_accepted is required")
+        self.organization_name = organization_name or None
+        self.organization_type = (self.organization_type or "").strip().upper() or None
+        self.authority_designation = (self.authority_designation or "").strip() or None
+        self.selected_plan = (self.selected_plan or "").strip() or None
+        self.plan_timing = (self.plan_timing or "").strip() or None
         self.temple_name = temple_name or None
         self.trust_name = trust_name or None
         self.temple_slug = (self.temple_slug or "").strip().lower() or None
@@ -54,6 +72,15 @@ class OnboardingRequestItem(BaseModel):
     request_id: str
     status: OnboardingStatus
     tenant_name: str
+    app_key: str | None = None
+    organization_name: str | None = None
+    organization_type: str | None = None
+    authority_designation: str | None = None
+    request_intent: OnboardingIntent | None = None
+    selected_plan: str | None = None
+    plan_timing: str | None = None
+    verification_channel: OnboardingVerificationChannel | None = None
+    terms_accepted: bool | None = None
     temple_name: str | None = None
     trust_name: str | None = None
     temple_slug: str | None = None

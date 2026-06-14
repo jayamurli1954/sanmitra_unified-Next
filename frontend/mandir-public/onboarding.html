@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1f3d2b">
+    <link rel="icon" href="../assets/brand/mandirmitra-logo.jpeg" type="image/jpeg">
+    <link rel="stylesheet" href="../shared/product-onboarding.css">
+    <title>MandirMitra Onboarding</title>
+  </head>
+  <body class="onboarding-page">
+    <main class="onboarding-shell">
+      <header class="onboarding-header">
+        <a class="onboarding-brand" href="./index.html">
+          <img src="../assets/brand/mandirmitra-logo.jpeg" alt="MandirMitra">
+          <span>MandirMitra</span>
+        </a>
+        <nav class="onboarding-actions" aria-label="MandirMitra onboarding actions">
+          <a class="onboarding-action primary" href="./onboarding.html?intent=register">Register</a>
+          <a class="onboarding-action" href="./onboarding.html?intent=demo">Request Demo</a>
+          <a class="onboarding-action" href="../index.html">Login</a>
+        </nav>
+      </header>
+
+      <section class="onboarding-grid">
+        <article class="onboarding-card">
+          <p class="onboarding-eyebrow">Temple and trust onboarding</p>
+          <h1>Register a temple, trust, or NGO workspace.</h1>
+          <p>Submit authorized trustee, secretary, president, treasurer, or administrator details. Login access starts only after verification, approval, and activation.</p>
+          <ul class="onboarding-list">
+            <li>Donation, seva, receipt, and trust accounting setup is done after approval.</li>
+            <li>The approved authorized person becomes the primary tenant admin.</li>
+            <li>Additional staff and committee access is controlled through RBAC after activation.</li>
+          </ul>
+        </article>
+
+        <article class="onboarding-card">
+          <p class="onboarding-eyebrow">Register or request demo</p>
+          <h2>Temple / Trust details</h2>
+          <form data-onboarding-form data-product="MandirMitra" data-app-key="mandirmitra">
+            <div class="onboarding-form-grid">
+              <div class="onboarding-field">
+                <label for="full_name">Full Name *</label>
+                <input id="full_name" name="full_name" autocomplete="name" required>
+              </div>
+              <div class="onboarding-field">
+                <label for="email">Email Address *</label>
+                <input id="email" name="email" type="email" autocomplete="email" required>
+              </div>
+              <div class="onboarding-field">
+                <label for="mobile">Mobile Number *</label>
+                <input id="mobile" name="mobile" inputmode="tel" autocomplete="tel" required>
+              </div>
+              <div class="onboarding-field">
+                <label for="organization_type">Organization Type *</label>
+                <select id="organization_type" name="organization_type" required>
+                  <option value="TEMPLE">Temple / Trust</option>
+                </select>
+              </div>
+              <div class="onboarding-field full">
+                <label for="organization_name">Temple / Trust Name *</label>
+                <input id="organization_name" name="organization_name" required>
+              </div>
+              <div class="onboarding-field full">
+                <label for="address">Address</label>
+                <textarea id="address" name="address"></textarea>
+              </div>
+              <div class="onboarding-field">
+                <label for="authority_designation">Designation / Authority *</label>
+                <input id="authority_designation" name="authority_designation" placeholder="Trustee, Admin, Treasurer, Secretary, President" required>
+              </div>
+              <div class="onboarding-field">
+                <label for="request_intent">Request Type *</label>
+                <select id="request_intent" name="request_intent" required>
+                  <option value="register">Register</option>
+                  <option value="demo">Request Demo</option>
+                </select>
+              </div>
+              <div class="onboarding-field">
+                <label for="selected_plan">Plan</label>
+                <select id="selected_plan" name="selected_plan">
+                  <option value="Decide after demo">Decide after demo</option>
+                  <option value="Starter">Starter</option>
+                  <option value="Growth">Growth</option>
+                  <option value="Professional">Professional</option>
+                </select>
+              </div>
+              <div class="onboarding-field">
+                <label for="plan_timing">Plan Finalization</label>
+                <select id="plan_timing" name="plan_timing">
+                  <option value="After demo/discussion">After demo/discussion</option>
+                  <option value="Ready to activate">Ready to activate</option>
+                </select>
+              </div>
+              <div class="onboarding-field">
+                <label for="verification_channel">OTP / Verification Channel</label>
+                <select id="verification_channel" name="verification_channel">
+                  <option value="email">Email</option>
+                  <option value="mobile">Mobile</option>
+                </select>
+              </div>
+              <label class="onboarding-consent">
+                <input type="checkbox" name="terms_accepted" required>
+                <span>I confirm I am authorized to register this temple/trust and agree to the <a href="./terms.html">Terms of Service</a> and <a href="./privacy.html">Privacy Policy</a>.</span>
+              </label>
+              <div data-onboarding-status class="onboarding-status" role="status"></div>
+              <button data-onboarding-submit class="onboarding-submit" type="submit">Submit Request</button>
+            </div>
+          </form>
+        </article>
+      </section>
+    </main>
+    <script type="module" src="../shared/product-onboarding.js"></script>
+  </body>
+</html>

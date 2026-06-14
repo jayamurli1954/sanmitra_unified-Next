@@ -74,6 +74,53 @@ def test_statement_running_balance_receivable():
     assert out["transactions"][1]["document_type"] == "Receipt"
 
 
+def test_statement_suppresses_open_items_when_ledger_is_settled():
+    out = assemble_party_statement(
+        party={"party_id": "p1", "party_name": "Acme Ltd"},
+        kind="receivable", from_date=date(2026, 6, 1), to_date=AS_OF,
+        opening_balance=Decimal("0.00"),
+        transactions=[
+            _txn("2026-06-09", debit="106200.00", ref="INV-2026-2027-000001"),
+            _txn("2026-06-09", credit="106200.00", doc="receipt", ref="RCT-1"),
+        ],
+        open_items=[_open_item(5, "106200.00", "INV-2026-2027-000001", "2026-06-09")],
+        dunning_suggestion={"level": 1, "label": "Gentle reminder", "overdue_total": "106200.00"},
+        dunning_letter="stale reminder",
+        dunning_log=[],
+        business_name="Sanmitra Traders",
+    )
+
+    assert out["closing_balance"] == "0.00"
+    assert out["open_items"] == []
+    assert out["dunning"]["suggestion"]["level"] == 0
+    assert out["dunning"]["suggestion"]["label"] == "Allocation required"
+    assert out["dunning"]["letter"] == ""
+    assert any("ledger is settled" in note for note in out["notes"])
+
+
+def test_statement_suppresses_dunning_when_open_items_exceed_ledger_balance():
+    out = assemble_party_statement(
+        party={"party_id": "p1", "party_name": "Acme Ltd"},
+        kind="receivable", from_date=date(2026, 6, 1), to_date=AS_OF,
+        opening_balance=Decimal("0.00"),
+        transactions=[
+            _txn("2026-06-09", debit="1000.00", ref="INV-1"),
+            _txn("2026-06-10", credit="400.00", doc="receipt", ref="RCT-1"),
+        ],
+        open_items=[_open_item(5, "1000.00", "INV-1", "2026-06-09")],
+        dunning_suggestion={"level": 1, "label": "Gentle reminder", "overdue_total": "1000.00"},
+        dunning_letter="stale reminder",
+        dunning_log=[],
+        business_name="Sanmitra Traders",
+    )
+
+    assert out["closing_balance"] == "600.00"
+    assert out["open_items"][0]["outstanding"] == "1000.00"
+    assert out["dunning"]["suggestion"]["level"] == 0
+    assert out["dunning"]["letter"] == ""
+    assert any("does not match" in note for note in out["notes"])
+
+
 def test_statement_running_balance_payable_sign_flips():
     out = assemble_party_statement(
         party={"party_id": "v1", "party_name": "Vendor"},

@@ -3,7 +3,12 @@ from types import SimpleNamespace
 import pytest
 
 import app.core.onboarding.service as onboarding_service
-from app.core.onboarding.schemas import OnboardingApproveRequest, OnboardingRejectRequest, OnboardingResendRequest
+from app.core.onboarding.schemas import (
+    OnboardingApproveRequest,
+    OnboardingRejectRequest,
+    OnboardingRequestCreate,
+    OnboardingResendRequest,
+)
 
 
 class FakeCursor:
@@ -63,6 +68,76 @@ def _matches(doc: dict, filters: dict) -> bool:
         if doc.get(key) != expected:
             return False
     return True
+
+
+@pytest.mark.asyncio
+async def test_create_onboarding_request_captures_authority_plan_and_terms(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+
+    result = await onboarding_service.create_onboarding_request(
+        OnboardingRequestCreate(
+            organization_name="ABC Books LLP",
+            organization_type="PROFESSIONAL",
+            authority_designation="Partner",
+            request_intent="demo",
+            selected_plan="Growth",
+            plan_timing="After demo/discussion",
+            verification_channel="mobile",
+            admin_full_name="Asha Rao",
+            admin_email="asha@example.com",
+            admin_phone="9000000001",
+            terms_accepted=True,
+        ),
+        app_key="mitrabooks",
+    )
+
+    assert result["status"] == "pending"
+    assert result["tenant_name"] == "ABC Books LLP"
+
+    stored = await fake_requests.find_one({"request_id": result["request_id"]})
+    assert stored["app_key"] == "mitrabooks"
+    assert stored["organization_type"] == "PROFESSIONAL"
+    assert stored["authority_designation"] == "Partner"
+    assert stored["request_intent"] == "demo"
+    assert stored["selected_plan"] == "Growth"
+    assert stored["verification_channel"] == "mobile"
+    assert stored["terms_accepted"] is True
+
+
+def test_public_onboarding_requires_valid_product_app_key():
+    assert onboarding_service.normalize_public_onboarding_app_key("mandirmitra") == "mandirmitra"
+    assert onboarding_service.normalize_public_onboarding_app_key("gharmitra") == "gruhamitra"
+    with pytest.raises(ValueError, match="X-App-Key"):
+        onboarding_service.normalize_public_onboarding_app_key(None)
+    with pytest.raises(ValueError, match="X-App-Key"):
+        onboarding_service.normalize_public_onboarding_app_key("legalmitra")
+
+
+@pytest.mark.asyncio
+async def test_create_onboarding_request_deduplicates_per_app_key(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+
+    payload = OnboardingRequestCreate(
+        organization_name="Shared Admin Entity",
+        organization_type="BUSINESS",
+        authority_designation="Owner",
+        admin_full_name="Shared Admin",
+        admin_email="shared@example.com",
+        admin_phone="9000000001",
+        terms_accepted=True,
+    )
+
+    first = await onboarding_service.create_onboarding_request(payload, app_key="mitrabooks")
+    second = await onboarding_service.create_onboarding_request(payload, app_key="gruhamitra")
+
+    assert first["request_id"] != second["request_id"]
+    assert len(fake_requests.docs) == 2
+    assert {doc["app_key"] for doc in fake_requests.docs} == {"mitrabooks", "gruhamitra"}
+
+    with pytest.raises(ValueError, match="already exists"):
+        await onboarding_service.create_onboarding_request(payload, app_key="mitrabooks")
 
 
 @pytest.mark.asyncio

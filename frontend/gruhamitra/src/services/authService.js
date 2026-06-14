@@ -393,10 +393,19 @@ export const authService = {
   },
 
   /**
-   * Register a new society with its first super admin (backend onboarding)
+   * Submit a new society onboarding request. Tenant admin access is created only
+   * after platform approval, plan/payment completion, and activation.
    */
   async registerSociety(data) {
     const payload = {
+      organization_name: data?.society_name,
+      organization_type: 'HOUSING',
+      authority_designation: data?.authority_designation,
+      request_intent: data?.request_intent || 'register',
+      selected_plan: data?.selected_plan || 'Decide after demo',
+      plan_timing: data?.plan_timing || 'After demo/discussion',
+      verification_channel: data?.verification_channel || 'email',
+      terms_accepted: Boolean(data?.terms_accepted),
       temple_name: data?.society_name,
       trust_name: data?.society_name,
       temple_slug: String(data?.society_name || '')

@@ -12,8 +12,10 @@ from app.modules.business.schemas import (
     CaDocumentUpdateRequest,
     PartyCreateRequest,
     PartyUpdateRequest,
+    CreditNoteCancelRequest,
     CreditNoteCreateRequest,
     CreditNoteLineItem,
+    DebitNoteCancelRequest,
     DebitNoteCreateRequest,
     DebitNoteLineItem,
     PurchaseBillCancelRequest,
@@ -1049,6 +1051,72 @@ async def test_credit_note_blocked_in_locked_period(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_cancel_credit_note_posts_reversal(monkeypatch):
+    store = FakeCollection()
+    store.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "credit_note_id": "cn-1",
+        "credit_note_number": "CN-2026-2027-000001",
+        "customer_party_id": "cust-1",
+        "customer_name": "Acme Customer",
+        "note_date": date(2026, 6, 20),
+        "original_invoice_number": "INV-2026-2027-000001",
+        "reason": "sales_return",
+        "is_inter_state": False,
+        "income_account_code": "41001",
+        "line_items": [],
+        "taxable_total": Decimal("1000.00"),
+        "cgst_total": Decimal("90.00"),
+        "sgst_total": Decimal("90.00"),
+        "igst_total": Decimal("0.00"),
+        "gst_total": Decimal("180.00"),
+        "note_total": Decimal("1180.00"),
+        "status": "posted",
+        "journal_entry_id": 1001,
+        "created_by": "owner-1",
+        "created_at": "2026-06-20T00:00:00Z",
+        "updated_at": "2026-06-20T00:00:00Z",
+    })
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "_validate_reversal_period", lambda **_k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2002), True
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    result = await business_service.cancel_credit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        credit_note_id="cn-1",
+        created_by="owner-1",
+        payload=CreditNoteCancelRequest(cancel_date=date(2026, 6, 21), reason="Customer return confirmed"),
+        idempotency_key="cn-cancel-1",
+    )
+
+    assert captured["journal_id"] == 1001
+    assert captured["reversal_date"] == date(2026, 6, 21)
+    assert captured["reason"] == "Customer return confirmed"
+    assert captured["idempotency_key"] == "cn-cancel-1"
+    assert result["status"] == "cancelled"
+    assert result["reversal_journal_entry_id"] == 2002
+    assert result["cancel_reason"] == "Customer return confirmed"
+    assert store.docs[0]["status"] == "cancelled"
+    assert audit_events[0]["action"] == "business_credit_note_cancelled"
+
+
+@pytest.mark.asyncio
 async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     store = FakeCollection()
     _seed_vendor(store)
@@ -1102,6 +1170,72 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     assert result["note_total"] == "1180.00"
     assert result["status"] == "posted"
     assert audit_events[0]["action"] == "business_debit_note_posted"
+
+
+@pytest.mark.asyncio
+async def test_cancel_debit_note_posts_reversal(monkeypatch):
+    store = FakeCollection()
+    store.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "debit_note_id": "dn-1",
+        "debit_note_number": "DN-2026-2027-000001",
+        "vendor_party_id": "vend-1",
+        "vendor_name": "Acme Vendor",
+        "note_date": date(2026, 6, 20),
+        "original_bill_number": "SUP-2026-77",
+        "reason": "purchase_return",
+        "is_inter_state": False,
+        "expense_account_code": "51001",
+        "line_items": [],
+        "taxable_total": Decimal("1000.00"),
+        "cgst_total": Decimal("90.00"),
+        "sgst_total": Decimal("90.00"),
+        "igst_total": Decimal("0.00"),
+        "gst_total": Decimal("180.00"),
+        "note_total": Decimal("1180.00"),
+        "status": "posted",
+        "journal_entry_id": 1101,
+        "created_by": "owner-1",
+        "created_at": "2026-06-20T00:00:00Z",
+        "updated_at": "2026-06-20T00:00:00Z",
+    })
+    captured = {}
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "_validate_reversal_period", lambda **_k: _async_none())
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2102), True
+
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    result = await business_service.cancel_debit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        debit_note_id="dn-1",
+        created_by="owner-1",
+        payload=DebitNoteCancelRequest(cancel_date=date(2026, 6, 21), reason="Vendor return confirmed"),
+        idempotency_key="dn-cancel-1",
+    )
+
+    assert captured["journal_id"] == 1101
+    assert captured["reversal_date"] == date(2026, 6, 21)
+    assert captured["reason"] == "Vendor return confirmed"
+    assert captured["idempotency_key"] == "dn-cancel-1"
+    assert result["status"] == "cancelled"
+    assert result["reversal_journal_entry_id"] == 2102
+    assert result["cancel_reason"] == "Vendor return confirmed"
+    assert store.docs[0]["status"] == "cancelled"
+    assert audit_events[0]["action"] == "business_debit_note_cancelled"
 
 
 def test_gst_setoff_follows_statutory_order():

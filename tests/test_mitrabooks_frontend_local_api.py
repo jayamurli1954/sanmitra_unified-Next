@@ -87,6 +87,11 @@ def test_business_party_payload_matches_backend_schema() -> None:
     assert "opening_balance_paise" not in create_block
     assert "party_name: data.name" in update_block
     assert "opening_balance_paise" not in update_block
+    assert '/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate' in app_source
+    deactivate_start = app_source.index("async function deactivateBusinessParty")
+    deactivate_end = app_source.index("function openBusinessCreatePartyDialog", deactivate_start)
+    deactivate_block = app_source[deactivate_start:deactivate_end]
+    assert 'method: "POST"' in deactivate_block
 
 
 def test_business_loaders_refresh_active_workspace_panel() -> None:
@@ -107,6 +112,10 @@ def test_mitrabooks_settings_menu_is_business_specific() -> None:
     assert "Core Settings" in app_source
     assert "Module Settings" in app_source
     assert "Professional Practice Settings" in app_source
+    assert 'data-business-action="settings-detail"' in app_source
+    assert 'businessAction === "settings-detail"' in app_source
+    assert 'businessAction === "settings-back"' in app_source
+    assert "Backend contract pending" in app_source
     assert "Client Management" in app_source
     assert "Multi-Company Dashboard" in app_source
     assert "AI Settings" in app_source
@@ -123,7 +132,12 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
 
     assert "MitraBooks" in landing_source
     assert "Cloud ERP and double-entry accounting" in landing_source
-    assert "./index.html" in landing_source
+    assert "./login.html" in landing_source
+    assert "./onboarding.html?intent=register" in landing_source
+    assert "./onboarding.html?intent=demo" in landing_source
+    assert ">Register<" in landing_source
+    assert ">Request Demo<" in landing_source
+    assert ">Login<" in landing_source
     assert "GST-ready invoicing" in landing_source
     assert "Document upload and OCR extraction" in landing_source
     assert "Single User - Multi Company" in landing_source
@@ -147,6 +161,13 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert "./privacy.html" in landing_source
     assert "./terms.html" in landing_source
 
+    onboarding_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "onboarding.html").read_text(encoding="utf-8")
+    assert 'data-app-key="mitrabooks"' in onboarding_source
+    assert "Designation / Authority" in onboarding_source
+    assert "OTP / Verification Channel" in onboarding_source
+    assert "terms_accepted" in onboarding_source
+    assert "Contact verification and plan/payment approval" in onboarding_source
+
 
 def test_mitrabooks_public_pages_are_product_scoped() -> None:
     public_pages = ("about.html", "contact.html", "privacy.html", "terms.html")
@@ -156,7 +177,7 @@ def test_mitrabooks_public_pages_are_product_scoped() -> None:
         assert "MitraBooks" in source
         assert "SanMitra Platform" in source
         assert "./landing.html" in source
-        assert "./index.html" in source
+        assert "./login.html" in source
         assert "Privacy Policy" in source
         assert "Terms of Use" in source
         assert "GruhaMitra" not in source
@@ -337,6 +358,12 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     assert "/api/v1/business/ca-documents?limit=100" in ca_block
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
     assert 'method: "PATCH"' in ca_block
+    assert 'label: "CA Practice Portal"' in app_source
+    assert 'businessWorkspace: "ca-access"' in app_source
+    assert 'activeBusinessWorkspace === "ca-access"' in app_source
+    assert 'module_key: "ca_access"' in app_source
+    nav_start = app_source.index('businessWorkspace: "ca-access"')
+    assert 'enabled: true' in app_source[nav_start:nav_start + 220]
     assert "File storage deferred" in app_source
     assert 'type="file" multiple disabled' in app_source
     assert "data-ca-document-form" in app_source

@@ -79,6 +79,83 @@ Before testing the live websites, the local codebase safety and automated tests 
 
 ---
 
+## 4A. GruhaMitra Local Playwright Smoke Verification
+
+Date: 2026-06-13
+Environment: local built frontend artifact served from `frontend/build` on `http://127.0.0.1:3200`
+Command:
+
+```powershell
+npm run build
+npx.cmd playwright test e2e/gruhamitra-smoke.spec.js --project=chromium
+```
+
+Result:
+
+```text
+4 passed
+```
+
+Verified:
+
+- GruhaMitra PWA build artifact is generated under `/gruhamitra/`.
+- `/gruhamitra/manifest.json` is reachable.
+- Public landing page renders product positioning, feature cards, plan cards, and entry links.
+- Login, society onboarding, and resident signup routes render through in-app navigation.
+- Authenticated dashboard shell renders with a demo local-storage session and mocked backend responses.
+- Core authenticated route screens load without route-level crashes for maintenance, accounting, members, complaints, reports, message, meeting, and settings.
+
+Limitations:
+
+- Authenticated routes used mocked backend responses. This verifies frontend shell health and route availability, not live backend business correctness.
+- Maintenance bill generation, bill posting, receipt posting, dues reduction, ledger/trial balance correctness, tenant isolation, and debit-credit accounting invariants still require a real GruhaMitra demo tenant and safe backend test data.
+- Direct local deep links such as `/gruhamitra/login` did not work through the local `serve_build.py` fallback because the server falls back to root `index.html` instead of `gruhamitra/index.html`. Deployed Vercel routing should be verified separately.
+
+---
+
+## 4B. MitraBooks Local Playwright Smoke Verification
+
+Date: 2026-06-13
+Environment: local built frontend artifact served from `frontend/build` on `http://127.0.0.1:3200`
+Command:
+
+```powershell
+npm run build
+npx.cmd playwright test e2e/mitrabooks-shell.spec.js --project=chromium
+```
+
+Result:
+
+```text
+3 passed
+```
+
+Verified:
+
+- MitraBooks login validation and password visibility toggle.
+- Stale cached token fails closed and clears the local token.
+- Authenticated business dashboard shell renders with mocked tenant/module context.
+- Sidebar navigation groups render and the enabled Bills workspace is available.
+- Party master route, New Party action, create, edit, and soft deactivate from the active list render correctly.
+- Voucher route, New Voucher dialog, debit/credit lines, account selectors, imbalance state, disabled submit for an unbalanced voucher, balanced journal posting, and voucher reversal render correctly.
+- Sales invoice route, New Invoice form, GST totals preview, posting, list row, detail view, and reversal panel render correctly.
+- Purchase bill route, New Bill form, input GST totals preview, posting, list row, detail view, and reversal panel render correctly.
+- Credit note route, New Credit Note form, GST totals preview, posting, list row, detail view, and reversal panel render correctly.
+- Debit note route, New Debit Note form, input GST totals preview, posting, list row, detail view, and reversal panel render correctly.
+- Accounting drill-down route renders.
+- Enabled workspace routes render for Sales Invoices, Purchase Bills, Credit Notes, Debit Notes, Financial Reports, GST Returns, Reconciliation, TDS/TCS, Bank Reconciliation, Financial Health, and MitraBooks Settings.
+
+Limitations:
+
+- Authenticated routes used mocked backend responses. This verifies frontend shell health and route availability, not live backend business correctness.
+- GST/TDS, bank reconciliation, reports, exports, and live print/PDF paths still require a safe business-demo tenant and backend E2E.
+- Journal voucher browser verification used mocked backend responses; backend tests separately cover journal posting, idempotency, unbalanced rejection, drill-down, and reversal.
+- Sales invoice and purchase bill browser verification used mocked backend responses; backend tests separately cover sales invoice and purchase bill posting and reversal.
+- Credit note and debit note browser verification used mocked backend responses; backend tests separately cover credit/debit note posting and reversal.
+- Financial posting invariants, tenant isolation, report totals, entitlement enforcement, exports, and compliance correctness remain separate backend verification requirements.
+
+---
+
 ## 5. Security & Vulnerability Analysis (Defensive Remediation)
 
 As an agentic developer, active penetration testing or vulnerability scanning on the live endpoints was omitted to protect system availability. Instead, a review of the configuration files and network headers was performed:
@@ -101,6 +178,8 @@ As an agentic developer, active penetration testing or vulnerability scanning on
 | :--- | :--- | :--- | :--- |
 | **LegalMitra** | `www.legalmitra.sanmitratech.in` | **PASS** | Homepage, Admin Login, Chat History, Template Form Fields, Document Preview Renderer |
 | **MandirMitra** | `www.mandirmitra.sanmitratech.in` | **PASS** | Redirect, Admin Login, Dashboard Cards, Today's Panchang, Trial Balance Generation |
+| **GruhaMitra** | Local built PWA at `127.0.0.1:3200/gruhamitra/` | **PASS - frontend shell smoke** | Landing, Manifest, Login, Society Onboarding, Resident Signup, Authenticated Dashboard Shell, Core Route Availability with mocked backend |
+| **MitraBooks** | Local built PWA at `127.0.0.1:3200/mitrabooks-erp/` | **PASS - frontend shell smoke** | Login Guards, Business Dashboard Shell, Party/Voucher Workspace, Voucher Dialog Guard, Enabled Business/Tax/Report/Settings Route Availability with mocked backend |
 | **Local Code** | `D:\sanmitra_unified-Next` | **PASS** | Repository Safety, Compile Checks, Pytest suite (119 checks) |
 
 ---

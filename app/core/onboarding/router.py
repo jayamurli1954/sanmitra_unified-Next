@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.auth.dependencies import get_current_user
-from app.core.tenants.context import get_app_key
 from app.core.onboarding.schemas import (
     OnboardingApproveRequest,
     OnboardingApproveResponse,
@@ -17,6 +16,7 @@ from app.core.onboarding.service import (
     create_onboarding_request,
     get_onboarding_request,
     list_onboarding_requests,
+    normalize_public_onboarding_app_key,
     reject_onboarding_request,
     resend_onboarding_credentials,
 )
@@ -30,12 +30,17 @@ def _require_super_admin(current_user: dict) -> None:
 
 
 @router.post("/register", response_model=OnboardingRequestResponse)
-async def register_onboarding_request(payload: OnboardingRequestCreate):
+async def register_onboarding_request(
+    payload: OnboardingRequestCreate,
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
     try:
-        return await create_onboarding_request(payload)
+        return await create_onboarding_request(payload, app_key=x_app_key)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
+        if "X-App-Key" in str(exc):
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -44,10 +49,15 @@ async def register_onboarding_request(payload: OnboardingRequestCreate):
 async def list_onboarding_requests_endpoint(
     status: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    """Public endpoint - list all onboarding requests for demo/platform operations"""
+    """List onboarding requests for one explicit product app context."""
     try:
-        rows = await list_onboarding_requests(status=status, app_key=get_app_key(), limit=limit)
+        rows = await list_onboarding_requests(
+            status=status,
+            app_key=normalize_public_onboarding_app_key(x_app_key),
+            limit=limit,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -57,14 +67,20 @@ async def list_onboarding_requests_endpoint(
 
 
 @router.get("/{request_id}", response_model=OnboardingRequestItem)
-async def get_onboarding_request_endpoint(request_id: str):
-    """Public endpoint - get a single onboarding request"""
+async def get_onboarding_request_endpoint(
+    request_id: str,
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Get an onboarding request only within one explicit product app context."""
     try:
+        requested_app_key = normalize_public_onboarding_app_key(x_app_key)
         row = await get_onboarding_request(request_id)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not row:
+    if not row or str(row.get("app_key") or "").strip().lower() != requested_app_key:
         raise HTTPException(status_code=404, detail="Onboarding request not found")
     return OnboardingRequestItem(**row)
 

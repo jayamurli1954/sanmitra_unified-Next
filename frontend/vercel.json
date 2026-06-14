@@ -110,6 +110,10 @@
       "destination": "/legalmitra/index.html"
     },
     {
+      "source": "/mitrabooks-erp/login",
+      "destination": "/mitrabooks-erp/login.html"
+    },
+    {
       "source": "/mitrabooks-erp/:path((?!.*\\.).*)",
       "destination": "/mitrabooks-erp/index.html"
     },
@@ -127,6 +131,12 @@
     },
     {
       "source": "/mitrabooks-erp/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/mitrabooks-erp/login.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]

@@ -83,8 +83,8 @@ const LandingScreen = () => {
           <span>GruhaMitra</span>
         </Link>
         <nav className="landing-nav-actions" aria-label="GruhaMitra entry actions">
-          <Link to="/resident-signup" className="landing-nav-link">Join Society</Link>
-          <Link to="/onboard-society" className="landing-nav-link">Register Society</Link>
+          <Link to="/onboard-society?intent=register" className="landing-nav-link">Register</Link>
+          <Link to="/onboard-society?intent=demo" className="landing-nav-link">Request Demo</Link>
           <Link to="/login" className="landing-nav-button">Login</Link>
         </nav>
       </header>
@@ -98,8 +98,9 @@ const LandingScreen = () => {
             and society accounting into one practical workspace for committees and residents.
           </p>
           <div className="landing-hero-actions">
-            <Link to="/onboard-society" className="landing-primary-button">Register Society</Link>
-            <Link to="/login" className="landing-secondary-button">Existing User Login</Link>
+            <Link to="/onboard-society?intent=register" className="landing-primary-button">Register</Link>
+            <Link to="/onboard-society?intent=demo" className="landing-secondary-button">Request Demo</Link>
+            <Link to="/login" className="landing-secondary-button">Login</Link>
           </div>
           <div className="landing-trust-row">
             <span><FaCheckCircle /> Tenant-scoped society data</span>
@@ -220,7 +221,7 @@ const LandingScreen = () => {
         </div>
         <div className="landing-cta-actions">
           <Link to="/login" className="landing-primary-button">Login</Link>
-          <Link to="/resident-signup" className="landing-secondary-button">Join Existing Society</Link>
+          <Link to="/onboard-society?intent=demo" className="landing-secondary-button">Request Demo</Link>
         </div>
       </section>
 

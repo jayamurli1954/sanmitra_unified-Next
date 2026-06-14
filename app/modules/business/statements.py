@@ -126,6 +126,31 @@ def build_dunning_letter(
     return "\n".join(lines)
 
 
+def reconcile_statement_open_items(
+    *,
+    kind: str,
+    closing_balance: Decimal,
+    open_items: list[dict],
+) -> tuple[list[dict], list[str]]:
+    """Suppress stale open-item reminders when allocation metadata lags ledger."""
+    closing = _q2(closing_balance)
+    open_total = sum((_q2(i.get("outstanding") or 0) for i in open_items), Decimal("0.00"))
+    if not open_items or open_total == closing:
+        return open_items, []
+
+    if closing <= Decimal("0.00"):
+        return [], [
+            "Open-item allocation is out of date: the party ledger is settled, so overdue reminders are suppressed.",
+        ]
+
+    return open_items, [
+        (
+            "Open-item allocation does not match the party ledger closing balance; "
+            "reminders are suppressed until receipts/payments are allocated."
+        ),
+    ]
+
+
 def assemble_party_statement(
     *,
     party: dict,
@@ -167,6 +192,21 @@ def assemble_party_statement(
             "balance": str(running),
         })
 
+    open_items, allocation_notes = reconcile_statement_open_items(
+        kind=kind,
+        closing_balance=running,
+        open_items=open_items,
+    )
+    if allocation_notes:
+        dunning_suggestion = {
+            "level": 0,
+            "label": "Allocation required",
+            "max_days_overdue": 0,
+            "overdue_count": 0,
+            "overdue_total": "0.00",
+        }
+        dunning_letter = ""
+
     return {
         "party": {
             "party_id": party.get("party_id"),
@@ -194,6 +234,7 @@ def assemble_party_statement(
             "Statement lines come from the posted party sub-ledger; the closing balance ties to the party's ledger balance.",
             "Open items and overdue ages come from payment allocation — allocate receipts to invoices to keep them accurate.",
             "Reminder letters are generated from the ledger figures; sending is manual and recorded below (maker-checker).",
+            *allocation_notes,
         ],
     }
 

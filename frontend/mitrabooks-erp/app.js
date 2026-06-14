@@ -67,7 +67,7 @@ function businessNavigationGroups() {
       items: [
         { label: "GST Returns", businessWorkspace: "gst-returns", icon: "GT", module: { module_key: "gst", frontend_path: "/gst/returns", enabled: true } },
         { label: "TDS / TCS", businessWorkspace: "tds-tcs", icon: "TD", module: { module_key: "tax", frontend_path: "/tax/tds-tcs", enabled: true } },
-        { label: "CA Access Portal", businessWorkspace: "ca-access", icon: "CA", module: { module_key: "ca_access", frontend_path: "/business/ca-access", enabled: false } },
+        { label: "CA Practice Portal", businessWorkspace: "ca-access", icon: "CA", module: { module_key: "ca_access", frontend_path: "/business/ca-access", enabled: true } },
       ],
     },
     {
@@ -4311,6 +4311,7 @@ function renderDashboardPreview(config) {
 
 let activeBusinessWorkspace = "overview";
 let lastBusinessPartiesResult = null;
+let activeSettingsDetailId = "";
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
@@ -4368,6 +4369,24 @@ const MITRABOOKS_COMPLETION_PHASES = [
   ["Phase 2D", "Jul 1-12", "Integrations, document storage, OCR, AI settings, and provider controls"],
   ["Phase 2E", "Jul 13-19", "Browser E2E, tenant isolation, accounting guardrails, and staging validation"],
 ];
+
+function settingsItemId(item) {
+  return String(item.title || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function allMitraBooksSettingsItems() {
+  return MITRABOOKS_SETTINGS_GROUPS.flatMap((group) =>
+    group.items.map((item) => ({ ...item, groupTitle: group.title })),
+  );
+}
+
+function findMitraBooksSettingsItem(settingId) {
+  return allMitraBooksSettingsItems().find((item) => settingsItemId(item) === settingId) || null;
+}
 
 const businessListState = {
   parties: {
@@ -4552,11 +4571,12 @@ function settingsStatusClass(status) {
 }
 
 function renderMitraBooksSettingsCard(item) {
+  const settingId = settingsItemId(item);
   const action = item.workspace
     ? `<button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open Related Area</button>`
-    : `<button class="secondary" type="button" disabled>Needs Backend Contract</button>`;
+    : `<button class="secondary" type="button" data-business-action="settings-detail" data-settings-id="${escapeHtml(settingId)}">View Setup</button>`;
   return `
-    <article class="settings-menu-card">
+    <article class="settings-menu-card" data-settings-card="${escapeHtml(settingId)}">
       <div class="settings-card-head">
         <h5>${escapeHtml(item.title)}</h5>
         <span class="pill ${settingsStatusClass(item.status)}">${escapeHtml(item.status)}</span>
@@ -4570,7 +4590,49 @@ function renderMitraBooksSettingsCard(item) {
   `;
 }
 
+function renderMitraBooksSettingsDetail() {
+  const item = findMitraBooksSettingsItem(activeSettingsDetailId);
+  if (!item) return "";
+  const isReady = String(item.status || "").toLowerCase() === "implemented";
+  const action = item.workspace
+    ? `<button class="primary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open ${escapeHtml(item.title)}</button>`
+    : `<button class="secondary" type="button" disabled>Backend contract pending</button>`;
+  const evidence = item.workspace
+    ? "Available through the linked MitraBooks workspace with existing tenant-scoped route checks."
+    : "Documented as planned target scope; not yet backed by a tenant-scoped save API.";
+  return `
+    <section class="settings-detail-panel" data-settings-detail="${escapeHtml(activeSettingsDetailId)}">
+      <div class="preview-heading compact">
+        <div>
+          <h5>${escapeHtml(item.title)}</h5>
+          <p>${escapeHtml(item.groupTitle || "Settings")} · ${escapeHtml(item.visibility || "")}</p>
+        </div>
+        <span class="pill ${settingsStatusClass(item.status)}">${escapeHtml(item.status)}</span>
+      </div>
+      <div class="settings-detail-grid">
+        <article>
+          <strong>Current state</strong>
+          <p>${escapeHtml(item.detail || "")}</p>
+        </article>
+        <article>
+          <strong>${isReady ? "Verification" : "Gap"}</strong>
+          <p>${escapeHtml(evidence)}</p>
+        </article>
+        <article>
+          <strong>Deferred scope</strong>
+          <p>${escapeHtml(isReady ? "No direct ledger mutation from settings; financial changes continue through controlled posting workflows." : "Final forms, permissions, audit events, and persistence will be added under the relevant backend contract.")}</p>
+        </article>
+      </div>
+      <div class="settings-detail-actions">
+        ${action}
+        <button class="secondary" type="button" data-business-action="settings-back">Back to Settings</button>
+      </div>
+    </section>
+  `;
+}
+
 function renderMitraBooksSettingsWorkspace() {
+  const detail = activeSettingsDetailId ? renderMitraBooksSettingsDetail() : "";
   return `
     <div class="verification-panel erp-workspace-panel mitrabooks-settings-workspace">
       <div class="preview-heading compact">
@@ -4594,6 +4656,7 @@ function renderMitraBooksSettingsWorkspace() {
         <span><strong>Module</strong> shown by enabled workflow</span>
         <span><strong>Platform</strong> owner/admin controlled</span>
       </div>
+      ${detail}
       ${MITRABOOKS_SETTINGS_GROUPS.map((group) => `
         <section class="settings-menu-section">
           <div class="settings-section-heading">
@@ -4613,9 +4676,50 @@ function renderMitraBooksSettingsWorkspace() {
   `;
 }
 
+function renderCaPracticePortalWorkspace() {
+  const model = plannedOrgWorkspaceModel("CA_PRACTICE");
+  return `
+    <div class="verification-panel erp-workspace-panel ca-practice-workspace">
+      <div class="preview-heading compact">
+        <div>
+          <span class="workbench-kicker">Practice workbench</span>
+          <h4>CA Practice Portal</h4>
+          <p>Client document intake, review queue, and compliance workflow for CA firms and bookkeepers.</p>
+        </div>
+        <span class="pill warn">Controlled rollout</span>
+      </div>
+      <div class="planned-org-kpis">
+        <article>
+          <span>Client Books</span>
+          <strong>Planned</strong>
+          <small>Tenant-safe multi-company switching is not enabled yet.</small>
+        </article>
+        <article>
+          <span>Review Queue</span>
+          <strong>${escapeHtml(String(lastCaDocuments.length))}</strong>
+          <small>Document metadata in the current tenant queue.</small>
+        </article>
+        <article>
+          <span>Compliance</span>
+          <strong>Planned</strong>
+          <small>GST, TDS, audit due dates, and filing calendar.</small>
+        </article>
+      </div>
+      <div class="settings-boundary-note">
+        <strong>Current state:</strong>
+        This portal saves tenant-scoped document metadata only. File storage, OCR, client tenant switching, voucher posting, and filing links are deferred until CA practice access rules are complete.
+      </div>
+      ${renderCaDocumentIntake(model.documentIntake)}
+    </div>
+  `;
+}
+
 function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "settings") {
     return renderMitraBooksSettingsWorkspace();
+  }
+  if (activeBusinessWorkspace === "ca-access") {
+    return renderCaPracticePortalWorkspace();
   }
   if (activeBusinessWorkspace === "parties") {
     return `
@@ -4951,14 +5055,20 @@ async function loadCaPracticeDocuments() {
   lastCaDocumentsResult = result;
   if (result.ok) {
     lastCaDocuments = Array.isArray(result.payload?.items) ? result.payload.items : [];
-    if (currentExperience === "mitrabooks" && activeOrgSelectorType() === "CA_PRACTICE") {
+    if (currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+      if (activeBusinessWorkspace === "ca-access") {
+        dashboardPreview.innerHTML = renderBusinessWorkspace();
+      }
     }
   } else {
     lastCaDocuments = [];
     setLoginStatus("warn", "Unable to load CA documents", statusDetailText(result.payload?.detail) || `Document metadata request failed with HTTP ${result.status}.`);
-    if (currentExperience === "mitrabooks" && activeOrgSelectorType() === "CA_PRACTICE") {
+    if (currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+      if (activeBusinessWorkspace === "ca-access") {
+        dashboardPreview.innerHTML = renderBusinessWorkspace();
+      }
     }
   }
   renderJson(apiOutput, { ca_documents: { ok: result.ok, status: result.status, count: lastCaDocuments.length, detail: result.payload?.detail || null } });
@@ -5038,7 +5148,7 @@ async function updateBusinessParty(partyId, data) {
 async function deactivateBusinessParty(partyId) {
   const appKey = "mitrabooks";
   const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate`, {
-    method: "PATCH",
+    method: "POST",
   });
 
   if (result.ok) {
@@ -5093,6 +5203,9 @@ function setBusinessWorkspace(workspace) {
     selectedOrgType = "BUSINESS";
     updateTrustedContextUi();
   }
+  if (workspace !== "settings") {
+    activeSettingsDetailId = "";
+  }
   activeBusinessWorkspace = workspace;
   syncBusinessNavActiveState();
   dashboardPreview.innerHTML = workspace === "overview"
@@ -5138,6 +5251,10 @@ function setBusinessWorkspace(workspace) {
     loadBusinessParties();
     loadBusinessAccounts();
     loadDebitNotes();
+  } else if (workspace === "ca-access") {
+    lastCaDocumentsResult = null;
+    lastCaDocuments = [];
+    loadCaPracticeDocuments();
   }
 }
 
@@ -5171,6 +5288,7 @@ function syncBusinessNavActiveState() {
       "reconciliation": "Reconciliation",
       "tds-tcs": "TDS / TCS",
       "bank-recon": "Bank Reconciliation",
+      "ca-access": "CA Practice Portal",
       settings: "Settings",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -6830,6 +6948,9 @@ function renderStatementsPanel() {
 
   const d = r.dunning || {};
   const sug = d.suggestion || {};
+  const dunningMessage = sug.level
+    ? `Suggested: <strong>${escapeHtml(sug.label || "")}</strong> — oldest invoice ${escapeHtml(String(sug.max_days_overdue || 0))} days overdue, ${escapeHtml(String(sug.overdue_count || 0))} invoice(s), total ${num(sug.overdue_total)}.`
+    : (sug.label === "Allocation required" ? "Allocation required — the ledger is settled or differs from open-item allocation, so no reminder is generated." : "Nothing overdue — no reminder needed.");
   const logRows = (d.log || []).map((l) => `
     <tr>
       <td>${escapeHtml(String(l.created_at || "").slice(0, 10))}</td>
@@ -6843,7 +6964,7 @@ function renderStatementsPanel() {
     <div class="table-preview compact-table">
       <h4>Payment reminders (dunning)</h4>
       <div class="preview-heading compact">
-        <div><p>${sug.level ? `Suggested: <strong>${escapeHtml(sug.label || "")}</strong> — oldest invoice ${escapeHtml(String(sug.max_days_overdue || 0))} days overdue, ${escapeHtml(String(sug.overdue_count || 0))} invoice(s), total ${num(sug.overdue_total)}.` : "Nothing overdue — no reminder needed."}</p></div>
+        <div><p>${dunningMessage}</p></div>
         <span class="pill ${sug.level >= 3 ? "warn" : sug.level ? "" : "ok"}">${escapeHtml(sug.level ? `Level ${sug.level}` : "clear")}</span>
       </div>
       ${d.letter ? `
@@ -13956,6 +14077,12 @@ dashboardPreview.addEventListener("click", (event) => {
     pageBusinessList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
   } else if (businessAction === "workspace-view") {
     setBusinessWorkspace(button.getAttribute("data-workspace-view") || "overview");
+  } else if (businessAction === "settings-detail") {
+    activeSettingsDetailId = button.getAttribute("data-settings-id") || "";
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "settings-back") {
+    activeSettingsDetailId = "";
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
   } else if (businessAction === "open-create-voucher") {
     openBusinessCreateVoucherDialog();
   } else if (businessAction === "remove-voucher-line") {
