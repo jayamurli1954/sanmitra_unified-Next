@@ -83,7 +83,41 @@ jobs:
         working-directory: frontend
         env:
           E2E_BASE_URL: http://127.0.0.1:3300
-        run: npx playwright test e2e/mitrabooks-shell.spec.js --project=chromium --timeout=90000
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: npx playwright test e2e/mitrabooks-shell.spec.js --project=chromium --timeout=90000 --reporter=list,json
+
+      - name: Annotate Playwright Failures
+        if: failure()
+        working-directory: frontend
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_path = Path("playwright-results.json")
+          if not report_path.exists():
+              print("No Playwright JSON report found.")
+              raise SystemExit(0)
+
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          def gh_escape(value: str) -> str:
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          def walk_suites(suites):
+              for suite in suites or []:
+                  for spec in suite.get("specs", []):
+                      title = " > ".join(spec.get("titlePath", []) or [spec.get("title", "Playwright test")])
+                      for test in spec.get("tests", []):
+                          for result in test.get("results", []):
+                              if result.get("status") in {"failed", "timedOut", "interrupted"}:
+                                  errors = result.get("errors") or []
+                                  message = errors[0].get("message", result.get("status")) if errors else result.get("status")
+                                  print(f"::error file=e2e/mitrabooks-shell.spec.js::" + gh_escape(f"{title}: {message}"))
+                  yield from walk_suites(suite.get("suites", []))
+
+          list(walk_suites(report.get("suites", [])))
+          PY
 
       - name: Upload Playwright Failure Artifacts
         if: failure()
