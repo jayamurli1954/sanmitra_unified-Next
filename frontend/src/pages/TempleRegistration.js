@@ -13,7 +13,6 @@ import {
   Typography,
   Link,
 } from '@mui/material';
-import TempleHinduIcon from '@mui/icons-material/TempleHindu';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchWithApiFallback } from '../utils/apiBaseUrl';
 
@@ -173,7 +172,12 @@ function TempleRegistration() {
       <Box sx={{ my: 6 }}>
         <Paper elevation={3} sx={{ p: { xs: 3, md: 4 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <TempleHinduIcon color="primary" />
+            <Box
+              component="img"
+              src="/assets/brand/mandirmitra-logo.jpeg"
+              alt="MandirMitra"
+              sx={{ width: 28, height: 28, borderRadius: 1, objectFit: 'contain', flexShrink: 0 }}
+            />
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               New Temple / Trust Registration
             </Typography>
@@ -201,12 +205,13 @@ function TempleRegistration() {
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Full Name" value={form.admin_full_name} onChange={(e) => updateField('admin_full_name', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Email" value={form.admin_email} onChange={(e) => updateField('admin_email', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600, mb: 0.5 }}>
+                  Designation / Authority *
+                </Typography>
                 <TextField
                   fullWidth
                   select
-                  SelectProps={{ native: true }}
-                  InputLabelProps={{ shrink: true }}
-                  label="Designation / Authority"
+                  SelectProps={{ native: true, inputProps: { 'aria-label': 'Designation / Authority' } }}
                   value={form.authority_designation}
                   onChange={(e) => updateField('authority_designation', e.target.value)}
                 >
