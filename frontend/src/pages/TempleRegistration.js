@@ -32,6 +32,7 @@ const INITIAL_FORM = {
   admin_email: '',
   admin_phone: '',
   authority_designation: '',
+  authority_designation_other: '',
   request_intent: 'register',
   selected_plan: 'Decide after demo',
   plan_timing: 'After demo/discussion',
@@ -85,6 +86,10 @@ function TempleRegistration() {
       setError('Designation or authority is required');
       return;
     }
+    if (form.authority_designation === 'Other' && !form.authority_designation_other.trim()) {
+      setError('Please enter the designation or authority for Other');
+      return;
+    }
     if (!form.terms_accepted) {
       setError('Please confirm authority and accept the Terms of Service and Privacy Policy');
       return;
@@ -96,6 +101,7 @@ function TempleRegistration() {
         organization_name: (form.temple_name || form.trust_name).trim() || null,
         organization_type: 'TEMPLE',
         authority_designation: form.authority_designation.trim(),
+        authority_designation_other: form.authority_designation === 'Other' ? form.authority_designation_other.trim() : null,
         request_intent: form.request_intent,
         selected_plan: form.selected_plan,
         plan_timing: form.plan_timing,
@@ -194,7 +200,10 @@ function TempleRegistration() {
               <Grid item xs={12} md={4}><TextField fullWidth label="Primary Admin Phone" value={form.admin_phone} onChange={(e) => updateField('admin_phone', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Full Name" value={form.admin_full_name} onChange={(e) => updateField('admin_full_name', e.target.value)} /></Grid>
               <Grid item xs={12} md={6}><TextField fullWidth label="Primary Admin Email" value={form.admin_email} onChange={(e) => updateField('admin_email', e.target.value)} /></Grid>
-              <Grid item xs={12} md={6}><TextField fullWidth label="Designation / Authority" value={form.authority_designation} onChange={(e) => updateField('authority_designation', e.target.value)} /></Grid>
+              <Grid item xs={12} md={6}><TextField fullWidth select SelectProps={{ native: true }} label="Designation / Authority" value={form.authority_designation} onChange={(e) => updateField('authority_designation', e.target.value)}><option value="">Select designation</option><option value="Trustee">Trustee</option><option value="Admin">Admin</option><option value="Treasurer">Treasurer</option><option value="Secretary">Secretary</option><option value="President">President</option><option value="Authorized Signatory">Authorized Signatory</option><option value="Manager">Manager</option><option value="Other">Other</option></TextField></Grid>
+              {form.authority_designation === 'Other' && (
+                <Grid item xs={12} md={6}><TextField fullWidth label="Other Designation / Authority" value={form.authority_designation_other} onChange={(e) => updateField('authority_designation_other', e.target.value)} /></Grid>
+              )}
               <Grid item xs={12} md={6}><TextField fullWidth select SelectProps={{ native: true }} label="Request Type" value={form.request_intent} onChange={(e) => updateField('request_intent', e.target.value)}><option value="register">Register</option><option value="demo">Request Demo</option></TextField></Grid>
               <Grid item xs={12} md={4}><TextField fullWidth select SelectProps={{ native: true }} label="Plan" value={form.selected_plan} onChange={(e) => updateField('selected_plan', e.target.value)}><option value="Decide after demo">Decide after demo</option><option value="Starter">Starter</option><option value="Growth">Growth</option><option value="Professional">Professional</option></TextField></Grid>
               <Grid item xs={12} md={4}><TextField fullWidth select SelectProps={{ native: true }} label="Plan Finalization" value={form.plan_timing} onChange={(e) => updateField('plan_timing', e.target.value)}><option value="After demo/discussion">After demo/discussion</option><option value="Ready to activate">Ready to activate</option></TextField></Grid>

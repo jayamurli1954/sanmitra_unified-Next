@@ -401,6 +401,7 @@ export const authService = {
       organization_name: data?.society_name,
       organization_type: 'HOUSING',
       authority_designation: data?.authority_designation,
+      authority_designation_other: data?.authority_designation_other || undefined,
       request_intent: data?.request_intent || 'register',
       selected_plan: data?.selected_plan || 'Decide after demo',
       plan_timing: data?.plan_timing || 'After demo/discussion',

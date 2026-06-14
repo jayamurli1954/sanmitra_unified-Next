@@ -164,6 +164,9 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     onboarding_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "onboarding.html").read_text(encoding="utf-8")
     assert 'data-app-key="mitrabooks"' in onboarding_source
     assert "Designation / Authority" in onboarding_source
+    assert '<select id="authority_designation" name="authority_designation" required>' in onboarding_source
+    assert '<option value="Other">Other</option>' in onboarding_source
+    assert "authority_designation_other" in onboarding_source
     assert "OTP / Verification Channel" in onboarding_source
     assert "terms_accepted" in onboarding_source
     assert "Contact verification and plan/payment approval" in onboarding_source

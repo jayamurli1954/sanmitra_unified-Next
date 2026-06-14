@@ -9,6 +9,7 @@ const SocietyOnboardingScreen = () => {
     society_name: '',
     society_address: '',
     authority_designation: '',
+    authority_designation_other: '',
     admin_name: '',
     admin_email: '',
     admin_phone: '',
@@ -40,6 +41,10 @@ const SocietyOnboardingScreen = () => {
       setError('Designation or authority is required');
       return;
     }
+    if (formData.authority_designation === 'Other' && !formData.authority_designation_other) {
+      setError('Please enter the designation or authority for Other');
+      return;
+    }
     if (!formData.terms_accepted) {
       setError('Please confirm authority and accept the Terms of Service and Privacy Policy');
       return;
@@ -51,6 +56,7 @@ const SocietyOnboardingScreen = () => {
         society_name: formData.society_name,
         society_address: formData.society_address || undefined,
         authority_designation: formData.authority_designation,
+        authority_designation_other: formData.authority_designation === 'Other' ? formData.authority_designation_other : undefined,
         admin_name: formData.admin_name,
         admin_email: formData.admin_email,
         admin_phone: formData.admin_phone || undefined,
@@ -159,16 +165,38 @@ const SocietyOnboardingScreen = () => {
 
           <div className="login-input-container">
             <label className="login-label">Designation / Authority *</label>
-            <input
-              type="text"
+            <select
               name="authority_designation"
               className="login-input"
-              placeholder="President, Secretary, Treasurer, Authorized Person"
               value={formData.authority_designation}
               onChange={handleChange}
               required
-            />
+            >
+              <option value="">Select designation</option>
+              <option value="President">President</option>
+              <option value="Secretary">Secretary</option>
+              <option value="Treasurer">Treasurer</option>
+              <option value="Committee Member">Committee Member</option>
+              <option value="Authorized Person">Authorized Person</option>
+              <option value="Manager">Manager</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
+
+          {formData.authority_designation === 'Other' && (
+            <div className="login-input-container">
+              <label className="login-label">Other Designation / Authority *</label>
+              <input
+                type="text"
+                name="authority_designation_other"
+                className="login-input"
+                value={formData.authority_designation_other}
+                onChange={handleChange}
+                required
+                maxLength={120}
+              />
+            </div>
+          )}
 
           <div className="login-input-container">
             <label className="login-label">Request Type</label>

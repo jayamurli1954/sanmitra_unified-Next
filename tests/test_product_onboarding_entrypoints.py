@@ -10,6 +10,8 @@ def test_shared_product_onboarding_script_requires_app_key_and_terms_payload() -
     assert '"X-App-Key": form.dataset.appKey' in source
     assert "terms_accepted" in source
     assert "authority_designation" in source
+    assert "authority_designation_other" in source
+    assert 'authoritySelect?.addEventListener("change", syncAuthorityOtherField)' in source
     assert "/api/v1/onboarding-requests/register" in source
     assert "Contact verification and plan/payment approval" in source
 
@@ -23,6 +25,9 @@ def test_mandir_public_entrypoints_use_mandir_app_key() -> None:
     assert ">Login<" in landing_source
     assert 'data-app-key="mandirmitra"' in onboarding_source
     assert "Designation / Authority" in onboarding_source
+    assert '<select id="authority_designation" name="authority_designation" required>' in onboarding_source
+    assert '<option value="Other">Other</option>' in onboarding_source
+    assert "authority_designation_other" in onboarding_source
     assert "OTP / Verification Channel" in onboarding_source
     assert "terms_accepted" in onboarding_source
 
@@ -51,7 +56,10 @@ def test_gruhamitra_landing_and_service_use_gruha_app_key() -> None:
     assert "/onboard-society?intent=demo" in landing_source
     assert ">Login<" in landing_source
     assert "Designation / Authority" in onboarding_source
+    assert '<option value="Other">Other</option>' in onboarding_source
+    assert "Other Designation / Authority" in onboarding_source
     assert "OTP / Verification Channel" in onboarding_source
     assert "terms_accepted" in onboarding_source
     assert "organization_type: 'HOUSING'" in service_source
     assert "terms_accepted: Boolean(data?.terms_accepted)" in service_source
+    assert "authority_designation_other: data?.authority_designation_other" in service_source

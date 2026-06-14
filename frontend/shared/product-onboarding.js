@@ -55,10 +55,12 @@ function buildPayload() {
   const organizationType = formValue("organization_type");
   const intent = formValue("request_intent") || "register";
   const termsAccepted = Boolean(form.elements.terms_accepted?.checked);
+  const authorityDesignation = formValue("authority_designation");
   const payload = {
     organization_name: organizationName,
     organization_type: organizationType,
-    authority_designation: formValue("authority_designation"),
+    authority_designation: authorityDesignation,
+    authority_designation_other: authorityDesignation === "Other" ? formValue("authority_designation_other") : null,
     request_intent: intent,
     selected_plan: formValue("selected_plan") || null,
     plan_timing: formValue("plan_timing") || null,
@@ -86,6 +88,9 @@ function validatePayload(payload) {
   }
   if (!payload.authority_designation) {
     return "Designation or authority is required.";
+  }
+  if (payload.authority_designation === "Other" && !payload.authority_designation_other) {
+    return "Please enter the designation or authority for Other.";
   }
   if (!payload.terms_accepted) {
     return "Please confirm authority and accept the Terms of Use and Privacy Policy.";
@@ -138,5 +143,21 @@ if (form) {
   if (intent && form.elements.request_intent) {
     form.elements.request_intent.value = intent === "demo" ? "demo" : "register";
   }
+  const authoritySelect = form.elements.authority_designation;
+  const authorityOther = form.elements.authority_designation_other;
+  const authorityOtherField = authorityOther?.closest(".onboarding-field");
+  function syncAuthorityOtherField() {
+    if (!authorityOther || !authorityOtherField) {
+      return;
+    }
+    const isOther = authoritySelect?.value === "Other";
+    authorityOtherField.hidden = !isOther;
+    authorityOther.required = isOther;
+    if (!isOther) {
+      authorityOther.value = "";
+    }
+  }
+  authoritySelect?.addEventListener("change", syncAuthorityOtherField);
+  syncAuthorityOtherField();
   form.addEventListener("submit", submitOnboarding);
 }

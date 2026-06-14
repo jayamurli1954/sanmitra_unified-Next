@@ -67,7 +67,21 @@
               </div>
               <div class="onboarding-field">
                 <label for="authority_designation">Designation / Authority *</label>
-                <input id="authority_designation" name="authority_designation" placeholder="Trustee, Admin, Treasurer, Secretary, President" required>
+                <select id="authority_designation" name="authority_designation" required>
+                  <option value="">Select designation</option>
+                  <option value="Trustee">Trustee</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Treasurer">Treasurer</option>
+                  <option value="Secretary">Secretary</option>
+                  <option value="President">President</option>
+                  <option value="Authorized Signatory">Authorized Signatory</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="onboarding-field" hidden>
+                <label for="authority_designation_other">Other Designation / Authority *</label>
+                <input id="authority_designation_other" name="authority_designation_other" maxlength="120" placeholder="Enter designation or authority">
               </div>
               <div class="onboarding-field">
                 <label for="request_intent">Request Type *</label>

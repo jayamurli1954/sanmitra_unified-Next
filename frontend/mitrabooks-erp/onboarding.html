@@ -70,7 +70,25 @@
               </div>
               <div class="onboarding-field">
                 <label for="authority_designation">Designation / Authority *</label>
-                <input id="authority_designation" name="authority_designation" placeholder="Owner, Partner, Director, CFO, CA partner" required>
+                <select id="authority_designation" name="authority_designation" required>
+                  <option value="">Select designation</option>
+                  <option value="Owner">Owner</option>
+                  <option value="Founder">Founder</option>
+                  <option value="Partner">Partner</option>
+                  <option value="Director">Director</option>
+                  <option value="CEO">CEO</option>
+                  <option value="CFO">CFO</option>
+                  <option value="Managing Director">Managing Director</option>
+                  <option value="Authorized Signatory">Authorized Signatory</option>
+                  <option value="CA Partner">CA Partner</option>
+                  <option value="Practice Manager">Practice Manager</option>
+                  <option value="Bookkeeper">Bookkeeper</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="onboarding-field" hidden>
+                <label for="authority_designation_other">Other Designation / Authority *</label>
+                <input id="authority_designation_other" name="authority_designation_other" maxlength="120" placeholder="Enter designation or authority">
               </div>
               <div class="onboarding-field">
                 <label for="request_intent">Request Type *</label>

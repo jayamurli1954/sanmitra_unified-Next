@@ -79,7 +79,8 @@ async def test_create_onboarding_request_captures_authority_plan_and_terms(monke
         OnboardingRequestCreate(
             organization_name="ABC Books LLP",
             organization_type="PROFESSIONAL",
-            authority_designation="Partner",
+            authority_designation="Other",
+            authority_designation_other="Senior Accounts Partner",
             request_intent="demo",
             selected_plan="Growth",
             plan_timing="After demo/discussion",
@@ -98,7 +99,8 @@ async def test_create_onboarding_request_captures_authority_plan_and_terms(monke
     stored = await fake_requests.find_one({"request_id": result["request_id"]})
     assert stored["app_key"] == "mitrabooks"
     assert stored["organization_type"] == "PROFESSIONAL"
-    assert stored["authority_designation"] == "Partner"
+    assert stored["authority_designation"] == "Other"
+    assert stored["authority_designation_other"] == "Senior Accounts Partner"
     assert stored["request_intent"] == "demo"
     assert stored["selected_plan"] == "Growth"
     assert stored["verification_channel"] == "mobile"
@@ -112,6 +114,19 @@ def test_public_onboarding_requires_valid_product_app_key():
         onboarding_service.normalize_public_onboarding_app_key(None)
     with pytest.raises(ValueError, match="X-App-Key"):
         onboarding_service.normalize_public_onboarding_app_key("legalmitra")
+
+
+def test_onboarding_requires_other_designation_detail():
+    with pytest.raises(ValueError, match="authority_designation_other"):
+        OnboardingRequestCreate(
+            organization_name="Other Role Trust",
+            organization_type="TEMPLE",
+            authority_designation="Other",
+            admin_full_name="Trust Admin",
+            admin_email="trust@example.com",
+            admin_phone="9000000001",
+            terms_accepted=True,
+        )
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ class OnboardingRequestCreate(BaseModel):
     organization_name: str | None = Field(default=None, max_length=200)
     organization_type: str | None = Field(default=None, max_length=40)
     authority_designation: str | None = Field(default=None, max_length=120)
+    authority_designation_other: str | None = Field(default=None, max_length=120)
     request_intent: OnboardingIntent = "register"
     selected_plan: str | None = Field(default=None, max_length=80)
     plan_timing: str | None = Field(default=None, max_length=80)
@@ -43,6 +44,9 @@ class OnboardingRequestCreate(BaseModel):
         self.organization_name = organization_name or None
         self.organization_type = (self.organization_type or "").strip().upper() or None
         self.authority_designation = (self.authority_designation or "").strip() or None
+        self.authority_designation_other = (self.authority_designation_other or "").strip() or None
+        if (self.authority_designation or "").lower() == "other" and not self.authority_designation_other:
+            raise ValueError("authority_designation_other is required when authority_designation is Other")
         self.selected_plan = (self.selected_plan or "").strip() or None
         self.plan_timing = (self.plan_timing or "").strip() or None
         self.temple_name = temple_name or None
@@ -76,6 +80,7 @@ class OnboardingRequestItem(BaseModel):
     organization_name: str | None = None
     organization_type: str | None = None
     authority_designation: str | None = None
+    authority_designation_other: str | None = None
     request_intent: OnboardingIntent | None = None
     selected_plan: str | None = None
     plan_timing: str | None = None

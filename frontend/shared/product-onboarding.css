@@ -126,6 +126,10 @@
   grid-column: 1 / -1;
 }
 
+.onboarding-field[hidden] {
+  display: none;
+}
+
 .onboarding-field label,
 .onboarding-consent {
   color: #344054;
