@@ -1,0 +1,40 @@
+name: SanMitra Daily Ops Check
+
+# 01:30 UTC = 07:00 IST. Also runnable on demand.
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+# Least privilege: this workflow only needs to read its own repo.
+permissions:
+  contents: read
+
+jobs:
+  ops-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r ops-agents/requirements.txt
+
+      - name: Run ops check
+        # NOTE: no DATABASE_URL here. DB health is read via the backend
+        # /health endpoint, so no database credentials ever touch CI.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_RECIPIENT_EMAIL: ${{ secrets.ALERT_RECIPIENT_EMAIL }}
+          # Optional:
+          HEALTH_TOKEN: ${{ secrets.HEALTH_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: python ops-agents/scripts/generate_report.py

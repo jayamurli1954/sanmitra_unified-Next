@@ -1,0 +1,28 @@
+# SanMitra ops monitor — product registry
+#
+# backend_health_url is the same Render service for all products.
+# Confirm the Render URL matches your dashboard if it was ever renamed.
+# Add MandirMitra / InvestMitra frontend_url values once their custom
+# domains are live; leave them commented out until then to avoid noise.
+
+products:
+  - name: MitraBooks
+    frontend_url: https://mitrabooks.sanmitratech.in
+    backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+
+  - name: LegalMitra
+    frontend_url: https://legalmitra.sanmitratech.in
+    backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+
+  - name: GruhaMitra
+    frontend_url: https://gruhamitra.sanmitratech.in
+    backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+
+  # MandirMitra and InvestMitra: add frontend_url once custom domains are confirmed.
+  # - name: MandirMitra
+  #   frontend_url: https://mandirmitra.sanmitratech.in
+  #   backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+
+  # - name: InvestMitra
+  #   frontend_url: https://investmitra.sanmitratech.in
+  #   backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health

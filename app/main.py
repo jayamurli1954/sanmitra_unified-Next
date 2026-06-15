@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -219,26 +219,37 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+async def health(response: Response):
     mongo_task = _ping_with_timeout(ping_mongo(), timeout_seconds=2.5)
     pg_task = _ping_with_timeout(ping_postgres(), timeout_seconds=2.5)
     mongo_result, pg_result = await asyncio.gather(mongo_task, pg_task)
 
     mongo_ok, mongo_detail = mongo_result
     pg_ok, pg_detail = pg_result
-    overall = "ok" if mongo_ok or pg_ok else "degraded"
-    response: dict = {
+
+    # Postgres holds the ledger → down = hard error; Mongo down = degraded.
+    if not pg_ok:
+        overall = "error"
+    elif not mongo_ok:
+        overall = "degraded"
+    else:
+        overall = "ok"
+
+    if overall == "error":
+        response.status_code = 503
+
+    payload: dict = {
         "status": overall,
         "version": settings.APP_VERSION,
-        "db": {
-            "mongo": {"ok": mongo_ok, "detail": mongo_detail},
-            "postgres": {"ok": pg_ok, "detail": pg_detail},
+        "checks": {
+            "postgres": {"status": "connected" if pg_ok else "error", "detail": pg_detail},
+            "mongo": {"status": "connected" if mongo_ok else "error", "detail": mongo_detail},
         },
     }
     # Expose environment only in non-production to avoid leaking deployment topology.
     if settings.ENVIRONMENT not in {"production", "prod"}:
-        response["environment"] = settings.ENVIRONMENT
-    return response
+        payload["environment"] = settings.ENVIRONMENT
+    return payload
 
 
 
