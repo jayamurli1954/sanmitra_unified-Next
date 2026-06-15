@@ -12,6 +12,8 @@ def test_shared_product_onboarding_script_requires_app_key_and_terms_payload() -
     assert "authority_designation" in source
     assert "authority_designation_other" in source
     assert 'authoritySelect?.addEventListener("change", syncAuthorityOtherField)' in source
+    assert 'params.get("plan")' in source
+    assert "form.elements.selected_plan.value = plan" in source
     assert "/api/v1/onboarding-requests/register" in source
     assert "Contact verification and plan/payment approval" in source
 

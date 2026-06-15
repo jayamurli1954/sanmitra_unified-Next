@@ -62,6 +62,7 @@ Regular business account pricing and CA Practice / Bookkeeper pricing must stay 
 | Basic | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25 |
 | Starter | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25 |
 | Growth | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100 |
+| Enterprise | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom documents / AI MIS by requirement |
 
 ### CA Practice / Bookkeepers
 

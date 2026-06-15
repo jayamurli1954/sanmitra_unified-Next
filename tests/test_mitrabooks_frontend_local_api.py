@@ -148,6 +148,9 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert "Basic" in landing_source
     assert "Starter" in landing_source
     assert "Growth" in landing_source
+    assert "Enterprise" in landing_source
+    assert "Get Quote" in landing_source
+    assert "plan=Enterprise%20custom%20quote" in landing_source
     assert "Rs. 1,499/mo" in landing_source
     assert "Rs. 2,999/mo" in landing_source
     assert "15 practice users" in landing_source
@@ -168,6 +171,7 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert '<option value="Other">Other</option>' in onboarding_source
     assert "authority_designation_other" in onboarding_source
     assert "OTP / Verification Channel" in onboarding_source
+    assert "Enterprise custom quote" in onboarding_source
     assert "terms_accepted" in onboarding_source
     assert "Contact verification and plan/payment approval" in onboarding_source
 

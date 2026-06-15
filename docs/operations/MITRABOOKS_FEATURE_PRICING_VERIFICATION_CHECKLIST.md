@@ -69,6 +69,7 @@ MitraBooks has two pricing tracks and they should stay separate.
 | Basic | INR 499 | INR 4,999 | 1 company | 3 | 25/month | Small business team with GST/TDS prep and basic reports. |
 | Starter | INR 999 | INR 9,999 | 2 branches | 5 | 25/month | Growing business with branch operations, ageing, and bank reconciliation. |
 | Growth | INR 1,499 | INR 14,999 | 5 branches | 10 | 100/month | Larger business with higher document limits and assistance features. |
+| Enterprise | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom/month | Requirement-led plan for AI MIS and custom document upload workflows. |
 
 ### CA Practice / Bookkeeper
 
@@ -79,6 +80,8 @@ MitraBooks has two pricing tracks and they should stay separate.
 | Growth | INR 2,999 | INR 29,999 | 50 | 15 | Fair-use unlimited | Larger practice workspace with priority support and onboarding review. |
 
 ## Regular Business Matrix
+
+Enterprise is a custom quote path and should be assessed through requirement review rather than the fixed Free/Basic/Starter/Growth entitlement matrix below.
 
 | Feature area | Feature | Current status | Free | Basic | Starter | Growth | Evidence / next verification |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -188,7 +191,7 @@ Do not publish Basic unless Free plus these are verified:
 
 Do not publish Starter unless Basic plus these are verified:
 
-- Multi-company entitlement or company switch model.
+- Branch entitlement or branch switch model.
 - Bank reconciliation.
 - Receivable/payable ageing.
 - Customer/vendor statements.
@@ -200,7 +203,7 @@ Do not publish Starter unless Basic plus these are verified:
 
 Do not publish Growth unless Starter plus these are verified:
 
-- Higher company/document limits enforced by entitlement.
+- Higher branch/user/document limits enforced by entitlement.
 - AI MIS or reconciliation assistance, if advertised, is source-backed and non-posting.
 - Advanced reports are reproducible from posted records.
 - Priority support and onboarding review terms are defined.
@@ -226,8 +229,9 @@ The current pricing numbers can be used for planning, but public payment pages s
 The regular-business pricing is defensible if the published feature copy stays conservative:
 
 - INR 499/month Basic is justified when GST/TDS prep, core reports, parties, invoices, vouchers, and one-company books are verified.
-- INR 999/month Starter is justified when bank reconciliation, ageing, statements, inventory basics, and multi-company support are verified.
+- INR 999/month Starter is justified when bank reconciliation, ageing, statements, inventory basics, and branch support are verified.
 - INR 1,499/month Growth is justified only if higher document limits, advanced reports, support, and AI/OCR assistance are genuinely available and clearly non-posting.
+- Enterprise should remain "Get Quote" until the tenant's branch count, user roles, AI MIS needs, custom document workflow, migration, and support expectations are reviewed.
 
 The CA/bookkeeper pricing is attractive, but higher risk:
 

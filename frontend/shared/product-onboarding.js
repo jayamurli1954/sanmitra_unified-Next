@@ -143,6 +143,10 @@ if (form) {
   if (intent && form.elements.request_intent) {
     form.elements.request_intent.value = intent === "demo" ? "demo" : "register";
   }
+  const plan = params.get("plan");
+  if (plan && form.elements.selected_plan) {
+    form.elements.selected_plan.value = plan;
+  }
   const authoritySelect = form.elements.authority_designation;
   const authorityOther = form.elements.authority_designation_other;
   const authorityOtherField = authorityOther?.closest(".onboarding-field");

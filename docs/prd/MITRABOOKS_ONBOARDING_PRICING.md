@@ -47,6 +47,7 @@ Plans:
 - Basic
 - Starter
 - Growth
+- Enterprise custom quote
 
 Practice-specific modes:
 
@@ -120,6 +121,7 @@ All prices are recommended launch prices in INR. Taxes extra where applicable.
 | Basic | Small business team | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25/month | GST prep, TDS/TCS tracking, basic OCR queue, email support |
 | Starter | Growing business with branches | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
 | Growth | Larger business with branch operations | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100/month | Higher business document limits, AI MIS, OCR, reconciliation assistance |
+| Enterprise | Larger business with custom controls | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom/month | AI MIS, custom document upload workflows, implementation review, and quote after requirement discussion |
 
 ### CA Practice / Bookkeepers
 
@@ -167,11 +169,18 @@ Recommended add-ons:
 
 ### Growth
 
-- Regular business account: up to 10 companies and 1 user.
+- Regular business account: 5 branches and 10 users.
 - CA/bookkeeper practice account: up to 50 client companies and 15 practice users.
 - Client assignment and client access control belong to the CA/bookkeeper pricing track, not the regular business track.
 - AI MIS, OCR extraction, reconciliation assistance, and document queue.
 - Human approval before any ledger posting.
+
+### Enterprise
+
+- Regular business account for one company with multi-user and multi-branch requirements.
+- Custom document upload workflows and AI MIS are scoped after discussion.
+- Quote is shared only after requirement capture, implementation review, and support expectations are clear.
+- Human approval remains mandatory before ledger posting; AI/OCR must not directly mutate posted accounting records.
 
 ## Landing Page Positioning
 
@@ -198,7 +207,7 @@ The MitraBooks landing page should explain:
 1. Static landing page and pricing content.
 2. MitraBooks onboarding request schema separate from MandirMitra fields.
 3. Practice profile and client-company data model.
-4. Module entitlement mapping for Free, Basic, Starter, Growth.
+4. Module entitlement mapping for Free, Basic, Starter, Growth, and Enterprise custom quote.
 5. Frontend onboarding wizard.
 6. Platform-owner approval and provisioning.
 7. Browser E2E for business onboarding and CA practice onboarding.
