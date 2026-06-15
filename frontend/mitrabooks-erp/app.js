@@ -14459,7 +14459,7 @@ nav.addEventListener("click", (event) => {
   setBusinessWorkspace(link.dataset.businessWorkspace || "overview");
 });
 dashboardPreview.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action]");
+  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action], [data-coa-action]");
   if (!button) {
     return;
   }
