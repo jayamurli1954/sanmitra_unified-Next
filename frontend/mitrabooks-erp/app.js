@@ -34,6 +34,7 @@ function businessNavigationGroups() {
       name: "Core Ledger",
       items: [
         { label: "Core Ledger", businessWorkspace: "accounting", icon: "CL", module: { module_key: "accounting", frontend_path: "/accounting", enabled: true } },
+        { label: "Chart of Accounts", businessWorkspace: "coa", icon: "CA", module: { module_key: "accounting", frontend_path: "/accounting/coa", enabled: true } },
         { label: "Journal Post", businessWorkspace: "vouchers", icon: "JP", module: { module_key: "business", frontend_path: "/business/vouchers", enabled: true } },
         { label: "Audit Trails", businessWorkspace: "audit", icon: "AT", module: { module_key: "audit", frontend_path: "/audit", enabled: true } },
       ],
@@ -5029,6 +5030,9 @@ function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "debit-notes") {
     return renderBusinessDebitNoteWorkspace();
   }
+  if (activeBusinessWorkspace === "coa") {
+    return renderBusinessCoaWorkspace();
+  }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
   }
@@ -5169,6 +5173,192 @@ function fhFormatNarrative(text) {
   flushList();
   return out.join("");
 }
+
+// ── Chart of Accounts workspace ─────────────────────────────────────────────
+
+const COA_TYPE_META = {
+  asset:     { label: "ASSET",     icon: "🏦", bg: "#2e7d32", color: "#fff" },
+  liability: { label: "LIABILITY", icon: "📉", bg: "#c62828", color: "#fff" },
+  equity:    { label: "EQUITY",    icon: "💼", bg: "#4527a0", color: "#fff" },
+  income:    { label: "INCOME",    icon: "📈", bg: "#1565c0", color: "#fff" },
+  expense:   { label: "EXPENSE",   icon: "💸", bg: "#e65100", color: "#fff" },
+};
+const COA_CLASS_LABELS = {
+  personal: "Personal", real: "Real", nominal: "Nominal",
+};
+
+function coaTypePill(type) {
+  const m = COA_TYPE_META[type] || { label: (type || "—").toUpperCase(), icon: "", bg: "#888", color: "#fff" };
+  return `<span style="display:inline-flex;align-items:center;gap:.3em;padding:.2em .6em;border-radius:999px;font-size:.75rem;font-weight:700;background:${m.bg};color:${m.color}">${m.icon} ${m.label}</span>`;
+}
+
+function renderBusinessCoaWorkspace() {
+  const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [];
+  const typeOptions = Object.entries(COA_TYPE_META)
+    .map(([v, m]) => `<option value="${v}">${m.label}</option>`).join("");
+  const classOptions = Object.entries(COA_CLASS_LABELS)
+    .map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+
+  const rows = accounts.length === 0
+    ? `<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-muted)">No accounts found. Add one below.</td></tr>`
+    : accounts.map((a) => {
+        const isSystem = a.is_cash_bank || a.is_receivable || a.is_payable;
+        const systemBadge = isSystem
+          ? `<span style="padding:.2em .55em;border-radius:999px;font-size:.72rem;border:1px solid #aaa;color:#555">System</span>`
+          : "";
+        const statusBadge = `<span style="padding:.2em .6em;border-radius:999px;font-size:.72rem;background:#2e7d32;color:#fff;font-weight:600">Active</span>`;
+        return `
+          <tr data-coa-code="${escapeHtml(a.code || "")}" style="border-bottom:1px solid #eee">
+            <td style="padding:.55rem .75rem;font-family:monospace;color:#1a73e8;font-size:.85rem">${escapeHtml(a.code || "—")}</td>
+            <td style="padding:.55rem .75rem" class="coa-name-cell">
+              <strong class="coa-name-display">${escapeHtml(a.name)}</strong>
+              <input class="coa-name-input" type="text" value="${escapeHtml(a.name)}" style="display:none;width:100%;font-size:.9rem" maxlength="200" />
+            </td>
+            <td style="padding:.55rem .75rem">${coaTypePill(a.type)}</td>
+            <td style="padding:.55rem .75rem">${systemBadge}</td>
+            <td style="padding:.55rem .75rem">${statusBadge}</td>
+            <td style="padding:.55rem .75rem;text-align:right;white-space:nowrap">
+              <button class="secondary small" type="button" data-coa-action="edit-name" title="Edit name" style="padding:.2em .55em;font-size:.85rem">&#9998;</button>
+              <button class="secondary small" type="button" data-coa-action="save-name" style="display:none;padding:.2em .55em;font-size:.85rem;color:#2e7d32" title="Save">&#10003;</button>
+              <button class="secondary small" type="button" data-coa-action="cancel-name" style="display:none;padding:.2em .55em;font-size:.85rem;color:#c62828" title="Cancel">&#10005;</button>
+            </td>
+          </tr>`;
+      }).join("");
+
+  return `
+    <div class="verification-panel erp-workspace-panel" id="coa-workspace">
+      <div class="preview-heading compact">
+        <div>
+          <h4>Chart of Accounts</h4>
+          <p>${accounts.length} account${accounts.length !== 1 ? "s" : ""} in the ledger. Account codes are permanent — only names can be edited.</p>
+        </div>
+        <button class="secondary" type="button" data-coa-action="toggle-add-form">+ Add Account</button>
+      </div>
+
+      <div id="coa-add-form" style="display:none;background:var(--surface-2,#f5f5f5);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1rem">
+        <h5 style="margin:0 0 .75rem">New Account</h5>
+        <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:.5rem .75rem;align-items:end">
+          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Code (optional)<input id="coa-new-code" type="text" maxlength="30" placeholder="e.g. 11010" /></label>
+          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Account Name *<input id="coa-new-name" type="text" maxlength="200" placeholder="e.g. Petty Cash" required /></label>
+          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Type *
+            <select id="coa-new-type"><option value="">Select…</option>${typeOptions}</select>
+          </label>
+          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Classification *
+            <select id="coa-new-class"><option value="">Select…</option>${classOptions}</select>
+          </label>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.75rem;align-items:center">
+          <button class="primary small" type="button" data-coa-action="submit-add">Create Account</button>
+          <button class="secondary small" type="button" data-coa-action="toggle-add-form">Cancel</button>
+          <span id="coa-add-msg" style="font-size:.8rem;margin-left:.5rem"></span>
+        </div>
+      </div>
+
+      <div id="coa-msg" style="margin-bottom:.5rem;font-size:.85rem"></div>
+
+      <div class="table-scroll-wrapper">
+        <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+          <thead>
+            <tr style="background:#FF9933;color:#fff">
+              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Code</th>
+              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Account Name</th>
+              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Type</th>
+              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">System</th>
+              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Status</th>
+              <th style="padding:.6rem .75rem;text-align:right;font-weight:700">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="coa-tbody">
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function coaShowMsg(el, text, ok) {
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = ok ? "var(--color-success, green)" : "var(--color-danger, red)";
+  if (ok) setTimeout(() => { el.textContent = ""; }, 3000);
+}
+
+async function coaHandleAddSubmit() {
+  const code = document.getElementById("coa-new-code")?.value.trim() || null;
+  const name = document.getElementById("coa-new-name")?.value.trim() || "";
+  const type = document.getElementById("coa-new-type")?.value;
+  const classification = document.getElementById("coa-new-class")?.value;
+  const msg = document.getElementById("coa-add-msg");
+
+  if (!name || !type || !classification) {
+    coaShowMsg(msg, "Name, Type and Classification are required.", false);
+    return;
+  }
+
+  const body = { name, type, classification };
+  if (code) body.code = code;
+
+  const result = await apiRequest("mitrabooks", "/api/v1/accounting/accounts", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (!result.ok) {
+    coaShowMsg(msg, statusDetailText(result.payload?.detail) || `Error creating account.`, false);
+    return;
+  }
+  coaShowMsg(msg, "Account created.", true);
+  ["coa-new-code", "coa-new-name"].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
+  ["coa-new-type", "coa-new-class"].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ""; });
+  await loadBusinessAccounts();
+  dashboardPreview.innerHTML = renderBusinessWorkspace();
+}
+
+async function coaHandleSaveName(row) {
+  const code = row.dataset.coaCode;
+  const input = row.querySelector(".coa-name-input");
+  const name = input?.value.trim() || "";
+  const msg = document.getElementById("coa-msg");
+
+  if (!name || name.length < 2) {
+    coaShowMsg(msg, "Name must be at least 2 characters.", false);
+    return;
+  }
+
+  const result = await apiRequest("mitrabooks", `/api/v1/accounting/accounts/${encodeURIComponent(code)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+
+  if (!result.ok) {
+    coaShowMsg(msg, statusDetailText(result.payload?.detail) || `Error updating account.`, false);
+    return;
+  }
+  coaShowMsg(msg, `"${escapeHtml(name)}" saved.`, true);
+  await loadBusinessAccounts();
+  dashboardPreview.innerHTML = renderBusinessWorkspace();
+}
+
+function coaEnterEditMode(row) {
+  row.querySelector(".coa-name-display").style.display = "none";
+  row.querySelector(".coa-name-input").style.display = "";
+  row.querySelector("[data-coa-action='edit-name']").style.display = "none";
+  row.querySelector("[data-coa-action='save-name']").style.display = "";
+  row.querySelector("[data-coa-action='cancel-name']").style.display = "";
+  row.querySelector(".coa-name-input").focus();
+}
+
+function coaExitEditMode(row) {
+  const original = row.querySelector(".coa-name-display").textContent;
+  row.querySelector(".coa-name-input").value = original;
+  row.querySelector(".coa-name-display").style.display = "";
+  row.querySelector(".coa-name-input").style.display = "none";
+  row.querySelector("[data-coa-action='edit-name']").style.display = "";
+  row.querySelector("[data-coa-action='save-name']").style.display = "none";
+  row.querySelector("[data-coa-action='cancel-name']").style.display = "none";
+}
+
+// ── End Chart of Accounts workspace ─────────────────────────────────────────
 
 function renderFinancialHealthWorkspace() {
   const data = lastFinancialHealth;
@@ -5494,6 +5684,8 @@ function setBusinessWorkspace(workspace) {
     loadBusinessParties();
     loadBusinessAccounts();
     loadDebitNotes();
+  } else if (workspace === "coa") {
+    loadBusinessAccounts();
   } else if (workspace === "ca-access") {
     lastCaDocumentsResult = null;
     lastCaDocuments = [];
@@ -5532,6 +5724,7 @@ function syncBusinessNavActiveState() {
       "tds-tcs": "TDS / TCS",
       "bank-recon": "Bank Reconciliation",
       "ca-access": "CA Practice Portal",
+      coa: "Chart of Accounts",
       settings: "Settings",
     };
     const plannedMeta = orgSelectorMeta[selectorOrgType];
@@ -14575,6 +14768,24 @@ dashboardPreview.addEventListener("click", (event) => {
     const noteId = button.getAttribute("data-dn-id") || "";
     const dateInput = document.querySelector("[data-reversal-date]");
     cancelDebitNote(noteId, dateInput?.value || "");
+  }
+
+  // COA actions use their own attribute to avoid collisions with businessAction
+  const coaAction = button.getAttribute("data-coa-action");
+  if (coaAction === "toggle-add-form") {
+    const form = document.getElementById("coa-add-form");
+    if (form) form.style.display = form.style.display === "none" ? "" : "none";
+  } else if (coaAction === "submit-add") {
+    coaHandleAddSubmit();
+  } else if (coaAction === "edit-name") {
+    const row = button.closest("tr[data-coa-code]");
+    if (row) coaEnterEditMode(row);
+  } else if (coaAction === "save-name") {
+    const row = button.closest("tr[data-coa-code]");
+    if (row) coaHandleSaveName(row);
+  } else if (coaAction === "cancel-name") {
+    const row = button.closest("tr[data-coa-code]");
+    if (row) coaExitEditMode(row);
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
