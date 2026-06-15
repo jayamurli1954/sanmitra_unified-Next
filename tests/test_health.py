@@ -9,4 +9,6 @@ def test_health_endpoint_returns_payload():
     assert response.status_code == 200
     payload = response.json()
     assert 'status' in payload
-    assert 'db' in payload
+    assert 'checks' in payload
+    assert 'mongo' in payload['checks']
+    assert 'postgres' in payload['checks']
