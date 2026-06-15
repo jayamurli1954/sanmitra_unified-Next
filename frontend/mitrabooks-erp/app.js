@@ -677,6 +677,7 @@ let lastAccountingVoucherDetail = null;
 let lastGruhaData = null;
 let lastBusinessParties = [];
 let lastBusinessAccounts = [];
+let coaTypeFilter = "";
 let lastCaDocuments = [];
 let lastCaDocumentsResult = null;
 let caPracticeFilters = {
@@ -5177,50 +5178,51 @@ function fhFormatNarrative(text) {
 // ── Chart of Accounts workspace ─────────────────────────────────────────────
 
 const COA_TYPE_META = {
-  asset:     { label: "ASSET",     icon: "🏦", bg: "#2e7d32", color: "#fff" },
-  liability: { label: "LIABILITY", icon: "📉", bg: "#c62828", color: "#fff" },
-  equity:    { label: "EQUITY",    icon: "💼", bg: "#4527a0", color: "#fff" },
-  income:    { label: "INCOME",    icon: "📈", bg: "#1565c0", color: "#fff" },
-  expense:   { label: "EXPENSE",   icon: "💸", bg: "#e65100", color: "#fff" },
+  asset:     { label: "Asset",     pillClass: "pill ok" },
+  liability: { label: "Liability", pillClass: "pill danger" },
+  equity:    { label: "Equity",    pillClass: "pill neutral" },
+  income:    { label: "Income",    pillClass: "pill ok" },
+  expense:   { label: "Expense",   pillClass: "pill warn" },
 };
 const COA_CLASS_LABELS = {
   personal: "Personal", real: "Real", nominal: "Nominal",
 };
 
 function coaTypePill(type) {
-  const m = COA_TYPE_META[type] || { label: (type || "—").toUpperCase(), icon: "", bg: "#888", color: "#fff" };
-  return `<span style="display:inline-flex;align-items:center;gap:.3em;padding:.2em .6em;border-radius:999px;font-size:.75rem;font-weight:700;background:${m.bg};color:${m.color}">${m.icon} ${m.label}</span>`;
+  const m = COA_TYPE_META[type] || { label: (type || "—"), pillClass: "pill" };
+  return `<span class="${m.pillClass}">${m.label}</span>`;
 }
 
 function renderBusinessCoaWorkspace() {
   const accounts = Array.isArray(lastBusinessAccounts) ? lastBusinessAccounts : [];
+  const filtered = coaTypeFilter ? accounts.filter((a) => a.type === coaTypeFilter) : accounts;
+
   const typeOptions = Object.entries(COA_TYPE_META)
     .map(([v, m]) => `<option value="${v}">${m.label}</option>`).join("");
   const classOptions = Object.entries(COA_CLASS_LABELS)
     .map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  const filterOptions = Object.entries(COA_TYPE_META)
+    .map(([v, m]) => `<option value="${v}" ${coaTypeFilter === v ? "selected" : ""}>${m.label}</option>`).join("");
 
-  const rows = accounts.length === 0
-    ? `<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-muted)">No accounts found. Add one below.</td></tr>`
-    : accounts.map((a) => {
+  const rows = filtered.length === 0
+    ? `<tr><td colspan="6" class="empty-state-cell" style="text-align:center;padding:1.5rem">No accounts match the selected filter.</td></tr>`
+    : filtered.map((a) => {
         const isSystem = a.is_cash_bank || a.is_receivable || a.is_payable;
-        const systemBadge = isSystem
-          ? `<span style="padding:.2em .55em;border-radius:999px;font-size:.72rem;border:1px solid #aaa;color:#555">System</span>`
-          : "";
-        const statusBadge = `<span style="padding:.2em .6em;border-radius:999px;font-size:.72rem;background:#2e7d32;color:#fff;font-weight:600">Active</span>`;
+        const systemBadge = isSystem ? `<span class="pill neutral" style="font-size:.72rem">System</span>` : "";
         return `
-          <tr data-coa-code="${escapeHtml(a.code || "")}" style="border-bottom:1px solid #eee">
-            <td style="padding:.55rem .75rem;font-family:monospace;color:#1a73e8;font-size:.85rem">${escapeHtml(a.code || "—")}</td>
-            <td style="padding:.55rem .75rem" class="coa-name-cell">
+          <tr data-coa-code="${escapeHtml(a.code || "")}">
+            <td class="mono-code">${escapeHtml(a.code || "—")}</td>
+            <td class="coa-name-cell">
               <strong class="coa-name-display">${escapeHtml(a.name)}</strong>
-              <input class="coa-name-input" type="text" value="${escapeHtml(a.name)}" style="display:none;width:100%;font-size:.9rem" maxlength="200" />
+              <input class="coa-name-input" type="text" value="${escapeHtml(a.name)}" style="display:none;width:100%" maxlength="200" />
             </td>
-            <td style="padding:.55rem .75rem">${coaTypePill(a.type)}</td>
-            <td style="padding:.55rem .75rem">${systemBadge}</td>
-            <td style="padding:.55rem .75rem">${statusBadge}</td>
-            <td style="padding:.55rem .75rem;text-align:right;white-space:nowrap">
-              <button class="secondary small" type="button" data-coa-action="edit-name" title="Edit name" style="padding:.2em .55em;font-size:.85rem">&#9998;</button>
-              <button class="secondary small" type="button" data-coa-action="save-name" style="display:none;padding:.2em .55em;font-size:.85rem;color:#2e7d32" title="Save">&#10003;</button>
-              <button class="secondary small" type="button" data-coa-action="cancel-name" style="display:none;padding:.2em .55em;font-size:.85rem;color:#c62828" title="Cancel">&#10005;</button>
+            <td>${coaTypePill(a.type)}</td>
+            <td>${systemBadge}</td>
+            <td><span class="pill ok" style="font-size:.72rem">Active</span></td>
+            <td style="text-align:right;white-space:nowrap">
+              <button class="secondary small" type="button" data-coa-action="edit-name" title="Edit name">&#9998;</button>
+              <button class="secondary small" type="button" data-coa-action="save-name" style="display:none" title="Save">&#10003;</button>
+              <button class="secondary small" type="button" data-coa-action="cancel-name" style="display:none" title="Cancel">&#10005;</button>
             </td>
           </tr>`;
       }).join("");
@@ -5230,22 +5232,18 @@ function renderBusinessCoaWorkspace() {
       <div class="preview-heading compact">
         <div>
           <h4>Chart of Accounts</h4>
-          <p>${accounts.length} account${accounts.length !== 1 ? "s" : ""} in the ledger. Account codes are permanent — only names can be edited.</p>
+          <p>${accounts.length} account${accounts.length !== 1 ? "s" : ""} in the ledger — account codes are permanent, only names can be edited.</p>
         </div>
         <button class="secondary" type="button" data-coa-action="toggle-add-form">+ Add Account</button>
       </div>
 
-      <div id="coa-add-form" style="display:none;background:var(--surface-2,#f5f5f5);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1rem">
+      <div id="coa-add-form" style="display:none" class="erp-form-inline">
         <h5 style="margin:0 0 .75rem">New Account</h5>
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:.5rem .75rem;align-items:end">
-          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Code (optional)<input id="coa-new-code" type="text" maxlength="30" placeholder="e.g. 11010" /></label>
-          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Account Name *<input id="coa-new-name" type="text" maxlength="200" placeholder="e.g. Petty Cash" required /></label>
-          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Type *
-            <select id="coa-new-type"><option value="">Select…</option>${typeOptions}</select>
-          </label>
-          <label style="font-size:.8rem;display:flex;flex-direction:column;gap:.25rem">Classification *
-            <select id="coa-new-class"><option value="">Select…</option>${classOptions}</select>
-          </label>
+          <label class="field-label">Code (optional)<input id="coa-new-code" type="text" maxlength="30" placeholder="e.g. 53099" /></label>
+          <label class="field-label">Account Name *<input id="coa-new-name" type="text" maxlength="200" placeholder="e.g. Petty Cash" required /></label>
+          <label class="field-label">Type *<select id="coa-new-type"><option value="">Select…</option>${typeOptions}</select></label>
+          <label class="field-label">Classification *<select id="coa-new-class"><option value="">Select…</option>${classOptions}</select></label>
         </div>
         <div style="display:flex;gap:.5rem;margin-top:.75rem;align-items:center">
           <button class="primary small" type="button" data-coa-action="submit-add">Create Account</button>
@@ -5254,18 +5252,29 @@ function renderBusinessCoaWorkspace() {
         </div>
       </div>
 
-      <div id="coa-msg" style="margin-bottom:.5rem;font-size:.85rem"></div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap">
+        <label class="field-label" style="margin:0;display:flex;align-items:center;gap:.5rem;flex-direction:row">
+          <span style="white-space:nowrap;font-size:.82rem">Filter by Type</span>
+          <select id="coa-type-filter" style="min-width:140px">
+            <option value="" ${coaTypeFilter === "" ? "selected" : ""}>All Types</option>
+            ${filterOptions}
+          </select>
+        </label>
+        <span class="pill neutral" style="font-size:.75rem">${filtered.length} of ${accounts.length} account${accounts.length !== 1 ? "s" : ""}</span>
+        ${coaTypeFilter ? `<button class="secondary small" type="button" data-coa-action="clear-filter">Clear filter</button>` : ""}
+        <div id="coa-msg" style="font-size:.82rem;margin-left:auto"></div>
+      </div>
 
-      <div class="table-scroll-wrapper">
-        <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <div class="table-preview compact-table erp-table">
+        <table>
           <thead>
-            <tr style="background:#FF9933;color:#fff">
-              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Code</th>
-              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Account Name</th>
-              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Type</th>
-              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">System</th>
-              <th style="padding:.6rem .75rem;text-align:left;font-weight:700">Status</th>
-              <th style="padding:.6rem .75rem;text-align:right;font-weight:700">Actions</th>
+            <tr>
+              <th>Code</th>
+              <th>Account Name</th>
+              <th>Type</th>
+              <th>System</th>
+              <th>Status</th>
+              <th style="text-align:right">Actions</th>
             </tr>
           </thead>
           <tbody id="coa-tbody">
@@ -5685,6 +5694,7 @@ function setBusinessWorkspace(workspace) {
     loadBusinessAccounts();
     loadDebitNotes();
   } else if (workspace === "coa") {
+    coaTypeFilter = "";
     loadBusinessAccounts();
   } else if (workspace === "ca-access") {
     lastCaDocumentsResult = null;
@@ -14786,6 +14796,9 @@ dashboardPreview.addEventListener("click", (event) => {
   } else if (coaAction === "cancel-name") {
     const row = button.closest("tr[data-coa-code]");
     if (row) coaExitEditMode(row);
+  } else if (coaAction === "clear-filter") {
+    coaTypeFilter = "";
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
@@ -14800,6 +14813,11 @@ dashboardPreview.addEventListener("input", (event) => {
   }
 });
 dashboardPreview.addEventListener("change", (event) => {
+  if (event.target.id === "coa-type-filter") {
+    coaTypeFilter = event.target.value;
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+    return;
+  }
   if (!["is_inter_state", "is_reverse_charge", "tds_section", "tcs_section", "supply_type"].includes(event.target.name)) {
     return;
   }
