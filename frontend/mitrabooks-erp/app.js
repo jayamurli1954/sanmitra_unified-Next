@@ -1,3 +1,10 @@
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MODULE BOOTSTRAP — MitraBooks ERP app.js
+// NOTE  : 15K-line vanilla ES-module. Split trigger: >18K lines or second developer joins.
+// Use Ctrl+F '// SECTION:' to jump between sections.
+// ══════════════════════════════════════════════════════════════════════
+
 import {
   clearAccessToken,
   apiRequest,
@@ -20,6 +27,12 @@ import {
 // ============================================
 
 const THEME_STORAGE_KEY = "mitrabooks-theme";
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: NAVIGATION GROUPS + ITEMS
+// NOTE  : businessNavigationGroups — sidebar structure for MitraBooks ERP
+// ══════════════════════════════════════════════════════════════════════
 
 function businessNavigationGroups() {
   return [
@@ -98,6 +111,12 @@ function businessNavigationItems() {
  * Set the app theme (dark or light)
  * Persists to localStorage for offline retention
  */
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: THEME (dark / light)
+// NOTE  : setTheme, getTheme, initializeTheme, updateThemeButtons
+// ══════════════════════════════════════════════════════════════════════
+
 function setTheme(theme) {
   const validTheme = theme === "light" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", validTheme);
@@ -156,6 +175,12 @@ if (window.matchMedia) {
     }
   });
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: WIDGET SYSTEM (dashboard widget collapse / visibility / settings)
+// NOTE  : getWidgetStates, toggleWidgetCollapse, createWidgetWrapper, openWidgetSettings
+// ══════════════════════════════════════════════════════════════════════
 
 // ============================================
 // DASHBOARD WIDGET STATE MANAGEMENT (Phase 2C.2-2C.3)
@@ -416,6 +441,12 @@ const EXPERIENCE_APP_KEYS = {
   mandir: "mandirmitra",
   gruha: "gruhamitra",
 };
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: EXPERIENCE DETECTION + PRODUCT SHELL
+// NOTE  : isMandirHost, isGruhaHost, isProductionShell, initialExperience, experienceConfig
+// ══════════════════════════════════════════════════════════════════════
 
 function isMandirHost() {
   const host = String(window.location.hostname || "").toLowerCase();
@@ -786,6 +817,12 @@ const currentPasswordInput = document.getElementById("current-password");
 const newPasswordInput = document.getElementById("new-password");
 const confirmNewPasswordInput = document.getElementById("confirm-password");
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: EXPERIENCE + MODULE CONFIG
+// NOTE  : renderModules, mandirNavigationItems, gruhaNavigationItems, loadAndRenderGroupedNav
+// ══════════════════════════════════════════════════════════════════════
+
 function renderModules(modules = experienceConfig[currentExperience].modules, options = {}) {
   const config = experienceConfig[currentExperience];
   const preview = options.preview !== false;
@@ -1047,6 +1084,12 @@ async function loadAndRenderGroupedNav(appKey) {
 /**
  * Render navigation with group headers (Phase 1D)
  */
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: NAVIGATION RENDERING
+// NOTE  : renderGroupedNav, renderGroupedNavFromItems — builds sidebar from nav group config
+// ══════════════════════════════════════════════════════════════════════
+
 function renderGroupedNav(groups) {
   console.log("[Nav] renderGroupedNav called with", groups.length, "groups");
   const nav = document.getElementById("nav");
@@ -1143,6 +1186,12 @@ function renderGroupedNavFromItems(items) {
   syncBusinessNavActiveState();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: STAT CARDS + ACTIVITY + RECENT VOUCHERS
+// NOTE  : renderStatCards, renderActionTiles, renderActivity, renderBusinessRecentVoucherRows
+// ══════════════════════════════════════════════════════════════════════
+
 function renderStatCards(stats) {
   return stats.map(([label, value, subtext]) => `
     <article class="metric-tile">
@@ -1209,6 +1258,13 @@ function renderBusinessRecentVoucherRows(rows) {
     </div>
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: CA PRACTICE PORTAL + DOCUMENT INTAKE
+// API   : GET/POST /api/v1/business/ca-documents
+// NOTE  : renderCaDocumentTable, renderCaDocumentIntake, caPracticeSummary
+// ══════════════════════════════════════════════════════════════════════
 
 function caDocumentStatusLabel(status) {
   return CA_DOCUMENT_LABELS[status] || String(status || "Uploaded");
@@ -1672,6 +1728,13 @@ function renderSelectedOrgWorkspace() {
 
 let businessDashboardLoadInFlight = false;
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BUSINESS EXECUTIVE DASHBOARD
+// API   : GET /api/v1/business/dashboard/stats
+// NOTE  : renderBusinessExecutiveDashboard — KPI cards, quick actions, data-health panel
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
   const partyCount = Array.isArray(lastBusinessParties) ? lastBusinessParties.length : 0;
@@ -2033,6 +2096,12 @@ function syncGruhaNavActiveState() {
     topbarCurrent.textContent = labels[activeGruhaWorkspace] || "Dashboard";
   }
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: SHARED UTILITIES
+// NOTE  : escapeHtml, formatCurrency, formatCountLabel, setLoginStatus, statusDetailText, delay
+// ══════════════════════════════════════════════════════════════════════
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -2451,6 +2520,13 @@ function hideMandirSplash() {
   mandirSplashVideo?.pause();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: AUTH + SESSION
+// API   : POST /api/v1/auth/login  POST /api/v1/auth/change-password
+// NOTE  : signInWithPassword, signOutAndReturnToLogin, hasTrustedSession, updateSessionUi
+// ══════════════════════════════════════════════════════════════════════
+
 function hasTrustedSession() {
   if (!getAccessToken()) {
     return false;
@@ -2774,6 +2850,12 @@ async function signInWithPassword() {
     }
   }
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — receipt / donation / seva tables
+// NOTE  : renderMandirDonationsTable, renderMandirSevaBookingsTable, renderMandirReceiptHistoryTable
+// ══════════════════════════════════════════════════════════════════════
 
 function renderMandirDonationsTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -3117,6 +3199,13 @@ function renderRecentTenantsTable(rows) {
     </div>
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — financial reports (TB / I&E / B&P / BS)
+// API   : GET /api/v1/mandir/reports/...
+// NOTE  : renderMandirTrialBalance, renderMandirIncomeExpenditureReport, renderMandirBalanceSheetReport
+// ══════════════════════════════════════════════════════════════════════
 
 function formatCurrency(value) {
   const amount = Number(value || 0);
@@ -3732,6 +3821,13 @@ function renderMandirFinancialReports(reports = lastMandirFinancialReports) {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — panchang + operational reports
+// API   : GET /api/v1/mandir/panchang  GET /api/v1/mandir/reports/operational
+// NOTE  : renderMandirPanchang, renderMandirOperationalReports, renderMandirDevoteesView
+// ══════════════════════════════════════════════════════════════════════
+
 function panchangTimeRange(value) {
   if (!value || typeof value !== "object") {
     return "--";
@@ -4050,6 +4146,13 @@ function renderMandirDevoteesView(reports = lastMandirOperationalReports) {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — dashboard home + workspace tabs
+// API   : GET /api/v1/mandir/dashboard
+// NOTE  : renderMandirDashboardHome, renderMandirDashboard, renderMandirSettings
+// ══════════════════════════════════════════════════════════════════════
+
 function renderMandirDashboardHome(payload = {}) {
   const pendingPayments = Array.isArray(payload.pending_payments) ? payload.pending_payments : [];
   const paymentExceptions = Array.isArray(payload.payment_exceptions) ? payload.payment_exceptions : [];
@@ -4367,6 +4470,12 @@ function renderMandirPlatformOwnerShortcut() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: DASHBOARD PREVIEW SHELL
+// NOTE  : renderDashboardPreview — outermost wrapper rendered into dashboardPreview element
+// ══════════════════════════════════════════════════════════════════════
+
 function renderDashboardPreview(config) {
   const dashboard = config.dashboard;
   if (!dashboard) {
@@ -4584,6 +4693,12 @@ const businessListState = {
   },
 };
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: PARTIES TABLE RENDERER
+// NOTE  : renderBusinessPartiesTable, renderBusinessPartiesListFilters — list view only
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessPartiesTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return `
@@ -4692,6 +4807,12 @@ function renderBusinessPartiesListFilters(rowsLength) {
     </div>
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: VOUCHERS TABLE RENDERER
+// NOTE  : renderBusinessVouchersTable — list view only; full CRUD at SECTION: VOUCHERS CRUD
+// ══════════════════════════════════════════════════════════════════════
 
 function renderBusinessVouchersTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -4947,6 +5068,12 @@ function renderProfessionalSuiteWorkspace() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BUSINESS WORKSPACE DISPATCHER
+// NOTE  : renderBusinessWorkspace — top-level if/else dispatches to each workspace render function
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "settings") {
     return renderMitraBooksSettingsWorkspace();
@@ -5175,6 +5302,13 @@ function fhFormatNarrative(text) {
   return out.join("");
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: CHART OF ACCOUNTS (COA) WORKSPACE
+// API   : GET /api/v1/accounting/accounts  POST .../accounts  PATCH .../accounts/{code}
+// NOTE  : renderBusinessCoaWorkspace — name-edit only, codes are permanent, type filter dropdown
+// ══════════════════════════════════════════════════════════════════════
+
+
 // ── Chart of Accounts workspace ─────────────────────────────────────────────
 
 const COA_TYPE_META = {
@@ -5369,6 +5503,13 @@ function coaExitEditMode(row) {
 
 // ── End Chart of Accounts workspace ─────────────────────────────────────────
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: FINANCIAL HEALTH WORKSPACE
+// API   : GET /api/v1/business/financial-health?narrate=
+// NOTE  : renderFinancialHealthWorkspace, fhFormatNarrative — AI narrative is advisory only
+// ══════════════════════════════════════════════════════════════════════
+
 function renderFinancialHealthWorkspace() {
   const data = lastFinancialHealth;
 
@@ -5420,6 +5561,13 @@ function renderFinancialHealthWorkspace() {
     </section>
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: PARTIES — CRUD + dialogs
+// API   : GET/POST /api/v1/business/parties  PATCH .../deactivate
+// NOTE  : loadBusinessParties, createBusinessParty, updateBusinessParty
+// ══════════════════════════════════════════════════════════════════════
 
 async function loadBusinessParties(filters = {}) {
   const appKey = "mitrabooks";
@@ -5640,6 +5788,12 @@ function openBusinessEditPartyDialog(button) {
   dialog?.showModal();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BUSINESS WORKSPACE ROUTER — state + navigation
+// NOTE  : setBusinessWorkspace, syncBusinessNavActiveState — drives activeBusinessWorkspace
+// ══════════════════════════════════════════════════════════════════════
+
 function setBusinessWorkspace(workspace) {
   if (currentExperience === "mitrabooks" && activeOrgSelectorType() !== "BUSINESS") {
     selectedOrgType = "BUSINESS";
@@ -5746,6 +5900,12 @@ function syncBusinessNavActiveState() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BUSINESS LIST FILTERING + PAGINATION
+// NOTE  : applyBusinessListFilter, resetBusinessListFilter, pageBusinessList
+// ══════════════════════════════════════════════════════════════════════
+
 function applyBusinessListFilter(listKind) {
   if (listKind === "parties") {
     const panel = document.querySelector("[data-business-list='parties']");
@@ -5843,6 +6003,13 @@ let lastEinvoiceView = null;     // e-invoice readiness/payload for the open inv
 let lastInventoryItems = null;   // item master cache (also feeds the line selects)
 let lastStockRegister = null;
 let lastClosingStockEntries = null;
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: E-INVOICING (IRN foundation, credential-free)
+// API   : GET /api/v1/business/invoices/{id}/einvoice  POST .../record
+// NOTE  : loadEinvoiceView, recordEinvoiceIrn, renderEinvoiceSection — INV-01 v1.1 payload
+// ══════════════════════════════════════════════════════════════════════
 
 async function loadEinvoiceView(invoiceId) {
   const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}/einvoice`, { method: "GET" });
@@ -6003,6 +6170,13 @@ let lastAllocationOpenItems = null;
 let lastAllocationReconciliation = null;
 let lastAllocationResult = null;
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: FINANCIAL REPORTS — workspace renderer + report framework
+// API   : GET /api/v1/business/reports/... (all report tabs)
+// NOTE  : refreshCurrentBusinessReport, reportResultPayload — dispatches to tab-specific renderers
+// ══════════════════════════════════════════════════════════════════════
+
 function reportResultPayload(result, extra = {}) {
   if (result.ok) {
     return { ok: true, ...(result.payload || {}), ...extra };
@@ -6074,6 +6248,13 @@ async function refreshCurrentBusinessReport() {
     }
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GST SETTLEMENT (liability posting)
+// API   : GET /api/v1/business/gst-settlement/preview  POST /api/v1/business/gst-settlement
+// NOTE  : loadGstSettlementPreview, postGstSettlement, renderGstSettlementPanel
+// ══════════════════════════════════════════════════════════════════════
+
 
 async function loadGstSettlementPreview(period) {
   gstSettlementPeriod = period || gstSettlementPeriod;
@@ -6166,6 +6347,13 @@ function renderGstSettlementPanel() {
 }
 
 // ---- GSTR-3B monthly summary return ------------------------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GSTR-3B (monthly summary return)
+// API   : GET /api/v1/business/returns/gstr-3b?period=
+// NOTE  : loadGstr3b, renderGstr3bPanel, downloadGstr3bJson
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadGstr3b(period) {
   gstr3bPeriod = period || gstr3bPeriod;
   const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-3b?period=${encodeURIComponent(gstr3bPeriod)}`, { method: "GET" });
@@ -6296,6 +6484,12 @@ function renderGstr3bPanel() {
 }
 
 // Wrapper: choose the return (GSTR-3B summary vs GSTR-1 outward detail).
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GST RETURNS — workspace switcher (3B / 1 / 2B / CMP-08 / GSTR-4)
+// NOTE  : renderGstReturns, gstReturnType state variable
+// ══════════════════════════════════════════════════════════════════════
+
 function renderGstReturns() {
   const tabBtn = (id, label) => `
     <button class="report-tab ${gstReturnType === id ? "active" : ""}" type="button"
@@ -6313,6 +6507,13 @@ function renderGstReturns() {
 }
 
 // ---- GSTR-2B / ITC reconciliation (upload the portal JSON) --------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GSTR-2B RECONCILIATION
+// API   : POST /api/v1/business/returns/gstr-2b/reconcile?period=
+// NOTE  : reconcileGstr2b, renderGstr2bPanel — file-upload JSON match
+// ══════════════════════════════════════════════════════════════════════
+
 async function reconcileGstr2b() {
   const fileInput = document.querySelector("[data-gstr2b-file]");
   const periodInput = document.querySelector("[data-gstr2b-period]");
@@ -6409,6 +6610,13 @@ function renderGstr2bPanel() {
 }
 
 // ---- GSTR-4 annual composition return ----------------------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GSTR-4 (composition annual return)
+// API   : GET /api/v1/business/returns/gstr-4?financial_year=
+// NOTE  : loadGstr4, renderGstr4Panel, downloadGstr4Json
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadGstr4(fy) {
   gstr4Fy = fy || gstr4Fy;
   const result = await apiRequest("mitrabooks", `/api/v1/business/returns/gstr-4?financial_year=${encodeURIComponent(gstr4Fy)}`, { method: "GET" });
@@ -6519,6 +6727,13 @@ function downloadCmp08Json() {
   renderJson(apiOutput, { cmp08_download: { quarter: cmp08Quarter } });
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GST COMPOSITION — CMP-08 (quarterly statement)
+// API   : GET /api/v1/business/returns/cmp-08?quarter=
+// NOTE  : renderCmp08Panel, previewCmp08FromInput, postCmp08Liability
+// ══════════════════════════════════════════════════════════════════════
+
 function renderCmp08Panel() {
   const quarterOpts = recentFyQuarters(6).map((q) =>
     `<option value="${q}" ${q === cmp08Quarter ? "selected" : ""}>${q.replace("-Q", " · Q")}</option>`).join("");
@@ -6589,6 +6804,13 @@ async function downloadObTemplate() {
   const result = await downloadApiFile("mitrabooks", "/api/v1/business/opening-balances/template", "opening_balances_template.csv");
   renderJson(apiOutput, { ob_template: { ok: result.ok } });
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: OPENING BALANCES + YEAR-END CLOSE
+// API   : POST /api/v1/business/opening-balances  POST /api/v1/business/year-end/close
+// NOTE  : previewOpeningBalances, postOpeningBalances, previewYearEnd, postYearEndClose
+// ══════════════════════════════════════════════════════════════════════
 
 async function previewOpeningBalances() {
   const fileInput = document.querySelector("[data-ob-file]");
@@ -6782,6 +7004,13 @@ function renderOpeningYearEndPanel() {
 }
 
 // ---- Fixed assets register + depreciation --------------------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: FIXED ASSETS + DEPRECIATION
+// API   : GET/POST /api/v1/business/fixed-assets  POST /api/v1/business/depreciation/run
+// NOTE  : loadFixedAssets, createFixedAssetFromForm, renderFixedAssetsPanel
+// ══════════════════════════════════════════════════════════════════════
+
 function fixedAssetAccountOptions() {
   // Fixed-asset accounts live in the 16xxx subclass (16099 is the contra).
   return businessAccountsForSelection().filter((acc) =>
@@ -6968,6 +7197,13 @@ function renderFixedAssetsPanel() {
 }
 
 // ---- Accounting dimensions (cost centres / projects) ----------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ACCOUNTING DIMENSIONS (cost centre / project)
+// API   : GET/POST /api/v1/business/dimensions  GET .../report
+// NOTE  : loadDimensions, createDimensionFromForm, deactivateDimension, renderDimensionsPanel
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadDimensions() {
   const result = await apiRequest("mitrabooks", "/api/v1/business/dimensions", { method: "GET" });
   lastDimensions = result.ok ? result.payload : null;
@@ -7113,6 +7349,13 @@ function renderDimensionsPanel() {
 }
 
 // ---- Inventory (opt-in): items, stock register, closing stock ------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: INVENTORY (opt-in, periodic method)
+// API   : GET/POST /api/v1/business/inventory/items  GET .../stock-register
+// NOTE  : loadInventoryItems, createInventoryItemFromForm, postClosingStock, renderInventoryPanel
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadInventoryItems() {
   const result = await apiRequest("mitrabooks", "/api/v1/business/inventory/items", { method: "GET" });
   lastInventoryItems = result.ok ? result.payload : { ok: false, inventory_enabled: false, items: [], detail: result.payload?.detail || `HTTP ${result.status}.` };
@@ -7300,6 +7543,13 @@ function renderInventoryPanel() {
 }
 
 // ---- Customer/vendor statements + dunning (Phase D) ----------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: CUSTOMER STATEMENTS + DUNNING
+// API   : GET /api/v1/business/statements/{party_id}  POST .../dunning
+// NOTE  : loadPartyStatement, recordDunningSent, renderStatementsPanel
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadPartyStatement() {
   const partySel = document.querySelector("[data-stmt-party]");
   const kindSel = document.querySelector("[data-stmt-kind]");
@@ -7459,6 +7709,13 @@ function renderStatementsPanel() {
 }
 
 // ---- Bank reconciliation (statement CSV vs bank-account ledger) ---------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BANK RECONCILIATION
+// API   : POST /api/v1/business/bank-recon/statement  GET /api/v1/business/bank-recon
+// NOTE  : loadBankReconciliation, uploadBankStatementFile, confirmBankReconMatch
+// ══════════════════════════════════════════════════════════════════════
+
 function bankAccountOptions() {
   // Cash/bank accounts live in the 11xxx subclass of the business COA.
   return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("11"));
@@ -7646,6 +7903,13 @@ function renderBankReconPanel() {
 }
 
 // ---- TDS / TCS quarterly register (Form 26Q / 27EQ working paper) -------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: TDS / TCS MODULE
+// API   : GET /api/v1/business/tds/register?quarter=
+// NOTE  : loadTdsRegister, renderTdsRegisterPanel, renderTdsRegisterSide
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadTdsRegister(quarter) {
   tdsQuarter = quarter || tdsQuarter;
   const result = await apiRequest("mitrabooks", `/api/v1/business/tds/register?quarter=${encodeURIComponent(tdsQuarter)}`, { method: "GET" });
@@ -7725,6 +7989,13 @@ function renderTdsRegisterPanel() {
     ${(r.generated_notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GSTR-1 (Outward Supplies)
+// API   : GET /api/v1/business/returns/gstr-1?period=
+// NOTE  : loadGstr1, renderGstr1Panel, downloadGstr1Json
+// ══════════════════════════════════════════════════════════════════════
 
 async function loadGstr1(period) {
   gstr3bPeriod = period || gstr3bPeriod;
@@ -7832,6 +8103,13 @@ function renderGstr1Panel() {
     ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}
   `;
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ITC REVERSALS (Rule 37 / Re-claim)
+// API   : GET /api/v1/business/itc/reversals  POST /api/v1/business/itc/reverse|reclaim
+// NOTE  : loadItcReversalPreview, reverseItcForBill, reclaimItcForBill, renderItcReversalPanel
+// ══════════════════════════════════════════════════════════════════════
 
 async function loadItcReversalPreview(asOf) {
   itcReversalAsOf = asOf || itcReversalAsOf;
@@ -7990,6 +8268,13 @@ async function loadPeriodLocks() {
   renderJson(apiOutput, { period_locks: { ok: result.ok, count: lastPeriodLocks.length } });
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GST PERIOD LOCKS
+// API   : POST /api/v1/business/gst-period-lock
+// NOTE  : setGstPeriodLock, lockGstPeriodFromInput, rerenderBusinessReportsIfActive
+// ══════════════════════════════════════════════════════════════════════
+
 async function setGstPeriodLock(period, locked) {
   if (!period) {
     setLoginStatus("warn", "Period required", "Enter a month to lock (YYYY-MM).");
@@ -8057,6 +8342,13 @@ function rerenderBusinessReportsIfActive() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: FINANCIAL REPORT LOADERS (TB / P&L / BS / R&P)
+// API   : GET /api/v1/business/reports/...
+// NOTE  : loadBusinessTrialBalance, loadBusinessProfitLoss, loadBusinessBalanceSheet
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadBusinessTrialBalance() {
   const result = await apiRequest("mitrabooks", `/api/v1/accounting/reports/trial-balance?as_of=${encodeURIComponent(businessReportState.as_of)}`, { method: "GET" });
   lastBusinessTrialBalance = reportResultPayload(result);
@@ -8092,6 +8384,13 @@ async function loadBusinessReceivablesPayables() {
 }
 
 // ---- AR/AP Aging (Phase B backend) -------------------------------------- //
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: PAYMENT ALLOCATION + AR/AP AGING
+// API   : GET /api/v1/business/aging  POST /api/v1/business/allocation
+// NOTE  : loadBusinessAging, setAllocationKind, applyFifoSuggestion, submitAllocation
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadBusinessAging() {
   const kind = businessReportState.agingKind === "payable" ? "payable" : "receivable";
   const asOf = encodeURIComponent(businessReportState.as_of);
@@ -9743,6 +10042,13 @@ function renderInvoiceSettingsPanel() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: SALES INVOICES WORKSPACE
+// API   : GET /api/v1/business/invoices  POST /api/v1/business/invoices
+// NOTE  : loadBusinessInvoices, submitInvoice, renderBusinessSalesWorkspace; e-invoice section included
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessSalesWorkspace() {
   if (salesView === "create") {
     return renderInvoiceCreateForm();
@@ -10252,6 +10558,13 @@ function renderBillDetail() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: PURCHASE BILLS WORKSPACE
+// API   : GET /api/v1/business/bills  POST /api/v1/business/bills
+// NOTE  : loadBusinessBills, submitBill, renderBusinessPurchaseWorkspace
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessPurchaseWorkspace() {
   if (purchaseView === "create") {
     return renderBillCreateForm();
@@ -10680,6 +10993,13 @@ function renderCreditNoteDetail() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: CREDIT NOTES WORKSPACE
+// API   : GET /api/v1/business/credit-notes  POST /api/v1/business/credit-notes
+// NOTE  : loadCreditNotes, submitCreditNote, renderBusinessCreditNoteWorkspace
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessCreditNoteWorkspace() {
   if (creditNoteView === "create") {
     return renderCreditNoteCreateForm();
@@ -11098,6 +11418,13 @@ function renderDebitNoteDetail() {
   `;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: DEBIT NOTES WORKSPACE
+// API   : GET /api/v1/business/debit-notes  POST /api/v1/business/debit-notes
+// NOTE  : loadDebitNotes, submitDebitNote, renderBusinessDebitNoteWorkspace
+// ══════════════════════════════════════════════════════════════════════
+
 function renderBusinessDebitNoteWorkspace() {
   if (debitNoteView === "create") {
     return renderDebitNoteCreateForm();
@@ -11143,6 +11470,12 @@ const MITRABOOKS_FALLBACK_ACCOUNTS = [
   { account_id: 53004, account_code: "53004", account_name: "Office Expense", account_type: "expense" },
   { account_id: 54001, account_code: "54001", account_name: "Bank Charges", account_type: "expense" },
 ];
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ACCOUNT HELPERS + DATA HEALTH
+// NOTE  : normalizeBusinessAccount, businessAccountsForSelection, renderBusinessDataHealthPanel
+// ══════════════════════════════════════════════════════════════════════
 
 function normalizeBusinessAccount(acc) {
   const id = acc.account_id
@@ -11559,6 +11892,12 @@ async function loadModuleContextForAccounts() {
   return lastModuleContext;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: VOUCHER FORM HELPERS
+// NOTE  : renderVoucherLineItem, updateVoucherBalance, addVoucherLine, clearVoucherForm
+// ══════════════════════════════════════════════════════════════════════
+
 function syncVoucherAccountFromText(lineEl) {
   const input = lineEl?.querySelector(".voucher-account");
   const select = lineEl?.querySelector(".voucher-account-select");
@@ -11732,6 +12071,13 @@ function clearVoucherForm() {
   updateVoucherBalanceState();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ACCOUNT LOADING + FINANCIAL HEALTH LOADER
+// API   : GET /api/v1/accounting/accounts  GET /api/v1/business/financial-health
+// NOTE  : loadBusinessAccounts, loadFinancialHealth, loadBusinessDashboardStats
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadBusinessAccounts() {
   const appKey = "mitrabooks";
   const result = await apiRequest(appKey, "/api/v1/accounting/accounts", { method: "GET" });
@@ -11870,6 +12216,12 @@ function filterBusinessAccountsByQuery(query) {
  * @param {number} selectedAccountId - Currently selected account ID (optional)
  * @returns {string} HTML for the account selector component
  */
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ACCOUNT SELECTOR COMPONENT
+// NOTE  : renderAccountSelectorComponent, selectBusinessAccount — inline searchable dropdown
+// ══════════════════════════════════════════════════════════════════════
+
 function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
   const accounts = businessAccountsForSelection();
   const selectedAccount = accounts.find((acc) => String(acc.id) === String(selectedAccountId));
@@ -12060,6 +12412,13 @@ document.addEventListener("change", (event) => {
     selectBusinessAccount(fieldId, accountSelect.value);
   }
 });
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: VOUCHERS — creation helpers (party / contra / journal)
+// API   : POST /api/v1/business/vouchers/...
+// NOTE  : createSimplePartyVoucher, createContraVoucher, createJournalVoucher
+// ══════════════════════════════════════════════════════════════════════
 
 async function loadVoucherPartyOutstanding(partyId, voucherType) {
   const box = document.getElementById("business-voucher-outstanding");
@@ -12394,6 +12753,13 @@ async function createBusinessVoucher(voucherData) {
   renderJson(apiOutput, { create_voucher: result });
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: VOUCHERS — CRUD + list
+// API   : GET /api/v1/business/vouchers  POST /api/v1/business/vouchers/{type}
+// NOTE  : loadBusinessVouchers, reverseBusinessVoucher, openBusinessCreateVoucherDialog
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadBusinessVouchers(filters = {}) {
   const appKey = "mitrabooks";
   const params = new URLSearchParams();
@@ -12691,6 +13057,13 @@ function formatTimestampIST(utcTimestamp) {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: AUDIT TRAIL
+// API   : GET /api/v1/business/audit-log
+// NOTE  : renderAuditEventsTable, loadAuditEvents, applyAuditFilters
+// ══════════════════════════════════════════════════════════════════════
+
 function renderAuditEventsTable(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return `
@@ -12876,6 +13249,13 @@ function pageAuditList(direction) {
   auditListState.offset = direction === "next" ? offset + 30 : Math.max(0, offset - 30);
   loadAuditEvents();
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: GRUHAMITRA WORKSPACE
+// API   : GET /api/v1/gruha/...
+// NOTE  : renderGruhaDashboard, renderGruhaWorkspace
+// ══════════════════════════════════════════════════════════════════════
 
 function renderGruhaDashboard(config, payload) {
   const data = payload || {};
@@ -13207,6 +13587,13 @@ async function loadAccountingDrilldownResult() {
   return result;
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: ACCOUNTING DRILLDOWN (shared MandirMitra + MitraBooks)
+// API   : GET /api/v1/accounting/drilldown/...
+// NOTE  : loadAccountingVoucherDetail, renderAccountingDrilldownPanel
+// ══════════════════════════════════════════════════════════════════════
+
 async function loadAccountingVoucherDetail(journalId) {
   if (!journalId) {
     return null;
@@ -13360,6 +13747,12 @@ async function loadMandirDashboard() {
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — account options / create forms / posting dialogs
+// API   : POST /api/v1/mandir/... (receipts, seva bookings, expenses, contra)
+// ══════════════════════════════════════════════════════════════════════
 
 function renderBankAccountOptions(accounts = []) {
   const options = ['<option value="">Use backend default bank account</option>'];
@@ -14262,6 +14655,12 @@ async function rejectOnboardingRequest(requestId) {
   await loadPlatformOwnerDashboard();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: MANDIR — dialogs: drilldown / verification / rejection / cancel
+// NOTE  : openMandirVerificationDialog, openMandirCancelReceiptDialog, drillAccountingReport
+// ══════════════════════════════════════════════════════════════════════
+
 function openTenantEntitlementsDialog(button) {
   const tenantId = button.getAttribute("data-tenant-id") || "";
   if (!tenantId) {
@@ -14458,6 +14857,12 @@ nav.addEventListener("click", (event) => {
   }
   setBusinessWorkspace(link.dataset.businessWorkspace || "overview");
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: EVENT HANDLERS — click / change / input / keydown
+// NOTE  : Single delegated listener on dashboardPreview for all workspace actions
+// ══════════════════════════════════════════════════════════════════════
+
 dashboardPreview.addEventListener("click", (event) => {
   const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action], [data-coa-action]");
   if (!button) {
@@ -15135,6 +15540,12 @@ document.addEventListener("click", (e) => {
  * @param {number} percentage - Health percentage (0-100)
  * @param {string} status - Status message
  */
+
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: BOOKS HEALTH WIDGET
+// NOTE  : updateHealthWidget / refreshBooksHealthWidget / initializeHealthWidget
+// ══════════════════════════════════════════════════════════════════════
+
 function updateHealthWidget(percentage = null, status = "Run checks", tone = "pending") {
   const widget = document.getElementById("books-health-widget");
   const healthPercent = document.getElementById("health-percent-text");
