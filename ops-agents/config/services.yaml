@@ -19,10 +19,5 @@ products:
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
 
   - name: MandirMitra
-    frontend_url: https://www.sanmitratech.in
+    frontend_url: https://www.mandirmitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
-
-  # InvestMitra: add frontend_url once custom domain is confirmed.
-  # - name: InvestMitra
-  #   frontend_url: https://investmitra.sanmitratech.in
-  #   backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
