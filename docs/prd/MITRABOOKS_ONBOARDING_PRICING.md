@@ -114,12 +114,12 @@ All prices are recommended launch prices in INR. Taxes extra where applicable.
 
 ### Regular Business Account
 
-| Plan | Target user | Monthly | Yearly | Companies | Users | OCR / AI documents | Included scope |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Free | Trial, very small business | Rs. 0 | Rs. 0 | 1 | 1 | 0/month | Basic parties, vouchers, invoices, and reports with manual entry |
-| Basic | Single-user business | Rs. 499 | Rs. 4,999 | 1 | 1 | 25/month | GST prep, TDS/TCS tracking, basic OCR queue, email support |
-| Starter | Growing business or single-user multi-company | Rs. 999 | Rs. 9,999 | 5 | 1 | 25/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
-| Growth | Larger single-user business account | Rs. 1,499 | Rs. 14,999 | 10 | 1 | 100/month | Higher business document limits, AI MIS, OCR, reconciliation assistance |
+| Plan | Target user | Monthly | Yearly | Business scope | Users | OCR / AI documents | Included scope |
+| --- | --- | ---: | ---: | --- | ---: | ---: | --- |
+| Free | Trial, very small business | Rs. 0 | Rs. 0 | 1 company | 1 | 0/month | Basic parties, vouchers, invoices, and reports with manual entry |
+| Basic | Small business team | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25/month | GST prep, TDS/TCS tracking, basic OCR queue, email support |
+| Starter | Growing business with branches | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
+| Growth | Larger business with branch operations | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100/month | Higher business document limits, AI MIS, OCR, reconciliation assistance |
 
 ### CA Practice / Bookkeepers
 

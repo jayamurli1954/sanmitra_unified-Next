@@ -63,12 +63,12 @@ MitraBooks has two pricing tracks and they should stay separate.
 
 ### Regular Business
 
-| Plan | Monthly | Yearly | Companies | Users | OCR / AI documents | Commercial role |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Free | INR 0 | INR 0 | 1 | 1 | 0/month | Trial and very small manual-entry businesses. |
-| Basic | INR 499 | INR 4,999 | 1 | 1 | 25/month | Single-user business with GST/TDS prep and basic reports. |
-| Starter | INR 999 | INR 9,999 | 5 | 1 | 25/month | Growing business or single-user multi-company use. |
-| Growth | INR 1,499 | INR 14,999 | 10 | 1 | 100/month | Larger single-user business with higher document limits and assistance features. |
+| Plan | Monthly | Yearly | Business scope | Users | OCR / AI documents | Commercial role |
+| --- | ---: | ---: | --- | ---: | ---: | --- |
+| Free | INR 0 | INR 0 | 1 company | 1 | 0/month | Trial and very small manual-entry businesses. |
+| Basic | INR 499 | INR 4,999 | 1 company | 3 | 25/month | Small business team with GST/TDS prep and basic reports. |
+| Starter | INR 999 | INR 9,999 | 2 branches | 5 | 25/month | Growing business with branch operations, ageing, and bank reconciliation. |
+| Growth | INR 1,499 | INR 14,999 | 5 branches | 10 | 100/month | Larger business with higher document limits and assistance features. |
 
 ### CA Practice / Bookkeeper
 

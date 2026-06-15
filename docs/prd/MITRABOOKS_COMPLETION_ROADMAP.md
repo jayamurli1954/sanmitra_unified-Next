@@ -56,12 +56,12 @@ Regular business account pricing and CA Practice / Bookkeeper pricing must stay 
 
 ### Regular Business Account
 
-| Plan | Monthly | Yearly | Companies | Users | OCR documents |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Free | Rs. 0 | Rs. 0 | 1 | 1 | 0 |
-| Basic | Rs. 499 | Rs. 4,999 | 1 | 1 | 25 |
-| Starter | Rs. 999 | Rs. 9,999 | 5 | 1 | 25 |
-| Growth | Rs. 1,499 | Rs. 14,999 | 10 | 1 | 100 |
+| Plan | Monthly | Yearly | Business scope | Users | OCR documents |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Free | Rs. 0 | Rs. 0 | 1 company | 1 | 0 |
+| Basic | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25 |
+| Starter | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25 |
+| Growth | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100 |
 
 ### CA Practice / Bookkeepers
 
