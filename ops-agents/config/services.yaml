@@ -11,7 +11,7 @@ products:
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
 
   - name: LegalMitra
-    frontend_url: https://legalmitra.sanmitratech.in
+    frontend_url: https://www.legalmitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
 
   - name: GruhaMitra
