@@ -38,7 +38,7 @@ from collect_errors import collect_errors  # noqa: E402
 from redact import redact_lines  # noqa: E402
 
 CONFIG = Path(__file__).resolve().parent.parent / "config" / "services.yaml"
-MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")  # cheap; swappable
+MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 IST_OFFSET_NOTE = "times shown in UTC"
 
 
@@ -126,7 +126,7 @@ def ai_summary(facts: str, redacted_errors: list[str]) -> str:
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
     except Exception as e:
-        return f"(AI summary unavailable: {type(e).__name__})"
+        return f"(AI summary unavailable: {type(e).__name__}: {e})"
 
 
 # --------------------------------------------------------------------------
