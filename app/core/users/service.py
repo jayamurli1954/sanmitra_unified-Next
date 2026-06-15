@@ -156,11 +156,13 @@ async def ensure_demo_mitrabooks_user(
     password: str,
     full_name: str = "Demo MitraBooks Admin",
     tenant_id: str = "demo-mitrabooks-business",
+    display_name: str = "Local MitraBooks Demo Business",
 ) -> dict | None:
     normalized_email = str(email or "").strip().lower()
     normalized_password = str(password or "").strip()
     normalized_tenant_id = str(tenant_id or "").strip() or "demo-mitrabooks-business"
     normalized_full_name = str(full_name or "Demo MitraBooks Admin").strip() or "Demo MitraBooks Admin"
+    normalized_display_name = str(display_name or "Local MitraBooks Demo Business").strip() or "Local MitraBooks Demo Business"
 
     if not normalized_email or "@" not in normalized_email:
         return None
@@ -170,7 +172,7 @@ async def ensure_demo_mitrabooks_user(
     await ensure_users_indexes()
     await ensure_tenant_exists(
         normalized_tenant_id,
-        display_name="Local MitraBooks Demo Business",
+        display_name=normalized_display_name,
         organization_type="BUSINESS",
         enabled_modules=["business", "accounting", "gst", "inventory", "audit"],
         app_keys=["mitrabooks"],
