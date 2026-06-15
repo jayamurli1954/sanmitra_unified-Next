@@ -381,6 +381,25 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     assert "Planned multi-client books" not in app_source
 
 
+def test_professional_suite_routes_to_active_workspace_without_planned_cards() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
+
+    assert 'statusTitle: "Professional workspace active"' in app_source
+    assert 'statusCopy: "Using the signed-in MitraBooks tenant context for billing, client accounts, receipts, and reports."' in app_source
+    assert 'return renderProfessionalSuiteWorkspace();' in app_source
+    assert 'function renderProfessionalSuiteWorkspace()' in app_source
+    assert 'MitraBooks workflow active' in app_source
+    assert '["Client Billing", "Create GST-ready service invoices in the active Sales workspace.", "sales", "Open Sales"]' in app_source
+    assert '["Client Accounts", "Maintain professional clients and vendors in Parties.", "parties", "Open Parties"]' in app_source
+    assert '["Receipts", "Record client receipts and journal entries through the voucher workflow.", "vouchers", "Open Vouchers"]' in app_source
+    assert '["Professional Reports", "Review ledger-backed financial statements and receivables.", "reports", "Open Reports"]' in app_source
+    assert "Professional workspace planned" not in app_source
+    assert "Planned billing and invoicing" not in app_source
+    assert "planned workspace preview" not in app_source
+    assert "<strong>Professional Suite</strong><small>Billing and invoicing</small>" in index_source
+
+
 def test_accounting_voucher_detail_surfaces_reversal_links() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     start = app_source.index("function renderAccountingVoucherDetail")

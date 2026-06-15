@@ -461,8 +461,8 @@ const orgSelectorMeta = {
   PROFESSIONAL: {
     label: "Professional Suite",
     subtitle: "Billing and invoicing",
-    statusTitle: "Professional workspace planned",
-    statusCopy: "This selector is ready in the shell; backend tenant context and modules are not enabled yet.",
+    statusTitle: "Professional workspace active",
+    statusCopy: "Using the signed-in MitraBooks tenant context for billing, client accounts, receipts, and reports.",
   },
   CA_PRACTICE: {
     label: "CA Practice Portal",
@@ -1597,20 +1597,20 @@ function plannedOrgWorkspaceModel(orgType) {
 
   return {
     label: "Professional Suite",
-    eyebrow: "Planned billing and invoicing",
-    lead: "Service-business workspace for billing, receipts, professional client accounts, and revenue tracking. This shell is visible now; backend modules are not enabled yet.",
+    eyebrow: "Billing and invoicing",
+    lead: "Service-business workspace for billing, receipts, professional client accounts, and revenue tracking using the active MitraBooks tenant context.",
     kpis: [
-      ["Billing", "Planned", "Service invoices and retainers"],
-      ["Receivables", "Planned", "Client dues and follow-ups"],
-      ["Reports", "Planned", "Practice performance summaries"],
+      ["Billing", "Active", "Service invoices through Sales"],
+      ["Receivables", "Active", "Client accounts through Parties and ledger reports"],
+      ["Reports", "Active", "Financial statements and health summaries"],
     ],
     modules: [
-      ["Client billing", "Create professional service invoices with GST and accounting posting.", "Planned"],
-      ["Retainers and advances", "Track advance receipts separately from final service revenue recognition.", "Planned"],
-      ["Receivables follow-up", "Age client balances and route overdue reminders.", "Planned"],
-      ["Professional reports", "Monthly revenue, collections, margins, and client-wise performance.", "Planned"],
+      ["Client billing", "Create service invoices with GST through the active Sales workspace.", "Active"],
+      ["Client accounts", "Maintain professional clients in Parties and review balances from ledger-backed reports.", "Active"],
+      ["Receipts", "Record client receipts with journal posting from the existing voucher workflow.", "Active"],
+      ["Professional reports", "Use financial statements, receivables, and health summaries for practice reporting.", "Active"],
     ],
-    note: "No backend tenant context has changed; this is a planned workspace preview inside the MitraBooks shell.",
+    note: "Current state: Professional Suite reuses active MitraBooks billing, parties, vouchers, and reports. Deferred scope: separate professional-only tenant context and retainer-specific automation.",
   };
 }
 
@@ -1618,6 +1618,9 @@ function renderSelectedOrgWorkspace() {
   const orgType = activeOrgSelectorType();
   if (orgType === "CA_PRACTICE") {
     return renderCaPracticePortalWorkspace();
+  }
+  if (orgType === "PROFESSIONAL") {
+    return renderProfessionalSuiteWorkspace();
   }
   const model = plannedOrgWorkspaceModel(orgType);
   return `
@@ -4892,6 +4895,52 @@ function renderCaPracticePortalWorkspace() {
         This portal saves tenant-scoped document metadata only. File storage, OCR, client tenant switching, voucher posting, and filing links are deferred until CA practice access rules are complete.
       </div>
       ${renderCaDocumentIntake(model.documentIntake)}
+    </div>
+  `;
+}
+
+function renderProfessionalSuiteWorkspace() {
+  const model = plannedOrgWorkspaceModel("PROFESSIONAL");
+  const cards = [
+    ["Client Billing", "Create GST-ready service invoices in the active Sales workspace.", "sales", "Open Sales"],
+    ["Client Accounts", "Maintain professional clients and vendors in Parties.", "parties", "Open Parties"],
+    ["Receipts", "Record client receipts and journal entries through the voucher workflow.", "vouchers", "Open Vouchers"],
+    ["Professional Reports", "Review ledger-backed financial statements and receivables.", "reports", "Open Reports"],
+  ];
+  return `
+    <div class="verification-panel erp-workspace-panel professional-suite-workspace">
+      <div class="preview-heading compact">
+        <div>
+          <span class="workbench-kicker">${escapeHtml(model.eyebrow)}</span>
+          <h4>Professional Suite</h4>
+          <p>${escapeHtml(model.lead)}</p>
+        </div>
+        <span class="pill ok">MitraBooks workflow active</span>
+      </div>
+      <div class="planned-org-kpis">
+        ${model.kpis.map(([title, value, copy]) => `
+          <article>
+            <span>${escapeHtml(title)}</span>
+            <strong>${escapeHtml(value)}</strong>
+            <small>${escapeHtml(copy)}</small>
+          </article>
+        `).join("")}
+      </div>
+      <div class="planned-org-module-grid">
+        ${cards.map(([title, copy, workspace, action]) => `
+          <article>
+            <div>
+              <h4>${escapeHtml(title)}</h4>
+              <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(workspace)}">${escapeHtml(action)}</button>
+            </div>
+            <p>${escapeHtml(copy)}</p>
+          </article>
+        `).join("")}
+      </div>
+      <div class="settings-boundary-note">
+        <strong>Current state:</strong>
+        Professional Suite uses the active MitraBooks tenant for billing, parties, receipts, and reports. Deferred scope: retainer-specific automation and separate professional-only tenant context.
+      </div>
     </div>
   `;
 }
@@ -14787,10 +14836,10 @@ orgOptions.forEach((option) => {
     syncOrgSelectorOptions(orgType);
     orgMenu.hidden = true;
     orgSelector.classList.remove("open");
-    if (orgType !== "BUSINESS") {
-      setLoginStatus("warn", selectorMeta.statusTitle, selectorMeta.statusCopy);
-    } else {
+    if (orgType === "BUSINESS" || orgType === "PROFESSIONAL" || orgType === "CA_PRACTICE") {
       setLoginStatus("ok", selectorMeta.statusTitle, selectorMeta.statusCopy);
+    } else {
+      setLoginStatus("warn", selectorMeta.statusTitle, selectorMeta.statusCopy);
     }
     updateTrustedContextUi();
     if (currentExperience === "mitrabooks") {
