@@ -1,3 +1,10 @@
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: MODULE HEADER + IMPORTS
+# NOTE   : 9K-line MandirMitra FastAPI router. Use Ctrl+F '# SECTION:' to navigate.
+# Split trigger: when a second developer joins or file exceeds 12K lines.
+# ════════════════════════════════════════════════════════════════════════
+
 from __future__ import annotations
 
 import calendar
@@ -206,6 +213,12 @@ _MANDIR_LEGACY_ACCOUNT_CODE_MAP: dict[str, str] = {
 }
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ACCOUNT CODE + CATEGORY HELPERS
+# NOTE   : _normalize_mandir_account_code, _normalize_income_category, _normalize_public_payment_utr_reference, _is_mandir_sponsorship_category, _mandir_cash_income_category, _mandir_in_kind_income_category, _mandir_in_kind_debit_account_target, _mandir_income_bucket_for_account
+# ════════════════════════════════════════════════════════════════════════
+
 def _normalize_mandir_account_code(code: Any, *, account_name: Any = None) -> str:
     raw_code = str(code or "").strip()
     if not raw_code:
@@ -301,6 +314,12 @@ def _mandir_income_bucket_for_account(name: Any, code: Any) -> str | None:
         return 'seva'
     return None
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ASYNC ACCOUNT RESOLVERS
+# NOTE   : _normalize_mandir_income_accounts, _resolve_mandir_income_account, _resolve_or_create_mandir_account, _mandir_inventory_accounting_enabled, _resolve_mandir_in_kind_debit_account, _resolve_mandir_payment_account_id
+# ════════════════════════════════════════════════════════════════════════
 
 async def _normalize_mandir_income_accounts(session: AsyncSession, tenant_id: str) -> dict[str, int]:
     canonical_targets = {
@@ -553,6 +572,12 @@ def _mandir_actor_id(current_user: dict[str, Any]) -> str:
     )
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: RECEIPT CANCELLATION HELPERS
+# NOTE   : _mandir_actor_id, _mandir_receipt_cancellation_metadata, _reverse_mandir_source_journal, _cancel_mandir_receipt_source
+# ════════════════════════════════════════════════════════════════════════
+
 def _mandir_receipt_cancellation_metadata(payload: dict[str, Any] | None, current_user: dict[str, Any]) -> dict[str, Any]:
     payload = payload if isinstance(payload, dict) else {}
     reason = str(
@@ -761,6 +786,12 @@ MANDIR_DEFAULT_ACCOUNTS: list[dict[str, Any]] = [
     },
 ]
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ACCOUNT SEEDING
+# NOTE   : _mandir_seed_accounts, _mandir_account_view, _dedupe_mandir_account_docs, _ensure_default_mandir_accounts, _sync_mandir_sql_accounts_from_seed, _ensure_default_mandir_sql_accounts
+# ════════════════════════════════════════════════════════════════════════
 
 def _mandir_seed_accounts() -> list[dict[str, Any]]:
     legacy = _load_mandir_legacy_accounts()
@@ -995,6 +1026,12 @@ async def _ensure_default_mandir_sql_accounts_safe(
         logger.warning("Skipped COA normalization for tenant %s due to: %s", tenant_id, exc)
         return
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: SAFE TYPE COERCIONS
+# NOTE   : _safe_float, _safe_optional_float, _safe_optional_int, _safe_bool, _safe_optional_str, _parse_opening_balance_decimal
+# ════════════════════════════════════════════════════════════════════════
+
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -1059,6 +1096,12 @@ def _parse_opening_balance_decimal(value: Any) -> Decimal | None:
     except (InvalidOperation, ValueError, TypeError):
         raise ValueError(f"Invalid amount value: {value}")
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: OPENING BALANCE HELPERS
+# NOTE   : _parse_opening_balance_rows, _find_or_create_opening_balance_offset_account, _current_opening_balance_net
+# ════════════════════════════════════════════════════════════════════════
 
 async def _parse_opening_balance_rows(file: UploadFile) -> list[dict[str, Any]]:
     filename = str(file.filename or '').strip()
@@ -1170,6 +1213,12 @@ async def _current_opening_balance_net(
 
 
 @lru_cache(maxsize=1)
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: LEGACY COA IMPORT
+# NOTE   : _load_mandir_legacy_accounts, _coerce_account_id, _infer_cash_bank_nature, _infer_flag, _prepare_mandir_account_docs, _upsert_mandir_account_docs
+# ════════════════════════════════════════════════════════════════════════
+
 def _load_mandir_legacy_accounts() -> list[dict[str, Any]]:
     if not MANDIR_LEGACY_COA_PATH.exists():
         return []
@@ -1339,6 +1388,12 @@ def _sanitize_mongo_doc(doc: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: SEQUENCE NUMBERS
+# NOTE   : _format_mandir_receipt_number, _format_mandir_sequence_number, _next_receipt_number, _next_journal_entry_number, _receipt_number_for_donation, _sanitize_mongo_doc
+# ════════════════════════════════════════════════════════════════════════
+
 def _format_mandir_receipt_number(prefix: str, sequence: int) -> str:
     normalized_prefix = str(prefix or "").strip().upper()
     if normalized_prefix not in {"DON", "SEV"}:
@@ -1428,6 +1483,12 @@ def _receipt_number_for_donation(doc: dict[str, Any]) -> str:
     return f"DON-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: DONATION VIEW + ROW FILTERING
+# NOTE   : _mandir_donation_view, _mandir_row_date_text, _mandir_row_matches_search, _mandir_filter_rows
+# ════════════════════════════════════════════════════════════════════════
+
 def _mandir_donation_view(doc: dict[str, Any]) -> dict[str, Any]:
     row = _sanitize_mongo_doc(doc)
     donation_id = str(row.get("donation_id") or row.get("id") or "").strip()
@@ -1483,6 +1544,12 @@ def _mandir_filter_rows(
         filtered.append(row)
     return filtered
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: DONATION RECEIPT PDF (ReportLab)
+# NOTE   : _generate_donation_receipt_pdf_bytes
+# ════════════════════════════════════════════════════════════════════════
 
 def _generate_donation_receipt_pdf_bytes(
     donation: dict[str, Any],
@@ -1549,6 +1616,12 @@ def _generate_donation_receipt_pdf_bytes(
     }
     return _build_receipt_pdf_bytes(payload)
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: SEVA RECEIPT PDF (ReportLab) + SEVA BOOKING VIEW
+# NOTE   : _receipt_number_for_seva, _mandir_seva_booking_view, _generate_seva_receipt_pdf_bytes
+# ════════════════════════════════════════════════════════════════════════
 
 def _receipt_number_for_seva(doc: dict[str, Any]) -> str:
     existing = str(doc.get("receipt_number") or "").strip()
@@ -1857,6 +1930,12 @@ _FONT_SEARCH_DIRS = [
 
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: AMOUNT TO WORDS (English + Kannada)
+# NOTE   : _integer_to_words, _amount_to_words, _integer_to_kannada_words, _amount_to_kannada_words, _amount_words_receipt_line
+# ════════════════════════════════════════════════════════════════════════
+
 def _integer_to_words(value: int) -> str:
     if value < 20:
         return _ONES_WORDS[value]
@@ -1935,6 +2014,12 @@ def _amount_words_receipt_line(amount: float, *, local_language: str | None = No
     return f"Received {english}"
 
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: RECEIPT TEXT COMPOSITION
+# NOTE   : _as_text, _first_non_empty_text, _name_prefix_from_sources, _compose_receipt_party_name, _compose_receipt_address_line, _split_amount, _normalize_local_language, _detect_script
+# ════════════════════════════════════════════════════════════════════════
 
 def _as_text(value: Any, fallback: str = "") -> str:
     if value is None:
@@ -2055,6 +2140,12 @@ def _detect_script(text: str) -> str | None:
     return None
 
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: FONT RESOLUTION + REPORTLAB STYLES
+# NOTE   : _font_candidate_paths, _resolve_font_name, _receipt_paragraph, _format_receipt_date, _format_payment_mode_for_receipt, _format_payment_mode_local, _receipt_payment_line, _compose_receipt_line_description, _extract_seva_line_items
+# ════════════════════════════════════════════════════════════════════════
 
 def _font_candidate_paths(script_hint: str | None) -> list[str]:
     candidates: list[str] = []
@@ -2250,6 +2341,12 @@ def _extract_seva_line_items(
 
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: TEMPLE RECEIPT PROFILE
+# NOTE   : _build_temple_receipt_profile, _resolve_temple_receipt_profile, _bilingual_label
+# ════════════════════════════════════════════════════════════════════════
+
 def _build_temple_receipt_profile(temple_doc: dict[str, Any] | None) -> dict[str, str | None]:
     temple_doc = temple_doc if isinstance(temple_doc, dict) else {}
     temple_name = _as_text(temple_doc.get("temple_name") or temple_doc.get("name"), "Temple")
@@ -2330,6 +2427,12 @@ def _bilingual_label(local_label: str, english_label: str, use_local_labels: boo
     return english_label
 
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: WEASYPRINT + BILINGUAL LABEL HELPERS
+# NOTE   : _default_labels, _receipt_html_escape, _receipt_html_mixed, _receipt_weasy_font_css (entry)
+# ════════════════════════════════════════════════════════════════════════
 
 def _default_labels(local_language: str | None, use_local_labels: bool) -> dict[str, str]:
     local_labels = _LOCAL_LABELS.get(local_language or "", {})
@@ -2413,6 +2516,12 @@ def _receipt_weasy_font_css(local_language: str | None) -> str:
         )
     return "\n".join(font_faces)
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: WEASYPRINT RECEIPT PDF BUILDER
+# NOTE   : _build_receipt_pdf_bytes_weasy, _receipt_weasy_font_css — HTML-to-PDF receipt via WeasyPrint
+# ════════════════════════════════════════════════════════════════════════
 
 def _build_receipt_pdf_bytes_weasy(
     payload: dict[str, Any],
@@ -2600,6 +2709,12 @@ def _build_receipt_pdf_bytes_weasy(
     return HTML(string=html, base_url=str(Path.cwd().resolve())).write_pdf()
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: PILLOW FONT + TEXT RENDERING HELPERS
+# NOTE   : _load_receipt_pillow_font, _load_receipt_latin_pillow_font, _receipt_text_runs, _draw_receipt_text, _receipt_text_width, _wrap_receipt_text, _draw_receipt_cell_text
+# ════════════════════════════════════════════════════════════════════════
+
 def _load_receipt_pillow_font(script_hint: str | None, size_px: int) -> Any:
     if ImageFont is None:
         raise RuntimeError("Pillow font support is not available")
@@ -2745,6 +2860,12 @@ def _draw_receipt_cell_text(
         _draw_receipt_text(draw, (x, y), line, selected_font, latin_font=selected_latin_font, anchor=anchor)
         y += line_height
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: PILLOW IMAGE RECEIPT BUILDER
+# NOTE   : _build_receipt_pdf_bytes_pillow — renders receipt as PNG wrapped in PDF using Pillow
+# ════════════════════════════════════════════════════════════════════════
 
 def _build_receipt_pdf_bytes_pillow(
     payload: dict[str, Any],
@@ -2991,6 +3112,12 @@ def _build_receipt_pdf_bytes_pillow(
     return pdf_buffer.getvalue()
 
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: RECEIPT PDF ORCHESTRATOR
+# NOTE   : _build_receipt_pdf_bytes — picks WeasyPrint → Pillow → ReportLab strategy
+# ════════════════════════════════════════════════════════════════════════
 
 def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
     local_language = _normalize_local_language(payload.get("local_language"))
@@ -3308,6 +3435,12 @@ def _build_receipt_pdf_bytes(payload: dict[str, Any]) -> bytes:
     return buffer.getvalue()
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: PINCODE + DATE-WINDOW HELPERS
+# NOTE   : _normalize_pincode, _lookup_pincode_city_state, _to_positive_int
+# ════════════════════════════════════════════════════════════════════════
+
 def _normalize_pincode(value: Any) -> str:
     digits = "".join(ch for ch in str(value or "") if ch.isdigit())
     return digits[:6]
@@ -3388,6 +3521,12 @@ _SEVA_ALLOWED_AVAILABILITY = {
     "festival_only",
 }
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: SEVA BOOKING HELPERS
+# NOTE   : _normalize_seva_category/availability/day, _today_weekday, _parse_booking_date, _validate_seva_booking_date, _count_seva_bookings_for_date, _validate_seva_booking_capacity, _compute_seva_available_today, _resolve_report_date_window, _resolve_export_window
+# ════════════════════════════════════════════════════════════════════════
 
 def _normalize_seva_category(value: Any) -> str:
     candidate = str(value or "pooja").strip().lower()
@@ -3597,6 +3736,12 @@ def _resolve_export_window(
         raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
     return start, end
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: DASHBOARD STATS + SEVA BUILDERS
+# NOTE   : _dashboard_posted_stats, _canonical_seva_name, _build_seva_item, _build_seva_patch, _serialize_seva_doc, _seva_import_template_csv, _normalize_phone, _parse_iso_datetime
+# ════════════════════════════════════════════════════════════════════════
 
 async def _dashboard_posted_stats(
     *,
@@ -3853,6 +3998,12 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
         return None
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: DEVOTEE + UPI HELPERS
+# NOTE   : _upi_receipt_number, _mandir_upi_payment_view, _find_devotee_by_phone, _upsert_devotee_from_contribution, _build_upi_intent_uri
+# ════════════════════════════════════════════════════════════════════════
+
 def _upi_receipt_number(doc: dict[str, Any]) -> str:
     existing = str(doc.get("receipt_number") or "").strip()
     if existing:
@@ -4106,6 +4257,12 @@ def _build_upi_intent_uri(
     return f"upi://pay?{urlencode(params)}"
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: PLATFORM + TENANT RESOLVERS
+# NOTE   : _is_platform_super_admin, _resolve_tenant_for_mandir_request, _assert_platform_can_write_tenant, _payment_accounts
+# ════════════════════════════════════════════════════════════════════════
+
 def _is_platform_super_admin(user: dict[str, Any]) -> bool:
     return bool(user.get("is_superuser")) or str(user.get("role") or "").strip().lower() == "super_admin"
 
@@ -4189,6 +4346,12 @@ async def _payment_accounts(tenant_id: str, app_key: str) -> dict[str, list[dict
         }]
     return {"cash_accounts": cash_accounts, "bank_accounts": bank_accounts}
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Dashboard stats
+# ROUTES : GET /dashboard/stats
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/dashboard/stats")
 async def dashboard_stats(
@@ -4281,6 +4444,12 @@ def _resolve_panchang_location(
     )
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Panchang (today)
+# ROUTES : GET /panchang/today
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/panchang/today")
 async def panchang_today(
     city_name: str | None = Query(default=None),
@@ -4330,6 +4499,12 @@ async def panchang_today(
             detail=f"Failed to calculate panchang: {str(e)}"
         )
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Donations (GET list / POST / cancel / receipt PDF / reconcile / cleanup / export / daily|monthly reports)
+# ROUTES : GET /donations/payment-accounts|categories  GET|POST /donations  GET .../receipt/pdf  POST .../cancel|reconcile-posting  DELETE .../cleanup  GET .../report/daily|monthly  GET .../export/excel|pdf
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/donations/payment-accounts")
 async def donations_payment_accounts(
@@ -4833,6 +5008,12 @@ async def cleanup_donation_entry(
         "journal_status": journal_status,
     }
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Devotees (GET / POST / search by mobile / autofill)
+# ROUTES : GET /devotees  POST .../devotees  GET .../search/by-mobile/{phone}  GET .../autofill/by-mobile/{phone}
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/devotees")
 @router.get("/devotees/")
 async def list_devotees(
@@ -4983,6 +5164,12 @@ async def autofill_devotee_by_mobile(
         logger.error("Failed to autofill devotee by mobile for tenant=%s: %s", tenant_id, exc, exc_info=True)
         return {"found": False, "phone": normalized, "devotee": None}
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Sevas (GET / POST / PUT / DELETE / import / lists / dropdown-options / payment-accounts)
+# ROUTES : GET /sevas  POST .../sevas  PUT|DELETE .../sevas/{seva_id}  GET|POST .../import  GET .../priests|dropdown-options|payment-accounts
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/sevas/")
 @router.get("/sevas")
@@ -5292,6 +5479,12 @@ async def seva_payment_accounts(
     return await _payment_accounts(tenant_id, app_key)
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Temples current (GET / PUT)
+# ROUTES : GET /temples/current  PUT .../current
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/temples/current")
 async def get_current_temple(
     current_user: dict = Depends(get_current_user),
@@ -5364,6 +5557,12 @@ async def update_current_temple(
 def _ok(name: str, **extra: Any) -> dict[str, Any]:
     return {"status": "ok", "endpoint": name, **extra}
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Accounts / COA (GET list / GET hierarchy / PUT / import legacy / initialize default)
+# ROUTES : GET /accounts  GET .../hierarchy  PUT .../accounts/{account_id}  POST .../import-legacy  POST .../initialize-default
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/accounts")
 async def mandir_accounts_list(_current_user: dict = Depends(get_current_user)):
@@ -5569,6 +5768,12 @@ async def mandir_accounts_initialize_default(
 
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Assets, backup, bank accounts
+# ROUTES : GET /assets  GET .../cwip|reports/summary  POST .../revaluation  GET|POST /backup-restore  GET|POST /bank-accounts
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/assets")
 async def mandir_assets(_current_user: dict = Depends(get_current_user)):
     return []
@@ -5633,6 +5838,12 @@ async def mandir_create_bank_account(
     }
     await get_collection("mandir_bank_accounts").insert_one(doc)
     return _sanitize_mongo_doc(doc)
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Bank reconciliation (accounts / match / reconcile / statements / import / summary / entries)
+# ROUTES : GET /bank-reconciliation/accounts  POST .../match|reconcile|statements/import  GET .../statements  GET .../statements/{id}/summary|entries|unmatched-book-entries
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/bank-reconciliation/accounts")
 async def mandir_bank_rec_accounts(
@@ -5773,6 +5984,12 @@ async def mandir_bank_rec_unmatched_book_entries(
     ).sort("entry_date", 1).to_list(length=2000)
     return [_sanitize_mongo_doc(row) for row in rows]
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Sacred events, financial closing, auth (forgot / reset), HR, hundi
+# ROUTES : GET /dashboard/sacred-events  POST /financial-closing/close-month|close-year  GET .../closing-summary|financial-years|period-closings  POST /forgot-password|reset-password  GET /hr/employees|attendance  GET /hundi/masters|openings
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/dashboard/sacred-events/nakshatra/{nakshatra}")
 async def mandir_nakshatra_dates(nakshatra: str, limit: int = Query(default=8, ge=1, le=30), _current_user: dict = Depends(get_current_user)):
     today = date.today()
@@ -5838,6 +6055,12 @@ async def mandir_hundi_masters(_current_user: dict = Depends(get_current_user)):
 async def mandir_hundi_openings(_current_user: dict = Depends(get_current_user)):
     return []
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Inventory (items CRUD / stock-balances / summary)
+# ROUTES : GET|POST /inventory/items  PUT|DELETE .../items/{item_id}  GET .../stock-balances  GET .../summary
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/inventory/items")
 @router.get("/inventory/items/")
@@ -6165,6 +6388,12 @@ def _mandir_journal_entry_view(doc: dict[str, Any]) -> dict[str, Any]:
     row["journal_lines"] = journal_lines
     return row
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Journal entries (GET / POST / drilldown / financial reports / day-book / cash-book / bank-book)
+# ROUTES : GET /journal-entries  POST .../journal-entries  GET .../reports/drilldown|balance-sheet|accounts-receivable|payable|ledger|category-income|top-donors|day-book|cash-book|bank-book
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/journal-entries")
 @router.get("/journal-entries/")
@@ -6766,6 +6995,12 @@ async def mandir_journal_bank_book(
     return await bank_book_report(session, tenant_id=tenant_id, account_id=account_id, from_date=from_date, to_date=to_date)
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Login + opening balances (template / import)
+# ROUTES : POST /login  POST /login/access-token  GET /opening-balances/template  POST .../import
+# ════════════════════════════════════════════════════════════════════════
+
 @router.post("/login")
 @router.post("/login/access-token")
 async def mandir_legacy_login(payload: dict[str, Any], x_app_key: str | None = Header(default=None, alias="X-App-Key")):
@@ -7004,6 +7239,12 @@ async def mandir_opening_balances_import(
         }
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Panchang display settings + panchang on-date
+# ROUTES : GET|PUT /panchang/display-settings  GET .../cities  GET /panchang/on-date  GET /panchang/on-date-full
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/panchang/display-settings")
 @router.get("/panchang/display-settings/")
 async def mandir_panchang_display_settings(
@@ -7207,6 +7448,12 @@ async def mandir_panchang_on_date_full(
         )
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Pincode lookup
+# ROUTES : GET /pincode/lookup
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/pincode/lookup")
 async def mandir_pincode_lookup(pincode: str = Query(...), _current_user: dict = Depends(get_current_user)):
     normalized = _normalize_pincode(pincode)
@@ -7223,6 +7470,12 @@ async def mandir_pincode_lookup(pincode: str = Query(...), _current_user: dict =
         "country": "India",
         "found": found,
     }
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Reports (donations category-wise / detailed / sevas / daily / monthly / export)
+# ROUTES : GET /reports/donations/category-wise|detailed  GET /reports/sevas/detailed|schedule  GET /donations/report/daily|monthly  GET /donations/export/excel|pdf
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/reports/donations/category-wise")
 async def mandir_report_donations_category_wise(
     from_date: date = Query(...),
@@ -7385,6 +7638,12 @@ async def mandir_donations_export_pdf(
     return {**data, "export_format": "pdf"}
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Role permissions (GET list / PUT / GET assignable)
+# ROUTES : GET /role-permissions  PUT .../role-permissions/{role_key}  GET .../assignable
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/role-permissions")
 async def mandir_role_permissions(
     current_user: dict = Depends(get_current_user),
@@ -7467,6 +7726,12 @@ async def mandir_role_permissions_assignable(_current_user: dict = Depends(get_c
             {"role_key": "priest_operator", "display_name": "Priest / Temple Operator"},
         ]
     }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Setup wizard + Temples management (CRUD / activate / deactivate / onboard / upload / modules config)
+# ROUTES : GET /setup-wizard/status  GET /temples  POST /temples/{id}/activate|deactivate|remove  POST /temples/onboard  POST .../upload  GET|PUT .../modules/config
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/setup-wizard/status")
 async def mandir_setup_wizard_status(_current_user: dict = Depends(get_current_user)):
@@ -7801,6 +8066,12 @@ def _mandir_upi_config_view(doc: dict[str, Any], temple_id: int) -> dict[str, An
     }
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: UPI payments config (GET / PUT)
+# ROUTES : GET /upi-payments/config  PUT .../config
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/upi-payments/config")
 async def mandir_upi_payments_config(
     current_user: dict = Depends(get_current_user),
@@ -7931,6 +8202,12 @@ async def mandir_public_upi_intent(
 # VERSION ENDPOINT
 # ---------------------------------------------------------------------------
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Version + public UPI intent
+# ROUTES : GET /mandir/version  GET /public/temples/{temple_id}/upi-intent
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/mandir/version")
 async def mandir_get_version():
     """Get MandirMitra version info. No authentication required."""
@@ -7989,6 +8266,12 @@ def _normalize_public_donation_categories(raw: Any, *, fallback_to_default: bool
         return normalized
     return [dict(item) for item in _DEFAULT_PUBLIC_DONATION_CATEGORIES]
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Public endpoints (temples list / info / sevas / autofill / pincode / donation-categories)
+# ROUTES : GET /public/temples  GET .../info  GET .../sevas  GET .../devotee/autofill  GET .../donation-categories  GET /public/location/pincode
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/public/temples")
 async def mandir_public_list_temples(
@@ -8181,6 +8464,12 @@ async def mandir_public_donation_categories(
     temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
     return _normalize_public_donation_categories(temple_doc.get("donation_categories"))
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Public seva payments (create / status)
+# ROUTES : POST /public/temples/{temple_id}/seva-payments  GET /public/payments/{payment_id}/status
+# ════════════════════════════════════════════════════════════════════════
 
 @router.post("/public/temples/{temple_id}/seva-payments")
 @limiter.limit("10/minute")
@@ -8401,6 +8690,12 @@ async def mandir_public_payment_status(
         "verified_at": doc.get("verified_at"),
     }
 
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Public payments management (list / exceptions / reject / correct / verify)
+# ROUTES : GET /public-payments  GET .../exceptions  PATCH .../reject|correction|verify
+# ════════════════════════════════════════════════════════════════════════
 
 @router.get("/public-payments")
 async def mandir_list_public_payments(
@@ -8832,6 +9127,12 @@ async def mandir_verify_public_payment(
     }
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: UPI payments management (list / quick-log)
+# ROUTES : GET /upi-payments  POST .../quick-log
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/upi-payments")
 async def mandir_upi_payments(
     from_date: date | None = Query(default=None),
@@ -8984,6 +9285,12 @@ async def mandir_upi_quick_log(
     return _mandir_upi_payment_view(payment_row)
 
 
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Users (GET list / PUT profile)
+# ROUTES : GET /users  PUT /users/{user_id}
+# ════════════════════════════════════════════════════════════════════════
+
 @router.get("/users")
 async def mandir_users(_current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID")):
     tenant_id = resolve_tenant_id(_current_user, x_tenant_id)
@@ -9040,6 +9347,12 @@ async def mandir_update_user_profile(
         "is_superuser": bool(doc.get("is_superuser", False)),
         "must_change_password": bool(doc.get("must_change_password", False)),
     }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Seva bookings (POST / quick-ticket / GET / receipt PDF / cancel / reschedule / approve)
+# ROUTES : POST /sevas/bookings  POST .../quick-ticket  GET .../bookings  GET .../receipt/pdf  POST .../cancel  PUT .../reschedule  POST .../approve-reschedule  GET .../pending
+# ════════════════════════════════════════════════════════════════════════
 
 @router.post("/sevas/bookings")
 @router.post("/sevas/bookings/")
@@ -9751,6 +10064,12 @@ async def mandir_seva_reminders_upcoming(
 
 
 @router.post("/sevas/reminders/trigger")
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION: ROUTES: Seva reminders (trigger / upcoming / config)
+# ROUTES : POST /sevas/reminders/trigger  GET .../upcoming  PATCH .../reminder-config  GET /users/me
+# ════════════════════════════════════════════════════════════════════════
+
 async def mandir_seva_reminders_trigger(
     payload: dict = {},
     current_user: dict = Depends(get_current_user),
