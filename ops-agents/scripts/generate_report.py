@@ -144,7 +144,7 @@ def send_email(subject: str, body: str) -> None:
         return
     msg = MIMEText(body)
     msg["Subject"] = subject
-    msg["From"] = user
+    msg["From"] = os.getenv("SMTP_FROM_EMAIL") or user
     msg["To"] = to
     with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587"))) as s:
         s.starttls()
