@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import secrets
+import string
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -169,6 +171,19 @@ def _admin_emails(args: argparse.Namespace) -> list[str]:
     return normalized
 
 
+def _generate_ca_demo_password(firm: dict[str, Any]) -> str:
+    firm_code = str(firm["tenant_id"]).rsplit("-", maxsplit=1)[-1].title()
+    alphabet = string.ascii_letters + string.digits
+    random_part = "".join(secrets.choice(alphabet) for _ in range(10))
+    return f"DemoCA-{firm_code}-{random_part}9!"
+
+
+def _ca_demo_passwords(*, shared_password: str | None, generate_passwords: bool) -> dict[str, str]:
+    if generate_passwords:
+        return {firm["tenant_id"]: _generate_ca_demo_password(firm) for firm in CA_DEMO_FIRMS}
+    return {firm["tenant_id"]: shared_password or "" for firm in CA_DEMO_FIRMS}
+
+
 async def _seed_ca_demo_documents(*, tenant_id: str, created_by: str, documents: list[dict[str, Any]]) -> int:
     collection = get_collection(CA_DOCUMENTS_COLLECTION)
     created = 0
@@ -204,7 +219,8 @@ async def seed_demo(args: argparse.Namespace) -> None:
     password = args.password
     if args.use_env_password:
         password = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
-    if not password:
+    generated_ca_passwords = bool(args.ca_demo_firms and args.generate_ca_demo_passwords)
+    if not password and not generated_ca_passwords:
         print("MitraBooks demo seed failed: DEMO_MITRABOOKS_ADMIN_PASSWORD is not set.")
         raise SystemExit("password is required; pass --password or set DEMO_MITRABOOKS_ADMIN_PASSWORD with --use-env-password")
 
@@ -216,11 +232,12 @@ async def seed_demo(args: argparse.Namespace) -> None:
     try:
         seeded_users = []
         seeded_ca_documents = 0
+        ca_passwords = _ca_demo_passwords(shared_password=password, generate_passwords=generated_ca_passwords)
         if args.ca_demo_firms:
             for firm in CA_DEMO_FIRMS:
                 user = await ensure_demo_mitrabooks_user(
                     email=firm["email"],
-                    password=password,
+                    password=ca_passwords[firm["tenant_id"]],
                     full_name=firm["full_name"],
                     tenant_id=firm["tenant_id"],
                     display_name=firm["display_name"],
@@ -258,7 +275,8 @@ async def seed_demo(args: argparse.Namespace) -> None:
         if args.ca_demo_firms:
             print("Demo CA logins:")
             for firm in CA_DEMO_FIRMS:
-                print(f"- {firm['display_name']}: {firm['email']} / <password supplied to script>")
+                password_label = ca_passwords[firm["tenant_id"]] if generated_ca_passwords else "<password supplied to script>"
+                print(f"- {firm['display_name']}: {firm['email']} / {password_label}")
         return
 
     await init_postgres()
@@ -307,7 +325,8 @@ async def seed_demo(args: argparse.Namespace) -> None:
     if args.ca_demo_firms:
         print("Demo CA logins:")
         for firm in CA_DEMO_FIRMS:
-            print(f"- {firm['display_name']}: {firm['email']} / <password supplied to script>")
+            password_label = ca_passwords[firm["tenant_id"]] if generated_ca_passwords else "<password supplied to script>"
+            print(f"- {firm['display_name']}: {firm['email']} / {password_label}")
 
 
 def main() -> None:
@@ -330,6 +349,11 @@ def main() -> None:
         "--ca-demo-firms",
         action="store_true",
         help="Seed three dummy CA/bookkeeper demo tenants, login users, report-ready books, and CA document queues.",
+    )
+    parser.add_argument(
+        "--generate-ca-demo-passwords",
+        action="store_true",
+        help="Generate and print a distinct random password for each CA demo firm.",
     )
     parser.add_argument("--skip-coa", action="store_true", help="Only seed Mongo tenant/user data; skip PostgreSQL COA.")
     args = parser.parse_args()
