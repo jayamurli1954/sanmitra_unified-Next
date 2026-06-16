@@ -145,8 +145,14 @@
             });
           })
           .catch(function () {
+            document.getElementById("sub").textContent = "";
             document.getElementById("form-area").innerHTML =
-              '<p class="err" style="text-align:center">Could not load invite. Check your connection and try again.</p>';
+              '<p class="err" style="text-align:center;margin-bottom:1rem">Could not reach the server.<br>' +
+              '<small style="opacity:.7">The server may be starting up — please wait 30 seconds and try again.</small></p>' +
+              '<button id="ca-retry-btn" style="width:100%;background:#334;border:1px solid #556;border-radius:6px;color:#eee;padding:.5rem;cursor:pointer">Retry</button>';
+            document.getElementById("ca-retry-btn").addEventListener("click", function () {
+              window.location.reload();
+            });
           });
       })();
     </script>

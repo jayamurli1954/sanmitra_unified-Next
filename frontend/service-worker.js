@@ -5,14 +5,15 @@
   static assets are cache-first.
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v15';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v15';
+const CACHE_NAME = 'mitrabooks-erp-v16';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v16';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
   // HTML
   '/mitrabooks-erp/',
   '/mitrabooks-erp/index.html',
+  '/mitrabooks-erp/login.html',
 
   // CSS (theme tokens + styles)
   '/shared/theme-tokens.css',
