@@ -2841,6 +2841,15 @@ async def invite_ca_user(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.get("/ca/invite/{token}/preview")
+async def preview_ca_invite(token: str):
+    """Return public invite details (email, name) for pre-filling the accept form. No auth required."""
+    try:
+        return await ca_access_module.preview_ca_invite(token=token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/ca/invite/{token}/accept")
 async def accept_ca_invite(
     token: str,

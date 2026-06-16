@@ -15877,73 +15877,93 @@ if (currentExperience === "mitrabooks" && getAccessToken()) {
 renderModuleState(moduleState);
 runChecks();
 
-// CA invite accept — detect ?ca_invite=TOKEN and show accept modal
+// CA invite accept — detect ?ca_invite=TOKEN, hide normal app, show a dedicated set-password page
 (function checkCaInviteParam() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("ca_invite");
   if (!token) return;
 
-  const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center";
-  overlay.innerHTML = `
-    <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:2rem;max-width:420px;width:90%;color:var(--fg,#eee)">
-      <h4 style="margin:0 0 .5rem">Accept MitraBooks CA Invite</h4>
-      <p style="font-size:.85rem;opacity:.7;margin:0 0 1rem">Set a password to activate your read-only CA account.</p>
-      <div id="ca-accept-msg" style="margin-bottom:.75rem;font-size:.85rem"></div>
-      <label style="display:block;margin-bottom:.75rem;font-size:.85rem">
-        Full Name (optional — leave blank to use the name from the invite)
-        <input id="ca-accept-name" type="text" placeholder="CA Suresh Kumar" maxlength="120"
-          style="display:block;width:100%;margin-top:.25rem;padding:.4rem .6rem;background:var(--input-bg,#111);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
-      </label>
-      <label style="display:block;margin-bottom:.75rem;font-size:.85rem">
-        Password (min 8 characters)
-        <input id="ca-accept-pw" type="password" placeholder="Enter password" minlength="8" maxlength="128"
-          style="display:block;width:100%;margin-top:.25rem;padding:.4rem .6rem;background:var(--input-bg,#111);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
-      </label>
-      <div style="display:flex;gap:.5rem">
-        <button id="ca-accept-btn" style="flex:1">Activate Account</button>
-        <button id="ca-accept-cancel" class="secondary">Cancel</button>
+  // Full-page opaque takeover — hides the sign-in form entirely
+  const page = document.createElement("div");
+  page.style.cssText = "position:fixed;inset:0;background:var(--bg,#12121f);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem";
+  page.innerHTML = `
+    <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;padding:2rem 2.5rem;max-width:440px;width:100%;color:var(--fg,#eee)">
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <img src="../assets/brand/mitrabooks-pro-logo.png" alt="MitraBooks" style="height:36px;display:block;margin:0 auto .75rem" onerror="this.style.display='none'">
+        <h3 style="margin:0 0 .25rem;font-size:1.1rem">Activate Your CA Account</h3>
+        <p id="ca-invite-sub" style="margin:0;font-size:.85rem;opacity:.6">Loading invite details…</p>
       </div>
+      <div id="ca-invite-msg" style="margin-bottom:.75rem;font-size:.85rem;min-height:1.2rem"></div>
+      <div id="ca-invite-body" style="text-align:center;padding:1.5rem 0;opacity:.5">Loading…</div>
     </div>`;
-  document.body.appendChild(overlay);
+  document.body.appendChild(page);
 
-  document.getElementById("ca-accept-cancel").addEventListener("click", () => {
-    overlay.remove();
-    const url = new URL(window.location.href);
-    url.searchParams.delete("ca_invite");
-    history.replaceState(null, "", url.toString());
-  });
+  const apiBase = getConfiguredApiBaseUrl();
 
-  document.getElementById("ca-accept-btn").addEventListener("click", async () => {
-    const pw = (document.getElementById("ca-accept-pw")?.value || "").trim();
-    const name = (document.getElementById("ca-accept-name")?.value || "").trim() || undefined;
-    const msgEl = document.getElementById("ca-accept-msg");
-    if (pw.length < 8) {
-      msgEl.innerHTML = `<span style="color:var(--err,#f55)">Password must be at least 8 characters.</span>`;
-      return;
-    }
-    document.getElementById("ca-accept-btn").disabled = true;
-    msgEl.textContent = "Activating…";
-    try {
-      const resp = await fetch(`${getConfiguredApiBaseUrl()}/api/v1/business/ca/invite/${encodeURIComponent(token)}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pw, full_name: name }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok) {
-        msgEl.innerHTML = `<span style="color:var(--ok,#4f4)">Account activated! You can now log in with your email and password.</span>`;
-        document.getElementById("ca-accept-btn").style.display = "none";
-        const url = new URL(window.location.href);
-        url.searchParams.delete("ca_invite");
-        history.replaceState(null, "", url.toString());
-      } else {
-        msgEl.innerHTML = `<span style="color:var(--err,#f55)">${escapeHtml(data?.detail || `Activation failed (HTTP ${resp.status}).`)}</span>`;
-        document.getElementById("ca-accept-btn").disabled = false;
+  fetch(`${apiBase}/api/v1/business/ca/invite/${encodeURIComponent(token)}/preview`)
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+      const body = document.getElementById("ca-invite-body");
+      const sub = document.getElementById("ca-invite-sub");
+      if (!ok) {
+        sub.textContent = "";
+        body.innerHTML = `<p style="color:var(--err,#f55)">${escapeHtml(data?.detail || "Invalid or expired invite link.")}</p>`;
+        return;
       }
-    } catch (err) {
-      msgEl.innerHTML = `<span style="color:var(--err,#f55)">Network error. Please try again.</span>`;
-      document.getElementById("ca-accept-btn").disabled = false;
-    }
-  });
+      const { email, full_name } = data;
+      sub.textContent = "You've been invited to access MitraBooks as a Chartered Accountant";
+      body.innerHTML = `
+        <label style="display:block;margin-bottom:1rem;font-size:.85rem;text-align:left">
+          Email
+          <input type="email" value="${escapeHtml(email)}" readonly tabindex="-1"
+            style="display:block;width:100%;margin-top:.25rem;padding:.45rem .6rem;background:var(--input-bg,#0f0f1a);border:1px solid var(--border,#333);border-radius:4px;color:var(--fg-muted,#888);box-sizing:border-box;cursor:default"/>
+        </label>
+        <label style="display:block;margin-bottom:1rem;font-size:.85rem;text-align:left">
+          Full Name <span style="opacity:.5">(optional)</span>
+          <input id="ca-accept-name" type="text" value="${escapeHtml(full_name || "")}" maxlength="120"
+            style="display:block;width:100%;margin-top:.25rem;padding:.45rem .6rem;background:var(--input-bg,#0f0f1a);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
+        </label>
+        <label style="display:block;margin-bottom:1.25rem;font-size:.85rem;text-align:left">
+          Password <span style="opacity:.5">(min 8 characters)</span>
+          <input id="ca-accept-pw" type="password" placeholder="Set your password" minlength="8" maxlength="128"
+            style="display:block;width:100%;margin-top:.25rem;padding:.45rem .6rem;background:var(--input-bg,#0f0f1a);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
+        </label>
+        <button id="ca-accept-btn" style="width:100%">Activate Account</button>`;
+
+      document.getElementById("ca-accept-btn").addEventListener("click", async () => {
+        const pw = (document.getElementById("ca-accept-pw")?.value || "").trim();
+        const name = (document.getElementById("ca-accept-name")?.value || "").trim() || undefined;
+        const msgEl = document.getElementById("ca-invite-msg");
+        if (pw.length < 8) {
+          msgEl.innerHTML = `<span style="color:var(--err,#f55)">Password must be at least 8 characters.</span>`;
+          return;
+        }
+        document.getElementById("ca-accept-btn").disabled = true;
+        msgEl.textContent = "Activating…";
+        try {
+          const resp = await fetch(`${apiBase}/api/v1/business/ca/invite/${encodeURIComponent(token)}/accept`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: pw, full_name: name }),
+          });
+          const d = await resp.json().catch(() => ({}));
+          if (resp.ok) {
+            msgEl.innerHTML = `<span style="color:var(--ok,#4f4)">Account activated! You can now <a href="./index.html" style="color:var(--accent,#7b5ea7)">sign in</a> with ${escapeHtml(email)}.</span>`;
+            document.getElementById("ca-accept-btn").style.display = "none";
+            const url = new URL(window.location.href);
+            url.searchParams.delete("ca_invite");
+            history.replaceState(null, "", url.toString());
+          } else {
+            msgEl.innerHTML = `<span style="color:var(--err,#f55)">${escapeHtml(d?.detail || `Activation failed (HTTP ${resp.status}).`)}</span>`;
+            document.getElementById("ca-accept-btn").disabled = false;
+          }
+        } catch (_e) {
+          msgEl.innerHTML = `<span style="color:var(--err,#f55)">Network error. Please try again.</span>`;
+          document.getElementById("ca-accept-btn").disabled = false;
+        }
+      });
+    })
+    .catch(() => {
+      document.getElementById("ca-invite-body").innerHTML = `<p style="color:var(--err,#f55)">Could not load invite. Check your connection and try again.</p>`;
+    });
 })();

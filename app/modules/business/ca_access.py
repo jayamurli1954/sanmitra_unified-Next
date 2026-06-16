@@ -151,6 +151,26 @@ async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_i
         _logger.warning("CA invite email delivery failed: %s", exc)
 
 
+async def preview_ca_invite(*, token: str) -> dict:
+    """Return public invite details (email, name) without consuming the token."""
+    await _ensure_indexes()
+    col = get_collection(_CA_INVITES)
+    invite = await col.find_one({"token": token})
+    if not invite:
+        raise ValueError("Invalid or expired invite token")
+    if invite["status"] == "accepted":
+        raise ValueError("This invite has already been accepted")
+    if invite["status"] == "revoked":
+        raise ValueError("This invite has been revoked")
+    if invite["expires_at"] < datetime.now(timezone.utc):
+        raise ValueError("This invite link has expired. Ask the business to send a new invite.")
+    return {
+        "email": invite["email"],
+        "full_name": invite.get("full_name", ""),
+        "tenant_id": invite["tenant_id"],
+    }
+
+
 async def accept_ca_invite(*, token: str, password: str, full_name: str | None = None) -> dict:
     """Accept an invite: create the ca_viewer user account. Returns basic user info."""
     await _ensure_indexes()
