@@ -122,11 +122,10 @@ async def invite_ca(
             "full_name": resolved_name,
             "token": token,
             "expires_at": expires_at,
-            "status": "accepted",
-            "accepted_at": now,
-            "user_id": user_id,
+            "status": "invited",
             "resent_at": now,
             "resent_by": invited_by,
+            "user_id": user_id,
         }
         await col.update_one({"_id": existing["_id"]}, {"$set": update_doc})
         delivery = await _send_invite_email(
@@ -149,11 +148,10 @@ async def invite_ca(
         "email": normalized_email,
         "full_name": resolved_name,
         "token": token,
-        "status": "accepted",
+        "status": "invited",
         "invited_by": invited_by,
         "created_at": now,
         "expires_at": now + timedelta(days=_TOKEN_TTL_DAYS),
-        "accepted_at": now,
         "user_id": user_id,
     }
     await col.insert_one(doc)
@@ -361,7 +359,7 @@ async def reinstate_ca_access(*, tenant_id: str, user_id: str) -> None:
     col = get_collection(_CA_INVITES)
     await col.update_one(
         {"tenant_id": tenant_id, "user_id": user_id},
-        {"$set": {"status": "accepted"}},
+        {"$set": {"status": "invited"}},
     )
 
 

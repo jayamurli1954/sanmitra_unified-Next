@@ -5037,8 +5037,9 @@ function renderMitraBooksSettingsWorkspace() {
 }
 
 function renderCaStatusPill(status) {
-  const map = { pending: "warn", accepted: "ok", revoked: "err" };
-  return `<span class="pill ${map[status] || "warn"}">${escapeHtml(status)}</span>`;
+  const map = { pending: "warn", invited: "warn", accepted: "ok", revoked: "err" };
+  const label = { pending: "Pending", invited: "Credentials Sent", accepted: "Active", revoked: "Revoked" };
+  return `<span class="pill ${map[status] || "warn"}">${label[status] || escapeHtml(status)}</span>`;
 }
 
 function renderCaAccessManagementSection() {
@@ -5052,7 +5053,7 @@ function renderCaAccessManagementSection() {
         <td>${renderCaStatusPill(u.status)}</td>
         <td style="font-size:.75rem;opacity:.7">${u.invited_at ? new Date(u.invited_at).toLocaleDateString("en-IN") : "—"}</td>
         <td style="white-space:nowrap;display:flex;gap:.35rem;align-items:center">
-          ${u.status === "accepted" && u.user_id ? `
+          ${(u.status === "accepted" || u.status === "invited") && u.user_id ? `
             <button class="secondary small" type="button"
               data-coa-action="ca-resend" data-ca-email="${escapeHtml(u.email)}"
               data-ca-name="${escapeHtml(u.full_name || "")}">Resend</button>
