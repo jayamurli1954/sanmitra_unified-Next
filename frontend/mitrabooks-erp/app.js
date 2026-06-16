@@ -5014,14 +5014,19 @@ function renderCaAccessManagementSection() {
         <td>${escapeHtml(u.email)}</td>
         ${renderCaStatusPill(u.status)}
         <td style="font-size:.75rem;opacity:.7">${u.invited_at ? new Date(u.invited_at).toLocaleDateString("en-IN") : "—"}</td>
-        <td>
+        <td style="white-space:nowrap;display:flex;gap:.35rem;align-items:center">
           ${u.status === "accepted" && u.user_id ? `
             <button class="secondary small" type="button"
               data-coa-action="ca-revoke" data-ca-user-id="${escapeHtml(u.user_id)}"
               data-ca-email="${escapeHtml(u.email)}">Revoke</button>
-          ` : u.status === "pending" && u.invite_id ? `
+          ` : u.status === "revoked" && u.user_id ? `
             <button class="secondary small" type="button"
-              data-coa-action="ca-cancel-invite" data-ca-invite-id="${escapeHtml(u.invite_id)}"
+              data-coa-action="ca-reinstate" data-ca-user-id="${escapeHtml(u.user_id)}"
+              data-ca-email="${escapeHtml(u.email)}">Reinstate</button>
+          ` : ""}
+          ${u.invite_id ? `
+            <button class="secondary small" type="button" style="color:var(--err,#f55);border-color:var(--err,#f55)"
+              data-coa-action="ca-delete" data-ca-invite-id="${escapeHtml(u.invite_id)}"
               data-ca-email="${escapeHtml(u.email)}">Cancel</button>
           ` : ""}
         </td>
@@ -15385,11 +15390,11 @@ dashboardPreview.addEventListener("click", async (event) => {
       caInviteSuccess = "";
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
-  } else if (coaAction === "ca-cancel-invite") {
+  } else if (coaAction === "ca-delete") {
     const inviteId = button.getAttribute("data-ca-invite-id");
     const email = button.getAttribute("data-ca-email");
     if (!inviteId) return;
-    if (!confirm(`Cancel the pending invite for ${email}? They will not be able to use the invite link.`)) return;
+    if (!confirm(`Permanently delete the CA record for ${email}? This cannot be undone.`)) return;
     button.disabled = true;
     const result = await apiRequest("mitrabooks", `/api/v1/business/ca/invite/${encodeURIComponent(inviteId)}/cancel`, {
       method: "DELETE",
@@ -15398,7 +15403,22 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       loadCaAccessUsers();
     } else {
-      alert(result.payload?.detail || `Cancel failed (HTTP ${result.status}).`);
+      alert(result.payload?.detail || `Delete failed (HTTP ${result.status}).`);
+    }
+  } else if (coaAction === "ca-reinstate") {
+    const userId = button.getAttribute("data-ca-user-id");
+    const email = button.getAttribute("data-ca-email");
+    if (!userId) return;
+    if (!confirm(`Reinstate CA access for ${email}? They will be able to log in again.`)) return;
+    button.disabled = true;
+    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/${encodeURIComponent(userId)}/reinstate`, {
+      method: "POST",
+    });
+    button.disabled = false;
+    if (result.ok) {
+      loadCaAccessUsers();
+    } else {
+      alert(result.payload?.detail || `Reinstate failed (HTTP ${result.status}).`);
     }
   } else if (coaAction === "ca-revoke") {
     const userId = button.getAttribute("data-ca-user-id");

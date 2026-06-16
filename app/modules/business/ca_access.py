@@ -246,22 +246,45 @@ async def revoke_ca_access(*, tenant_id: str, user_id: str) -> None:
     )
 
 
-async def cancel_ca_invite(*, tenant_id: str, invite_id: str) -> None:
-    """Hard-delete a pending invite. Raises if not found or already accepted."""
+async def reinstate_ca_access(*, tenant_id: str, user_id: str) -> None:
+    """Re-enable a previously revoked ca_viewer."""
+    users = get_collection(_USERS)
+    result = await users.update_one(
+        {"user_id": user_id, "tenant_id": tenant_id, "role": "ca_viewer"},
+        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc)}},
+    )
+    if result.matched_count == 0:
+        raise ValueError(f"CA user '{user_id}' not found in this tenant")
+    col = get_collection(_CA_INVITES)
+    await col.update_one(
+        {"tenant_id": tenant_id, "user_id": user_id},
+        {"$set": {"status": "accepted"}},
+    )
+
+
+async def delete_ca_record(*, tenant_id: str, invite_id: str) -> None:
+    """Permanently delete a CA invite record (any status).
+    If the invite had an associated user account, deactivates it too."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
-    result = await col.delete_one(
-        {"invite_id": invite_id, "tenant_id": tenant_id, "status": "pending"},
-    )
-    if result.deleted_count == 0:
-        raise ValueError("Pending invite not found or already accepted/revoked")
+    invite = await col.find_one({"invite_id": invite_id, "tenant_id": tenant_id})
+    if not invite:
+        raise ValueError("CA record not found")
+    user_id = invite.get("user_id")
+    if user_id:
+        users = get_collection(_USERS)
+        await users.update_one(
+            {"user_id": user_id, "tenant_id": tenant_id},
+            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}},
+        )
+    await col.delete_one({"invite_id": invite_id, "tenant_id": tenant_id})
 
 
 async def list_ca_access(*, tenant_id: str) -> dict:
     """List all CA invites (pending + accepted + revoked) for this tenant."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
-    docs = await col.find({"tenant_id": tenant_id, "status": {"$ne": "revoked"}}).sort("created_at", -1).to_list(length=200)
+    docs = await col.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(length=200)
     records = [
         {
             "invite_id": str(d.get("invite_id") or ""),

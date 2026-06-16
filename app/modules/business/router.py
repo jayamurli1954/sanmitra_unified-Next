@@ -2906,8 +2906,31 @@ async def cancel_ca_invite(
         operation="CA invite cancel",
     )
     try:
-        await ca_access_module.cancel_ca_invite(tenant_id=context.tenant_id, invite_id=invite_id)
-        return {"ok": True, "message": "Invite cancelled"}
+        await ca_access_module.delete_ca_record(tenant_id=context.tenant_id, invite_id=invite_id)
+        return {"ok": True, "message": "CA record deleted"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/ca/{user_id}/reinstate")
+async def reinstate_ca_user(
+    user_id: str,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Reinstate a previously revoked CA user. tenant_admin only."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA access reinstate",
+    )
+    try:
+        await ca_access_module.reinstate_ca_access(tenant_id=context.tenant_id, user_id=user_id)
+        return {"ok": True, "message": f"CA access reinstated for user {user_id}"}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
