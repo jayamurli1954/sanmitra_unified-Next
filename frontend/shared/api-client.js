@@ -121,7 +121,8 @@ let _refreshInFlight = null;
 async function _attemptSilentRefresh(appKey) {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
-    window.dispatchEvent(new CustomEvent("auth-session-expired"));
+    // No refresh token means the user was never logged in with remember-me,
+    // not a session expiry — let the caller handle the 401 normally.
     return false;
   }
   try {
