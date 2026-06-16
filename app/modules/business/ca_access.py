@@ -245,6 +245,18 @@ async def revoke_ca_access(*, tenant_id: str, user_id: str) -> None:
     )
 
 
+async def cancel_ca_invite(*, tenant_id: str, invite_id: str) -> None:
+    """Cancel a pending invite. Has no effect on accepted invites."""
+    await _ensure_indexes()
+    col = get_collection(_CA_INVITES)
+    result = await col.update_one(
+        {"invite_id": invite_id, "tenant_id": tenant_id, "status": "pending"},
+        {"$set": {"status": "revoked"}},
+    )
+    if result.matched_count == 0:
+        raise ValueError("Pending invite not found or already accepted/revoked")
+
+
 async def list_ca_access(*, tenant_id: str) -> dict:
     """List all CA invites (pending + accepted + revoked) for this tenant."""
     await _ensure_indexes()

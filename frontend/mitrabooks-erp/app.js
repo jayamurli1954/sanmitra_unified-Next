@@ -5019,6 +5019,10 @@ function renderCaAccessManagementSection() {
             <button class="secondary small" type="button"
               data-coa-action="ca-revoke" data-ca-user-id="${escapeHtml(u.user_id)}"
               data-ca-email="${escapeHtml(u.email)}">Revoke</button>
+          ` : u.status === "pending" && u.invite_id ? `
+            <button class="secondary small" type="button"
+              data-coa-action="ca-cancel-invite" data-ca-invite-id="${escapeHtml(u.invite_id)}"
+              data-ca-email="${escapeHtml(u.email)}">Cancel</button>
           ` : ""}
         </td>
       </tr>`).join("");
@@ -15380,6 +15384,21 @@ dashboardPreview.addEventListener("click", async (event) => {
       caInviteError = result.payload?.detail || `Failed to send invite (HTTP ${result.status}).`;
       caInviteSuccess = "";
       dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else if (coaAction === "ca-cancel-invite") {
+    const inviteId = button.getAttribute("data-ca-invite-id");
+    const email = button.getAttribute("data-ca-email");
+    if (!inviteId) return;
+    if (!confirm(`Cancel the pending invite for ${email}? They will not be able to use the invite link.`)) return;
+    button.disabled = true;
+    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/invite/${encodeURIComponent(inviteId)}/cancel`, {
+      method: "DELETE",
+    });
+    button.disabled = false;
+    if (result.ok) {
+      loadCaAccessUsers();
+    } else {
+      alert(result.payload?.detail || `Cancel failed (HTTP ${result.status}).`);
     }
   } else if (coaAction === "ca-revoke") {
     const userId = button.getAttribute("data-ca-user-id");

@@ -2895,6 +2895,29 @@ async def list_ca_users(
     )
 
 
+@router.delete("/ca/invite/{invite_id}/cancel")
+async def cancel_ca_invite(
+    invite_id: str,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Cancel a pending CA invite. tenant_admin only."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA invite cancel",
+    )
+    try:
+        await ca_access_module.cancel_ca_invite(tenant_id=context.tenant_id, invite_id=invite_id)
+        return {"ok": True, "message": "Invite cancelled"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.delete("/ca/{user_id}/revoke", response_model=CaRevokeResponse)
 async def revoke_ca_user(
     user_id: str,
