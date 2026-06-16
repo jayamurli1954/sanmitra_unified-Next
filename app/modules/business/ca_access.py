@@ -45,6 +45,7 @@ async def invite_ca(
     email: str,
     full_name: str,
     invited_by: str,
+    request_origin: str = "",
 ) -> dict:
     """Create a pending invite and send the invite email. Returns the invite record."""
     await _ensure_indexes()
@@ -72,20 +73,19 @@ async def invite_ca(
         "user_id": None,
     }
     await col.insert_one(doc)
-    await _send_invite_email(email=normalized_email, full_name=full_name.strip(), token=token, tenant_id=tenant_id)
+    await _send_invite_email(email=normalized_email, full_name=full_name.strip(), token=token, tenant_id=tenant_id, request_origin=request_origin)
     doc.pop("_id", None)
     return doc
 
 
-async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str) -> None:
+async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str, request_origin: str = "") -> None:
     settings = get_settings()
-    # CA access is a MitraBooks-only feature; always link to the MitraBooks frontend.
-    # AUTH_PUBLIC_BASE_URL may point to a different product (e.g. LegalMitra) on shared
-    # deployments, so we use the dedicated MITRABOOKS_PUBLIC_URL env var when set and
-    # fall back to the canonical MitraBooks production URL.
+    # Priority: explicit MITRABOOKS_PUBLIC_URL env var → request origin (works in
+    # local dev and on any Render/custom domain automatically) → hard fallback.
     mitrabooks_base = (
         str(getattr(settings, "MITRABOOKS_PUBLIC_URL", "") or "").rstrip("/")
-        or "https://www.mitrabooks.sanmitratech.in"
+        or str(request_origin).rstrip("/")
+        or "https://sanmitra-unified-next-staging-sg.onrender.com"
     )
     accept_url = f"{mitrabooks_base}/mitrabooks-erp/index.html?ca_invite={token}"
 
