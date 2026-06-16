@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import requests
 
-TIMEOUT = float(os.getenv("CHECK_TIMEOUT_SECONDS", "10"))
+TIMEOUT = float(os.getenv("CHECK_TIMEOUT_SECONDS", "20"))
 HEALTH_TOKEN = os.getenv("HEALTH_TOKEN")  # forwarded if the backend requires it
 
 
