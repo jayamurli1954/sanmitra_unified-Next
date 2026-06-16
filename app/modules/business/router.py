@@ -2908,7 +2908,7 @@ async def list_ca_users(
     )
 
 
-@router.delete("/ca/invite/{invite_id}/cancel")
+@router.post("/ca/invite/{invite_id}/cancel")
 async def cancel_ca_invite(
     invite_id: str,
     _module_context: dict = Depends(require_enabled_module("business")),
@@ -2954,7 +2954,7 @@ async def reinstate_ca_user(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/ca/{user_id}/revoke", response_model=CaRevokeResponse)
+@router.post("/ca/{user_id}/revoke", response_model=CaRevokeResponse)
 async def revoke_ca_user(
     user_id: str,
     _module_context: dict = Depends(require_enabled_module("business")),

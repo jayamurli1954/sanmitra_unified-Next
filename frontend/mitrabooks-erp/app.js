@@ -15479,7 +15479,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (!confirm(`Permanently delete the CA record for ${email}? This cannot be undone.`)) return;
     button.disabled = true;
     const result = await apiRequest("mitrabooks", `/api/v1/business/ca/invite/${encodeURIComponent(inviteId)}/cancel`, {
-      method: "DELETE",
+      method: "POST",
     });
     button.disabled = false;
     if (result.ok) {
@@ -15509,7 +15509,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (!confirm(`Revoke CA access for ${email}? They will no longer be able to log in.`)) return;
     button.disabled = true;
     const result = await apiRequest("mitrabooks", `/api/v1/business/ca/${encodeURIComponent(userId)}/revoke`, {
-      method: "DELETE",
+      method: "POST",
     });
     button.disabled = false;
     if (result.ok) {
