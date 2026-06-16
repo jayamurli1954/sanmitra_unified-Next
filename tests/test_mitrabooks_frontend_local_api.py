@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import subprocess
 
@@ -46,6 +47,8 @@ def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
     assert "/preview" not in script
     assert '"Content-Type": "application/json"' not in script
     assert 'body: JSON.stringify({ password: pw, full_name: name })' in script
+    assert '? "http://127.0.0.1:8000"' in script
+    assert ': "/api";' in script
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -61,6 +64,15 @@ def test_frontend_build_keeps_standalone_mitrabooks_login_page() -> None:
 
     assert "fs.copyFileSync(landingShell, appShell);" in build_source
     assert "fs.copyFileSync(appShell, loginShell);" not in build_source
+
+
+def test_vercel_proxies_api_requests_to_render_backend() -> None:
+    vercel_config = json.loads((REPO_ROOT / "frontend" / "vercel.json").read_text(encoding="utf-8"))
+
+    assert {
+        "source": "/api/:path*",
+        "destination": "https://sanmitra-unified-next-staging-sg.onrender.com/api/:path*",
+    } in vercel_config["rewrites"]
 
 
 def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:

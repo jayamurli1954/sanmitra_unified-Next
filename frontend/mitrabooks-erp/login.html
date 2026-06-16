@@ -74,10 +74,22 @@
           return;
         }
 
-        // API base: stored override, then meta tag, then origin for local dev.
+        function isLocalHost(hostname) {
+          var host = String(hostname || "").toLowerCase();
+          return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
+        }
+
+        // API base:
+        // - explicit stored override still wins
+        // - localhost keeps talking directly to the local backend
+        // - deployed frontend hosts use same-origin /api so Vercel can proxy upstream
+        // - meta tag remains as a final fallback for non-local standalone hosting
         var metaTag = document.querySelector("meta[name='sanmitra-api-base-url']");
         var stored = (localStorage.getItem("sanmitra_frontend_api_base_url") || "").trim().replace(/\/+$/, "");
-        var apiBase = stored || (metaTag ? (metaTag.content || "").trim().replace(/\/+$/, "") : "") || window.location.origin;
+        var runtimeDefault = isLocalHost(window.location.hostname)
+          ? "http://127.0.0.1:8000"
+          : "/api";
+        var apiBase = stored || runtimeDefault || (metaTag ? (metaTag.content || "").trim().replace(/\/+$/, "") : "") || window.location.origin;
 
         function esc(s) {
           return String(s || "").replace(/[&<>"']/g, function (c) {

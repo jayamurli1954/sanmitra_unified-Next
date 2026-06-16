@@ -102,6 +102,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://sanmitra-unified-next-staging-sg.onrender.com/api/:path*"
+    },
+    {
       "source": "/gruhamitra/:path((?!.*\\.).*)",
       "destination": "/gruhamitra/index.html"
     },
