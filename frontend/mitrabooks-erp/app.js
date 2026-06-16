@@ -14945,9 +14945,16 @@ document.getElementById("save-config").addEventListener("click", () => {
 // Enhanced login form handling
 const loginForm = document.getElementById("login-form");
 if (loginForm) {
+  let _loginInProgress = false;
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await signInWithPassword();
+    if (_loginInProgress) return;
+    _loginInProgress = true;
+    try {
+      await signInWithPassword();
+    } finally {
+      _loginInProgress = false;
+    }
   });
 }
 
