@@ -15381,8 +15381,14 @@ dashboardPreview.addEventListener("click", async (event) => {
     });
     button.disabled = false;
     if (result.ok) {
-      caInviteSuccess = `Invite sent to ${email}. They will receive an email within a few minutes.`;
-      caInviteError = "";
+      const payload = result.payload || {};
+      if (payload.email_sent) {
+        caInviteSuccess = `${payload.resent ? "Invite resent" : "Invite sent"} to ${email}. They will receive an email within a few minutes.`;
+        caInviteError = "";
+      } else {
+        caInviteSuccess = "";
+        caInviteError = `Invite saved, but email was not delivered: ${payload.email_error || "SMTP delivery failed."}`;
+      }
       form.reset();
       loadCaAccessUsers();
     } else {

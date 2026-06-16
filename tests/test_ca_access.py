@@ -37,9 +37,11 @@ async def test_invite_creates_record_and_sends_email():
     mock_col.find_one = AsyncMock(return_value=None)
     mock_col.insert_one = AsyncMock()
     mock_col.create_index = AsyncMock()
+    email_delivery = {"sent": True, "error": None}
 
     with patch("app.modules.business.ca_access.get_collection", return_value=mock_col), \
          patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
+        mock_email.return_value = email_delivery
         result = await ca_access.invite_ca(
             tenant_id="t1", app_key="mitrabooks",
             email="CA@Example.com", full_name="CA Ravi", invited_by="admin1",
@@ -48,24 +50,37 @@ async def test_invite_creates_record_and_sends_email():
     assert result["email"] == "ca@example.com"
     assert result["status"] == "pending"
     assert "token" in result
+    assert result["email_delivery"] == email_delivery
+    assert result["resent"] is False
     mock_email.assert_awaited_once()
     assert mock_email.call_args.kwargs["email"] == "ca@example.com"
 
 
 @pytest.mark.asyncio
-async def test_duplicate_pending_invite_raises():
+async def test_duplicate_pending_invite_resends_existing_invite():
     from app.modules.business import ca_access
 
+    invite = _make_invite("pending")
     mock_col = AsyncMock()
-    mock_col.find_one = AsyncMock(return_value=_make_invite("pending"))
+    mock_col.find_one = AsyncMock(return_value=invite)
+    mock_col.update_one = AsyncMock()
     mock_col.create_index = AsyncMock()
+    email_delivery = {"sent": True, "error": None}
 
-    with patch("app.modules.business.ca_access.get_collection", return_value=mock_col):
-        with pytest.raises(ValueError, match="pending invite already exists"):
-            await ca_access.invite_ca(
-                tenant_id="t1", app_key="mitrabooks",
-                email="ca@example.com", full_name="CA Ravi", invited_by="admin1",
-            )
+    with patch("app.modules.business.ca_access.get_collection", return_value=mock_col), \
+         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
+        mock_email.return_value = email_delivery
+        result = await ca_access.invite_ca(
+            tenant_id="t1", app_key="mitrabooks",
+            email="ca@example.com", full_name="CA Ravi", invited_by="admin1",
+        )
+
+    assert result["invite_id"] == "inv-1"
+    assert result["resent"] is True
+    assert result["email_delivery"] == email_delivery
+    mock_col.update_one.assert_awaited_once()
+    mock_email.assert_awaited_once()
+    assert mock_email.call_args.kwargs["token"] == invite["token"]
 
 
 @pytest.mark.asyncio

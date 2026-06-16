@@ -54,7 +54,30 @@ async def invite_ca(
     normalized_email = email.strip().lower()
     existing = await col.find_one({"tenant_id": tenant_id, "email": normalized_email, "status": "pending"})
     if existing:
-        raise ValueError(f"A pending invite already exists for {normalized_email}")
+        now = datetime.now(timezone.utc)
+        token = str(existing.get("token") or secrets.token_urlsafe(32))
+        expires_at = existing.get("expires_at")
+        if not expires_at or expires_at < now:
+            expires_at = now + timedelta(days=_TOKEN_TTL_DAYS)
+        update_doc = {
+            "full_name": full_name.strip(),
+            "token": token,
+            "expires_at": expires_at,
+            "resent_at": now,
+            "resent_by": invited_by,
+        }
+        await col.update_one({"_id": existing["_id"]}, {"$set": update_doc})
+        delivery = await _send_invite_email(
+            email=normalized_email,
+            full_name=full_name.strip(),
+            token=token,
+            tenant_id=tenant_id,
+        )
+        existing.update(update_doc)
+        existing["email_delivery"] = delivery
+        existing["resent"] = True
+        existing.pop("_id", None)
+        return existing
 
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
@@ -73,12 +96,19 @@ async def invite_ca(
         "user_id": None,
     }
     await col.insert_one(doc)
-    await _send_invite_email(email=normalized_email, full_name=full_name.strip(), token=token, tenant_id=tenant_id)
+    delivery = await _send_invite_email(
+        email=normalized_email,
+        full_name=full_name.strip(),
+        token=token,
+        tenant_id=tenant_id,
+    )
+    doc["email_delivery"] = delivery
+    doc["resent"] = False
     doc.pop("_id", None)
     return doc
 
 
-async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str) -> None:
+async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str) -> dict:
     settings = get_settings()
     # Use MITRABOOKS_PUBLIC_URL env var when set (required on Render since the
     # frontend is hosted separately at www.mitrabooks.sanmitratech.in, not on the
@@ -118,8 +148,8 @@ async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_i
             module="ca_access", action="ca_invite", to_email=email,
             subject=subject, sent=False, error="SMTP not configured", tenant_id=tenant_id,
         )
-        _logger.warning("CA invite email not sent (SMTP not configured). Accept URL: %s", accept_url)
-        return
+        _logger.warning("CA invite email not sent (SMTP not configured)")
+        return {"sent": False, "error": "SMTP not configured"}
 
     from_header = settings.SMTP_FROM_EMAIL
     if settings.SMTP_FROM_NAME:
@@ -151,12 +181,15 @@ async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_i
             module="ca_access", action="ca_invite", to_email=email,
             subject=subject, sent=True, tenant_id=tenant_id,
         )
+        return {"sent": True, "error": None}
     except Exception as exc:
+        error = str(exc)
         await log_email_delivery_attempt(
             module="ca_access", action="ca_invite", to_email=email,
-            subject=subject, sent=False, error=str(exc), tenant_id=tenant_id,
+            subject=subject, sent=False, error=error, tenant_id=tenant_id,
         )
         _logger.warning("CA invite email delivery failed: %s", exc)
+        return {"sent": False, "error": error}
 
 
 async def preview_ca_invite(*, token: str) -> dict:

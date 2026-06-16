@@ -2836,7 +2836,16 @@ async def invite_ca_user(
             full_name=payload.full_name,
             invited_by=_created_by(current_user),
         )
-        return {"ok": True, "invite_id": doc["invite_id"], "email": doc["email"], "expires_at": str(doc["expires_at"])}
+        delivery = doc.get("email_delivery") or {}
+        return {
+            "ok": bool(delivery.get("sent", False)),
+            "invite_id": doc["invite_id"],
+            "email": doc["email"],
+            "expires_at": str(doc["expires_at"]),
+            "resent": bool(doc.get("resent")),
+            "email_sent": bool(delivery.get("sent", False)),
+            "email_error": delivery.get("error"),
+        }
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
