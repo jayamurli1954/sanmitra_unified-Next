@@ -3297,6 +3297,15 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
 /* Change Password Dialog */
 #change-password-dialog {
   min-width: 400px;
+  background: #0f1424;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  color: #f8fafc;
+}
+
+#change-password-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
 }
 
 #change-password-dialog .dialog-head {
