@@ -5054,6 +5054,9 @@ function renderCaAccessManagementSection() {
         <td style="white-space:nowrap;display:flex;gap:.35rem;align-items:center">
           ${u.status === "accepted" && u.user_id ? `
             <button class="secondary small" type="button"
+              data-coa-action="ca-resend" data-ca-email="${escapeHtml(u.email)}"
+              data-ca-name="${escapeHtml(u.full_name || "")}">Resend</button>
+            <button class="secondary small" type="button"
               data-coa-action="ca-revoke" data-ca-user-id="${escapeHtml(u.user_id)}"
               data-ca-email="${escapeHtml(u.email)}">Revoke</button>
           ` : u.status === "revoked" && u.user_id ? `
@@ -5098,7 +5101,7 @@ function renderCaAccessManagementSection() {
         </label>
         <button type="button" data-coa-action="ca-invite-submit">Send Invite</button>
       </form>
-      <p style="font-size:.75rem;opacity:.6;margin-top:.5rem">The CA will receive an email with a 7-day link to set their password.</p>
+      <p style="font-size:.75rem;opacity:.6;margin-top:.5rem">The CA will receive an email with a temporary password and the MitraBooks login link. Use <strong>Resend</strong> on an existing CA to regenerate and email fresh credentials.</p>
     </section>`;
 }
 
@@ -15432,6 +15435,30 @@ dashboardPreview.addEventListener("click", async (event) => {
       caInviteError = result.payload?.detail || `Failed to send invite (HTTP ${result.status}).`;
       caInviteSuccess = "";
       dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else if (coaAction === "ca-resend") {
+    const email = button.getAttribute("data-ca-email");
+    const full_name = button.getAttribute("data-ca-name") || "";
+    if (!email) return;
+    if (!confirm(`Resend login credentials to ${email}? A new temporary password will be generated and emailed.`)) return;
+    button.disabled = true;
+    const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, full_name }),
+    });
+    button.disabled = false;
+    if (result.ok) {
+      const payload = result.payload || {};
+      if (payload.email_sent) {
+        caInviteSuccess = `New temporary password sent to ${email}.`;
+        caInviteError = "";
+      } else {
+        caInviteSuccess = "";
+        caInviteError = `Account refreshed but email delivery failed: ${payload.email_error || "SMTP not configured."}`;
+      }
+      loadCaAccessUsers();
+    } else {
+      alert(result.payload?.detail || `Resend failed (HTTP ${result.status}).`);
     }
   } else if (coaAction === "ca-delete") {
     const inviteId = button.getAttribute("data-ca-invite-id");
