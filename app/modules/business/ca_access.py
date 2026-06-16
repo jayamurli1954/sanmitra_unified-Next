@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import quote
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -88,7 +89,13 @@ async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_i
         str(getattr(settings, "MITRABOOKS_PUBLIC_URL", "") or "").rstrip("/")
         or "https://www.mitrabooks.sanmitratech.in"
     )
-    accept_url = f"{mitrabooks_base}/mitrabooks-erp/login.html?ca_invite={token}"
+    # Embed email and name so login.html can pre-fill without a cross-origin API call.
+    accept_url = (
+        f"{mitrabooks_base}/mitrabooks-erp/login.html"
+        f"?ca_invite={token}"
+        f"&email={quote(email, safe='')}"
+        f"&name={quote(full_name, safe='')}"
+    )
 
     subject = "You have been invited to access MitraBooks financial data"
     body = (
