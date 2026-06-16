@@ -27,6 +27,15 @@ from app.db.mongo import get_collection
 _logger = logging.getLogger(__name__)
 
 _CA_INVITES = "business_ca_invitations"
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Return dt as a timezone-aware UTC datetime. MongoDB returns naive UTC datetimes."""
+    if dt is None:
+        return dt
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 _USERS = "core_users"
 _TOKEN_TTL_DAYS = 7
 
@@ -115,7 +124,7 @@ async def invite_ca(
 
     if existing:
         token = str(existing.get("token") or secrets.token_urlsafe(32))
-        expires_at = existing.get("expires_at")
+        expires_at = _as_utc(existing.get("expires_at"))
         if not expires_at or expires_at < now:
             expires_at = now + timedelta(days=_TOKEN_TTL_DAYS)
         update_doc = {
@@ -254,7 +263,7 @@ async def preview_ca_invite(*, token: str) -> dict:
         raise ValueError("This invite has already been accepted")
     if invite["status"] == "revoked":
         raise ValueError("This invite has been revoked")
-    if invite["expires_at"] < datetime.now(timezone.utc):
+    if _as_utc(invite.get("expires_at")) < datetime.now(timezone.utc):
         raise ValueError("This invite link has expired. Ask the business to send a new invite.")
     return {
         "email": invite["email"],
@@ -274,7 +283,7 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
         raise ValueError("This invite has already been accepted")
     if invite["status"] == "revoked":
         raise ValueError("This invite has been revoked")
-    if invite["expires_at"] < datetime.now(timezone.utc):
+    if _as_utc(invite.get("expires_at")) < datetime.now(timezone.utc):
         raise ValueError("This invite link has expired. Ask the business to send a new invite.")
 
     resolved_name = (full_name or "").strip() or invite["full_name"]
