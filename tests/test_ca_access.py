@@ -100,6 +100,45 @@ async def test_accept_invite_creates_user():
 
 
 @pytest.mark.asyncio
+async def test_accept_invite_updates_existing_tenant_user_password():
+    from app.modules.business import ca_access
+
+    invite = _make_invite("pending")
+    existing_user = {
+        "_id": "user-oid",
+        "user_id": "u-existing",
+        "email": "ca@example.com",
+        "tenant_id": "t1",
+        "role": "viewer",
+        "hashed_password": "old-hash",
+    }
+    mock_inv_col = AsyncMock()
+    mock_inv_col.find_one = AsyncMock(return_value=invite)
+    mock_inv_col.update_one = AsyncMock()
+    mock_inv_col.create_index = AsyncMock()
+
+    mock_users_col = AsyncMock()
+    mock_users_col.find_one = AsyncMock(return_value=existing_user)
+    mock_users_col.update_one = AsyncMock()
+
+    def _col(name):
+        if name == "business_ca_invitations":
+            return mock_inv_col
+        return mock_users_col
+
+    with patch("app.modules.business.ca_access.get_collection", side_effect=_col), \
+         patch("app.modules.business.ca_access.hash_password", return_value="new-hash"):
+        result = await ca_access.accept_ca_invite(token="tok123", password="Secret123!")
+
+    assert result["user_id"] == "u-existing"
+    update_doc = mock_users_col.update_one.call_args[0][1]["$set"]
+    assert update_doc["role"] == "ca_viewer"
+    assert update_doc["is_active"] is True
+    assert update_doc["hashed_password"] == "new-hash"
+    assert update_doc["auth_provider"] == "password"
+
+
+@pytest.mark.asyncio
 async def test_accept_expired_invite_raises():
     from app.modules.business import ca_access
 

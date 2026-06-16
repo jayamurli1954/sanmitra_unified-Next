@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="sanmitra-api-base-url" content="https://sanmitra-unified-next-staging-sg.onrender.com">
-    <title>MitraBooks – Activate CA Account</title>
+    <title>MitraBooks - Activate CA Account</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -58,9 +58,9 @@
              onerror="this.parentNode.innerHTML='<strong style=\'font-size:1.2rem\'>MitraBooks</strong>'">
       </div>
       <h3>Activate Your CA Account</h3>
-      <p id="sub">Loading invite details…</p>
+      <p id="sub">Loading invite details...</p>
       <div id="msg"></div>
-      <div id="form-area"><p class="loading">Loading…</p></div>
+      <div id="form-area"><p class="loading">Loading...</p></div>
     </div>
 
     <script>
@@ -68,13 +68,13 @@
         var params = new URLSearchParams(window.location.search);
         var token = params.get("ca_invite");
 
-        // No invite token — redirect to ERP as normal
+        // No invite token: redirect to ERP as normal.
         if (!token) {
           window.location.replace("./index.html");
           return;
         }
 
-        // API base: stored override → meta tag → origin (for local dev)
+        // API base: stored override, then meta tag, then origin for local dev.
         var metaTag = document.querySelector("meta[name='sanmitra-api-base-url']");
         var stored = (localStorage.getItem("sanmitra_frontend_api_base_url") || "").trim().replace(/\/+$/, "");
         var apiBase = stored || (metaTag ? (metaTag.content || "").trim().replace(/\/+$/, "") : "") || window.location.origin;
@@ -85,20 +85,20 @@
           });
         }
 
-        // Email and name are embedded in the invite URL — no cross-origin call needed for pre-fill.
+        // Email and name are embedded in the invite URL; no preview call is needed.
         var email = params.get("email") || "";
         var fullName = params.get("name") || "";
 
         document.getElementById("sub").textContent =
-          "You’ve been invited to access MitraBooks as a Chartered Accountant";
+          "You have been invited to access MitraBooks as a Chartered Accountant";
 
         document.getElementById("form-area").innerHTML =
-          (email ? ‘<label>Email<input type="email" value="’ + esc(email) + ‘" readonly tabindex="-1"></label>’ : ‘’) +
-          ‘<label>Full Name <span style="opacity:.5">(optional)</span>’ +
-          ‘<input id="ca-name" type="text" value="’ + esc(fullName) + ‘" maxlength="120" placeholder="Leave blank to use the name from the invite"></label>’ +
-          ‘<label>Password <span style="opacity:.5">(min 8 characters)</span>’ +
-          ‘<input id="ca-pw" type="password" placeholder="Set your password" minlength="8" maxlength="128"></label>’ +
-          ‘<button id="ca-btn">Activate Account</button>’;
+          (email ? '<label>Email<input type="email" value="' + esc(email) + '" readonly tabindex="-1"></label>' : '') +
+          '<label>Full Name <span style="opacity:.5">(optional)</span>' +
+          '<input id="ca-name" type="text" value="' + esc(fullName) + '" maxlength="120" placeholder="Leave blank to use the name from the invite"></label>' +
+          '<label>Password <span style="opacity:.5">(min 8 characters)</span>' +
+          '<input id="ca-pw" type="password" placeholder="Set your password" minlength="8" maxlength="128"></label>' +
+          '<button id="ca-btn">Activate Account</button>';
 
         document.getElementById("ca-btn").addEventListener("click", function () {
           var pw = (document.getElementById("ca-pw").value || "").trim();
@@ -106,11 +106,11 @@
           var name = nameEl ? (nameEl.value || "").trim() || undefined : undefined;
           var msgEl = document.getElementById("msg");
           if (pw.length < 8) {
-            msgEl.innerHTML = ‘<span class="err">Password must be at least 8 characters.</span>’;
+            msgEl.innerHTML = '<span class="err">Password must be at least 8 characters.</span>';
             return;
           }
           document.getElementById("ca-btn").disabled = true;
-          msgEl.textContent = "Activating…";
+          msgEl.textContent = "Activating...";
           fetch(apiBase + "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -119,21 +119,21 @@
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
           .then(function (res) {
             if (res.ok) {
-              msgEl.innerHTML = ‘<span class="ok">Account activated! You can now ‘ +
-                ‘<a href="./index.html">sign in</a>’ +
-                (email ? ‘ with ‘ + esc(email) : ‘’) + ".</span>";
+              msgEl.innerHTML = '<span class="ok">Account activated. You can now ' +
+                '<a href="./index.html">sign in</a>' +
+                (email ? ' with ' + esc(email) : '') + ".</span>";
               document.getElementById("ca-btn").style.display = "none";
               var url = new URL(window.location.href);
               url.searchParams.delete("ca_invite");
               history.replaceState(null, "", url.toString());
             } else {
-              msgEl.innerHTML = ‘<span class="err">’ +
+              msgEl.innerHTML = '<span class="err">' +
                 esc(res.data.detail || "Activation failed. Please try again.") + "</span>";
               document.getElementById("ca-btn").disabled = false;
             }
           })
           .catch(function () {
-            msgEl.innerHTML = ‘<span class="err">Network error. Please try again.</span>’;
+            msgEl.innerHTML = '<span class="err">Network error. Please try again.</span>';
             document.getElementById("ca-btn").disabled = false;
           });
         });

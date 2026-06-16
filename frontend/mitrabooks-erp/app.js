@@ -5012,7 +5012,7 @@ function renderCaAccessManagementSection() {
       <tr>
         <td>${escapeHtml(u.full_name || "—")}</td>
         <td>${escapeHtml(u.email)}</td>
-        ${renderCaStatusPill(u.status)}
+        <td>${renderCaStatusPill(u.status)}</td>
         <td style="font-size:.75rem;opacity:.7">${u.invited_at ? new Date(u.invited_at).toLocaleDateString("en-IN") : "—"}</td>
         <td style="white-space:nowrap;display:flex;gap:.35rem;align-items:center">
           ${u.status === "accepted" && u.user_id ? `

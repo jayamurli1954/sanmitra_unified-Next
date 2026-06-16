@@ -207,7 +207,17 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
         user_id = str(existing.get("user_id") or uuid4())
         await users.update_one(
             {"_id": existing["_id"]},
-            {"$set": {"role": "ca_viewer", "is_active": True, "full_name": resolved_name, "updated_at": now}},
+            {
+                "$set": {
+                    "role": "ca_viewer",
+                    "is_active": True,
+                    "full_name": resolved_name,
+                    "hashed_password": hash_password(password),
+                    "auth_provider": "password",
+                    "provider_subject": f"password:{email}",
+                    "updated_at": now,
+                }
+            },
         )
     else:
         user_id = str(uuid4())

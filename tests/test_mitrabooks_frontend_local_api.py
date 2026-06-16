@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +22,28 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v28" in index_source
+    assert "app.js?v=mitrabooks-erp-v32" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v13'" in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v16'" in worker_source
+
+
+def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
+    login_html = REPO_ROOT / "frontend" / "mitrabooks-erp" / "login.html"
+    source = login_html.read_text(encoding="utf-8")
+    script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+
+    result = subprocess.run(
+        ["node", "-e", f"new Function({script!r});"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "/ca/invite/" in script
+    assert "/preview" not in script
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
