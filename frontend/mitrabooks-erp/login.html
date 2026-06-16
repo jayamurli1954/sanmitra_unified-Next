@@ -97,6 +97,21 @@
           });
         }
 
+        function buildApiUrl(base, path) {
+          var normalizedBase = String(base || "").trim().replace(/\/+$/, "");
+          var normalizedPath = String(path || "").trim();
+          if (!normalizedPath) {
+            return normalizedBase || window.location.origin;
+          }
+          if (normalizedPath.charAt(0) !== "/") {
+            normalizedPath = "/" + normalizedPath;
+          }
+          if (normalizedBase === "/api" && normalizedPath.indexOf("/api/") === 0) {
+            return normalizedPath;
+          }
+          return normalizedBase + normalizedPath;
+        }
+
         // Email and name are embedded in the invite URL; no preview call is needed.
         var email = params.get("email") || "";
         var fullName = params.get("name") || "";
@@ -123,7 +138,7 @@
           }
           document.getElementById("ca-btn").disabled = true;
           msgEl.textContent = "Activating...";
-          fetch(apiBase + "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept", {
+          fetch(buildApiUrl(apiBase, "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept"), {
             method: "POST",
             body: JSON.stringify({ password: pw, full_name: name })
           })

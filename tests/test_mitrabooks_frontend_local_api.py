@@ -49,6 +49,9 @@ def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
     assert 'body: JSON.stringify({ password: pw, full_name: name })' in script
     assert '? "http://127.0.0.1:8000"' in script
     assert ': "/api";' in script
+    assert 'function buildApiUrl(base, path)' in script
+    assert 'normalizedBase === "/api" && normalizedPath.indexOf("/api/") === 0' in script
+    assert 'fetch(buildApiUrl(apiBase, "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept"), {' in script
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
