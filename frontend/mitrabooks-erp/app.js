@@ -15419,6 +15419,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
       method: "POST",
       body: JSON.stringify({ email, full_name }),
+      timeoutMs: 30000,
     });
     button.disabled = false;
     if (result.ok) {
@@ -15446,6 +15447,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
       method: "POST",
       body: JSON.stringify({ email, full_name }),
+      timeoutMs: 30000,
     });
     button.disabled = false;
     if (result.ok) {
