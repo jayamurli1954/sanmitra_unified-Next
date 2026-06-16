@@ -711,6 +711,10 @@ let lastBusinessAccounts = [];
 let coaTypeFilter = "";
 let lastCaDocuments = [];
 let lastCaDocumentsResult = null;
+let caAccessUsers = [];
+let caAccessLoading = false;
+let caInviteError = "";
+let caInviteSuccess = "";
 let caPracticeFilters = {
   status: "",
   client_name: "",
@@ -4983,7 +4987,100 @@ function renderMitraBooksSettingsWorkspace() {
   `;
 }
 
+function renderCaStatusPill(status) {
+  const map = { pending: "warn", accepted: "ok", revoked: "err" };
+  return `<span class="pill ${map[status] || "warn"}">${escapeHtml(status)}</span>`;
+}
+
+function renderCaAccessManagementSection() {
+  const loading = caAccessLoading ? `<p class="settings-boundary-note">Loading CA users…</p>` : "";
+  const rows = caAccessUsers.length === 0 && !caAccessLoading
+    ? `<tr><td colspan="5" style="text-align:center;opacity:.6">No CA users yet. Send an invite below.</td></tr>`
+    : caAccessUsers.map(u => `
+      <tr>
+        <td>${escapeHtml(u.full_name || "—")}</td>
+        <td>${escapeHtml(u.email)}</td>
+        ${renderCaStatusPill(u.status)}
+        <td style="font-size:.75rem;opacity:.7">${u.invited_at ? new Date(u.invited_at).toLocaleDateString("en-IN") : "—"}</td>
+        <td>
+          ${u.status === "accepted" && u.user_id ? `
+            <button class="secondary small" type="button"
+              data-coa-action="ca-revoke" data-ca-user-id="${escapeHtml(u.user_id)}"
+              data-ca-email="${escapeHtml(u.email)}">Revoke</button>
+          ` : ""}
+        </td>
+      </tr>`).join("");
+
+  const successMsg = caInviteSuccess ? `<div class="pill ok" style="margin-bottom:.5rem">${escapeHtml(caInviteSuccess)}</div>` : "";
+  const errMsg = caInviteError ? `<div class="pill err" style="margin-bottom:.5rem">${escapeHtml(caInviteError)}</div>` : "";
+
+  return `
+    <section class="erp-panel" style="margin-bottom:1.5rem">
+      <div class="preview-heading compact" style="margin-bottom:1rem">
+        <div>
+          <h5>CA Access — Invited Users</h5>
+          <p>CAs you invite get read-only access to financial statements, GST returns, TDS register, and bank reconciliation.</p>
+        </div>
+      </div>
+      ${loading}
+      <table class="erp-table" style="margin-bottom:1.25rem">
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Invited</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="settings-section-heading" style="margin-bottom:.5rem"><h6>Invite a CA</h6></div>
+      ${successMsg}${errMsg}
+      <form data-ca-invite-form style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;align-items:end">
+        <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.8rem">
+          CA Name
+          <input name="full_name" type="text" placeholder="e.g. CA Suresh Kumar" required maxlength="120" />
+        </label>
+        <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.8rem">
+          CA Email
+          <input name="email" type="email" placeholder="ca@example.com" required maxlength="120" />
+        </label>
+        <button type="button" data-coa-action="ca-invite-submit">Send Invite</button>
+      </form>
+      <p style="font-size:.75rem;opacity:.6;margin-top:.5rem">The CA will receive an email with a 7-day link to set their password.</p>
+    </section>`;
+}
+
+function renderCaViewerPortal() {
+  const reportLinks = [
+    ["Financial Statements", "reports", "Trial Balance, P&L, Balance Sheet, General Ledger"],
+    ["GST Returns", "gst-returns", "GSTR-1, GSTR-3B, GSTR-2B ITC Reconciliation"],
+    ["TDS / TCS Register", "tds-tcs", "Quarterly TDS/TCS register, section-wise"],
+    ["Bank Reconciliation", "bank-recon", "Statement matching and BRS"],
+  ];
+  return `
+    <div class="verification-panel erp-workspace-panel ca-practice-workspace">
+      <div class="preview-heading compact">
+        <div>
+          <span class="workbench-kicker">Read-only access</span>
+          <h4>CA Portal</h4>
+          <p>You have read-only access to financial data for this business. Use the links below to navigate.</p>
+        </div>
+        <span class="pill ok">CA Viewer</span>
+      </div>
+      <div class="planned-org-module-grid">
+        ${reportLinks.map(([title, workspace, copy]) => `
+          <article>
+            <div>
+              <h4>${escapeHtml(title)}</h4>
+              <button class="secondary" type="button"
+                data-business-action="workspace-view"
+                data-workspace-view="${escapeHtml(workspace)}">Open</button>
+            </div>
+            <p>${escapeHtml(copy)}</p>
+          </article>`).join("")}
+      </div>
+    </div>`;
+}
+
 function renderCaPracticePortalWorkspace() {
+  if (isCaViewer()) {
+    return renderCaViewerPortal();
+  }
+
   const model = plannedOrgWorkspaceModel("CA_PRACTICE");
   const summary = caPracticeSummary(lastCaDocuments);
   return `
@@ -4992,30 +5089,27 @@ function renderCaPracticePortalWorkspace() {
         <div>
           <span class="workbench-kicker">Practice workbench</span>
           <h4>CA Practice Portal</h4>
-          <p>Client document intake, review queue, and compliance workflow for CA firms and bookkeepers.</p>
+          <p>Manage CA access to your books and track client document workflow.</p>
         </div>
-        <span class="pill ok">Metadata workflow active</span>
+        <span class="pill ok">Active</span>
       </div>
-      <div class="planned-org-kpis">
+      ${isBusinessAdmin() ? renderCaAccessManagementSection() : ""}
+      <div class="planned-org-kpis" style="margin-top:1rem">
         <article>
           <span>Client Tracking</span>
           <strong>${escapeHtml(String(summary.clientCount))}</strong>
-          <small>Client books represented in this tenant queue.</small>
+          <small>Client books in this tenant queue.</small>
         </article>
         <article>
           <span>Review Queue</span>
           <strong>${escapeHtml(String(lastCaDocuments.length))}</strong>
-          <small>Document metadata in the current tenant queue.</small>
+          <small>Document metadata entries.</small>
         </article>
         <article>
           <span>Compliance</span>
           <strong>${escapeHtml(String(summary.compliance.length))}</strong>
-          <small>Compliance areas tracked through document metadata.</small>
+          <small>Compliance areas tracked.</small>
         </article>
-      </div>
-      <div class="settings-boundary-note">
-        <strong>Current state:</strong>
-        This portal saves tenant-scoped document metadata only. File storage, OCR, client tenant switching, voucher posting, and filing links are deferred until CA practice access rules are complete.
       </div>
       ${renderCaDocumentIntake(model.documentIntake)}
     </div>
@@ -5660,6 +5754,24 @@ async function loadCaPracticeDocuments() {
   return result;
 }
 
+async function loadCaAccessUsers() {
+  caAccessLoading = true;
+  if (activeBusinessWorkspace === "ca-access") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/ca/users", { method: "GET" });
+  caAccessLoading = false;
+  if (result.ok) {
+    caAccessUsers = Array.isArray(result.payload?.ca_users) ? result.payload.ca_users : [];
+  } else {
+    caAccessUsers = [];
+  }
+  if (activeBusinessWorkspace === "ca-access") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+  return result;
+}
+
 async function createCaPracticeDocument(form) {
   const formData = new FormData(form);
   const payload = {
@@ -5853,6 +5965,12 @@ function setBusinessWorkspace(workspace) {
   } else if (workspace === "ca-access") {
     lastCaDocumentsResult = null;
     lastCaDocuments = [];
+    caAccessUsers = [];
+    caInviteError = "";
+    caInviteSuccess = "";
+    if (isBusinessAdmin()) {
+      loadCaAccessUsers();
+    }
     loadCaPracticeDocuments();
   }
 }
@@ -9322,6 +9440,11 @@ function isBusinessAdmin() {
   const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
   // Show settings to admins; when role is unknown the backend still enforces access on save.
   return role === "" || role === "tenant_admin" || role === "super_admin";
+}
+
+function isCaViewer() {
+  const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
+  return role === "ca_viewer";
 }
 
 function invoiceFieldRule(key) {
@@ -15204,6 +15327,48 @@ dashboardPreview.addEventListener("click", (event) => {
   } else if (coaAction === "clear-filter") {
     coaTypeFilter = "";
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (coaAction === "ca-invite-submit") {
+    const form = button.closest("[data-ca-invite-form]");
+    if (!form) return;
+    const email = (form.querySelector("[name=email]")?.value || "").trim();
+    const full_name = (form.querySelector("[name=full_name]")?.value || "").trim();
+    if (!email || !full_name) {
+      caInviteError = "Please fill in both name and email.";
+      caInviteSuccess = "";
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+      return;
+    }
+    button.disabled = true;
+    const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, full_name }),
+    });
+    button.disabled = false;
+    if (result.ok) {
+      caInviteSuccess = `Invite sent to ${email}. They will receive an email within a few minutes.`;
+      caInviteError = "";
+      form.reset();
+      loadCaAccessUsers();
+    } else {
+      caInviteError = result.payload?.detail || `Failed to send invite (HTTP ${result.status}).`;
+      caInviteSuccess = "";
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else if (coaAction === "ca-revoke") {
+    const userId = button.getAttribute("data-ca-user-id");
+    const email = button.getAttribute("data-ca-email");
+    if (!userId) return;
+    if (!confirm(`Revoke CA access for ${email}? They will no longer be able to log in.`)) return;
+    button.disabled = true;
+    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/${encodeURIComponent(userId)}/revoke`, {
+      method: "DELETE",
+    });
+    button.disabled = false;
+    if (result.ok) {
+      loadCaAccessUsers();
+    } else {
+      alert(result.payload?.detail || `Revoke failed (HTTP ${result.status}).`);
+    }
   }
 });
 dashboardPreview.addEventListener("input", (event) => {
@@ -15684,3 +15849,74 @@ if (currentExperience === "mitrabooks" && getAccessToken()) {
 
 renderModuleState(moduleState);
 runChecks();
+
+// CA invite accept — detect ?ca_invite=TOKEN and show accept modal
+(function checkCaInviteParam() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("ca_invite");
+  if (!token) return;
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center";
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:2rem;max-width:420px;width:90%;color:var(--fg,#eee)">
+      <h4 style="margin:0 0 .5rem">Accept MitraBooks CA Invite</h4>
+      <p style="font-size:.85rem;opacity:.7;margin:0 0 1rem">Set a password to activate your read-only CA account.</p>
+      <div id="ca-accept-msg" style="margin-bottom:.75rem;font-size:.85rem"></div>
+      <label style="display:block;margin-bottom:.75rem;font-size:.85rem">
+        Full Name (optional — leave blank to use the name from the invite)
+        <input id="ca-accept-name" type="text" placeholder="CA Suresh Kumar" maxlength="120"
+          style="display:block;width:100%;margin-top:.25rem;padding:.4rem .6rem;background:var(--input-bg,#111);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
+      </label>
+      <label style="display:block;margin-bottom:.75rem;font-size:.85rem">
+        Password (min 8 characters)
+        <input id="ca-accept-pw" type="password" placeholder="Enter password" minlength="8" maxlength="128"
+          style="display:block;width:100%;margin-top:.25rem;padding:.4rem .6rem;background:var(--input-bg,#111);border:1px solid var(--border,#333);border-radius:4px;color:inherit;box-sizing:border-box"/>
+      </label>
+      <div style="display:flex;gap:.5rem">
+        <button id="ca-accept-btn" style="flex:1">Activate Account</button>
+        <button id="ca-accept-cancel" class="secondary">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById("ca-accept-cancel").addEventListener("click", () => {
+    overlay.remove();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("ca_invite");
+    history.replaceState(null, "", url.toString());
+  });
+
+  document.getElementById("ca-accept-btn").addEventListener("click", async () => {
+    const pw = (document.getElementById("ca-accept-pw")?.value || "").trim();
+    const name = (document.getElementById("ca-accept-name")?.value || "").trim() || undefined;
+    const msgEl = document.getElementById("ca-accept-msg");
+    if (pw.length < 8) {
+      msgEl.innerHTML = `<span style="color:var(--err,#f55)">Password must be at least 8 characters.</span>`;
+      return;
+    }
+    document.getElementById("ca-accept-btn").disabled = true;
+    msgEl.textContent = "Activating…";
+    try {
+      const resp = await fetch(`${getConfiguredApiBaseUrl()}/api/v1/business/ca/invite/${encodeURIComponent(token)}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw, full_name: name }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        msgEl.innerHTML = `<span style="color:var(--ok,#4f4)">Account activated! You can now log in with your email and password.</span>`;
+        document.getElementById("ca-accept-btn").style.display = "none";
+        const url = new URL(window.location.href);
+        url.searchParams.delete("ca_invite");
+        history.replaceState(null, "", url.toString());
+      } else {
+        msgEl.innerHTML = `<span style="color:var(--err,#f55)">${escapeHtml(data?.detail || `Activation failed (HTTP ${resp.status}).`)}</span>`;
+        document.getElementById("ca-accept-btn").disabled = false;
+      }
+    } catch (err) {
+      msgEl.innerHTML = `<span style="color:var(--err,#f55)">Network error. Please try again.</span>`;
+      document.getElementById("ca-accept-btn").disabled = false;
+    }
+  });
+})();

@@ -24,10 +24,15 @@ from app.modules.business.schemas import (
     AllocationCreateResponse,
     AllocationRecord,
     BillPaymentUpdateRequest,
+    CaAccessListResponse,
+    CaAccessRecord,
     CaDocumentCreateRequest,
     CaDocumentListResponse,
     CaDocumentResponse,
     CaDocumentUpdateRequest,
+    CaInviteAcceptRequest,
+    CaInviteRequest,
+    CaRevokeResponse,
     CreditNoteCancelRequest,
     CreditNoteCreateRequest,
     CreditNoteListResponse,
@@ -82,6 +87,7 @@ from app.modules.business import fixed_assets
 from app.modules.business import opening_close
 from app.modules.business import statements
 from app.modules.business import tds as tds_module
+from app.modules.business import ca_access as ca_access_module
 from app.core.tenants.service import get_tenant
 from app.modules.business.service import (
     cancel_credit_note,
@@ -2802,3 +2808,96 @@ async def business_depreciation_run(
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+# ── CA Access Management ──────────────────────────────────────────────────────
+
+@router.post("/ca/invite")
+async def invite_ca_user(
+    payload: CaInviteRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Send a CA invite email. tenant_admin only."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA invite",
+    )
+    try:
+        doc = await ca_access_module.invite_ca(
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            email=payload.email,
+            full_name=payload.full_name,
+            invited_by=_created_by(current_user),
+        )
+        return {"ok": True, "invite_id": doc["invite_id"], "email": doc["email"], "expires_at": str(doc["expires_at"])}
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/ca/invite/{token}/accept")
+async def accept_ca_invite(
+    token: str,
+    payload: CaInviteAcceptRequest,
+):
+    """Accept a CA invite — creates the ca_viewer account. No auth required."""
+    try:
+        result = await ca_access_module.accept_ca_invite(
+            token=token,
+            password=payload.password,
+            full_name=payload.full_name,
+        )
+        return {"ok": True, **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/ca/users", response_model=CaAccessListResponse)
+async def list_ca_users(
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """List all CA invites and users for this tenant. tenant_admin only."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA user listing",
+    )
+    data = await ca_access_module.list_ca_access(tenant_id=context.tenant_id)
+    return CaAccessListResponse(
+        ca_users=[CaAccessRecord(**r) for r in data["ca_users"]],
+        total=data["total"],
+    )
+
+
+@router.delete("/ca/{user_id}/revoke", response_model=CaRevokeResponse)
+async def revoke_ca_user(
+    user_id: str,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Revoke a CA user account. tenant_admin only."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA access revoke",
+    )
+    try:
+        await ca_access_module.revoke_ca_access(tenant_id=context.tenant_id, user_id=user_id)
+        return CaRevokeResponse(ok=True, message=f"CA access revoked for user {user_id}")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

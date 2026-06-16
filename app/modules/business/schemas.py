@@ -190,6 +190,38 @@ class CaDocumentListResponse(BaseModel):
     total: int
 
 
+class CaInviteRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=120)
+    full_name: str = Field(..., min_length=1, max_length=120)
+
+
+class CaInviteAcceptRequest(BaseModel):
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: str | None = Field(default=None, max_length=120)
+
+
+class CaAccessRecord(BaseModel):
+    invite_id: str
+    email: str
+    full_name: str
+    status: str
+    invited_by: str
+    invited_at: datetime | None
+    expires_at: datetime | None
+    accepted_at: datetime | None
+    user_id: str | None
+
+
+class CaAccessListResponse(BaseModel):
+    ca_users: list[CaAccessRecord]
+    total: int
+
+
+class CaRevokeResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 SalesInvoiceStatus = Literal["posted", "cancelled"]
 
 

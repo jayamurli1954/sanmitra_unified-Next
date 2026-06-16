@@ -12,6 +12,7 @@ class Role(str, Enum):
     accountant = "accountant"
     operator = "operator"
     viewer = "viewer"
+    ca_viewer = "ca_viewer"
 
 
 def require_roles(allowed_roles: Iterable[Role]):
