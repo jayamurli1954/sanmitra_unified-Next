@@ -86,6 +86,7 @@ class Settings:
         if client_id.strip()
     ]
     AUTH_PUBLIC_BASE_URL = os.getenv("AUTH_PUBLIC_BASE_URL", "").strip()
+    MITRABOOKS_PUBLIC_URL = os.getenv("MITRABOOKS_PUBLIC_URL", "").strip()
     AUTH_ACTIVATION_TOKEN_TTL_MINUTES = int(os.getenv("AUTH_ACTIVATION_TOKEN_TTL_MINUTES", "60"))
     AUTH_RESET_TOKEN_TTL_MINUTES = int(os.getenv("AUTH_RESET_TOKEN_TTL_MINUTES", "30"))
     AUTH_EMAIL_DEBUG_RETURN_LINK = os.getenv(

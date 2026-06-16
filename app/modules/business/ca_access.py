@@ -79,8 +79,15 @@ async def invite_ca(
 
 async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str) -> None:
     settings = get_settings()
-    base = settings.AUTH_PUBLIC_BASE_URL.rstrip("/") or "https://www.mitrabooks.sanmitratech.in"
-    accept_url = f"{base}/mitrabooks-erp/index.html?ca_invite={token}"
+    # CA access is a MitraBooks-only feature; always link to the MitraBooks frontend.
+    # AUTH_PUBLIC_BASE_URL may point to a different product (e.g. LegalMitra) on shared
+    # deployments, so we use the dedicated MITRABOOKS_PUBLIC_URL env var when set and
+    # fall back to the canonical MitraBooks production URL.
+    mitrabooks_base = (
+        str(getattr(settings, "MITRABOOKS_PUBLIC_URL", "") or "").rstrip("/")
+        or "https://www.mitrabooks.sanmitratech.in"
+    )
+    accept_url = f"{mitrabooks_base}/mitrabooks-erp/index.html?ca_invite={token}"
 
     subject = "You have been invited to access MitraBooks financial data"
     body = (
