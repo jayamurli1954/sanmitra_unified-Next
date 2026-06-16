@@ -29,7 +29,7 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     assert "CACHE_NAME = 'mitrabooks-erp-v16'" in worker_source
 
 
-def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
+def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
     login_html = REPO_ROOT / "frontend" / "mitrabooks-erp" / "login.html"
     source = login_html.read_text(encoding="utf-8")
     script = source.split("<script>", 1)[1].split("</script>", 1)[0]
@@ -43,15 +43,8 @@ def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "/ca/invite/" in script
-    assert "/preview" not in script
-    assert '"Content-Type": "application/json"' not in script
-    assert 'body: JSON.stringify({ password: pw, full_name: name })' in script
-    assert '? "http://127.0.0.1:8000"' in script
-    assert ': "/api";' in script
-    assert 'function buildApiUrl(base, path)' in script
-    assert 'normalizedBase === "/api" && normalizedPath.indexOf("/api/") === 0' in script
-    assert 'fetch(buildApiUrl(apiBase, "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept"), {' in script
+    assert 'window.location.replace("./index.html");' in script
+    assert "/ca/invite/" not in source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -76,6 +69,17 @@ def test_vercel_proxies_api_requests_to_render_backend() -> None:
         "source": "/api/:path*",
         "destination": "https://sanmitra-unified-next-staging-sg.onrender.com/api/:path*",
     } in vercel_config["rewrites"]
+
+
+def test_mitrabooks_shell_forces_password_change_after_temporary_password_login() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert "pendingForcedPasswordChange = false;" in app_source
+    assert 'const currentUser = await loadCurrentUserProfile(appKey);' in app_source
+    assert 'pendingForcedPasswordChange = Boolean(currentUser?.must_change_password);' in app_source
+    assert 'setLoginStatus("warn", "Temporary password in use", "Change the temporary password to continue into the MitraBooks workspace.");' in app_source
+    assert "openPasswordDialog();" in app_source
+    assert "await completeWorkspaceSignIn(appKey);" in app_source
 
 
 def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:

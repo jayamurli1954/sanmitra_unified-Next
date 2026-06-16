@@ -3,17 +3,16 @@ CA Access — invite a Chartered Accountant to read-only access of one tenant's 
 
 Invite flow:
   1. tenant_admin  POST /business/ca/invite        {email, full_name}
-  2. Token stored in business_ca_invitations; invite email sent.
-  3. CA clicks link → lands on ?ca_invite=TOKEN in the MitraBooks FE.
-  4. CA         POST /business/ca/invite/{token}/accept  {password}
-  5. core_users entry created with role=ca_viewer.
-  6. tenant_admin  DELETE /business/ca/{user_id}/revoke  → is_active=False
+  2. core_users entry is created or refreshed with role=ca_viewer.
+  3. A temporary password email is sent with the normal MitraBooks login URL.
+  4. CA signs in with the temporary password and must change it on first login.
+  5. tenant_admin  DELETE /business/ca/{user_id}/revoke  → is_active=False
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import quote
+import string
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -32,6 +31,11 @@ _USERS = "core_users"
 _TOKEN_TTL_DAYS = 7
 
 
+def _generate_temporary_password(length: int = 14) -> str:
+    alphabet = string.ascii_letters + string.digits + "@#$%&*!"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
 async def _ensure_indexes() -> None:
     col = get_collection(_CA_INVITES)
     await col.create_index("token", unique=True, sparse=True)
@@ -47,30 +51,88 @@ async def invite_ca(
     full_name: str,
     invited_by: str,
 ) -> dict:
-    """Create a pending invite and send the invite email. Returns the invite record."""
+    """Provision or refresh a CA viewer account and send temporary login credentials."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
+    users = get_collection(_USERS)
 
     normalized_email = email.strip().lower()
-    existing = await col.find_one({"tenant_id": tenant_id, "email": normalized_email, "status": "pending"})
+    existing = await col.find_one({"tenant_id": tenant_id, "email": normalized_email})
+    temp_password = _generate_temporary_password()
+    now = datetime.now(timezone.utc)
+    resolved_name = full_name.strip()
+
+    existing_user = await users.find_one({"email": normalized_email})
+    if existing_user and str(existing_user.get("tenant_id") or "") != tenant_id:
+        raise ValueError("A user with this email already exists in a different tenant. Contact support.")
+
+    if existing_user:
+        user_id = str(existing_user.get("user_id") or uuid4())
+        await users.update_one(
+            {"_id": existing_user["_id"]},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "email": normalized_email,
+                    "full_name": resolved_name,
+                    "tenant_id": tenant_id,
+                    "app_key": app_key,
+                    "role": "ca_viewer",
+                    "hashed_password": hash_password(temp_password),
+                    "auth_provider": "password",
+                    "provider_subject": f"password:{normalized_email}",
+                    "is_active": True,
+                    "must_change_password": True,
+                    "subscription_tier": existing_user.get("subscription_tier", "free"),
+                    "subscription_status": existing_user.get("subscription_status", "active"),
+                    "accepted_terms_at": existing_user.get("accepted_terms_at"),
+                    "query_usage_count": existing_user.get("query_usage_count", 0),
+                    "updated_at": now,
+                }
+            },
+        )
+    else:
+        user_id = str(uuid4())
+        await users.insert_one({
+            "user_id": user_id,
+            "email": normalized_email,
+            "full_name": resolved_name,
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "role": "ca_viewer",
+            "hashed_password": hash_password(temp_password),
+            "auth_provider": "password",
+            "provider_subject": f"password:{normalized_email}",
+            "is_active": True,
+            "must_change_password": True,
+            "subscription_tier": "free",
+            "subscription_status": "active",
+            "accepted_terms_at": None,
+            "query_usage_count": 0,
+            "created_at": now,
+            "updated_at": now,
+        })
+
     if existing:
-        now = datetime.now(timezone.utc)
         token = str(existing.get("token") or secrets.token_urlsafe(32))
         expires_at = existing.get("expires_at")
         if not expires_at or expires_at < now:
             expires_at = now + timedelta(days=_TOKEN_TTL_DAYS)
         update_doc = {
-            "full_name": full_name.strip(),
+            "full_name": resolved_name,
             "token": token,
             "expires_at": expires_at,
+            "status": "accepted",
+            "accepted_at": now,
+            "user_id": user_id,
             "resent_at": now,
             "resent_by": invited_by,
         }
         await col.update_one({"_id": existing["_id"]}, {"$set": update_doc})
         delivery = await _send_invite_email(
             email=normalized_email,
-            full_name=full_name.strip(),
-            token=token,
+            full_name=resolved_name,
+            temporary_password=temp_password,
             tenant_id=tenant_id,
         )
         existing.update(update_doc)
@@ -80,26 +142,25 @@ async def invite_ca(
         return existing
 
     token = secrets.token_urlsafe(32)
-    now = datetime.now(timezone.utc)
     doc = {
         "invite_id": str(uuid4()),
         "tenant_id": tenant_id,
         "app_key": app_key,
         "email": normalized_email,
-        "full_name": full_name.strip(),
+        "full_name": resolved_name,
         "token": token,
-        "status": "pending",
+        "status": "accepted",
         "invited_by": invited_by,
         "created_at": now,
         "expires_at": now + timedelta(days=_TOKEN_TTL_DAYS),
-        "accepted_at": None,
-        "user_id": None,
+        "accepted_at": now,
+        "user_id": user_id,
     }
     await col.insert_one(doc)
     delivery = await _send_invite_email(
         email=normalized_email,
-        full_name=full_name.strip(),
-        token=token,
+        full_name=resolved_name,
+        temporary_password=temp_password,
         tenant_id=tenant_id,
     )
     doc["email_delivery"] = delivery
@@ -108,33 +169,25 @@ async def invite_ca(
     return doc
 
 
-async def _send_invite_email(*, email: str, full_name: str, token: str, tenant_id: str) -> dict:
+async def _send_invite_email(*, email: str, full_name: str, temporary_password: str, tenant_id: str) -> dict:
     settings = get_settings()
-    # Use MITRABOOKS_PUBLIC_URL env var when set (required on Render since the
-    # frontend is hosted separately at www.mitrabooks.sanmitratech.in, not on the
-    # API server). Falls back to the production frontend URL.
-    # Link to login.html (not index.html) — login.html is a dedicated static file
-    # that handles the CA invite flow without being intercepted by the marketing site.
     mitrabooks_base = (
         str(getattr(settings, "MITRABOOKS_PUBLIC_URL", "") or "").rstrip("/")
         or "https://www.mitrabooks.sanmitratech.in"
     )
-    # Embed email and name so login.html can pre-fill without a cross-origin API call.
-    accept_url = (
-        f"{mitrabooks_base}/mitrabooks-erp/login.html"
-        f"?ca_invite={token}"
-        f"&email={quote(email, safe='')}"
-        f"&name={quote(full_name, safe='')}"
-    )
+    login_url = f"{mitrabooks_base}/mitrabooks-erp/login.html"
 
     subject = "You have been invited to access MitraBooks financial data"
     body = (
         f"Hello {full_name},\n\n"
         f"You have been invited as a Chartered Accountant (CA) to review the financial data"
         f" for business tenant '{tenant_id}' on MitraBooks.\n\n"
-        f"Click the link below to set your password and activate read-only access:\n\n"
-        f"  {accept_url}\n\n"
-        f"This link is valid for {_TOKEN_TTL_DAYS} days.\n\n"
+        f"Use the normal MitraBooks login page below:\n\n"
+        f"  {login_url}\n\n"
+        f"Sign in with the following temporary credentials:\n"
+        f"  Email: {email}\n"
+        f"  Temporary password: {temporary_password}\n\n"
+        f"You must change this temporary password immediately after the first login.\n\n"
         f"You will have read-only access to:\n"
         f"  - Financial Statements (Trial Balance, P&L, Balance Sheet, General Ledger)\n"
         f"  - GST Returns (GSTR-1, GSTR-3B, GSTR-2B Reconciliation)\n"
@@ -213,7 +266,7 @@ async def preview_ca_invite(*, token: str) -> dict:
 
 
 async def accept_ca_invite(*, token: str, password: str, full_name: str | None = None) -> dict:
-    """Accept an invite: create the ca_viewer user account. Returns basic user info."""
+    """Accept a legacy invite: create the ca_viewer user account. Returns basic user info."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
     invite = await col.find_one({"token": token})

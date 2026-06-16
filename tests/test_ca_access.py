@@ -60,17 +60,26 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
     assert payload["user_id"] == "u-1"
 
 @pytest.mark.asyncio
-async def test_invite_creates_record_and_sends_email():
+async def test_invite_provisions_ca_user_and_sends_temporary_password_email():
     from app.modules.business import ca_access
 
-    mock_col = AsyncMock()
-    mock_col.find_one = AsyncMock(return_value=None)
-    mock_col.insert_one = AsyncMock()
-    mock_col.create_index = AsyncMock()
+    mock_invites = AsyncMock()
+    mock_invites.find_one = AsyncMock(return_value=None)
+    mock_invites.insert_one = AsyncMock()
+    mock_invites.create_index = AsyncMock()
+    mock_users = AsyncMock()
+    mock_users.find_one = AsyncMock(return_value=None)
+    mock_users.insert_one = AsyncMock()
     email_delivery = {"sent": True, "error": None}
 
-    with patch("app.modules.business.ca_access.get_collection", return_value=mock_col), \
-         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
+    def _col(name):
+        if name == "business_ca_invitations":
+            return mock_invites
+        return mock_users
+
+    with patch("app.modules.business.ca_access.get_collection", side_effect=_col), \
+         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email, \
+         patch("app.modules.business.ca_access.hash_password", return_value="hashed-temp-password"):
         mock_email.return_value = email_delivery
         result = await ca_access.invite_ca(
             tenant_id="t1", app_key="mitrabooks",
@@ -78,27 +87,53 @@ async def test_invite_creates_record_and_sends_email():
         )
 
     assert result["email"] == "ca@example.com"
-    assert result["status"] == "pending"
+    assert result["status"] == "accepted"
     assert "token" in result
+    assert result["user_id"]
     assert result["email_delivery"] == email_delivery
     assert result["resent"] is False
     mock_email.assert_awaited_once()
     assert mock_email.call_args.kwargs["email"] == "ca@example.com"
+    assert mock_email.call_args.kwargs["temporary_password"]
+    mock_users.insert_one.assert_awaited_once()
+    inserted_user = mock_users.insert_one.call_args[0][0]
+    assert inserted_user["role"] == "ca_viewer"
+    assert inserted_user["must_change_password"] is True
+    assert inserted_user["hashed_password"] == "hashed-temp-password"
 
 
 @pytest.mark.asyncio
-async def test_duplicate_pending_invite_resends_existing_invite():
+async def test_existing_ca_invite_resends_credentials_and_rotates_temporary_password():
     from app.modules.business import ca_access
 
     invite = _make_invite("pending")
-    mock_col = AsyncMock()
-    mock_col.find_one = AsyncMock(return_value=invite)
-    mock_col.update_one = AsyncMock()
-    mock_col.create_index = AsyncMock()
+    existing_user = {
+        "_id": "user-oid",
+        "user_id": "u-existing",
+        "email": "ca@example.com",
+        "tenant_id": "t1",
+        "role": "ca_viewer",
+        "subscription_tier": "free",
+        "subscription_status": "active",
+        "query_usage_count": 4,
+    }
+    mock_invites = AsyncMock()
+    mock_invites.find_one = AsyncMock(return_value=invite)
+    mock_invites.update_one = AsyncMock()
+    mock_invites.create_index = AsyncMock()
+    mock_users = AsyncMock()
+    mock_users.find_one = AsyncMock(return_value=existing_user)
+    mock_users.update_one = AsyncMock()
     email_delivery = {"sent": True, "error": None}
 
-    with patch("app.modules.business.ca_access.get_collection", return_value=mock_col), \
-         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
+    def _col(name):
+        if name == "business_ca_invitations":
+            return mock_invites
+        return mock_users
+
+    with patch("app.modules.business.ca_access.get_collection", side_effect=_col), \
+         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email, \
+         patch("app.modules.business.ca_access.hash_password", return_value="new-temp-hash"):
         mock_email.return_value = email_delivery
         result = await ca_access.invite_ca(
             tenant_id="t1", app_key="mitrabooks",
@@ -108,9 +143,15 @@ async def test_duplicate_pending_invite_resends_existing_invite():
     assert result["invite_id"] == "inv-1"
     assert result["resent"] is True
     assert result["email_delivery"] == email_delivery
-    mock_col.update_one.assert_awaited_once()
+    assert result["status"] == "accepted"
+    assert result["user_id"] == "u-existing"
+    mock_invites.update_one.assert_awaited_once()
+    mock_users.update_one.assert_awaited_once()
     mock_email.assert_awaited_once()
-    assert mock_email.call_args.kwargs["token"] == invite["token"]
+    assert mock_email.call_args.kwargs["temporary_password"]
+    user_update = mock_users.update_one.call_args[0][1]["$set"]
+    assert user_update["must_change_password"] is True
+    assert user_update["hashed_password"] == "new-temp-hash"
 
 
 @pytest.mark.asyncio
