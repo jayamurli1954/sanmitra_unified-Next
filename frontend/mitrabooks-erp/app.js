@@ -7,10 +7,12 @@
 
 import {
   clearAccessToken,
+  clearAllTokens,
   apiRequest,
   downloadApiFile,
   fetchApiFileObjectUrl,
   getAccessToken,
+  getRefreshToken,
   getConfiguredApiBaseUrl,
   loadHealth,
   loadModules,
@@ -18,6 +20,7 @@ import {
   renderModuleState,
   renderJson,
   setAccessToken,
+  setRefreshToken,
   setConfiguredApiBaseUrl,
   statusLabel,
 } from "../shared/api-client.js";
@@ -2610,7 +2613,15 @@ function compactAccountLabel(email) {
 }
 
 function signOutAndReturnToLogin() {
-  clearAccessToken();
+  const rt = getRefreshToken();
+  if (rt) {
+    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+    apiRequest(appKey, "/api/v1/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: rt }),
+    }).catch(() => {});
+  }
+  clearAllTokens();
   lastModuleContext = null;
   lastBusinessAccounts = [];
   lastBusinessParties = [];
@@ -2813,6 +2824,7 @@ async function signInWithPassword() {
 
     // Successful login
     setAccessToken(result.payload?.access_token || "");
+    setRefreshToken(result.payload?.refresh_token || "");
     window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
 
     // Clear password for security
@@ -13577,7 +13589,7 @@ async function runChecks() {
 
   if (!modules.ok && modules.status === 401) {
     lastModuleContext = null;
-    clearAccessToken();
+    clearAllTokens();
     renderModules();
     setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
     updateSessionUi();
@@ -14904,6 +14916,21 @@ if (togglePasswordBtn && loginPassword) {
 document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
   signOutAndReturnToLogin();
+});
+
+// Fired by api-client when silent token refresh fails — show clean login screen
+window.addEventListener("auth-session-expired", () => {
+  lastModuleContext = null;
+  lastBusinessAccounts = [];
+  lastBusinessParties = [];
+  lastBusinessVouchers = [];
+  lastAccountingDrilldown = null;
+  clearAllTokens();
+  if (loginPassword) loginPassword.value = "";
+  dashboardPreview.innerHTML = "";
+  renderModules();
+  updateSessionUi();
+  setLoginStatus("warn", "Session expired", "Your session has expired. Please sign in again.");
 });
 document.getElementById("topbar-logout")?.addEventListener("click", () => {
   signOutAndReturnToLogin();

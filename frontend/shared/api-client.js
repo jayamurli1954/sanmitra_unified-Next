@@ -1,6 +1,7 @@
 const LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
 const API_BASE_STORAGE_KEY = "sanmitra_frontend_api_base_url";
 const ACCESS_TOKEN_STORAGE_KEY = "sanmitra_frontend_access_token";
+const REFRESH_TOKEN_STORAGE_KEY = "sanmitra_frontend_refresh_token";
 const REQUEST_TIMEOUT_MS = 5000;
 
 function normalizeApiBaseUrl(value) {
@@ -91,6 +92,67 @@ export function clearAccessToken() {
   localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 
+export function getRefreshToken() {
+  return String(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "").trim();
+}
+
+export function setRefreshToken(value) {
+  const token = String(value || "").trim();
+  if (!token) {
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    return "";
+  }
+  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+  return token;
+}
+
+export function clearRefreshToken() {
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+export function clearAllTokens() {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+// Singleton in-flight promise so concurrent 401s don't fire multiple refresh calls
+let _refreshInFlight = null;
+
+async function _attemptSilentRefresh(appKey) {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    window.dispatchEvent(new CustomEvent("auth-session-expired"));
+    return false;
+  }
+  try {
+    const baseUrl = getConfiguredApiBaseUrl();
+    const url = buildApiUrl(baseUrl, "/api/v1/auth/refresh");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-App-Key": appKey || "mitrabooks" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      clearAllTokens();
+      window.dispatchEvent(new CustomEvent("auth-session-expired"));
+      return false;
+    }
+    const data = await response.json();
+    if (data.access_token) setAccessToken(data.access_token);
+    if (data.refresh_token) setRefreshToken(data.refresh_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function _silentRefresh(appKey) {
+  if (!_refreshInFlight) {
+    _refreshInFlight = _attemptSilentRefresh(appKey).finally(() => { _refreshInFlight = null; });
+  }
+  return _refreshInFlight;
+}
+
 export function buildHeaders(appKey, extraHeaders = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -110,7 +172,7 @@ export async function apiRequest(appKey, path, options = {}) {
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
+  const { timeoutMs: _timeoutMs, _isRetry, ...fetchOptions } = options;
   try {
     const response = await fetch(requestUrl, {
       ...fetchOptions,
@@ -122,6 +184,17 @@ export async function apiRequest(appKey, path, options = {}) {
     const payload = contentType.includes("application/json")
       ? await response.json()
       : await response.text();
+
+    // On 401: attempt a silent token refresh then replay the request once.
+    // Skip for auth endpoints to avoid infinite loops.
+    if (response.status === 401 && !_isRetry && !path.includes("/api/v1/auth/")) {
+      window.clearTimeout(timeout);
+      const refreshed = await _silentRefresh(appKey);
+      if (refreshed) {
+        return apiRequest(appKey, path, { ...options, _isRetry: true });
+      }
+      return { ok: false, status: 401, payload };
+    }
 
     return {
       ok: response.ok,
