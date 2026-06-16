@@ -44,6 +44,8 @@ def test_mitrabooks_login_invite_page_inline_script_parses() -> None:
     assert result.returncode == 0, result.stderr
     assert "/ca/invite/" in script
     assert "/preview" not in script
+    assert '"Content-Type": "application/json"' not in script
+    assert 'body: JSON.stringify({ password: pw, full_name: name })' in script
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:

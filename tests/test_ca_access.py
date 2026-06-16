@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 
@@ -28,6 +29,35 @@ def _make_invite(status="pending", expired=False):
 
 
 # ── tests ─────────────────────────────────────────────────────────────────────
+
+def test_accept_route_accepts_text_plain_json(monkeypatch):
+    from app.main import app
+    from app.modules.business import router as business_router
+
+    async def fake_accept_ca_invite(*, token: str, password: str, full_name: str | None = None):
+        assert token == "tok123"
+        assert password == "Secret123!"
+        assert full_name == "CA Ravi"
+        return {
+            "user_id": "u-1",
+            "email": "ca@example.com",
+            "full_name": full_name,
+            "role": "ca_viewer",
+        }
+
+    monkeypatch.setattr(business_router.ca_access_module, "accept_ca_invite", fake_accept_ca_invite)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/business/ca/invite/tok123/accept",
+            data='{"password":"Secret123!","full_name":"CA Ravi"}',
+            headers={"Content-Type": "text/plain;charset=UTF-8"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["user_id"] == "u-1"
 
 @pytest.mark.asyncio
 async def test_invite_creates_record_and_sends_email():

@@ -1,8 +1,9 @@
+import json
 import re
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -2861,17 +2862,25 @@ async def preview_ca_invite(token: str):
 
 @router.post("/ca/invite/{token}/accept")
 async def accept_ca_invite(
+    request: Request,
     token: str,
-    payload: CaInviteAcceptRequest,
 ):
     """Accept a CA invite — creates the ca_viewer account. No auth required."""
     try:
+        content_type = str(request.headers.get("content-type") or "").lower()
+        if content_type.startswith("text/plain"):
+            raw_body = (await request.body()).decode("utf-8").strip()
+            payload = CaInviteAcceptRequest.model_validate(json.loads(raw_body or "{}"))
+        else:
+            payload = CaInviteAcceptRequest.model_validate(await request.json())
         result = await ca_access_module.accept_ca_invite(
             token=token,
             password=payload.password,
             full_name=payload.full_name,
         )
         return {"ok": True, **result}
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid invite accept payload") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

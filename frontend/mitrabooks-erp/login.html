@@ -113,7 +113,6 @@
           msgEl.textContent = "Activating...";
           fetch(apiBase + "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ password: pw, full_name: name })
           })
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
