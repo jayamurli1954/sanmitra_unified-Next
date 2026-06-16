@@ -15013,7 +15013,7 @@ nav.addEventListener("click", (event) => {
 // NOTE  : Single delegated listener on dashboardPreview for all workspace actions
 // ══════════════════════════════════════════════════════════════════════
 
-dashboardPreview.addEventListener("click", (event) => {
+dashboardPreview.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action], [data-coa-action]");
   if (!button) {
     return;
