@@ -2,7 +2,7 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -2814,7 +2814,6 @@ async def business_depreciation_run(
 
 @router.post("/ca/invite")
 async def invite_ca_user(
-    request: Request,
     payload: CaInviteRequest,
     _module_context: dict = Depends(require_enabled_module("business")),
     current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
@@ -2829,10 +2828,6 @@ async def invite_ca_user(
         expected_app_key="mitrabooks",
         operation="CA invite",
     )
-    # Derive the ERP base URL from the incoming request so the invite link
-    # works in local dev, on Render, and on any custom domain without needing
-    # a separate env var. MITRABOOKS_PUBLIC_URL still overrides when set.
-    request_origin = str(request.base_url).rstrip("/")
     try:
         doc = await ca_access_module.invite_ca(
             tenant_id=context.tenant_id,
@@ -2840,7 +2835,6 @@ async def invite_ca_user(
             email=payload.email,
             full_name=payload.full_name,
             invited_by=_created_by(current_user),
-            request_origin=request_origin,
         )
         return {"ok": True, "invite_id": doc["invite_id"], "email": doc["email"], "expires_at": str(doc["expires_at"])}
     except ValueError as exc:

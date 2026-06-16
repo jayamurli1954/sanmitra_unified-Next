@@ -2,12 +2,153 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="refresh" content="0; url=./index.html">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>MitraBooks Login</title>
+    <meta name="sanmitra-api-base-url" content="https://sanmitra-unified-next-staging-sg.onrender.com">
+    <title>MitraBooks – Activate CA Account</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #12121f;
+        color: #eee;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      .card {
+        background: #1a1a2e;
+        border: 1px solid #2a2a4a;
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        max-width: 440px;
+        width: 100%;
+      }
+      .logo { text-align: center; margin-bottom: 1.5rem; }
+      .logo img { height: 36px; }
+      h3 { font-size: 1.1rem; text-align: center; margin-bottom: .25rem; }
+      #sub { font-size: .85rem; opacity: .6; text-align: center; margin-bottom: 1.5rem; }
+      #msg { font-size: .85rem; min-height: 1.2rem; margin-bottom: .75rem; }
+      label { display: block; font-size: .85rem; margin-bottom: 1rem; }
+      input {
+        display: block; width: 100%; margin-top: .25rem;
+        padding: .45rem .65rem;
+        background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 4px;
+        color: inherit; font-size: .9rem; outline: none;
+      }
+      input:focus { border-color: #4f46e5; }
+      input[readonly] { color: #888; cursor: default; }
+      button#ca-btn {
+        width: 100%; padding: .6rem 1rem; margin-top: .25rem;
+        background: #4f46e5; border: none; border-radius: 6px;
+        color: #fff; font-size: .95rem; cursor: pointer; font-weight: 500;
+      }
+      button#ca-btn:disabled { opacity: .5; cursor: not-allowed; }
+      .ok { color: #4ade80; }
+      .err { color: #f87171; }
+      a { color: #818cf8; }
+      .loading { text-align: center; opacity: .5; padding: 1rem 0; }
+    </style>
   </head>
   <body>
-    <p>Opening MitraBooks login...</p>
-    <script>window.location.replace("./index.html");</script>
+    <div class="card">
+      <div class="logo">
+        <img src="./assets/brand/mitrabooks-pro-logo.png" alt="MitraBooks"
+             onerror="this.parentNode.innerHTML='<strong style=\'font-size:1.2rem\'>MitraBooks</strong>'">
+      </div>
+      <h3>Activate Your CA Account</h3>
+      <p id="sub">Loading invite details…</p>
+      <div id="msg"></div>
+      <div id="form-area"><p class="loading">Loading…</p></div>
+    </div>
+
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get("ca_invite");
+
+        // No invite token — redirect to ERP as normal
+        if (!token) {
+          window.location.replace("./index.html");
+          return;
+        }
+
+        // API base: stored override → meta tag → origin (for local dev)
+        var metaTag = document.querySelector("meta[name='sanmitra-api-base-url']");
+        var stored = (localStorage.getItem("sanmitra_frontend_api_base_url") || "").trim().replace(/\/+$/, "");
+        var apiBase = stored || (metaTag ? (metaTag.content || "").trim().replace(/\/+$/, "") : "") || window.location.origin;
+
+        function esc(s) {
+          return String(s || "").replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+          });
+        }
+
+        fetch(apiBase + "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/preview")
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (res) {
+            var sub = document.getElementById("sub");
+            var formArea = document.getElementById("form-area");
+            if (!res.ok) {
+              sub.textContent = "";
+              formArea.innerHTML = '<p class="err" style="text-align:center">' +
+                esc(res.data.detail || "Invalid or expired invite link.") + "</p>";
+              return;
+            }
+            var email = res.data.email || "";
+            var fullName = res.data.full_name || "";
+            sub.textContent = "You’ve been invited to access MitraBooks as a Chartered Accountant";
+            formArea.innerHTML =
+              '<label>Email<input type="email" value="' + esc(email) + '" readonly tabindex="-1"></label>' +
+              '<label>Full Name <span style="opacity:.5">(optional)</span>' +
+              '<input id="ca-name" type="text" value="' + esc(fullName) + '" maxlength="120" placeholder="Leave blank to use the name from the invite"></label>' +
+              '<label>Password <span style="opacity:.5">(min 8 characters)</span>' +
+              '<input id="ca-pw" type="password" placeholder="Set your password" minlength="8" maxlength="128"></label>' +
+              '<button id="ca-btn">Activate Account</button>';
+
+            document.getElementById("ca-btn").addEventListener("click", function () {
+              var pw = (document.getElementById("ca-pw").value || "").trim();
+              var nameEl = document.getElementById("ca-name");
+              var name = nameEl ? (nameEl.value || "").trim() || undefined : undefined;
+              var msgEl = document.getElementById("msg");
+              if (pw.length < 8) {
+                msgEl.innerHTML = '<span class="err">Password must be at least 8 characters.</span>';
+                return;
+              }
+              document.getElementById("ca-btn").disabled = true;
+              msgEl.textContent = "Activating…";
+              fetch(apiBase + "/api/v1/business/ca/invite/" + encodeURIComponent(token) + "/accept", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: pw, full_name: name })
+              })
+              .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+              .then(function (res) {
+                if (res.ok) {
+                  msgEl.innerHTML = '<span class="ok">Account activated! You can now ' +
+                    '<a href="./index.html">sign in</a> with ' + esc(email) + ".</span>";
+                  document.getElementById("ca-btn").style.display = "none";
+                  var url = new URL(window.location.href);
+                  url.searchParams.delete("ca_invite");
+                  history.replaceState(null, "", url.toString());
+                } else {
+                  msgEl.innerHTML = '<span class="err">' +
+                    esc(res.data.detail || "Activation failed. Please try again.") + "</span>";
+                  document.getElementById("ca-btn").disabled = false;
+                }
+              })
+              .catch(function () {
+                msgEl.innerHTML = '<span class="err">Network error. Please try again.</span>';
+                document.getElementById("ca-btn").disabled = false;
+              });
+            });
+          })
+          .catch(function () {
+            document.getElementById("form-area").innerHTML =
+              '<p class="err" style="text-align:center">Could not load invite. Check your connection and try again.</p>';
+          });
+      })();
+    </script>
   </body>
 </html>
