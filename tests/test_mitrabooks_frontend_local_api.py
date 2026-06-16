@@ -56,6 +56,13 @@ def test_local_frontend_server_disables_browser_cache() -> None:
     assert "partial(LocalFrontendHandler" in server_source
 
 
+def test_frontend_build_keeps_standalone_mitrabooks_login_page() -> None:
+    build_source = (REPO_ROOT / "frontend" / "scripts" / "build.js").read_text(encoding="utf-8")
+
+    assert "fs.copyFileSync(landingShell, appShell);" in build_source
+    assert "fs.copyFileSync(appShell, loginShell);" not in build_source
+
+
 def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:
     pwa_source = (REPO_ROOT / "frontend" / "shared" / "pwa-shell.js").read_text(encoding="utf-8")
 

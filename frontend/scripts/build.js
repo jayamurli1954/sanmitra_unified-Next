@@ -38,12 +38,10 @@ function copyStaticFile(name) {
 function publishMitraBooksLandingIndex() {
   const mitraDir = path.join(buildDir, 'mitrabooks-erp');
   const appShell = path.join(mitraDir, 'index.html');
-  const loginShell = path.join(mitraDir, 'login.html');
   const landingShell = path.join(mitraDir, 'landing.html');
   if (!fs.existsSync(appShell) || !fs.existsSync(landingShell)) {
     return;
   }
-  fs.copyFileSync(appShell, loginShell);
   fs.copyFileSync(landingShell, appShell);
 }
 
