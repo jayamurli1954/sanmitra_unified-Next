@@ -2656,14 +2656,12 @@ function closeAccountMenu() {
 function openPasswordDialog() {
   closeAccountMenu();
   passwordForm?.reset();
-  if (passwordStatus) {
-    if (pendingForcedPasswordChange) {
-      passwordStatus.className = "module-state warn";
-      passwordStatus.innerHTML = "<strong>Temporary password in use</strong><span>Change the temporary password before opening the MitraBooks workspace.</span>";
-    } else {
-      passwordStatus.className = "module-state";
-      passwordStatus.textContent = "";
-    }
+  _clearPasswordError();
+  if (passwordStatus && pendingForcedPasswordChange) {
+    const field = document.getElementById("password-error-field");
+    if (field) field.style.display = "block";
+    passwordStatus.className = "module-state warn";
+    passwordStatus.innerHTML = "<strong>Temporary password in use</strong><span>Change the temporary password before opening the MitraBooks workspace.</span>";
   }
   passwordDialog?.showModal();
 }
@@ -2698,6 +2696,24 @@ async function completeWorkspaceSignIn(appKey) {
   }
 }
 
+function _showPasswordError(msg) {
+  const field = document.getElementById("password-error-field");
+  if (field) field.style.display = "block";
+  if (passwordStatus) {
+    passwordStatus.className = "module-state danger";
+    passwordStatus.innerHTML = msg;
+  }
+}
+
+function _clearPasswordError() {
+  const field = document.getElementById("password-error-field");
+  if (field) field.style.display = "none";
+  if (passwordStatus) {
+    passwordStatus.className = "module-state";
+    passwordStatus.textContent = "";
+  }
+}
+
 async function updateCurrentPassword() {
   const currentPassword = String(currentPasswordInput?.value || "");
   const newPassword = String(newPasswordInput?.value || "");
@@ -2705,26 +2721,18 @@ async function updateCurrentPassword() {
   const submitButton = document.getElementById("change-password-submit");
 
   if (!currentPassword || currentPassword.length < 6) {
-    if (passwordStatus) {
-      passwordStatus.className = "module-state danger";
-      passwordStatus.innerHTML = "<strong>Current password required</strong><span>Enter the current account password first.</span>";
-    }
+    _showPasswordError("<strong>Current password required</strong><span>Enter the current account password first.</span>");
     return;
   }
   if (!newPassword || newPassword.length < 6) {
-    if (passwordStatus) {
-      passwordStatus.className = "module-state danger";
-      passwordStatus.innerHTML = "<strong>New password too short</strong><span>Use at least 6 characters.</span>";
-    }
+    _showPasswordError("<strong>New password too short</strong><span>Use at least 6 characters.</span>");
     return;
   }
   if (newPassword !== confirmPassword) {
-    if (passwordStatus) {
-      passwordStatus.className = "module-state danger";
-      passwordStatus.innerHTML = "<strong>Passwords do not match</strong><span>Confirm the new password again.</span>";
-    }
+    _showPasswordError("<strong>Passwords do not match</strong><span>Confirm the new password again.</span>");
     return;
   }
+  _clearPasswordError();
 
   if (submitButton) {
     submitButton.disabled = true;
@@ -2757,9 +2765,8 @@ async function updateCurrentPassword() {
     } else {
       setLoginStatus("ok", "Password updated", "Use the new password for your next sign-in.");
     }
-  } else if (passwordStatus) {
-    passwordStatus.className = "module-state danger";
-    passwordStatus.innerHTML = `<strong>Password update failed</strong><span>${escapeHtml(statusDetailText(result.payload?.detail) || statusDetailText(result.payload) || "Try again.")}</span>`;
+  } else {
+    _showPasswordError(`<strong>Password update failed</strong><span>${escapeHtml(statusDetailText(result.payload?.detail) || statusDetailText(result.payload) || "Try again.")}</span>`);
   }
   renderJson(apiOutput, { change_password: { ok: result.ok, status: result.status, detail: result.payload?.detail } });
 }
