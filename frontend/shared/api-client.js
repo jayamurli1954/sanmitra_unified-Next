@@ -141,7 +141,7 @@ async function _attemptSilentRefresh(appKey) {
     if (data.access_token) setAccessToken(data.access_token);
     if (data.refresh_token) setRefreshToken(data.refresh_token);
     return true;
-  } catch {
+  } catch (_e) {
     return false;
   }
 }
