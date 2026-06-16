@@ -84,13 +84,16 @@ def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
     resolved_app_key = resolve_app_key(user_app_key or requested_app_key)
     if user_app_key and requested_app_key != resolved_app_key and str(user.get("role") or "").strip() != "super_admin":
         raise HTTPException(status_code=403, detail="App key mismatch for this account")
-    return {
+    payload = {
         "sub": user["user_id"],
         "email": user["email"],
         "role": user["role"],
         "tenant_id": user["tenant_id"],
         "app_key": resolved_app_key,
     }
+    if user.get("must_change_password"):
+        payload["must_change_password"] = True
+    return payload
 
 
 def _refresh_collection():
