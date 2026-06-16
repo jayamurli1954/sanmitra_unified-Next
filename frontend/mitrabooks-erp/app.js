@@ -15425,7 +15425,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        caInviteSuccess = `${payload.resent ? "Credentials resent" : "Credentials sent"} to ${email}. The email contains a temporary password and the normal MitraBooks login link.`;
+        const pwLine = payload.temp_password ? ` Temporary password: ${payload.temp_password}` : "";
+        caInviteSuccess = `${payload.resent ? "Credentials resent" : "Credentials sent"} to ${email}.${pwLine}`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";
@@ -15453,7 +15454,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        caInviteSuccess = `New temporary password sent to ${email}.`;
+        const pwLine = payload.temp_password ? ` Temporary password: ${payload.temp_password}` : "";
+        caInviteSuccess = `New temporary password sent to ${email}.${pwLine}`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";

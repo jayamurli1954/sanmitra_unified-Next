@@ -146,6 +146,7 @@ async def invite_ca(
         existing.update(update_doc)
         existing["email_delivery"] = delivery
         existing["resent"] = True
+        existing["temp_password"] = temp_password
         existing.pop("_id", None)
         return existing
 
@@ -172,6 +173,7 @@ async def invite_ca(
     )
     doc["email_delivery"] = delivery
     doc["resent"] = False
+    doc["temp_password"] = temp_password
     doc.pop("_id", None)
     return doc
 
