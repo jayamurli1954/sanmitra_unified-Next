@@ -507,7 +507,7 @@ async function mockVerifiedMitraBooksSession(page) {
 
 test.describe('MitraBooks ERP static shell', () => {
   test('shows login validation and password toggle before sign in', async ({ page }) => {
-    await page.goto('/mitrabooks-erp/login.html');
+    await page.goto('/mitrabooks-erp/index.html');
 
     await expect(page.locator('#access-panel')).toBeVisible();
     await expect(page.locator('.erp-sidebar')).toBeHidden();
@@ -540,7 +540,7 @@ test.describe('MitraBooks ERP static shell', () => {
       body: JSON.stringify({ detail: 'Unauthorized' }),
     }));
 
-    await page.goto('/mitrabooks-erp/login.html');
+    await page.goto('/mitrabooks-erp/index.html');
 
     await expect(page.locator('#access-panel')).toBeVisible();
     await expect(page.locator('.erp-sidebar')).toBeHidden();
@@ -555,7 +555,7 @@ test.describe('MitraBooks ERP static shell', () => {
       window.localStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
       window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
     });
-    await page.goto('/mitrabooks-erp/login.html');
+    await page.goto('/mitrabooks-erp/index.html');
 
     await expect(page).toHaveTitle('MitraBooks Pro');
     await expect(page.locator('#brand-title')).toContainText('MitraBooks Pro');
