@@ -77,6 +77,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Skip non-http(s) schemes — chrome-extension://, data:, blob:, etc.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
