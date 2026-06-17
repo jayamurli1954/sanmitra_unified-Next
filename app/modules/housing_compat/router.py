@@ -172,6 +172,10 @@ def _complaints_collection() -> Any:
     return get_collection("housing_complaints")
 
 
+def _visitors_collection() -> Any:
+    return get_collection("housing_visitor_entries")
+
+
 def _asset_response(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row.get("id"),
@@ -1559,6 +1563,290 @@ async def _can_access_message_room(
 def _can_manage_complaints(role: Any) -> bool:
     normalized = str(role or "").strip().lower()
     return normalized in {"admin", "super_admin", "secretary"}
+
+
+def _can_manage_visitors(role: Any) -> bool:
+    normalized = str(role or "").strip().lower()
+    return normalized in {
+        "admin",
+        "super_admin",
+        "tenant_admin",
+        "secretary",
+        "chairman",
+        "security",
+        "security_guard",
+        "guard",
+        "gate",
+        "watchman",
+    }
+
+
+def _visitor_response(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "tenant_id": row.get("tenant_id"),
+        "app_key": row.get("app_key"),
+        "flat_number": row.get("flat_number"),
+        "visitor_type": row.get("visitor_type") or "guest",
+        "visitor_name": row.get("visitor_name") or "",
+        "phone_number": row.get("phone_number") or "",
+        "vehicle_number": row.get("vehicle_number") or "",
+        "purpose": row.get("purpose") or "",
+        "vendor_name": row.get("vendor_name") or "",
+        "status": row.get("status") or "pending",
+        "approval_by": row.get("approval_by"),
+        "approved_at": row.get("approved_at"),
+        "rejected_reason": row.get("rejected_reason"),
+        "checked_in_at": row.get("checked_in_at"),
+        "checked_out_at": row.get("checked_out_at"),
+        "created_by": row.get("created_by"),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+async def _visitor_access_query(
+    *, current_user: dict[str, Any], tenant_id: str, app_key: str
+) -> dict[str, Any]:
+    if _can_manage_visitors(current_user.get("role")):
+        return {}
+    audience = await _current_user_message_audience(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    flats = sorted(value for value in audience["flats"] if value)
+    user_terms = sorted(value for value in audience["members"] if value)
+    clauses: list[dict[str, Any]] = []
+    if flats:
+        clauses.append({"flat_number": {"$in": flats}})
+    if user_terms:
+        clauses.append({"created_by": {"$in": user_terms}})
+        clauses.append({"approval_by": {"$in": user_terms}})
+    if not clauses:
+        raise HTTPException(status_code=403, detail="Resident flat context is required for visitor access")
+    return {"$or": clauses}
+
+
+async def _get_visitor_or_404(
+    *, visitor_id: str, current_user: dict[str, Any], tenant_id: str, app_key: str
+) -> dict[str, Any]:
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id}
+    access_query = await _visitor_access_query(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if access_query:
+        query.update(access_query)
+    row = await _visitors_collection().find_one(query)
+    if not row:
+        raise HTTPException(status_code=404, detail="Visitor entry not found")
+    return row
+
+
+@router.get("/visitors")
+async def visitors_list(
+    status: str | None = Query(default=None),
+    visitor_type: str | None = Query(default=None),
+    flat_number: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor register list",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    access_query = await _visitor_access_query(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if access_query:
+        query.update(access_query)
+    if isinstance(status, str) and status.strip():
+        query["status"] = str(status).strip().lower()
+    if isinstance(visitor_type, str) and visitor_type.strip():
+        query["visitor_type"] = str(visitor_type).strip().lower()
+    if isinstance(flat_number, str) and flat_number.strip() and _can_manage_visitors(current_user.get("role")):
+        query["flat_number"] = _normalize_flat_number(flat_number)
+    rows = await _visitors_collection().find(query).sort("created_at", -1).to_list(length=1000)
+    return [_visitor_response(row) for row in rows]
+
+
+@router.post("/visitors")
+async def visitors_create(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor register create",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    visitor_name = str(payload.get("visitor_name") or payload.get("name") or "").strip()
+    flat_number = _normalize_flat_number(payload.get("flat_number"))
+    if not visitor_name:
+        raise HTTPException(status_code=400, detail="visitor_name is required")
+    if not flat_number:
+        raise HTTPException(status_code=400, detail="flat_number is required")
+
+    visitor_type = str(payload.get("visitor_type") or "guest").strip().lower()
+    if visitor_type not in {"guest", "delivery", "cab", "vendor", "service_staff", "domestic_help", "other"}:
+        visitor_type = "other"
+    creator = str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system")
+    status = "pending"
+    if not _can_manage_visitors(current_user.get("role")):
+        audience = await _current_user_message_audience(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+        if flat_number not in audience["flats"]:
+            raise HTTPException(status_code=403, detail="Residents can create expected visitors only for their own flat")
+        status = "approved"
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "flat_number": flat_number,
+        "visitor_type": visitor_type,
+        "visitor_name": visitor_name,
+        "phone_number": str(payload.get("phone_number") or "").strip(),
+        "vehicle_number": str(payload.get("vehicle_number") or "").strip().upper(),
+        "purpose": str(payload.get("purpose") or "").strip(),
+        "vendor_name": str(payload.get("vendor_name") or "").strip(),
+        "status": status,
+        "approval_by": creator if status == "approved" else None,
+        "approved_at": now if status == "approved" else None,
+        "rejected_reason": None,
+        "checked_in_at": None,
+        "checked_out_at": None,
+        "created_by": creator,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await _visitors_collection().insert_one(doc)
+    return _visitor_response(doc)
+
+
+@router.post("/visitors/{visitor_id}/approve")
+async def visitors_approve(
+    visitor_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor approval",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    row = await _get_visitor_or_404(visitor_id=visitor_id, current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if row.get("status") in {"inside", "exited", "cancelled"}:
+        raise HTTPException(status_code=400, detail="Visitor entry cannot be approved in its current status")
+    actor = str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system")
+    now = datetime.now(timezone.utc).isoformat()
+    await _visitors_collection().update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id},
+        {"$set": {"status": "approved", "approval_by": actor, "approved_at": now, "updated_at": now}},
+    )
+    updated = await _visitors_collection().find_one({"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id})
+    return _visitor_response(updated or row)
+
+
+@router.post("/visitors/{visitor_id}/reject")
+async def visitors_reject(
+    visitor_id: str,
+    payload: dict[str, Any] | None = None,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor rejection",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    row = await _get_visitor_or_404(visitor_id=visitor_id, current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if row.get("status") in {"inside", "exited"}:
+        raise HTTPException(status_code=400, detail="Visitor already entered or exited")
+    actor = str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system")
+    now = datetime.now(timezone.utc).isoformat()
+    await _visitors_collection().update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id},
+        {
+            "$set": {
+                "status": "rejected",
+                "approval_by": actor,
+                "rejected_reason": str((payload or {}).get("reason") or "").strip() or None,
+                "updated_at": now,
+            }
+        },
+    )
+    updated = await _visitors_collection().find_one({"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id})
+    return _visitor_response(updated or row)
+
+
+@router.post("/visitors/{visitor_id}/check-in")
+async def visitors_check_in(
+    visitor_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor check-in",
+    )
+    if not _can_manage_visitors(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only gate/security or admin can check visitors in")
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    row = await _get_visitor_or_404(visitor_id=visitor_id, current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if row.get("status") in {"rejected", "cancelled", "exited"}:
+        raise HTTPException(status_code=400, detail="Visitor entry cannot be checked in")
+    now = datetime.now(timezone.utc).isoformat()
+    await _visitors_collection().update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id},
+        {"$set": {"status": "inside", "checked_in_at": now, "updated_at": now}},
+    )
+    updated = await _visitors_collection().find_one({"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id})
+    return _visitor_response(updated or row)
+
+
+@router.post("/visitors/{visitor_id}/check-out")
+async def visitors_check_out(
+    visitor_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="visitor check-out",
+    )
+    if not _can_manage_visitors(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only gate/security or admin can check visitors out")
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    row = await _get_visitor_or_404(visitor_id=visitor_id, current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if row.get("status") != "inside":
+        raise HTTPException(status_code=400, detail="Only visitors currently inside can be checked out")
+    now = datetime.now(timezone.utc).isoformat()
+    await _visitors_collection().update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id},
+        {"$set": {"status": "exited", "checked_out_at": now, "updated_at": now}},
+    )
+    updated = await _visitors_collection().find_one({"tenant_id": tenant_id, "app_key": app_key, "id": visitor_id})
+    return _visitor_response(updated or row)
 
 
 @router.get("/complaints/")

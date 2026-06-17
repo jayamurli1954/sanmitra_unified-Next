@@ -35,6 +35,12 @@ def test_gruhamitra_frontend_aliases_are_registered():
         ("GET", "/api/v1/member-onboarding"),
         ("GET", "/api/v1/member-onboarding/debug"),
         ("GET", "/api/v1/member-onboarding/my-profile"),
+        ("GET", "/api/v1/visitors"),
+        ("POST", "/api/v1/visitors"),
+        ("POST", "/api/v1/visitors/{visitor_id}/approve"),
+        ("POST", "/api/v1/visitors/{visitor_id}/reject"),
+        ("POST", "/api/v1/visitors/{visitor_id}/check-in"),
+        ("POST", "/api/v1/visitors/{visitor_id}/check-out"),
         ("GET", "/api/v1/society/{society_id}"),
         ("POST", "/api/v1/v2/societies/{society_id}/join-requests"),
     }

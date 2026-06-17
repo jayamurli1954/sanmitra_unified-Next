@@ -880,3 +880,141 @@ async def test_meeting_notice_posts_to_selected_restricted_room(monkeypatch):
     assert result["message_room"]["id"] == "mc-room"
     assert messages.inserted[0]["room_id"] == "mc-room"
     assert meetings.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": "meeting-1"}
+
+
+@pytest.mark.asyncio
+async def test_visitors_list_is_limited_to_resident_flat(monkeypatch):
+    visitors = _Collection(
+        "housing_visitor_entries",
+        rows=[
+            {
+                "id": "visit-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "visitor_name": "Courier One",
+                "visitor_type": "delivery",
+                "status": "pending",
+                "created_at": "2026-06-17T10:00:00Z",
+            },
+            {
+                "id": "visit-2",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "flat_number": "B-201",
+                "visitor_name": "Other Flat Guest",
+                "visitor_type": "guest",
+                "status": "pending",
+                "created_at": "2026-06-17T10:05:00Z",
+            },
+            {
+                "id": "visit-3",
+                "tenant_id": "society-2",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "visitor_name": "Other Society Guest",
+                "visitor_type": "guest",
+                "status": "pending",
+                "created_at": "2026-06-17T10:10:00Z",
+            },
+        ],
+    )
+    members = _Collection(
+        "housing_members",
+        rows=[
+            {
+                "id": "member-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "email": "resident@example.com",
+                "flat_number": "A-101",
+            }
+        ],
+    )
+    collections = {"housing_visitor_entries": visitors, "housing_members": members}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    rows = await housing_router.visitors_list(
+        current_user={
+            "tenant_id": "society-1",
+            "app_key": "gruhamitra",
+            "role": "resident",
+            "email": "resident@example.com",
+            "sub": "member-1",
+        },
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+
+    assert [row["id"] for row in rows] == ["visit-1"]
+    assert visitors.find_queries[0]["tenant_id"] == "society-1"
+    assert visitors.find_queries[0]["app_key"] == "gruhamitra"
+    assert visitors.find_queries[0]["$or"][0] == {"flat_number": {"$in": ["A-101"]}}
+
+
+@pytest.mark.asyncio
+async def test_resident_cannot_create_visitor_for_another_flat(monkeypatch):
+    visitors = _Collection("housing_visitor_entries")
+    members = _Collection(
+        "housing_members",
+        rows=[
+            {
+                "id": "member-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "email": "resident@example.com",
+                "flat_number": "A-101",
+            }
+        ],
+    )
+    collections = {"housing_visitor_entries": visitors, "housing_members": members}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    with pytest.raises(HTTPException) as exc_info:
+        await housing_router.visitors_create(
+            payload={"visitor_name": "Wrong Flat", "flat_number": "B-201", "visitor_type": "guest"},
+            current_user={
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "role": "resident",
+                "email": "resident@example.com",
+                "sub": "member-1",
+            },
+            x_tenant_id=None,
+            x_app_key=None,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert visitors.inserted == []
+
+
+@pytest.mark.asyncio
+async def test_security_can_create_and_check_in_visitor(monkeypatch):
+    visitors = _Collection("housing_visitor_entries")
+    members = _Collection("housing_members")
+    collections = {"housing_visitor_entries": visitors, "housing_members": members}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    created = await housing_router.visitors_create(
+        payload={
+            "visitor_name": "Delivery Agent",
+            "flat_number": "A-101",
+            "visitor_type": "delivery",
+            "vendor_name": "QuickKart",
+        },
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security", "sub": "guard-1"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    checked_in = await housing_router.visitors_check_in(
+        visitor_id=created["id"],
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security", "sub": "guard-1"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+
+    assert created["tenant_id"] == "society-1"
+    assert created["app_key"] == "gruhamitra"
+    assert created["status"] == "pending"
+    assert visitors.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": created["id"]}
+    assert checked_in["id"] == created["id"]
