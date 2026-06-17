@@ -29,6 +29,9 @@ GruhaMitra is available as a housing society operations app with:
 - Meetings, notices, attendance, minutes, and resolutions
 - Messages and notice-room style communication
 - Society settings and billing rules
+- Visitor Management (Pre-approved Guest QR invites, manual entry with flat/vehicle/brand details)
+- Staff Attendance Registry (Daily check-in/out logs for society staff)
+- Real-time Web Push Notifications (Lock-screen approvals/rejections for visitor entry)
 
 Payment gateway and automated notifications are configuration-dependent and may not be enabled for every demo or tenant.
 
@@ -447,6 +450,48 @@ Examples:
 - Vehicle details
 
 Some changes may require admin approval.
+
+### 8. Manage Guest Invites
+Residents can pre-approve guests by generating a pass:
+1. Go to the Visitors page.
+2. Enter the guest's name and choose a validity limit (4, 8, 12, or 24 hours).
+3. Click **Create Invite Pass**. A QR code and passcode are generated.
+4. Click **Share on WhatsApp** to send the secure link directly to the guest.
+5. The guest opens the link (without needing an account) to present the QR pass at the gate.
+
+### 9. Configure Web Push Notifications
+Residents can subscribe to real-time gate notifications:
+1. Accept notification permissions when prompted by the top dashboard banner.
+2. Alternatively, go to Settings -> Notifications and toggle **Enable Web Push**.
+3. When a visitor arrives at the gate, you will receive an instant push notification on your device with quick **Approve** and **Reject** buttons to grant/deny access.
+
+## Gate Security & Guard Guide
+
+Security guards use a simplified interface locked to `/visitors` to process entry and attendance.
+
+### 1. Manual Visitor Entry
+When a visitor arrives without a pre-approved pass (e.g., delivery personnel or unexpected guest):
+1. Select the destination Flat Number from the dropdown.
+2. Select the Purpose/Brand if applicable (e.g., Amazon, Swiggy, Zomato, Guest).
+3. Select the Vehicle Type (e.g., Car, Bike, Scooter, Van) and enter the Vehicle Number.
+4. Click **Check In**. This triggers an instant Web Push notification to the resident flat owner.
+
+### 2. Scanning Pre-Approved QR Passes
+When a guest arrives with a WhatsApp QR pass link:
+1. Tap the **📷 Scan QR** button to open the device's camera.
+2. Scan the guest's QR code from their mobile screen.
+3. If camera access is unavailable, manually type the 6-digit **Passcode** shown on the guest's pass.
+4. The system verifies the pass:
+   - If the pass is valid and within the selected validity window (4, 8, 12, or 24 hours), it displays the guest's name, flat number, and checks them in.
+   - If the pass is expired (past the time limit), the screen displays "Invitation Expired" and entry is denied.
+
+### 3. Staff Attendance Registry
+For society staff (maids, drivers, maintenance, security):
+1. Go to the Staff tab on the Visitors page.
+2. Locate the staff member in the registry list.
+3. Tap **Check In** when they arrive.
+4. Tap **Check Out** when they leave.
+5. Check-in/out timestamps are logged automatically for administrative payroll/attendance reporting.
 
 ## Demo Walkthrough For Prospects
 
