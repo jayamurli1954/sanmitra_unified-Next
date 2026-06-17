@@ -33,6 +33,22 @@ def _create_maintenance_payload():
     )
 
 
+def _create_bill_payment_payload(**overrides):
+    data = {
+        "bill_id": "bill-1",
+        "amount": Decimal("3000.00"),
+        "flat_number": "A-101",
+        "resident_name": "John Doe",
+        "payment_mode": "cash",
+        "collected_on": date.today(),
+        "bank_account_id": 100,
+        "maintenance_income_account_id": 200,
+        "reference": "RCPT-001",
+    }
+    data.update(overrides)
+    return MaintenanceCollectionCreateRequest(**data)
+
+
 class TestMissingAppKeyFix:
     """Test Fix 1.1: app_key field and index enforcement"""
 
@@ -224,6 +240,177 @@ class TestCrossTenantIsolation:
             assert doc1["app_key"] == "gruhamitra"
             assert doc2["app_key"] == "mandirmitra"
             assert doc1["collection_id"] != doc2["collection_id"]
+
+
+class TestMaintenanceBillPaymentLinkage:
+    """Tests that collections update the linked bill only after accounting succeeds."""
+
+    @pytest.mark.asyncio
+    async def test_bill_collection_updates_paid_amount_and_status_after_accounting_post(self):
+        session = AsyncMock(spec=AsyncSession)
+        collections = AsyncMock()
+        collections.insert_one = AsyncMock()
+        bills = AsyncMock()
+        bills.find_one = AsyncMock(
+            return_value={
+                "id": "bill-1",
+                "tenant_id": "T123",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "amount": "5000.00",
+                "paid_amount": "1000.00",
+                "status": "posted",
+            }
+        )
+        bills.update_one = AsyncMock(return_value=MagicMock(matched_count=1))
+
+        def fake_get_collection(name):
+            if name == "housing_maintenance_bills":
+                return bills
+            return collections
+
+        with patch("app.modules.housing.service.get_collection", side_effect=fake_get_collection), \
+             patch("app.modules.housing.service.post_journal_entry") as mock_journal:
+            mock_journal.return_value = (MagicMock(id=321), True)
+
+            result = await record_maintenance_collection(
+                session,
+                tenant_id="T123",
+                app_key="gruhamitra",
+                created_by="user1",
+                payload=_create_bill_payment_payload(),
+            )
+
+        update_payload = bills.update_one.call_args[0][1]
+        assert result["bill_id"] == "bill-1"
+        assert result["bill_status"] == "partially_paid"
+        assert result["paid_amount"] == Decimal("4000.00")
+        assert result["outstanding_amount"] == Decimal("1000.00")
+        assert update_payload["$set"]["paid_amount"] == "4000.00"
+        assert update_payload["$set"]["outstanding_amount"] == "1000.00"
+        assert update_payload["$set"]["status"] == "partially_paid"
+        assert update_payload["$set"]["last_collection_journal_entry_id"] == 321
+        assert update_payload["$push"]["collection_ids"] == collections.insert_one.call_args[0][0]["collection_id"]
+
+    @pytest.mark.asyncio
+    async def test_bill_collection_marks_bill_paid_when_outstanding_is_cleared(self):
+        session = AsyncMock(spec=AsyncSession)
+        collections = AsyncMock()
+        collections.insert_one = AsyncMock()
+        bills = AsyncMock()
+        bills.find_one = AsyncMock(
+            return_value={
+                "id": "bill-1",
+                "tenant_id": "T123",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "amount": "3000.00",
+                "paid_amount": "0.00",
+                "status": "posted",
+            }
+        )
+        bills.update_one = AsyncMock(return_value=MagicMock(matched_count=1))
+
+        def fake_get_collection(name):
+            if name == "housing_maintenance_bills":
+                return bills
+            return collections
+
+        with patch("app.modules.housing.service.get_collection", side_effect=fake_get_collection), \
+             patch("app.modules.housing.service.post_journal_entry") as mock_journal:
+            mock_journal.return_value = (MagicMock(id=322), True)
+
+            result = await record_maintenance_collection(
+                session,
+                tenant_id="T123",
+                app_key="gruhamitra",
+                created_by="user1",
+                payload=_create_bill_payment_payload(amount=Decimal("3000.00")),
+            )
+
+        update_payload = bills.update_one.call_args[0][1]
+        assert result["bill_status"] == "paid"
+        assert result["outstanding_amount"] == Decimal("0.00")
+        assert update_payload["$set"]["status"] == "paid"
+        assert update_payload["$set"]["payment_status"] == "paid"
+
+    @pytest.mark.asyncio
+    async def test_bill_collection_rejects_overpayment_before_collection_or_journal(self):
+        session = AsyncMock(spec=AsyncSession)
+        collections = AsyncMock()
+        bills = AsyncMock()
+        bills.find_one = AsyncMock(
+            return_value={
+                "id": "bill-1",
+                "tenant_id": "T123",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "amount": "3000.00",
+                "paid_amount": "1000.00",
+                "status": "posted",
+            }
+        )
+
+        def fake_get_collection(name):
+            if name == "housing_maintenance_bills":
+                return bills
+            return collections
+
+        with patch("app.modules.housing.service.get_collection", side_effect=fake_get_collection), \
+             patch("app.modules.housing.service.post_journal_entry") as mock_journal:
+            with pytest.raises(HTTPException) as exc_info:
+                await record_maintenance_collection(
+                    session,
+                    tenant_id="T123",
+                    app_key="gruhamitra",
+                    created_by="user1",
+                    payload=_create_bill_payment_payload(amount=Decimal("2500.00")),
+                )
+
+        assert exc_info.value.status_code == 400
+        assert "exceeds outstanding" in str(exc_info.value.detail)
+        assert not collections.insert_one.called
+        assert not mock_journal.called
+
+    @pytest.mark.asyncio
+    async def test_bill_collection_does_not_mark_paid_when_accounting_post_fails(self):
+        session = AsyncMock(spec=AsyncSession)
+        collections = AsyncMock()
+        collections.insert_one = AsyncMock()
+        collections.delete_one = AsyncMock()
+        bills = AsyncMock()
+        bills.find_one = AsyncMock(
+            return_value={
+                "id": "bill-1",
+                "tenant_id": "T123",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "amount": "3000.00",
+                "paid_amount": "0.00",
+                "status": "posted",
+            }
+        )
+        bills.update_one = AsyncMock()
+
+        def fake_get_collection(name):
+            if name == "housing_maintenance_bills":
+                return bills
+            return collections
+
+        with patch("app.modules.housing.service.get_collection", side_effect=fake_get_collection), \
+             patch("app.modules.housing.service.post_journal_entry", side_effect=RuntimeError("accounting failed")):
+            with pytest.raises(RuntimeError, match="accounting failed"):
+                await record_maintenance_collection(
+                    session,
+                    tenant_id="T123",
+                    app_key="gruhamitra",
+                    created_by="user1",
+                    payload=_create_bill_payment_payload(),
+                )
+
+        assert collections.insert_one.called
+        assert collections.delete_one.call_args[0][0]["app_key"] == "gruhamitra"
+        assert not bills.update_one.called
 
 
 class TestIndexStructure:

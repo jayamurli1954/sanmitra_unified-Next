@@ -41,11 +41,13 @@ const MaintenanceScreen = () => {
   const [user, setUser] = useState(null);
   const [selectedBillDetails, setSelectedBillDetails] = useState(null);
   const [showExtraChargeModal, setShowExtraChargeModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [selectedBillForAction, setSelectedBillForAction] = useState(null);
   const [reverseForm, setReverseForm] = useState({ reversal_reason: '', committee_approval: '' });
   const [extraChargeForm, setExtraChargeForm] = useState({ amount: '', description: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', payment_mode: 'bank', reference: '' });
   const [regenerateForm, setRegenerateForm] = useState({
     corrected_occupants: '',
     override_maintenance: '',
@@ -316,6 +318,78 @@ const MaintenanceScreen = () => {
       currency: 'INR',
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const billPaidAmount = (bill) => {
+    const status = String(bill?.status || bill?.payment_status || '').toLowerCase();
+    const total = parseFloat(bill?.amount || 0);
+    if (['paid', 'collected', 'settled'].includes(status)) {
+      return total;
+    }
+    return parseFloat(bill?.paid_amount || bill?.amount_paid || bill?.collected_amount || 0);
+  };
+
+  const billOutstandingAmount = (bill) => {
+    const total = parseFloat(bill?.amount || 0);
+    const explicit = bill?.outstanding_amount ?? bill?.balance_amount;
+    if (explicit !== undefined && explicit !== null && explicit !== '') {
+      return Math.max(0, parseFloat(explicit) || 0);
+    }
+    return Math.max(0, total - billPaidAmount(bill));
+  };
+
+  const openPaymentModal = (bill) => {
+    const billWithId = { ...bill, id: bill.id || bill._id || String(bill.id) };
+    const outstanding = billOutstandingAmount(billWithId);
+    setSelectedBillForAction(billWithId);
+    setPaymentForm({
+      amount: outstanding ? outstanding.toFixed(2) : '',
+      payment_mode: 'bank',
+      reference: ''
+    });
+    setShowPaymentModal(true);
+  };
+
+  const handleRecordPayment = async () => {
+    if (!selectedBillForAction?.id) {
+      setMessage({ type: 'error', text: 'Bill ID is missing. Refresh bills and try again.' });
+      return;
+    }
+    const amount = parseFloat(paymentForm.amount);
+    if (!amount || amount <= 0) {
+      setMessage({ type: 'error', text: 'Enter a valid payment amount.' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await api.post('/housing/maintenance-collections', {
+        bill_id: selectedBillForAction.id,
+        amount,
+        flat_number: selectedBillForAction.flat_number,
+        resident_name: selectedBillForAction.member_name || selectedBillForAction.resident_name || null,
+        payment_mode: paymentForm.payment_mode || 'bank',
+        collected_on: today,
+        reference: paymentForm.reference || null
+      });
+      setMessage({
+        type: 'success',
+        text: `Payment recorded. Bill status: ${response.data.bill_status || 'updated'}.`
+      });
+      setShowPaymentModal(false);
+      setSelectedBillForAction(null);
+      setPaymentForm({ amount: '', payment_mode: 'bank', reference: '' });
+      await loadBillsForPeriod();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.detail || error.message || 'Failed to record payment.'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const monthNames = [
@@ -1051,6 +1125,8 @@ const MaintenanceScreen = () => {
                     <tr>
                       <th>Flat Number</th>
                       <th>Amount ()</th>
+                      <th>Paid ()</th>
+                      <th>Outstanding ()</th>
                       <th>Status</th>
                       <th>Posted</th>
                       <th>Created</th>
@@ -1063,6 +1139,10 @@ const MaintenanceScreen = () => {
                         <tr>
                           <td><strong>{bill.flat_number}</strong></td>
                           <td style={{ textAlign: 'right' }}><strong>{bill.amount.toLocaleString('en-IN')}</strong></td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(billPaidAmount(bill))}</td>
+                          <td style={{ textAlign: 'right', color: billOutstandingAmount(bill) > 0 ? '#FF3B30' : '#34C759', fontWeight: '600' }}>
+                            {formatCurrency(billOutstandingAmount(bill))}
+                          </td>
                           <td>{bill.status}</td>
                           <td>{bill.is_posted ? 'Yes' : 'No'}</td>
                           <td>{new Date(bill.created_at).toLocaleDateString()}</td>
@@ -1102,6 +1182,22 @@ const MaintenanceScreen = () => {
                                   Extra Charge
                                 </button>
                               )}
+                              {bill.is_posted && bill.status !== 'reversed' && billOutstandingAmount(bill) > 0 && (
+                                <button
+                                  onClick={() => openPaymentModal(bill)}
+                                  style={{
+                                    padding: '5px 10px',
+                                    backgroundColor: '#34C759',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                  }}
+                                >
+                                  Record Payment
+                                </button>
+                              )}
                               {/* Allow reversal for both posted and unposted bills */}
                               <button
                                 onClick={() => {
@@ -1133,7 +1229,7 @@ const MaintenanceScreen = () => {
                         </tr>
                         {selectedBillDetails === bill.id && (
                           <tr>
-                            <td colSpan="6" style={{ padding: '20px', backgroundColor: '#f9f9f9' }}>
+                            <td colSpan="8" style={{ padding: '20px', backgroundColor: '#f9f9f9' }}>
                               <BillBreakdownView bill={bill} />
                             </td>
                           </tr>
@@ -1147,6 +1243,105 @@ const MaintenanceScreen = () => {
           </div>
         </div>
       </div>
+
+      {/* Record Payment Modal */}
+      {showPaymentModal && selectedBillForAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h2 style={{ marginTop: 0 }}>Record Payment - {selectedBillForAction.flat_number}</h2>
+            <p style={{ color: '#666', marginBottom: '20px' }}>
+              Outstanding: <strong>{formatCurrency(billOutstandingAmount(selectedBillForAction))}</strong>
+            </p>
+            <div className="settings-form-group" style={{ marginBottom: '15px' }}>
+              <label>Payment Amount *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={billOutstandingAmount(selectedBillForAction)}
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+            <div className="settings-form-group" style={{ marginBottom: '15px' }}>
+              <label>Payment Mode</label>
+              <select
+                value={paymentForm.payment_mode}
+                onChange={(e) => setPaymentForm({ ...paymentForm, payment_mode: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              >
+                <option value="bank">Bank</option>
+                <option value="upi">UPI</option>
+                <option value="cash">Cash</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </div>
+            <div className="settings-form-group" style={{ marginBottom: '20px' }}>
+              <label>Reference / Receipt No.</label>
+              <input
+                type="text"
+                value={paymentForm.reference}
+                onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                placeholder="Optional bank/UPI/receipt reference"
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setSelectedBillForAction(null);
+                  setPaymentForm({ amount: '', payment_mode: 'bank', reference: '' });
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRecordPayment}
+                disabled={loading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: loading ? '#ccc' : '#34C759',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loading ? 'Recording...' : 'Record Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reverse Bill Modal */}
       {showReverseModal && selectedBillForAction && (

@@ -6,14 +6,15 @@ from pydantic import BaseModel, Field, field_validator
 
 class MaintenanceCollectionCreateRequest(BaseModel):
     amount: Decimal = Field(gt=0)
+    bill_id: str | None = Field(default=None, min_length=1, max_length=120)
     flat_number: str = Field(min_length=1, max_length=30)
     resident_name: str | None = Field(default=None, max_length=120)
     payment_mode: str = Field(default="bank", min_length=2, max_length=40)
     collected_on: date
     reference: str | None = Field(default=None, max_length=120)
 
-    bank_account_id: int
-    maintenance_income_account_id: int
+    bank_account_id: int | None = None
+    maintenance_income_account_id: int | None = None
 
     @field_validator("amount")
     @classmethod
@@ -27,3 +28,7 @@ class MaintenanceCollectionCreateResponse(BaseModel):
     amount: Decimal
     journal_entry_id: int
     created: bool
+    bill_id: str | None = None
+    bill_status: str | None = None
+    paid_amount: Decimal | None = None
+    outstanding_amount: Decimal | None = None
