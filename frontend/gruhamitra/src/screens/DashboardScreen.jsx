@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GruhaMitra Dashboard Screen
  * Warm, trust-based design with brand colors
  */
@@ -26,6 +26,7 @@ import {
 import { authService } from '../services/authService';
 import api from '../services/api';
 import messagesService from '../services/messagesService';
+import { useWebPush } from '../hooks/useWebPush';
 
 const DEFAULT_STATS = {
   society_balance: 0,
@@ -72,6 +73,29 @@ const DashboardScreen = () => {
   const [societyLogoSrc, setSocietyLogoSrc] = useState('/gruhamitra/GruhaMitra_Logo.png');
   const [newMessageNotice, setNewMessageNotice] = useState(null);
   const objectUrlRef = useRef(null);
+  const [showPushBanner, setShowPushBanner] = useState(() => {
+    return localStorage.getItem('gm_dismiss_push_banner') !== 'true';
+  });
+  const { isSupported, permission, subscribe } = useWebPush();
+
+  const handleEnablePush = async () => {
+    try {
+      const flat = user?.flat_number || user?.unit_number;
+      if (!flat) {
+        alert('Please update your flat number in Profile before enabling visitor alerts.');
+        return;
+      }
+      await subscribe(flat);
+      setShowPushBanner(false);
+    } catch (err) {
+      alert(err.message || 'Failed to enable notifications.');
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    localStorage.setItem('gm_dismiss_push_banner', 'true');
+    setShowPushBanner(false);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -369,6 +393,59 @@ const DashboardScreen = () => {
             <span>New message in {newMessageNotice.roomName}</span>
             <span style={{ color: '#E8842A' }}>Open Message Board</span>
           </button>
+        )}
+
+        {showPushBanner && isSupported && permission === 'default' && (
+          <div style={{
+            background: '#E8F2FF',
+            border: '1px solid #007AFF',
+            color: '#004085',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <strong style={{ display: 'block', fontSize: '15px', marginBottom: '4px' }}>Real-time Visitor Alerts</strong>
+              <span style={{ fontSize: '13px' }}>Allow notifications to approve Zomato, Swiggy, and guests directly from your lock screen.</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleEnablePush}
+                style={{
+                  backgroundColor: '#007AFF',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                Enable
+              </button>
+              <button
+                onClick={handleDismissPushBanner}
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#007AFF',
+                  border: '1px solid #007AFF',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                Later
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Metric Cards */}

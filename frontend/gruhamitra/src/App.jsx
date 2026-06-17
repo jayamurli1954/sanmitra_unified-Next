@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Web Version of GruhaMitra App
  * Adapted from React Native App.tsx for web/desktop
  */
@@ -37,6 +37,7 @@ const AssetDetailScreen = lazy(() => import('./screens/AssetDetailScreen'));
 const SocietySearchScreen = lazy(() => import('./screens/SocietySearchScreen'));
 const MyMembershipsScreen = lazy(() => import('./screens/MyMembershipsScreen'));
 const JoinRequestsScreen = lazy(() => import('./screens/JoinRequestsScreen'));
+const PublicPassScreen = lazy(() => import('./screens/PublicPassScreen'));
 
 const getInitialUserFromStorage = () => {
   if (typeof window === 'undefined') return null;
@@ -78,6 +79,11 @@ const MobileNav = () => {
       </Link>
     </div>
   );
+};
+
+const isSecurityUser = (user) => {
+  const normalized = String(user?.role || '').trim().toLowerCase();
+  return ['security', 'security_guard', 'guard', 'gate', 'watchman'].includes(normalized);
 };
 
 const App = () => {
@@ -129,7 +135,7 @@ const App = () => {
   return (
     <Router basename="/gruhamitra">
       <PWAInstallBanner />
-      {user && <MobileNav />}
+      {user && !isSecurityUser(user) && <MobileNav />}
       <Suspense
         fallback={
           <div className="loading-container">
@@ -140,31 +146,40 @@ const App = () => {
         }
       >
         <Routes>
+          <Route path="/public/pass/:visitorId" element={<PublicPassScreen />} />
           {user ? (
-            <>
-              <Route path="/splash" element={<SplashScreen />} />
-              <Route path="/" element={<DashboardScreen />} />
-              <Route path="/dashboard" element={<DashboardScreen />} />
-              <Route path="/maintenance" element={<MaintenanceScreen />} />
-              <Route path="/accounting" element={<AccountingScreen />} />
-              <Route path="/members" element={<MembersScreen />} />
-              <Route path="/complaints" element={<ComplaintsScreen />} />
-              <Route path="/visitors" element={<VisitorsScreen />} />
-              <Route path="/reports" element={<ReportsScreen />} />
-              <Route path="/message" element={<MessagesScreen />} />
-              <Route path="/meeting" element={<MeetingsScreen />} />
-              <Route path="/assets" element={<AssetRegisterScreen />} />
-              <Route path="/assets/add" element={<AddAssetScreen />} />
-              <Route path="/assets/:asset_id" element={<AssetDetailScreen />} />
-              <Route path="/onboarding/search" element={<SocietySearchScreen />} />
-              <Route path="/onboarding/memberships" element={<MyMembershipsScreen />} />
-              <Route path="/onboarding/requests" element={<JoinRequestsScreen />} />
-              <Route path="/settings" element={<SettingsScreen />} />
-              <Route path="/profile" element={<ProfileScreen />} />
-              <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
-              <Route path="/reset-password" element={<ResetPasswordScreen />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </>
+            isSecurityUser(user) ? (
+              <>
+                <Route path="/visitors" element={<VisitorsScreen />} />
+                <Route path="/profile" element={<ProfileScreen />} />
+                <Route path="*" element={<Navigate to="/visitors" replace />} />
+              </>
+            ) : (
+              <>
+                <Route path="/splash" element={<SplashScreen />} />
+                <Route path="/" element={<DashboardScreen />} />
+                <Route path="/dashboard" element={<DashboardScreen />} />
+                <Route path="/maintenance" element={<MaintenanceScreen />} />
+                <Route path="/accounting" element={<AccountingScreen />} />
+                <Route path="/members" element={<MembersScreen />} />
+                <Route path="/complaints" element={<ComplaintsScreen />} />
+                <Route path="/visitors" element={<VisitorsScreen />} />
+                <Route path="/reports" element={<ReportsScreen />} />
+                <Route path="/message" element={<MessagesScreen />} />
+                <Route path="/meeting" element={<MeetingsScreen />} />
+                <Route path="/assets" element={<AssetRegisterScreen />} />
+                <Route path="/assets/add" element={<AddAssetScreen />} />
+                <Route path="/assets/:asset_id" element={<AssetDetailScreen />} />
+                <Route path="/onboarding/search" element={<SocietySearchScreen />} />
+                <Route path="/onboarding/memberships" element={<MyMembershipsScreen />} />
+                <Route path="/onboarding/requests" element={<JoinRequestsScreen />} />
+                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/profile" element={<ProfileScreen />} />
+                <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/reset-password" element={<ResetPasswordScreen />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </>
+            )
           ) : (
             <>
               <Route path="/" element={<LandingScreen />} />
@@ -180,11 +195,7 @@ const App = () => {
           )}
         </Routes>
       </Suspense>
-
-      {/* Global Footer */}
-      {!user && <div className="global-footer" style={{
-        textAlign: 'center',
-        padding: '12px',
+      {user && <div style={{
         fontSize: '11px',
         color: '#8E8E93',
         backgroundColor: '#f8f9fa',
@@ -199,4 +210,3 @@ const App = () => {
 };
 
 export default App;
-

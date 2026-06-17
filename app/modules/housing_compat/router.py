@@ -28,6 +28,9 @@ from app.core.tenants.app_resolvers import resolve_gruha_tenant
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
+from app.config import get_settings
+import pywebpush
+
 from app.modules.housing_compat.schemas import (
     ApproveJoinRequest,
     ArrearsResponse,
@@ -55,6 +58,11 @@ from app.modules.housing_compat.schemas import (
     SocietySettingsResponse,
     SocietySettingsUpdate,
     SocietySearchItem,
+    WebPushSubscribeRequest,
+    StaffCreateRequest,
+    StaffResponse,
+    StaffUpdateRequest,
+    StaffAttendanceResponse,
 )
 from app.modules.housing_compat.service import (
     approve_join_request,
@@ -1590,9 +1598,11 @@ def _visitor_response(row: dict[str, Any]) -> dict[str, Any]:
         "visitor_type": row.get("visitor_type") or "guest",
         "visitor_name": row.get("visitor_name") or "",
         "phone_number": row.get("phone_number") or "",
+        "vehicle_type": row.get("vehicle_type") or "none",
         "vehicle_number": row.get("vehicle_number") or "",
         "purpose": row.get("purpose") or "",
         "vendor_name": row.get("vendor_name") or "",
+        "passcode": row.get("passcode") or "",
         "status": row.get("status") or "pending",
         "approval_by": row.get("approval_by"),
         "approved_at": row.get("approved_at"),
@@ -1668,6 +1678,52 @@ async def visitors_list(
     return [_visitor_response(row) for row in rows]
 
 
+import asyncio
+
+def _send_web_push_sync(subscription_info: dict, data: str, private_key: str) -> None:
+    try:
+        pywebpush.webpush(
+            subscription_info=subscription_info,
+            data=data,
+            vapid_private_key=private_key,
+            vapid_claims={"sub": "mailto:support@sanmitra.net"}
+        )
+    except Exception:
+        pass
+
+
+async def _send_web_push_notification(
+    tenant_id: str, app_key: str, flat_number: str, title: str, body: str, visitor_id: str
+) -> None:
+    app_settings = get_settings()
+    sub_col = get_collection("housing_web_push_subscriptions")
+    cursor = sub_col.find({"tenant_id": tenant_id, "app_key": app_key, "flat_number": flat_number})
+    subscriptions = await cursor.to_list(length=100)
+    if not subscriptions:
+        return
+
+    payload = {
+        "title": title,
+        "body": body,
+        "data": {
+            "visitor_id": visitor_id,
+            "flat_number": flat_number,
+            "type": "visitor_approval",
+        },
+    }
+    data_str = json.dumps(payload)
+
+    for sub_doc in subscriptions:
+        if not app_settings.VAPID_PRIVATE_KEY:
+            continue
+        await asyncio.to_thread(
+            _send_web_push_sync,
+            sub_doc["subscription"],
+            data_str,
+            app_settings.VAPID_PRIVATE_KEY
+        )
+
+
 @router.post("/visitors")
 async def visitors_create(
     payload: dict[str, Any],
@@ -1701,7 +1757,19 @@ async def visitors_create(
             raise HTTPException(status_code=403, detail="Residents can create expected visitors only for their own flat")
         status = "approved"
 
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    validity_hours = int(payload.get("validity_hours") or 24)
+    if validity_hours not in {4, 8, 12, 24}:
+        validity_hours = 24
+
+    from datetime import timedelta
+    expires_at = (now_dt + timedelta(hours=validity_hours)).isoformat()
+
+    vehicle_type = str(payload.get("vehicle_type") or "none").strip().lower()
+    import random
+    passcode = "".join(random.choices("0123456789", k=6))
+
     doc = {
         "id": str(uuid4()),
         "tenant_id": tenant_id,
@@ -1710,9 +1778,11 @@ async def visitors_create(
         "visitor_type": visitor_type,
         "visitor_name": visitor_name,
         "phone_number": str(payload.get("phone_number") or "").strip(),
+        "vehicle_type": vehicle_type,
         "vehicle_number": str(payload.get("vehicle_number") or "").strip().upper(),
         "purpose": str(payload.get("purpose") or "").strip(),
         "vendor_name": str(payload.get("vendor_name") or "").strip(),
+        "passcode": passcode,
         "status": status,
         "approval_by": creator if status == "approved" else None,
         "approved_at": now if status == "approved" else None,
@@ -1722,8 +1792,34 @@ async def visitors_create(
         "created_by": creator,
         "created_at": now,
         "updated_at": now,
+        "validity_hours": validity_hours,
+        "expires_at": expires_at,
     }
     await _visitors_collection().insert_one(doc)
+
+    if status == "pending":
+        if visitor_type == "delivery":
+            vendor = str(payload.get("vendor_name") or payload.get("visitor_name") or "Delivery").strip()
+            title = f"Delivery Alert: {vendor}"
+            body = f"A delivery person from {vendor} is at the gate. Tap to approve."
+        elif visitor_type == "guest":
+            title = f"Guest Arrival: {visitor_name}"
+            body = f"{visitor_name} is at the gate. Tap to approve."
+        else:
+            title = f"Visitor Alert: {visitor_name}"
+            body = f"A {visitor_type} is at the gate. Tap to approve."
+
+        asyncio.create_task(
+            _send_web_push_notification(
+                tenant_id=tenant_id,
+                app_key=app_key,
+                flat_number=flat_number,
+                title=title,
+                body=body,
+                visitor_id=doc["id"],
+            )
+        )
+
     return _visitor_response(doc)
 
 
@@ -4409,3 +4505,429 @@ async def database_backup_download(
     content = json.dumps(payload, ensure_ascii=True, indent=2).encode("utf-8")
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(BytesIO(content), media_type="application/octet-stream", headers=headers)
+
+
+@router.get("/visitors/web-push/vapid-public-key")
+async def get_vapid_public_key(
+    current_user: dict = Depends(get_current_user),
+):
+    app_settings = get_settings()
+    return {"public_key": app_settings.VAPID_PUBLIC_KEY}
+
+
+@router.post("/visitors/web-push/subscribe")
+async def web_push_subscribe(
+    payload: WebPushSubscribeRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="web push subscribe",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    flat_number = _normalize_flat_number(payload.flat_number)
+
+    sub_col = get_collection("housing_web_push_subscriptions")
+    endpoint = payload.subscription.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="Invalid subscription payload")
+
+    doc = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "flat_number": flat_number,
+        "subscription": payload.subscription,
+        "endpoint": endpoint,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await sub_col.update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "endpoint": endpoint},
+        {"$set": doc},
+        upsert=True,
+    )
+    return {"status": "success"}
+
+
+@router.post("/visitors/web-push/unsubscribe")
+async def web_push_unsubscribe(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="web push unsubscribe",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    endpoint = payload.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="endpoint is required")
+
+    await get_collection("housing_web_push_subscriptions").delete_many(
+        {"tenant_id": tenant_id, "app_key": app_key, "endpoint": endpoint}
+    )
+    return {"status": "success"}
+
+
+def _staff_response(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "tenant_id": row.get("tenant_id"),
+        "app_key": row.get("app_key"),
+        "name": row.get("name") or "",
+        "phone_number": row.get("phone_number") or "",
+        "role": row.get("role") or "",
+        "flat_number": row.get("flat_number"),
+        "vehicle_type": row.get("vehicle_type") or "none",
+        "vehicle_number": row.get("vehicle_number") or "",
+        "status": row.get("status") or "active",
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _attendance_response(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "tenant_id": row.get("tenant_id"),
+        "app_key": row.get("app_key"),
+        "staff_id": row.get("staff_id"),
+        "name": row.get("name") or "",
+        "role": row.get("role") or "",
+        "flat_number": row.get("flat_number"),
+        "vehicle_type": row.get("vehicle_type") or "none",
+        "vehicle_number": row.get("vehicle_number") or "",
+        "checked_in_at": row.get("checked_in_at"),
+        "checked_out_at": row.get("checked_out_at"),
+        "status": row.get("status") or "inside",
+    }
+
+
+@router.get("/staff")
+async def staff_list(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff list",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    rows = await get_collection("housing_staff_members").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=1000)
+    return [_staff_response(row) for row in rows]
+
+
+@router.post("/staff", response_model=StaffResponse)
+async def staff_create(
+    payload: StaffCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff create",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    existing = await get_collection("housing_staff_members").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "phone_number": payload.phone_number.strip()
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Staff member with this phone number already registered")
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "name": payload.name.strip(),
+        "phone_number": payload.phone_number.strip(),
+        "role": payload.role.strip(),
+        "flat_number": payload.flat_number,
+        "vehicle_type": (payload.vehicle_type or "none").strip().lower(),
+        "vehicle_number": (payload.vehicle_number or "").strip().upper(),
+        "status": "active",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await get_collection("housing_staff_members").insert_one(doc)
+    return _staff_response(doc)
+
+
+@router.put("/staff/{staff_id}", response_model=StaffResponse)
+async def staff_update(
+    staff_id: str,
+    payload: StaffUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff update",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    existing = await get_collection("housing_staff_members").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "id": staff_id
+    })
+    if not existing:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if payload.name is not None:
+        updates["name"] = payload.name.strip()
+    if payload.phone_number is not None:
+        updates["phone_number"] = payload.phone_number.strip()
+    if payload.role is not None:
+        updates["role"] = payload.role.strip()
+    if payload.flat_number is not None:
+        updates["flat_number"] = payload.flat_number.strip().upper() if payload.flat_number else None
+    if payload.vehicle_type is not None:
+        updates["vehicle_type"] = payload.vehicle_type.strip().lower()
+    if payload.vehicle_number is not None:
+        updates["vehicle_number"] = payload.vehicle_number.strip().upper()
+    if payload.status is not None:
+        updates["status"] = payload.status
+
+    await get_collection("housing_staff_members").update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": staff_id},
+        {"$set": updates}
+    )
+    updated = await get_collection("housing_staff_members").find_one({"tenant_id": tenant_id, "app_key": app_key, "id": staff_id})
+    return _staff_response(updated or existing)
+
+
+@router.delete("/staff/{staff_id}")
+async def staff_delete(
+    staff_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff delete",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    res = await get_collection("housing_staff_members").update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": staff_id},
+        {"$set": {"status": "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    return {"status": "success"}
+
+
+@router.get("/staff/attendance")
+async def staff_attendance_list(
+    date_str: str | None = Query(default=None, alias="date"),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff attendance list",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    if date_str:
+        query["checked_in_at"] = {"$regex": f"^{date_str}"}
+    else:
+        today = date.today().isoformat()
+        query["checked_in_at"] = {"$regex": f"^{today}"}
+
+    rows = await get_collection("housing_staff_attendance").find(query).sort("checked_in_at", -1).to_list(length=1000)
+    return [_attendance_response(row) for row in rows]
+
+
+@router.post("/staff/attendance/{staff_id}/check-in", response_model=StaffAttendanceResponse)
+async def staff_attendance_check_in(
+    staff_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff check-in",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    staff = await get_collection("housing_staff_members").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "id": staff_id,
+        "status": "active"
+    })
+    if not staff:
+        raise HTTPException(status_code=400, detail="Active staff member not found")
+
+    already_in = await get_collection("housing_staff_attendance").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "staff_id": staff_id,
+        "status": "inside"
+    })
+    if already_in:
+        return _attendance_response(already_in)
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "staff_id": staff_id,
+        "name": staff.get("name"),
+        "role": staff.get("role"),
+        "flat_number": staff.get("flat_number"),
+        "vehicle_type": staff.get("vehicle_type") or "none",
+        "vehicle_number": staff.get("vehicle_number") or "",
+        "checked_in_at": now,
+        "checked_out_at": None,
+        "status": "inside"
+    }
+    await get_collection("housing_staff_attendance").insert_one(doc)
+    return _attendance_response(doc)
+
+
+@router.post("/staff/attendance/{log_id}/check-out", response_model=StaffAttendanceResponse)
+async def staff_attendance_check_out(
+    log_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="staff check-out",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+
+    log = await get_collection("housing_staff_attendance").find_one({
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "id": log_id
+    })
+    if not log:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    if log.get("status") == "exited":
+        return _attendance_response(log)
+
+    now = datetime.now(timezone.utc).isoformat()
+    await get_collection("housing_staff_attendance").update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": log_id},
+        {"$set": {"status": "exited", "checked_out_at": now}}
+    )
+    updated = await get_collection("housing_staff_attendance").find_one({"tenant_id": tenant_id, "app_key": app_key, "id": log_id})
+    return _attendance_response(updated or log)
+
+
+@router.post("/visitors/verify-pass")
+async def visitors_verify_pass(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="verify guest pass",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    code = str(payload.get("code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Passcode or Visitor ID is required")
+
+    # Search by passcode or visitor ID
+    query = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "$or": [
+            {"passcode": code},
+            {"id": code}
+        ]
+    }
+    row = await _visitors_collection().find_one(query)
+    if not row:
+        raise HTTPException(status_code=404, detail="Invalid pass or guest not found")
+
+    if row.get("expires_at"):
+        from datetime import datetime, timezone
+        expires_dt = datetime.fromisoformat(row["expires_at"])
+        if datetime.now(timezone.utc) > expires_dt:
+            raise HTTPException(status_code=410, detail="This pass has expired")
+
+    return _visitor_response(row)
+
+
+@router.get("/visitors/public/{visitor_id}")
+async def get_public_visitor_pass(visitor_id: str):
+    doc = await _visitors_collection().find_one({"id": visitor_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Invite pass not found")
+
+    expires_at = doc.get("expires_at")
+    is_expired = False
+    if expires_at:
+        from datetime import datetime, timezone
+        is_expired = datetime.now(timezone.utc) > datetime.fromisoformat(expires_at)
+
+    return {
+        "id": doc["id"],
+        "visitor_name": doc["visitor_name"],
+        "flat_number": doc["flat_number"],
+        "passcode": doc["passcode"],
+        "visitor_type": doc["visitor_type"],
+        "status": doc["status"],
+        "created_at": doc.get("created_at"),
+        "expires_at": expires_at,
+        "is_expired": is_expired
+    }
+
+
+

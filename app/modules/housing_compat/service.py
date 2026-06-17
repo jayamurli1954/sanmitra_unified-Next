@@ -76,6 +76,15 @@ async def ensure_housing_compat_indexes() -> None:
     # Damage claims with app_key isolation
     await get_collection(DAMAGE_CLAIMS).create_index([("tenant_id", 1), ("app_key", 1)])
 
+    # Staff members with app_key isolation
+    await get_collection("housing_staff_members").create_index([("tenant_id", 1), ("app_key", 1), ("phone_number", 1)], unique=True)
+    await get_collection("housing_staff_members").create_index([("tenant_id", 1), ("app_key", 1), ("status", 1)])
+
+    # Staff attendance logs with app_key isolation
+    await get_collection("housing_staff_attendance").create_index([("tenant_id", 1), ("app_key", 1), ("staff_id", 1), ("status", 1)])
+    await get_collection("housing_staff_attendance").create_index([("tenant_id", 1), ("app_key", 1), ("checked_in_at", 1)])
+
+
 
 async def _drop_legacy_unique_index(collection, *, keys: list[tuple[str, int]]) -> None:
     """Remove single-tenant unique indexes replaced by app_key-scoped indexes."""

@@ -51,3 +51,6 @@ slowapi==0.1.9
 
 # Web search (LegalMitra)
 tavily-python==0.7.23
+
+# Web Push Notifications
+pywebpush==1.14.0

@@ -14,6 +14,9 @@ from app.modules.housing_compat.schemas import (
     DamageClaimCreate,
     PublicJoinRequestCreate,
     SocietySettingsUpdate,
+    WebPushSubscribeRequest,
+    StaffCreateRequest,
+    StaffUpdateRequest,
 )
 
 
@@ -1018,3 +1021,185 @@ async def test_security_can_create_and_check_in_visitor(monkeypatch):
     assert created["status"] == "pending"
     assert visitors.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": created["id"]}
     assert checked_in["id"] == created["id"]
+
+
+@pytest.mark.asyncio
+async def test_web_push_subscribe_and_unsubscribe(monkeypatch):
+    subs = _Collection("housing_web_push_subscriptions")
+    collections = {"housing_web_push_subscriptions": subs}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    # Test Subscribe
+    res = await housing_router.web_push_subscribe(
+        payload=WebPushSubscribeRequest(
+            flat_number="A-101",
+            subscription={
+                "endpoint": "https://fcm.googleapis.com/fcm/send/123",
+                "keys": {"p256dh": "key1", "auth": "key2"}
+            }
+        ),
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "resident"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert res == {"status": "success"}
+    assert subs.update_queries[0] == {
+        "tenant_id": "society-1",
+        "app_key": "gruhamitra",
+        "endpoint": "https://fcm.googleapis.com/fcm/send/123"
+    }
+
+    # Test Unsubscribe
+    unsub_res = await housing_router.web_push_unsubscribe(
+        payload={"endpoint": "https://fcm.googleapis.com/fcm/send/123"},
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "resident"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert unsub_res == {"status": "success"}
+    assert subs.delete_queries[0] == {
+        "tenant_id": "society-1",
+        "app_key": "gruhamitra",
+        "endpoint": "https://fcm.googleapis.com/fcm/send/123"
+    }
+
+
+@pytest.mark.asyncio
+async def test_staff_registry_crud(monkeypatch):
+    staff_col = _Collection("housing_staff_members")
+    collections = {"housing_staff_members": staff_col}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    # Create Staff Member
+    payload = StaffCreateRequest(
+        name="Rajesh Kumar",
+        phone_number="9876543210",
+        role="Housekeeping",
+        flat_number=None,
+        vehicle_type="none",
+        vehicle_number=None
+    )
+    created = await housing_router.staff_create(
+        payload=payload,
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert created["name"] == "Rajesh Kumar"
+    assert created["role"] == "Housekeeping"
+    assert created["status"] == "active"
+
+    # Mock database state for reading list
+    staff_col.rows = [created]
+
+    # List Staff
+    staff_list = await housing_router.staff_list(
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert len(staff_list) == 1
+    assert staff_list[0]["id"] == created["id"]
+
+    # Update Staff Member
+    update_payload = StaffUpdateRequest(
+        name="Rajesh K.",
+        role="Maintenance"
+    )
+    updated = await housing_router.staff_update(
+        staff_id=created["id"],
+        payload=update_payload,
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert staff_col.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": created["id"]}
+
+    # Delete Staff Member
+    deleted = await housing_router.staff_delete(
+        staff_id=created["id"],
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert deleted == {"status": "success"}
+
+
+@pytest.mark.asyncio
+async def test_staff_attendance_check_in_out(monkeypatch):
+    staff_member = {
+        "id": "staff-1",
+        "tenant_id": "society-1",
+        "app_key": "gruhamitra",
+        "name": "Rajesh Kumar",
+        "phone_number": "9876543210",
+        "role": "Housekeeping",
+        "status": "active"
+    }
+    staff_col = _Collection("housing_staff_members", [staff_member])
+    attendance_col = _Collection("housing_staff_attendance")
+    collections = {
+        "housing_staff_members": staff_col,
+        "housing_staff_attendance": attendance_col
+    }
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    # Check In
+    check_in_res = await housing_router.staff_attendance_check_in(
+        staff_id="staff-1",
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert check_in_res["staff_id"] == "staff-1"
+    assert check_in_res["status"] == "inside"
+    assert check_in_res["checked_in_at"] is not None
+
+    # Mock check-in record in DB
+    attendance_col.rows = [check_in_res]
+
+    # Check Out
+    check_out_res = await housing_router.staff_attendance_check_out(
+        log_id=check_in_res["id"],
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert check_out_res["id"] == check_in_res["id"]
+    assert attendance_col.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": check_in_res["id"]}
+
+
+@pytest.mark.asyncio
+async def test_visitor_passcode_verification(monkeypatch):
+    visitors = _Collection("housing_visitor_entries")
+    collections = {"housing_visitor_entries": visitors}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    # 1. Create a guest visitor
+    guest = await housing_router.visitors_create(
+        payload={
+            "visitor_name": "John Doe",
+            "flat_number": "A-101",
+            "visitor_type": "guest",
+        },
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert guest["passcode"] != ""
+    assert len(guest["passcode"]) == 6
+
+    # Mock DB state
+    visitors.rows = [guest]
+
+    # 2. Verify using passcode
+    verified = await housing_router.visitors_verify_pass(
+        payload={"code": guest["passcode"]},
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+    assert verified["id"] == guest["id"]
+    assert verified["visitor_name"] == "John Doe"
+
+

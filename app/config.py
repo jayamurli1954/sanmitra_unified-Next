@@ -40,6 +40,8 @@ class Settings:
     JWT_SECRET = os.getenv("JWT_SECRET", "")
     # Validated at startup — see validate() below.
     OTP_PEPPER = os.getenv("OTP_PEPPER", "")
+    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -282,6 +284,24 @@ class Settings:
                 "JWT_SECRET is not set. Tokens are signed with an empty secret. "
                 "Set JWT_SECRET before deploying to production."
             )
+
+        if not self.VAPID_PUBLIC_KEY or not self.VAPID_PRIVATE_KEY:
+            try:
+                import base64
+                from py_vapid import Vapid
+                vapid = Vapid()
+                vapid.generate_keys()
+                public_key_bytes = vapid.public_key.to_string("uncompressed")
+                self.VAPID_PUBLIC_KEY = base64.urlsafe_b64encode(public_key_bytes).decode('utf-8').rstrip('=')
+                private_value = vapid.private_key.private_numbers().private_value
+                private_key_bytes = private_value.to_bytes(32, byteorder="big")
+                self.VAPID_PRIVATE_KEY = base64.urlsafe_b64encode(private_key_bytes).decode('utf-8').rstrip('=')
+                _config_logger.warning(
+                    "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are not configured. Generated a temporary keypair. "
+                    "Push subscriptions will expire and fail on server restart."
+                )
+            except Exception as e:
+                _config_logger.error("Failed to generate temporary VAPID keys: %s", e)
 
         if is_prod and self.AUTH_EMAIL_DEBUG_RETURN_LINK:
             raise ValueError(

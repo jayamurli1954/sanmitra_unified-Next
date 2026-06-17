@@ -64,3 +64,59 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+
+// Push Event Listener for Visitor Approvals and other alerts
+self.addEventListener('push', (event) => {
+    if (!event.data) return;
+    try {
+        const payload = event.data.json();
+        const title = payload.title || 'GruhaMitra Alert';
+        const options = {
+            body: payload.body || 'New visitor request received',
+            icon: '/gruhamitra/icons/icon-192.png',
+            badge: '/gruhamitra/icons/icon-192.png',
+            data: payload.data || {},
+            actions: [
+                { action: 'approve', title: 'Approve' },
+                { action: 'reject', title: 'Reject' }
+            ]
+        };
+        event.waitUntil(self.registration.showNotification(title, options));
+    } catch (err) {
+        console.error('Error displaying push notification:', err);
+    }
+});
+
+// Notification Action & Click Event Listener
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const visitorId = event.notification.data?.visitor_id;
+    if (!visitorId) return;
+
+    let action = 'view';
+    if (event.action === 'approve') {
+        action = 'approve';
+    } else if (event.action === 'reject') {
+        action = 'reject';
+    }
+
+    const urlToOpen = new URL(`/gruhamitra/visitors?action=${action}&id=${visitorId}`, self.location.origin).href;
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // If the app is already open, navigate to visitors screen with query parameters
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                if (client.url.includes('/gruhamitra') && 'focus' in client) {
+                    return client.navigate(urlToOpen).then((focusedClient) => {
+                        if (focusedClient) focusedClient.focus();
+                    });
+                }
+            }
+            // Otherwise, open a new window
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
+});

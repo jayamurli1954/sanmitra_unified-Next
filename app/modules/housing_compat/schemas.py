@@ -190,12 +190,14 @@ class BlockConfig(BaseModel):
 
 class SocietySettingsUpdate(BaseModel):
     blocks_config: list[dict] | None = None
+    custom_visitor_brands: list[dict] | None = None
     model_config = ConfigDict(extra="allow")
 
 
 class SocietySettingsResponse(BaseModel):
     tenant_id: str
     blocks_config: list[BlockConfig] = Field(default_factory=list)
+    custom_visitor_brands: list[dict] | None = Field(default=None)
     max_members_per_flat: int | None = None
     messaging_members_per_flat: int | None = None
     pan_mandatory: bool | None = None
@@ -284,3 +286,65 @@ class FinancialYearResponse(BaseModel):
     is_closed: bool
     created_at: datetime
     updated_at: datetime
+
+
+class WebPushSubscribeRequest(BaseModel):
+    flat_number: str
+    subscription: dict
+
+
+class StaffCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    phone_number: str = Field(min_length=6, max_length=30)
+    role: str = Field(min_length=2, max_length=50)  # e.g. "security", "housekeeping", "maintenance", "maid", "driver", "other"
+    flat_number: str | None = Field(default=None, max_length=30)
+    vehicle_type: str | None = Field(default="none", max_length=20)
+    vehicle_number: str | None = Field(default=None, max_length=30)
+
+    @field_validator("flat_number")
+    @classmethod
+    def normalize_flat(cls, value: str | None) -> str | None:
+        if value is not None:
+            return value.strip().upper()
+        return None
+
+
+class StaffResponse(BaseModel):
+    id: str
+    tenant_id: str
+    name: str
+    phone_number: str
+    role: str
+    flat_number: str | None = None
+    vehicle_type: str | None = "none"
+    vehicle_number: str | None = None
+    status: str = "active"
+    created_at: datetime
+    updated_at: datetime
+
+
+class StaffUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    phone_number: str | None = Field(default=None, min_length=6, max_length=30)
+    role: str | None = Field(default=None, min_length=2, max_length=50)
+    flat_number: str | None = Field(default=None, max_length=30)
+    vehicle_type: str | None = Field(default=None, max_length=20)
+    vehicle_number: str | None = Field(default=None, max_length=30)
+    status: Literal["active", "inactive"] | None = None
+
+
+class StaffAttendanceResponse(BaseModel):
+    id: str
+    tenant_id: str
+    staff_id: str
+    name: str
+    role: str
+    flat_number: str | None = None
+    vehicle_type: str | None = "none"
+    vehicle_number: str | None = None
+    checked_in_at: datetime
+    checked_out_at: datetime | None = None
+    status: str
+
+
+

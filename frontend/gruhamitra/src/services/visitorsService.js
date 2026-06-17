@@ -30,6 +30,31 @@ const visitorsService = {
     const response = await api.post(`/visitors/${visitorId}/check-out`);
     return response.data;
   },
+
+  async verifyPass(code) {
+    const response = await api.post('/visitors/verify-pass', { code });
+    return response.data;
+  },
+
+  async getVapidPublicKey() {
+    const response = await api.get('/visitors/web-push/vapid-public-key');
+    return response.data;
+  },
+
+  async subscribeWebPush(data) {
+    const response = await api.post('/visitors/web-push/subscribe', data);
+    return response.data;
+  },
+
+  async unsubscribeWebPush(endpoint) {
+    const response = await api.post('/visitors/web-push/unsubscribe', { endpoint });
+    return response.data;
+  },
+
+  async getPublicPass(visitorId) {
+    const response = await api.get(`/visitors/public/${visitorId}`);
+    return response.data;
+  },
 };
 
 export default visitorsService;
