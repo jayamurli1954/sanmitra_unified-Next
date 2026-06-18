@@ -91,6 +91,7 @@ async function run() {
   publishMitraBooksLandingIndex();
   copyStaticFile('service-worker.js');
   copyStaticFile('sw-register.js');
+  copyStaticFile('config.js');
 }
 
 run();
