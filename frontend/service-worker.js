@@ -5,8 +5,8 @@
   static assets are cache-first.
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v16';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v16';
+const CACHE_NAME = 'mitrabooks-erp-v17';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v17';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
@@ -79,6 +79,11 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-http(s) schemes — chrome-extension://, data:, blob:, etc.
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
+  // Skip external Google Sign-In requests to avoid SW fetch CSP errors
+  if (url.hostname === 'accounts.google.com') {
     return;
   }
 
