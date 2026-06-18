@@ -33,7 +33,14 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from checks import check_backend_health, check_frontend, check_ssl_expiry  # noqa: E402
+from checks import (  # noqa: E402
+    check_backend_health,
+    check_consecutive_failures,
+    check_frontend,
+    check_ssl_expiry,
+    check_vercel_deployment,
+    classify_failure_layer,
+)
 from collect_errors import collect_errors  # noqa: E402
 from redact import redact_lines  # noqa: E402
 
@@ -47,6 +54,7 @@ IST_OFFSET_NOTE = "times shown in UTC"
 # --------------------------------------------------------------------------
 
 def run_checks(products: list[dict]) -> list[dict]:
+    vercel_token = os.getenv("VERCEL_TOKEN", "")
     rows = []
     for p in products:
         fe = check_frontend(p["frontend_url"])
@@ -54,8 +62,16 @@ def run_checks(products: list[dict]) -> list[dict]:
         ssl = check_ssl_expiry(p["frontend_url"])
         fe_ok = fe["reachable"] and (fe["status_code"] or 500) < 400
         be_ok = be["reachable"] and be.get("app_status") in ("ok", "degraded")
-        rows.append({"name": p["name"], "fe": fe, "be": be, "ssl": ssl,
-                     "fe_ok": fe_ok, "be_ok": be_ok})
+        row = {"name": p["name"], "fe": fe, "be": be, "ssl": ssl,
+               "fe_ok": fe_ok, "be_ok": be_ok}
+        row["layer"] = classify_failure_layer(row)
+        project_id = p.get("vercel_project_id", "")
+        row["vercel"] = (
+            check_vercel_deployment(project_id, vercel_token)
+            if project_id and vercel_token
+            else None
+        )
+        rows.append(row)
     return rows
 
 
@@ -82,6 +98,15 @@ def facts_block(rows: list[dict]) -> str:
                  else f"?({ssl['error']})")
         flag = "" if (r["fe_ok"] and r["be_ok"]) else "  <-- ATTENTION"
         lines.append(f"{r['name']:<12} fe:{fe_s:<22} be:{be_s:<18} ssl:{ssl_s}{flag}")
+        if r.get("layer"):
+            lines.append(f"             Likely layer: {r['layer']}")
+        v = r.get("vercel")
+        if v and not (v.get("error") == "not configured"):
+            if v.get("error"):
+                lines.append(f"             Vercel: check failed ({v['error']})")
+            elif v.get("status"):
+                age = f", {v['age_hours']}h ago" if v.get("age_hours") is not None else ""
+                lines.append(f"             Vercel: {v['status']}{age}")
     return "\n".join(lines)
 
 
@@ -160,17 +185,31 @@ def main() -> int:
     rows = run_checks(products)
     outage = has_outage(rows)
 
+    # Consecutive failure detection — only makes an API call when there is an outage.
+    consecutive = 0
+    if outage:
+        gh_token = os.getenv("GH_TOKEN", "")
+        repo = os.getenv("GITHUB_REPO", "")
+        consecutive = check_consecutive_failures(gh_token, repo, "daily-ops-check.yml")
+
     facts = facts_block(rows)
     errors = redact_lines(collect_errors())
     summary = ai_summary(facts, errors)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     verdict = "ACTION NEEDED" if outage else "Healthy"
-    subject = f"SanMitra Ops {'[ALERT] ' if outage else ''}{verdict} - {now}"
+    recurring_tag = f"[RECURRING x{consecutive}] " if consecutive >= 2 else ""
+    subject = f"SanMitra Ops {'[ALERT] ' if outage else ''}{recurring_tag}{verdict} - {now}"
 
+    recurring_note = (
+        f"\nNOTE: This has been failing for {consecutive} consecutive daily checks.\n"
+        if consecutive >= 2
+        else ""
+    )
     body = (
         f"SanMitra daily ops report ({now}; {IST_OFFSET_NOTE})\n"
         f"Verdict (computed from checks): {verdict}\n"
+        f"{recurring_note}"
         f"{'=' * 60}\n\n"
         f"{facts}\n\n"
         f"AI SUMMARY (advisory only - does not affect verdict)\n"

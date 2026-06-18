@@ -86,3 +86,90 @@ def check_ssl_expiry(url: str, warn_days: int = 21) -> dict[str, Any]:
     except Exception as e:
         result["error"] = f"{type(e).__name__}"
     return result
+
+
+def classify_failure_layer(row: dict) -> str | None:
+    """Return the most likely failure layer for a service row, or None if healthy."""
+    fe_ok: bool = row["fe_ok"]
+    be_ok: bool = row["be_ok"]
+    ssl_error: bool = bool(row["ssl"].get("error"))
+    fe_err: str = row["fe"].get("error") or ""
+
+    if fe_ok and be_ok:
+        return None
+    if not fe_ok and be_ok:
+        if ssl_error:
+            return "Vercel/DNS/SSL — SSL handshake failed; check Vercel domain assignment and DNS CNAME/A records"
+        if "Timeout" in fe_err or "timeout" in fe_err:
+            return "Vercel/DNS — connection timeout; check DNS records and Vercel project domain"
+        return "Vercel/DNS/frontend — backend healthy, frontend unreachable; check Vercel deployment"
+    if not be_ok and fe_ok:
+        return "Render/API/backend — frontend reachable but backend down; check Render service logs"
+    return "DNS/global — both frontend and backend unreachable; check domain DNS and platform status pages"
+
+
+def check_vercel_deployment(project_id: str, token: str) -> dict[str, Any]:
+    """Query Vercel API for the latest production deployment state."""
+    result: dict[str, Any] = {"status": None, "url": None, "age_hours": None, "error": None}
+    if not project_id or not token:
+        result["error"] = "not configured"
+        return result
+    try:
+        resp = requests.get(
+            "https://api.vercel.com/v6/deployments",
+            params={"projectId": project_id, "limit": 1, "target": "production"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        deployments = resp.json().get("deployments", [])
+        if not deployments:
+            result["error"] = "no deployments found"
+            return result
+        d = deployments[0]
+        created_ms = d.get("createdAt")
+        age_hours = None
+        if created_ms:
+            created = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
+            age_hours = round((datetime.now(timezone.utc) - created).total_seconds() / 3600, 1)
+        result.update(
+            status=d.get("state"),   # READY | ERROR | BUILDING | QUEUED | CANCELED
+            url=d.get("url"),
+            age_hours=age_hours,
+        )
+    except requests.exceptions.RequestException as e:
+        result["error"] = f"{type(e).__name__}"
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+    return result
+
+
+def check_consecutive_failures(gh_token: str, repo: str, workflow_filename: str, lookback: int = 5) -> int:
+    """Return count of consecutive recent failures for a workflow via GitHub API.
+
+    Returns 0 on any error or if the most recent run was successful.
+    """
+    if not gh_token or not repo:
+        return 0
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_filename}/runs",
+            params={"per_page": lookback, "status": "completed", "branch": "main"},
+            headers={
+                "Authorization": f"Bearer {gh_token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        runs = resp.json().get("workflow_runs", [])
+        count = 0
+        for run in runs:
+            if run.get("conclusion") == "failure":
+                count += 1
+            else:
+                break
+        return count
+    except Exception:
+        return 0

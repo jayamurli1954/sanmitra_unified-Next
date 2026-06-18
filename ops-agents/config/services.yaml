@@ -2,22 +2,28 @@
 #
 # backend_health_url is the same Render service for all products.
 # Confirm the Render URL matches your dashboard if it was ever renamed.
-# Add MandirMitra / InvestMitra frontend_url values once their custom
-# domains are live; leave them commented out until then to avoid noise.
+#
+# vercel_project_id: optional. Set to the Vercel project ID (found in
+# Project Settings → General) and add VERCEL_TOKEN to GitHub secrets to
+# enable Vercel deployment status in the daily report. Leave blank to skip.
 
 products:
   - name: MitraBooks
     frontend_url: https://mitrabooks.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+    vercel_project_id: ""   # e.g. "prj_xxxxxxxxxxxxxx"
 
   - name: LegalMitra
     frontend_url: https://www.legalmitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+    vercel_project_id: ""
 
   - name: GruhaMitra
     frontend_url: https://gruhamitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+    vercel_project_id: ""
 
   - name: MandirMitra
     frontend_url: https://www.mandirmitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+    vercel_project_id: ""
