@@ -195,6 +195,34 @@ const MaintenanceScreen = () => {
     }
   };
 
+  const _pollBillingJob = async (jobId, month, year) => {
+    const MAX_POLLS = 80; // 80 × 3s = 4 minutes
+    for (let i = 0; i < MAX_POLLS; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const res = await api.get(`/maintenance/billing-jobs/${jobId}`);
+        const job = res.data;
+        if (job.status === 'completed') {
+          const billsRes = await api.get(`/maintenance/bills?month=${month}&year=${year}`);
+          setExistingBills(billsRes.data || []);
+          setMessage({
+            type: 'success',
+            text: `Generated ${job.total_bills} bills for ${month}/${year}. Total: ₹${(job.total_amount || 0).toLocaleString('en-IN')}`
+          });
+          return;
+        }
+        if (job.status === 'failed') {
+          setMessage({ type: 'error', text: `Bill generation failed: ${job.error || 'Unknown error'}` });
+          return;
+        }
+        setMessage({ type: 'info', text: `Generating bills for ${month}/${year}… (${job.total_flats} flats)` });
+      } catch {
+        // transient poll error — keep trying
+      }
+    }
+    setMessage({ type: 'error', text: 'Bill generation is taking longer than expected. Please refresh the page to check status.' });
+  };
+
   const handleGenerateBills = async () => {
     setMessage({ type: '', text: '' });
     setLoading(true);
@@ -230,28 +258,30 @@ const MaintenanceScreen = () => {
 
     try {
       const response = await api.post('/maintenance/generate-bills', requestPayload);
-      setGeneratedBills(response.data);
+      const data = response.data;
+
+      // Background job response (new path)
+      if (data.job_id) {
+        setMessage({ type: 'info', text: `Generating bills for ${month}/${year} (${data.total_flats} flats)…` });
+        await _pollBillingJob(data.job_id, month, year);
+        return;
+      }
+
+      // Sync fallback — should not occur in normal operation
+      setGeneratedBills(data);
       setMessage({
         type: 'success',
-        text: `Successfully generated ${response.data.total_bills_generated} bills for ${month}/${year}. Total amount: ${response.data.total_amount.toLocaleString('en-IN')}`
+        text: `Generated ${data.total_bills_generated} bills for ${month}/${year}. Total: ₹${(data.total_amount || 0).toLocaleString('en-IN')}`
       });
-
-      // Reload existing bills
       const billsRes = await api.get(`/maintenance/bills?month=${month}&year=${year}`);
       setExistingBills(billsRes.data || []);
     } catch (error) {
       console.error('Error generating bills:', error);
       let errorText = error.response?.data?.detail || error.message || 'Failed to generate bills. Please check your inputs and try again.';
-
-      // Handle connection errors specifically
       if (error.code === 'CONNECTION_ERROR' || error.message?.includes('Cannot connect')) {
-        errorText = error.message || 'Cannot connect to server. Please check:\n1. Backend is running on http://localhost:8002\n2. Correct API URL in config';
+        errorText = error.message || 'Cannot connect to server. Please check:\n1. Backend is running\n2. Correct API URL in config';
       }
-
-      setMessage({
-        type: 'error',
-        text: errorText
-      });
+      setMessage({ type: 'error', text: errorText });
     } finally {
       setLoading(false);
     }

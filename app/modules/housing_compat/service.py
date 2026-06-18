@@ -84,6 +84,11 @@ async def ensure_housing_compat_indexes() -> None:
     await get_collection("housing_staff_attendance").create_index([("tenant_id", 1), ("app_key", 1), ("staff_id", 1), ("status", 1)])
     await get_collection("housing_staff_attendance").create_index([("tenant_id", 1), ("app_key", 1), ("checked_in_at", 1)])
 
+    # Billing jobs — background bill-generation tracking
+    await get_collection("housing_billing_jobs").create_index([("id", 1)], unique=True)
+    await get_collection("housing_billing_jobs").create_index([("tenant_id", 1), ("app_key", 1), ("status", 1)])
+    await get_collection("housing_billing_jobs").create_index([("tenant_id", 1), ("app_key", 1), ("month", 1), ("year", 1)])
+
 
 
 async def _drop_legacy_unique_index(collection, *, keys: list[tuple[str, int]]) -> None:

@@ -11,7 +11,7 @@ from io import BytesIO
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import load_workbook
 from reportlab.lib.pagesizes import A4
@@ -27,7 +27,7 @@ from app.core.auth.dependencies import get_current_user
 from app.core.tenants.app_resolvers import resolve_gruha_tenant
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
-from app.db.postgres import get_async_session
+from app.db.postgres import get_async_session, get_session_factory
 from app.config import get_settings
 import pywebpush
 
@@ -2119,9 +2119,67 @@ async def maintenance_expense_accounts_for_period(
     return await _expense_accounts_for_period(session, tenant_id=tenant_id, app_key=app_key, month=month, year=year)
 
 
-@router.post("/maintenance/generate-bills")
+BILLING_JOBS = "housing_billing_jobs"
+
+
+async def _run_billing_job(
+    *,
+    job_id: str,
+    tenant_id: str,
+    app_key: str,
+    payload: dict[str, Any],
+    created_by: str,
+) -> None:
+    """Background task: executes bill generation and updates the job record."""
+    jobs_col = get_collection(BILLING_JOBS)
+    try:
+        await jobs_col.update_one(
+            {"id": job_id},
+            {"$set": {"status": "running", "started_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            result = await _build_maintenance_bills(
+                tenant_id=tenant_id,
+                app_key=app_key,
+                payload=payload,
+                current_user={"sub": created_by},
+                session=session,
+                replace_existing=True,
+            )
+        await jobs_col.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "total_bills": result.get("total_bills_generated", 0),
+                "total_amount": result.get("total_amount", 0),
+            }},
+        )
+    except HTTPException as exc:
+        await jobs_col.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "failed",
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(exc.detail),
+            }},
+        )
+    except Exception as exc:
+        await jobs_col.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "failed",
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(exc),
+            }},
+        )
+
+
+@router.post("/maintenance/generate-bills", status_code=202)
 async def maintenance_generate_bills(
     payload: dict[str, Any],
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -2135,14 +2193,95 @@ async def maintenance_generate_bills(
     )
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
-    return await _build_maintenance_bills(
+
+    month = _safe_int(payload.get("month"))
+    year = _safe_int(payload.get("year"))
+    if month < 1 or month > 12 or year < 2000:
+        raise HTTPException(status_code=422, detail="Valid month and year are required")
+
+    flats = await list_flats(tenant_id=tenant_id, app_key=app_key)
+    if not flats:
+        raise HTTPException(status_code=400, detail="No flats found. Please add flats before generating bills.")
+
+    bills_col, _ = _maintenance_collections()
+    existing_posted = await bills_col.count_documents(
+        {"tenant_id": tenant_id, "app_key": app_key, "month": month, "year": year, "is_posted": True}
+    )
+    if existing_posted:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Posted bills already exist for {_month_name(month)} {year}. Reverse them before regenerating.",
+        )
+
+    jobs_col = get_collection(BILLING_JOBS)
+    running_job = await jobs_col.find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "month": month, "year": year,
+         "status": {"$in": ["pending", "running"]}}
+    )
+    if running_job:
+        return {
+            "job_id": running_job["id"],
+            "status": running_job["status"],
+            "total_flats": len(flats),
+            "message": f"A billing job for {_month_name(month)} {year} is already in progress.",
+        }
+
+    job_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    payload_snapshot = {k: v for k, v in payload.items() if k != "adjusted_inmates"}
+    await jobs_col.insert_one({
+        "id": job_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "month": month,
+        "year": year,
+        "status": "pending",
+        "created_by": str(current_user.get("sub") or "system"),
+        "created_at": now,
+        "total_flats": len(flats),
+        "payload_snapshot": payload_snapshot,
+    })
+
+    background_tasks.add_task(
+        _run_billing_job,
+        job_id=job_id,
         tenant_id=tenant_id,
         app_key=app_key,
         payload=payload,
-        current_user=current_user,
-        session=session,
-        replace_existing=True,
+        created_by=str(current_user.get("sub") or "system"),
     )
+
+    return {
+        "job_id": job_id,
+        "status": "pending",
+        "total_flats": len(flats),
+        "message": (
+            f"Bill generation for {_month_name(month)} {year} started for {len(flats)} flats. "
+            f"Poll GET /housing-compat/maintenance/billing-jobs/{job_id} for progress."
+        ),
+    }
+
+
+@router.get("/maintenance/billing-jobs/{job_id}")
+async def get_billing_job_status(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="read",
+    )
+    jobs_col = get_collection(BILLING_JOBS)
+    job = await jobs_col.find_one(
+        {"id": job_id, "tenant_id": tenant_context.tenant_id, "app_key": tenant_context.app_key}
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="Billing job not found")
+    return _sanitize_mongo_doc(job)
 
 
 @router.post("/maintenance/post-bills")
