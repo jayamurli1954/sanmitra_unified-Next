@@ -85,7 +85,7 @@ from app.modules.business import dimensions as dimensions_module
 from app.modules.business import einvoice as einvoice_module
 from app.modules.business import inventory as inventory_module
 from app.modules.business import fixed_assets
-from app.modules.business import opening_close
+from app.modules.business import opening_close, bulk_import
 from app.modules.business import statements
 from app.modules.business import tds as tds_module
 from app.modules.business import ca_access as ca_access_module
@@ -1083,6 +1083,85 @@ async def reverse_business_voucher(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/vouchers/bulk-import/template")
+async def business_voucher_bulk_import_template(
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Sample CSV template for the bulk voucher import."""
+    resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="voucher bulk import template",
+    )
+    from fastapi.responses import Response
+    return Response(
+        content=bulk_import.voucher_csv_template(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="vouchers_bulk_import_template.csv"'},
+    )
+
+
+@router.post("/vouchers/bulk-import/preview")
+async def business_voucher_bulk_import_preview(
+    payload: dict = Body(..., description='{"csv": "<vouchers CSV>"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Parse + resolve the uploaded voucher CSV without posting."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="voucher bulk import preview",
+    )
+    try:
+        return await bulk_import.build_bulk_import_preview(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            csv_text=str(payload.get("csv") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/vouchers/bulk-import")
+async def business_voucher_bulk_import(
+    payload: dict = Body(..., description='{"csv": "<vouchers CSV>"}'),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Post bulk vouchers atomically."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="voucher bulk import posting",
+    )
+    try:
+        return await bulk_import.post_bulk_import_vouchers(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            csv_text=str(payload.get("csv") or ""),
+            created_by=_created_by(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 
 
 @router.post("/invoices", response_model=SalesInvoiceResponse)
@@ -2298,9 +2377,35 @@ async def business_opening_balance_template(
     )
 
 
+@router.get("/opening-balances/export")
+async def business_opening_balance_export(
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Export the currently posted opening balances as a CSV file."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="opening balance export",
+    )
+    from fastapi.responses import Response
+    csv_content = await opening_close.export_opening_balances_csv(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="opening_balances.csv"'},
+    )
+
+
 @router.post("/opening-balances/preview")
 async def business_opening_balance_preview(
-    payload: dict = Body(..., description='{"csv": "<opening balance CSV>", "as_of": "YYYY-MM-DD"}'),
+    payload: dict = Body(..., description='{"csv": "<opening balance CSV>", "as_of": "YYYY-MM-DD", "header_mapping": {}, "preset": null}'),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
     session: AsyncSession = Depends(get_async_session),
@@ -2325,6 +2430,8 @@ async def business_opening_balance_preview(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id,
             csv_text=str(payload.get("csv") or ""), as_of=as_of,
+            header_mapping=payload.get("header_mapping"),
+            preset=payload.get("preset"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -2332,7 +2439,7 @@ async def business_opening_balance_preview(
 
 @router.post("/opening-balances")
 async def business_post_opening_balances(
-    payload: dict = Body(..., description='{"csv": "...", "as_of": "YYYY-MM-DD", "allow_duplicate": false}'),
+    payload: dict = Body(..., description='{"csv": "...", "as_of": "YYYY-MM-DD", "allow_duplicate": false, "header_mapping": {}, "preset": null}'),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
     session: AsyncSession = Depends(get_async_session),
@@ -2361,6 +2468,8 @@ async def business_post_opening_balances(
             allow_duplicate=bool(payload.get("allow_duplicate")),
             created_by=_created_by(current_user),
             idempotency_key=x_idempotency_key,
+            header_mapping=payload.get("header_mapping"),
+            preset=payload.get("preset"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

@@ -68,13 +68,74 @@ def _parse_amount(value) -> Decimal:
     return _q2(-amount if negative else amount)
 
 
-def parse_opening_balances_csv(csv_text: str) -> list[dict]:
+TALLY_PRESET = {
+    "account_name": "name",
+    "account_code": "alias",
+    "balance": "opening balance",
+    "party": "parent"
+}
+
+ZOHO_PRESET = {
+    "account_name": "account name",
+    "account_code": "account code",
+    "debit": "debit",
+    "credit": "credit",
+    "balance": "balance",
+    "party": "contact"
+}
+
+QUICKBOOKS_PRESET = {
+    "account_name": "account",
+    "account_code": "number",
+    "debit": "debit",
+    "credit": "credit",
+    "balance": "balance"
+}
+
+
+def _parse_single_balance(value) -> tuple[Decimal, Decimal]:
+    """Parse a single balance string (e.g. "10000.00 Dr" or "-5000") into (debit, credit)."""
+    text = str(value if value is not None else "").strip()
+    if not text or text in {"-", "--"}:
+        return Decimal("0.00"), Decimal("0.00")
+    
+    text_clean = text.lower()
+    is_dr = "dr" in text_clean
+    is_cr = "cr" in text_clean
+    
+    # Strip Dr/Cr and other non-numeric chars except minus and decimal point
+    clean_num = re.sub(r"[^\d.\-]", "", text.replace(",", ""))
+    if not clean_num or clean_num in {"-", "."}:
+        return Decimal("0.00"), Decimal("0.00")
+        
+    try:
+        val = Decimal(clean_num)
+    except InvalidOperation:
+        return Decimal("0.00"), Decimal("0.00")
+        
+    val = _q2(val)
+    if is_dr:
+        return abs(val), Decimal("0.00")
+    elif is_cr:
+        return Decimal("0.00"), abs(val)
+    else:
+        # Standard positive/negative logic: positive is Debit, negative is Credit
+        if val >= 0:
+            return val, Decimal("0.00")
+        else:
+            return Decimal("0.00"), abs(val)
+
+
+def parse_opening_balances_csv(
+    csv_text: str,
+    header_mapping: dict[str, str] | None = None,
+    preset: str | None = None
+) -> list[dict]:
     """Parse an opening-balance CSV into normalized rows:
     {row_number, account_code, account_name, party, debit, credit}.
 
-    Requires an account-code or account-name column plus debit/credit columns.
-    Rows with no movement are skipped; a row carrying BOTH debit and credit is
-    kept and flagged later by validation (the accountant must fix it).
+    Supports dynamic header mappings, predefined format presets, and single-column
+    balance parsing.
     """
     text = (csv_text or "").lstrip("﻿")
     if not text.strip():
@@ -83,22 +144,52 @@ def parse_opening_balances_csv(csv_text: str) -> list[dict]:
     if not reader.fieldnames:
         raise ValueError("Could not read a CSV header row")
 
-    normalized = {_norm_header(name): name for name in reader.fieldnames if name}
+    normalized_fields = {_norm_header(name): name for name in reader.fieldnames if name}
+    
+    resolved_mapping = {}
+    if preset == "tally":
+        resolved_mapping = TALLY_PRESET
+    elif preset == "zoho":
+        resolved_mapping = ZOHO_PRESET
+    elif preset == "quickbooks":
+        resolved_mapping = QUICKBOOKS_PRESET
+    elif header_mapping:
+        resolved_mapping = header_mapping
+
     headers: dict[str, str] = {}
+    if resolved_mapping:
+        for key, field_alias in resolved_mapping.items():
+            norm_alias = _norm_header(field_alias)
+            if norm_alias in normalized_fields:
+                headers[key] = normalized_fields[norm_alias]
+
+    # Fallback to defaults if key not found in resolved_mapping
     for key, aliases in _HEADER_ALIASES.items():
-        for alias in aliases:
-            if alias in normalized:
-                headers[key] = normalized[alias]
-                break
+        if key not in headers:
+            for alias in aliases:
+                if alias in normalized_fields:
+                    headers[key] = normalized_fields[alias]
+                    break
+
     if "account_code" not in headers and "account_name" not in headers:
         raise ValueError("Could not find an account column (tried: account code / code / account name / ledger ...)")
-    if "debit" not in headers and "credit" not in headers:
-        raise ValueError("Could not find debit/credit columns")
+    if "debit" not in headers and "credit" not in headers and "balance" not in headers:
+        raise ValueError("Could not find debit/credit or balance columns")
 
     rows: list[dict] = []
     for line_no, row in enumerate(reader, start=2):  # header is line 1
-        debit = _parse_amount(row.get(headers.get("debit", ""), ""))
-        credit = _parse_amount(row.get(headers.get("credit", ""), ""))
+        debit = Decimal("0.00")
+        credit = Decimal("0.00")
+        
+        if "balance" in headers:
+            val_str = row.get(headers["balance"], "")
+            debit, credit = _parse_single_balance(val_str)
+        else:
+            if "debit" in headers:
+                debit = _parse_amount(row.get(headers["debit"], ""))
+            if "credit" in headers:
+                credit = _parse_amount(row.get(headers["credit"], ""))
+
         account_code = str(row.get(headers.get("account_code", ""), "") or "").strip()
         account_name = str(row.get(headers.get("account_name", ""), "") or "").strip()
         if not account_code and not account_name:
@@ -334,6 +425,8 @@ async def build_opening_preview(
     accounting_entity_id: str,
     csv_text: str,
     as_of: date | None = None,
+    header_mapping: dict[str, str] | None = None,
+    preset: str | None = None,
 ) -> dict:
     from app.accounting.service import initialize_default_chart_of_accounts
 
@@ -342,7 +435,7 @@ async def build_opening_preview(
             session, tenant_id=tenant_id, app_key=app_key,
             accounting_entity_id=accounting_entity_id, organization_type="BUSINESS",
         )
-    rows = parse_opening_balances_csv(csv_text)
+    rows = parse_opening_balances_csv(csv_text, header_mapping=header_mapping, preset=preset)
     accounts_by_code, accounts_by_name = await _account_lookups(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
     )
@@ -391,6 +484,8 @@ async def post_opening_balances(
     allow_duplicate: bool = False,
     created_by: str,
     idempotency_key: str | None = None,
+    header_mapping: dict[str, str] | None = None,
+    preset: str | None = None,
 ) -> dict:
     from app.accounting.schemas import JournalLineIn, JournalPostRequest
     from app.accounting.service import AccountingValidationError, post_journal_entry
@@ -399,6 +494,7 @@ async def post_opening_balances(
     preview = await build_opening_preview(
         session, tenant_id=tenant_id, app_key=app_key,
         accounting_entity_id=accounting_entity_id, csv_text=csv_text, as_of=as_of,
+        header_mapping=header_mapping, preset=preset,
     )
     if not preview["can_post"]:
         raise AccountingValidationError(
@@ -594,3 +690,60 @@ async def post_year_end_close(
         "net_profit": preview["net_profit"],
         "line_count": len(journal_lines),
     }
+
+
+async def export_opening_balances_csv(
+    session,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+) -> str:
+    from sqlalchemy import select
+    from app.accounting.models.entities import JournalEntry, JournalLine, Account
+    from app.accounting.service import _accounting_scope
+    from app.db.mongo import get_collection
+    from app.modules.business.service import PARTIES_COLLECTION
+    import io
+    import csv
+
+    # 1. Fetch opening journal entry
+    stmt = select(JournalEntry).where(
+        *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        JournalEntry.source_document_type == "opening_balance"
+    ).order_by(JournalEntry.id.desc())
+    entry = (await session.execute(stmt)).scalars().first()
+    
+    if not entry:
+        # Return empty template if no opening balances have been posted yet
+        return csv_template()
+
+    # 2. Fetch lines with account join
+    lines_stmt = select(JournalLine, Account).join(Account).where(
+        JournalLine.journal_id == entry.id
+    ).order_by(JournalLine.id.asc())
+    results = (await session.execute(lines_stmt)).all()
+
+    # 3. Load parties for subledger mapping
+    parties = await get_collection(PARTIES_COLLECTION).find({
+        "tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id,
+    }).to_list(length=5000)
+    party_map = {p["party_id"]: p.get("party_code") or p.get("party_name") or "" for p in parties if p.get("party_id")}
+
+    # 4. Generate CSV
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["account_code", "account_name", "party", "debit", "credit"])
+    
+    for line, account in results:
+        # Skip the Opening Balance Equity line if it was automatically added for balancing
+        if account.code == OPENING_BALANCE_EQUITY_CODE:
+            continue
+            
+        party_val = party_map.get(line.party_id, "") if line.party_id else ""
+        debit_val = str(line.debit) if line.debit > 0 else ""
+        credit_val = str(line.credit) if line.credit > 0 else ""
+        writer.writerow([account.code, account.name, party_val, debit_val, credit_val])
+        
+    return out.getvalue()
+
