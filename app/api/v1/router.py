@@ -16,7 +16,6 @@ from app.core.tenants.router import router as tenants_router
 from app.core.users.router import router as users_router
 from app.modules.housing.router import router as housing_router
 from app.modules.housing_compat.router import router as housing_compat_router
-from app.modules.investment.router import router as investment_router
 from app.modules.legal.router import router as legal_router
 from app.modules.legal_compat.router import router as legal_compat_router
 from app.modules.mandir_compat.router import router as mandir_compat_router
@@ -43,7 +42,8 @@ api_router.include_router(legal_router)
 api_router.include_router(legal_compat_router)
 api_router.include_router(mandir_compat_router)
 api_router.include_router(mitrabooks_compat_router)
-api_router.include_router(investment_router)
+# InvestMitra is excluded from the unified backend scope — investment routes are
+# intentionally not mounted here. See chore/disable-investmitra-unified-scope.
 api_router.include_router(rag_router)
 api_router.include_router(billing_router)
 api_router.include_router(business_router)

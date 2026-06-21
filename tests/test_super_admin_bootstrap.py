@@ -107,7 +107,9 @@ async def test_ensure_super_admin_user_uses_platform_context_for_separate_tenant
     assert created["tenant_id"] == "platform-admin"
     assert ensured["tenant_id"] == "platform-admin"
     assert ensured["organization_type"] == "BUSINESS"
-    assert ensured["app_keys"] == ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"]
+    # InvestMitra is excluded from the unified backend scope, so the platform
+    # super-admin tenant is no longer provisioned with the investmitra app key.
+    assert ensured["app_keys"] == ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra"]
 
 
 @pytest.mark.asyncio

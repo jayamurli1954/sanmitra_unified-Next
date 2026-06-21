@@ -50,7 +50,7 @@ services:
       - key: DEFAULT_APP_KEY
         value: legalmitra
       - key: ALLOWED_APP_KEYS
-        value: mandirmitra,gruhamitra,mitrabooks,legalmitra,investmitra
+        value: mandirmitra,gruhamitra,mitrabooks,legalmitra
       - key: GOOGLE_OAUTH_CLIENT_IDS
         sync: false
       - key: AUTH_PUBLIC_BASE_URL

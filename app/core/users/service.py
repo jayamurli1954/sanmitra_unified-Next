@@ -104,7 +104,7 @@ async def ensure_super_admin_user() -> None:
         display_name="SanMitra Seed Tenant" if uses_shared_seed_tenant else "SanMitra Platform",
         organization_type="TEMPLE" if uses_shared_seed_tenant else "BUSINESS",
         enabled_modules=["temple", "accounting", "audit"] if uses_shared_seed_tenant else None,
-        app_keys=["mandirmitra"] if uses_shared_seed_tenant else ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"],
+        app_keys=["mandirmitra"] if uses_shared_seed_tenant else ["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra"],
         created_by="system",
     )
 

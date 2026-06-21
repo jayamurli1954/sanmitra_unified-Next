@@ -132,9 +132,12 @@ class Settings:
     DEFAULT_APP_KEY = os.getenv("DEFAULT_APP_KEY", "mandirmitra").strip().lower()
     ALLOWED_APP_KEYS = [
         key.strip().lower()
+        # InvestMitra is intentionally excluded from the unified backend scope.
+        # The investment module definitions remain in the registry as a dormant,
+        # tested capability, but the app key is not accepted at runtime here.
         for key in os.getenv(
             "ALLOWED_APP_KEYS",
-            "mandirmitra,gruhamitra,mitrabooks,legalmitra,investmitra",
+            "mandirmitra,gruhamitra,mitrabooks,legalmitra",
         ).split(",")
         if key.strip()
     ]

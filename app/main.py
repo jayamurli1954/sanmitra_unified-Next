@@ -25,7 +25,6 @@ from app.db.postgres import close_postgres, create_postgres_tables, get_session_
 from app.modules.business.seed import ensure_mitrabooks_e2e_seed
 from app.modules.housing.service import ensure_maintenance_indexes
 from app.modules.housing_compat.service import ensure_housing_compat_indexes
-from app.modules.investment.service import ensure_investment_indexes
 from app.modules.legal.service import ensure_legal_indexes
 from app.modules.legal_compat.service import ensure_legal_compat_indexes
 from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
@@ -136,7 +135,7 @@ async def on_startup() -> None:
         await ensure_legal_compat_indexes()
         await ensure_legal_retention_indexes()
         await cleanup_expired_legal_retention_records()
-        await ensure_investment_indexes()
+        # InvestMitra excluded from unified scope — investment indexes not provisioned.
         await ensure_onboarding_indexes()
         await ensure_rag_indexes()
     except Exception as exc:
