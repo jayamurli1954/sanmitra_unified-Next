@@ -57,6 +57,22 @@ CREDIT_NOTES_COLLECTION = "business_credit_notes"
 DEBIT_NOTES_COLLECTION = "business_debit_notes"
 GST_SETTLEMENTS_COLLECTION = "business_gst_settlements"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+# CA source-document files (invoices, bank statements, etc.) are stored as bytes
+# in MongoDB rather than on local disk: Render's filesystem is ephemeral and would
+# lose these accounting documents on every deploy. One file per CA document.
+CA_DOCUMENT_FILES_COLLECTION = "business_ca_document_files"
+# Hard cap kept under the 16 MB BSON document limit, with headroom for metadata.
+CA_DOCUMENT_MAX_FILE_BYTES = 10 * 1024 * 1024
+CA_DOCUMENT_ALLOWED_CONTENT_TYPES = frozenset({
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/csv",
+    "text/plain",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+})
 
 GST_PAYABLE_CODE = "22004"
 
@@ -248,6 +264,10 @@ async def ensure_business_indexes() -> None:
     ca_documents = get_collection(CA_DOCUMENTS_COLLECTION)
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("updated_at", -1)])
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True)
+    ca_document_files = get_collection(CA_DOCUMENT_FILES_COLLECTION)
+    await ca_document_files.create_index(
+        [("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True
+    )
     invoices = get_collection(SALES_INVOICES_COLLECTION)
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("invoice_date", -1)])
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("invoice_id", 1)], unique=True)
@@ -307,6 +327,11 @@ def _ca_document_response_doc(doc: dict) -> dict:
     result.setdefault("due_date", None)
     result.setdefault("compliance_area", None)
     result.setdefault("client_access_enabled", False)
+    result.setdefault("has_file", False)
+    result.setdefault("file_content_type", None)
+    result.setdefault("file_size", None)
+    result.setdefault("file_uploaded_at", None)
+    result.setdefault("file_uploaded_by", None)
     return result
 
 
@@ -439,6 +464,171 @@ async def update_ca_document_metadata(
         entity_id=document_id,
         old_value=_ca_document_response_doc(existing),
         new_value=result,
+    )
+    return result
+
+
+async def store_ca_document_file(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    document_id: str,
+    file_name: str,
+    content_type: str | None,
+    payload: bytes,
+    uploaded_by: str,
+) -> dict | None:
+    """Attach (or replace) the source file for a CA document.
+
+    Returns the updated document metadata, or None if the CA document does not
+    exist in this tenant/app/entity scope. Bytes are stored in MongoDB (one file
+    per document) so they persist across deploys."""
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "document_id": document_id,
+    }
+    documents = get_collection(CA_DOCUMENTS_COLLECTION)
+    existing = await documents.find_one(filters)
+    if existing is None:
+        return None
+
+    now = _now()
+    safe_name = (file_name or "uploaded-document").strip() or "uploaded-document"
+    resolved_type = (content_type or "application/octet-stream").strip() or "application/octet-stream"
+    file_size = len(payload)
+
+    files = get_collection(CA_DOCUMENT_FILES_COLLECTION)
+    await files.update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "document_id": document_id},
+        {
+            "$set": {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "accounting_entity_id": accounting_entity_id,
+                "document_id": document_id,
+                "file_name": safe_name,
+                "content_type": resolved_type,
+                "file_size": file_size,
+                "data": payload,
+                "uploaded_by": uploaded_by,
+                "uploaded_at": now,
+            }
+        },
+        upsert=True,
+    )
+
+    file_meta = {
+        "original_file_name": safe_name,
+        "has_file": True,
+        "file_content_type": resolved_type,
+        "file_size": file_size,
+        "file_uploaded_at": now,
+        "file_uploaded_by": uploaded_by,
+        "updated_by": uploaded_by,
+        "updated_at": now,
+    }
+    await documents.update_one(filters, {"$set": file_meta})
+    updated = await documents.find_one(filters)
+    result = _ca_document_response_doc(updated)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=uploaded_by,
+        action="business_ca_document_file_uploaded",
+        entity_type="business_ca_document_file",
+        entity_id=document_id,
+        new_value={"file_name": safe_name, "content_type": resolved_type, "file_size": file_size},
+    )
+    return result
+
+
+async def get_ca_document_file(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    document_id: str,
+) -> dict | None:
+    """Return {file_name, content_type, data} for a CA document's file, or None."""
+    documents = get_collection(CA_DOCUMENTS_COLLECTION)
+    exists = await documents.find_one(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "document_id": document_id,
+        },
+        projection={"_id": 1},
+    )
+    if exists is None:
+        return None
+    files = get_collection(CA_DOCUMENT_FILES_COLLECTION)
+    file_doc = await files.find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "document_id": document_id}
+    )
+    if file_doc is None:
+        return None
+    data = file_doc.get("data")
+    return {
+        "file_name": str(file_doc.get("file_name") or "ca-document"),
+        "content_type": str(file_doc.get("content_type") or "application/octet-stream"),
+        "data": bytes(data) if data is not None else b"",
+    }
+
+
+async def delete_ca_document_file(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    document_id: str,
+    deleted_by: str,
+) -> dict | None:
+    """Remove a CA document's attached file and clear its file metadata.
+
+    Returns the updated document metadata, or None if the document does not exist
+    in scope."""
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "document_id": document_id,
+    }
+    documents = get_collection(CA_DOCUMENTS_COLLECTION)
+    existing = await documents.find_one(filters)
+    if existing is None:
+        return None
+
+    await get_collection(CA_DOCUMENT_FILES_COLLECTION).delete_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "document_id": document_id}
+    )
+    now = _now()
+    await documents.update_one(
+        filters,
+        {
+            "$set": {
+                "has_file": False,
+                "file_content_type": None,
+                "file_size": None,
+                "file_uploaded_at": None,
+                "file_uploaded_by": None,
+                "updated_by": deleted_by,
+                "updated_at": now,
+            }
+        },
+    )
+    updated = await documents.find_one(filters)
+    result = _ca_document_response_doc(updated)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=deleted_by,
+        action="business_ca_document_file_removed",
+        entity_type="business_ca_document_file",
+        entity_id=document_id,
     )
     return result
 

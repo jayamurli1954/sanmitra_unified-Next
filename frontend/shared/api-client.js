@@ -265,6 +265,53 @@ export async function downloadApiFile(appKey, path, filename, options = {}) {
   }
 }
 
+export async function uploadApiFile(appKey, path, formData, options = {}) {
+  // Multipart upload: deliberately omit Content-Type so the browser sets the
+  // multipart boundary itself (buildHeaders would force application/json).
+  const baseUrl = getConfiguredApiBaseUrl();
+  const requestUrl = buildApiUrl(baseUrl, path);
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, _isRetry, ...fetchOptions } = options;
+  const headers = { "X-App-Key": appKey };
+  const token = getAccessToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  try {
+    const response = await fetch(requestUrl, {
+      method: fetchOptions.method || "POST",
+      body: formData,
+      signal: fetchOptions.signal || controller.signal,
+      headers,
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+
+    if (response.status === 401 && !_isRetry) {
+      window.clearTimeout(timeout);
+      const refreshed = await _silentRefresh(appKey);
+      if (refreshed) {
+        return uploadApiFile(appKey, path, formData, { ...options, _isRetry: true });
+      }
+      return { ok: false, status: 401, payload };
+    }
+
+    return { ok: response.ok, status: response.status, payload };
+  } catch (error) {
+    const detail = error instanceof Error && error.name === "AbortError"
+      ? `Request timed out after ${timeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : "File upload failed";
+    return { ok: false, status: 0, payload: { detail } };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function fetchApiFileObjectUrl(appKey, path, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
   const requestUrl = buildApiUrl(baseUrl, path);

@@ -10,6 +10,7 @@ import {
   clearAllTokens,
   apiRequest,
   downloadApiFile,
+  uploadApiFile,
   fetchApiFileObjectUrl,
   getAccessToken,
   getRefreshToken,
@@ -1433,10 +1434,11 @@ function renderCaDocumentTable(rows) {
     return `
       <div class="empty-state">
         <strong>No CA document metadata yet</strong>
-        <span>Add a client document record. File storage is intentionally deferred.</span>
+        <span>Add a client document record, then attach the source file (invoice, bank statement, etc.).</span>
       </div>
     `;
   }
+  const fileAccept = ".pdf,.csv,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp,application/pdf,text/csv,image/jpeg,image/png,image/webp";
   return `
     <div class="table-preview compact-table erp-table ca-document-status-table">
       <table>
@@ -1450,6 +1452,7 @@ function renderCaDocumentTable(rows) {
             <th>Status</th>
             <th>Next action</th>
             <th>Posting ref</th>
+            <th>File</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -1460,7 +1463,7 @@ function renderCaDocumentTable(rows) {
               <tr>
                 <td>
                   <strong>${escapeHtml(row.client_name || "-")}</strong>
-                  <span class="row-subtext">${escapeHtml(row.original_file_name || "metadata only")}</span>
+                  <span class="row-subtext">${row.has_file ? escapeHtml(row.original_file_name || "file attached") : "no file attached"}</span>
                 </td>
                 <td>${escapeHtml(row.document_type || "-")}</td>
                 <td>${escapeHtml(row.period || "-")}</td>
@@ -1478,6 +1481,28 @@ function renderCaDocumentTable(rows) {
                   <span class="row-subtext">${escapeHtml(row.compliance_area || "General")} ${row.client_access_enabled ? " | Client access flagged" : ""}</span>
                 </td>
                 <td>${escapeHtml(row.posting_reference || "-")}</td>
+                <td class="ca-doc-file-cell">
+                  ${row.has_file ? `
+                    <div class="ca-doc-file-actions">
+                      <button class="secondary" type="button"
+                        data-business-action="download-ca-document-file"
+                        data-document-id="${escapeHtml(row.document_id || "")}"
+                        data-file-name="${escapeHtml(row.original_file_name || "ca-document")}"
+                      >Download</button>
+                      <button class="link-button" type="button"
+                        data-business-action="remove-ca-document-file"
+                        data-document-id="${escapeHtml(row.document_id || "")}"
+                      >Remove</button>
+                    </div>
+                  ` : ""}
+                  <label class="ca-doc-file-input">
+                    <input type="file" accept="${fileAccept}" data-ca-file-input="${escapeHtml(row.document_id || "")}">
+                  </label>
+                  <button class="secondary" type="button"
+                    data-business-action="upload-ca-document-file"
+                    data-document-id="${escapeHtml(row.document_id || "")}"
+                  >${row.has_file ? "Replace" : "Upload"}</button>
+                </td>
                 <td>
                   ${nextStatus ? `
                     <button
@@ -5885,6 +5910,67 @@ async function updateCaPracticeDocumentStatus(documentId, status) {
     setLoginStatus("danger", "Status update failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
   renderJson(apiOutput, { update_ca_document: result });
+}
+
+async function uploadCaPracticeDocumentFile(documentId) {
+  if (!documentId) {
+    return;
+  }
+  const input = document.querySelector(`[data-ca-file-input="${documentId}"]`);
+  const file = input?.files?.[0];
+  if (!file) {
+    setLoginStatus("warn", "Choose a file first", "Select an invoice, bank statement or supporting document to attach.");
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  const result = await uploadApiFile(
+    "mitrabooks",
+    `/api/v1/business/ca-documents/${encodeURIComponent(documentId)}/file`,
+    formData,
+  );
+  if (result.ok) {
+    if (input) {
+      input.value = "";
+    }
+    setLoginStatus("ok", "File attached", `${result.payload?.original_file_name || file.name} is attached to ${result.payload?.client_name || "the document"}.`);
+    await loadCaPracticeDocuments();
+  } else {
+    setLoginStatus("danger", "Upload failed", statusDetailText(result.payload?.detail) || `Upload failed with HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { upload_ca_document_file: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
+}
+
+async function downloadCaPracticeDocumentFile(documentId, fileName) {
+  if (!documentId) {
+    return;
+  }
+  const result = await downloadApiFile(
+    "mitrabooks",
+    `/api/v1/business/ca-documents/${encodeURIComponent(documentId)}/file`,
+    fileName || "ca-document",
+  );
+  if (!result.ok) {
+    setLoginStatus("danger", "Download failed", statusDetailText(result.payload?.detail) || `Download failed with HTTP ${result.status}.`);
+  }
+}
+
+async function removeCaPracticeDocumentFile(documentId) {
+  if (!documentId) {
+    return;
+  }
+  const result = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/ca-documents/${encodeURIComponent(documentId)}/file`,
+    { method: "DELETE" },
+  );
+  if (result.ok) {
+    setLoginStatus("ok", "File removed", `Attachment removed from ${result.payload?.client_name || "the document"}.`);
+    await loadCaPracticeDocuments();
+  } else {
+    setLoginStatus("danger", "Remove failed", statusDetailText(result.payload?.detail) || "Try again.");
+  }
+  renderJson(apiOutput, { remove_ca_document_file: { ok: result.ok, status: result.status } });
 }
 
 async function updateBusinessParty(partyId, data) {
@@ -15378,6 +15464,15 @@ dashboardPreview.addEventListener("click", async (event) => {
       button.getAttribute("data-document-id") || "",
       button.getAttribute("data-status") || "",
     );
+  } else if (businessAction === "upload-ca-document-file") {
+    uploadCaPracticeDocumentFile(button.getAttribute("data-document-id") || "");
+  } else if (businessAction === "download-ca-document-file") {
+    downloadCaPracticeDocumentFile(
+      button.getAttribute("data-document-id") || "",
+      button.getAttribute("data-file-name") || "ca-document",
+    );
+  } else if (businessAction === "remove-ca-document-file") {
+    removeCaPracticeDocumentFile(button.getAttribute("data-document-id") || "");
   } else if (businessAction === "widget-collapse") {
     toggleWidgetCollapse(button.getAttribute("data-widget-id") || "");
   } else if (businessAction === "open-widget-settings") {

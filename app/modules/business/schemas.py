@@ -179,6 +179,14 @@ class CaDocumentResponse(BaseModel):
     next_action: str
     posting_reference: str | None = None
     notes: str | None = None
+    # Attached source file (invoice/bank statement/etc.). Stored in MongoDB so it
+    # survives Render's ephemeral disk; these are metadata only — bytes are served
+    # by the dedicated file download endpoint.
+    has_file: bool = False
+    file_content_type: str | None = None
+    file_size: int | None = None
+    file_uploaded_at: datetime | None = None
+    file_uploaded_by: str | None = None
     created_by: str
     updated_by: str | None = None
     created_at: datetime

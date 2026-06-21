@@ -3,7 +3,7 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -96,6 +96,11 @@ from app.modules.business.service import (
     cancel_purchase_bill,
     cancel_sales_invoice,
     create_ca_document_metadata,
+    store_ca_document_file,
+    get_ca_document_file,
+    delete_ca_document_file,
+    CA_DOCUMENT_MAX_FILE_BYTES,
+    CA_DOCUMENT_ALLOWED_CONTENT_TYPES,
     create_credit_note,
     create_debit_note,
     create_gst_settlement,
@@ -957,6 +962,127 @@ async def update_ca_document(
         document_id=document_id,
         updated_by=_created_by(current_user),
         payload=payload,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="CA document metadata not found")
+    return result
+
+
+async def _read_ca_upload(file: UploadFile) -> bytes:
+    """Read an uploaded CA document file, enforcing the size cap and content-type
+    allowlist. Streams in chunks so an oversized upload is rejected early."""
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type and content_type not in CA_DOCUMENT_ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "Unsupported file type. Allowed: PDF, JPEG, PNG, WEBP, CSV, "
+                "plain text, and Excel (.xls/.xlsx)."
+            ),
+        )
+    data = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > CA_DOCUMENT_MAX_FILE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds the {CA_DOCUMENT_MAX_FILE_BYTES // (1024 * 1024)} MB limit.",
+            )
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    return bytes(data)
+
+
+@router.post("/ca-documents/{document_id}/file", response_model=CaDocumentResponse)
+async def upload_ca_document_file(
+    document_id: str,
+    file: UploadFile = File(...),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document file upload",
+    )
+    content = await _read_ca_upload(file)
+    result = await store_ca_document_file(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        document_id=document_id,
+        file_name=file.filename or "uploaded-document",
+        content_type=file.content_type,
+        payload=content,
+        uploaded_by=_created_by(current_user),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="CA document metadata not found")
+    return result
+
+
+@router.get("/ca-documents/{document_id}/file")
+async def download_ca_document_file(
+    document_id: str,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document file download",
+    )
+    file = await get_ca_document_file(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        document_id=document_id,
+    )
+    if file is None:
+        raise HTTPException(status_code=404, detail="No file attached to this CA document")
+    safe_name = file["file_name"].replace('"', "")
+    return Response(
+        content=file["data"],
+        media_type=file["content_type"],
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
+@router.delete("/ca-documents/{document_id}/file", response_model=CaDocumentResponse)
+async def remove_ca_document_file(
+    document_id: str,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA document file removal",
+    )
+    result = await delete_ca_document_file(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        document_id=document_id,
+        deleted_by=_created_by(current_user),
     )
     if result is None:
         raise HTTPException(status_code=404, detail="CA document metadata not found")
