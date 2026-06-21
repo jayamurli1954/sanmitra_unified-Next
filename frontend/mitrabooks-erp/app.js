@@ -10003,6 +10003,20 @@ async function submitInvoice() {
   renderJson(apiOutput, { create_invoice: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
 }
 
+async function downloadInvoicePdf(invoiceId, invoiceNumber) {
+  if (!invoiceId) {
+    return;
+  }
+  const result = await downloadApiFile(
+    "mitrabooks",
+    `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+    `${invoiceNumber || invoiceId}.pdf`,
+  );
+  if (!result.ok) {
+    setLoginStatus("danger", "PDF download failed", statusDetailText(result.payload?.detail) || `Invoice PDF failed with HTTP ${result.status}.`);
+  }
+}
+
 async function openInvoiceDetail(invoiceId) {
   const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}`, { method: "GET" });
   if (result.ok) {
@@ -10248,6 +10262,7 @@ function renderInvoiceDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
+          <button class="secondary" type="button" data-business-action="download-invoice-pdf" data-invoice-id="${escapeHtml(inv.invoice_id || "")}" data-invoice-number="${escapeHtml(inv.invoice_number || "")}">Download PDF</button>
           ${String(inv.status).toLowerCase() === "posted" && !invoiceReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-invoice">Reverse Invoice</button>` : ""}
         </div>
       </div>
@@ -15417,6 +15432,11 @@ dashboardPreview.addEventListener("click", async (event) => {
     removeInvoiceLine(button.getAttribute("data-line-id") || "");
   } else if (businessAction === "save-invoice") {
     submitInvoice();
+  } else if (businessAction === "download-invoice-pdf") {
+    downloadInvoicePdf(
+      button.getAttribute("data-invoice-id") || "",
+      button.getAttribute("data-invoice-number") || "",
+    );
   } else if (businessAction === "invoice-back") {
     setBusinessSalesView("list");
   } else if (businessAction === "view-invoice") {
