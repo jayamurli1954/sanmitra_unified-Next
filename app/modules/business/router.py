@@ -2,6 +2,7 @@ import json
 import re
 from datetime import date
 from decimal import Decimal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1282,11 +1283,16 @@ async def get_business_sales_invoice_pdf(
         accounting_entity_id=accounting_entity_id,
     )
     pdf_bytes = build_sales_invoice_pdf(invoice, settings.get("branding") or {})
-    filename = f"{invoice.get('invoice_number') or invoice_id}.pdf".replace('"', "").replace("/", "-")
+    raw_name = f"{invoice.get('invoice_number') or invoice_id}.pdf".replace('"', "").replace("/", "-")
+    # A non-ASCII invoice number (e.g. a local-language prefix) cannot be encoded
+    # in a Latin-1 header value, which would make Starlette raise. Emit an ASCII
+    # fallback plus an RFC 5987 filename* for the UTF-8 form.
+    ascii_name = raw_name.encode("ascii", "ignore").decode("ascii").strip() or "invoice.pdf"
+    encoded = quote(raw_name)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"},
     )
 
 

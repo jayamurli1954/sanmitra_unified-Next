@@ -34,8 +34,6 @@ register_document_fonts()
 _PAGE_SIZES = {"A4": A4, "A5": A5}
 _RUPEE = "₹"
 
-_HEADING = ParagraphStyle("doc-heading", fontName="Helvetica-Bold", fontSize=18, leading=21)
-_ORG_NAME = ParagraphStyle("doc-org", fontName="Helvetica-Bold", fontSize=12, leading=15)
 _BODY = ParagraphStyle("doc-body", fontName="Helvetica", fontSize=8.5, leading=11)
 _BODY_RIGHT = ParagraphStyle("doc-body-r", parent=_BODY, alignment=2)
 _SMALL = ParagraphStyle("doc-small", fontName="Helvetica", fontSize=7.5, leading=10, textColor=colors.HexColor("#555555"))

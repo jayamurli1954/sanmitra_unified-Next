@@ -7,7 +7,6 @@ PDF bytes.
 from __future__ import annotations
 
 from app.modules.business.invoice_pdf import build_sales_invoice_spec, build_sales_invoice_pdf
-from app.core.documents import render_document_pdf
 
 
 def _regular_invoice() -> dict:
