@@ -4685,6 +4685,10 @@ let hrSelectedRunId = "";
 let hrRunSlips = [];
 let hrAnalytics = null;
 let hrError = "";
+let hrLeaveTypes = [];
+let hrLeaveApplications = [];
+let hrDeclarations = [];
+let hrFnf = [];
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
@@ -5346,6 +5350,150 @@ function hrDownloadSlipPdf(button) {
   );
 }
 
+// ── Leave ────────────────────────────────────────────────────────────────────
+async function loadHrLeave() {
+  const [types, apps] = await Promise.all([
+    apiRequest("mitrabooks", "/api/v1/business/hr/leave-types", { method: "GET" }),
+    apiRequest("mitrabooks", "/api/v1/business/hr/leave-applications", { method: "GET" }),
+  ]);
+  hrLeaveTypes = types.ok && Array.isArray(types.payload?.leave_types) ? types.payload.leave_types : [];
+  hrLeaveApplications = apps.ok && Array.isArray(apps.payload?.applications) ? apps.payload.applications : [];
+  refreshHrView();
+}
+
+async function hrCreateLeaveType() {
+  const code = (document.getElementById("hr-lt-code")?.value || "").trim();
+  const name = (document.getElementById("hr-lt-name")?.value || "").trim();
+  const isLwp = !!document.getElementById("hr-lt-lwp")?.checked;
+  if (!code || !name) { hrError = "Leave type needs a code and name."; refreshHrView(); return; }
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/leave-types", {
+    method: "POST", body: JSON.stringify({ code, name, is_lwp: isLwp }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Could not create leave type.");
+  await loadHrLeave();
+}
+
+async function hrAllocateLeave() {
+  const employeeId = document.getElementById("hr-alloc-emp")?.value || "";
+  const leaveTypeId = document.getElementById("hr-alloc-type")?.value || "";
+  const days = parseFloat(document.getElementById("hr-alloc-days")?.value);
+  if (!employeeId || !leaveTypeId || !days) { hrError = "Pick employee, leave type and days."; refreshHrView(); return; }
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/employees/${encodeURIComponent(employeeId)}/leave-allocations`, {
+    method: "POST", body: JSON.stringify({ leave_type_id: leaveTypeId, days }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Allocation failed.");
+  refreshHrView();
+}
+
+async function hrApplyLeave() {
+  const employeeId = document.getElementById("hr-leave-emp")?.value || "";
+  const leaveTypeId = document.getElementById("hr-leave-type")?.value || "";
+  const fromDate = document.getElementById("hr-leave-from")?.value || "";
+  const toDate = document.getElementById("hr-leave-to")?.value || "";
+  if (!employeeId || !leaveTypeId || !fromDate || !toDate) { hrError = "Fill all leave fields."; refreshHrView(); return; }
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/leave-applications", {
+    method: "POST",
+    body: JSON.stringify({ employee_id: employeeId, leave_type_id: leaveTypeId, from_date: fromDate, to_date: toDate }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Leave application failed.");
+  await loadHrLeave();
+}
+
+async function hrDecideLeave(button, decision) {
+  const id = button.getAttribute("data-app-id") || "";
+  if (!id) return;
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/leave-applications/${encodeURIComponent(id)}/${decision}`, { method: "POST" });
+  hrError = res.ok ? "" : (res.payload?.detail || `Could not ${decision} leave.`);
+  await loadHrLeave();
+}
+
+// ── Form 12BB (tax) ──────────────────────────────────────────────────────────
+async function loadHrTax() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/tax-declarations", { method: "GET" });
+  hrDeclarations = res.ok && Array.isArray(res.payload?.declarations) ? res.payload.declarations : [];
+  refreshHrView();
+}
+
+async function hrCreateDeclaration() {
+  const employeeId = document.getElementById("hr-decl-emp")?.value || "";
+  const fy = (document.getElementById("hr-decl-fy")?.value || "").trim();
+  const section = (document.getElementById("hr-decl-section")?.value || "").trim();
+  const name = (document.getElementById("hr-decl-name")?.value || "").trim();
+  const amount = parseFloat(document.getElementById("hr-decl-amount")?.value);
+  if (!employeeId || !fy || !section || !name || !(amount >= 0)) { hrError = "Fill all declaration fields."; refreshHrView(); return; }
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/tax-declarations", {
+    method: "POST",
+    body: JSON.stringify({ employee_id: employeeId, financial_year: fy, section_code: section, investment_name: name, declared_amount: amount }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Declaration failed.");
+  await loadHrTax();
+}
+
+async function hrVerifyDeclaration(button, approve) {
+  const id = button.getAttribute("data-decl-id") || "";
+  if (!id) return;
+  let verified = 0;
+  if (approve) {
+    const declared = button.getAttribute("data-declared") || "0";
+    const entry = window.prompt("Verified amount to allow:", declared);
+    if (entry === null) return;
+    verified = parseFloat(entry) || 0;
+  }
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/tax-declarations/${encodeURIComponent(id)}/verify`, {
+    method: "POST", body: JSON.stringify({ verified_amount: verified, approve }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Verification failed.");
+  await loadHrTax();
+}
+
+// ── Full & Final ─────────────────────────────────────────────────────────────
+async function loadHrFnf() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/fnf", { method: "GET" });
+  hrFnf = res.ok && Array.isArray(res.payload?.settlements) ? res.payload.settlements : [];
+  refreshHrView();
+}
+
+async function hrCreateFnf() {
+  const employeeId = document.getElementById("hr-fnf-emp")?.value || "";
+  const lwd = document.getElementById("hr-fnf-lwd")?.value || "";
+  const basic = parseFloat(document.getElementById("hr-fnf-basic")?.value);
+  const leaves = parseFloat(document.getElementById("hr-fnf-leaves")?.value) || 0;
+  const notice = parseFloat(document.getElementById("hr-fnf-notice")?.value) || 0;
+  if (!employeeId || !lwd || !(basic > 0)) { hrError = "Employee, last working day and last basic are required."; refreshHrView(); return; }
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/fnf", {
+    method: "POST",
+    body: JSON.stringify({ employee_id: employeeId, last_working_day: lwd, last_drawn_basic: basic, unutilized_leaves: leaves, unpaid_notice_days: notice }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Could not create settlement.");
+  await loadHrFnf();
+}
+
+async function hrTransitionFnf(button, action) {
+  const id = button.getAttribute("data-fnf-id") || "";
+  if (!id) return;
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/fnf/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+  hrError = res.ok ? "" : (res.payload?.detail || `Could not ${action} settlement.`);
+  await loadHrFnf();
+}
+
+function hrDownloadFnfPdf(button) {
+  const id = button.getAttribute("data-fnf-id") || "";
+  if (!id) return;
+  downloadApiFile("mitrabooks", `/api/v1/business/hr/fnf/${encodeURIComponent(id)}/pdf`, `fnf-${id.slice(0, 8)}.pdf`);
+}
+
+function hrEmployeeOptions(selectedId) {
+  return hrEmployees.map((e) =>
+    `<option value="${escapeHtml(e.employee_id)}"${e.employee_id === selectedId ? " selected" : ""}>${escapeHtml(e.full_name || e.employee_id)}</option>`,
+  ).join("");
+}
+
+function hrLeaveTypeOptions() {
+  return hrLeaveTypes.map((t) =>
+    `<option value="${escapeHtml(t.leave_type_id)}">${escapeHtml(t.code)} — ${escapeHtml(t.name)}${t.is_lwp ? " (LWP)" : ""}</option>`,
+  ).join("");
+}
+
 function hrTabButton(key, label) {
   const active = hrTab === key ? " active" : "";
   return `<button type="button" class="erp-tab${active}" data-business-action="hr-tab" data-hr-tab="${key}">${escapeHtml(label)}</button>`;
@@ -5455,8 +5603,139 @@ function renderHrAnalyticsTab() {
   return cards + trend;
 }
 
+function renderHrLeaveTab() {
+  const manage = hrCanManage();
+  const typeForm = manage ? `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">
+      <label>Code<br><input id="hr-lt-code" type="text" maxlength="20" style="width:90px;"></label>
+      <label>Name<br><input id="hr-lt-name" type="text" maxlength="80" style="width:150px;"></label>
+      <label style="display:flex;gap:4px;align-items:center;"><input id="hr-lt-lwp" type="checkbox"> Unpaid (LWP)</label>
+      <button class="secondary" type="button" data-business-action="hr-create-leave-type">Add Type</button>
+    </div>` : "";
+  const typeRows = hrLeaveTypes.length
+    ? hrLeaveTypes.map((t) => `<tr><td>${escapeHtml(t.code)}</td><td>${escapeHtml(t.name)}</td><td>${t.is_lwp ? "Unpaid" : "Paid"}</td></tr>`).join("")
+    : `<tr><td colspan="3" class="muted">No leave types yet.</td></tr>`;
+
+  const allocForm = manage && hrLeaveTypes.length ? `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:10px 0;">
+      <label>Employee<br><select id="hr-alloc-emp" style="width:150px;">${hrEmployeeOptions()}</select></label>
+      <label>Type<br><select id="hr-alloc-type" style="width:150px;">${hrLeaveTypeOptions()}</select></label>
+      <label>Days<br><input id="hr-alloc-days" type="number" min="0" step="0.5" style="width:80px;"></label>
+      <button class="secondary" type="button" data-business-action="hr-allocate-leave">Allocate</button>
+    </div>` : "";
+
+  const applyForm = manage && hrLeaveTypes.length ? `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:10px 0;">
+      <label>Employee<br><select id="hr-leave-emp" style="width:150px;">${hrEmployeeOptions()}</select></label>
+      <label>Type<br><select id="hr-leave-type" style="width:150px;">${hrLeaveTypeOptions()}</select></label>
+      <label>From<br><input id="hr-leave-from" type="date"></label>
+      <label>To<br><input id="hr-leave-to" type="date"></label>
+      <button class="secondary" type="button" data-business-action="hr-apply-leave">Apply</button>
+    </div>` : "";
+
+  const appRows = hrLeaveApplications.length ? hrLeaveApplications.map((a) => {
+    const actions = (manage && a.status === "pending")
+      ? `<button class="secondary" type="button" data-business-action="hr-approve-leave" data-app-id="${escapeHtml(a.application_id)}">Approve</button>
+         <button class="secondary" type="button" data-business-action="hr-reject-leave" data-app-id="${escapeHtml(a.application_id)}">Reject</button>`
+      : "";
+    return `<tr>
+      <td>${escapeHtml(a.employee_id || "")}</td>
+      <td>${escapeHtml(a.from_date || "")} → ${escapeHtml(a.to_date || "")}</td>
+      <td class="num">${escapeHtml(String(a.days ?? ""))}</td>
+      <td class="num">${escapeHtml(String(a.lop_days ?? ""))}</td>
+      <td><span class="status-pill">${escapeHtml(a.status || "")}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No leave applications.</td></tr>`;
+
+  return `
+    <h5>Leave Types</h5>
+    ${typeForm}
+    <table class="erp-table"><thead><tr><th>Code</th><th>Name</th><th>Kind</th></tr></thead><tbody>${typeRows}</tbody></table>
+    ${allocForm}
+    ${applyForm}
+    <h5 style="margin-top:16px;">Leave Applications</h5>
+    <table class="erp-table">
+      <thead><tr><th>Employee</th><th>Dates</th><th>Days</th><th>LOP</th><th>Status</th><th></th></tr></thead>
+      <tbody>${appRows}</tbody>
+    </table>`;
+}
+
+function renderHrTaxTab() {
+  const manage = hrCanManage();
+  const form = manage ? `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <label>Employee<br><select id="hr-decl-emp" style="width:150px;">${hrEmployeeOptions()}</select></label>
+      <label>FY<br><input id="hr-decl-fy" type="text" placeholder="2025-26" style="width:90px;"></label>
+      <label>Section<br><input id="hr-decl-section" type="text" placeholder="80C" style="width:90px;"></label>
+      <label>Investment<br><input id="hr-decl-name" type="text" style="width:150px;"></label>
+      <label>Declared ₹<br><input id="hr-decl-amount" type="number" min="0" style="width:110px;"></label>
+      <button class="secondary" type="button" data-business-action="hr-create-declaration">Declare</button>
+    </div>` : "";
+  const rows = hrDeclarations.length ? hrDeclarations.map((d) => {
+    const actions = (manage && d.status !== "approved" && d.status !== "rejected")
+      ? `<button class="secondary" type="button" data-business-action="hr-approve-decl" data-decl-id="${escapeHtml(d.declaration_id)}" data-declared="${escapeHtml(String(d.declared_amount ?? "0"))}">Approve</button>
+         <button class="secondary" type="button" data-business-action="hr-reject-decl" data-decl-id="${escapeHtml(d.declaration_id)}">Reject</button>`
+      : "";
+    return `<tr>
+      <td>${escapeHtml(d.employee_id || "")}</td>
+      <td>${escapeHtml(d.financial_year || "")}</td>
+      <td>${escapeHtml(d.section_code || "")}</td>
+      <td>${escapeHtml(d.investment_name || "")}</td>
+      <td class="num">${hrMoney(d.declared_amount)}</td>
+      <td class="num">${hrMoney(d.verified_amount)}</td>
+      <td><span class="status-pill">${escapeHtml(d.status || "")}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="8" class="muted">No declarations yet.</td></tr>`;
+  return `
+    ${form}
+    <p class="muted" style="font-size:12px;">Proof files are uploaded via the API; this view manages declarations and HR verification.</p>
+    <table class="erp-table">
+      <thead><tr><th>Employee</th><th>FY</th><th>Section</th><th>Investment</th><th>Declared</th><th>Verified</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderHrFnfTab() {
+  const manage = hrCanManage();
+  const form = manage ? `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <label>Employee<br><select id="hr-fnf-emp" style="width:150px;">${hrEmployeeOptions()}</select></label>
+      <label>Last Working Day<br><input id="hr-fnf-lwd" type="date"></label>
+      <label>Last Basic ₹<br><input id="hr-fnf-basic" type="number" min="0" style="width:110px;"></label>
+      <label>Unused Leaves<br><input id="hr-fnf-leaves" type="number" min="0" step="0.5" style="width:90px;"></label>
+      <label>Notice Shortfall<br><input id="hr-fnf-notice" type="number" min="0" style="width:90px;"></label>
+      <button class="secondary" type="button" data-business-action="hr-create-fnf">Compute F&amp;F</button>
+    </div>` : "";
+  const rows = hrFnf.length ? hrFnf.map((f) => {
+    const s = f.settlement || {};
+    let actions = `<button class="secondary" type="button" data-business-action="hr-fnf-pdf" data-fnf-id="${escapeHtml(f.fnf_id)}">PDF</button>`;
+    if (manage && f.status === "draft") actions += ` <button class="secondary" type="button" data-business-action="hr-fnf-approve" data-fnf-id="${escapeHtml(f.fnf_id)}">Approve</button>`;
+    if (manage && f.status === "approved") actions += ` <button class="secondary" type="button" data-business-action="hr-fnf-pay" data-fnf-id="${escapeHtml(f.fnf_id)}">Mark Paid</button>`;
+    return `<tr>
+      <td>${escapeHtml(f.employee_id || "")}</td>
+      <td>${escapeHtml(f.last_working_day || "")}</td>
+      <td class="num">${escapeHtml(String(f.completed_years ?? ""))}</td>
+      <td class="num">${hrMoney(s.gratuity)}</td>
+      <td class="num">${hrMoney(s.net_settlement)}</td>
+      <td><span class="status-pill">${escapeHtml(f.status || "")}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="muted">No settlements yet.</td></tr>`;
+  return `
+    ${form}
+    <table class="erp-table">
+      <thead><tr><th>Employee</th><th>Last Day</th><th>Years</th><th>Gratuity</th><th>Net Settlement</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
 function renderHrTab() {
   if (hrTab === "payroll") return renderHrPayrollTab();
+  if (hrTab === "leave") return renderHrLeaveTab();
+  if (hrTab === "tax") return renderHrTaxTab();
+  if (hrTab === "fnf") return renderHrFnfTab();
   if (hrTab === "analytics") return renderHrAnalyticsTab();
   return renderHrEmployeesTab();
 }
@@ -5473,9 +5752,12 @@ function renderHrWorkspace() {
   } else {
     body = `
       ${hrError ? `<div class="module-state danger"><span>${escapeHtml(hrError)}</span></div>` : ""}
-      <div class="erp-tabs" style="display:flex;gap:6px;margin-bottom:14px;">
+      <div class="erp-tabs" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
         ${hrTabButton("employees", "Employees")}
         ${hrTabButton("payroll", "Payroll")}
+        ${hrTabButton("leave", "Leave")}
+        ${hrTabButton("tax", "Form 12BB")}
+        ${hrTabButton("fnf", "Full & Final")}
         ${hrTabButton("analytics", "Analytics")}
       </div>
       <div class="erp-tab-content">${renderHrTab()}</div>`;
@@ -15632,12 +15914,39 @@ dashboardPreview.addEventListener("click", async (event) => {
     hrTab = button.getAttribute("data-hr-tab") || "employees";
     if (hrTab !== "payroll") { hrSelectedRunId = ""; hrRunSlips = []; }
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (hrTab === "leave") loadHrLeave();
+    else if (hrTab === "tax") loadHrTax();
+    else if (hrTab === "fnf") loadHrFnf();
   } else if (businessAction === "hr-run-payroll") {
     hrRunPayroll();
   } else if (businessAction === "hr-view-slips") {
     loadHrRunSlips(button.getAttribute("data-run-id") || "");
   } else if (businessAction === "hr-slip-pdf") {
     hrDownloadSlipPdf(button);
+  } else if (businessAction === "hr-create-leave-type") {
+    hrCreateLeaveType();
+  } else if (businessAction === "hr-allocate-leave") {
+    hrAllocateLeave();
+  } else if (businessAction === "hr-apply-leave") {
+    hrApplyLeave();
+  } else if (businessAction === "hr-approve-leave") {
+    hrDecideLeave(button, "approve");
+  } else if (businessAction === "hr-reject-leave") {
+    hrDecideLeave(button, "reject");
+  } else if (businessAction === "hr-create-declaration") {
+    hrCreateDeclaration();
+  } else if (businessAction === "hr-approve-decl") {
+    hrVerifyDeclaration(button, true);
+  } else if (businessAction === "hr-reject-decl") {
+    hrVerifyDeclaration(button, false);
+  } else if (businessAction === "hr-create-fnf") {
+    hrCreateFnf();
+  } else if (businessAction === "hr-fnf-approve") {
+    hrTransitionFnf(button, "approve");
+  } else if (businessAction === "hr-fnf-pay") {
+    hrTransitionFnf(button, "pay");
+  } else if (businessAction === "hr-fnf-pdf") {
+    hrDownloadFnfPdf(button);
   } else if (businessAction === "open-create-voucher") {
     openBusinessCreateVoucherDialog();
   } else if (businessAction === "remove-voucher-line") {
