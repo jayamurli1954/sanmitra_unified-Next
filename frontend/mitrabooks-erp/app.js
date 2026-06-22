@@ -4690,6 +4690,9 @@ let hrLeaveTypes = [];
 let hrLeaveApplications = [];
 let hrDeclarations = [];
 let hrFnf = [];
+let hrStructures = [];
+let hrShowAddEmployee = false;
+let hrAssignFor = "";   // employee_id currently being assigned a salary
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
@@ -5287,9 +5290,16 @@ async function loadHrWorkspace() {
   refreshHrView();
   if (hrAccess && hrAccess.entitled) {
     loadHrEmployees();
+    loadHrStructures();
     loadHrRuns();
     loadHrAnalytics();
   }
+}
+
+async function loadHrStructures() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/salary-structures", { method: "GET" });
+  hrStructures = res.ok && Array.isArray(res.payload?.structures) ? res.payload.structures : [];
+  refreshHrView();
 }
 
 async function hrEnable() {
@@ -5496,6 +5506,67 @@ function hrDownloadFnfPdf(button) {
   downloadApiFile("mitrabooks", `/api/v1/business/hr/fnf/${encodeURIComponent(id)}/pdf`, `fnf-${id.slice(0, 8)}.pdf`);
 }
 
+async function hrCreateEmployee() {
+  const v = (id) => (document.getElementById(id)?.value || "").trim();
+  const body = {
+    user_id: v("hr-emp-userid"),
+    full_name: v("hr-emp-name"),
+    designation: v("hr-emp-designation") || null,
+    department: v("hr-emp-department") || null,
+    date_of_joining: v("hr-emp-doj"),
+    state_for_professional_tax: v("hr-emp-ptstate") || null,
+    is_pf_eligible: !!document.getElementById("hr-emp-pf")?.checked,
+    is_esic_eligible: !!document.getElementById("hr-emp-esic")?.checked,
+    status: "active",
+  };
+  if (!body.user_id || !body.full_name || !body.date_of_joining) {
+    hrError = "Employee needs a User ID, Full Name and Date of Joining."; refreshHrView(); return;
+  }
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/employees", { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) { hrError = res.payload?.detail || "Could not create employee."; refreshHrView(); return; }
+  hrError = ""; hrShowAddEmployee = false;
+  await loadHrEmployees();
+}
+
+async function hrCreateStructure() {
+  const name = (document.getElementById("hr-struct-name")?.value || "").trim();
+  const basic = (document.getElementById("hr-struct-basic")?.value || "GROSS * 0.5").trim();
+  const hra = (document.getElementById("hr-struct-hra")?.value || "BASIC * 0.4").trim();
+  if (!name) { hrError = "Give the salary structure a name."; refreshHrView(); return; }
+  const body = {
+    name,
+    components: [
+      { name: "Basic", abbr: "BASIC", formula: basic, statutory_kind: "basic" },
+      { name: "HRA", abbr: "HRA", formula: hra },
+      { name: "Special Allowance", abbr: "SPECIAL", formula: "GROSS - BASIC - HRA" },
+    ],
+  };
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/salary-structures", { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) { hrError = res.payload?.detail || "Could not create structure."; refreshHrView(); return; }
+  hrError = "";
+  await loadHrStructures();
+}
+
+async function hrAssignSalary() {
+  const employeeId = hrAssignFor;
+  const structureId = document.getElementById("hr-assign-structure")?.value || "";
+  const gross = (document.getElementById("hr-assign-gross")?.value || "").trim();
+  const regime = document.getElementById("hr-assign-regime")?.value || "new";
+  if (!structureId || !gross) { hrError = "Pick a structure and enter monthly gross."; refreshHrView(); return; }
+  const res = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/hr/employees/${encodeURIComponent(employeeId)}/salary`,
+    { method: "PUT", body: JSON.stringify({ structure_id: structureId, monthly_gross: gross, regime }) },
+  );
+  if (!res.ok) { hrError = res.payload?.detail || "Could not assign salary."; refreshHrView(); return; }
+  hrError = ""; hrAssignFor = "";
+  refreshHrView();
+}
+
+function hrStructureOptions() {
+  return hrStructures.map((s) => `<option value="${escapeHtml(s.structure_id)}">${escapeHtml(s.name)}</option>`).join("");
+}
+
 function hrEmployeeOptions(selectedId) {
   return hrEmployees.map((e) =>
     `<option value="${escapeHtml(e.employee_id)}"${e.employee_id === selectedId ? " selected" : ""}>${escapeHtml(e.full_name || e.employee_id)}</option>`,
@@ -5514,21 +5585,68 @@ function hrTabButton(key, label) {
 }
 
 function renderHrEmployeesTab() {
-  if (!hrEmployees.length) {
-    return `<p class="muted">No employees yet. Add employees via the HR API to start running payroll.</p>`;
-  }
-  const rows = hrEmployees.map((e) => `
-    <tr>
-      <td>${escapeHtml(e.full_name || "")}</td>
-      <td>${escapeHtml(e.designation || "—")}</td>
-      <td>${escapeHtml(e.department || "—")}</td>
-      <td><span class="status-pill">${escapeHtml(e.status || "")}</span></td>
-    </tr>`).join("");
-  return `
+  const manage = hrCanManage();
+
+  const addForm = (manage && hrShowAddEmployee) ? `
+    <div class="hr-add-form" style="border:1px solid var(--border,#333);border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <label>User ID*<br><input id="hr-emp-userid" type="text" style="width:120px;"></label>
+      <label>Full Name*<br><input id="hr-emp-name" type="text" style="width:150px;"></label>
+      <label>Designation<br><input id="hr-emp-designation" type="text" style="width:120px;"></label>
+      <label>Department<br><input id="hr-emp-department" type="text" style="width:120px;"></label>
+      <label>Date of Joining*<br><input id="hr-emp-doj" type="date"></label>
+      <label>PT State<br><input id="hr-emp-ptstate" type="text" placeholder="Karnataka" style="width:110px;"></label>
+      <label style="display:flex;gap:4px;align-items:center;"><input id="hr-emp-pf" type="checkbox" checked> PF</label>
+      <label style="display:flex;gap:4px;align-items:center;"><input id="hr-emp-esic" type="checkbox"> ESIC</label>
+      <button class="primary" type="button" data-business-action="hr-create-employee">Save</button>
+      <button class="secondary" type="button" data-business-action="hr-add-employee-cancel">Cancel</button>
+    </div>` : "";
+
+  const addBtn = (manage && !hrShowAddEmployee)
+    ? `<button class="secondary" type="button" data-business-action="hr-add-employee-toggle" style="margin-bottom:12px;">+ Add Employee</button>`
+    : "";
+
+  const empBlock = hrEmployees.length ? `
     <table class="erp-table">
-      <thead><tr><th>Name</th><th>Designation</th><th>Department</th><th>Status</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+      <thead><tr><th>Name</th><th>Designation</th><th>Department</th><th>Status</th>${manage ? "<th></th>" : ""}</tr></thead>
+      <tbody>${hrEmployees.map((e) => `
+        <tr>
+          <td>${escapeHtml(e.full_name || "")}</td>
+          <td>${escapeHtml(e.designation || "—")}</td>
+          <td>${escapeHtml(e.department || "—")}</td>
+          <td><span class="status-pill">${escapeHtml(e.status || "")}</span></td>
+          ${manage ? `<td><button class="secondary" type="button" data-business-action="hr-assign-open" data-emp-id="${escapeHtml(e.employee_id)}">Assign Salary</button></td>` : ""}
+        </tr>`).join("")}</tbody>
+    </table>` : `<p class="muted">No employees yet. Click "+ Add Employee" to create one.</p>`;
+
+  const assignForm = (manage && hrAssignFor) ? `
+    <div style="border:1px solid var(--border,#333);border-radius:8px;padding:12px;margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <strong style="width:100%;">Assign salary — ${escapeHtml(hrAssignFor)}</strong>
+      <label>Structure<br><select id="hr-assign-structure" style="width:170px;">${hrStructureOptions()}</select></label>
+      <label>Monthly Gross ₹<br><input id="hr-assign-gross" type="number" min="0" style="width:120px;"></label>
+      <label>Regime<br><select id="hr-assign-regime"><option value="new">New</option><option value="old">Old</option></select></label>
+      <button class="primary" type="button" data-business-action="hr-assign-submit">Assign</button>
+      <button class="secondary" type="button" data-business-action="hr-assign-cancel">Cancel</button>
+    </div>` : "";
+
+  // Salary structures panel.
+  const structForm = manage ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+      <label>New structure name<br><input id="hr-struct-name" type="text" placeholder="Standard (Non-metro)" style="width:170px;"></label>
+      <label>Basic formula<br><input id="hr-struct-basic" type="text" value="GROSS * 0.5" style="width:120px;"></label>
+      <label>HRA formula<br><input id="hr-struct-hra" type="text" value="BASIC * 0.4" style="width:120px;"></label>
+      <button class="secondary" type="button" data-business-action="hr-create-structure">Add Structure</button>
+    </div>` : "";
+  const structRows = hrStructures.length
+    ? hrStructures.map((s) => `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml((s.components || []).map((c) => c.abbr).join(", "))}</td></tr>`).join("")
+    : `<tr><td colspan="2" class="muted">No salary structures yet — add one to assign salaries.</td></tr>`;
+
+  return `
+    ${addBtn}${addForm}
+    ${empBlock}
+    ${assignForm}
+    <h5 style="margin-top:18px;">Salary Structures</h5>
+    ${structForm}
+    <table class="erp-table"><thead><tr><th>Name</th><th>Components</th></tr></thead><tbody>${structRows}</tbody></table>`;
 }
 
 function renderHrPayrollTab() {
@@ -15959,6 +16077,20 @@ dashboardPreview.addEventListener("click", async (event) => {
     loadHrWorkspace();
   } else if (businessAction === "hr-enable") {
     hrEnable();
+  } else if (businessAction === "hr-add-employee-toggle") {
+    hrShowAddEmployee = true; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-add-employee-cancel") {
+    hrShowAddEmployee = false; hrError = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-create-employee") {
+    hrCreateEmployee();
+  } else if (businessAction === "hr-create-structure") {
+    hrCreateStructure();
+  } else if (businessAction === "hr-assign-open") {
+    hrAssignFor = button.getAttribute("data-emp-id") || ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-assign-cancel") {
+    hrAssignFor = ""; hrError = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-assign-submit") {
+    hrAssignSalary();
   } else if (businessAction === "hr-tab") {
     hrTab = button.getAttribute("data-hr-tab") || "employees";
     if (hrTab !== "payroll") { hrSelectedRunId = ""; hrRunSlips = []; }
