@@ -18,7 +18,8 @@ from app.config import get_settings
 from app.core.audit.service import ensure_audit_indexes
 from app.core.onboarding.service import ensure_onboarding_indexes
 from app.core.tenants.context import TenantContextMiddleware
-from app.core.tenants.service import ensure_seed_tenant
+from app.core.tenants.service import ensure_seed_tenant, set_hr_addon_available
+from app.modules.business.service import set_hr_enabled
 from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
@@ -127,6 +128,24 @@ async def on_startup() -> None:
                     settings.DEMO_MITRABOOKS_TENANT_ID,
                     seeded_count,
                 )
+                # Auto-provision + enable the HR/Payroll add-on for the demo tenant
+                # so the demo workspace is usable out of the box (real tenants are
+                # provisioned via Platform Owner -> Entitlements).
+                if seeded_count:
+                    try:
+                        await set_hr_addon_available(
+                            tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID, available=True, updated_by="system",
+                        )
+                        await set_hr_enabled(
+                            tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID, app_key="mitrabooks",
+                            accounting_entity_id="primary", enabled=True, updated_by="system",
+                        )
+                        _startup_logger.info(
+                            "HR add-on auto-provisioned + enabled for demo tenant=%s",
+                            settings.DEMO_MITRABOOKS_TENANT_ID,
+                        )
+                    except Exception as exc:  # pragma: no cover - best-effort demo convenience
+                        _startup_logger.warning("HR demo provisioning skipped: %s", exc)
             else:
                 _startup_logger.warning(
                     "MitraBooks demo admin bootstrap skipped: DEMO_MITRABOOKS_ADMIN_PASSWORD is not set"
