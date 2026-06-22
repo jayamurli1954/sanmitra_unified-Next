@@ -364,7 +364,17 @@ closed. Full HR suite: 36 tests green; broad regression (business/accounting/COA
   (no separate cache needed) + current active/exited headcount. Endpoint
   `GET …/analytics/dashboard?months=`. Tests `tests/test_hr_analytics.py` (2).
 
-**v1 COMPLETE.** HR surface = **26 routes** under `/api/v1/business/hr/*`. HR tests: **53 green**;
+### User-based access (entitlement + role)
+- Gate is now three-layer: tenant entitlement (the two flags) **+ per-user HR role**. `require_hr_context`
+  takes `roles=` — mutating endpoints require `HR_MANAGE_ROLES` ({hr_manager, super_admin}); read
+  endpoints default to `HR_READ_ROLES` ({hr_manager, payroll_auditor, super_admin}). Plain
+  `tenant_admin` is NOT granted HR by default (must be given an HR role).
+- New **`GET /business/hr/access`** — a never-403 entitlement probe returning
+  `{available, enabled, entitled, role, can_manage, can_view, is_self}` so the dashboard can decide
+  whether to render the HR menu and which actions to expose. Frontend wiring (MitraBooks `app.js`
+  sidebar + screens) and the `employee_self` self-scoped surface remain the next (frontend) phase.
+
+**v1 COMPLETE.** HR surface = **27 routes** under `/api/v1/business/hr/*`. HR tests: **56 green**;
 broad regression (business/accounting/COA/tenant/platform): **341 green**. Deferred for later phases:
 self-service check-in / Attendance-mode LOP; GL posting of F&F; appointment-letter PDF; Aadhaar
 vault; recruitment/performance/shift modules.

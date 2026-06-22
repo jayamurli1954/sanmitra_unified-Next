@@ -189,11 +189,16 @@ async def test_gate_blocks_when_not_provisioned(monkeypatch):
     from fastapi import HTTPException
 
     from app.modules.hr import gating
+    import app.modules.business.service as business_service
 
     async def _tenant(_tid):
         return {"tenant_id": "t1", "hr_addon_available": False}
 
+    async def _settings(**_kwargs):
+        return {"hr_enabled": False}
+
     monkeypatch.setattr(gating, "get_tenant", _tenant)
+    monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
     dep = gating.require_hr_context("test")
     user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1"}
     with pytest.raises(HTTPException) as exc:
@@ -239,7 +244,82 @@ async def test_gate_passes_when_both_flags_on(monkeypatch):
     monkeypatch.setattr(gating, "get_tenant", _tenant)
     monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
     dep = gating.require_hr_context("test")
-    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1"}
+    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "hr_manager"}
     context = await dep(current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None)
     assert context.tenant_id == "t1"
     assert context.app_key == "mitrabooks"
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_when_role_not_hr(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.modules.hr import gating
+    import app.modules.business.service as business_service
+
+    async def _tenant(_tid):
+        return {"tenant_id": "t1", "hr_addon_available": True}
+
+    async def _settings(**_kwargs):
+        return {"hr_enabled": True}
+
+    monkeypatch.setattr(gating, "get_tenant", _tenant)
+    monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
+    # Entitled tenant, but a plain tenant_admin has no HR role -> manage is denied.
+    dep = gating.require_hr_context("payroll run", roles=gating.HR_MANAGE_ROLES)
+    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "tenant_admin"}
+    with pytest.raises(HTTPException) as exc:
+        await dep(current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None)
+    assert exc.value.status_code == 403
+    assert "HR role" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_payroll_auditor_can_read_but_not_manage(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.modules.hr import gating
+    import app.modules.business.service as business_service
+
+    async def _tenant(_tid):
+        return {"tenant_id": "t1", "hr_addon_available": True}
+
+    async def _settings(**_kwargs):
+        return {"hr_enabled": True}
+
+    monkeypatch.setattr(gating, "get_tenant", _tenant)
+    monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
+    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "payroll_auditor"}
+    # Read passes.
+    read = gating.require_hr_context("listing")  # default = read roles
+    ctx = await read(current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None)
+    assert ctx.tenant_id == "t1"
+    # Manage is denied.
+    manage = gating.require_hr_context("run", roles=gating.HR_MANAGE_ROLES)
+    with pytest.raises(HTTPException) as exc:
+        await manage(current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None)
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_access_probe_never_403s_when_disabled(monkeypatch):
+    from app.modules.hr import gating
+    import app.modules.business.service as business_service
+
+    async def _tenant(_tid):
+        return {"tenant_id": "t1", "hr_addon_available": True}
+
+    async def _settings(**_kwargs):
+        return {"hr_enabled": False}  # not enabled yet
+
+    monkeypatch.setattr(gating, "get_tenant", _tenant)
+    monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
+    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "hr_manager"}
+    access = await gating.resolve_hr_access(
+        current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None
+    )
+    assert access["available"] is True
+    assert access["enabled"] is False
+    assert access["entitled"] is False
+    assert access["can_manage"] is False  # not entitled -> cannot manage
+    assert access["role"] == "hr_manager"

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import get_current_user
@@ -15,7 +15,7 @@ from app.modules.hr import documents as hr_documents
 from app.modules.hr import fnf as fnf_module
 from app.modules.hr import leave as leave_module
 from app.modules.hr import tax as tax_module
-from app.modules.hr.gating import require_hr_context
+from app.modules.hr.gating import HR_MANAGE_ROLES, require_hr_context, resolve_hr_access
 from app.modules.hr.payroll_run import get_slip, list_payroll_runs, list_run_slips, run_payroll
 from app.modules.hr.schemas import (
     EmployeeCreateRequest,
@@ -98,10 +98,26 @@ def _pdf_response(content: bytes, filename: str) -> Response:
     )
 
 
+@router.get("/access")
+async def hr_access(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
+):
+    """Entitlement probe for the dashboard — never 403s on a disabled add-on.
+    The frontend uses this to decide whether to render the HR menu and which
+    actions to expose."""
+    return await resolve_hr_access(
+        current_user=current_user, x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key, x_accounting_entity_id=x_accounting_entity_id,
+    )
+
+
 @router.post("/employees", response_model=EmployeeResponse)
 async def hr_create_employee(
     payload: EmployeeCreateRequest,
-    context: AppTenantContext = Depends(require_hr_context("employee creation")),
+    context: AppTenantContext = Depends(require_hr_context("employee creation", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -148,7 +164,7 @@ async def hr_get_employee(
 async def hr_update_employee(
     employee_id: str,
     payload: EmployeeUpdateRequest,
-    context: AppTenantContext = Depends(require_hr_context("employee update")),
+    context: AppTenantContext = Depends(require_hr_context("employee update", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -168,7 +184,7 @@ async def hr_update_employee(
 @router.post("/salary-structures", response_model=SalaryStructureResponse)
 async def hr_create_salary_structure(
     payload: SalaryStructureCreateRequest,
-    context: AppTenantContext = Depends(require_hr_context("salary structure creation")),
+    context: AppTenantContext = Depends(require_hr_context("salary structure creation", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     return await create_salary_structure(
@@ -203,7 +219,7 @@ async def hr_get_salary_structure(
 async def hr_set_salary_assignment(
     employee_id: str,
     payload: SalaryAssignmentRequest,
-    context: AppTenantContext = Depends(require_hr_context("salary assignment")),
+    context: AppTenantContext = Depends(require_hr_context("salary assignment", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -233,7 +249,7 @@ async def hr_get_salary_assignment(
 @router.post("/payroll/run", response_model=PayrollRunResponse)
 async def hr_run_payroll(
     payload: PayrollRunRequest,
-    context: AppTenantContext = Depends(require_hr_context("payroll run")),
+    context: AppTenantContext = Depends(require_hr_context("payroll run", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -293,7 +309,7 @@ async def hr_salary_slip_pdf(
 @router.post("/leave-types", response_model=LeaveTypeResponse)
 async def hr_create_leave_type(
     payload: LeaveTypeCreateRequest,
-    context: AppTenantContext = Depends(require_hr_context("leave type creation")),
+    context: AppTenantContext = Depends(require_hr_context("leave type creation", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -318,7 +334,7 @@ async def hr_list_leave_types(
 async def hr_allocate_leave(
     employee_id: str,
     payload: LeaveAllocationRequest,
-    context: AppTenantContext = Depends(require_hr_context("leave allocation")),
+    context: AppTenantContext = Depends(require_hr_context("leave allocation", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -347,7 +363,7 @@ async def hr_leave_balances(
 @router.post("/leave-applications", response_model=LeaveApplicationResponse)
 async def hr_apply_leave(
     payload: LeaveApplicationRequest,
-    context: AppTenantContext = Depends(require_hr_context("leave application")),
+    context: AppTenantContext = Depends(require_hr_context("leave application", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -365,7 +381,7 @@ async def hr_apply_leave(
 @router.post("/leave-applications/{application_id}/approve", response_model=LeaveApplicationResponse)
 async def hr_approve_leave(
     application_id: str,
-    context: AppTenantContext = Depends(require_hr_context("leave approval")),
+    context: AppTenantContext = Depends(require_hr_context("leave approval", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -382,7 +398,7 @@ async def hr_approve_leave(
 @router.post("/leave-applications/{application_id}/reject", response_model=LeaveApplicationResponse)
 async def hr_reject_leave(
     application_id: str,
-    context: AppTenantContext = Depends(require_hr_context("leave rejection")),
+    context: AppTenantContext = Depends(require_hr_context("leave rejection", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -411,7 +427,7 @@ async def hr_list_leave_applications(
 @router.post("/tax-declarations", response_model=TaxDeclarationResponse)
 async def hr_create_tax_declaration(
     payload: TaxDeclarationCreateRequest,
-    context: AppTenantContext = Depends(require_hr_context("tax declaration")),
+    context: AppTenantContext = Depends(require_hr_context("tax declaration", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -443,7 +459,7 @@ async def hr_list_tax_declarations(
 async def hr_verify_tax_declaration(
     declaration_id: str,
     payload: TaxVerifyRequest,
-    context: AppTenantContext = Depends(require_hr_context("tax verification")),
+    context: AppTenantContext = Depends(require_hr_context("tax verification", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -462,7 +478,7 @@ async def hr_verify_tax_declaration(
 async def hr_upload_tax_proof(
     declaration_id: str,
     file: UploadFile = File(...),
-    context: AppTenantContext = Depends(require_hr_context("tax proof upload")),
+    context: AppTenantContext = Depends(require_hr_context("tax proof upload", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     # Chunked read so an oversized upload is rejected without buffering it whole.
@@ -523,7 +539,7 @@ async def hr_effective_deductions(
 @router.post("/fnf", response_model=FnfResponse)
 async def hr_create_fnf(
     payload: FnfCreateRequest,
-    context: AppTenantContext = Depends(require_hr_context("F&F settlement")),
+    context: AppTenantContext = Depends(require_hr_context("F&F settlement", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -580,7 +596,7 @@ async def hr_fnf_pdf(
 @router.post("/fnf/{fnf_id}/approve", response_model=FnfResponse)
 async def hr_approve_fnf(
     fnf_id: str,
-    context: AppTenantContext = Depends(require_hr_context("F&F approval")),
+    context: AppTenantContext = Depends(require_hr_context("F&F approval", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -597,7 +613,7 @@ async def hr_approve_fnf(
 @router.post("/fnf/{fnf_id}/pay", response_model=FnfResponse)
 async def hr_pay_fnf(
     fnf_id: str,
-    context: AppTenantContext = Depends(require_hr_context("F&F payment")),
+    context: AppTenantContext = Depends(require_hr_context("F&F payment", roles=HR_MANAGE_ROLES)),
     current_user: dict = Depends(get_current_user),
 ):
     try:
