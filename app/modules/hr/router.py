@@ -4,11 +4,12 @@ from __future__ import annotations
 import re
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import get_current_user
-from app.core.tenants.app_resolvers import AppTenantContext
+from app.core.tenants.app_resolvers import AppTenantContext, resolve_business_app_tenant
+from app.core.tenants.service import get_tenant
 from app.db.postgres import get_async_session
 from app.modules.hr import analytics as analytics_module
 from app.modules.hr import documents as hr_documents
@@ -112,6 +113,39 @@ async def hr_access(
         current_user=current_user, x_tenant_id=x_tenant_id,
         x_app_key=x_app_key, x_accounting_entity_id=x_accounting_entity_id,
     )
+
+
+@router.put("/enabled")
+async def hr_set_enabled(
+    enabled: bool = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
+):
+    """Tenant-admin toggle for hr_enabled. Cannot use the normal HR gate (that
+    requires hr_enabled already true), so it checks provisioning + role here."""
+    from app.modules.business.service import set_hr_enabled
+
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="HR enable toggle",
+        x_accounting_entity_id=x_accounting_entity_id,
+    )
+    tenant = await get_tenant(context.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    if not tenant.get("hr_addon_available"):
+        raise HTTPException(status_code=403, detail="HR add-on is not provisioned for this tenant")
+    if str(current_user.get("role") or "").strip() not in HR_MANAGE_ROLES:
+        raise HTTPException(status_code=403, detail="Only an admin can enable HR")
+
+    await set_hr_enabled(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=context.accounting_entity_id,
+        enabled=bool(enabled), updated_by=_actor(current_user),
+    )
+    return {"enabled": bool(enabled)}
 
 
 @router.post("/employees", response_model=EmployeeResponse)

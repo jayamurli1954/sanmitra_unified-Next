@@ -1184,6 +1184,26 @@ async def save_invoice_settings(
     return await get_invoice_settings(tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id)
 
 
+async def set_hr_enabled(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, enabled: bool, updated_by: str
+) -> bool:
+    """Tenant-admin toggle for the HR add-on — flips just InvoiceSettings.hr_enabled
+    (upserting the settings doc) without needing the full settings payload."""
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
+        filters,
+        {"$set": {"hr_enabled": bool(enabled), "updated_by": updated_by, "updated_at": _now()},
+         "$setOnInsert": {**filters, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit_business_event(
+        tenant_id=tenant_id, app_key=app_key, user_id=updated_by,
+        action="business_hr_enabled_toggled", entity_type="business_invoice_settings",
+        entity_id=accounting_entity_id, new_value={"hr_enabled": bool(enabled)},
+    )
+    return bool(enabled)
+
+
 async def list_sales_invoices(
     *,
     tenant_id: str,

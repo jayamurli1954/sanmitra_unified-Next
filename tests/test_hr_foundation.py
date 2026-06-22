@@ -265,9 +265,10 @@ async def test_gate_blocks_when_role_not_hr(monkeypatch):
 
     monkeypatch.setattr(gating, "get_tenant", _tenant)
     monkeypatch.setattr(business_service, "get_invoice_settings", _settings)
-    # Entitled tenant, but a plain tenant_admin has no HR role -> manage is denied.
+    # Entitled tenant, but a non-HR role (accountant) is denied manage access.
+    # (tenant_admin IS allowed — SMB owner/admin runs HR.)
     dep = gating.require_hr_context("payroll run", roles=gating.HR_MANAGE_ROLES)
-    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "tenant_admin"}
+    user = {"tenant_id": "t1", "app_key": "mitrabooks", "sub": "u1", "role": "accountant"}
     with pytest.raises(HTTPException) as exc:
         await dep(current_user=user, x_tenant_id="t1", x_app_key="mitrabooks", x_accounting_entity_id=None)
     assert exc.value.status_code == 403

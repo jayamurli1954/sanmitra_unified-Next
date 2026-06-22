@@ -3257,6 +3257,7 @@ function renderRecentTenantsTable(rows) {
                     data-organization-type="${escapeHtml(row.organization_type)}"
                     data-subscription-plan="${escapeHtml(row.subscription_plan)}"
                     data-enabled-modules="${escapeHtml(modules)}"
+                    data-hr-addon-available="${row.hr_addon_available ? "1" : "0"}"
                   >Entitlements</button>
                 </td>
               </tr>
@@ -5291,6 +5292,19 @@ async function loadHrWorkspace() {
   }
 }
 
+async function hrEnable() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/enabled", {
+    method: "PUT", body: JSON.stringify({ enabled: true }),
+  });
+  if (!res.ok) {
+    hrError = res.payload?.detail || "Could not enable HR.";
+    refreshHrView();
+    return;
+  }
+  hrError = "";
+  loadHrWorkspace();  // re-probe access → tabs light up
+}
+
 async function loadHrEmployees() {
   const res = await apiRequest("mitrabooks", "/api/v1/business/hr/employees", { method: "GET" });
   hrEmployees = res.ok && Array.isArray(res.payload?.employees) ? res.payload.employees : [];
@@ -5745,10 +5759,19 @@ function renderHrWorkspace() {
   if (!hrAccess) {
     body = `<p class="muted">Loading HR workspace…</p>`;
   } else if (!hrAccess.entitled) {
-    const reason = hrAccess.available === false
-      ? "The HR add-on has not been provisioned for your organization. Contact your platform administrator to enable it."
-      : "The HR module is turned off. Enable it in MitraBooks Settings to begin.";
-    body = `<div class="module-state warn"><strong>HR &amp; Payroll is not active</strong><span>${escapeHtml(reason)}</span></div>`;
+    if (hrAccess.available === false) {
+      body = `<div class="module-state warn"><strong>HR &amp; Payroll is not active</strong><span>The HR add-on has not been provisioned for your organization. Contact your platform administrator to enable it.</span></div>`;
+    } else if (hrAccess.can_enable) {
+      // Provisioned but the tenant hasn't switched it on yet — let an admin do it here.
+      body = `
+        <div class="module-state warn">
+          <strong>HR &amp; Payroll is provisioned but turned off</strong>
+          <span>Enable it to start managing employees, payroll, leave and settlements.</span>
+        </div>
+        <button class="primary" type="button" data-business-action="hr-enable" style="margin-top:10px;">Enable HR &amp; Payroll</button>`;
+    } else {
+      body = `<div class="module-state warn"><strong>HR &amp; Payroll is not active</strong><span>The HR module is turned off. Ask an administrator to enable it in MitraBooks Settings.</span></div>`;
+    }
   } else {
     body = `
       ${hrError ? `<div class="module-state danger"><span>${escapeHtml(hrError)}</span></div>` : ""}
@@ -15632,12 +15655,21 @@ function openTenantEntitlementsDialog(button) {
   entitlementPlan.value = currentPlan;
   entitlementStatus.value = currentStatus;
   entitlementStatus.dataset.currentStatus = currentStatus;
+  const hrAddonAvailable = button.getAttribute("data-hr-addon-available") === "1";
+  // Show the HR add-on provisioning toggle only for MitraBooks (business) tenants.
+  const isBusiness = String(organizationType || "").toUpperCase() === "BUSINESS";
+  const hrToggle = isBusiness ? `
+    <label class="checkbox-option" style="margin-top:10px;border-top:1px solid var(--border,#333);padding-top:10px;">
+      <input type="checkbox" id="entitlement-hr-addon" ${hrAddonAvailable ? "checked" : ""}>
+      <span><strong>HR &amp; Payroll add-on</strong> (enterprise) — provision for this tenant</span>
+    </label>` : "";
   entitlementModules.innerHTML = availableModules.map((moduleKey) => `
     <label class="checkbox-option">
       <input type="checkbox" value="${escapeHtml(moduleKey)}" ${currentModules.has(moduleKey) ? "checked" : ""}>
       <span>${escapeHtml(moduleKey)}</span>
     </label>
-  `).join("");
+  `).join("") + hrToggle;
+  entitlementModules.dataset.hrInitial = hrAddonAvailable ? "1" : "0";
 
   entitlementDialog.showModal();
 }
@@ -15673,7 +15705,22 @@ async function submitTenantEntitlements() {
       enabled_modules: enabledModules,
     }),
   });
-  renderJson(apiOutput, { update_tenant_status: statusResult, update_tenant_entitlements: result });
+
+  // Provision / revoke the HR add-on if its toggle changed (super_admin only).
+  let hrResult = null;
+  const hrCheckbox = document.getElementById("entitlement-hr-addon");
+  if (hrCheckbox) {
+    const hrWanted = !!hrCheckbox.checked;
+    const hrInitial = entitlementModules.dataset.hrInitial === "1";
+    if (hrWanted !== hrInitial) {
+      hrResult = await apiRequest(APP_KEY, `/api/v1/platform-owner/tenants/${encodeURIComponent(tenantId)}/hr-addon`, {
+        method: "PUT",
+        body: JSON.stringify({ available: hrWanted }),
+      });
+    }
+  }
+
+  renderJson(apiOutput, { update_tenant_status: statusResult, update_tenant_entitlements: result, hr_addon: hrResult });
   entitlementDialog.close();
   await loadPlatformOwnerDashboard();
 }
@@ -15910,6 +15957,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   } else if (businessAction === "hr-refresh") {
     loadHrWorkspace();
+  } else if (businessAction === "hr-enable") {
+    hrEnable();
   } else if (businessAction === "hr-tab") {
     hrTab = button.getAttribute("data-hr-tab") || "employees";
     if (hrTab !== "payroll") { hrSelectedRunId = ""; hrRunSlips = []; }

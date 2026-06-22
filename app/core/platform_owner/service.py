@@ -51,6 +51,7 @@ def _compact_tenant(row: dict[str, Any]) -> dict[str, Any]:
         "app_keys": _normalize_app_keys(row.get("app_keys")),
         "enabled_modules": [str(item).strip().lower() for item in row.get("enabled_modules") or [] if str(item).strip()],
         "subscription_plan": str(row.get("subscription_plan") or "free").strip().lower() or "free",
+        "hr_addon_available": bool(row.get("hr_addon_available", False)),
         "updated_at": row.get("updated_at"),
     }
 

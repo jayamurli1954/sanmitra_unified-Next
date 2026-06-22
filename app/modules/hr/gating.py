@@ -25,8 +25,11 @@ from app.core.tenants.service import get_tenant
 HR_APP_KEY = "mitrabooks"
 
 # Role sets. super_admin (platform owner) is included for support/operations.
-HR_MANAGE_ROLES = frozenset({"hr_manager", "super_admin"})
-HR_READ_ROLES = frozenset({"hr_manager", "payroll_auditor", "super_admin"})
+# tenant_admin is included so the business owner/admin can run HR directly —
+# fits SMBs where the admin is the HR/payroll person. Larger orgs can still grant
+# the dedicated hr_manager / payroll_auditor roles for separation of duties.
+HR_MANAGE_ROLES = frozenset({"hr_manager", "tenant_admin", "super_admin"})
+HR_READ_ROLES = frozenset({"hr_manager", "payroll_auditor", "tenant_admin", "super_admin"})
 HR_SELF_ROLE = "employee_self"
 
 
@@ -108,5 +111,7 @@ async def resolve_hr_access(
         "role": role,
         "can_manage": entitled and role in HR_MANAGE_ROLES,
         "can_view": entitled and role in HR_READ_ROLES,
+        # Provisioned but maybe not yet enabled — an admin can flip hr_enabled.
+        "can_enable": available and role in HR_MANAGE_ROLES,
         "is_self": role == HR_SELF_ROLE,
     }
