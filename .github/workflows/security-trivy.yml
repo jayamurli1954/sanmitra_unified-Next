@@ -1,10 +1,9 @@
 name: security-trivy
 
 on:
+  # Run on a push to ANY branch (not just main/develop) so the vulnerability
+  # scan gates every commit, plus on PRs and the weekly schedule.
   push:
-    branches:
-      - main
-      - develop
   pull_request:
   schedule:
     - cron: "15 3 * * 2"

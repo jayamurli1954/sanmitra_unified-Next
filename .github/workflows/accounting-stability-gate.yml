@@ -1,9 +1,9 @@
 name: accounting-stability-gate
 
 on:
+  # Run on a push to ANY branch when accounting / live-app surfaces change —
+  # the path filter keeps this guardrail off unrelated commits.
   push:
-    branches:
-      - main
     paths:
       - app/modules/mandir_compat/**
       - app/modules/housing_compat/**
