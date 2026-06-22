@@ -1,10 +1,9 @@
 name: semgrep
 
 on:
+  # Run on a push to ANY branch (not just main/develop) so static analysis
+  # gates every commit, plus on PRs and the weekly schedule.
   push:
-    branches:
-      - main
-      - develop
   pull_request:
   schedule:
     - cron: "45 3 * * 2"

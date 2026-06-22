@@ -1,9 +1,9 @@
 name: mitrabooks-shell-smoke
 
 on:
+  # Run on a push to ANY branch when the MitraBooks frontend (or its harness)
+  # changes — the path filter keeps it off unrelated commits.
   push:
-    branches:
-      - main
     paths:
       - frontend/mitrabooks-erp/**
       - frontend/shared/**
