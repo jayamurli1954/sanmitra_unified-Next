@@ -96,6 +96,14 @@ function businessNavigationGroups() {
       ],
     },
     {
+      name: "Human Resources",
+      items: [
+        // Enterprise HR/Payroll add-on. The menu always renders; the workspace
+        // itself gates on GET /business/hr/access (platform + tenant entitlement).
+        { label: "HR & Payroll", businessWorkspace: "hr", icon: "HR", module: { module_key: "hr", frontend_path: "/business/hr", enabled: true } },
+      ],
+    },
+    {
       name: "Configuration & Extensions",
       items: [
         { label: "Settings", businessWorkspace: "settings", icon: "ST", module: { module_key: "business", frontend_path: "/business/settings", enabled: true } },
@@ -4667,6 +4675,16 @@ function renderDashboardPreview(config) {
 let activeBusinessWorkspace = "overview";
 let lastBusinessPartiesResult = null;
 let activeSettingsDetailId = "";
+
+// ── HR / Payroll add-on workspace state ──────────────────────────────────────
+let hrAccess = null;          // GET /business/hr/access result (entitlement + role)
+let hrTab = "employees";      // "employees" | "payroll" | "analytics"
+let hrEmployees = [];
+let hrRuns = [];
+let hrSelectedRunId = "";
+let hrRunSlips = [];
+let hrAnalytics = null;
+let hrError = "";
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
@@ -5237,6 +5255,241 @@ function renderProfessionalSuiteWorkspace() {
 // NOTE  : renderBusinessWorkspace — top-level if/else dispatches to each workspace render function
 // ══════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════
+// SECTION: HR / PAYROLL ADD-ON WORKSPACE
+// NOTE  : Backend /api/v1/business/hr/*. Menu always shows; content gates on
+//         GET /business/hr/access (platform + tenant entitlement + role).
+// ══════════════════════════════════════════════════════════════════════
+
+function hrMoney(value) {
+  const n = Number(value || 0);
+  return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function hrCanManage() {
+  return !!(hrAccess && hrAccess.can_manage);
+}
+
+function refreshHrView() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "hr") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function loadHrWorkspace() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/access", { method: "GET" });
+  hrAccess = res.ok ? res.payload : { entitled: false, available: false, error: res.payload?.detail };
+  refreshHrView();
+  if (hrAccess && hrAccess.entitled) {
+    loadHrEmployees();
+    loadHrRuns();
+    loadHrAnalytics();
+  }
+}
+
+async function loadHrEmployees() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/employees", { method: "GET" });
+  hrEmployees = res.ok && Array.isArray(res.payload?.employees) ? res.payload.employees : [];
+  refreshHrView();
+}
+
+async function loadHrRuns() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/payroll/runs", { method: "GET" });
+  hrRuns = res.ok && Array.isArray(res.payload?.runs) ? res.payload.runs : [];
+  refreshHrView();
+}
+
+async function loadHrAnalytics() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/analytics/dashboard?months=6", { method: "GET" });
+  hrAnalytics = res.ok ? res.payload : null;
+  refreshHrView();
+}
+
+async function loadHrRunSlips(runId) {
+  hrSelectedRunId = runId;
+  const res = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/hr/payroll/runs/${encodeURIComponent(runId)}/slips`,
+    { method: "GET" },
+  );
+  hrRunSlips = res.ok && Array.isArray(res.payload) ? res.payload : [];
+  refreshHrView();
+}
+
+async function hrRunPayroll() {
+  const year = parseInt(document.getElementById("hr-run-year")?.value, 10);
+  const month = parseInt(document.getElementById("hr-run-month")?.value, 10);
+  if (!year || !month) {
+    hrError = "Enter a valid year and month before running payroll.";
+    refreshHrView();
+    return;
+  }
+  hrError = "";
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/payroll/run", {
+    method: "POST",
+    body: JSON.stringify({ year, month }),
+  });
+  hrError = res.ok ? "" : (res.payload?.detail || "Payroll run failed.");
+  await loadHrRuns();
+  await loadHrAnalytics();
+  refreshHrView();
+}
+
+function hrDownloadSlipPdf(button) {
+  const slipId = button.getAttribute("data-slip-id") || "";
+  const period = button.getAttribute("data-period") || "slip";
+  if (!slipId) return;
+  downloadApiFile(
+    "mitrabooks",
+    `/api/v1/business/hr/payroll/slips/${encodeURIComponent(slipId)}/pdf`,
+    `salary-slip-${period}.pdf`,
+  );
+}
+
+function hrTabButton(key, label) {
+  const active = hrTab === key ? " active" : "";
+  return `<button type="button" class="erp-tab${active}" data-business-action="hr-tab" data-hr-tab="${key}">${escapeHtml(label)}</button>`;
+}
+
+function renderHrEmployeesTab() {
+  if (!hrEmployees.length) {
+    return `<p class="muted">No employees yet. Add employees via the HR API to start running payroll.</p>`;
+  }
+  const rows = hrEmployees.map((e) => `
+    <tr>
+      <td>${escapeHtml(e.full_name || "")}</td>
+      <td>${escapeHtml(e.designation || "—")}</td>
+      <td>${escapeHtml(e.department || "—")}</td>
+      <td><span class="status-pill">${escapeHtml(e.status || "")}</span></td>
+    </tr>`).join("");
+  return `
+    <table class="erp-table">
+      <thead><tr><th>Name</th><th>Designation</th><th>Department</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderHrPayrollTab() {
+  const now = new Date();
+  const runForm = hrCanManage() ? `
+    <div class="hr-run-form" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+      <label>Year<br><input id="hr-run-year" type="number" min="2000" max="2100" value="${now.getFullYear()}" style="width:90px;"></label>
+      <label>Month<br>
+        <select id="hr-run-month" style="width:120px;">
+          ${Array.from({ length: 12 }, (_, i) => {
+            const m = i + 1;
+            const sel = m === now.getMonth() + 1 ? " selected" : "";
+            return `<option value="${m}"${sel}>${m.toString().padStart(2, "0")}</option>`;
+          }).join("")}
+        </select>
+      </label>
+      <button class="primary" type="button" data-business-action="hr-run-payroll">Run Payroll</button>
+    </div>` : `<p class="muted">Read-only access — payroll runs require an HR manager role.</p>`;
+
+  const runRows = hrRuns.length ? hrRuns.map((r) => {
+    const net = (r.totals && r.totals.net) || 0;
+    return `
+      <tr>
+        <td>${escapeHtml(r.period || "")}</td>
+        <td>${escapeHtml(String(r.employee_count ?? ""))}</td>
+        <td class="num">${hrMoney(net)}</td>
+        <td>${escapeHtml(String(r.journal_entry_id ?? "—"))}</td>
+        <td><button class="secondary" type="button" data-business-action="hr-view-slips" data-run-id="${escapeHtml(r.run_id)}">View Slips</button></td>
+      </tr>`;
+  }).join("") : `<tr><td colspan="5" class="muted">No payroll runs yet.</td></tr>`;
+
+  const slipsBlock = hrSelectedRunId ? `
+    <h5 style="margin-top:18px;">Salary Slips — ${escapeHtml(hrSelectedRunId.slice(0, 8))}</h5>
+    <table class="erp-table">
+      <thead><tr><th>Employee</th><th>Period</th><th>Paid Days</th><th>LOP</th><th>Net Pay</th><th></th></tr></thead>
+      <tbody>${
+        hrRunSlips.length ? hrRunSlips.map((s) => `
+          <tr>
+            <td>${escapeHtml(s.employee_id || "")}</td>
+            <td>${escapeHtml(s.period || "")}</td>
+            <td class="num">${escapeHtml(String(s.payment_days ?? ""))}</td>
+            <td class="num">${escapeHtml(String(s.lop_days ?? ""))}</td>
+            <td class="num">${hrMoney(s.net_pay)}</td>
+            <td><button class="secondary" type="button" data-business-action="hr-slip-pdf" data-slip-id="${escapeHtml(s.slip_id)}" data-period="${escapeHtml(s.period || "")}">PDF</button></td>
+          </tr>`).join("") : `<tr><td colspan="6" class="muted">No slips for this run.</td></tr>`
+      }</tbody>
+    </table>` : "";
+
+  return `
+    ${runForm}
+    <table class="erp-table">
+      <thead><tr><th>Period</th><th>Employees</th><th>Net Payout</th><th>Journal #</th><th></th></tr></thead>
+      <tbody>${runRows}</tbody>
+    </table>
+    ${slipsBlock}`;
+}
+
+function renderHrAnalyticsTab() {
+  if (!hrAnalytics || !hrAnalytics.summary) {
+    return `<p class="muted">No analytics yet — run payroll to populate the dashboard.</p>`;
+  }
+  const s = hrAnalytics.summary;
+  const card = (label, value) => `
+    <div class="kpi-card" style="padding:12px 16px;border:1px solid var(--border,#333);border-radius:8px;min-width:140px;">
+      <div class="muted" style="font-size:12px;">${escapeHtml(label)}</div>
+      <div style="font-size:20px;font-weight:600;">${value}</div>
+    </div>`;
+  const cards = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+      ${card("Active Employees", escapeHtml(String(s.active_employees ?? 0)))}
+      ${card("Exited", escapeHtml(String(s.exited_employees ?? 0)))}
+      ${card("Latest Period", escapeHtml(s.latest_period || "—"))}
+      ${card("Latest Net Payout", hrMoney(s.latest_net_payout))}
+      ${card("Latest TDS", hrMoney(s.latest_tds))}
+    </div>`;
+  const labels = (hrAnalytics.labels || []);
+  const tds = (hrAnalytics.datasets && hrAnalytics.datasets.tds_liability) || [];
+  const net = (hrAnalytics.datasets && hrAnalytics.datasets.net_disbursed) || [];
+  const trendRows = labels.map((lbl, i) => `
+    <tr><td>${escapeHtml(lbl)}</td><td class="num">${hrMoney(net[i])}</td><td class="num">${hrMoney(tds[i])}</td></tr>`).join("");
+  const trend = labels.length ? `
+    <table class="erp-table">
+      <thead><tr><th>Period</th><th>Net Disbursed</th><th>TDS Liability</th></tr></thead>
+      <tbody>${trendRows}</tbody>
+    </table>` : "";
+  return cards + trend;
+}
+
+function renderHrTab() {
+  if (hrTab === "payroll") return renderHrPayrollTab();
+  if (hrTab === "analytics") return renderHrAnalyticsTab();
+  return renderHrEmployeesTab();
+}
+
+function renderHrWorkspace() {
+  let body;
+  if (!hrAccess) {
+    body = `<p class="muted">Loading HR workspace…</p>`;
+  } else if (!hrAccess.entitled) {
+    const reason = hrAccess.available === false
+      ? "The HR add-on has not been provisioned for your organization. Contact your platform administrator to enable it."
+      : "The HR module is turned off. Enable it in MitraBooks Settings to begin.";
+    body = `<div class="module-state warn"><strong>HR &amp; Payroll is not active</strong><span>${escapeHtml(reason)}</span></div>`;
+  } else {
+    body = `
+      ${hrError ? `<div class="module-state danger"><span>${escapeHtml(hrError)}</span></div>` : ""}
+      <div class="erp-tabs" style="display:flex;gap:6px;margin-bottom:14px;">
+        ${hrTabButton("employees", "Employees")}
+        ${hrTabButton("payroll", "Payroll")}
+        ${hrTabButton("analytics", "Analytics")}
+      </div>
+      <div class="erp-tab-content">${renderHrTab()}</div>`;
+  }
+  return `
+    <div class="verification-panel erp-workspace-panel">
+      <div class="preview-heading compact">
+        <div><h4>HR &amp; Payroll</h4><p>Employees, payroll runs, and statutory analytics.</p></div>
+        <button class="secondary" type="button" data-business-action="hr-refresh">Refresh</button>
+      </div>
+      ${body}
+    </div>`;
+}
+
 function renderBusinessWorkspace() {
   if (activeBusinessWorkspace === "settings") {
     return renderMitraBooksSettingsWorkspace();
@@ -5326,6 +5579,9 @@ function renderBusinessWorkspace() {
   }
   if (activeBusinessWorkspace === "financial-health") {
     return renderFinancialHealthWorkspace();
+  }
+  if (activeBusinessWorkspace === "hr") {
+    return renderHrWorkspace();
   }
   return `
     <div class="erp-workbench-grid">
@@ -6041,6 +6297,12 @@ function setBusinessWorkspace(workspace) {
       loadCaAccessUsers();
     }
     loadCaPracticeDocuments();
+  } else if (workspace === "hr") {
+    hrTab = "employees";
+    hrError = "";
+    hrSelectedRunId = "";
+    hrRunSlips = [];
+    loadHrWorkspace();
   }
 }
 
@@ -15364,6 +15626,18 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "settings-back") {
     activeSettingsDetailId = "";
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-refresh") {
+    loadHrWorkspace();
+  } else if (businessAction === "hr-tab") {
+    hrTab = button.getAttribute("data-hr-tab") || "employees";
+    if (hrTab !== "payroll") { hrSelectedRunId = ""; hrRunSlips = []; }
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-run-payroll") {
+    hrRunPayroll();
+  } else if (businessAction === "hr-view-slips") {
+    loadHrRunSlips(button.getAttribute("data-run-id") || "");
+  } else if (businessAction === "hr-slip-pdf") {
+    hrDownloadSlipPdf(button);
   } else if (businessAction === "open-create-voucher") {
     openBusinessCreateVoucherDialog();
   } else if (businessAction === "remove-voucher-line") {
