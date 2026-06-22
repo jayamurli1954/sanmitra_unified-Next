@@ -13,6 +13,7 @@ from app.core.documents.spec import (
     DocumentLine,
     DocumentParty,
     DocumentSpec,
+    LocalText,
     TotalRow,
 )
 from app.core.documents.pdf import render_document_pdf
@@ -22,6 +23,7 @@ __all__ = [
     "DocumentLine",
     "DocumentParty",
     "DocumentSpec",
+    "LocalText",
     "TotalRow",
     "render_document_pdf",
 ]

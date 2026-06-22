@@ -25,9 +25,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.core.documents.spec import DocumentSpec
+from app.core.documents.fonts import font_for_language, register_document_fonts, rupee_font_name
+from app.core.documents.spec import DocumentSpec, LocalText
+
+# Register the bundled Noto fonts once at import so per-run lookups are cheap.
+register_document_fonts()
 
 _PAGE_SIZES = {"A4": A4, "A5": A5}
+_RUPEE = "₹"
 
 _HEADING = ParagraphStyle("doc-heading", fontName="Helvetica-Bold", fontSize=18, leading=21)
 _ORG_NAME = ParagraphStyle("doc-org", fontName="Helvetica-Bold", fontSize=12, leading=15)
@@ -46,6 +51,40 @@ def _esc(value) -> str:
     )
 
 
+def _wrap_rupee(escaped: str) -> str:
+    """Render any ₹ in a font that has the glyph (core fonts lack it).
+
+    When no Noto font is registered, fall back to the ASCII 'Rs.' so the symbol
+    never shows as a missing-glyph box."""
+    if _RUPEE not in escaped:
+        return escaped
+    rupee_font = rupee_font_name()
+    if rupee_font:
+        return escaped.replace(_RUPEE, f'<font name="{rupee_font}">{_RUPEE}</font>')
+    return escaped.replace(_RUPEE, "Rs.")
+
+
+def _rich(value, default_language: str | None = None) -> str:
+    """Turn a str / LocalText / mixed list into reportlab inline markup.
+
+    Plain strings render in the paragraph's base (Latin) font with ₹ wrapped;
+    LocalText runs render in the matching Indian-script font. This is what lets a
+    single line mix English and, say, Kannada correctly — the bundled Noto fonts
+    are script-only and cannot render Latin themselves."""
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return "".join(_rich(part, default_language) for part in value)
+    if isinstance(value, LocalText):
+        inner = _esc(value.text)
+        font = font_for_language(value.language or default_language)
+        if font:
+            return f'<font name="{font}">{inner}</font>'
+        # No script font available — still show the text (may miss glyphs).
+        return _wrap_rupee(inner)
+    return _wrap_rupee(_esc(value))
+
+
 def _party_block(party, *, heading: str | None = None) -> list:
     bits = []
     if heading:
@@ -61,10 +100,10 @@ def _party_block(party, *, heading: str | None = None) -> list:
 
 def _header_table(spec: DocumentSpec, width: float) -> Table:
     left = _party_block(spec.seller)
-    meta_bits = [f'<font name="Helvetica-Bold" size="13">{_esc(spec.title)}</font>']
+    meta_bits = [f'<font name="Helvetica-Bold" size="13">{_rich(spec.title, spec.language)}</font>']
     meta_bits.append(f"<br/>No: {_esc(spec.number)}")
     for label, value in spec.meta:
-        meta_bits.append(f"<br/>{_esc(label)}: {_esc(value)}")
+        meta_bits.append(f"<br/>{_esc(label)}: {_rich(value, spec.language)}")
     right = Paragraph("".join(meta_bits), _BODY_RIGHT)
     table = Table([[left, right]], colWidths=[width * 0.55, width * 0.45])
     table.setStyle(TableStyle([
@@ -83,7 +122,7 @@ def _line_items_table(spec: DocumentSpec, width: float) -> Table:
     header = [Paragraph(f'<font name="Helvetica-Bold">{_esc(c.label)}</font>', _SMALL) for c in spec.columns]
     body = [header]
     for line in spec.lines:
-        body.append([Paragraph(_esc(line.cells.get(c.key, "")), _SMALL) for c in spec.columns])
+        body.append([Paragraph(_rich(line.cells.get(c.key, ""), spec.language), _SMALL) for c in spec.columns])
 
     table = Table(body, colWidths=col_widths, repeatRows=1)
     style = [
@@ -106,7 +145,10 @@ def _totals_table(spec: DocumentSpec, width: float) -> Table:
     for total in spec.totals:
         label_style = _LABEL if total.emphasize else _BODY
         value_style = ParagraphStyle("tv", parent=_BODY_RIGHT, fontName="Helvetica-Bold" if total.emphasize else "Helvetica")
-        rows.append([Paragraph(_esc(total.label), label_style), Paragraph(_esc(total.value), value_style)])
+        rows.append([
+            Paragraph(_rich(total.label, spec.language), label_style),
+            Paragraph(_rich(total.value, spec.language), value_style),
+        ])
     inner = Table(rows, colWidths=[width * 0.28, width * 0.17])
     style = [
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -164,14 +206,14 @@ def render_document_pdf(spec: DocumentSpec) -> bytes:
         story.append(_totals_table(spec, content_width))
         story.append(Spacer(1, 5 * mm))
     if spec.notes:
-        story.append(Paragraph(f'<font name="Helvetica-Bold">Notes: </font>{_esc(spec.notes)}', _BODY))
+        story.append(Paragraph(f'<font name="Helvetica-Bold">Notes: </font>{_rich(spec.notes, spec.language)}', _BODY))
         story.append(Spacer(1, 3 * mm))
     if spec.declaration:
-        story.append(Paragraph(_esc(spec.declaration), _SMALL))
+        story.append(Paragraph(_rich(spec.declaration, spec.language), _SMALL))
         story.append(Spacer(1, 2 * mm))
     if spec.footer_note:
         story.append(Spacer(1, 6 * mm))
-        story.append(Paragraph(_esc(spec.footer_note), _SMALL))
+        story.append(Paragraph(_rich(spec.footer_note, spec.language), _SMALL))
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buffer.getvalue()

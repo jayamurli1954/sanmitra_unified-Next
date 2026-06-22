@@ -9,6 +9,25 @@ invoice includes them — without the renderer knowing anything about GST.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Union
+
+
+@dataclass
+class LocalText:
+    """A run of local-language (Indian-script) text.
+
+    The renderer renders this in the script font for ``language`` (e.g. a
+    bilingual receipt mixes English runs with Kannada ``LocalText`` runs). When
+    the font is unavailable the text still renders (possibly with missing
+    glyphs) rather than failing.
+    """
+    text: str
+    language: str | None = None
+
+
+# Any renderable text field may be a plain string, a local-language run, or a
+# mixed sequence of both.
+RichText = Union[str, "LocalText", list]
 
 
 @dataclass
@@ -51,7 +70,10 @@ class DocumentSpec:
     totals: list[TotalRow] = field(default_factory=list)
     meta: list[tuple[str, str]] = field(default_factory=list)   # header key/value pairs
     buyer_heading: str = "Bill To"
-    notes: str | None = None
-    declaration: str | None = None
-    footer_note: str | None = None
+    notes: RichText | None = None
+    declaration: RichText | None = None
+    footer_note: RichText | None = None
+    # Default local language for the document (used where a field doesn't carry
+    # its own LocalText language). Optional; documents are English-only by default.
+    language: str | None = None
     page_size: str = "A4"

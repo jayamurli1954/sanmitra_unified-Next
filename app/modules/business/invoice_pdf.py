@@ -28,7 +28,9 @@ def _dec(value) -> Decimal:
 
 
 def _money(value) -> str:
-    return f"Rs. {_dec(value):,.2f}"
+    # Emit the ₹ symbol; the shared renderer wraps it in a font that has the
+    # glyph (core PDF fonts don't) and falls back to "Rs." when none is present.
+    return f"₹{_dec(value):,.2f}"
 
 
 def _qty(value) -> str:
