@@ -23,6 +23,10 @@ from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
 from app.modules.business.seed import ensure_mitrabooks_e2e_seed
+from app.modules.hr.fnf import ensure_fnf_indexes
+from app.modules.hr.leave import ensure_leave_indexes
+from app.modules.hr.tax import ensure_tax_indexes
+from app.modules.hr.service import ensure_hr_indexes
 from app.modules.housing.service import ensure_maintenance_indexes
 from app.modules.housing_compat.service import ensure_housing_compat_indexes
 from app.modules.investment.service import ensure_investment_indexes
@@ -139,6 +143,10 @@ async def on_startup() -> None:
         await ensure_investment_indexes()
         await ensure_onboarding_indexes()
         await ensure_rag_indexes()
+        await ensure_hr_indexes()
+        await ensure_leave_indexes()
+        await ensure_tax_indexes()
+        await ensure_fnf_indexes()
     except Exception as exc:
         # Keep app booting even if Mongo is unavailable; health endpoint will show degraded state.
         _startup_logger.error("MongoDB startup initialisation failed: %s", exc, exc_info=True)

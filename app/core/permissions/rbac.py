@@ -13,6 +13,11 @@ class Role(str, Enum):
     operator = "operator"
     viewer = "viewer"
     ca_viewer = "ca_viewer"
+    # HR / Payroll add-on (MitraBooks enterprise tier). Sensitive comp data is not
+    # visible to tenant_admin by default — it must be granted one of these roles.
+    hr_manager = "hr_manager"
+    payroll_auditor = "payroll_auditor"
+    employee_self = "employee_self"
 
 
 def require_roles(allowed_roles: Iterable[Role]):

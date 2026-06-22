@@ -1101,7 +1101,10 @@ async def get_invoice_settings(
         result = settings.model_dump()
     else:
         # Re-validate stored doc through the model so missing/new keys get defaults.
-        stored = {k: v for k, v in row.items() if k in {"field_config", "numbering", "custom_fields", "branding"}}
+        stored = {
+            k: v for k, v in row.items()
+            if k in {"field_config", "numbering", "custom_fields", "branding", "inventory_enabled", "hr_enabled"}
+        }
         result = InvoiceSettings(**stored).model_dump()
     # Backfill any standard field missing from a partially-saved config so the
     # form and required-field validation always have a complete rule set.
@@ -1158,6 +1161,8 @@ async def save_invoice_settings(
         numbering=payload.numbering,
         custom_fields=payload.custom_fields,
         branding=payload.branding,
+        inventory_enabled=payload.inventory_enabled,
+        hr_enabled=payload.hr_enabled,
     )
     doc = settings.model_dump()
     doc.update({"updated_by": updated_by, "updated_at": _now()})

@@ -47,6 +47,11 @@ def _serialize_tenant(doc: dict) -> dict:
         "enabled_modules": enabled_modules,
         "app_keys": [str(key).strip().lower() for key in app_keys if str(key).strip()],
         "subscription_plan": str(doc.get("subscription_plan") or "free").strip().lower() or "free",
+        # Platform-owner provisioning flag for the MitraBooks HR add-on (enterprise
+        # tier). Defaults False — a tenant cannot self-enable HR; the platform owner
+        # must first make it available. The tenant-admin on/off toggle lives
+        # separately on MitraBooks InvoiceSettings (hr_enabled).
+        "hr_addon_available": bool(doc.get("hr_addon_available", False)),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
         "updated_by": doc.get("updated_by"),
@@ -231,6 +236,32 @@ async def set_tenant_status(*, tenant_id: str, status: str, updated_by: str) -> 
         raise KeyError("Tenant not found")
 
     _set_tenant_status_cache(normalized_tenant_id, normalized_status)
+    return _serialize_tenant(doc)
+
+
+async def set_hr_addon_available(*, tenant_id: str, available: bool, updated_by: str) -> dict:
+    """Platform-owner switch: make (or revoke) the MitraBooks HR add-on for a tenant.
+
+    This is the first of the two-level HR gate. Once available, the tenant admin
+    still has to turn the module on via InvoiceSettings.hr_enabled.
+    """
+    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    if not normalized_tenant_id:
+        raise ValueError("tenant_id is required")
+
+    await ensure_tenants_indexes()
+    tenants = get_collection(TENANTS_COLLECTION)
+    now = datetime.now(timezone.utc)
+    result = await tenants.update_one(
+        {"tenant_id": normalized_tenant_id},
+        {"$set": {"hr_addon_available": bool(available), "updated_at": now, "updated_by": updated_by}},
+    )
+    if result.matched_count == 0:
+        raise KeyError("Tenant not found")
+
+    doc = await tenants.find_one({"tenant_id": normalized_tenant_id})
+    if not doc:
+        raise KeyError("Tenant not found")
     return _serialize_tenant(doc)
 
 

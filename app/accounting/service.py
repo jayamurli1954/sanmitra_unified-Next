@@ -246,6 +246,8 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     # 21xxx Payables
     _default_account("21001", "Sundry Creditors", "liability", "personal", is_payable=True),
     _default_account("21002", "Expenses Payable", "liability", "personal", is_payable=True),
+    # Net salary owed to employees until the bank disbursal clears it (HR add-on).
+    _default_account("21003", "Salaries Payable", "liability", "personal", is_payable=True),
     # 22xxx Tax payable (Output GST)
     _default_account("22001", "Output CGST", "liability", "personal"),
     _default_account("22002", "Output SGST", "liability", "personal"),
@@ -258,6 +260,12 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("23002", "Statutory Dues Payable", "liability", "personal", is_payable=True),
     _default_account("23003", "Interest Payable on GST", "liability", "personal", is_payable=True),
     _default_account("23004", "TCS Payable", "liability", "personal", is_payable=True),
+    # Payroll statutory dues (HR add-on). Each accrues on a payroll run and is
+    # discharged when the challan/return is paid.
+    _default_account("23005", "EPF Payable", "liability", "personal", is_payable=True),
+    _default_account("23006", "ESI Payable", "liability", "personal", is_payable=True),
+    _default_account("23007", "Professional Tax Payable", "liability", "personal", is_payable=True),
+    _default_account("23008", "TDS Payable (Salary)", "liability", "personal", is_payable=True),
     # 24xxx Advances and loans
     _default_account("24001", "Advance from Customers", "liability", "personal"),
     _default_account("24002", "Loans Payable", "liability", "personal"),
@@ -282,6 +290,8 @@ DEFAULT_BUSINESS_CHART_OF_ACCOUNTS = [
     _default_account("51002", "Cost of Goods Sold", "expense", "nominal"),
     # 52xxx Personnel
     _default_account("52001", "Salaries and Wages", "expense", "nominal"),
+    # Employer-side EPF/ESI contribution cost (HR add-on).
+    _default_account("52002", "Employer Statutory Contributions", "expense", "nominal"),
     # 53xxx Operating expenses
     _default_account("53001", "Rent Expense", "expense", "nominal"),
     _default_account("53002", "Electricity Expense", "expense", "nominal"),

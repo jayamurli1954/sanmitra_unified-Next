@@ -385,6 +385,10 @@ class InvoiceSettings(BaseModel):
     # no stock screens anywhere — service businesses see no change. ON: item
     # master, stock register and the periodic closing-stock journal light up.
     inventory_enabled: bool = False
+    # Tenant-admin on/off switch for the HR / Payroll add-on. Second of the
+    # two-level HR gate: effective only once the platform owner has provisioned
+    # the add-on for the tenant (core_tenants.hr_addon_available).
+    hr_enabled: bool = False
 
 
 class InvoiceSettingsUpdateRequest(InvoiceSettings):
