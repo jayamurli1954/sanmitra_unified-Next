@@ -3389,7 +3389,9 @@ function renderPlatformDashboard(payload) {
   const appStatus = Array.isArray(payload?.app_status) ? payload.app_status : [];
   const moduleStatus = Array.isArray(payload?.module_status) ? payload.module_status : [];
   const pendingApprovals = Array.isArray(payload?.pending_approvals) ? payload.pending_approvals : [];
-  const recentOnboarding = Array.isArray(payload?.recent_onboarding) ? payload.recent_onboarding : [];
+  const recentOnboarding = Array.isArray(payload?.recent_onboarding_requests)
+    ? payload.recent_onboarding_requests
+    : (Array.isArray(payload?.recent_onboarding) ? payload.recent_onboarding : []);
   const recentTenants = Array.isArray(payload?.recent_tenants) ? payload.recent_tenants : [];
   const workspace = activePlatformWorkspace || "dashboard";
 

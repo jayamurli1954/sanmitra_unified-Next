@@ -135,5 +135,6 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
         "module_status": module_status,
         "pending_approvals": pending_approvals,
         "recent_onboarding_requests": recent_onboarding,
+        "recent_onboarding": recent_onboarding,
         "recent_tenants": recent_tenants,
     }

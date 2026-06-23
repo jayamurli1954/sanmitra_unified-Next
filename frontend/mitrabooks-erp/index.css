@@ -877,7 +877,7 @@ html[data-theme="light"] select:focus {
 }
 
 /* Hide legacy dashboard styles - but keep new clean version visible */
-.legacy-dashboard:not(.business-dashboard-clean) {
+.legacy-dashboard:not(.business-dashboard-clean):not(.platform-dashboard):not(.mandir-dashboard):not(.gruha-dashboard) {
   display: none !important;
 }
 
