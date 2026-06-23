@@ -23,6 +23,7 @@ from app.modules.hr.schemas import (
     EmployeeListResponse,
     EmployeeResponse,
     EmployeeUpdateRequest,
+    MarkJoinedRequest,
     LeaveAllocationRequest,
     LeaveApplicationListResponse,
     LeaveApplicationRequest,
@@ -64,6 +65,8 @@ from app.modules.hr.service import (
     get_salary_structure,
     list_employees,
     list_salary_structures,
+    mark_employee_declined,
+    mark_employee_joined,
     save_appointment_config,
     update_employee,
     upsert_salary_assignment,
@@ -280,6 +283,60 @@ async def hr_get_salary_assignment(
         )
     except HrNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ── onboarding lifecycle (offer -> join / decline) ────────────────────────────
+
+@router.post("/employees/{employee_id}/join", response_model=EmployeeResponse)
+async def hr_mark_joined(
+    employee_id: str,
+    payload: MarkJoinedRequest,
+    context: AppTenantContext = Depends(require_hr_context("mark joined", roles=HR_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    """Candidate accepted the offer and joined — mint the EMP-#### code + activate."""
+    try:
+        return await mark_employee_joined(
+            tenant_id=context.tenant_id, app_key=context.app_key, actor=_actor(current_user),
+            employee_id=employee_id, joining_date=payload.joining_date.isoformat(),
+        )
+    except HrNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HrValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/employees/{employee_id}/decline", response_model=EmployeeResponse)
+async def hr_mark_declined(
+    employee_id: str,
+    context: AppTenantContext = Depends(require_hr_context("mark declined", roles=HR_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        return await mark_employee_declined(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            actor=_actor(current_user), employee_id=employee_id,
+        )
+    except HrNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HrValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/employees/{employee_id}/joining-letter")
+async def hr_joining_letter_pdf(
+    employee_id: str,
+    context: AppTenantContext = Depends(require_hr_context("joining letter")),
+):
+    try:
+        employee = await get_employee(tenant_id=context.tenant_id, app_key=context.app_key, employee_id=employee_id)
+    except HrNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not employee.get("employee_code"):
+        raise HTTPException(status_code=422, detail="Mark the candidate as joined before issuing a joining letter")
+    config = await get_appointment_config(tenant_id=context.tenant_id, app_key=context.app_key)
+    pdf = hr_documents.render_joining_letter_pdf(employee=employee, branding=await _branding(context), config=config)
+    return _pdf_response(pdf, f"joining-letter-{employee.get('employee_code')}.pdf")
 
 
 # ── appointment letter (config + PDF) ─────────────────────────────────────────

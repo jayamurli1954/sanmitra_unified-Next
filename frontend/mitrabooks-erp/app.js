@@ -5321,6 +5321,54 @@ function hrDownloadLetter(button) {
   );
 }
 
+function hrDownloadJoiningLetter(button) {
+  const employeeId = button.getAttribute("data-emp-id") || "";
+  if (!employeeId) return;
+  downloadApiFile(
+    "mitrabooks",
+    `/api/v1/business/hr/employees/${encodeURIComponent(employeeId)}/joining-letter`,
+    `joining-letter-${employeeId}.pdf`,
+  );
+}
+
+// Status-aware row actions for the onboarding lifecycle.
+function hrEmployeeActions(e) {
+  const id = escapeHtml(e.employee_id);
+  const btn = (action, label) => `<button class="secondary" type="button" data-business-action="${action}" data-emp-id="${id}">${label}</button>`;
+  const status = e.status || "";
+  let out = btn("hr-assign-open", "Assign Salary") + " " + btn("hr-letter", "Appt Letter");
+  if (status === "offered" || status === "onboarding") {
+    out += " " + btn("hr-mark-joined", "Mark Joined") + " " + btn("hr-mark-declined", "Decline");
+  } else if (status === "active") {
+    out += " " + btn("hr-joining-letter", "Joining Letter");
+  }
+  return out;
+}
+
+async function hrMarkJoined(button) {
+  const id = button.getAttribute("data-emp-id") || "";
+  if (!id) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const when = window.prompt("Joining date (YYYY-MM-DD):", today);
+  if (!when) return;
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/employees/${encodeURIComponent(id)}/join`, {
+    method: "POST", body: JSON.stringify({ joining_date: when }),
+  });
+  if (!res.ok) { hrError = res.payload?.detail || "Could not mark joined."; refreshHrView(); return; }
+  hrError = "";
+  await loadHrEmployees();
+}
+
+async function hrMarkDeclined(button) {
+  const id = button.getAttribute("data-emp-id") || "";
+  if (!id) return;
+  if (!window.confirm("Mark this candidate as declined? No employee code will be assigned.")) return;
+  const res = await apiRequest("mitrabooks", `/api/v1/business/hr/employees/${encodeURIComponent(id)}/decline`, { method: "POST" });
+  if (!res.ok) { hrError = res.payload?.detail || "Could not decline."; refreshHrView(); return; }
+  hrError = "";
+  await loadHrEmployees();
+}
+
 async function hrSaveLetterSettings() {
   const num = (id, d) => { const n = parseInt(document.getElementById(id)?.value, 10); return Number.isFinite(n) ? n : d; };
   const chk = (id) => !!document.getElementById(id)?.checked;
@@ -5676,17 +5724,14 @@ function renderHrEmployeesTab() {
 
   const empBlock = hrEmployees.length ? `
     <table class="erp-table">
-      <thead><tr><th>Name</th><th>Designation</th><th>Department</th><th>Status</th>${manage ? "<th></th>" : ""}</tr></thead>
+      <thead><tr><th>Emp Code</th><th>Name</th><th>Designation</th><th>Status</th>${manage ? "<th>Actions</th>" : ""}</tr></thead>
       <tbody>${hrEmployees.map((e) => `
         <tr>
+          <td>${escapeHtml(e.employee_code || "—")}</td>
           <td>${escapeHtml(e.full_name || "")}</td>
           <td>${escapeHtml(e.designation || "—")}</td>
-          <td>${escapeHtml(e.department || "—")}</td>
           <td><span class="status-pill">${escapeHtml(e.status || "")}</span></td>
-          ${manage ? `<td>
-            <button class="secondary" type="button" data-business-action="hr-assign-open" data-emp-id="${escapeHtml(e.employee_id)}">Assign Salary</button>
-            <button class="secondary" type="button" data-business-action="hr-letter" data-emp-id="${escapeHtml(e.employee_id)}">Letter</button>
-          </td>` : ""}
+          ${manage ? `<td style="white-space:nowrap;">${hrEmployeeActions(e)}</td>` : ""}
         </tr>`).join("")}</tbody>
     </table>` : `<p class="muted">No employees yet. Click "+ Add Employee" to create one.</p>`;
 
@@ -16165,6 +16210,12 @@ dashboardPreview.addEventListener("click", async (event) => {
     hrAssignSalary();
   } else if (businessAction === "hr-letter") {
     hrDownloadLetter(button);
+  } else if (businessAction === "hr-joining-letter") {
+    hrDownloadJoiningLetter(button);
+  } else if (businessAction === "hr-mark-joined") {
+    hrMarkJoined(button);
+  } else if (businessAction === "hr-mark-declined") {
+    hrMarkDeclined(button);
   } else if (businessAction === "hr-letter-settings-toggle") {
     hrShowLetterSettings = true; dashboardPreview.innerHTML = renderBusinessWorkspace();
   } else if (businessAction === "hr-letter-settings-cancel") {

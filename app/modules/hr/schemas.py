@@ -15,7 +15,11 @@ from pydantic import BaseModel, Field, field_validator
 
 TaxRegime = Literal["new", "old"]
 
-EmployeeStatus = Literal["onboarding", "active", "exited"]
+# Onboarding lifecycle: a candidate is "offered" (appointment letter issued, no
+# employee code yet); on acceptance they are "joined" -> active (code generated +
+# joining letter); if they don't accept they are "declined". "exited" closes the
+# loop on F&F. "onboarding" kept for backward compatibility with earlier records.
+EmployeeStatus = Literal["offered", "onboarding", "active", "declined", "exited"]
 Gender = Literal["M", "F", "O"]
 
 # Indian statutory identifier formats.
@@ -118,6 +122,10 @@ class EmployeeResponse(EmployeeBase):
     employee_id: str
     tenant_id: str
     app_key: str
+    # Official employee code (EMP-####) — assigned only on joining, so it is
+    # null for candidates still at the "offered" stage.
+    employee_code: str | None = None
+    joining_date: date | None = None
     created_by: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -126,6 +134,10 @@ class EmployeeResponse(EmployeeBase):
 class EmployeeListResponse(BaseModel):
     employees: list[EmployeeResponse]
     total: int
+
+
+class MarkJoinedRequest(BaseModel):
+    joining_date: date
 
 
 # --------------------------------------------------------------------------- #

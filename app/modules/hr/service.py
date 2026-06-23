@@ -55,6 +55,11 @@ async def ensure_hr_indexes() -> None:
     await employees.create_index(
         [("tenant_id", 1), ("app_key", 1), ("user_id", 1)], unique=True
     )
+    # Official employee code is unique once assigned (sparse: offered candidates
+    # have no code yet and are skipped by the index).
+    await employees.create_index(
+        [("tenant_id", 1), ("app_key", 1), ("employee_code", 1)], unique=True, sparse=True
+    )
     structures = get_collection(HR_STRUCTURES_COLLECTION)
     await structures.create_index(
         [("tenant_id", 1), ("app_key", 1), ("structure_id", 1)], unique=True
@@ -130,11 +135,12 @@ async def create_employee(
 ) -> dict:
     employees = get_collection(HR_EMPLOYEES_COLLECTION)
 
-    # Auto-generate an EMP-#### code when the caller didn't supply a user_id
-    # (most employees don't have a separate Sanmitra login).
-    user_id = (payload.user_id or "").strip() or await _next_employee_code(
-        tenant_id=tenant_id, app_key=app_key
-    )
+    employee_id = str(uuid4())
+    # A new record starts as an OFFER (candidate). The official employee_code is
+    # NOT minted yet — that happens on "Mark Joined". user_id is the optional
+    # Sanmitra-login link; when absent we use employee_id as a unique placeholder
+    # so the (tenant, app, user_id) uniqueness still holds across offers.
+    user_id = (payload.user_id or "").strip() or employee_id
 
     existing = await employees.find_one(
         {"tenant_id": tenant_id, "app_key": app_key, "user_id": user_id}
@@ -142,7 +148,6 @@ async def create_employee(
     if existing is not None:
         raise HrConflictError("An employee profile already exists for this user")
 
-    employee_id = str(uuid4())
     doc = payload.model_dump(mode="json")  # dates -> ISO strings (BSON-safe)
     doc["user_id"] = user_id
     doc.update(
@@ -150,6 +155,9 @@ async def create_employee(
             "employee_id": employee_id,
             "tenant_id": tenant_id,
             "app_key": app_key,
+            "status": "offered",          # lifecycle starts at the offer stage
+            "employee_code": None,         # minted on join
+            "joining_date": None,
             "created_by": created_by,
             "created_at": _now(),
             "updated_at": _now(),
@@ -230,6 +238,50 @@ async def update_employee(
         entity_id=employee_id,
         old_value=_redact(existing),
         new_value=_redact(changes),
+    )
+    return await get_employee(tenant_id=tenant_id, app_key=app_key, employee_id=employee_id)
+
+
+async def mark_employee_joined(
+    *, tenant_id: str, app_key: str, actor: str, employee_id: str, joining_date: str
+) -> dict:
+    """Candidate accepted + joined: mint the official EMP-#### code and activate.
+    The employee code is generated HERE, never at the offer stage."""
+    emp = await get_employee(tenant_id=tenant_id, app_key=app_key, employee_id=employee_id)
+    if emp.get("status") not in ("offered", "onboarding"):
+        raise HrValidationError(f"Only an offered candidate can be marked joined (current: {emp.get('status')})")
+
+    code = await _next_employee_code(tenant_id=tenant_id, app_key=app_key)
+    update = {
+        "status": "active",
+        "employee_code": code,
+        "joining_date": str(joining_date),
+        "updated_at": _now(),
+    }
+    await get_collection(HR_EMPLOYEES_COLLECTION).update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "employee_id": employee_id},
+        {"$set": update},
+    )
+    await _audit(
+        tenant_id=tenant_id, app_key=app_key, user_id=actor,
+        action="hr_employee_joined", entity_id=employee_id,
+        new_value={"employee_code": code, "joining_date": str(joining_date)},
+    )
+    return await get_employee(tenant_id=tenant_id, app_key=app_key, employee_id=employee_id)
+
+
+async def mark_employee_declined(*, tenant_id: str, app_key: str, actor: str, employee_id: str) -> dict:
+    """Candidate did not accept the offer — no employee code is ever assigned."""
+    emp = await get_employee(tenant_id=tenant_id, app_key=app_key, employee_id=employee_id)
+    if emp.get("status") not in ("offered", "onboarding"):
+        raise HrValidationError(f"Only an offered candidate can be declined (current: {emp.get('status')})")
+    await get_collection(HR_EMPLOYEES_COLLECTION).update_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "employee_id": employee_id},
+        {"$set": {"status": "declined", "updated_at": _now()}},
+    )
+    await _audit(
+        tenant_id=tenant_id, app_key=app_key, user_id=actor,
+        action="hr_employee_declined", entity_id=employee_id, new_value={"status": "declined"},
     )
     return await get_employee(tenant_id=tenant_id, app_key=app_key, employee_id=employee_id)
 

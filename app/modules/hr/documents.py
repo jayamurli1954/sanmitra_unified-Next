@@ -236,7 +236,7 @@ def render_appointment_letter_pdf(*, employee: dict, monthly_gross, breakdown: d
         story.append(Paragraph(f"GSTIN: {gstin}", sub))
     story.append(Spacer(1, 8))
     story.append(Paragraph(f"Date: {_today_str()}", body))
-    story.append(Paragraph(f"Ref: APPT/{employee.get('user_id') or employee.get('employee_id', '')[:8]}", sub))
+    story.append(Paragraph(f"Ref: APPT/{str(employee.get('employee_id') or '')[:8]}", sub))
     story.append(Spacer(1, 8))
 
     name = str(employee.get("full_name") or "Employee")
@@ -246,10 +246,12 @@ def render_appointment_letter_pdf(*, employee: dict, monthly_gross, breakdown: d
     story.append(Paragraph(f"Dear {name},", body))
     story.append(Paragraph("<b>Subject: Letter of Appointment</b>", body))
     dept_txt = f" in the {dept} department" if dept else ""
+    # This is the OFFER — the official employee code is assigned only on joining,
+    # so it is intentionally not stated here.
     story.append(Paragraph(
         f"We are pleased to offer you the position of <b>{designation}</b>{dept_txt} at {company}. "
-        f"Your employment will commence on <b>{doj}</b>. Your Employee ID is "
-        f"<b>{employee.get('user_id') or employee.get('employee_id')}</b>.", body))
+        f"Your proposed date of joining is <b>{doj}</b>. This offer is subject to your acceptance of the "
+        f"terms and conditions set out in this letter.", body))
 
     story.append(Spacer(1, 4))
     story.append(Paragraph("<b>Compensation</b>", body))
@@ -284,6 +286,69 @@ def render_appointment_letter_pdf(*, employee: dict, monthly_gross, breakdown: d
     ]], colWidths=[85 * mm, 85 * mm])
     sig_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(sig_table)
+
+    buf = BytesIO()
+    SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+                      topMargin=16 * mm, bottomMargin=16 * mm).build(story)
+    return buf.getvalue()
+
+
+def render_joining_letter_pdf(*, employee: dict, branding: dict, config: dict) -> bytes:
+    """Joining / confirmation letter, issued once a candidate accepts and joins.
+    Carries the newly assigned employee code and confirms that the appointment
+    letter terms remain in force."""
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    body = ParagraphStyle("jl-body", fontName="Helvetica", fontSize=10, leading=14, spaceAfter=6)
+    hh = ParagraphStyle("jl-h", fontName="Helvetica-Bold", fontSize=14, leading=17, spaceAfter=2)
+    sub = ParagraphStyle("jl-sub", fontName="Helvetica", fontSize=8.5, leading=11, textColor=colors.HexColor("#555555"))
+
+    branding = branding or {}
+    config = config or {}
+    company = str(branding.get("business_name") or "Your Company")
+    address = str(branding.get("address") or "").replace("\r", "")
+    gstin = branding.get("gstin")
+    name = str(employee.get("full_name") or "Employee")
+    designation = str(employee.get("designation") or "Employee")
+    dept = employee.get("department")
+    code = str(employee.get("employee_code") or "")
+    joining = str(employee.get("joining_date") or employee.get("date_of_joining") or "")
+
+    story = [Paragraph(company, hh)]
+    for line in [seg.strip() for seg in address.split("\n") if seg.strip()]:
+        story.append(Paragraph(line, sub))
+    if gstin:
+        story.append(Paragraph(f"GSTIN: {gstin}", sub))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"Date: {_today_str()}", body))
+    story.append(Paragraph(f"Ref: JOIN/{code}", sub))
+    story.append(Spacer(1, 8))
+
+    dept_txt = f" in the {dept} department" if dept else ""
+    story.append(Paragraph(f"Dear {name},", body))
+    story.append(Paragraph("<b>Subject: Confirmation of Joining</b>", body))
+    story.append(Paragraph(
+        f"We are pleased to confirm that you have joined {company} as <b>{designation}</b>{dept_txt} "
+        f"with effect from <b>{joining}</b>. Your employee code is <b>{code}</b>.", body))
+    story.append(Paragraph(
+        "All other terms and conditions of employment, including compensation, probation, notice period "
+        "and the clauses stated in your Letter of Appointment, remain in full force and are unchanged.", body))
+    story.append(Paragraph(
+        "Please retain this letter for your records. We look forward to a long and rewarding association with you.", body))
+    story.append(Spacer(1, 16))
+
+    sig_name = config.get("signatory_name") or ""
+    sig_title = config.get("signatory_title") or "Authorised Signatory"
+    sig = Table([[Paragraph(f"For {company}<br/><br/><br/>_________________________<br/>{sig_name}<br/>{sig_title}", body)]],
+                colWidths=[100 * mm])
+    sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    story.append(sig)
 
     buf = BytesIO()
     SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
