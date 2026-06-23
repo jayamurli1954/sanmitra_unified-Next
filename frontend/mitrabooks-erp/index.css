@@ -4851,12 +4851,15 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
 
 .app .platform-dashboard .preview-heading h3,
 .app .platform-dashboard h4,
+.app .platform-dashboard .metric-tile strong,
 .app .platform-dashboard .metric-value,
 .app .platform-dashboard .status-list strong {
   color: #f8fafc;
 }
 
 .app .platform-dashboard .preview-heading p,
+.app .platform-dashboard .metric-tile span,
+.app .platform-dashboard .metric-tile small,
 .app .platform-dashboard .metric-label,
 .app .platform-dashboard .metric-sub,
 .app .platform-dashboard .muted,
@@ -4864,6 +4867,7 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   color: #94a3b8;
 }
 
+.app .platform-dashboard .metric-tile,
 .app .platform-dashboard .metric-card,
 .app .platform-dashboard .dashboard-main-grid > article,
 .app .platform-dashboard > article {
@@ -4872,6 +4876,7 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   color: #f8fafc;
 }
 
+.app .platform-dashboard .metric-tile strong,
 .app .platform-dashboard .metric-card .metric-value {
   color: #60a5fa;
 }
