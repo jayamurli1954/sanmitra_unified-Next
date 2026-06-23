@@ -7,11 +7,11 @@ import app.core.modules.router as modules_router
 @pytest.mark.asyncio
 async def test_get_my_modules_returns_enabled_and_available_modules(monkeypatch):
     async def fake_get_tenant(tenant_id: str):
-        assert tenant_id == "tenant-invest"
+        assert tenant_id == "tenant-legal"
         return {
             "tenant_id": tenant_id,
-            "organization_type": "INVESTMENT",
-            "enabled_modules": ["investment", "portfolio", "audit"],
+            "organization_type": "LEGAL",
+            "enabled_modules": ["legal", "rag", "compliance", "audit"],
             "subscription_plan": "pro",
         }
 
@@ -21,22 +21,21 @@ async def test_get_my_modules_returns_enabled_and_available_modules(monkeypatch)
         include_available=True,
         current_user={
             "sub": "user-1",
-            "tenant_id": "tenant-invest",
+            "tenant_id": "tenant-legal",
             "role": "tenant_admin",
-            "app_key": "investmitra",
+            "app_key": "legalmitra",
         },
     )
 
     enabled_keys = {item["module_key"] for item in result["enabled_modules"]}
     available_keys = {item["module_key"] for item in result["available_modules"]}
 
-    assert result["organization_type"] == "INVESTMENT"
+    assert result["organization_type"] == "LEGAL"
     assert result["subscription_plan"] == "pro"
-    assert {"investment", "portfolio", "audit"}.issubset(enabled_keys)
-    assert "broker_research" in available_keys
-    assert "investment_research" in available_keys
+    assert {"legal", "rag", "compliance", "audit"}.issubset(enabled_keys)
+    assert "legal_ai" in available_keys
     assert all(item["frontend_path"] for item in result["enabled_modules"])
-    assert result["navigation"][0]["display_name"] == "Portfolio"
+    assert result["navigation"][0]["display_name"] == "Compliance"
     assert result["role"] == "tenant_admin"
     assert result["is_platform_owner"] is False
 
@@ -102,13 +101,6 @@ async def test_get_my_modules_can_hide_available_modules(monkeypatch):
             ["legal", "rag", "compliance", "audit"],
             ["Compliance", "Legal", "Administration"],
             {"legal", "rag", "compliance", "audit"},
-        ),
-        (
-            "INVESTMENT",
-            "investmitra",
-            ["investment", "portfolio", "audit"],
-            ["Portfolio", "Administration"],
-            {"investment", "portfolio", "audit"},
         ),
     ],
 )

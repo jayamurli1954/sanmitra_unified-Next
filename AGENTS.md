@@ -519,6 +519,20 @@ Do not expand to a later E2E stage until the previous stage has a passing smoke/
 
 Docs must be practical and implementation-ready.
 
+The following planning documents are master reference notes for SanMitra unified scope and are non-negotiable unless the platform owner explicitly updates this policy and the documents in the same change:
+
+- `README.md`
+- `docs/prd/SANMITRA_UNIFIED_PLATFORM_PRD.md`
+- `docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md`
+- `docs/prd/MITRABOOKS_COMPLETION_ROADMAP.md`
+- `docs/architecture/CURRENT_VS_TARGET.md`
+- `docs/architecture/MODULE_REGISTRY.md`
+- `docs/architecture/ACCOUNTING_DOCTRINE.md`
+- `docs/operations/STAGED_E2E_PLAN.md`
+- `docs/migration/FRONTEND_MERGE_PLAN.md`
+
+Do not bypass, override, or silently contradict these documents in code, tests, frontend routing, deployment configuration, onboarding flows, module registry entries, or PR descriptions. If they conflict, stop and resolve the conflict explicitly before implementation. InvestMitra remains excluded from SanMitra unified backend, frontend deployment, tenant/module registry, billing, E2E, and release planning unless this policy and all master references are updated together by explicit platform-owner decision.
+
 Every major doc should state:
 
 - Current state.
@@ -657,6 +671,7 @@ The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains
 | 1.1 | 2026-05-15 | Expanded with backend guardrails, module-specific policies, testing, security, and frontend merge rules |
 | 1.2 | 2026-05-20 | Added repo-local skill routing for SanMitra domain workflows |
 | 1.3 | 2026-05-26 | Added PR acceptance checklist and AGENTS compliance gate |
+| 1.4 | 2026-06-23 | Marked master planning references as non-negotiable and reinforced InvestMitra unified-scope exclusion |
 
 ## 27. CI/CD and Release Discipline
 

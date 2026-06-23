@@ -8,7 +8,6 @@ OrganizationType = Literal[
     "BUSINESS",
     "PROFESSIONAL",
     "LEGAL",
-    "INVESTMENT",
 ]
 
 VALID_ORGANIZATION_TYPES: set[str] = {
@@ -17,7 +16,6 @@ VALID_ORGANIZATION_TYPES: set[str] = {
     "BUSINESS",
     "PROFESSIONAL",
     "LEGAL",
-    "INVESTMENT",
 }
 
 APP_KEY_TO_ORG_TYPE: dict[str, str] = {
@@ -25,7 +23,6 @@ APP_KEY_TO_ORG_TYPE: dict[str, str] = {
     "mandirmitra": "TEMPLE",
     "mitrabooks": "BUSINESS",
     "legalmitra": "LEGAL",
-    "investmitra": "INVESTMENT",
 }
 
 DEFAULT_MODULES_BY_ORG_TYPE: dict[str, tuple[str, ...]] = {
@@ -34,7 +31,6 @@ DEFAULT_MODULES_BY_ORG_TYPE: dict[str, tuple[str, ...]] = {
     "BUSINESS": ("business", "accounting", "gst", "inventory", "audit"),
     "PROFESSIONAL": ("professional", "accounting", "billing", "audit"),
     "LEGAL": ("legal", "rag", "compliance", "audit"),
-    "INVESTMENT": ("investment", "portfolio", "audit"),
 }
 
 MODULE_API_PREFIXES: dict[str, str] = {
@@ -50,10 +46,6 @@ MODULE_API_PREFIXES: dict[str, str] = {
     "legal": "/api/v1/legal",
     "rag": "/api/v1/rag",
     "compliance": "/api/v1/legal",
-    "investment": "/api/v1/investment",
-    "portfolio": "/api/v1/investment",
-    "investment_research": "/api/v1/investment/research",
-    "broker_research": "/api/v1/investment/broker-research",
     "legal_ai": "/api/v1/legal/ai",
 }
 
@@ -70,10 +62,6 @@ MODULE_FRONTEND_PATHS: dict[str, str] = {
     "legal": "/legal",
     "rag": "/legal/research",
     "compliance": "/legal/compliance",
-    "investment": "/investment",
-    "portfolio": "/investment/portfolio",
-    "investment_research": "/investment/research",
-    "broker_research": "/investment/broker-research",
     "legal_ai": "/legal/assistant",
 }
 
@@ -90,16 +78,11 @@ MODULE_NAV_GROUPS: dict[str, str] = {
     "legal": "Legal",
     "rag": "Legal",
     "compliance": "Compliance",
-    "investment": "Portfolio",
-    "portfolio": "Portfolio",
-    "investment_research": "Research",
-    "broker_research": "Research",
     "legal_ai": "AI Assistant",
 }
 
 NAV_GROUP_ORDER: tuple[str, ...] = (
     "Operations",
-    "Portfolio",
     "Finance",
     "Compliance",
     "Legal",
@@ -132,7 +115,7 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         module_key="audit",
         display_name="Audit Log",
         allowed_organization_types=frozenset(VALID_ORGANIZATION_TYPES),
-        allowed_app_keys=frozenset({"gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"}),
+        allowed_app_keys=frozenset({"gruhamitra", "mandirmitra", "mitrabooks", "legalmitra"}),
         features=("audit_log",),
     ),
     "housing": ModuleDefinition(
@@ -208,38 +191,6 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         allowed_app_keys=frozenset({"legalmitra"}),
         features=("deadlines", "reminders"),
     ),
-    "investment": ModuleDefinition(
-        module_key="investment",
-        display_name="InvestMitra Portfolio",
-        allowed_organization_types=frozenset({"INVESTMENT"}),
-        allowed_app_keys=frozenset({"investmitra"}),
-        features=("holdings", "asset_classes"),
-    ),
-    "portfolio": ModuleDefinition(
-        module_key="portfolio",
-        display_name="Portfolio Analytics",
-        allowed_organization_types=frozenset({"INVESTMENT"}),
-        allowed_app_keys=frozenset({"investmitra"}),
-        features=("xirr", "pnl", "allocation"),
-    ),
-    "investment_research": ModuleDefinition(
-        module_key="investment_research",
-        display_name="InvestMitra Research Integrations",
-        allowed_organization_types=frozenset({"INVESTMENT"}),
-        allowed_app_keys=frozenset({"investmitra"}),
-        minimum_plan="pro",
-        default_enabled=False,
-        features=("fincept_terminal", "research_reports"),
-    ),
-    "broker_research": ModuleDefinition(
-        module_key="broker_research",
-        display_name="Read-Only Broker Research Context",
-        allowed_organization_types=frozenset({"INVESTMENT"}),
-        allowed_app_keys=frozenset({"investmitra"}),
-        minimum_plan="pro",
-        default_enabled=False,
-        features=("zerodha_kite_mcp_read_only",),
-    ),
     "legal_ai": ModuleDefinition(
         module_key="legal_ai",
         display_name="Legal AI Assistant",
@@ -264,7 +215,6 @@ def normalize_organization_type(value: str | None, *, app_key: str | None = None
         "MANDIRMITRA": "TEMPLE",
         "MITRABOOKS": "BUSINESS",
         "LEGALMITRA": "LEGAL",
-        "INVESTMITRA": "INVESTMENT",
         "SOCIETY": "HOUSING",
         "TEMPLE_TRUST": "TEMPLE",
     }
@@ -275,6 +225,9 @@ def normalize_organization_type(value: str | None, *, app_key: str | None = None
     app_based = APP_KEY_TO_ORG_TYPE.get(str(app_key or "").strip().lower())
     if app_based:
         return app_based
+
+    if raw:
+        return normalized
 
     return "BUSINESS"
 
@@ -292,7 +245,7 @@ def _normalize_modules(values: Iterable[str] | None) -> list[str]:
 
 def get_default_modules_for_org_type(organization_type: str | None) -> list[str]:
     normalized = normalize_organization_type(organization_type)
-    return list(DEFAULT_MODULES_BY_ORG_TYPE[normalized])
+    return list(DEFAULT_MODULES_BY_ORG_TYPE.get(normalized, ()))
 
 
 def get_module_definition(module_key: str) -> ModuleDefinition | None:

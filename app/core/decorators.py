@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def limit_concurrency(limit: int = 5):
     """
     Concurrency Limiter for async functions.
-    Ideal for LegalMitra (Tavily/Gemini API calls) and InvestMitra (Angel One SmartAPI).
+    Ideal for LegalMitra provider/API calls.
     Prevents hitting rate limits by throttling concurrent executions.
     """
     sem = asyncio.Semaphore(limit)
@@ -29,7 +29,7 @@ def limit_concurrency(limit: int = 5):
 def audit_logger(module_name: str = "core"):
     """
     Structured Machine Learning / Audit Logger.
-    Mandatory for MitraBooks double-entry tracking and InvestMitra trade logs.
+    Mandatory for MitraBooks double-entry tracking.
     Captures execution status, elapsed time, and errors in a structured JSON format.
     """
     def decorator(func: Callable) -> Callable:
@@ -92,7 +92,7 @@ def async_audit_logger(module_name: str = "core"):
 
 def inject_indicators():
     """
-    Feature Injector for InvestMitra stock screening.
+    Feature injector for opt-in module behavior.
     Injects dummy technical indicators (RSI, EMA) to raw dataframes to ensure
     consistent data transformations.
     """
@@ -114,7 +114,7 @@ def inject_indicators():
 def lock_seed(seed: int = 42):
     """
     Deterministic Seed Setter for test suites.
-    Ideal for tests/investmitra/ or tests/legalmitra/ where reproducibility is key.
+    Ideal for tests where reproducibility is key.
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -132,7 +132,7 @@ def lock_seed(seed: int = 42):
 def dev_mode_fallback(mock_data_func: Callable = None):
     """
     Dev-Mode Fallback.
-    CRITICAL for InvestMitra (prevents live trades in dev, falling back to mock)
+    Prevents external side effects in dev by falling back to mock data.
     and LegalMitra (fallback to Ollama/mock if Gemini API fails).
     """
     def decorator(func: Callable) -> Callable:
@@ -141,8 +141,7 @@ def dev_mode_fallback(mock_data_func: Callable = None):
             environment = os.getenv("ENVIRONMENT", "development")
             
             try:
-                # Enforce mock in dev for InvestMitra to avoid accidental live trades
-                if environment != "production" and hasattr(func, "__module__") and "investmitra" in func.__module__:
+                if environment != "production" and hasattr(func, "__module__") and "investment" in func.__module__:
                     if mock_data_func:
                         return mock_data_func(*args, **kwargs)
                 return func(*args, **kwargs)
@@ -165,7 +164,7 @@ def async_dev_mode_fallback(mock_data_func: Callable = None):
             environment = os.getenv("ENVIRONMENT", "development")
             
             try:
-                if environment != "production" and hasattr(func, "__module__") and "investmitra" in func.__module__:
+                if environment != "production" and hasattr(func, "__module__") and "investment" in func.__module__:
                     if mock_data_func:
                         if asyncio.iscoroutinefunction(mock_data_func):
                             return await mock_data_func(*args, **kwargs)

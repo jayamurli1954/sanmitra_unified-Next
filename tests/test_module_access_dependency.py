@@ -57,7 +57,7 @@ async def test_require_enabled_temple_module_allows_mitrabooks_erp_context(monke
 
 
 @pytest.mark.asyncio
-async def test_require_enabled_module_blocks_disabled_module(monkeypatch):
+async def test_require_enabled_module_blocks_investment_module(monkeypatch):
     async def fake_get_tenant(_tenant_id: str):
         return {
             "tenant_id": "tenant-invest",
@@ -67,7 +67,7 @@ async def test_require_enabled_module_blocks_disabled_module(monkeypatch):
 
     monkeypatch.setattr(module_deps, "get_tenant", fake_get_tenant)
 
-    dependency = module_deps.require_enabled_module("broker_research")
+    dependency = module_deps.require_enabled_module("investment")
     with pytest.raises(HTTPException) as exc:
         await dependency(
             current_user={
@@ -79,7 +79,7 @@ async def test_require_enabled_module_blocks_disabled_module(monkeypatch):
         )
 
     assert exc.value.status_code == 403
-    assert "not enabled" in exc.value.detail
+    assert "Unknown module" in exc.value.detail
 
 
 @pytest.mark.asyncio

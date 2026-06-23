@@ -7,7 +7,6 @@ This workspace contains browser frontends for the three target SanMitra experien
 - `src` / `public`: MandirMitra React/MUI production frontend restored from the legacy MandirMitra layout and wired to the unified backend.
 - `mitrabooks-erp`: static validation shell retained as a local/reference harness for GruhaMitra, MandirMitra, and MitraBooks workflow testing.
 - `legalmitra`: separate LegalMitra experience.
-- `investmitra`: separate InvestMitra experience.
 
 The live MandirMitra frontend is no longer the lightweight static validation shell. It uses the legacy React/MUI MandirMitra user experience while calling the unified SanMitra backend with the `mandirmitra` app context. Do not copy legacy `.env` files, `node_modules`, build output, or deployment artifacts into this workspace.
 
@@ -30,7 +29,6 @@ Copied reference assets:
 - `mitrabooks-logo.mp4`
 - `legalmitra-logo.png`
 - `legalmitra-logo.mp4`
-- `investmitra-logo.png`
 - `mandirmitra-logo.jpeg`
 - `mandirmitra-logo.mp4`
 - `gruhamitra-logo.png`
@@ -44,7 +42,6 @@ The target frontend model remains:
 
 - MitraBooks Unified ERP for housing, temple, and accounting/business workflows.
 - LegalMitra as a separate legal workflow and research frontend.
-- InvestMitra as a separate investment and portfolio frontend.
 
 ## Gap
 
@@ -68,7 +65,6 @@ Open:
 
 - `http://127.0.0.1:3300/mitrabooks-erp/`
 - `http://127.0.0.1:3300/legalmitra/`
-- `http://127.0.0.1:3300/investmitra/`
 
 For the restored MandirMitra React frontend:
 
@@ -115,5 +111,4 @@ After each frontend host/domain is finalized, add the exact origin, for example 
 - No production UI redesign in this pass.
 - No full legacy frontend merge in one step.
 - No direct browser-trusted tenant override.
-- No trading/order execution UI in InvestMitra.
 - No LegalMitra AI assistant unless the backend enables the `legal_ai` module.

@@ -105,19 +105,17 @@ async def test_ensure_seed_tenant_repairs_mandirmitra_context(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ensure_tenant_exists_can_reserve_future_integration_flags(monkeypatch):
+async def test_ensure_tenant_exists_rejects_investment_modules(monkeypatch):
     fake = FakeCollection()
     monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
 
-    tenant = await tenant_service.ensure_tenant_exists(
-        "tenant-invest",
-        organization_type="INVESTMENT",
-        enabled_modules=["investment", "portfolio", "audit", "broker_research"],
-        app_keys=["investmitra"],
-    )
-
-    assert tenant["organization_type"] == "INVESTMENT"
-    assert "broker_research" in tenant["enabled_modules"]
+    with pytest.raises(ValueError, match="Unknown module"):
+        await tenant_service.ensure_tenant_exists(
+            "tenant-invest",
+            organization_type="INVESTMENT",
+            enabled_modules=["investment", "portfolio", "audit"],
+            app_keys=["investmitra"],
+        )
 
 
 @pytest.mark.asyncio

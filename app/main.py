@@ -30,7 +30,6 @@ from app.modules.hr.tax import ensure_tax_indexes
 from app.modules.hr.service import ensure_hr_indexes
 from app.modules.housing.service import ensure_maintenance_indexes
 from app.modules.housing_compat.service import ensure_housing_compat_indexes
-from app.modules.investment.service import ensure_investment_indexes
 from app.modules.legal.service import ensure_legal_indexes
 from app.modules.legal_compat.service import ensure_legal_compat_indexes
 from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
@@ -52,7 +51,7 @@ app.add_middleware(
     # Restrict to known SanMitra Vercel apps only; the broad *.vercel.app wildcard
     # would allow any Vercel deployment to make credentialed cross-origin requests.
     allow_origin_regex=(
-        r"https://(mitrabooks|mitrabooks-erp|mandirmitra|mandir-mitra-alpha|legalmitra|gruhamitra|invest-mitra)"
+        r"https://(mitrabooks|mitrabooks-erp|mandirmitra|mandir-mitra-alpha|legalmitra|gruhamitra)"
         r"(-[a-z0-9-]+)?\.vercel\.app"
     ),
     allow_credentials=True,
@@ -159,7 +158,6 @@ async def on_startup() -> None:
         await ensure_legal_compat_indexes()
         await ensure_legal_retention_indexes()
         await cleanup_expired_legal_retention_records()
-        await ensure_investment_indexes()
         await ensure_onboarding_indexes()
         await ensure_rag_indexes()
         await ensure_hr_indexes()

@@ -17,7 +17,6 @@ from app.core.users.router import router as users_router
 from app.modules.hr.router import router as hr_router
 from app.modules.housing.router import router as housing_router
 from app.modules.housing_compat.router import router as housing_compat_router
-from app.modules.investment.router import router as investment_router
 from app.modules.legal.router import router as legal_router
 from app.modules.legal_compat.router import router as legal_compat_router
 from app.modules.mandir_compat.router import router as mandir_compat_router
@@ -44,7 +43,6 @@ api_router.include_router(legal_router)
 api_router.include_router(legal_compat_router)
 api_router.include_router(mandir_compat_router)
 api_router.include_router(mitrabooks_compat_router)
-api_router.include_router(investment_router)
 api_router.include_router(rag_router)
 api_router.include_router(billing_router)
 api_router.include_router(business_router)

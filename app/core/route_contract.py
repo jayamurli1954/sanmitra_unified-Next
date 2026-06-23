@@ -83,7 +83,6 @@ def default_frontend_roots(repo_root: Path | None = None) -> dict[str, list[Path
     candidates = {
         "LegalMitra": [base / "LegalMitra" / "frontend" / "src"],
         "MandirMitra": [base / "MandirMitra" / "frontend" / "src"],
-        "InvestMitra": [base / "InvestMitra" / "frontend" / "src"],
         "MitraBooks": [base / "MitraBooks" / "frontend" / "src"],
         "GharMitra": [base / "GharMitra" / "src", base / "GharMitra" / "web" / "src"],
     }

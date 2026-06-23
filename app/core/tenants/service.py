@@ -128,6 +128,12 @@ async def ensure_tenant_exists(
 
     default_app_keys = [str(key).strip().lower() for key in (app_keys or []) if str(key).strip()]
     default_subscription_plan = str(subscription_plan or "free").strip().lower() or "free"
+    if derived_modules and (enabled_modules is not None or app_keys is not None):
+        _validate_enabled_modules(
+            organization_type=normalized_org_type,
+            app_keys=default_app_keys,
+            enabled_modules=derived_modules,
+        )
     update: dict = {
         "$setOnInsert": {
             "tenant_id": normalized_tenant_id,

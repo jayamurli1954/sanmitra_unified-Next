@@ -65,7 +65,6 @@ class Settings:
         "https://mandir-mitra-alpha.vercel.app",
         "https://legalmitra.vercel.app",
         "https://gruhamitra.vercel.app",
-        "https://invest-mitra.vercel.app",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3006",
@@ -134,7 +133,7 @@ class Settings:
         key.strip().lower()
         for key in os.getenv(
             "ALLOWED_APP_KEYS",
-            "mandirmitra,gruhamitra,mitrabooks,legalmitra,investmitra",
+            "mandirmitra,gruhamitra,mitrabooks,legalmitra",
         ).split(",")
         if key.strip()
     ]

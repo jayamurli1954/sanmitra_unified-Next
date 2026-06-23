@@ -31,7 +31,6 @@ ONBOARDING_APP_NAMES = {
     "legalmitra": "LegalMitra",
     "gruhamitra": "GruhaMitra",
     "gharmitra": "GharMitra",
-    "investmitra": "InvestMitra",
     "mitrabooks": "MitraBooks",
 }
 ONBOARDING_PUBLIC_APP_KEYS = {"mandirmitra", "gruhamitra", "mitrabooks"}

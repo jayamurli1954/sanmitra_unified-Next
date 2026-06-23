@@ -121,7 +121,6 @@ async def get_current_app_key(
     - mandirmitra: Temple management
     - gruhamitra: Housing management
     - legalmitra: Legal document management
-    - investmitra: Investment tracking
 
     Args:
         current_user: Authenticated user
