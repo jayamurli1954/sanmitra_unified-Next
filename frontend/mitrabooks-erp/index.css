@@ -881,6 +881,186 @@ html[data-theme="light"] select:focus {
   display: none !important;
 }
 
+.platform-dashboard {
+  display: grid;
+  gap: 20px;
+  color: var(--text-primary, #f8fafc);
+}
+
+.platform-dashboard .preview-heading {
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.04));
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.platform-dashboard .preview-heading h3 {
+  color: var(--text-primary, #f8fafc);
+  font-size: 24px;
+  line-height: 1.25;
+  margin: 0 0 6px;
+}
+
+.platform-dashboard .preview-heading p {
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+  max-width: 760px;
+}
+
+.platform-dashboard .pill {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
+.platform-dashboard .metric-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.platform-dashboard .metric-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.platform-dashboard .metric-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.platform-dashboard .metric-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.platform-dashboard .metric-card,
+.platform-dashboard .dashboard-main-grid > article,
+.platform-dashboard > article {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  color: var(--text-primary, #f8fafc);
+  padding: 20px;
+}
+
+.platform-dashboard .metric-card {
+  gap: 8px;
+}
+
+.platform-dashboard .metric-label {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.platform-dashboard .metric-value {
+  color: var(--accent-color, #3b82f6);
+}
+
+.platform-dashboard .metric-sub,
+.platform-dashboard .muted {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.platform-dashboard h4 {
+  color: var(--text-primary, #f8fafc);
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.platform-dashboard .dashboard-main-grid.platform-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.platform-dashboard .table-preview {
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.platform-dashboard .table-preview table {
+  border-collapse: collapse;
+  color: var(--text-primary, #f8fafc);
+  min-width: 760px;
+  width: 100%;
+}
+
+.platform-dashboard .table-preview th,
+.platform-dashboard .table-preview td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.platform-dashboard .table-preview th {
+  background: rgba(148, 163, 184, 0.10);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.platform-dashboard .table-preview td {
+  color: var(--text-primary, #e2e8f0);
+}
+
+.platform-dashboard .table-preview tbody tr:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.platform-dashboard .status-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.platform-dashboard .status-list li {
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.platform-dashboard .status-list strong {
+  color: var(--text-primary, #f8fafc);
+}
+
+.platform-dashboard .status-list span {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .platform-dashboard .metric-grid.four,
+  .platform-dashboard .metric-grid.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platform-dashboard .dashboard-main-grid.platform-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .platform-dashboard .preview-heading {
+    flex-direction: column;
+  }
+
+  .platform-dashboard .metric-grid.two,
+  .platform-dashboard .metric-grid.three,
+  .platform-dashboard .metric-grid.four {
+    grid-template-columns: 1fr;
+  }
+}
+
 .app.signed-out .content {
   background:
     linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(16, 185, 129, 0.08)),
