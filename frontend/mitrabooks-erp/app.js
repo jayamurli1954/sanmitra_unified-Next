@@ -4693,6 +4693,8 @@ let hrFnf = [];
 let hrStructures = [];
 let hrShowAddEmployee = false;
 let hrAssignFor = "";   // employee_id currently being assigned a salary
+let hrAppointmentConfig = null;
+let hrShowLetterSettings = false;
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
@@ -5291,6 +5293,7 @@ async function loadHrWorkspace() {
   if (hrAccess && hrAccess.entitled) {
     loadHrEmployees();
     loadHrStructures();
+    loadHrAppointmentConfig();
     loadHrRuns();
     loadHrAnalytics();
   }
@@ -5299,6 +5302,44 @@ async function loadHrWorkspace() {
 async function loadHrStructures() {
   const res = await apiRequest("mitrabooks", "/api/v1/business/hr/salary-structures", { method: "GET" });
   hrStructures = res.ok && Array.isArray(res.payload?.structures) ? res.payload.structures : [];
+  refreshHrView();
+}
+
+async function loadHrAppointmentConfig() {
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/appointment-settings", { method: "GET" });
+  hrAppointmentConfig = res.ok ? res.payload : null;
+  refreshHrView();
+}
+
+function hrDownloadLetter(button) {
+  const employeeId = button.getAttribute("data-emp-id") || "";
+  if (!employeeId) return;
+  downloadApiFile(
+    "mitrabooks",
+    `/api/v1/business/hr/employees/${encodeURIComponent(employeeId)}/appointment-letter`,
+    `appointment-letter-${employeeId}.pdf`,
+  );
+}
+
+async function hrSaveLetterSettings() {
+  const num = (id, d) => { const n = parseInt(document.getElementById(id)?.value, 10); return Number.isFinite(n) ? n : d; };
+  const chk = (id) => !!document.getElementById(id)?.checked;
+  const body = {
+    probation_months: num("hr-ls-probation", 6),
+    notice_days: num("hr-ls-notice", 30),
+    work_hours: (document.getElementById("hr-ls-hours")?.value || "").trim() || "9:30 AM to 6:30 PM, Monday to Friday",
+    signatory_name: (document.getElementById("hr-ls-signame")?.value || "").trim() || null,
+    signatory_title: (document.getElementById("hr-ls-sigtitle")?.value || "").trim() || "Authorised Signatory",
+    clauses: {
+      background_check: chk("hr-ls-bg"), confidentiality_nda: chk("hr-ls-nda"),
+      ip_assignment: chk("hr-ls-ip"), data_privacy: chk("hr-ls-data"),
+      code_of_conduct: chk("hr-ls-conduct"), cash_handling: chk("hr-ls-cash"),
+      relocation: chk("hr-ls-reloc"),
+    },
+  };
+  const res = await apiRequest("mitrabooks", "/api/v1/business/hr/appointment-settings", { method: "PUT", body: JSON.stringify(body) });
+  if (!res.ok) { hrError = res.payload?.detail || "Could not save letter settings."; refreshHrView(); return; }
+  hrError = ""; hrShowLetterSettings = false; hrAppointmentConfig = res.payload;
   refreshHrView();
 }
 
@@ -5509,7 +5550,7 @@ function hrDownloadFnfPdf(button) {
 async function hrCreateEmployee() {
   const v = (id) => (document.getElementById(id)?.value || "").trim();
   const body = {
-    user_id: v("hr-emp-userid"),
+    user_id: v("hr-emp-userid") || null,   // blank -> backend auto-generates EMP-####
     full_name: v("hr-emp-name"),
     designation: v("hr-emp-designation") || null,
     department: v("hr-emp-department") || null,
@@ -5519,8 +5560,8 @@ async function hrCreateEmployee() {
     is_esic_eligible: !!document.getElementById("hr-emp-esic")?.checked,
     status: "active",
   };
-  if (!body.user_id || !body.full_name || !body.date_of_joining) {
-    hrError = "Employee needs a User ID, Full Name and Date of Joining."; refreshHrView(); return;
+  if (!body.full_name || !body.date_of_joining) {
+    hrError = "Employee needs a Full Name and Date of Joining."; refreshHrView(); return;
   }
   const res = await apiRequest("mitrabooks", "/api/v1/business/hr/employees", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) { hrError = res.payload?.detail || "Could not create employee."; refreshHrView(); return; }
@@ -5589,7 +5630,7 @@ function renderHrEmployeesTab() {
 
   const addForm = (manage && hrShowAddEmployee) ? `
     <div class="hr-add-form" style="border:1px solid var(--border,#333);border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-      <label>User ID*<br><input id="hr-emp-userid" type="text" style="width:120px;"></label>
+      <label>User ID<br><input id="hr-emp-userid" type="text" placeholder="auto (EMP-####)" style="width:130px;"></label>
       <label>Full Name*<br><input id="hr-emp-name" type="text" style="width:150px;"></label>
       <label>Designation<br><input id="hr-emp-designation" type="text" style="width:120px;"></label>
       <label>Department<br><input id="hr-emp-department" type="text" style="width:120px;"></label>
@@ -5602,8 +5643,36 @@ function renderHrEmployeesTab() {
     </div>` : "";
 
   const addBtn = (manage && !hrShowAddEmployee)
-    ? `<button class="secondary" type="button" data-business-action="hr-add-employee-toggle" style="margin-bottom:12px;">+ Add Employee</button>`
+    ? `<button class="secondary" type="button" data-business-action="hr-add-employee-toggle" style="margin-bottom:12px;">+ Add Employee</button>
+       <button class="secondary" type="button" data-business-action="hr-letter-settings-toggle" style="margin-bottom:12px;margin-left:6px;">⚙ Letter Settings</button>`
     : "";
+
+  const c = (hrAppointmentConfig && hrAppointmentConfig.clauses) || {};
+  const ck = (id, key, label) => `<label style="display:flex;gap:4px;align-items:center;"><input id="${id}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>`;
+  const letterSettings = (manage && hrShowLetterSettings) ? `
+    <div style="border:1px solid var(--border,#333);border-radius:8px;padding:12px;margin-bottom:14px;">
+      <strong>Appointment-letter settings</strong>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+        <label>Probation (months)<br><input id="hr-ls-probation" type="number" min="0" max="24" value="${hrAppointmentConfig?.probation_months ?? 6}" style="width:90px;"></label>
+        <label>Notice (days)<br><input id="hr-ls-notice" type="number" min="0" max="180" value="${hrAppointmentConfig?.notice_days ?? 30}" style="width:90px;"></label>
+        <label>Working hours<br><input id="hr-ls-hours" type="text" value="${escapeHtml(hrAppointmentConfig?.work_hours || "9:30 AM to 6:30 PM, Monday to Friday")}" style="width:230px;"></label>
+        <label>Signatory name<br><input id="hr-ls-signame" type="text" value="${escapeHtml(hrAppointmentConfig?.signatory_name || "")}" style="width:140px;"></label>
+        <label>Signatory title<br><input id="hr-ls-sigtitle" type="text" value="${escapeHtml(hrAppointmentConfig?.signatory_title || "Authorised Signatory")}" style="width:150px;"></label>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;">
+        ${ck("hr-ls-bg", "background_check", "Background check")}
+        ${ck("hr-ls-nda", "confidentiality_nda", "Confidentiality / NDA")}
+        ${ck("hr-ls-ip", "ip_assignment", "IP assignment")}
+        ${ck("hr-ls-data", "data_privacy", "Data privacy")}
+        ${ck("hr-ls-conduct", "code_of_conduct", "Code of conduct")}
+        ${ck("hr-ls-cash", "cash_handling", "Cash/material handling")}
+        ${ck("hr-ls-reloc", "relocation", "Shift/relocation")}
+      </div>
+      <div style="margin-top:10px;">
+        <button class="primary" type="button" data-business-action="hr-save-letter-settings">Save Settings</button>
+        <button class="secondary" type="button" data-business-action="hr-letter-settings-cancel">Cancel</button>
+      </div>
+    </div>` : "";
 
   const empBlock = hrEmployees.length ? `
     <table class="erp-table">
@@ -5614,7 +5683,10 @@ function renderHrEmployeesTab() {
           <td>${escapeHtml(e.designation || "—")}</td>
           <td>${escapeHtml(e.department || "—")}</td>
           <td><span class="status-pill">${escapeHtml(e.status || "")}</span></td>
-          ${manage ? `<td><button class="secondary" type="button" data-business-action="hr-assign-open" data-emp-id="${escapeHtml(e.employee_id)}">Assign Salary</button></td>` : ""}
+          ${manage ? `<td>
+            <button class="secondary" type="button" data-business-action="hr-assign-open" data-emp-id="${escapeHtml(e.employee_id)}">Assign Salary</button>
+            <button class="secondary" type="button" data-business-action="hr-letter" data-emp-id="${escapeHtml(e.employee_id)}">Letter</button>
+          </td>` : ""}
         </tr>`).join("")}</tbody>
     </table>` : `<p class="muted">No employees yet. Click "+ Add Employee" to create one.</p>`;
 
@@ -5641,7 +5713,7 @@ function renderHrEmployeesTab() {
     : `<tr><td colspan="2" class="muted">No salary structures yet — add one to assign salaries.</td></tr>`;
 
   return `
-    ${addBtn}${addForm}
+    ${addBtn}${addForm}${letterSettings}
     ${empBlock}
     ${assignForm}
     <h5 style="margin-top:18px;">Salary Structures</h5>
@@ -16091,6 +16163,14 @@ dashboardPreview.addEventListener("click", async (event) => {
     hrAssignFor = ""; hrError = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
   } else if (businessAction === "hr-assign-submit") {
     hrAssignSalary();
+  } else if (businessAction === "hr-letter") {
+    hrDownloadLetter(button);
+  } else if (businessAction === "hr-letter-settings-toggle") {
+    hrShowLetterSettings = true; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-letter-settings-cancel") {
+    hrShowLetterSettings = false; hrError = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "hr-save-letter-settings") {
+    hrSaveLetterSettings();
   } else if (businessAction === "hr-tab") {
     hrTab = button.getAttribute("data-hr-tab") || "employees";
     if (hrTab !== "payroll") { hrSelectedRunId = ""; hrRunSlips = []; }

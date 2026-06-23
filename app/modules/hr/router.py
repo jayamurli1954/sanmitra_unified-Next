@@ -31,6 +31,8 @@ from app.modules.hr.schemas import (
     LeaveTypeCreateRequest,
     LeaveTypeListResponse,
     LeaveTypeResponse,
+    AppointmentConfig,
+    AppointmentConfigResponse,
     EffectiveDeductionsResponse,
     FnfCreateRequest,
     FnfListResponse,
@@ -56,11 +58,13 @@ from app.modules.hr.service import (
     HrValidationError,
     create_employee,
     create_salary_structure,
+    get_appointment_config,
     get_employee,
     get_salary_assignment,
     get_salary_structure,
     list_employees,
     list_salary_structures,
+    save_appointment_config,
     update_employee,
     upsert_salary_assignment,
 )
@@ -276,6 +280,67 @@ async def hr_get_salary_assignment(
         )
     except HrNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ── appointment letter (config + PDF) ─────────────────────────────────────────
+
+@router.get("/appointment-settings", response_model=AppointmentConfigResponse)
+async def hr_get_appointment_settings(
+    context: AppTenantContext = Depends(require_hr_context("appointment settings")),
+):
+    return await get_appointment_config(tenant_id=context.tenant_id, app_key=context.app_key)
+
+
+@router.put("/appointment-settings", response_model=AppointmentConfigResponse)
+async def hr_save_appointment_settings(
+    payload: AppointmentConfig,
+    context: AppTenantContext = Depends(require_hr_context("appointment settings", roles=HR_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    return await save_appointment_config(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        updated_by=_actor(current_user), payload=payload,
+    )
+
+
+@router.get("/employees/{employee_id}/appointment-letter")
+async def hr_appointment_letter_pdf(
+    employee_id: str,
+    context: AppTenantContext = Depends(require_hr_context("appointment letter")),
+):
+    from decimal import Decimal
+
+    from app.modules.hr.payroll_engine import PayrollInput, compute_payroll
+    from app.modules.hr.payroll_run import _components_from_structure
+
+    try:
+        employee = await get_employee(tenant_id=context.tenant_id, app_key=context.app_key, employee_id=employee_id)
+        assignment = await get_salary_assignment(tenant_id=context.tenant_id, app_key=context.app_key, employee_id=employee_id)
+    except HrNotFoundError as exc:
+        # No salary assigned -> the letter has no compensation to state.
+        raise HTTPException(status_code=422, detail="Assign a salary to this employee before generating the appointment letter") from exc
+    try:
+        structure = await get_salary_structure(
+            tenant_id=context.tenant_id, app_key=context.app_key, structure_id=assignment["structure_id"]
+        )
+    except HrNotFoundError as exc:
+        raise HTTPException(status_code=422, detail="The employee's salary structure no longer exists") from exc
+
+    breakdown = compute_payroll(PayrollInput(
+        monthly_gross=Decimal(str(assignment["monthly_gross"])),
+        components=_components_from_structure(structure),
+        payment_days=Decimal("30"), total_days=Decimal("30"),
+        regime=assignment.get("regime", "new"),
+        pf_eligible=bool(employee.get("is_pf_eligible", True)),
+        esi_eligible=bool(employee.get("is_esic_eligible", False)),
+        pt_state=employee.get("state_for_professional_tax"),
+    ))
+    config = await get_appointment_config(tenant_id=context.tenant_id, app_key=context.app_key)
+    pdf = hr_documents.render_appointment_letter_pdf(
+        employee=employee, monthly_gross=assignment["monthly_gross"],
+        breakdown=breakdown, branding=await _branding(context), config=config,
+    )
+    return _pdf_response(pdf, f"appointment-letter-{employee.get('user_id') or employee_id}.pdf")
 
 
 # ── payroll run ───────────────────────────────────────────────────────────────

@@ -9,9 +9,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from pymongo import ReturnDocument
+
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
 from app.modules.hr.schemas import (
+    AppointmentConfig,
     EmployeeCreateRequest,
     EmployeeUpdateRequest,
     SalaryAssignmentRequest,
@@ -23,10 +26,24 @@ HR_STRUCTURES_COLLECTION = "hr_salary_structures"
 HR_ASSIGNMENTS_COLLECTION = "hr_salary_assignments"
 HR_SLIPS_COLLECTION = "hr_salary_slips"
 HR_RUNS_COLLECTION = "hr_payroll_runs"
+HR_COUNTERS_COLLECTION = "hr_counters"
+HR_APPOINTMENT_SETTINGS_COLLECTION = "hr_appointment_settings"
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+async def _next_employee_code(*, tenant_id: str, app_key: str) -> str:
+    """Atomic per-tenant sequence -> EMP-0001, EMP-0002, ..."""
+    counters = get_collection(HR_COUNTERS_COLLECTION)
+    doc = await counters.find_one_and_update(
+        {"tenant_id": tenant_id, "app_key": app_key, "key": "employee_code"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return f"EMP-{int(doc['seq']):04d}"
 
 
 async def ensure_hr_indexes() -> None:
@@ -113,14 +130,21 @@ async def create_employee(
 ) -> dict:
     employees = get_collection(HR_EMPLOYEES_COLLECTION)
 
+    # Auto-generate an EMP-#### code when the caller didn't supply a user_id
+    # (most employees don't have a separate Sanmitra login).
+    user_id = (payload.user_id or "").strip() or await _next_employee_code(
+        tenant_id=tenant_id, app_key=app_key
+    )
+
     existing = await employees.find_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "user_id": payload.user_id}
+        {"tenant_id": tenant_id, "app_key": app_key, "user_id": user_id}
     )
     if existing is not None:
         raise HrConflictError("An employee profile already exists for this user")
 
     employee_id = str(uuid4())
     doc = payload.model_dump(mode="json")  # dates -> ISO strings (BSON-safe)
+    doc["user_id"] = user_id
     doc.update(
         {
             "employee_id": employee_id,
@@ -285,6 +309,39 @@ async def get_salary_assignment(*, tenant_id: str, app_key: str, employee_id: st
     if row is None:
         raise HrNotFoundError("Salary assignment not found")
     return _serialize(row)
+
+
+# --------------------------------------------------------------------------- #
+# Appointment-letter configuration (toggle clauses) — one per tenant
+# --------------------------------------------------------------------------- #
+
+async def get_appointment_config(*, tenant_id: str, app_key: str) -> dict:
+    row = await get_collection(HR_APPOINTMENT_SETTINGS_COLLECTION).find_one(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    )
+    stored = {k: v for k, v in (row or {}).items() if k in {
+        "probation_months", "notice_days", "work_hours", "signatory_name", "signatory_title", "clauses",
+    }}
+    config = AppointmentConfig(**stored).model_dump()
+    config.update({"tenant_id": tenant_id, "app_key": app_key})
+    return config
+
+
+async def save_appointment_config(
+    *, tenant_id: str, app_key: str, updated_by: str, payload: AppointmentConfig
+) -> dict:
+    doc = payload.model_dump()
+    doc.update({"updated_by": updated_by, "updated_at": _now()})
+    await get_collection(HR_APPOINTMENT_SETTINGS_COLLECTION).update_one(
+        {"tenant_id": tenant_id, "app_key": app_key},
+        {"$set": doc, "$setOnInsert": {"tenant_id": tenant_id, "app_key": app_key, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit(
+        tenant_id=tenant_id, app_key=app_key, user_id=updated_by,
+        action="hr_appointment_config_updated", entity_id="appointment_config", new_value={"clauses": doc.get("clauses")},
+    )
+    return await get_appointment_config(tenant_id=tenant_id, app_key=app_key)
 
 
 # Fields too sensitive to copy verbatim into the audit trail.

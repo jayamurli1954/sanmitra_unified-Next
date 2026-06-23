@@ -84,7 +84,9 @@ class EmployeeBase(BaseModel):
 
 
 class EmployeeCreateRequest(EmployeeBase):
-    pass
+    # Optional on create — when blank the service auto-generates an EMP-#### code.
+    # Link to a real Sanmitra login user only when the employee has one.
+    user_id: str | None = Field(default=None, max_length=120)
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -382,3 +384,31 @@ class FnfResponse(BaseModel):
 class FnfListResponse(BaseModel):
     settlements: list[FnfResponse]
     total: int
+
+
+# --------------------------------------------------------------------------- #
+# Appointment letter configuration (toggle clauses)
+# --------------------------------------------------------------------------- #
+
+class AppointmentClauses(BaseModel):
+    background_check: bool = True
+    confidentiality_nda: bool = True
+    ip_assignment: bool = True
+    data_privacy: bool = True
+    code_of_conduct: bool = True
+    cash_handling: bool = False       # supermarkets/retail
+    relocation: bool = False          # shift flexibility / branch transfer
+
+
+class AppointmentConfig(BaseModel):
+    probation_months: int = Field(default=6, ge=0, le=24)
+    notice_days: int = Field(default=30, ge=0, le=180)
+    work_hours: str = Field(default="9:30 AM to 6:30 PM, Monday to Friday", max_length=120)
+    signatory_name: str | None = Field(default=None, max_length=120)
+    signatory_title: str | None = Field(default="Authorised Signatory", max_length=120)
+    clauses: AppointmentClauses = Field(default_factory=AppointmentClauses)
+
+
+class AppointmentConfigResponse(AppointmentConfig):
+    tenant_id: str
+    app_key: str
