@@ -664,6 +664,8 @@ let lastMandirReceipt = null;
 let activeReceiptPreviewObjectUrl = "";
 let activeMandirWorkspace = "overview";
 let activeGruhaWorkspace = "overview";
+let activePlatformWorkspace = "dashboard";
+let lastPlatformOwnerDashboard = null;
 let lastMandirPaymentAccounts = { cash_accounts: [], bank_accounts: [] };
 let lastMandirAccounts = [];
 let lastMandirFormResult = null;
@@ -899,6 +901,8 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
       ? gruhaNavigationItems()
       : currentExperience === "mitrabooks"
         ? businessNavigationItems()
+        : currentExperience === "platform"
+          ? platformNavigationItems(modules)
         : modules.map((module) => ({
         label: `${module.nav_group || "Module"}: ${module.display_name}`,
         module,
@@ -926,6 +930,9 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
     if (item.businessWorkspace) {
       link.dataset.businessWorkspace = item.businessWorkspace;
     }
+    if (item.platformWorkspace) {
+      link.dataset.platformWorkspace = item.platformWorkspace;
+    }
     link.dataset.navIcon = item.icon || navIconForMandirWorkspace(mandirWorkspace);
     link.textContent = item.label;
     nav.appendChild(link);
@@ -943,6 +950,7 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   });
   syncMandirNavActiveState();
   syncGruhaNavActiveState();
+  syncPlatformNavActiveState();
   syncBusinessNavActiveState();
 }
 
@@ -989,6 +997,14 @@ function gruhaNavigationItems() {
     { label: "Reports", gruhaWorkspace: "reports", icon: "R", module: { module_key: "housing", frontend_path: "/housing/reports", enabled: true } },
     { label: "Settings", gruhaWorkspace: "settings", icon: "S", module: { module_key: "audit", frontend_path: "/housing/settings", enabled: true } },
   ];
+}
+
+function platformNavigationItems(modules = experienceConfig.platform.modules) {
+  return modules.map((module) => ({
+    label: `${module.nav_group || "Platform"}: ${module.display_name}`,
+    platformWorkspace: platformWorkspaceFromModule(module),
+    module,
+  }));
 }
 
 function legacyBusinessNavigationItems() {
@@ -2025,6 +2041,21 @@ function mandirWorkspaceFromModule(module = {}) {
   return "";
 }
 
+function platformWorkspaceFromModule(module = {}) {
+  const path = String(module.frontend_path || "").toLowerCase();
+  const displayName = String(module.display_name || "").toLowerCase();
+  if (path.includes("/onboarding") || displayName.includes("onboarding")) {
+    return "onboarding";
+  }
+  if (path.includes("/tenants") || displayName.includes("tenant")) {
+    return "tenants";
+  }
+  if (path.includes("/subscriptions") || displayName.includes("subscription")) {
+    return "subscriptions";
+  }
+  return "dashboard";
+}
+
 function navIconForMandirWorkspace(workspace) {
   return ({
     overview: "▦",
@@ -2117,6 +2148,25 @@ function syncGruhaNavActiveState() {
 // SECTION: SHARED UTILITIES
 // NOTE  : escapeHtml, formatCurrency, formatCountLabel, setLoginStatus, statusDetailText, delay
 // ══════════════════════════════════════════════════════════════════════
+
+function syncPlatformNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.platformWorkspace || "";
+    const isActive = currentExperience === "platform" && workspace && workspace === activePlatformWorkspace;
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent && currentExperience === "platform") {
+    const labels = {
+      dashboard: "Dashboard",
+      onboarding: "Onboarding Requests",
+      tenants: "Tenant Status",
+      subscriptions: "Subscriptions",
+    };
+    const label = labels[activePlatformWorkspace] || "Dashboard";
+    topbarCurrent.textContent = label;
+    updatePageHeader("Platform Owner", label, `${label} Workspace`);
+  }
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -3286,6 +3336,27 @@ function formatCountLabel(count, singular, plural = `${singular}s`) {
   return `${safeCount} ${safeCount === 1 ? singular : plural}`;
 }
 
+function renderPlatformRecentOnboardingTable(rows) {
+  return renderPlatformTable(rows, [
+    { label: "Request", value: (row) => row.request_id || row.id || "" },
+    { label: "App", value: (row) => row.app_key || "" },
+    { label: "Status", value: (row) => row.status || "" },
+    { label: "Payment", value: (row) => row.payment_status || "" },
+    { label: "Documents", value: (row) => row.document_verification_status || "" },
+    { label: "Admin Email", value: (row) => row.admin_email || "" },
+  ], "No onboarding requests returned.");
+}
+
+function renderPlatformSubscriptionsTable(rows) {
+  return renderPlatformTable(rows, [
+    { label: "Tenant", value: (row) => row.display_name || row.tenant_id || "" },
+    { label: "App Keys", value: (row) => Array.isArray(row.app_keys) ? row.app_keys.join(", ") : "" },
+    { label: "Plan", value: (row) => row.subscription_plan || "" },
+    { label: "Status", value: (row) => row.subscription_status || row.status || "" },
+    { label: "Modules", value: (row) => Array.isArray(row.enabled_modules) ? row.enabled_modules.join(", ") : "" },
+  ], "No subscription records returned.");
+}
+
 function renderPlatformDashboard(payload) {
   const summary = payload?.summary || {};
   const onboarding = summary.onboarding || {};
@@ -3298,7 +3369,76 @@ function renderPlatformDashboard(payload) {
   const appStatus = Array.isArray(payload?.app_status) ? payload.app_status : [];
   const moduleStatus = Array.isArray(payload?.module_status) ? payload.module_status : [];
   const pendingApprovals = Array.isArray(payload?.pending_approvals) ? payload.pending_approvals : [];
+  const recentOnboarding = Array.isArray(payload?.recent_onboarding) ? payload.recent_onboarding : [];
   const recentTenants = Array.isArray(payload?.recent_tenants) ? payload.recent_tenants : [];
+  const workspace = activePlatformWorkspace || "dashboard";
+
+  if (workspace === "onboarding") {
+    return `
+      <div class="legacy-dashboard platform-dashboard">
+        <div class="preview-heading">
+          <div>
+            <h3>Onboarding Requests</h3>
+            <p>Review product onboarding requests, payment status, and document verification state.</p>
+          </div>
+          <span class="pill ok">super admin</span>
+        </div>
+        <article>
+          <h4>Pending Review</h4>
+          ${renderPendingApprovalsTable(pendingApprovals)}
+        </article>
+        <article>
+          <h4>Recent Onboarding Requests</h4>
+          ${renderPlatformRecentOnboardingTable(recentOnboarding)}
+        </article>
+      </div>
+    `;
+  }
+
+  if (workspace === "tenants") {
+    return `
+      <div class="legacy-dashboard platform-dashboard">
+        <div class="preview-heading">
+          <div>
+            <h3>Tenant Status</h3>
+            <p>Inspect active and inactive tenants across LegalMitra, MandirMitra, GruhaMitra, and MitraBooks.</p>
+          </div>
+          <span class="pill ok">super admin</span>
+        </div>
+        <div class="metric-grid three">${renderStatCards([
+          ["Active Tenants", active, "currently enabled"],
+          ["Inactive Tenants", inactive, "needs review"],
+          ["Tracked Apps", appStatus.length, "product contexts"],
+        ])}</div>
+        <article>
+          <h4>Recent Tenants</h4>
+          ${renderRecentTenantsTable(recentTenants)}
+        </article>
+      </div>
+    `;
+  }
+
+  if (workspace === "subscriptions") {
+    return `
+      <div class="legacy-dashboard platform-dashboard">
+        <div class="preview-heading">
+          <div>
+            <h3>Subscriptions</h3>
+            <p>Check plan, subscription status, and enabled modules for tenant accounts.</p>
+          </div>
+          <span class="pill ok">super admin</span>
+        </div>
+        <div class="metric-grid two">${renderStatCards([
+          ["Subscription Plans", planCount, formatCountMap(subscriptions.by_plan)],
+          ["Tracked Tenants", recentTenants.length, "latest records shown"],
+        ])}</div>
+        <article>
+          <h4>Tenant Subscriptions</h4>
+          ${renderPlatformSubscriptionsTable(recentTenants)}
+        </article>
+      </div>
+    `;
+  }
 
   return `
     <div class="legacy-dashboard platform-dashboard">
@@ -14713,7 +14853,9 @@ async function loadPlatformOwnerDashboard() {
   const result = await apiRequest(APP_KEY, "/api/v1/platform-owner/dashboard", { method: "GET" });
   renderJson(apiOutput, { platform_owner_dashboard: result });
   if (result.ok) {
+    lastPlatformOwnerDashboard = result.payload;
     dashboardPreview.innerHTML = renderPlatformDashboard(result.payload);
+    syncPlatformNavActiveState();
     return;
   }
 
@@ -15960,10 +16102,23 @@ async function submitTenantEntitlements() {
   await loadPlatformOwnerDashboard();
 }
 
+async function setPlatformWorkspace(workspace) {
+  activePlatformWorkspace = workspace || "dashboard";
+  syncPlatformNavActiveState();
+  if (lastPlatformOwnerDashboard) {
+    dashboardPreview.innerHTML = renderPlatformDashboard(lastPlatformOwnerDashboard);
+    return;
+  }
+  await loadPlatformOwnerDashboard();
+}
+
 function setExperience(nextExperience) {
   currentExperience = nextExperience;
   document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
   document.getElementById(`mode-${nextExperience}`)?.classList.add("active");
+  if (nextExperience === "platform") {
+    activePlatformWorkspace = "dashboard";
+  }
   renderModules();
   if (nextExperience === "platform") {
     loadPlatformOwnerDashboard();
@@ -16115,6 +16270,18 @@ nav.addEventListener("click", (event) => {
 // SECTION: EVENT HANDLERS — click / change / input / keydown
 // NOTE  : Single delegated listener on dashboardPreview for all workspace actions
 // ══════════════════════════════════════════════════════════════════════
+
+nav.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-platform-workspace]");
+  if (!link || currentExperience !== "platform") {
+    return;
+  }
+  event.preventDefault();
+  if (link.getAttribute("aria-disabled") === "true") {
+    return;
+  }
+  setPlatformWorkspace(link.dataset.platformWorkspace || "dashboard");
+});
 
 dashboardPreview.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action], [data-coa-action]");
