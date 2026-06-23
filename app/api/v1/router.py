@@ -15,6 +15,7 @@ from app.core.platform_owner.router import router as platform_owner_router
 from app.core.tenants.router import router as tenants_router
 from app.core.users.router import router as users_router
 from app.modules.hr.router import router as hr_router
+from app.modules.manufacturing.router import router as manufacturing_router
 from app.modules.housing.router import router as housing_router
 from app.modules.housing_compat.router import router as housing_compat_router
 from app.modules.legal.router import router as legal_router
@@ -47,4 +48,5 @@ api_router.include_router(rag_router)
 api_router.include_router(billing_router)
 api_router.include_router(business_router)
 api_router.include_router(hr_router)
+api_router.include_router(manufacturing_router)
 api_router.include_router(blog_router)

@@ -52,6 +52,12 @@ def _serialize_tenant(doc: dict) -> dict:
         # must first make it available. The tenant-admin on/off toggle lives
         # separately on MitraBooks InvoiceSettings (hr_enabled).
         "hr_addon_available": bool(doc.get("hr_addon_available", False)),
+        # Platform-owner provisioning for the enterprise Cost-Centre Accounting and
+        # Manufacturing add-ons (same two-level model as HR). Default False — tenants
+        # cannot self-enable; the tenant-admin toggles live on InvoiceSettings
+        # (cost_centre_enabled / manufacturing_enabled).
+        "cost_centre_addon_available": bool(doc.get("cost_centre_addon_available", False)),
+        "manufacturing_addon_available": bool(doc.get("manufacturing_addon_available", False)),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
         "updated_by": doc.get("updated_by"),
@@ -265,6 +271,48 @@ async def set_hr_addon_available(*, tenant_id: str, available: bool, updated_by:
     if result.matched_count == 0:
         raise KeyError("Tenant not found")
 
+    doc = await tenants.find_one({"tenant_id": normalized_tenant_id})
+    if not doc:
+        raise KeyError("Tenant not found")
+    return _serialize_tenant(doc)
+
+
+_ADDON_AVAILABLE_FLAGS = {
+    "hr_addon_available",
+    "cost_centre_addon_available",
+    "manufacturing_addon_available",
+}
+
+
+async def set_addon_available(*, tenant_id: str, flag: str, available: bool, updated_by: str) -> dict:
+    """Platform-owner switch to provision (or revoke) an enterprise add-on for a
+    tenant — the first of the two-level gate. Generic over the addon-available
+    flags; the tenant-admin still has to enable the module on InvoiceSettings.
+
+    Manufacturing depends on cost centres, so provisioning manufacturing also
+    provisions cost centres, and revoking cost centres also revokes manufacturing.
+    """
+    if flag not in _ADDON_AVAILABLE_FLAGS:
+        raise ValueError(f"Unknown add-on flag '{flag}'")
+    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    if not normalized_tenant_id:
+        raise ValueError("tenant_id is required")
+
+    updates = {flag: bool(available)}
+    if flag == "manufacturing_addon_available" and available:
+        updates["cost_centre_addon_available"] = True
+    if flag == "cost_centre_addon_available" and not available:
+        updates["manufacturing_addon_available"] = False
+
+    await ensure_tenants_indexes()
+    tenants = get_collection(TENANTS_COLLECTION)
+    now = datetime.now(timezone.utc)
+    result = await tenants.update_one(
+        {"tenant_id": normalized_tenant_id},
+        {"$set": {**updates, "updated_at": now, "updated_by": updated_by}},
+    )
+    if result.matched_count == 0:
+        raise KeyError("Tenant not found")
     doc = await tenants.find_one({"tenant_id": normalized_tenant_id})
     if not doc:
         raise KeyError("Tenant not found")

@@ -109,6 +109,10 @@ class JournalLine(Base):
     credit: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, default=Decimal("0.00"), server_default="0")
     # Subledger dimension: business party (customer/vendor) on receivable/payable lines.
     party_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Cost-centre dimension (enterprise add-on): tags the line to a cost centre for
+    # departmental/branch P&L and budget-vs-actual. Nullable; lines with no
+    # cost_center_id appear as "Unallocated" in cost-centre reports.
+    cost_center_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     journal_entry: Mapped[JournalEntry] = relationship(back_populates="lines")
 
@@ -122,6 +126,7 @@ class JournalLine(Base):
         Index("ix_journal_lines_account", "account_id"),
         Index("ix_journal_lines_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
         Index("ix_journal_lines_party", "app_key", "tenant_id", "accounting_entity_id", "account_id", "party_id"),
+        Index("ix_journal_lines_cost_center", "app_key", "tenant_id", "accounting_entity_id", "cost_center_id", "account_id"),
     )
 
 

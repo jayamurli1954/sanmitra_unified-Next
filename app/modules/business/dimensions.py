@@ -65,6 +65,17 @@ async def create_dimension(
     if await col.find_one({**scope, "dimension_type": dim_type, "code": code}):
         raise AccountingValidationError(f"A {dim_type.replace('_', ' ')} with code '{code}' already exists")
 
+    # Optional hierarchy (cost centres roll up: Assembly -> Factory -> Operations).
+    # The parent must already exist in THIS tenant+entity scope and be the same
+    # dimension type — a cross-tenant or cross-type parent is impossible.
+    parent_code = str(payload.get("parent_code") or "").strip().upper() or None
+    if parent_code:
+        if parent_code == code:
+            raise AccountingValidationError("A cost centre cannot be its own parent")
+        parent = await col.find_one({**scope, "dimension_type": dim_type, "code": parent_code})
+        if parent is None:
+            raise AccountingValidationError(f"Parent {dim_type.replace('_', ' ')} '{parent_code}' does not exist")
+
     now = _now()
     doc = {
         **scope,
@@ -72,6 +83,7 @@ async def create_dimension(
         "dimension_type": dim_type,
         "code": code,
         "name": name,
+        "parent_code": parent_code,
         "is_active": True,
         "created_by": created_by,
         "created_at": now,
@@ -138,6 +150,58 @@ async def validate_dimension_refs(
         )
         if row is None:
             raise AccountingValidationError(f"Unknown {dim_type.replace('_', ' ')} '{dim_id}'")
+
+
+async def validate_ledger_cost_centre_ids(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, cost_centre_ids: set[str],
+) -> None:
+    """Tenant-isolation guard for cost-centre tags on POSTED ledger lines.
+
+    Every cost_center_id attached to a journal line must resolve to an ACTIVE
+    cost centre owned by the SAME tenant + app + accounting entity. This is the
+    single chokepoint that makes cross-tenant (or cross-entity) cost-centre
+    contamination impossible: a code that lives only in another tenant's books
+    simply will not be found in this scope, and the posting is rejected before
+    it touches the immutable ledger. Empty input is a no-op (untagged postings
+    pay nothing and are unaffected).
+    """
+    from app.accounting.service import AccountingValidationError
+    from app.db.mongo import get_collection
+
+    wanted = {cid for cid in cost_centre_ids if cid}
+    if not wanted:
+        return
+    scope = _scope(tenant_id, app_key, accounting_entity_id)
+    rows = await get_collection(DIMENSIONS_COLLECTION).find(
+        {**scope, "dimension_type": "cost_centre", "is_active": True,
+         "dimension_id": {"$in": list(wanted)}},
+        {"dimension_id": 1},
+    ).to_list(length=len(wanted))
+    found = {r["dimension_id"] for r in rows}
+    missing = sorted(wanted - found)
+    if missing:
+        raise AccountingValidationError(
+            "Unknown or inactive cost centre(s) for this entity: "
+            + ", ".join(missing)
+            + ". A cost centre from another tenant or entity cannot be used."
+        )
+
+
+def build_cost_centre_tree(dimensions: list[dict]) -> list[dict]:
+    """Roll cost-centre masters into a parent/child forest (by code) for display.
+    Pure assembly; isolation is the caller's responsibility (pass one scope's
+    masters only)."""
+    centres = [d for d in dimensions if d.get("dimension_type") == "cost_centre"]
+    by_code = {c["code"]: {**c, "children": []} for c in centres}
+    roots: list[dict] = []
+    for node in by_code.values():
+        parent = by_code.get(node.get("parent_code"))
+        if parent is not None:
+            parent["children"].append(node)
+        else:
+            roots.append(node)  # orphans (missing parent) surface at the top
+    roots.sort(key=lambda n: n["code"])
+    return roots
 
 
 # --------------------------------------------------------------------------- #

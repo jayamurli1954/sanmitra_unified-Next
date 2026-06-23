@@ -1103,7 +1103,8 @@ async def get_invoice_settings(
         # Re-validate stored doc through the model so missing/new keys get defaults.
         stored = {
             k: v for k, v in row.items()
-            if k in {"field_config", "numbering", "custom_fields", "branding", "inventory_enabled", "hr_enabled"}
+            if k in {"field_config", "numbering", "custom_fields", "branding", "inventory_enabled",
+                     "hr_enabled", "cost_centre_enabled", "manufacturing_enabled"}
         }
         result = InvoiceSettings(**stored).model_dump()
     # Backfill any standard field missing from a partially-saved config so the
@@ -1163,6 +1164,8 @@ async def save_invoice_settings(
         branding=payload.branding,
         inventory_enabled=payload.inventory_enabled,
         hr_enabled=payload.hr_enabled,
+        cost_centre_enabled=payload.cost_centre_enabled,
+        manufacturing_enabled=payload.manufacturing_enabled,
     )
     doc = settings.model_dump()
     doc.update({"updated_by": updated_by, "updated_at": _now()})
@@ -1202,6 +1205,41 @@ async def set_hr_enabled(
         entity_id=accounting_entity_id, new_value={"hr_enabled": bool(enabled)},
     )
     return bool(enabled)
+
+
+_MODULE_ENABLE_FLAGS = {"cost_centre_enabled", "manufacturing_enabled"}
+
+
+async def set_module_enabled(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, flag: str, enabled: bool, updated_by: str,
+) -> dict:
+    """Tenant-admin toggle for an enterprise module flag on InvoiceSettings
+    (cost_centre_enabled / manufacturing_enabled), upserting the settings doc.
+
+    Manufacturing depends on cost centres, so enabling manufacturing implies
+    cost centres ON, and disabling cost centres also disables manufacturing —
+    the two flags can never end up in a contradictory state."""
+    if flag not in _MODULE_ENABLE_FLAGS:
+        raise ValueError(f"Unknown module flag '{flag}'")
+    updates = {flag: bool(enabled)}
+    if flag == "manufacturing_enabled" and enabled:
+        updates["cost_centre_enabled"] = True
+    if flag == "cost_centre_enabled" and not enabled:
+        updates["manufacturing_enabled"] = False
+
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
+        filters,
+        {"$set": {**updates, "updated_by": updated_by, "updated_at": _now()},
+         "$setOnInsert": {**filters, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit_business_event(
+        tenant_id=tenant_id, app_key=app_key, user_id=updated_by,
+        action="business_module_enabled_toggled", entity_type="business_invoice_settings",
+        entity_id=accounting_entity_id, new_value=updates,
+    )
+    return updates
 
 
 async def list_sales_invoices(

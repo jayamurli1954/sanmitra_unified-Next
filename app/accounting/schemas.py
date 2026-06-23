@@ -48,6 +48,9 @@ class JournalLineIn(BaseModel):
     credit: Decimal = Decimal("0")
     # Optional sub-ledger party (customer/vendor) for receivable/payable lines.
     party_id: str | None = Field(default=None, max_length=64)
+    # Optional cost-centre dimension (enterprise add-on). Tags the line to a
+    # cost centre for departmental/branch P&L and budget-vs-actual reporting.
+    cost_center_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("debit", "credit")
     @classmethod

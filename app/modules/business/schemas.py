@@ -389,6 +389,13 @@ class InvoiceSettings(BaseModel):
     # two-level HR gate: effective only once the platform owner has provisioned
     # the add-on for the tenant (core_tenants.hr_addon_available).
     hr_enabled: bool = False
+    # Tenant-admin on/off for the enterprise Cost-Centre Accounting add-on.
+    # Second level of its gate (platform sets core_tenants.cost_centre_addon_available).
+    cost_centre_enabled: bool = False
+    # Tenant-admin on/off for the Manufacturing add-on. Depends on cost centres
+    # (manufacturing posts to cost centres), so enabling it implies cost centres.
+    # Second level of its gate (platform sets core_tenants.manufacturing_addon_available).
+    manufacturing_enabled: bool = False
 
 
 class InvoiceSettingsUpdateRequest(InvoiceSettings):

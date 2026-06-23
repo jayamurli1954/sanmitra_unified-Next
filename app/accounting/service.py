@@ -720,6 +720,20 @@ async def post_journal_entry(
         normalized_lines=normalized_lines,
     )
 
+    # Tenant-isolation guard: any cost-centre tag on a line must belong to THIS
+    # tenant+entity. This is the single ledger chokepoint, so no posting path can
+    # smuggle in another tenant's cost centre. Untagged postings skip it entirely.
+    cost_centre_ids = {
+        cc for cc in (getattr(line, "cost_center_id", None) for line in payload.lines) if cc
+    }
+    if cost_centre_ids:
+        from app.modules.business.dimensions import validate_ledger_cost_centre_ids
+
+        await validate_ledger_cost_centre_ids(
+            tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+            cost_centre_ids=cost_centre_ids,
+        )
+
     journal_entry = JournalEntry(
         app_key=app_key,
         tenant_id=tenant_id,
@@ -738,7 +752,7 @@ async def post_journal_entry(
     )
     session.add(journal_entry)
 
-    # normalized_lines preserves payload order, so zip to carry the party sub-ledger tag.
+    # normalized_lines preserves payload order, so zip to carry the sub-ledger tags.
     for (account_id, debit, credit), source_line in zip(normalized_lines, payload.lines):
         journal_entry.lines.append(
             JournalLine(
@@ -749,6 +763,7 @@ async def post_journal_entry(
                 debit=debit,
                 credit=credit,
                 party_id=getattr(source_line, "party_id", None),
+                cost_center_id=getattr(source_line, "cost_center_id", None),
             )
         )
 
@@ -805,7 +820,13 @@ async def reverse_journal_entry(
         reference = f"{reference}-{original.reference}"[:120]
 
     reversal_lines = [
-        JournalLineIn(account_id=line.account_id, debit=line.credit, credit=line.debit, party_id=line.party_id)
+        JournalLineIn(
+            account_id=line.account_id,
+            debit=line.credit,
+            credit=line.debit,
+            party_id=line.party_id,
+            cost_center_id=line.cost_center_id,
+        )
         for line in original.lines
     ]
     reversal_payload = JournalPostRequest(
@@ -2076,6 +2097,126 @@ async def get_party_wise_balances(
         lines.append({"party_id": row.party_id, "balance": balance})
 
     return lines, _q(total_balance)
+
+
+async def get_cost_centre_ledger_pl(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    from_date: date,
+    to_date: date,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+) -> dict:
+    """Income / expense / net per cost centre, straight from the POSTED ledger
+    (the enterprise upgrade over the document-tag report). Only P&L accounts
+    (Account.type in income/expense) over the period count. Lines with no
+    cost_center_id collapse into a single 'untagged' bucket so the totals tie to
+    the period P&L. Strictly scoped by app_key + tenant_id + accounting_entity_id
+    on every table — a cost centre can never aggregate across tenants/entities."""
+    conditions = [
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        JournalEntry.entry_date >= from_date,
+        JournalEntry.entry_date <= to_date,
+        Account.type.in_(("income", "expense")),
+    ]
+    stmt = (
+        select(
+            JournalLine.cost_center_id.label("cost_center_id"),
+            Account.type.label("account_type"),
+            func.coalesce(func.sum(JournalLine.debit), 0).label("debit_total"),
+            func.coalesce(func.sum(JournalLine.credit), 0).label("credit_total"),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(and_(*conditions))
+        .group_by(JournalLine.cost_center_id, Account.type)
+    )
+    try:
+        rows = (await session.execute(stmt)).all()
+    except SQLAlchemyError as exc:
+        # Degrade gracefully if the cost_center_id column is missing (migrations behind).
+        await session.rollback()
+        _logger.warning("Cost-centre P&L unavailable (run 'alembic upgrade head'?): %s", exc)
+        rows = []
+
+    buckets: dict[str | None, dict] = {}
+
+    def _bucket(cc_id: str | None) -> dict:
+        return buckets.setdefault(cc_id, {"income": Decimal("0.00"), "expense": Decimal("0.00")})
+
+    for row in rows:
+        debit = _q(Decimal(row.debit_total))
+        credit = _q(Decimal(row.credit_total))
+        if row.account_type == "income":
+            _bucket(row.cost_center_id)["income"] += _q(credit - debit)
+        else:  # expense
+            _bucket(row.cost_center_id)["expense"] += _q(debit - credit)
+
+    return {
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        # cost_centre_id -> {income, expense} (names resolved by the caller from
+        # this tenant's masters; None key is the untagged bucket).
+        "buckets": {(k or "__untagged__"): v for k, v in buckets.items()},
+    }
+
+
+async def get_cost_centre_account_actuals(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    cost_centre_id: str,
+    from_date: date,
+    to_date: date,
+    app_key: str = "mandirmitra",
+    accounting_entity_id: str = "primary",
+) -> dict[int, dict]:
+    """Per-account actuals for ONE cost centre over a period — the actual side of
+    budget-vs-actual. Returns {account_id: {code, name, type, actual}}. 'actual'
+    is the natural-sign amount (income: credit−debit; expense: debit−credit).
+    Strictly scoped on every table and filtered to this cost centre, so figures
+    can never bleed across tenants/entities."""
+    conditions = [
+        *_accounting_scope(Account, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalEntry, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        *_accounting_scope(JournalLine, app_key=app_key, tenant_id=tenant_id, accounting_entity_id=accounting_entity_id),
+        JournalLine.cost_center_id == cost_centre_id,
+        JournalEntry.entry_date >= from_date,
+        JournalEntry.entry_date <= to_date,
+    ]
+    stmt = (
+        select(
+            Account.id.label("account_id"),
+            Account.code.label("code"),
+            Account.name.label("name"),
+            Account.type.label("account_type"),
+            func.coalesce(func.sum(JournalLine.debit), 0).label("debit_total"),
+            func.coalesce(func.sum(JournalLine.credit), 0).label("credit_total"),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(and_(*conditions))
+        .group_by(Account.id, Account.code, Account.name, Account.type)
+    )
+    try:
+        rows = (await session.execute(stmt)).all()
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        _logger.warning("Cost-centre actuals unavailable (run 'alembic upgrade head'?): %s", exc)
+        rows = []
+
+    out: dict[int, dict] = {}
+    for row in rows:
+        debit = _q(Decimal(row.debit_total))
+        credit = _q(Decimal(row.credit_total))
+        actual = _q(credit - debit) if row.account_type == "income" else _q(debit - credit)
+        out[int(row.account_id)] = {
+            "code": row.code, "name": row.name, "type": row.account_type, "actual": actual,
+        }
+    return out
 
 
 async def get_party_ledger_lines(
