@@ -8,7 +8,7 @@ from app.db.mongo import get_collection
 
 TENANTS_COLLECTION = "core_tenants"
 VALID_TENANT_STATUSES = {"active", "inactive"}
-VALID_SUBSCRIPTION_PLANS = {"free", "trial", "pro", "elite"}
+VALID_SUBSCRIPTION_PLANS = {"free", "trial", "basic", "growth", "pro", "professional", "elite"}
 
 _TENANT_INDEXES_READY = False
 _ACTIVE_TENANT_CACHE_TTL_SECONDS = 10.0

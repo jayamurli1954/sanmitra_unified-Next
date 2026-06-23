@@ -164,12 +164,12 @@ async def test_update_tenant_entitlements_sets_plan_and_modules(monkeypatch):
 
     updated = await tenant_service.update_tenant_entitlements(
         tenant_id="tenant-temple-entitlements",
-        subscription_plan="pro",
+        subscription_plan="basic",
         enabled_modules=["temple", "accounting", "audit"],
         updated_by="platform-owner",
     )
 
-    assert updated["subscription_plan"] == "pro"
+    assert updated["subscription_plan"] == "basic"
     assert updated["enabled_modules"] == ["temple", "accounting", "audit"]
     assert updated["updated_by"] == "platform-owner"
 

@@ -3349,11 +3349,11 @@ function renderPlatformRecentOnboardingTable(rows) {
 
 function renderPlatformSubscriptionsTable(rows) {
   return renderPlatformTable(rows, [
-    { label: "Tenant", value: (row) => row.display_name || row.tenant_id || "" },
-    { label: "App Keys", value: (row) => Array.isArray(row.app_keys) ? row.app_keys.join(", ") : "" },
+    { label: "Tenant / Payer", value: (row) => row.display_name || row.payer_email || row.tenant_id || "" },
+    { label: "Product", value: (row) => row.app_key || (Array.isArray(row.app_keys) ? row.app_keys.join(", ") : "") },
     { label: "Plan", value: (row) => row.subscription_plan || "" },
     { label: "Status", value: (row) => row.subscription_status || row.status || "" },
-    { label: "Modules", value: (row) => Array.isArray(row.enabled_modules) ? row.enabled_modules.join(", ") : "" },
+    { label: "Modules / Cycle", value: (row) => Array.isArray(row.enabled_modules) ? row.enabled_modules.join(", ") : (row.billing_cycle || "") },
   ], "No subscription records returned.");
 }
 
@@ -3374,6 +3374,7 @@ function emptyPlatformDashboardPayload() {
     pending_approvals: [],
     recent_onboarding: [],
     recent_tenants: [],
+    subscription_records: [],
   };
 }
 
@@ -3393,6 +3394,7 @@ function renderPlatformDashboard(payload) {
     ? payload.recent_onboarding_requests
     : (Array.isArray(payload?.recent_onboarding) ? payload.recent_onboarding : []);
   const recentTenants = Array.isArray(payload?.recent_tenants) ? payload.recent_tenants : [];
+  const subscriptionRecords = Array.isArray(payload?.subscription_records) ? payload.subscription_records : recentTenants;
   const workspace = activePlatformWorkspace || "dashboard";
 
   if (workspace === "onboarding") {
@@ -3452,11 +3454,11 @@ function renderPlatformDashboard(payload) {
         </div>
         <div class="metric-grid two">${renderStatCards([
           ["Subscription Plans", planCount, formatCountMap(subscriptions.by_plan)],
-          ["Tracked Tenants", recentTenants.length, "latest records shown"],
+          ["Subscription Records", subscriptionRecords.length, "tenants and paid billing records"],
         ])}</div>
         <article>
           <h4>Tenant Subscriptions</h4>
-          ${renderPlatformSubscriptionsTable(recentTenants)}
+          ${renderPlatformSubscriptionsTable(subscriptionRecords)}
         </article>
       </div>
     `;

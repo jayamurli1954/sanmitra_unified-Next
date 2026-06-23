@@ -4,8 +4,10 @@ from typing import Any
 
 from app.core.onboarding.service import list_onboarding_requests
 from app.core.tenants.service import list_tenants
+from app.db.mongo import get_collection
 
 
+CORE_BILLING_TRANSACTIONS_COLLECTION = "core_billing_transactions"
 TRACKED_APP_KEYS = ("legalmitra", "mandirmitra", "gruhamitra", "mitrabooks")
 TRACKED_MODULES = ("temple", "housing", "business", "professional", "accounting", "gst", "inventory", "audit")
 ONBOARDING_STATUSES = ("pending", "payment_pending", "payment_received", "under_review", "approved", "rejected")
@@ -59,15 +61,44 @@ def _compact_tenant(row: dict[str, Any]) -> dict[str, Any]:
         "app_keys": _normalize_app_keys(row.get("app_keys")),
         "enabled_modules": [str(item).strip().lower() for item in row.get("enabled_modules") or [] if str(item).strip()],
         "subscription_plan": str(row.get("subscription_plan") or "free").strip().lower() or "free",
+        "subscription_status": str(row.get("subscription_status") or row.get("status") or "active").strip().lower(),
         "hr_addon_available": bool(row.get("hr_addon_available", False)),
         "updated_at": row.get("updated_at"),
     }
+
+
+def _compact_billing_transaction(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "record_type": "billing_transaction",
+        "tenant_id": row.get("tenant_id"),
+        "display_name": row.get("customer_name") or row.get("name") or row.get("email") or row.get("payer_email") or "",
+        "payer_email": row.get("email") or row.get("payer_email") or "",
+        "app_key": str(row.get("app_key") or "").strip().lower() or None,
+        "app_keys": [str(row.get("app_key") or "").strip().lower()] if str(row.get("app_key") or "").strip() else [],
+        "subscription_plan": str(row.get("plan") or row.get("billing_plan") or row.get("subscription_plan") or "free").strip().lower() or "free",
+        "subscription_status": str(row.get("subscription_status") or "active").strip().lower() or "active",
+        "billing_cycle": str(row.get("billing_cycle") or "").strip().lower(),
+        "amount": row.get("amount"),
+        "currency": row.get("currency") or "INR",
+        "subscription_started_at": row.get("subscription_started_at"),
+        "subscription_expires_at": row.get("subscription_expires_at"),
+        "razorpay_payment_id": row.get("razorpay_payment_id"),
+    }
+
+
+async def list_billing_transactions(*, limit: int = 500) -> list[dict[str, Any]]:
+    billing = get_collection(CORE_BILLING_TRANSACTIONS_COLLECTION)
+    safe_limit = max(1, min(int(limit or 500), 500))
+    cursor = billing.find({}).sort("subscription_started_at", -1).limit(safe_limit)
+    docs = await cursor.to_list(length=safe_limit)
+    return [_compact_billing_transaction(doc) for doc in docs]
 
 
 async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
     tenants = [_compact_tenant(row) for row in await list_tenants(limit=500)]
     onboarding = [_compact_onboarding_request(row) for row in await list_onboarding_requests(limit=500)]
+    billing_transactions = await list_billing_transactions(limit=500)
 
     onboarding_by_status = Counter(row["status"] for row in onboarding)
     onboarding_by_app: dict[str, Counter] = defaultdict(Counter)
@@ -79,6 +110,7 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     tenant_by_org = Counter(str(row.get("organization_type") or "UNKNOWN") for row in tenants)
     tenant_by_app = Counter()
     subscription_by_plan = Counter(row["subscription_plan"] for row in tenants)
+    subscription_by_plan.update(row["subscription_plan"] for row in billing_transactions)
     module_enabled = Counter()
 
     for tenant in tenants:
@@ -109,6 +141,13 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     pending_approvals = [row for row in onboarding if row["status"] in ACTIONABLE_ONBOARDING_STATUSES][:safe_limit]
     recent_onboarding = onboarding[:safe_limit]
     recent_tenants = tenants[:safe_limit]
+    subscription_records = [
+        {
+            "record_type": "tenant",
+            **tenant,
+        }
+        for tenant in tenants
+    ] + billing_transactions
 
     return {
         "generated_at": datetime.now(timezone.utc),
@@ -137,4 +176,5 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
         "recent_onboarding_requests": recent_onboarding,
         "recent_onboarding": recent_onboarding,
         "recent_tenants": recent_tenants,
+        "subscription_records": subscription_records[: max(safe_limit, 100)],
     }

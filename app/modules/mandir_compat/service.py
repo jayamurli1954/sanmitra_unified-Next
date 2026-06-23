@@ -790,7 +790,14 @@ async def ensure_demo_mandir_bootstrap(app_key: str = "mandirmitra") -> None:
     if not admin_email or len(admin_password) < 8:
         return
 
-    await ensure_tenant_exists(tenant_id, display_name=temple_name, created_by="system")
+    await ensure_tenant_exists(
+        tenant_id,
+        display_name=temple_name,
+        organization_type="TEMPLE",
+        enabled_modules=["temple", "accounting", "audit"],
+        app_keys=[app_key],
+        created_by="system",
+    )
 
     try:
         existing_admin = await get_user_by_email(admin_email)

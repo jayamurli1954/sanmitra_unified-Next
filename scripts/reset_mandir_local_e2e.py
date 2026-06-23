@@ -132,7 +132,14 @@ def _base_sevas(now: datetime, temple_id: int) -> list[dict]:
 
 
 async def reset_mongo() -> int:
-    await ensure_tenant_exists(TENANT_ID, display_name="Demo Temple", created_by="local-e2e-reset")
+    await ensure_tenant_exists(
+        TENANT_ID,
+        display_name="Demo Temple",
+        organization_type="TEMPLE",
+        enabled_modules=["temple", "accounting", "audit"],
+        app_keys=["mandirmitra"],
+        created_by="local-e2e-reset",
+    )
     await ensure_mandir_compat_indexes()
     now = datetime.now(timezone.utc)
 

@@ -74,8 +74,24 @@ async def test_platform_owner_dashboard_contract_counts_tenants_and_onboarding(m
             },
         ]
 
+    async def fake_list_billing_transactions(*, limit: int = 500):
+        assert limit == 500
+        return [
+            {
+                "record_type": "billing_transaction",
+                "display_name": "Jayanthi M Rao",
+                "payer_email": "jayanthi@example.com",
+                "app_key": "legalmitra",
+                "app_keys": ["legalmitra"],
+                "subscription_plan": "basic",
+                "subscription_status": "active",
+                "billing_cycle": "monthly",
+            }
+        ]
+
     monkeypatch.setattr(platform_owner_service, "list_tenants", fake_list_tenants)
     monkeypatch.setattr(platform_owner_service, "list_onboarding_requests", fake_list_onboarding_requests)
+    monkeypatch.setattr(platform_owner_service, "list_billing_transactions", fake_list_billing_transactions)
 
     dashboard = await platform_owner_service.get_platform_owner_dashboard(limit=10)
 
@@ -92,9 +108,10 @@ async def test_platform_owner_dashboard_contract_counts_tenants_and_onboarding(m
     assert dashboard["summary"]["tenants"]["total"] == 3
     assert dashboard["summary"]["tenants"]["by_status"] == {"active": 2, "inactive": 1}
     assert dashboard["summary"]["tenants"]["by_app_key"] == {"mandirmitra": 1, "gruhamitra": 1, "mitrabooks": 1}
-    assert dashboard["summary"]["subscriptions"]["by_plan"] == {"free": 1, "pro": 1, "trial": 1}
+    assert dashboard["summary"]["subscriptions"]["by_plan"] == {"free": 1, "pro": 1, "trial": 1, "basic": 1}
     assert {"module_key": "accounting", "tenant_count": 3} in dashboard["module_status"]
     assert dashboard["pending_approvals"][0]["request_id"] == "req-mandir-pending"
+    assert any(row["display_name"] == "Jayanthi M Rao" for row in dashboard["subscription_records"])
 
 
 def test_platform_owner_dashboard_allows_super_admin(monkeypatch):

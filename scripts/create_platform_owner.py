@@ -47,7 +47,7 @@ async def create_platform_owner() -> None:
             tenant_id,
             display_name="SanMitra Platform",
             organization_type="BUSINESS",
-            app_keys=["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra", "investmitra"],
+            app_keys=["gruhamitra", "mandirmitra", "mitrabooks", "legalmitra"],
             created_by="create_platform_owner",
         )
         await ensure_users_indexes()

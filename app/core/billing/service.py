@@ -278,6 +278,8 @@ class BillingService:
         await billing.insert_one(
             {
                 "email": email.lower(),
+                "customer_name": payment_entity.get("name") or notes.get("name") or notes.get("customer_name"),
+                "contact": payment_entity.get("contact"),
                 "amount": amount,
                 "amount_paise": payment_entity.get("amount", 0),
                 "currency": payment_entity.get("currency", "INR"),
