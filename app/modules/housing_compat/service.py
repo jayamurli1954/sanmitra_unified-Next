@@ -14,6 +14,8 @@ from app.modules.housing_compat.schemas import (
     ArrearsTransferRequest,
     FinancialYearCloseRequest,
     FinancialYearCreateRequest,
+    FacilityCreateRequest,
+    FacilityUpdateRequest,
     FlatCreateRequest,
     FlatUpdateRequest,
     SocietySettingsUpdate,
@@ -35,6 +37,8 @@ SOCIETY_SETTINGS = "housing_society_settings"
 FLATS = "housing_flats"
 FINANCIAL_YEARS = "housing_financial_years"
 MEMBER_CHECKLISTS = "housing_member_checklists"
+FACILITIES = "housing_facilities"
+FACILITY_BOOKINGS = "housing_facility_bookings"
 MONEY_QUANT = Decimal("0.01")
 
 
@@ -75,6 +79,12 @@ async def ensure_housing_compat_indexes() -> None:
 
     # Damage claims with app_key isolation
     await get_collection(DAMAGE_CLAIMS).create_index([("tenant_id", 1), ("app_key", 1)])
+
+    # Facility and amenity booking with app_key isolation
+    await get_collection(FACILITIES).create_index([("tenant_id", 1), ("app_key", 1), ("name", 1)], unique=True)
+    await get_collection(FACILITIES).create_index([("tenant_id", 1), ("app_key", 1), ("status", 1)])
+    await get_collection(FACILITY_BOOKINGS).create_index([("tenant_id", 1), ("app_key", 1), ("facility_id", 1), ("start_time", 1)])
+    await get_collection(FACILITY_BOOKINGS).create_index([("tenant_id", 1), ("app_key", 1), ("flat_number", 1), ("status", 1)])
 
     # Staff members with app_key isolation
     await get_collection("housing_staff_members").create_index([("tenant_id", 1), ("app_key", 1), ("phone_number", 1)], unique=True)
@@ -239,6 +249,80 @@ async def update_member_checklist(
     )
     row = await checklists.find_one({"tenant_id": tenant_id, "app_key": str(app_key or "gruhamitra").strip(), "member_id": member_id})
     return row or _default_member_checklist(tenant_id=tenant_id, app_key=app_key, member_id=member_id, updated_by=updated_by)
+
+
+def _facility_response(row: dict) -> dict:
+    cleaned = {k: v for k, v in row.items() if k != "_id"}
+    cleaned["booking_fee"] = _money(cleaned.get("booking_fee") or 0)
+    cleaned["deposit_amount"] = _money(cleaned.get("deposit_amount") or 0)
+    cleaned.setdefault("booking_slot_minutes", 60)
+    cleaned.setdefault("advance_booking_days", 30)
+    cleaned.setdefault("status", "active")
+    return cleaned
+
+
+async def list_facilities(*, tenant_id: str, app_key: str, include_inactive: bool = False) -> list[dict]:
+    query: dict = {"tenant_id": tenant_id, "app_key": _housing_app_key(app_key)}
+    if not include_inactive:
+        query["status"] = "active"
+    rows = await get_collection(FACILITIES).find(query).sort("name", 1).to_list(length=1000)
+    return [_facility_response(row) for row in rows]
+
+
+async def create_facility(*, tenant_id: str, app_key: str, payload: FacilityCreateRequest) -> dict:
+    now = _now()
+    doc = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": _housing_app_key(app_key),
+        "name": payload.name.strip(),
+        "description": (payload.description or "").strip() or None,
+        "location": (payload.location or "").strip() or None,
+        "capacity": payload.capacity,
+        "booking_fee": str(_money(payload.booking_fee)),
+        "deposit_amount": str(_money(payload.deposit_amount)),
+        "booking_slot_minutes": payload.booking_slot_minutes,
+        "advance_booking_days": payload.advance_booking_days,
+        "open_time": payload.open_time.isoformat() if payload.open_time else None,
+        "close_time": payload.close_time.isoformat() if payload.close_time else None,
+        "terms": (payload.terms or "").strip() or None,
+        "status": payload.status,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        await get_collection(FACILITIES).insert_one(doc)
+    except Exception as exc:
+        if "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Facility with this name already exists") from exc
+        raise
+    return _facility_response(doc)
+
+
+async def update_facility(*, tenant_id: str, app_key: str, facility_id: str, payload: FacilityUpdateRequest) -> dict:
+    facilities = get_collection(FACILITIES)
+    query = {"tenant_id": tenant_id, "app_key": _housing_app_key(app_key), "id": facility_id}
+    existing = await facilities.find_one(query)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
+    for key in ("name", "description", "location", "terms"):
+        if key in updates and isinstance(updates[key], str):
+            updates[key] = updates[key].strip() or None
+    if "booking_fee" in updates:
+        updates["booking_fee"] = str(_money(updates["booking_fee"]))
+    if "deposit_amount" in updates:
+        updates["deposit_amount"] = str(_money(updates["deposit_amount"]))
+    if "open_time" in updates and updates["open_time"] is not None:
+        updates["open_time"] = updates["open_time"].isoformat()
+    if "close_time" in updates and updates["close_time"] is not None:
+        updates["close_time"] = updates["close_time"].isoformat()
+    updates["updated_at"] = _now()
+    await facilities.update_one(query, {"$set": updates})
+    updated = await facilities.find_one(query)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    return _facility_response(updated)
 
 
 def _housing_app_key(app_key: str | None = None) -> str:

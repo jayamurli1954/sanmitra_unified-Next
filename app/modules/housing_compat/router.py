@@ -38,6 +38,11 @@ from app.modules.housing_compat.schemas import (
     CompleteResidentRegistrationRequest,
     CompleteResidentRegistrationResponse,
     DamageClaimCreate,
+    FacilityBookingCreateRequest,
+    FacilityBookingResponse,
+    FacilityCreateRequest,
+    FacilityResponse,
+    FacilityUpdateRequest,
     FinancialYearCloseRequest,
     FinancialYearCreateRequest,
     FinancialYearResponse,
@@ -69,6 +74,7 @@ from app.modules.housing_compat.service import (
     calculate_final_bill,
     complete_resident_registration,
     create_member,
+    create_facility,
     get_member_checklist,
     create_public_join_request,
     create_flat,
@@ -80,6 +86,7 @@ from app.modules.housing_compat.service import (
     get_active_financial_year,
     list_flats,
     list_financial_years,
+    list_facilities,
     list_join_requests,
     list_members,
     list_my_memberships,
@@ -94,6 +101,7 @@ from app.modules.housing_compat.service import (
     transfer_to_arrears,
     update_member_checklist,
     update_member,
+    update_facility,
     update_flat,
     final_close_financial_year,
 )
@@ -1589,6 +1597,87 @@ def _can_manage_visitors(role: Any) -> bool:
     }
 
 
+def _can_manage_facilities(role: Any) -> bool:
+    normalized = str(role or "").strip().lower()
+    return normalized in {"admin", "super_admin", "tenant_admin", "secretary", "chairman", "committee"}
+
+
+def _facility_booking_response(row: dict[str, Any]) -> dict[str, Any]:
+    cleaned = _sanitize_mongo_doc(row)
+    cleaned["amount"] = _as_decimal_money(cleaned.get("amount") or 0)
+    cleaned["deposit_amount"] = _as_decimal_money(cleaned.get("deposit_amount") or 0)
+    cleaned.setdefault("payment_status", "not_required")
+    cleaned.setdefault("status", "pending")
+    return cleaned
+
+
+def _facility_confirmation_message(row: dict[str, Any]) -> str:
+    return (
+        f"{row.get('facility_name') or 'Facility'} booking confirmed for Flat {row.get('flat_number') or 'N/A'} "
+        f"from {format_date_time_for_display(row.get('start_time'))} to {format_date_time_for_display(row.get('end_time'))}."
+    )
+
+
+def format_date_time_for_display(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m-%Y %H:%M")
+    return str(value or "N/A")
+
+
+async def _facility_booking_access_query(
+    *, current_user: dict[str, Any], tenant_id: str, app_key: str
+) -> dict[str, Any]:
+    if _can_manage_facilities(current_user.get("role")):
+        return {}
+    audience = await _current_user_message_audience(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    flats = sorted(value for value in audience["flats"] if value)
+    user_terms = sorted(value for value in audience["members"] if value)
+    clauses: list[dict[str, Any]] = []
+    if flats:
+        clauses.append({"flat_number": {"$in": flats}})
+    if user_terms:
+        clauses.append({"created_by": {"$in": user_terms}})
+    if not clauses:
+        raise HTTPException(status_code=403, detail="Resident flat context is required for facility booking access")
+    return {"$or": clauses}
+
+
+async def _resolve_booking_flat(
+    *, requested_flat: str | None, current_user: dict[str, Any], tenant_id: str, app_key: str
+) -> str:
+    normalized = _normalize_flat_number(requested_flat)
+    if _can_manage_facilities(current_user.get("role")):
+        if not normalized:
+            raise HTTPException(status_code=422, detail="Flat number is required")
+        return normalized
+
+    audience = await _current_user_message_audience(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    flats = sorted(value for value in audience["flats"] if value)
+    if normalized and normalized not in flats:
+        raise HTTPException(status_code=403, detail="Residents can book facilities only for their own flat")
+    if normalized:
+        return normalized
+    if not flats:
+        raise HTTPException(status_code=403, detail="Resident flat context is required for facility booking")
+    return flats[0]
+
+
+async def _find_overlapping_facility_booking(
+    *, tenant_id: str, app_key: str, facility_id: str, start_time: datetime, end_time: datetime, exclude_id: str | None = None
+) -> dict[str, Any] | None:
+    query: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "facility_id": facility_id,
+        "status": {"$in": ["pending", "approved"]},
+        "start_time": {"$lt": end_time},
+        "end_time": {"$gt": start_time},
+    }
+    if exclude_id:
+        query["id"] = {"$ne": exclude_id}
+    return await get_collection("housing_facility_bookings").find_one(query)
+
+
 def _visitor_response(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row.get("id"),
@@ -1645,6 +1734,283 @@ async def _get_visitor_or_404(
     if not row:
         raise HTTPException(status_code=404, detail="Visitor entry not found")
     return row
+
+
+@router.get("/facilities", response_model=list[FacilityResponse])
+@router.get("/facilities/", response_model=list[FacilityResponse])
+async def facilities_list(
+    include_inactive: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility catalog list",
+    )
+    rows = await list_facilities(
+        tenant_id=tenant_context.tenant_id,
+        app_key=tenant_context.app_key,
+        include_inactive=include_inactive and _can_manage_facilities(current_user.get("role")),
+    )
+    return [FacilityResponse(**row) for row in rows]
+
+
+@router.post("/facilities", response_model=FacilityResponse)
+@router.post("/facilities/", response_model=FacilityResponse)
+async def facilities_create(
+    payload: FacilityCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if not _can_manage_facilities(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only society administrators can manage facilities")
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility create",
+    )
+    row = await create_facility(tenant_id=tenant_context.tenant_id, app_key=tenant_context.app_key, payload=payload)
+    return FacilityResponse(**row)
+
+
+@router.patch("/facilities/{facility_id}", response_model=FacilityResponse)
+async def facilities_update(
+    facility_id: str,
+    payload: FacilityUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if not _can_manage_facilities(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only society administrators can manage facilities")
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility update",
+    )
+    row = await update_facility(
+        tenant_id=tenant_context.tenant_id,
+        app_key=tenant_context.app_key,
+        facility_id=facility_id,
+        payload=payload,
+    )
+    return FacilityResponse(**row)
+
+
+@router.get("/facility-bookings", response_model=list[FacilityBookingResponse])
+@router.get("/facility-bookings/", response_model=list[FacilityBookingResponse])
+async def facility_bookings_list(
+    facility_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    from_time: datetime | None = Query(default=None),
+    to_time: datetime | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility booking list",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
+    access_query = await _facility_booking_access_query(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if access_query:
+        query.update(access_query)
+    if facility_id:
+        query["facility_id"] = facility_id
+    if status:
+        query["status"] = str(status).strip().lower()
+    if from_time or to_time:
+        time_query: dict[str, Any] = {}
+        if from_time:
+            time_query["$gte"] = from_time
+        if to_time:
+            time_query["$lte"] = to_time
+        query["start_time"] = time_query
+    rows = (
+        await get_collection("housing_facility_bookings")
+        .find(query)
+        .sort([("start_time", -1), ("created_at", -1)])
+        .to_list(length=1000)
+    )
+    return [FacilityBookingResponse(**_facility_booking_response(row)) for row in rows]
+
+
+@router.post("/facility-bookings", response_model=FacilityBookingResponse)
+@router.post("/facility-bookings/", response_model=FacilityBookingResponse)
+async def facility_bookings_create(
+    payload: FacilityBookingCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility booking create",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    if payload.end_time <= payload.start_time:
+        raise HTTPException(status_code=422, detail="Booking end time must be after start time")
+
+    facility = await get_collection("housing_facilities").find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "id": payload.facility_id}
+    )
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    if str(facility.get("status") or "active").lower() != "active":
+        raise HTTPException(status_code=409, detail="Facility is not active for booking")
+
+    overlap = await _find_overlapping_facility_booking(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        facility_id=payload.facility_id,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+    )
+    if overlap:
+        raise HTTPException(status_code=409, detail="Facility already has an active booking for this time")
+
+    flat_number = await _resolve_booking_flat(
+        requested_flat=payload.flat_number,
+        current_user=current_user,
+        tenant_id=tenant_id,
+        app_key=app_key,
+    )
+    amount = _as_decimal_money(facility.get("booking_fee") or 0)
+    deposit_amount = _as_decimal_money(facility.get("deposit_amount") or 0)
+    now = datetime.now(timezone.utc)
+    doc = {
+        "id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "facility_id": payload.facility_id,
+        "facility_name": facility.get("name") or "Facility",
+        "flat_number": flat_number,
+        "resident_name": (payload.resident_name or current_user.get("name") or current_user.get("full_name") or "").strip() or None,
+        "resident_phone": (payload.resident_phone or current_user.get("phone_number") or "").strip() or None,
+        "purpose": (payload.purpose or "").strip() or None,
+        "start_time": payload.start_time,
+        "end_time": payload.end_time,
+        "attendee_count": payload.attendee_count,
+        "amount": str(amount),
+        "deposit_amount": str(deposit_amount),
+        "status": "approved" if _can_manage_facilities(current_user.get("role")) else "pending",
+        "payment_status": "unpaid" if amount > 0 or deposit_amount > 0 else "not_required",
+        "accounting_reference": None,
+        "confirmation_message": None,
+        "created_by": str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    if doc["status"] == "approved":
+        doc["approved_at"] = now
+        doc["approved_by"] = doc["created_by"]
+        doc["confirmation_message"] = _facility_confirmation_message(doc)
+    await get_collection("housing_facility_bookings").insert_one(doc)
+    return FacilityBookingResponse(**_facility_booking_response(doc))
+
+
+@router.post("/facility-bookings/{booking_id}/approve", response_model=FacilityBookingResponse)
+async def facility_bookings_approve(
+    booking_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if not _can_manage_facilities(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only society administrators can approve facility bookings")
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility booking approve",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    bookings = get_collection("housing_facility_bookings")
+    query = {"tenant_id": tenant_id, "app_key": app_key, "id": booking_id}
+    row = await bookings.find_one(query)
+    if not row:
+        raise HTTPException(status_code=404, detail="Facility booking not found")
+    if row.get("status") == "cancelled":
+        raise HTTPException(status_code=409, detail="Cancelled booking cannot be approved")
+
+    overlap = await _find_overlapping_facility_booking(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        facility_id=str(row.get("facility_id") or ""),
+        start_time=row["start_time"],
+        end_time=row["end_time"],
+        exclude_id=booking_id,
+    )
+    if overlap:
+        raise HTTPException(status_code=409, detail="Facility already has an active booking for this time")
+
+    now = datetime.now(timezone.utc)
+    updated_row = {**row, "status": "approved"}
+    confirmation_message = _facility_confirmation_message(updated_row)
+    updates = {
+        "status": "approved",
+        "approved_at": now,
+        "approved_by": str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system"),
+        "confirmation_message": confirmation_message,
+        "updated_at": now,
+    }
+    await bookings.update_one(query, {"$set": updates})
+    updated = await bookings.find_one(query)
+    return FacilityBookingResponse(**_facility_booking_response(updated or {**row, **updates}))
+
+
+@router.post("/facility-bookings/{booking_id}/cancel", response_model=FacilityBookingResponse)
+async def facility_bookings_cancel(
+    booking_id: str,
+    payload: dict[str, Any] | None = None,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_context = resolve_gruha_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="facility booking cancel",
+    )
+    tenant_id = tenant_context.tenant_id
+    app_key = tenant_context.app_key
+    query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "id": booking_id}
+    access_query = await _facility_booking_access_query(current_user=current_user, tenant_id=tenant_id, app_key=app_key)
+    if access_query:
+        query.update(access_query)
+    bookings = get_collection("housing_facility_bookings")
+    row = await bookings.find_one(query)
+    if not row:
+        raise HTTPException(status_code=404, detail="Facility booking not found")
+    if row.get("status") == "cancelled":
+        return FacilityBookingResponse(**_facility_booking_response(row))
+    now = datetime.now(timezone.utc)
+    updates = {
+        "status": "cancelled",
+        "cancelled_at": now,
+        "cancelled_by": str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system"),
+        "cancellation_reason": str((payload or {}).get("reason") or "").strip() or None,
+        "updated_at": now,
+    }
+    await bookings.update_one({"tenant_id": tenant_id, "app_key": app_key, "id": booking_id}, {"$set": updates})
+    updated = await bookings.find_one({"tenant_id": tenant_id, "app_key": app_key, "id": booking_id})
+    return FacilityBookingResponse(**_facility_booking_response(updated or {**row, **updates}))
 
 
 @router.get("/visitors")

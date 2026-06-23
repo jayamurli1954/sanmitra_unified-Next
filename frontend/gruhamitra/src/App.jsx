@@ -31,6 +31,7 @@ const MeetingsScreen = lazy(() => import('./screens/MeetingsScreen'));
 const ReportsScreen = lazy(() => import('./screens/ReportsScreen'));
 const ComplaintsScreen = lazy(() => import('./screens/ComplaintsScreen'));
 const VisitorsScreen = lazy(() => import('./screens/VisitorsScreen'));
+const FacilityBookingScreen = lazy(() => import('./screens/FacilityBookingScreen'));
 const AssetRegisterScreen = lazy(() => import('./screens/AssetRegisterScreen'));
 const AddAssetScreen = lazy(() => import('./screens/AddAssetScreen'));
 const AssetDetailScreen = lazy(() => import('./screens/AssetDetailScreen'));
@@ -164,6 +165,7 @@ const App = () => {
                 <Route path="/members" element={<MembersScreen />} />
                 <Route path="/complaints" element={<ComplaintsScreen />} />
                 <Route path="/visitors" element={<VisitorsScreen />} />
+                <Route path="/facilities" element={<FacilityBookingScreen />} />
                 <Route path="/reports" element={<ReportsScreen />} />
                 <Route path="/message" element={<MessagesScreen />} />
                 <Route path="/meeting" element={<MeetingsScreen />} />

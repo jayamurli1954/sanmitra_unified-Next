@@ -17,6 +17,8 @@ from app.modules.housing_compat.schemas import (
     WebPushSubscribeRequest,
     StaffCreateRequest,
     StaffUpdateRequest,
+    FacilityCreateRequest,
+    FacilityBookingCreateRequest,
 )
 
 
@@ -54,6 +56,10 @@ class _Collection:
 
     async def update_one(self, query, update, *args, **kwargs):
         self.update_queries.append(query)
+        for row in self.rows:
+            if _matches(row, query):
+                row.update(update.get("$set") or {})
+                return type("Result", (), {"matched_count": 1})()
         if kwargs.get("upsert") and not any(_matches(row, query) for row in self.rows):
             doc = dict(update.get("$setOnInsert") or {})
             doc.update(update.get("$set") or {})
@@ -468,6 +474,14 @@ def _matches(row: dict, query: dict) -> bool:
             if "$in" in expected and value not in expected["$in"]:
                 return False
             if "$ne" in expected and value == expected["$ne"]:
+                return False
+            if "$lt" in expected and not (value < expected["$lt"]):
+                return False
+            if "$lte" in expected and not (value <= expected["$lte"]):
+                return False
+            if "$gt" in expected and not (value > expected["$gt"]):
+                return False
+            if "$gte" in expected and not (value >= expected["$gte"]):
                 return False
         elif value != expected:
             return False
@@ -1201,5 +1215,260 @@ async def test_visitor_passcode_verification(monkeypatch):
     )
     assert verified["id"] == guest["id"]
     assert verified["visitor_name"] == "John Doe"
+
+
+@pytest.mark.asyncio
+async def test_facility_catalog_is_tenant_and_app_key_scoped(monkeypatch):
+    facilities = _Collection(
+        "housing_facilities",
+        rows=[
+            {
+                "id": "fac-other",
+                "tenant_id": "society-1",
+                "app_key": "other-app",
+                "name": "Other Clubhouse",
+                "booking_fee": "100.00",
+                "deposit_amount": "0.00",
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            }
+        ],
+    )
+    collections = {"housing_facilities": facilities}
+    monkeypatch.setattr(housing_service, "get_collection", lambda name: collections[name])
+
+    created = await housing_service.create_facility(
+        tenant_id="society-1",
+        app_key="gruhamitra",
+        payload=FacilityCreateRequest(name="Clubhouse", booking_fee=Decimal("250.00")),
+    )
+    rows = await housing_service.list_facilities(tenant_id="society-1", app_key="gruhamitra")
+
+    assert created["tenant_id"] == "society-1"
+    assert created["app_key"] == "gruhamitra"
+    assert facilities.find_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "status": "active"}
+    assert [row["id"] for row in rows] == [created["id"]]
+
+
+@pytest.mark.asyncio
+async def test_facility_booking_rejects_overlapping_active_slot(monkeypatch):
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=10, minute=0, second=0, microsecond=0)
+    end = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    facilities = _Collection(
+        "housing_facilities",
+        rows=[
+            {
+                "id": "facility-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "name": "Community Hall",
+                "status": "active",
+                "booking_fee": "500.00",
+                "deposit_amount": "0.00",
+            }
+        ],
+    )
+    bookings = _Collection(
+        "housing_facility_bookings",
+        rows=[
+            {
+                "id": "booking-existing",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "facility_id": "facility-1",
+                "facility_name": "Community Hall",
+                "flat_number": "A-101",
+                "start_time": start,
+                "end_time": end,
+                "status": "approved",
+                "amount": "500.00",
+                "deposit_amount": "0.00",
+                "payment_status": "unpaid",
+                "created_at": now,
+                "updated_at": now,
+            }
+        ],
+    )
+    collections = {"housing_facilities": facilities, "housing_facility_bookings": bookings, "housing_members": _Collection("housing_members")}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    with pytest.raises(HTTPException) as exc_info:
+        await housing_router.facility_bookings_create(
+            payload=FacilityBookingCreateRequest(
+                facility_id="facility-1",
+                flat_number="A-102",
+                start_time=now.replace(hour=11, minute=0, second=0, microsecond=0),
+                end_time=now.replace(hour=13, minute=0, second=0, microsecond=0),
+            ),
+            current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin", "sub": "admin-1"},
+            x_tenant_id=None,
+            x_app_key=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert bookings.inserted == []
+    assert bookings.find_one_queries[0]["tenant_id"] == "society-1"
+    assert bookings.find_one_queries[0]["app_key"] == "gruhamitra"
+    assert bookings.find_one_queries[0]["status"] == {"$in": ["pending", "approved"]}
+
+
+@pytest.mark.asyncio
+async def test_resident_facility_booking_is_limited_to_own_flat(monkeypatch):
+    now = datetime.now(timezone.utc)
+    facilities = _Collection(
+        "housing_facilities",
+        rows=[
+            {
+                "id": "facility-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "name": "Party Hall",
+                "status": "active",
+                "booking_fee": "250.00",
+                "deposit_amount": "1000.00",
+            }
+        ],
+    )
+    bookings = _Collection("housing_facility_bookings")
+    members = _Collection(
+        "housing_members",
+        rows=[
+            {
+                "id": "member-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "email": "resident@example.com",
+                "flat_number": "A-101",
+            }
+        ],
+    )
+    collections = {"housing_facilities": facilities, "housing_facility_bookings": bookings, "housing_members": members}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    with pytest.raises(HTTPException) as exc_info:
+        await housing_router.facility_bookings_create(
+            payload=FacilityBookingCreateRequest(
+                facility_id="facility-1",
+                flat_number="B-201",
+                start_time=now.replace(hour=14, minute=0, second=0, microsecond=0),
+                end_time=now.replace(hour=16, minute=0, second=0, microsecond=0),
+            ),
+            current_user={
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "role": "resident",
+                "email": "resident@example.com",
+                "sub": "member-1",
+            },
+            x_tenant_id=None,
+            x_app_key=None,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert bookings.inserted == []
+
+    created = await housing_router.facility_bookings_create(
+        payload=FacilityBookingCreateRequest(
+            facility_id="facility-1",
+            start_time=now.replace(hour=17, minute=0, second=0, microsecond=0),
+            end_time=now.replace(hour=18, minute=0, second=0, microsecond=0),
+        ),
+        current_user={
+            "tenant_id": "society-1",
+            "app_key": "gruhamitra",
+            "role": "resident",
+            "email": "resident@example.com",
+            "sub": "member-1",
+        },
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+
+    assert created.flat_number == "A-101"
+    assert created.status == "pending"
+    assert created.payment_status == "unpaid"
+    assert bookings.inserted[0]["tenant_id"] == "society-1"
+    assert bookings.inserted[0]["app_key"] == "gruhamitra"
+
+
+@pytest.mark.asyncio
+async def test_facility_booking_cancel_keeps_tenant_scope(monkeypatch):
+    now = datetime.now(timezone.utc)
+    bookings = _Collection(
+        "housing_facility_bookings",
+        rows=[
+            {
+                "id": "booking-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "facility_id": "facility-1",
+                "facility_name": "Gym",
+                "flat_number": "A-101",
+                "start_time": now.replace(hour=8, minute=0, second=0, microsecond=0),
+                "end_time": now.replace(hour=9, minute=0, second=0, microsecond=0),
+                "status": "approved",
+                "amount": "0.00",
+                "deposit_amount": "0.00",
+                "payment_status": "not_required",
+                "created_at": now,
+                "updated_at": now,
+            }
+        ],
+    )
+    collections = {"housing_facility_bookings": bookings, "housing_members": _Collection("housing_members")}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    cancelled = await housing_router.facility_bookings_cancel(
+        booking_id="booking-1",
+        payload={"reason": "Resident requested"},
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "admin", "sub": "admin-1"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+
+    assert bookings.find_one_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": "booking-1"}
+    assert bookings.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": "booking-1"}
+    assert cancelled.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_society_admin_can_approve_pending_facility_booking_with_confirmation(monkeypatch):
+    now = datetime.now(timezone.utc)
+    bookings = _Collection(
+        "housing_facility_bookings",
+        rows=[
+            {
+                "id": "booking-1",
+                "tenant_id": "society-1",
+                "app_key": "gruhamitra",
+                "facility_id": "facility-1",
+                "facility_name": "Community Hall",
+                "flat_number": "A-101",
+                "start_time": now.replace(hour=18, minute=0, second=0, microsecond=0),
+                "end_time": now.replace(hour=20, minute=0, second=0, microsecond=0),
+                "status": "pending",
+                "amount": "500.00",
+                "deposit_amount": "0.00",
+                "payment_status": "unpaid",
+                "created_at": now,
+                "updated_at": now,
+            }
+        ],
+    )
+    collections = {"housing_facility_bookings": bookings}
+    monkeypatch.setattr(housing_router, "get_collection", lambda name: collections[name])
+
+    approved = await housing_router.facility_bookings_approve(
+        booking_id="booking-1",
+        current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "secretary", "sub": "admin-1"},
+        x_tenant_id=None,
+        x_app_key=None,
+    )
+
+    assert approved.status == "approved"
+    assert "Community Hall booking confirmed for Flat A-101" in (approved.confirmation_message or "")
+    assert bookings.update_queries[0] == {"tenant_id": "society-1", "app_key": "gruhamitra", "id": "booking-1"}
+    assert bookings.rows[0]["approved_by"] == "admin-1"
 
 

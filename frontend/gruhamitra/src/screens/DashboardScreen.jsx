@@ -22,6 +22,7 @@ import {
   FaCog,
   FaGavel,
   FaDoorOpen,
+  FaCalendarCheck,
 } from 'react-icons/fa';
 import { authService } from '../services/authService';
 import api from '../services/api';
@@ -551,6 +552,14 @@ const DashboardScreen = () => {
               >
                 <span className="dashboard-quick-tile-icon dashboard-quick-tile-icon--visitors"><FaDoorOpen /></span>
                 <p className="dashboard-quick-tile-label">Visitors</p>
+              </button>
+
+              <button
+                className="dashboard-quick-tile"
+                onClick={() => navigate('/facilities')}
+              >
+                <span className="dashboard-quick-tile-icon dashboard-quick-tile-icon--meeting"><FaCalendarCheck /></span>
+                <p className="dashboard-quick-tile-label">Facilities</p>
               </button>
 
               <button

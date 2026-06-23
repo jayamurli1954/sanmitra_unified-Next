@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Literal
 
@@ -345,6 +345,102 @@ class StaffAttendanceResponse(BaseModel):
     checked_in_at: datetime
     checked_out_at: datetime | None = None
     status: str
+
+
+FacilityStatus = Literal["active", "inactive"]
+FacilityBookingStatus = Literal["pending", "approved", "cancelled", "completed"]
+FacilityPaymentStatus = Literal["not_required", "unpaid", "paid", "waived"]
+
+
+class FacilityCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=120)
+    capacity: int | None = Field(default=None, ge=1, le=10000)
+    booking_fee: Decimal = Field(default=Decimal("0"), ge=0)
+    deposit_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    booking_slot_minutes: int = Field(default=60, ge=15, le=1440)
+    advance_booking_days: int = Field(default=30, ge=0, le=365)
+    open_time: time | None = None
+    close_time: time | None = None
+    terms: str | None = Field(default=None, max_length=1000)
+    status: FacilityStatus = "active"
+
+
+class FacilityUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=120)
+    capacity: int | None = Field(default=None, ge=1, le=10000)
+    booking_fee: Decimal | None = Field(default=None, ge=0)
+    deposit_amount: Decimal | None = Field(default=None, ge=0)
+    booking_slot_minutes: int | None = Field(default=None, ge=15, le=1440)
+    advance_booking_days: int | None = Field(default=None, ge=0, le=365)
+    open_time: time | None = None
+    close_time: time | None = None
+    terms: str | None = Field(default=None, max_length=1000)
+    status: FacilityStatus | None = None
+
+
+class FacilityResponse(BaseModel):
+    id: str
+    tenant_id: str
+    app_key: str
+    name: str
+    description: str | None = None
+    location: str | None = None
+    capacity: int | None = None
+    booking_fee: Decimal = Decimal("0")
+    deposit_amount: Decimal = Decimal("0")
+    booking_slot_minutes: int = 60
+    advance_booking_days: int = 30
+    open_time: time | None = None
+    close_time: time | None = None
+    terms: str | None = None
+    status: FacilityStatus = "active"
+    created_at: datetime
+    updated_at: datetime
+
+
+class FacilityBookingCreateRequest(BaseModel):
+    facility_id: str = Field(min_length=4, max_length=80)
+    flat_number: str | None = Field(default=None, max_length=30)
+    resident_name: str | None = Field(default=None, max_length=120)
+    resident_phone: str | None = Field(default=None, max_length=30)
+    purpose: str | None = Field(default=None, max_length=300)
+    start_time: datetime
+    end_time: datetime
+    attendee_count: int | None = Field(default=None, ge=1, le=10000)
+
+    @field_validator("flat_number")
+    @classmethod
+    def normalize_booking_flat(cls, value: str | None) -> str | None:
+        return value.strip().upper() if value else value
+
+
+class FacilityBookingResponse(BaseModel):
+    id: str
+    tenant_id: str
+    app_key: str
+    facility_id: str
+    facility_name: str
+    flat_number: str
+    resident_name: str | None = None
+    resident_phone: str | None = None
+    purpose: str | None = None
+    start_time: datetime
+    end_time: datetime
+    attendee_count: int | None = None
+    amount: Decimal = Decimal("0")
+    deposit_amount: Decimal = Decimal("0")
+    status: FacilityBookingStatus = "pending"
+    payment_status: FacilityPaymentStatus = "not_required"
+    accounting_reference: str | None = None
+    confirmation_message: str | None = None
+    cancellation_reason: str | None = None
+    created_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 
