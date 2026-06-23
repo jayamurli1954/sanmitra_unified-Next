@@ -1,11 +1,6 @@
 name: vercel-staging-deploy
 
 on:
-  push:
-    branches:
-      - develop
-    paths:
-      - "frontend/**"
   workflow_dispatch:
 
 concurrency:

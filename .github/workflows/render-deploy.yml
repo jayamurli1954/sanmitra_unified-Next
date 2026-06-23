@@ -1,11 +1,6 @@
 name: render-deploy
 
 on:
-  workflow_run:
-    workflows:
-      - backend-ci
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       target:
@@ -22,31 +17,18 @@ on:
         type: string
 
 concurrency:
-  group: render-deploy-${{ github.event_name == 'workflow_run' && 'staging' || github.event.inputs.target }}
+  group: render-deploy-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
 jobs:
   deploy-staging:
-    if: >-
-      ${{
-        (
-          github.event_name == 'workflow_run' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_branch == 'main'
-        ) ||
-        (
-          github.event_name == 'workflow_dispatch' &&
-          github.event.inputs.target == 'staging'
-        )
-      }}
+    if: ${{ github.event.inputs.target == 'staging' }}
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
