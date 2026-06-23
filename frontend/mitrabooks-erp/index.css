@@ -4836,6 +4836,74 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   font-size: 12px;
 }
 
+/* Platform Owner uses the MitraBooks dark operations shell even when the
+   global theme toggle is light. Keep this block last so generic card/table
+   rules cannot wash out the dashboard text. */
+.app .platform-dashboard {
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .preview-heading {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.90));
+  border-color: rgba(96, 165, 250, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app .platform-dashboard .preview-heading h3,
+.app .platform-dashboard h4,
+.app .platform-dashboard .metric-value,
+.app .platform-dashboard .status-list strong {
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .preview-heading p,
+.app .platform-dashboard .metric-label,
+.app .platform-dashboard .metric-sub,
+.app .platform-dashboard .muted,
+.app .platform-dashboard .status-list span {
+  color: #94a3b8;
+}
+
+.app .platform-dashboard .metric-card,
+.app .platform-dashboard .dashboard-main-grid > article,
+.app .platform-dashboard > article {
+  background: rgba(18, 25, 47, 0.86);
+  border-color: rgba(148, 163, 184, 0.14);
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .metric-card .metric-value {
+  color: #60a5fa;
+}
+
+.app .platform-dashboard .table-preview {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.app .platform-dashboard .table-preview table,
+.app .platform-dashboard .table-preview td {
+  color: #e2e8f0;
+}
+
+.app .platform-dashboard .table-preview th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+.app .platform-dashboard .table-preview tbody tr {
+  background: #0f172a;
+}
+
+.app .platform-dashboard .table-preview tbody tr:hover {
+  background: rgba(59, 130, 246, 0.10);
+}
+
+.app .platform-dashboard .status-list li {
+  background: rgba(30, 41, 59, 0.84);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
 
 
 
