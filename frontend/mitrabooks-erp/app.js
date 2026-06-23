@@ -3357,6 +3357,26 @@ function renderPlatformSubscriptionsTable(rows) {
   ], "No subscription records returned.");
 }
 
+function emptyPlatformDashboardPayload() {
+  return {
+    summary: {
+      onboarding: { by_status: { pending: 0, payment_pending: 0, payment_received: 0, under_review: 0, approved: 0, rejected: 0 } },
+      tenants: { by_status: { active: 0, inactive: 0 } },
+      subscriptions: { by_plan: {} },
+    },
+    app_status: [
+      { app_key: "legalmitra", onboarding: { pending: 0 }, tenant_count: 0 },
+      { app_key: "mandirmitra", onboarding: { pending: 0 }, tenant_count: 0 },
+      { app_key: "gruhamitra", onboarding: { pending: 0 }, tenant_count: 0 },
+      { app_key: "mitrabooks", onboarding: { pending: 0 }, tenant_count: 0 },
+    ],
+    module_status: [],
+    pending_approvals: [],
+    recent_onboarding: [],
+    recent_tenants: [],
+  };
+}
+
 function renderPlatformDashboard(payload) {
   const summary = payload?.summary || {};
   const onboarding = summary.onboarding || {};
@@ -4692,21 +4712,7 @@ function renderDashboardPreview(config) {
   }
 
   if (dashboard.type === "platform") {
-    return renderPlatformDashboard({
-      summary: {
-        onboarding: { by_status: { pending: 0 } },
-        tenants: { by_status: { active: 0, inactive: 0 } },
-        subscriptions: { by_plan: {} },
-      },
-      app_status: [
-        { app_key: "mandirmitra", onboarding: { pending: 0 }, tenant_count: 0 },
-        { app_key: "gruhamitra", onboarding: { pending: 0 }, tenant_count: 0 },
-        { app_key: "mitrabooks", onboarding: { pending: 0 }, tenant_count: 0 },
-      ],
-      module_status: [],
-      pending_approvals: [],
-      recent_tenants: [],
-    });
+    return renderPlatformDashboard(lastPlatformOwnerDashboard || emptyPlatformDashboardPayload());
   }
 
   if (dashboard.type === "mandir") {
@@ -16103,12 +16109,10 @@ async function submitTenantEntitlements() {
 }
 
 async function setPlatformWorkspace(workspace) {
+  currentExperience = "platform";
   activePlatformWorkspace = workspace || "dashboard";
   syncPlatformNavActiveState();
-  if (lastPlatformOwnerDashboard) {
-    dashboardPreview.innerHTML = renderPlatformDashboard(lastPlatformOwnerDashboard);
-    return;
-  }
+  dashboardPreview.innerHTML = renderPlatformDashboard(lastPlatformOwnerDashboard || emptyPlatformDashboardPayload());
   await loadPlatformOwnerDashboard();
 }
 
@@ -16273,7 +16277,7 @@ nav.addEventListener("click", (event) => {
 
 nav.addEventListener("click", (event) => {
   const link = event.target.closest("a[data-platform-workspace]");
-  if (!link || currentExperience !== "platform") {
+  if (!link) {
     return;
   }
   event.preventDefault();
