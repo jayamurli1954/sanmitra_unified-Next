@@ -114,6 +114,55 @@ async def test_platform_owner_dashboard_contract_counts_tenants_and_onboarding(m
     assert any(row["display_name"] == "Jayanthi M Rao" for row in dashboard["subscription_records"])
 
 
+@pytest.mark.asyncio
+async def test_platform_owner_dashboard_dedupes_duplicate_billing_subscription_records(monkeypatch):
+    async def fake_list_tenants(*, limit: int = 500, status: str | None = None):
+        return []
+
+    async def fake_list_onboarding_requests(*, limit: int = 500, status: str | None = None, app_key: str | None = None):
+        return []
+
+    async def fake_list_billing_transactions(*, limit: int = 500):
+        return [
+            {
+                "record_type": "billing_transaction",
+                "display_name": "jayanthimr56@gmail.com",
+                "payer_email": "jayanthimr56@gmail.com",
+                "app_key": "legalmitra",
+                "app_keys": ["legalmitra"],
+                "subscription_plan": "basic",
+                "subscription_status": "active",
+                "billing_cycle": "monthly",
+                "razorpay_payment_id": "pay_1",
+            },
+            {
+                "record_type": "billing_transaction",
+                "display_name": "jayanthimr56@gmail.com",
+                "payer_email": "jayanthimr56@gmail.com",
+                "app_key": "legalmitra",
+                "app_keys": ["legalmitra"],
+                "subscription_plan": "basic",
+                "subscription_status": "active",
+                "billing_cycle": "monthly",
+                "razorpay_payment_id": "pay_1",
+            },
+        ]
+
+    monkeypatch.setattr(platform_owner_service, "list_tenants", fake_list_tenants)
+    monkeypatch.setattr(platform_owner_service, "list_onboarding_requests", fake_list_onboarding_requests)
+    monkeypatch.setattr(platform_owner_service, "list_billing_transactions", fake_list_billing_transactions)
+
+    dashboard = await platform_owner_service.get_platform_owner_dashboard(limit=10)
+
+    matching = [
+        row
+        for row in dashboard["subscription_records"]
+        if row.get("payer_email") == "jayanthimr56@gmail.com"
+    ]
+    assert len(matching) == 1
+    assert dashboard["summary"]["subscriptions"]["by_plan"] == {"basic": 1}
+
+
 def test_platform_owner_dashboard_allows_super_admin(monkeypatch):
     async def fake_dashboard(*, limit: int):
         return {

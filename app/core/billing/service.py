@@ -275,32 +275,39 @@ class BillingService:
 
         settings = get_settings()
         billing = get_collection(BILLING_COLLECTION)
-        await billing.insert_one(
-            {
-                "email": email.lower(),
-                "customer_name": payment_entity.get("name") or notes.get("name") or notes.get("customer_name"),
-                "contact": payment_entity.get("contact"),
-                "amount": amount,
-                "amount_paise": payment_entity.get("amount", 0),
-                "currency": payment_entity.get("currency", "INR"),
-                "app_key": app_key,
-                "plan": plan,
-                "billing_cycle": billing_cycle,
-                "subscription_started_at": subscription_started_at,
-                "subscription_expires_at": subscription_expires_at,
-                "tenant_id": str(notes.get("tenant_id") or "").strip() or None,
-                "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "Sanmita Tech Solutions"),
-                "merchant_scope": getattr(settings, "RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform"),
-                "shared_platform_account": True,
-                "razorpay_payment_page_id": payment_page_id,
-                "razorpay_payment_id": payment_entity.get("id"),
-                "razorpay_order_id": payment_entity.get("order_id"),
-                "razorpay_customer_id": payment_entity.get("customer_id"),
-                "event": event,
-                "tier": new_tier,
-                "created_at": datetime.now(timezone.utc),
-            }
-        )
+        billing_doc = {
+            "email": email.lower(),
+            "customer_name": payment_entity.get("name") or notes.get("name") or notes.get("customer_name"),
+            "contact": payment_entity.get("contact"),
+            "amount": amount,
+            "amount_paise": payment_entity.get("amount", 0),
+            "currency": payment_entity.get("currency", "INR"),
+            "app_key": app_key,
+            "plan": plan,
+            "billing_cycle": billing_cycle,
+            "subscription_started_at": subscription_started_at,
+            "subscription_expires_at": subscription_expires_at,
+            "tenant_id": str(notes.get("tenant_id") or "").strip() or None,
+            "merchant_account": getattr(settings, "RAZORPAY_ACCOUNT_OWNER", "Sanmita Tech Solutions"),
+            "merchant_scope": getattr(settings, "RAZORPAY_MERCHANT_SCOPE", "sanmitra_platform"),
+            "shared_platform_account": True,
+            "razorpay_payment_page_id": payment_page_id,
+            "razorpay_payment_id": payment_entity.get("id"),
+            "razorpay_order_id": payment_entity.get("order_id"),
+            "razorpay_customer_id": payment_entity.get("customer_id"),
+            "event": event,
+            "tier": new_tier,
+            "created_at": datetime.now(timezone.utc),
+        }
+        payment_id = str(payment_entity.get("id") or "").strip()
+        if payment_id:
+            await billing.update_one(
+                {"razorpay_payment_id": payment_id},
+                {"$setOnInsert": billing_doc},
+                upsert=True,
+            )
+        else:
+            await billing.insert_one(billing_doc)
 
         return {
             "status": "success",

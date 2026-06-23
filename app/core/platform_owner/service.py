@@ -86,6 +86,40 @@ def _compact_billing_transaction(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _record_app_key(row: dict[str, Any]) -> str:
+    app_key = str(row.get("app_key") or "").strip().lower()
+    if app_key:
+        return app_key
+    app_keys = _normalize_app_keys(row.get("app_keys"))
+    return app_keys[0] if app_keys else ""
+
+
+def _subscription_identity(row: dict[str, Any]) -> tuple[str, ...]:
+    tenant_id = str(row.get("tenant_id") or "").strip().lower()
+    if tenant_id:
+        return ("tenant", tenant_id)
+    payer_email = str(row.get("payer_email") or row.get("email") or "").strip().lower()
+    display_name = str(row.get("display_name") or "").strip().lower()
+    return (
+        "payer",
+        payer_email or display_name,
+        _record_app_key(row),
+        str(row.get("subscription_plan") or "").strip().lower(),
+    )
+
+
+def _dedupe_subscription_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, ...]] = set()
+    for row in records:
+        key = _subscription_identity(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
 async def list_billing_transactions(*, limit: int = 500) -> list[dict[str, Any]]:
     billing = get_collection(CORE_BILLING_TRANSACTIONS_COLLECTION)
     safe_limit = max(1, min(int(limit or 500), 500))
@@ -109,8 +143,6 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     tenant_by_status = Counter(row["status"] for row in tenants)
     tenant_by_org = Counter(str(row.get("organization_type") or "UNKNOWN") for row in tenants)
     tenant_by_app = Counter()
-    subscription_by_plan = Counter(row["subscription_plan"] for row in tenants)
-    subscription_by_plan.update(row["subscription_plan"] for row in billing_transactions)
     module_enabled = Counter()
 
     for tenant in tenants:
@@ -141,13 +173,14 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     pending_approvals = [row for row in onboarding if row["status"] in ACTIONABLE_ONBOARDING_STATUSES][:safe_limit]
     recent_onboarding = onboarding[:safe_limit]
     recent_tenants = tenants[:safe_limit]
-    subscription_records = [
+    subscription_records = _dedupe_subscription_records([
         {
             "record_type": "tenant",
             **tenant,
         }
         for tenant in tenants
-    ] + billing_transactions
+    ] + billing_transactions)
+    subscription_by_plan = Counter(row["subscription_plan"] for row in subscription_records)
 
     return {
         "generated_at": datetime.now(timezone.utc),

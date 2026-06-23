@@ -28,9 +28,18 @@ class _FakeUsersCollection:
 class _FakeBillingCollection:
     def __init__(self):
         self.inserted = None
+        self.update_filter = None
+        self.update_query = None
+        self.upsert = None
 
     async def insert_one(self, doc: dict):
         self.inserted = doc
+
+    async def update_one(self, query: dict, update: dict, upsert: bool = False):
+        self.update_filter = query
+        self.update_query = update
+        self.upsert = upsert
+        self.inserted = update.get("$setOnInsert")
 
 
 class _FakeBlogCollection:
@@ -143,6 +152,8 @@ async def test_billing_records_product_metadata_for_shared_razorpay_account(monk
     assert users.update_query["$set"]["billing_cycle"] == "monthly"
     assert users.update_query["$set"]["subscription_status"] == "active"
     assert users.update_query["$set"]["subscription_expires_at"] > users.update_query["$set"]["subscription_started_at"]
+    assert billing.update_filter == {"razorpay_payment_id": "pay_123"}
+    assert billing.upsert is True
     assert billing.inserted["app_key"] == "mitrabooks"
     assert billing.inserted["plan"] == "growth"
     assert billing.inserted["billing_cycle"] == "monthly"
@@ -224,6 +235,47 @@ async def test_legalmitra_payment_page_mapping_sets_cycle_and_expiry(
     assert billing.inserted["razorpay_payment_page_id"] == page_id
     assert billing.inserted["billing_cycle"] == billing_cycle
     assert billing.inserted["subscription_expires_at"] == expected_expiry
+
+
+@pytest.mark.asyncio
+async def test_billing_transaction_write_is_idempotent_by_payment_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    users = _FakeUsersCollection({"email": "jayanthimr56@gmail.com"})
+    billing = _FakeBillingCollection()
+
+    def fake_get_collection(name: str):
+        return billing if name == "core_billing_transactions" else users
+
+    class _Settings:
+        RAZORPAY_ACCOUNT_OWNER = "Sanmita Tech Solutions"
+        RAZORPAY_MERCHANT_SCOPE = "sanmitra_platform"
+        RAZORPAY_PAYMENT_PAGE_MAP_JSON = ""
+
+    monkeypatch.setattr("app.core.billing.service.get_collection", fake_get_collection)
+    monkeypatch.setattr("app.core.billing.service.get_settings", lambda: _Settings())
+
+    result = await BillingService.handle_payment_success(
+        {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_duplicate_guard",
+                        "email": "jayanthimr56@gmail.com",
+                        "amount": 39900,
+                        "currency": "INR",
+                        "payment_page_id": "pl_T0f5if7cZZxXYf",
+                        "notes": {},
+                    }
+                }
+            },
+        }
+    )
+
+    assert result["status"] == "success"
+    assert billing.update_filter == {"razorpay_payment_id": "pay_duplicate_guard"}
+    assert billing.update_query["$setOnInsert"]["email"] == "jayanthimr56@gmail.com"
+    assert billing.update_query["$setOnInsert"]["plan"] == "growth"
+    assert billing.upsert is True
 
 
 @pytest.mark.asyncio
