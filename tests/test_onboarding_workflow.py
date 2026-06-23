@@ -5,9 +5,12 @@ import pytest
 import app.core.onboarding.service as onboarding_service
 from app.core.onboarding.schemas import (
     OnboardingApproveRequest,
+    OnboardingPaymentUpdateRequest,
     OnboardingRejectRequest,
     OnboardingRequestCreate,
     OnboardingResendRequest,
+    OnboardingVerificationDocument,
+    OnboardingVerificationUpdateRequest,
 )
 
 
@@ -98,6 +101,8 @@ async def test_create_onboarding_request_captures_authority_plan_and_terms(monke
 
     stored = await fake_requests.find_one({"request_id": result["request_id"]})
     assert stored["app_key"] == "mitrabooks"
+    assert stored["payment_status"] == "not_required"
+    assert stored["document_verification_status"] == "pending"
     assert stored["organization_type"] == "PROFESSIONAL"
     assert stored["authority_designation"] == "Other"
     assert stored["authority_designation_other"] == "Senior Accounts Partner"
@@ -110,10 +115,11 @@ async def test_create_onboarding_request_captures_authority_plan_and_terms(monke
 def test_public_onboarding_requires_valid_product_app_key():
     assert onboarding_service.normalize_public_onboarding_app_key("mandirmitra") == "mandirmitra"
     assert onboarding_service.normalize_public_onboarding_app_key("gharmitra") == "gruhamitra"
+    assert onboarding_service.normalize_public_onboarding_app_key("legalmitra") == "legalmitra"
     with pytest.raises(ValueError, match="X-App-Key"):
         onboarding_service.normalize_public_onboarding_app_key(None)
     with pytest.raises(ValueError, match="X-App-Key"):
-        onboarding_service.normalize_public_onboarding_app_key("legalmitra")
+        onboarding_service.normalize_public_onboarding_app_key("investmitra")
 
 
 def test_onboarding_requires_other_designation_detail():
@@ -168,6 +174,8 @@ async def test_approve_onboarding_request_creates_tenant_admin(monkeypatch):
             "temple_slug": "sri-ganesh-temple",
             "admin_full_name": "Temple Admin",
             "admin_email": "admin.temple@example.com",
+            "payment_status": "received",
+            "document_verification_status": "verified",
             "submitted_at": 100,
             "updated_at": 100,
         }
@@ -248,6 +256,8 @@ async def test_approve_onboarding_request_uses_app_key_for_tenant_modules(monkey
             "admin_full_name": "Society Admin",
             "admin_email": "admin.society@example.com",
             "app_key": "gruhamitra",
+            "payment_status": "received",
+            "document_verification_status": "verified",
             "submitted_at": 100,
             "updated_at": 100,
         }
@@ -304,6 +314,8 @@ async def test_reject_onboarding_request_updates_status(monkeypatch):
             "tenant_name": "A Temple",
             "admin_full_name": "Admin",
             "admin_email": "admin@example.com",
+            "payment_status": "received",
+            "document_verification_status": "verified",
             "submitted_at": 10,
             "updated_at": 10,
         }
@@ -355,6 +367,85 @@ async def test_list_onboarding_requests_filters_by_status(monkeypatch):
     pending = await onboarding_service.list_onboarding_requests(status="pending")
     assert len(pending) == 1
     assert pending[0]["request_id"] == "req-pending"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_payment_and_document_verification_updates_make_request_reviewable(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    fake_requests.docs.append(
+        {
+            "request_id": "req-review-1",
+            "status": "pending",
+            "tenant_name": "Review Society",
+            "admin_full_name": "Admin",
+            "admin_email": "admin@example.com",
+            "payment_status": "pending",
+            "document_verification_status": "pending",
+            "submitted_at": 10,
+            "updated_at": 10,
+        }
+    )
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+
+    paid = await onboarding_service.record_onboarding_payment(
+        request_id="req-review-1",
+        updated_by="platform-owner",
+        payload=OnboardingPaymentUpdateRequest(
+            payment_status="received",
+            razorpay_payment_id="pay_123",
+            amount="4999.00",
+        ),
+    )
+    assert paid["status"] == "payment_received"
+    assert paid["payment_status"] == "received"
+    assert paid["payment_reference"] == "pay_123"
+
+    reviewed = await onboarding_service.record_onboarding_verification(
+        request_id="req-review-1",
+        updated_by="platform-owner",
+        payload=OnboardingVerificationUpdateRequest(
+            document_verification_status="verified",
+            verification_notes="Society authorization verified",
+            verification_documents=[
+                OnboardingVerificationDocument(
+                    document_id="doc-1",
+                    document_type="society_authorization",
+                    file_name="authorization.pdf",
+                    storage_key="private/onboarding/req-review-1/authorization.pdf",
+                    status="verified",
+                )
+            ],
+        ),
+    )
+    assert reviewed["status"] == "under_review"
+    assert reviewed["document_verification_status"] == "verified"
+    assert reviewed["verification_documents"][0]["document_type"] == "society_authorization"
+
+
+@pytest.mark.asyncio
+async def test_approve_onboarding_requires_payment_and_verified_documents(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    fake_requests.docs.append(
+        {
+            "request_id": "req-unpaid",
+            "status": "pending",
+            "tenant_name": "Unpaid Society",
+            "admin_full_name": "Admin",
+            "admin_email": "admin@example.com",
+            "payment_status": "pending",
+            "document_verification_status": "verified",
+            "submitted_at": 10,
+            "updated_at": 10,
+        }
+    )
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+
+    with pytest.raises(ValueError, match="Payment must be received"):
+        await onboarding_service.approve_onboarding_request(
+            request_id="req-unpaid",
+            approved_by="super-admin-1",
+            payload=OnboardingApproveRequest(initial_password="TempPass123!"),
+        )
 
 
 @pytest.mark.asyncio
@@ -498,6 +589,8 @@ async def test_approve_onboarding_request_seeds_mandir_profile(monkeypatch):
                 "admin_email": "admin.temple@example.com",
                 "admin_phone": "9876543211",
                 "app_key": "mandirmitra",
+                "payment_status": "received",
+                "document_verification_status": "verified",
             }
         ]
     )

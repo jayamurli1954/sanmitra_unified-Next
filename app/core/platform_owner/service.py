@@ -6,9 +6,10 @@ from app.core.onboarding.service import list_onboarding_requests
 from app.core.tenants.service import list_tenants
 
 
-TRACKED_APP_KEYS = ("mandirmitra", "gruhamitra", "mitrabooks")
+TRACKED_APP_KEYS = ("legalmitra", "mandirmitra", "gruhamitra", "mitrabooks")
 TRACKED_MODULES = ("temple", "housing", "business", "professional", "accounting", "gst", "inventory", "audit")
-ONBOARDING_STATUSES = ("pending", "approved", "rejected")
+ONBOARDING_STATUSES = ("pending", "payment_pending", "payment_received", "under_review", "approved", "rejected")
+ACTIONABLE_ONBOARDING_STATUSES = {"pending", "payment_received", "under_review"}
 TENANT_STATUSES = ("active", "inactive")
 
 
@@ -35,6 +36,13 @@ def _compact_onboarding_request(row: dict[str, Any]) -> dict[str, Any]:
         "tenant_name": row.get("tenant_name") or row.get("temple_name") or row.get("trust_name") or "",
         "organization_name": row.get("tenant_name") or row.get("temple_name") or row.get("trust_name") or "",
         "admin_email": row.get("admin_email") or "",
+        "payment_status": row.get("payment_status") or "pending",
+        "payment_received_at": row.get("payment_received_at"),
+        "payment_reference": row.get("payment_reference"),
+        "document_verification_status": row.get("document_verification_status") or "pending",
+        "verification_notes": row.get("verification_notes"),
+        "verification_documents": row.get("verification_documents") or [],
+        "documents_deletion_due_at": row.get("documents_deletion_due_at"),
         "submitted_at": row.get("submitted_at") or row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "approved_tenant_id": row.get("approved_tenant_id"),
@@ -98,7 +106,7 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
         for module_key in TRACKED_MODULES
     ]
 
-    pending_approvals = [row for row in onboarding if row["status"] == "pending"][:safe_limit]
+    pending_approvals = [row for row in onboarding if row["status"] in ACTIONABLE_ONBOARDING_STATUSES][:safe_limit]
     recent_onboarding = onboarding[:safe_limit]
     recent_tenants = tenants[:safe_limit]
 

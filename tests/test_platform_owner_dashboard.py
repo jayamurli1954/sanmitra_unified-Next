@@ -80,7 +80,14 @@ async def test_platform_owner_dashboard_contract_counts_tenants_and_onboarding(m
     dashboard = await platform_owner_service.get_platform_owner_dashboard(limit=10)
 
     assert dashboard["summary"]["onboarding"]["total"] == 3
-    assert dashboard["summary"]["onboarding"]["by_status"] == {"pending": 1, "approved": 1, "rejected": 1}
+    assert dashboard["summary"]["onboarding"]["by_status"] == {
+        "pending": 1,
+        "payment_pending": 0,
+        "payment_received": 0,
+        "under_review": 0,
+        "approved": 1,
+        "rejected": 1,
+    }
     assert dashboard["summary"]["onboarding"]["by_app_key"]["mandirmitra"]["pending"] == 1
     assert dashboard["summary"]["tenants"]["total"] == 3
     assert dashboard["summary"]["tenants"]["by_status"] == {"active": 2, "inactive": 1}

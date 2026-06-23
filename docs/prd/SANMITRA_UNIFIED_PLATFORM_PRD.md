@@ -134,7 +134,7 @@ Use these canonical values:
 - Audit log.
 - Subscription and plan readiness.
 
-The platform owner dashboard is the review and control layer. It must not replace module-wise onboarding. MandirMitra, GruhaMitra, and MitraBooks users should start onboarding from their module context, while the platform owner can review, approve, reject, request correction, enable modules, and inspect subscription state centrally.
+The platform owner dashboard is the review and control layer. It must not replace module-wise onboarding. LegalMitra, MandirMitra, GruhaMitra, and MitraBooks users should start onboarding from their module context, while the platform owner can review payment status, verify submitted documents, approve, reject, request correction, enable modules, and inspect subscription state centrally.
 
 Initial read-only API contract:
 
@@ -144,10 +144,12 @@ Initial read-only API contract:
 
 Initial approval actions reuse existing super-admin onboarding endpoints:
 
+- `PATCH /api/v1/onboarding-requests/{request_id}/payment`
+- `PATCH /api/v1/onboarding-requests/{request_id}/verification`
 - `POST /api/v1/onboarding-requests/{request_id}/approve`
 - `POST /api/v1/onboarding-requests/{request_id}/reject`
 - UI action buttons must be shown only in the Platform Owner context and must refresh the dashboard after completion.
-- Approval must create or update tenants using the onboarding `app_key` to derive `organization_type`, default `enabled_modules`, and `app_keys`.
+- Approval must require payment received or verified, verified documents, and create or update tenants using the onboarding `app_key` to derive `organization_type`, default `enabled_modules`, and `app_keys`.
 
 Initial tenant entitlement action:
 

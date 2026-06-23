@@ -30,7 +30,6 @@ import { setActiveTempleId, emitActiveTempleChanged } from '../utils/activeTempl
 
 const getDisplayName = (temple) => temple?.name || temple?.trust_name || `Temple ${temple?.id || ''}`;
 const normalizeName = (value) => String(value || '').trim().toLowerCase();
-const getPendingDisplayName = (request) => request?.temple_name || request?.trust_name || request?.tenant_name || 'Unnamed request';
 const getRequestIdCandidates = (request) => {
   const candidates = [
     request?.request_id,
@@ -49,7 +48,6 @@ function TempleDirectory() {
   const { t } = useTranslation();
   const { showError, showSuccess } = useNotification();
   const [loading, setLoading] = useState(true);
-  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [tenantActionKey, setTenantActionKey] = useState('');
   const [resendLoadingRequestId, setResendLoadingRequestId] = useState(null);
   const [temples, setTemples] = useState([]);
@@ -63,12 +61,14 @@ function TempleDirectory() {
     try {
       setLoading(true);
       setLoadError('');
-      const [templesResponse, requestsResponse] = await Promise.all([
-        api.get('/api/v1/temples/'),
-        api.get('/api/v1/onboarding-requests/'),
-      ]);
+      const templesResponse = await api.get('/api/v1/temples/');
       setTemples(Array.isArray(templesResponse.data) ? templesResponse.data : []);
-      setRequests(Array.isArray(requestsResponse.data) ? requestsResponse.data : []);
+      if (isPlatformSuperAdmin) {
+        const requestsResponse = await api.get('/api/v1/onboarding-requests/');
+        setRequests(Array.isArray(requestsResponse.data) ? requestsResponse.data : []);
+      } else {
+        setRequests([]);
+      }
     } catch (err) {
       const message = err.userMessage || err?.response?.data?.detail || t('templeDirectory.messages.loadFailed');
       setLoadError(message);
@@ -76,7 +76,7 @@ function TempleDirectory() {
     } finally {
       setLoading(false);
     }
-  }, [showError, t]);
+  }, [isPlatformSuperAdmin, showError, t]);
 
   useEffect(() => {
     fetchData();
@@ -151,38 +151,6 @@ function TempleDirectory() {
     }
   };
 
-  const handleApprove = async (requestId) => {
-    try {
-      setActionLoadingId(requestId);
-      const response = await api.post(`/api/v1/onboarding-requests/${requestId}/approve`, {});
-      setApprovalSummary({ ...(response.data || {}), _action: 'approved' });
-      showSuccess(t('templeDirectory.messages.approved', { email: response.data.admin_email }));
-      await fetchData();
-    } catch (err) {
-      showError(err.userMessage || t('templeDirectory.messages.approveFailed'));
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleReject = async (requestId) => {
-    const reviewNotes = window.prompt(t('templeDirectory.rejectPrompt'));
-    if (!reviewNotes || reviewNotes.trim().length < 3) {
-      return;
-    }
-
-    try {
-      setActionLoadingId(requestId);
-      await api.post(`/api/v1/onboarding-requests/${requestId}/reject`, { review_notes: reviewNotes.trim() });
-      showSuccess(t('templeDirectory.messages.rejected'));
-      await fetchData();
-    } catch (err) {
-      showError(err.userMessage || t('templeDirectory.messages.rejectFailed'));
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   const handleResendCredentials = async (request, temple) => {
     const requestIds = getRequestIdCandidates(request);
     if (requestIds.length === 0) {
@@ -250,7 +218,7 @@ function TempleDirectory() {
   }
 
   const activeTempleCount = temples.filter((temple) => temple.is_active !== false).length;
-  const pendingRequests = requests.filter((request) => request.status === 'pending');
+  const pendingRequests = requests.filter((request) => ['pending', 'payment_received', 'under_review'].includes(request.status));
   const approvedRequests = requests.filter((request) => request.status === 'approved');
   const approvedRequestByTenant = approvedRequests.reduce((acc, request) => {
     const tenantKey = String(request?.approved_tenant_id || '').trim();
@@ -287,17 +255,7 @@ function TempleDirectory() {
 
         {approvalSummary && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            {approvalSummary._action === 'resent'
-              ? t('templeDirectory.summaryResent', {
-                email: approvalSummary.admin_email,
-                password: approvalSummary.temporary_password,
-                status: approvalSummary.email_sent
-                  ? t('templeDirectory.emailSent')
-                  : approvalSummary.email_error
-                    ? t('templeDirectory.emailFailed', { error: approvalSummary.email_error })
-                    : t('templeDirectory.sharePasswordManually')
-              })
-              : t('templeDirectory.summaryApproved', {
+            {t('templeDirectory.summaryResent', {
                 email: approvalSummary.admin_email,
                 password: approvalSummary.temporary_password,
                 status: approvalSummary.email_sent
@@ -344,56 +302,30 @@ function TempleDirectory() {
           <Alert severity="error">{loadError}</Alert>
         ) : (
           <Stack spacing={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                  <PendingActionsIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  {t('templeDirectory.pendingSection')}
-                </Typography>
-                {pendingRequests.length === 0 ? (
-                  <Alert severity="info">{t('templeDirectory.noPending')}</Alert>
-                ) : (
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>{t('templeDirectory.table.requestedTempleTrust')}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>{t('templeDirectory.table.city')}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>{t('templeDirectory.table.requestedAdmin')}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>{t('templeDirectory.table.adminEmail')}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>{t('templeDirectory.table.created')}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">{t('templeDirectory.table.action')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {pendingRequests.map((request) => {
-                          const requestId = getRequestId(request);
-                          return (
-                            <TableRow key={requestId} hover>
-                              <TableCell sx={{ fontWeight: 600 }}>{getPendingDisplayName(request)}</TableCell>
-                              <TableCell>{request.city || t('common.notAvailable')}</TableCell>
-                              <TableCell>{request.admin_full_name}</TableCell>
-                              <TableCell>{request.admin_email}</TableCell>
-                              <TableCell>{request.created_at}</TableCell>
-                              <TableCell align="right">
-                                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                  <Button size="small" variant="contained" disabled={actionLoadingId === requestId} onClick={() => handleApprove(requestId)}>
-                                    {actionLoadingId === requestId ? t('templeDirectory.approving') : t('templeDirectory.approve')}
-                                  </Button>
-                                  <Button size="small" variant="outlined" color="error" disabled={actionLoadingId === requestId} onClick={() => handleReject(requestId)}>
-                                    {t('templeDirectory.reject')}
-                                  </Button>
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </CardContent>
-            </Card>
+            {isPlatformSuperAdmin && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    <PendingActionsIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    {t('templeDirectory.pendingSection')}
+                  </Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Tenant onboarding approval is handled in the combined Platform Owner workspace for LegalMitra, MandirMitra, GruhaMitra, and MitraBooks.
+                  </Alert>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <Button
+                      variant="contained"
+                      onClick={() => { window.location.href = '/mitrabooks-erp/'; }}
+                    >
+                      Open Combined Platform Owner Console
+                    </Button>
+                    <Typography variant="body2" color="text.secondary">
+                      {pendingRequests.length} MandirMitra request(s) need platform-owner review.
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardContent>

@@ -56,7 +56,7 @@ Validate:
 - Login and tenant context.
 - `X-App-Key` handling.
 - Module registry and enabled module rendering.
-- Platform owner dashboard can show module-wise onboarding requests, pending approvals, subscription status, enabled modules, and tenant KPIs needed to operate MandirMitra tenants.
+- Platform owner dashboard can show LegalMitra, MandirMitra, GruhaMitra, and MitraBooks onboarding requests, pending approvals, payment/document verification state, subscription status, enabled modules, and tenant KPIs.
 - Chart of Accounts.
 - Journal posting.
 - Ledger, trial balance, and financial reports.

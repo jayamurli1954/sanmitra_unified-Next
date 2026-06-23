@@ -1,11 +1,66 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
-OnboardingStatus = Literal["pending", "approved", "rejected"]
+OnboardingStatus = Literal["pending", "payment_pending", "payment_received", "under_review", "approved", "rejected"]
 OnboardingIntent = Literal["register", "demo"]
 OnboardingVerificationChannel = Literal["email", "mobile"]
+OnboardingPaymentStatus = Literal["not_required", "pending", "received", "verified", "failed", "refunded"]
+OnboardingDocumentStatus = Literal[
+    "not_required",
+    "pending",
+    "uploaded",
+    "verified",
+    "rejected",
+    "scheduled_for_deletion",
+    "deleted",
+]
+
+
+class OnboardingVerificationDocument(BaseModel):
+    document_id: str = Field(min_length=2, max_length=120)
+    document_type: str = Field(min_length=2, max_length=80)
+    file_name: str | None = Field(default=None, max_length=200)
+    storage_key: str | None = Field(default=None, max_length=500)
+    checksum_sha256: str | None = Field(default=None, max_length=128)
+    uploaded_at: datetime | None = None
+    verified_at: datetime | None = None
+    verified_by: str | None = Field(default=None, max_length=160)
+    status: OnboardingDocumentStatus = "uploaded"
+    deletion_due_at: datetime | None = None
+    deleted_at: datetime | None = None
+
+
+class OnboardingPaymentUpdateRequest(BaseModel):
+    payment_status: OnboardingPaymentStatus = "received"
+    razorpay_payment_id: str | None = Field(default=None, max_length=120)
+    razorpay_subscription_id: str | None = Field(default=None, max_length=120)
+    amount: Decimal | None = Field(default=None, ge=0)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    received_at: datetime | None = None
+    notes: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def normalize(self):
+        self.currency = (self.currency or "INR").strip().upper()
+        self.razorpay_payment_id = (self.razorpay_payment_id or "").strip() or None
+        self.razorpay_subscription_id = (self.razorpay_subscription_id or "").strip() or None
+        self.notes = (self.notes or "").strip() or None
+        return self
+
+
+class OnboardingVerificationUpdateRequest(BaseModel):
+    document_verification_status: OnboardingDocumentStatus = "uploaded"
+    verification_notes: str | None = Field(default=None, max_length=1000)
+    verification_documents: list[OnboardingVerificationDocument] = Field(default_factory=list)
+    deletion_due_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def normalize(self):
+        self.verification_notes = (self.verification_notes or "").strip() or None
+        return self
 
 
 class OnboardingRequestCreate(BaseModel):
@@ -86,6 +141,15 @@ class OnboardingRequestItem(BaseModel):
     plan_timing: str | None = None
     verification_channel: OnboardingVerificationChannel | None = None
     terms_accepted: bool | None = None
+    payment_status: OnboardingPaymentStatus = "pending"
+    payment_received_at: datetime | None = None
+    payment_reference: str | None = None
+    document_verification_status: OnboardingDocumentStatus = "pending"
+    verification_notes: str | None = None
+    verification_documents: list[OnboardingVerificationDocument] = Field(default_factory=list)
+    verification_updated_at: datetime | None = None
+    documents_deletion_due_at: datetime | None = None
+    documents_deleted_at: datetime | None = None
     temple_name: str | None = None
     trust_name: str | None = None
     temple_slug: str | None = None

@@ -13,9 +13,11 @@ from app.core.auth.security import hash_password
 from app.core.email_delivery.service import log_email_delivery_attempt
 from app.core.onboarding.schemas import (
     OnboardingApproveRequest,
+    OnboardingPaymentUpdateRequest,
     OnboardingRejectRequest,
     OnboardingRequestCreate,
     OnboardingResendRequest,
+    OnboardingVerificationUpdateRequest,
 )
 from app.core.modules.registry import derive_enabled_modules, normalize_organization_type
 from app.core.tenants.context import get_app_key
@@ -25,7 +27,8 @@ from app.db.mongo import get_collection
 
 ONBOARDING_REQUESTS_COLLECTION = "core_onboarding_requests"
 USERS_COLLECTION = "core_users"
-ONBOARDING_STATUSES = {"pending", "approved", "rejected"}
+ONBOARDING_STATUSES = {"pending", "payment_pending", "payment_received", "under_review", "approved", "rejected"}
+APPROVABLE_ONBOARDING_STATUSES = {"pending", "payment_received", "under_review"}
 ONBOARDING_APP_NAMES = {
     "mandirmitra": "MandirMitra",
     "legalmitra": "LegalMitra",
@@ -33,7 +36,7 @@ ONBOARDING_APP_NAMES = {
     "gharmitra": "GharMitra",
     "mitrabooks": "MitraBooks",
 }
-ONBOARDING_PUBLIC_APP_KEYS = {"mandirmitra", "gruhamitra", "mitrabooks"}
+ONBOARDING_PUBLIC_APP_KEYS = {"mandirmitra", "gruhamitra", "mitrabooks", "legalmitra"}
 _ONBOARDING_INDEXES_READY = False
 _onboarding_logger = logging.getLogger(__name__)
 
@@ -46,6 +49,8 @@ async def ensure_onboarding_indexes() -> None:
     requests = get_collection(ONBOARDING_REQUESTS_COLLECTION)
     await requests.create_index("request_id", unique=True)
     await requests.create_index([("app_key", 1), ("status", 1), ("submitted_at", -1)])
+    await requests.create_index([("app_key", 1), ("payment_status", 1), ("submitted_at", -1)])
+    await requests.create_index([("app_key", 1), ("document_verification_status", 1), ("submitted_at", -1)])
     await requests.create_index([("admin_email", 1), ("status", 1)])
     await requests.create_index([("tenant_name", 1), ("status", 1)])
     _ONBOARDING_INDEXES_READY = True
@@ -68,6 +73,15 @@ def _serialize_request(doc: dict) -> dict:
         "plan_timing": doc.get("plan_timing"),
         "verification_channel": doc.get("verification_channel"),
         "terms_accepted": doc.get("terms_accepted"),
+        "payment_status": doc.get("payment_status") or "pending",
+        "payment_received_at": doc.get("payment_received_at"),
+        "payment_reference": doc.get("payment_reference"),
+        "document_verification_status": doc.get("document_verification_status") or "pending",
+        "verification_notes": doc.get("verification_notes"),
+        "verification_documents": doc.get("verification_documents") or [],
+        "verification_updated_at": doc.get("verification_updated_at"),
+        "documents_deletion_due_at": doc.get("documents_deletion_due_at"),
+        "documents_deleted_at": doc.get("documents_deleted_at"),
         "temple_name": doc.get("temple_name"),
         "trust_name": doc.get("trust_name"),
         "temple_slug": doc.get("temple_slug"),
@@ -377,6 +391,16 @@ async def create_onboarding_request(payload: OnboardingRequestCreate, *, app_key
         "verification_channel": payload.verification_channel,
         "terms_accepted": payload.terms_accepted,
         "terms_accepted_at": now,
+        "payment_status": "pending" if payload.request_intent == "register" else "not_required",
+        "payment_received_at": None,
+        "payment_reference": None,
+        "payment_meta": {},
+        "document_verification_status": "pending",
+        "verification_notes": None,
+        "verification_documents": [],
+        "verification_updated_at": None,
+        "documents_deletion_due_at": None,
+        "documents_deleted_at": None,
         "temple_name": payload.temple_name,
         "trust_name": payload.trust_name,
         "temple_slug": payload.temple_slug,
@@ -434,6 +458,91 @@ async def get_onboarding_request(request_id: str) -> dict | None:
     return _serialize_request(doc)
 
 
+async def record_onboarding_payment(
+    *, request_id: str, updated_by: str, payload: OnboardingPaymentUpdateRequest
+) -> dict:
+    await ensure_onboarding_indexes()
+    requests = get_collection(ONBOARDING_REQUESTS_COLLECTION)
+    normalized_request_id = request_id.strip()
+    doc = await _find_onboarding_request_doc(requests, normalized_request_id)
+    if not doc:
+        raise KeyError("Onboarding request not found")
+    if str(doc.get("status") or "").strip().lower() in {"approved", "rejected"}:
+        raise ValueError("Payment status cannot be changed after onboarding is completed")
+
+    now = datetime.now(timezone.utc)
+    payment_status = payload.payment_status
+    next_status = str(doc.get("status") or "pending").strip().lower()
+    if payment_status in {"received", "verified"}:
+        next_status = "payment_received"
+    elif payment_status == "pending":
+        next_status = "payment_pending"
+
+    patch = {
+        "payment_status": payment_status,
+        "payment_received_at": payload.received_at or (now if payment_status in {"received", "verified"} else None),
+        "payment_reference": payload.razorpay_payment_id or payload.razorpay_subscription_id,
+        "payment_meta": {
+            "razorpay_payment_id": payload.razorpay_payment_id,
+            "razorpay_subscription_id": payload.razorpay_subscription_id,
+            "amount": str(payload.amount) if payload.amount is not None else None,
+            "currency": payload.currency,
+            "notes": payload.notes,
+            "updated_by": updated_by,
+        },
+        "status": next_status,
+        "updated_at": now,
+        "payment_updated_at": now,
+        "payment_updated_by": updated_by,
+    }
+    result = await requests.update_one({"request_id": normalized_request_id}, {"$set": patch})
+    if int(getattr(result, "matched_count", 0) or 0) == 0:
+        result = await requests.update_one({"id": normalized_request_id}, {"$set": patch})
+    if int(getattr(result, "matched_count", 0) or 0) == 0:
+        raise ValueError("Failed to update onboarding payment status")
+    updated = await _find_onboarding_request_doc(requests, normalized_request_id)
+    return _serialize_request(updated or {**doc, **patch})
+
+
+async def record_onboarding_verification(
+    *, request_id: str, updated_by: str, payload: OnboardingVerificationUpdateRequest
+) -> dict:
+    await ensure_onboarding_indexes()
+    requests = get_collection(ONBOARDING_REQUESTS_COLLECTION)
+    normalized_request_id = request_id.strip()
+    doc = await _find_onboarding_request_doc(requests, normalized_request_id)
+    if not doc:
+        raise KeyError("Onboarding request not found")
+    if str(doc.get("status") or "").strip().lower() in {"approved", "rejected"}:
+        raise ValueError("Verification status cannot be changed after onboarding is completed")
+
+    now = datetime.now(timezone.utc)
+    document_status = payload.document_verification_status
+    payment_status = str(doc.get("payment_status") or "pending").strip().lower()
+    next_status = str(doc.get("status") or "pending").strip().lower()
+    if document_status == "verified" and payment_status in {"received", "verified", "not_required"}:
+        next_status = "under_review"
+
+    verification_documents = [item.model_dump(mode="json") for item in payload.verification_documents]
+    patch = {
+        "document_verification_status": document_status,
+        "verification_notes": payload.verification_notes,
+        "verification_documents": verification_documents,
+        "verification_updated_at": now,
+        "verification_updated_by": updated_by,
+        "documents_deletion_due_at": payload.deletion_due_at,
+        "status": next_status,
+        "updated_at": now,
+    }
+    result = await requests.update_one({"request_id": normalized_request_id}, {"$set": patch})
+    if int(getattr(result, "matched_count", 0) or 0) == 0:
+        result = await requests.update_one({"id": normalized_request_id}, {"$set": patch})
+    if int(getattr(result, "matched_count", 0) or 0) == 0:
+        raise ValueError("Failed to update onboarding verification status")
+    updated = await _find_onboarding_request_doc(requests, normalized_request_id)
+    return _serialize_request(updated or {**doc, **patch})
+
+
 async def approve_onboarding_request(*, request_id: str, approved_by: str, payload: OnboardingApproveRequest) -> dict:
     await ensure_onboarding_indexes()
     requests = get_collection(ONBOARDING_REQUESTS_COLLECTION)
@@ -443,8 +552,15 @@ async def approve_onboarding_request(*, request_id: str, approved_by: str, paylo
     if not doc:
         raise KeyError("Onboarding request not found")
 
-    if str(doc.get("status") or "").strip().lower() != "pending":
-        raise ValueError("Only pending onboarding requests can be approved")
+    status = str(doc.get("status") or "").strip().lower()
+    if status not in APPROVABLE_ONBOARDING_STATUSES:
+        raise ValueError("Only paid or reviewed onboarding requests can be approved")
+    payment_status = str(doc.get("payment_status") or "pending").strip().lower()
+    document_status = str(doc.get("document_verification_status") or "pending").strip().lower()
+    if payment_status not in {"received", "verified", "not_required"}:
+        raise ValueError("Payment must be received before onboarding approval")
+    if document_status != "verified":
+        raise ValueError("Verification documents must be verified before onboarding approval")
 
     tenant_name = str(doc.get("tenant_name") or doc.get("temple_name") or doc.get("trust_name") or "").strip() or "New Tenant"
 

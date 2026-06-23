@@ -4,12 +4,14 @@ from app.core.auth.dependencies import get_current_user
 from app.core.onboarding.schemas import (
     OnboardingApproveRequest,
     OnboardingApproveResponse,
+    OnboardingPaymentUpdateRequest,
     OnboardingRejectRequest,
     OnboardingRejectResponse,
     OnboardingRequestCreate,
     OnboardingRequestItem,
     OnboardingRequestResponse,
     OnboardingResendRequest,
+    OnboardingVerificationUpdateRequest,
 )
 from app.core.onboarding.service import (
     approve_onboarding_request,
@@ -17,6 +19,8 @@ from app.core.onboarding.service import (
     get_onboarding_request,
     list_onboarding_requests,
     normalize_public_onboarding_app_key,
+    record_onboarding_payment,
+    record_onboarding_verification,
     reject_onboarding_request,
     resend_onboarding_credentials,
 )
@@ -50,8 +54,10 @@ async def list_onboarding_requests_endpoint(
     status: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    current_user: dict = Depends(get_current_user),
 ):
     """List onboarding requests for one explicit product app context."""
+    _require_super_admin(current_user)
     try:
         rows = await list_onboarding_requests(
             status=status,
@@ -70,8 +76,10 @@ async def list_onboarding_requests_endpoint(
 async def get_onboarding_request_endpoint(
     request_id: str,
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get an onboarding request only within one explicit product app context."""
+    _require_super_admin(current_user)
     try:
         requested_app_key = normalize_public_onboarding_app_key(x_app_key)
         row = await get_onboarding_request(request_id)
@@ -82,6 +90,50 @@ async def get_onboarding_request_endpoint(
 
     if not row or str(row.get("app_key") or "").strip().lower() != requested_app_key:
         raise HTTPException(status_code=404, detail="Onboarding request not found")
+    return OnboardingRequestItem(**row)
+
+
+@router.patch("/{request_id}/payment", response_model=OnboardingRequestItem)
+async def record_onboarding_payment_endpoint(
+    request_id: str,
+    payload: OnboardingPaymentUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    try:
+        row = await record_onboarding_payment(
+            request_id=request_id,
+            updated_by=str(current_user.get("sub") or "system"),
+            payload=payload,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc.args[0] if exc.args else exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return OnboardingRequestItem(**row)
+
+
+@router.patch("/{request_id}/verification", response_model=OnboardingRequestItem)
+async def record_onboarding_verification_endpoint(
+    request_id: str,
+    payload: OnboardingVerificationUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    try:
+        row = await record_onboarding_verification(
+            request_id=request_id,
+            updated_by=str(current_user.get("sub") or "system"),
+            payload=payload,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc.args[0] if exc.args else exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return OnboardingRequestItem(**row)
 
 
