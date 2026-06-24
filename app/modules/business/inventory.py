@@ -176,22 +176,29 @@ def assemble_stock_register(
     items: list[dict],
     purchase_lines: list[dict],   # {item_id, quantity, taxable_amount}
     sales_lines: list[dict],      # {item_id, quantity}
+    produced_lines: list[dict] | None = None,   # {item_id, quantity, value}  (manufactured FG)
+    consumed_lines: list[dict] | None = None,   # {item_id, quantity}         (raw materials issued)
 ) -> dict:
     """Per-item stock position as of a date, periodic method:
 
-        closing qty   = opening + purchased − sold
-        avg cost      = (opening value + purchase value) / (opening qty + purchased qty)
+        closing qty   = opening + purchased + produced − sold − consumed
+        avg cost      = (opening value + purchase value + production value)
+                        / (opening qty + purchased qty + produced qty)
         closing value = closing qty × avg cost
 
-    Sales are valued at that same weighted-average cost (their price is
-    revenue, not stock value). Items driven negative are flagged — that means
-    sales were recorded for stock the books never received."""
+    Sales and manufacturing consumption are valued at that same weighted-average
+    cost. Manufactured finished goods are added at their production cost (work-order
+    actual cost). Items driven negative are flagged — that means more was sold/
+    consumed than the books ever received or produced."""
+    produced_lines = produced_lines or []
+    consumed_lines = consumed_lines or []
     by_item: dict[str, dict] = {}
     for it in items:
         by_item[str(it["item_id"])] = {
             "item": it,
             "purchased_qty": Decimal("0"), "purchased_value": Decimal("0"),
-            "sold_qty": Decimal("0"),
+            "produced_qty": Decimal("0"), "produced_value": Decimal("0"),
+            "sold_qty": Decimal("0"), "consumed_qty": Decimal("0"),
         }
     untracked_purchase_value = Decimal("0")
     for ln in purchase_lines:
@@ -201,11 +208,22 @@ def assemble_stock_register(
             continue
         bucket["purchased_qty"] += _q3(ln.get("quantity"))
         bucket["purchased_value"] += _q2(ln.get("taxable_amount"))
+    for ln in produced_lines:
+        bucket = by_item.get(str(ln.get("item_id") or ""))
+        if bucket is None:
+            continue
+        bucket["produced_qty"] += _q3(ln.get("quantity"))
+        bucket["produced_value"] += _q2(ln.get("value"))
     for ln in sales_lines:
         bucket = by_item.get(str(ln.get("item_id") or ""))
         if bucket is None:
             continue
         bucket["sold_qty"] += _q3(ln.get("quantity"))
+    for ln in consumed_lines:
+        bucket = by_item.get(str(ln.get("item_id") or ""))
+        if bucket is None:
+            continue
+        bucket["consumed_qty"] += _q3(ln.get("quantity"))
 
     rows: list[dict] = []
     total_closing_value = Decimal("0.00")
@@ -214,11 +232,12 @@ def assemble_stock_register(
         it = b["item"]
         opening_qty = _q3(it.get("opening_qty"))
         opening_value = _q2(it.get("opening_value"))
-        in_qty = b["purchased_qty"]
+        in_qty = b["purchased_qty"] + b["produced_qty"]
         available_qty = opening_qty + in_qty
-        available_value = opening_value + b["purchased_value"]
+        available_value = opening_value + b["purchased_value"] + b["produced_value"]
         avg_cost = _q2(available_value / available_qty) if available_qty > 0 else Decimal("0.00")
-        closing_qty = _q3(available_qty - b["sold_qty"])
+        out_qty = b["sold_qty"] + b["consumed_qty"]
+        closing_qty = _q3(available_qty - out_qty)
         negative = closing_qty < 0
         if negative:
             negative_items += 1
@@ -230,8 +249,10 @@ def assemble_stock_register(
             "name": it.get("name"),
             "uqc": it.get("uqc"),
             "opening_qty": str(opening_qty),
-            "purchased_qty": str(_q3(in_qty)),
+            "purchased_qty": str(_q3(b["purchased_qty"])),
+            "produced_qty": str(_q3(b["produced_qty"])),
             "sold_qty": str(_q3(b["sold_qty"])),
+            "consumed_qty": str(_q3(b["consumed_qty"])),
             "closing_qty": str(closing_qty),
             "avg_cost": str(avg_cost),
             "closing_value": str(closing_value),
@@ -247,11 +268,13 @@ def assemble_stock_register(
         "negative_stock_items": negative_items,
         "untracked_purchase_value": str(_q2(untracked_purchase_value)),
         "notes": [
-            "Valuation is weighted-average purchase cost (taxable value, GST excluded).",
-            "Negative closing stock means sales were recorded for quantities the books never "
-            "purchased — fix the documents or the item's opening stock before posting.",
+            "Valuation is weighted-average cost of purchases + production (taxable value, GST excluded).",
+            "Negative closing stock means more was sold/consumed than the books purchased or "
+            "produced — fix the documents or the item's opening stock before posting.",
             "Purchase lines without an item tag are listed as 'untracked' — they stay pure "
             "expense and are not part of closing stock.",
+            "Manufactured finished goods are added at work-order production cost; raw materials "
+            "consumed by completed work orders reduce stock at weighted-average cost.",
         ],
     }
 
@@ -286,9 +309,32 @@ async def build_stock_register(
         for ln in inv.get("line_items") or []:
             sales_lines.append({"item_id": ln.get("item_id"), "quantity": ln.get("quantity")})
 
+    # Manufacturing movements: completed work orders add finished goods (at
+    # production cost) and consume raw materials. Periodic, so nothing is posted
+    # to the ledger here — this only keeps closing-stock valuation correct.
+    produced_lines: list[dict] = []
+    consumed_lines: list[dict] = []
+    work_orders = await get_collection("manufacturing_work_orders").find({
+        **scope, "status": "completed",
+    }).to_list(length=20000)
+    for wo in work_orders:
+        completed_at = wo.get("completed_at")
+        # completed_at is a datetime; compare its date against as_of.
+        if completed_at is not None and hasattr(completed_at, "date") and completed_at.date() > as_of:
+            continue
+        actual = wo.get("actual") or {}
+        produced_lines.append({
+            "item_id": wo.get("fg_item_id"),
+            "quantity": wo.get("produced_qty"),
+            "value": actual.get("actual_cost"),
+        })
+        for comp in actual.get("components") or []:
+            consumed_lines.append({"item_id": comp.get("item_id"), "quantity": comp.get("qty")})
+
     return assemble_stock_register(
         as_of=as_of, items=[_response(i) for i in items],
         purchase_lines=purchase_lines, sales_lines=sales_lines,
+        produced_lines=produced_lines, consumed_lines=consumed_lines,
     )
 
 

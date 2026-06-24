@@ -20,10 +20,13 @@ from app.core.tenants.service import get_tenant
 from app.db.postgres import get_async_session
 from app.modules.business import cost_centre_budgets as budgets_module
 from app.modules.business import report_export
+from app.modules.manufacturing import bom as bom_module
 from app.modules.manufacturing import service as mfg_service
+from app.modules.manufacturing import work_orders as wo_module
 from app.modules.manufacturing.gating import (
     MFG_MANAGE_ROLES,
     require_cost_centre_context,
+    require_manufacturing_context,
     resolve_mfg_access,
 )
 
@@ -233,3 +236,165 @@ async def budget_vs_actual(
         )
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
+# Manufacturing — Bills of Materials (Phase 2). Gated on the manufacturing layer.
+# --------------------------------------------------------------------------- #
+
+@router.post("/boms")
+async def create_bom(
+    payload: dict = Body(...),
+    context: AppTenantContext = Depends(require_manufacturing_context("BOM create", roles=MFG_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.accounting.service import AccountingValidationError
+
+    try:
+        return await bom_module.create_bom(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            payload=payload, created_by=_actor(current_user),
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/boms")
+async def list_boms(
+    fg_item_id: str | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    context: AppTenantContext = Depends(require_manufacturing_context("BOM list")),
+):
+    return await bom_module.list_boms(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=context.accounting_entity_id,
+        fg_item_id=fg_item_id, include_inactive=include_inactive,
+    )
+
+
+@router.get("/boms/{bom_id}")
+async def get_bom(
+    bom_id: str,
+    context: AppTenantContext = Depends(require_manufacturing_context("BOM lookup")),
+):
+    from app.accounting.service import AccountingNotFoundError
+
+    try:
+        return await bom_module.get_bom(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id, bom_id=bom_id,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/boms/{bom_id}/deactivate")
+async def deactivate_bom(
+    bom_id: str,
+    context: AppTenantContext = Depends(require_manufacturing_context("BOM deactivate", roles=MFG_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.accounting.service import AccountingNotFoundError
+
+    try:
+        return await bom_module.deactivate_bom(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            bom_id=bom_id, updated_by=_actor(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
+# Manufacturing — Work Orders (Phase 2b).
+# --------------------------------------------------------------------------- #
+
+@router.post("/work-orders")
+async def create_work_order(
+    payload: dict = Body(...),
+    context: AppTenantContext = Depends(require_manufacturing_context("work order create", roles=MFG_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+
+    try:
+        return await wo_module.create_work_order(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            payload=payload, created_by=_actor(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/work-orders")
+async def list_work_orders(
+    status: str | None = Query(default=None),
+    context: AppTenantContext = Depends(require_manufacturing_context("work order list")),
+):
+    return await wo_module.list_work_orders(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=context.accounting_entity_id, status=status,
+    )
+
+
+@router.get("/work-orders/{wo_id}")
+async def get_work_order(
+    wo_id: str,
+    context: AppTenantContext = Depends(require_manufacturing_context("work order lookup")),
+):
+    from app.accounting.service import AccountingNotFoundError
+
+    try:
+        return await wo_module.get_work_order(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id, wo_id=wo_id,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.put("/work-orders/{wo_id}/status")
+async def update_work_order_status(
+    wo_id: str,
+    status: str = Body(..., embed=True),
+    context: AppTenantContext = Depends(require_manufacturing_context("work order status", roles=MFG_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+
+    try:
+        return await wo_module.update_status(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            wo_id=wo_id, status=status, updated_by=_actor(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/work-orders/{wo_id}/complete")
+async def complete_work_order(
+    wo_id: str,
+    payload: dict = Body(...),
+    context: AppTenantContext = Depends(require_manufacturing_context("work order complete", roles=MFG_MANAGE_ROLES)),
+    current_user: dict = Depends(get_current_user),
+):
+    from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+
+    try:
+        return await wo_module.complete_work_order(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            wo_id=wo_id, payload=payload, updated_by=_actor(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
