@@ -9,7 +9,7 @@
 
 products:
   - name: MitraBooks
-    frontend_url: https://mitrabooks.sanmitratech.in
+    frontend_url: https://www.mitrabooks.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
     vercel_project_id: ""   # e.g. "prj_xxxxxxxxxxxxxx"
 
@@ -19,7 +19,7 @@ products:
     vercel_project_id: ""
 
   - name: GruhaMitra
-    frontend_url: https://gruhamitra.sanmitratech.in
+    frontend_url: https://www.gruhamitra.sanmitratech.in
     backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
     vercel_project_id: ""
 

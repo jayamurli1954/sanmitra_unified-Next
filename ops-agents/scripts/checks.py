@@ -94,15 +94,22 @@ def classify_failure_layer(row: dict) -> str | None:
     be_ok: bool = row["be_ok"]
     ssl_error: bool = bool(row["ssl"].get("error"))
     fe_err: str = row["fe"].get("error") or ""
+    host: str = urlparse(row["fe"].get("url") or "").hostname or "the frontend host"
 
     if fe_ok and be_ok:
         return None
     if not fe_ok and be_ok:
+        # We can't know the host's provider from here, and not every frontend is on
+        # Vercel (apex domains may be served by other hosts). Name the host and let
+        # the reader check whichever platform actually serves it.
         if ssl_error:
-            return "Vercel/DNS/SSL — SSL handshake failed; check Vercel domain assignment and DNS CNAME/A records"
+            return (f"Frontend/DNS/SSL — TLS handshake to {host} failed; verify the "
+                    "cert and DNS for whichever platform serves this host")
         if "Timeout" in fe_err or "timeout" in fe_err:
-            return "Vercel/DNS — connection timeout; check DNS records and Vercel project domain"
-        return "Vercel/DNS/frontend — backend healthy, frontend unreachable; check Vercel deployment"
+            return (f"Frontend/DNS — connection to {host} timed out; could be DNS, a "
+                    "host firewall throttling the runner IP, or the platform being down")
+        return (f"Frontend/DNS — backend healthy but {host} unreachable; check the "
+                "frontend platform deployment and DNS")
     if not be_ok and fe_ok:
         return "Render/API/backend — frontend reachable but backend down; check Render service logs"
     return "DNS/global — both frontend and backend unreachable; check domain DNS and platform status pages"
