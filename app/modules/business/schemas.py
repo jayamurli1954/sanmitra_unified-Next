@@ -617,6 +617,7 @@ class CreditNoteCreateRequest(BaseModel):
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[CreditNoteLineItem] = Field(..., min_length=1)
+    save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -676,7 +677,7 @@ class CreditNoteListResponse(BaseModel):
 
 # ---- Debit Notes (purchase-side GST adjustment against a vendor bill) ----
 
-DebitNoteStatus = Literal["posted", "cancelled"]
+DebitNoteStatus = Literal["draft", "pending_approval", "posted", "rejected", "cancelled"]
 DebitNoteReason = Literal["purchase_return", "rejected_goods", "price_revision", "deficiency", "other"]
 
 
@@ -707,6 +708,7 @@ class DebitNoteCreateRequest(BaseModel):
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[DebitNoteLineItem] = Field(..., min_length=1)
+    save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 

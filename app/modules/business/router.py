@@ -1840,8 +1840,8 @@ async def create_business_credit_note(
 
 @router.get("/credit-notes", response_model=CreditNoteListResponse)
 async def list_business_credit_notes(
-    status: str | None = Query(default=None, pattern="^(posted|cancelled)$"),
-    approval_status: str | None = Query(default=None, pattern="^(auto_posted|pending_approval|approved|rejected)$"),
+    status: str | None = Query(default=None, pattern="^(draft|pending_approval|posted|rejected|cancelled)$"),
+    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
     _module_context: dict = Depends(require_enabled_module("business")),
@@ -1898,6 +1898,7 @@ async def review_business_credit_note(
     credit_note_id: str,
     payload: ApprovalReviewRequest,
     _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
@@ -1911,6 +1912,7 @@ async def review_business_credit_note(
     )
     try:
         return await review_credit_note(
+            session=session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
             credit_note_id=credit_note_id,
@@ -1991,8 +1993,8 @@ async def create_business_debit_note(
 
 @router.get("/debit-notes", response_model=DebitNoteListResponse)
 async def list_business_debit_notes(
-    status: str | None = Query(default=None, pattern="^(posted|cancelled)$"),
-    approval_status: str | None = Query(default=None, pattern="^(auto_posted|pending_approval|approved|rejected)$"),
+    status: str | None = Query(default=None, pattern="^(draft|pending_approval|posted|rejected|cancelled)$"),
+    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
     _module_context: dict = Depends(require_enabled_module("business")),
@@ -2049,6 +2051,7 @@ async def review_business_debit_note(
     debit_note_id: str,
     payload: ApprovalReviewRequest,
     _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
@@ -2062,6 +2065,7 @@ async def review_business_debit_note(
     )
     try:
         return await review_debit_note(
+            session=session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
             debit_note_id=debit_note_id,

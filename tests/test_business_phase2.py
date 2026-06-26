@@ -1359,7 +1359,7 @@ async def test_credit_note_posts_mirror_of_invoice(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
-    result = await business_service.create_credit_note(
+    created_doc = await business_service.create_credit_note(
         None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
@@ -1374,6 +1374,14 @@ async def test_credit_note_posts_mirror_of_invoice(monkeypatch):
         ),
         idempotency_key=None,
     )
+    result = await business_service.review_credit_note(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        credit_note_id=created_doc["credit_note_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+    )
 
     lines = captured["payload"].lines
     assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("1180.00")
@@ -1387,8 +1395,11 @@ async def test_credit_note_posts_mirror_of_invoice(monkeypatch):
     assert captured["payload"].source_document_type == "credit_note"
     assert result["credit_note_number"].startswith("CN-2026-2027-")
     assert result["note_total"] == "1180.00"
+    assert created_doc["status"] == "pending_approval"
+    assert created_doc["approval_status"] == "pending_approval"
     assert result["status"] == "posted"
-    assert audit_events[0]["action"] == "business_credit_note_posted"
+    assert result["approval_status"] == "approved"
+    assert audit_events[-1]["action"] == "business_credit_note_reviewed"
 
 
 @pytest.mark.asyncio
@@ -1439,25 +1450,34 @@ async def test_credit_note_reverses_journal_when_status_update_fails(monkeypatch
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
     monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
 
+    created_doc = await business_service.create_credit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=CreditNoteCreateRequest(
+            customer_party_id="cust-1",
+            note_date=date(2026, 6, 20),
+            original_invoice_number="INV-2026-2027-000001",
+            reason="sales_return",
+            is_inter_state=False,
+            line_items=[CreditNoteLineItem(description="Returned widget", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key="cn-comp-1",
+    )
+
     with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
-        await business_service.create_credit_note(
-            None,
+        await business_service.review_credit_note(
+            session=object(),
             tenant_id="business-tenant",
             app_key="mitrabooks",
-            created_by="owner-1",
-            payload=CreditNoteCreateRequest(
-                customer_party_id="cust-1",
-                note_date=date(2026, 6, 20),
-                original_invoice_number="INV-2026-2027-000001",
-                reason="sales_return",
-                is_inter_state=False,
-                line_items=[CreditNoteLineItem(description="Returned widget", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
-            ),
-            idempotency_key="cn-comp-1",
+            credit_note_id=created_doc["credit_note_id"],
+            reviewed_by="admin-1",
+            payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
         )
 
     assert captured["journal_id"] == 1051
-    assert captured["reason"].startswith("Compensation after credit note persistence failure")
+    assert captured["reason"].startswith("Compensation after credit note approval persistence failure")
     assert captured["tenant_id"] == "business-tenant"
     assert captured["app_key"] == "mitrabooks"
     assert captured["accounting_entity_id"] == "primary"
@@ -1543,8 +1563,7 @@ async def test_review_credit_note_can_reject_document(monkeypatch):
         "note_date": date(2026, 6, 20),
         "reason": "sales_return",
         "note_total": Decimal("1180.00"),
-        "status": "posted",
-        "journal_entry_id": 1001,
+        "status": "pending_approval",
         "created_by": "owner-1",
         "created_at": business_service._now(),
         "updated_at": business_service._now(),
@@ -1558,6 +1577,7 @@ async def test_review_credit_note_can_reject_document(monkeypatch):
     monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
 
     result = await business_service.review_credit_note(
+        session=None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
         credit_note_id="cn-1",
@@ -1602,7 +1622,7 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
-    result = await business_service.create_debit_note(
+    created_doc = await business_service.create_debit_note(
         None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
@@ -1617,6 +1637,14 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
         ),
         idempotency_key=None,
     )
+    result = await business_service.review_debit_note(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        debit_note_id=created_doc["debit_note_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+    )
 
     lines = captured["payload"].lines
     assert sum(l.debit for l in lines) == sum(l.credit for l in lines) == Decimal("1180.00")
@@ -1629,10 +1657,12 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     assert captured["payload"].source_document_type == "debit_note"
     assert result["debit_note_number"].startswith("DN-2026-2027-")
     assert result["note_total"] == "1180.00"
+    assert created_doc["status"] == "pending_approval"
+    assert created_doc["approval_status"] == "pending_approval"
     assert result["status"] == "posted"
-    assert result["approval_required"] is False
-    assert result["approval_status"] == "auto_posted"
-    assert audit_events[0]["action"] == "business_debit_note_posted"
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
+    assert audit_events[-1]["action"] == "business_debit_note_reviewed"
 
 
 @pytest.mark.asyncio
@@ -1658,25 +1688,34 @@ async def test_debit_note_reverses_journal_when_status_update_fails(monkeypatch)
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
     monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
 
+    created_doc = await business_service.create_debit_note(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=DebitNoteCreateRequest(
+            vendor_party_id="vend-1",
+            note_date=date(2026, 6, 20),
+            original_bill_number="SUP-2026-77",
+            reason="purchase_return",
+            is_inter_state=False,
+            line_items=[DebitNoteLineItem(description="Returned material", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key="dn-comp-1",
+    )
+
     with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
-        await business_service.create_debit_note(
-            None,
+        await business_service.review_debit_note(
+            session=object(),
             tenant_id="business-tenant",
             app_key="mitrabooks",
-            created_by="owner-1",
-            payload=DebitNoteCreateRequest(
-                vendor_party_id="vend-1",
-                note_date=date(2026, 6, 20),
-                original_bill_number="SUP-2026-77",
-                reason="purchase_return",
-                is_inter_state=False,
-                line_items=[DebitNoteLineItem(description="Returned material", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
-            ),
-            idempotency_key="dn-comp-1",
+            debit_note_id=created_doc["debit_note_id"],
+            reviewed_by="admin-1",
+            payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
         )
 
     assert captured["journal_id"] == 1151
-    assert captured["reason"].startswith("Compensation after debit note persistence failure")
+    assert captured["reason"].startswith("Compensation after debit note approval persistence failure")
     assert captured["tenant_id"] == "business-tenant"
     assert captured["app_key"] == "mitrabooks"
     assert captured["accounting_entity_id"] == "primary"
@@ -1777,6 +1816,7 @@ async def test_review_debit_note_updates_approval_state(monkeypatch):
     monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
 
     result = await business_service.review_debit_note(
+        session=None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
         debit_note_id="dn-1",
@@ -1826,7 +1866,7 @@ async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
         "credit_note_id": "cn-1", "credit_note_number": "CN-1",
         "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
         "customer_name": "Acme", "note_date": "2026-06-20", "note_total": "200.00",
-        "status": "posted", "journal_entry_id": 1001, "approval_status": "auto_posted", "approval_required": False,
+        "status": "pending_approval", "approval_status": "pending_approval", "approval_required": True,
         "created_by": "owner-3", "created_at": business_service._now(), "updated_at": business_service._now(),
     }]
     debit_notes = FakeCollection()
@@ -1834,8 +1874,14 @@ async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
         "debit_note_id": "dn-1", "debit_note_number": "DN-1",
         "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
         "vendor_name": "Vendor", "note_date": "2026-06-21", "note_total": "150.00",
-        "status": "posted", "journal_entry_id": 1101, "approval_status": "auto_posted", "approval_required": False,
+        "status": "pending_approval", "approval_status": "pending_approval", "approval_required": True,
         "created_by": "owner-4", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }, {
+        "debit_note_id": "dn-2", "debit_note_number": "DN-2",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "vendor_name": "Vendor", "note_date": "2026-06-22", "note_total": "75.00",
+        "status": "draft", "approval_status": "not_submitted", "approval_required": True,
+        "created_by": "owner-5", "created_at": business_service._now(), "updated_at": business_service._now(),
     }]
 
     def fake_get_collection(name):
@@ -1860,6 +1906,15 @@ async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
     types = {item["document_type"] for item in result["items"]}
     assert "sales_invoice" not in types
     assert {"voucher", "purchase_bill", "credit_note", "debit_note"} <= types
+    assert any(
+        item["document_type"] == "credit_note" and item["status"] == "pending_approval"
+        for item in result["items"]
+    )
+    assert any(
+        item["document_type"] == "debit_note" and item["status"] == "pending_approval"
+        for item in result["items"]
+    )
+    assert all(item["status"] != "draft" for item in result["items"])
     assert all(item["approval_status"] != "approved" for item in result["items"])
 
 
