@@ -1370,6 +1370,147 @@ function caPracticeSummary(rows) {
   };
 }
 
+let lastInvoiceAttachments = [];
+let invoiceAttachmentsLoading = false;
+let lastBillAttachments = [];
+let billAttachmentsLoading = false;
+let caDocumentAttachmentState = {
+  document_id: "",
+  client_name: "",
+  items: [],
+  loading: false,
+};
+
+function buildFrontendApiUrl(path) {
+  const baseUrl = String(getConfiguredApiBaseUrl() || "").trim().replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (baseUrl === "/api" && normalizedPath.startsWith("/api/")) {
+    return normalizedPath;
+  }
+  if (baseUrl.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${baseUrl.slice(0, -4)}${normalizedPath}`;
+  }
+  return `${baseUrl}${normalizedPath}`;
+}
+
+function businessAttachmentPath(ownerType, ownerId, attachmentId = "") {
+  const safeOwnerId = encodeURIComponent(ownerId || "");
+  if (ownerType === "sales_invoice") {
+    return attachmentId
+      ? `/api/v1/business/invoices/${safeOwnerId}/attachments/${encodeURIComponent(attachmentId)}/download`
+      : `/api/v1/business/invoices/${safeOwnerId}/attachments`;
+  }
+  if (ownerType === "purchase_bill") {
+    return attachmentId
+      ? `/api/v1/business/bills/${safeOwnerId}/attachments/${encodeURIComponent(attachmentId)}/download`
+      : `/api/v1/business/bills/${safeOwnerId}/attachments`;
+  }
+  return attachmentId
+    ? `/api/v1/business/ca-documents/${safeOwnerId}/attachments/${encodeURIComponent(attachmentId)}/download`
+    : `/api/v1/business/ca-documents/${safeOwnerId}/attachments`;
+}
+
+async function uploadBusinessAttachmentFiles(ownerType, ownerId, files) {
+  const queue = Array.from(files || []).filter(Boolean);
+  const results = [];
+  for (const file of queue) {
+    const headers = { "X-App-Key": "mitrabooks" };
+    const token = getAccessToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const response = await fetch(buildFrontendApiUrl(businessAttachmentPath(ownerType, ownerId)), {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+      results.push({ ok: response.ok, status: response.status, payload });
+    } catch (error) {
+      results.push({
+        ok: false,
+        status: 0,
+        payload: { detail: error instanceof Error ? error.message : "Attachment upload failed" },
+      });
+    }
+  }
+  return results;
+}
+
+async function listBusinessAttachments(ownerType, ownerId) {
+  return apiRequest("mitrabooks", `${businessAttachmentPath(ownerType, ownerId)}?limit=100`, { method: "GET" });
+}
+
+function attachmentListSummary(items) {
+  return Array.isArray(items) ? `${items.length} file(s)` : "0 file(s)";
+}
+
+function renderBusinessAttachmentPanel({ ownerType, ownerId, items, loading, title, emptyCopy, uploadButtonLabel }) {
+  const safeItems = Array.isArray(items) ? items : [];
+  return `
+    <div class="verification-panel" data-attachment-panel="${escapeHtml(ownerType)}">
+      <div class="preview-heading compact">
+        <div>
+          <h5>${escapeHtml(title)}</h5>
+          <p>${loading ? "Loading attachments…" : `${attachmentListSummary(safeItems)} for this document.`}</p>
+        </div>
+        <div class="invoice-detail-actions">
+          <button class="secondary" type="button" data-business-action="refresh-attachments" data-owner-type="${escapeHtml(ownerType)}" data-owner-id="${escapeHtml(ownerId || "")}">Refresh</button>
+        </div>
+      </div>
+      <div class="ca-document-actions">
+        <input type="file" multiple data-attachment-input data-owner-type="${escapeHtml(ownerType)}" data-owner-id="${escapeHtml(ownerId || "")}">
+        <button type="button" data-business-action="upload-attachments" data-owner-type="${escapeHtml(ownerType)}" data-owner-id="${escapeHtml(ownerId || "")}">${escapeHtml(uploadButtonLabel || "Upload files")}</button>
+      </div>
+      ${safeItems.length ? `
+        <div class="table-preview compact-table erp-table">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${safeItems.map((item) => `
+                <tr>
+                  <td>${escapeHtml(item.file_name || "attachment")}</td>
+                  <td>${escapeHtml(item.content_type || "application/octet-stream")}</td>
+                  <td>${escapeHtml(String(item.size_bytes || 0))} bytes</td>
+                  <td>${escapeHtml(String(item.uploaded_at || "").slice(0, 10) || "-")}</td>
+                  <td>
+                    <button
+                      class="secondary"
+                      type="button"
+                      data-business-action="download-attachment"
+                      data-owner-type="${escapeHtml(ownerType)}"
+                      data-owner-id="${escapeHtml(ownerId || "")}"
+                      data-attachment-id="${escapeHtml(item.attachment_id || "")}"
+                      data-file-name="${escapeHtml(item.file_name || "attachment")}"
+                    >Download</button>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="empty-state compact">
+          <strong>No attachments yet</strong>
+          <span>${escapeHtml(emptyCopy)}</span>
+        </div>
+      `}
+    </div>
+  `;
+}
+
 function renderCaPracticeFilters() {
   return `
     <form class="ca-practice-filter-panel" data-ca-filter-form>
@@ -1465,7 +1606,7 @@ function renderCaDocumentTable(rows) {
     return `
       <div class="empty-state">
         <strong>No CA document metadata yet</strong>
-        <span>Add a client document record. File storage is intentionally deferred.</span>
+        <span>Add a client document record and upload supporting files into the tenant-scoped review queue.</span>
       </div>
     `;
   }
@@ -1492,7 +1633,7 @@ function renderCaDocumentTable(rows) {
               <tr>
                 <td>
                   <strong>${escapeHtml(row.client_name || "-")}</strong>
-                  <span class="row-subtext">${escapeHtml(row.original_file_name || "metadata only")}</span>
+                  <span class="row-subtext">${escapeHtml(row.original_file_name || "No file uploaded")}</span>
                 </td>
                 <td>${escapeHtml(row.document_type || "-")}</td>
                 <td>${escapeHtml(row.period || "-")}</td>
@@ -1511,15 +1652,24 @@ function renderCaDocumentTable(rows) {
                 </td>
                 <td>${escapeHtml(row.posting_reference || "-")}</td>
                 <td>
-                  ${nextStatus ? `
+                  <div class="invoice-detail-actions">
                     <button
                       class="secondary"
                       type="button"
-                      data-business-action="ca-doc-status"
+                      data-business-action="ca-doc-files"
                       data-document-id="${escapeHtml(row.document_id || "")}"
-                      data-status="${escapeHtml(nextStatus)}"
-                    >${escapeHtml(caDocumentStatusLabel(nextStatus))}</button>
-                  ` : `<button class="secondary" type="button" disabled>Posted</button>`}
+                      data-client-name="${escapeHtml(row.client_name || "")}"
+                    >Files</button>
+                    ${nextStatus ? `
+                      <button
+                        class="secondary"
+                        type="button"
+                        data-business-action="ca-doc-status"
+                        data-document-id="${escapeHtml(row.document_id || "")}"
+                        data-status="${escapeHtml(nextStatus)}"
+                      >${escapeHtml(caDocumentStatusLabel(nextStatus))}</button>
+                    ` : `<button class="secondary" type="button" disabled>Posted</button>`}
+                  </div>
                 </td>
               </tr>
             `;
@@ -1595,11 +1745,15 @@ function renderCaDocumentIntake(documentIntake) {
             </label>
             <label>
               <span>Original file name</span>
-              <input name="original_file_name" type="text" maxlength="240" placeholder="metadata only, no upload yet">
+              <input name="original_file_name" type="text" maxlength="240" placeholder="Optional override for the first uploaded file">
             </label>
             <label>
               <span>Notes</span>
               <input name="notes" type="text" maxlength="500" placeholder="Review notes or client instruction">
+            </label>
+            <label>
+              <span>Attachments</span>
+              <input name="ca_attachments" type="file" multiple>
             </label>
             <label class="ca-checkbox-field">
               <input name="client_access_enabled" type="checkbox" value="true">
@@ -1611,12 +1765,6 @@ function renderCaDocumentIntake(documentIntake) {
             <button class="secondary" type="button" data-business-action="ca-doc-refresh">Refresh</button>
           </div>
         </form>
-        <label class="ca-upload-placeholder" aria-disabled="true">
-          <span>Upload placeholder</span>
-          <strong>File storage deferred</strong>
-          <small>Only document metadata is saved in this phase.</small>
-          <input type="file" multiple disabled>
-        </label>
       </div>
 
       <div class="ca-document-workflow" aria-label="Document review workflow">
@@ -1639,9 +1787,18 @@ function renderCaDocumentIntake(documentIntake) {
       ${renderCaPracticeOperations(lastCaDocuments)}
 
       ${renderCaDocumentTable(lastCaDocuments)}
+      ${caDocumentAttachmentState.document_id ? renderBusinessAttachmentPanel({
+        ownerType: "ca_document",
+        ownerId: caDocumentAttachmentState.document_id,
+        items: caDocumentAttachmentState.items,
+        loading: caDocumentAttachmentState.loading,
+        title: `CA document files${caDocumentAttachmentState.client_name ? ` · ${caDocumentAttachmentState.client_name}` : ""}`,
+        emptyCopy: "Upload client source documents, statements, or review papers for this CA record.",
+        uploadButtonLabel: "Upload files",
+      }) : ""}
 
       <div class="ca-document-note">
-        Current state: metadata records are tenant-scoped and stored through the MitraBooks business API. Deferred scope: file storage, OCR, voucher posting, and return filing links are not enabled yet.
+        Current state: metadata records and supporting files are tenant-scoped and stored through the MitraBooks business API. Deferred scope: OCR, voucher posting, and return filing links are not enabled yet.
       </div>
     </div>
   `;
@@ -7267,6 +7424,17 @@ async function loadCaPracticeDocuments() {
   lastCaDocumentsResult = result;
   if (result.ok) {
     lastCaDocuments = Array.isArray(result.payload?.items) ? result.payload.items : [];
+    if (caDocumentAttachmentState.document_id) {
+      const selected = lastCaDocuments.find((row) => row.document_id === caDocumentAttachmentState.document_id);
+      if (selected) {
+        caDocumentAttachmentState = {
+          ...caDocumentAttachmentState,
+          client_name: selected.client_name || caDocumentAttachmentState.client_name,
+        };
+      } else {
+        caDocumentAttachmentState = { document_id: "", client_name: "", items: [], loading: false };
+      }
+    }
     if (currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
       if (activeBusinessWorkspace === "ca-access") {
@@ -7285,6 +7453,12 @@ async function loadCaPracticeDocuments() {
   }
   renderJson(apiOutput, { ca_documents: { ok: result.ok, status: result.status, count: lastCaDocuments.length, detail: result.payload?.detail || null } });
   return result;
+}
+
+function rerenderCaPracticeIfActive() {
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "ca-access") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
 }
 
 async function loadCaAccessUsers() {
@@ -7307,6 +7481,7 @@ async function loadCaAccessUsers() {
 
 async function createCaPracticeDocument(form) {
   const formData = new FormData(form);
+  const selectedFiles = Array.from(form.querySelector("[name='ca_attachments']")?.files || []);
   const payload = {
     client_name: String(formData.get("client_name") || "").trim(),
     document_type: String(formData.get("document_type") || "").trim(),
@@ -7317,7 +7492,7 @@ async function createCaPracticeDocument(form) {
     due_date: String(formData.get("due_date") || "").trim() || null,
     compliance_area: String(formData.get("compliance_area") || "").trim() || null,
     client_access_enabled: formData.get("client_access_enabled") === "true",
-    original_file_name: String(formData.get("original_file_name") || "").trim() || null,
+    original_file_name: String(formData.get("original_file_name") || "").trim() || selectedFiles[0]?.name || null,
     notes: String(formData.get("notes") || "").trim() || null,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/ca-documents", {
@@ -7325,13 +7500,67 @@ async function createCaPracticeDocument(form) {
     body: JSON.stringify(payload),
   });
   if (result.ok) {
+    const documentId = result.payload?.document_id || "";
+    let uploadResults = [];
+    if (documentId && selectedFiles.length) {
+      uploadResults = await uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles);
+    }
     form.reset();
-    setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} is now in the CA review queue.`);
+    const successCount = uploadResults.filter((item) => item.ok).length;
+    const failureCount = uploadResults.length - successCount;
+    if (!uploadResults.length) {
+      setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} is now in the CA review queue.`);
+    } else if (failureCount === 0) {
+      setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} was created with ${successCount} attachment(s).`);
+    } else if (successCount > 0) {
+      setLoginStatus("warn", "Document added with partial file upload", `${successCount} attachment(s) uploaded and ${failureCount} failed. Refresh the file panel for details.`);
+    } else {
+      setLoginStatus("warn", "Document added but files failed", `${result.payload?.client_name || "Client"} was created, but the attachment upload failed.`);
+    }
+    if (documentId) {
+      caDocumentAttachmentState = {
+        document_id: documentId,
+        client_name: result.payload?.client_name || payload.client_name,
+        items: [],
+        loading: false,
+      };
+    }
     await loadCaPracticeDocuments();
+    if (documentId) {
+      await loadCaDocumentAttachments(documentId, result.payload?.client_name || payload.client_name);
+    }
   } else {
-    setLoginStatus("danger", "Document metadata failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
+    setLoginStatus("danger", "Document create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
   }
   renderJson(apiOutput, { create_ca_document: result });
+}
+
+async function loadCaDocumentAttachments(documentId, clientName = "") {
+  if (!documentId) {
+    caDocumentAttachmentState = { document_id: "", client_name: "", items: [], loading: false };
+    rerenderCaPracticeIfActive();
+    return { ok: false, status: 0, payload: { detail: "Missing document id." } };
+  }
+  caDocumentAttachmentState = {
+    document_id: documentId,
+    client_name: clientName || caDocumentAttachmentState.client_name,
+    items: caDocumentAttachmentState.document_id === documentId ? caDocumentAttachmentState.items : [],
+    loading: true,
+  };
+  rerenderCaPracticeIfActive();
+  const result = await listBusinessAttachments("ca_document", documentId);
+  caDocumentAttachmentState = {
+    document_id: documentId,
+    client_name: clientName || caDocumentAttachmentState.client_name,
+    items: result.ok ? (Array.isArray(result.payload?.items) ? result.payload.items : []) : [],
+    loading: false,
+  };
+  if (!result.ok) {
+    setLoginStatus("warn", "Unable to load CA document files", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  rerenderCaPracticeIfActive();
+  renderJson(apiOutput, { ca_document_attachments: { ok: result.ok, status: result.status, count: caDocumentAttachmentState.items.length } });
+  return result;
 }
 
 async function updateCaPracticeDocumentStatus(documentId, status) {
@@ -11492,16 +11721,40 @@ async function downloadInvoicePdf(invoiceId, invoiceNumber) {
 }
 
 async function openInvoiceDetail(invoiceId) {
+  invoiceAttachmentsLoading = true;
+  lastInvoiceAttachments = [];
   const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}`, { method: "GET" });
   if (result.ok) {
     lastInvoiceDetail = result.payload;
     lastEinvoiceView = null;
     loadEinvoiceView(invoiceId);  // async — the section fills in when it lands
     setBusinessSalesView("detail");
+    await loadInvoiceAttachments(invoiceId);
   } else {
+    invoiceAttachmentsLoading = false;
     setLoginStatus("danger", "Unable to load invoice", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { invoice_detail: { ok: result.ok, status: result.status } });
+}
+
+async function loadInvoiceAttachments(invoiceId) {
+  if (!invoiceId) {
+    lastInvoiceAttachments = [];
+    invoiceAttachmentsLoading = false;
+    rerenderSalesIfActive();
+    return { ok: false, status: 0, payload: { detail: "Missing invoice id." } };
+  }
+  invoiceAttachmentsLoading = true;
+  rerenderSalesIfActive();
+  const result = await listBusinessAttachments("sales_invoice", invoiceId);
+  lastInvoiceAttachments = result.ok ? (Array.isArray(result.payload?.items) ? result.payload.items : []) : [];
+  invoiceAttachmentsLoading = false;
+  if (!result.ok) {
+    setLoginStatus("warn", "Unable to load invoice files", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  rerenderSalesIfActive();
+  renderJson(apiOutput, { invoice_attachments: { ok: result.ok, status: result.status, count: lastInvoiceAttachments.length } });
+  return result;
 }
 
 async function cancelInvoice(invoiceId, reversalDate) {
@@ -11780,6 +12033,15 @@ function renderInvoiceDetail() {
       </div>
       ${inv.collectee_pan_missing ? `<p class="muted">⚠ Customer PAN missing — section 206AA prescribes a higher TCS rate. Capture the PAN on the party record.</p>` : ""}
       ${renderEinvoiceSection(inv)}
+      ${renderBusinessAttachmentPanel({
+        ownerType: "sales_invoice",
+        ownerId: inv.invoice_id || "",
+        items: lastInvoiceAttachments,
+        loading: invoiceAttachmentsLoading,
+        title: "Invoice attachments",
+        emptyCopy: "Upload supporting sales documents, signed copies, or customer references for this invoice.",
+        uploadButtonLabel: "Upload invoice files",
+      })}
       ${inv.notes ? `<p class="muted">${escapeHtml(inv.notes)}</p>` : ""}
       ${String(inv.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${inv.cancel_reason ? `: ${escapeHtml(inv.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(inv.reversal_journal_entry_id || "")} posted.</p>` : ""}
     </div>
@@ -12185,14 +12447,38 @@ async function submitBill() {
 }
 
 async function openBillDetail(billId) {
+  billAttachmentsLoading = true;
+  lastBillAttachments = [];
   const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}`, { method: "GET" });
   if (result.ok) {
     lastBillDetail = result.payload;
     setBusinessPurchaseView("detail");
+    await loadBillAttachments(billId);
   } else {
+    billAttachmentsLoading = false;
     setLoginStatus("danger", "Unable to load bill", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { bill_detail: { ok: result.ok, status: result.status } });
+}
+
+async function loadBillAttachments(billId) {
+  if (!billId) {
+    lastBillAttachments = [];
+    billAttachmentsLoading = false;
+    rerenderPurchaseIfActive();
+    return { ok: false, status: 0, payload: { detail: "Missing bill id." } };
+  }
+  billAttachmentsLoading = true;
+  rerenderPurchaseIfActive();
+  const result = await listBusinessAttachments("purchase_bill", billId);
+  lastBillAttachments = result.ok ? (Array.isArray(result.payload?.items) ? result.payload.items : []) : [];
+  billAttachmentsLoading = false;
+  if (!result.ok) {
+    setLoginStatus("warn", "Unable to load bill files", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  rerenderPurchaseIfActive();
+  renderJson(apiOutput, { bill_attachments: { ok: result.ok, status: result.status, count: lastBillAttachments.length } });
+  return result;
 }
 
 async function cancelBill(billId, reversalDate) {
@@ -12430,6 +12716,15 @@ function renderBillDetail() {
         ${(b.is_reverse_charge || Number(b.tds_amount || 0) > 0) ? `
         <div class="invoice-grand"><span>Net payable to vendor</span><strong>${formatCurrency(b.net_payable || b.bill_total || 0)}</strong></div>` : ""}
       </div>
+      ${renderBusinessAttachmentPanel({
+        ownerType: "purchase_bill",
+        ownerId: b.bill_id || "",
+        items: lastBillAttachments,
+        loading: billAttachmentsLoading,
+        title: "Bill attachments",
+        emptyCopy: "Upload supplier scans, supporting bills, or compliance evidence for this purchase bill.",
+        uploadButtonLabel: "Upload bill files",
+      })}
       ${b.deductee_pan_missing ? `<p class="muted">⚠ Vendor PAN missing — section 206AA prescribes deduction at 20%. Capture the PAN on the party record.</p>` : ""}
       ${b.notes ? `<p class="muted">${escapeHtml(b.notes)}</p>` : ""}
       ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
@@ -17028,6 +17323,11 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "ca-doc-clear-filters") {
     caPracticeFilters = { status: "", client_name: "", assigned_to: "", priority: "" };
     loadCaPracticeDocuments();
+  } else if (businessAction === "ca-doc-files") {
+    loadCaDocumentAttachments(
+      button.getAttribute("data-document-id") || "",
+      button.getAttribute("data-client-name") || "",
+    );
   } else if (businessAction === "refresh-financial-health") {
     loadFinancialHealth();
   } else if (businessAction === "ca-doc-status") {
@@ -17035,6 +17335,62 @@ dashboardPreview.addEventListener("click", async (event) => {
       button.getAttribute("data-document-id") || "",
       button.getAttribute("data-status") || "",
     );
+  } else if (businessAction === "refresh-attachments") {
+    const ownerType = button.getAttribute("data-owner-type") || "";
+    const ownerId = button.getAttribute("data-owner-id") || "";
+    if (ownerType === "sales_invoice") {
+      loadInvoiceAttachments(ownerId);
+    } else if (ownerType === "purchase_bill") {
+      loadBillAttachments(ownerId);
+    } else {
+      loadCaDocumentAttachments(ownerId, caDocumentAttachmentState.client_name);
+    }
+  } else if (businessAction === "upload-attachments") {
+    const ownerType = button.getAttribute("data-owner-type") || "";
+    const ownerId = button.getAttribute("data-owner-id") || "";
+    const panel = button.closest("[data-attachment-panel]");
+    const input = panel?.querySelector("[data-attachment-input]");
+    const files = Array.from(input?.files || []);
+    if (!ownerType || !ownerId) {
+      setLoginStatus("warn", "Attachment target missing", "Refresh the document and try again.");
+      return;
+    }
+    if (!files.length) {
+      setLoginStatus("warn", "Choose files first", "Select one or more files before uploading.");
+      return;
+    }
+    button.disabled = true;
+    const results = await uploadBusinessAttachmentFiles(ownerType, ownerId, files);
+    button.disabled = false;
+    if (input) {
+      input.value = "";
+    }
+    const successCount = results.filter((item) => item.ok).length;
+    const failureCount = results.length - successCount;
+    if (ownerType === "sales_invoice") {
+      await loadInvoiceAttachments(ownerId);
+    } else if (ownerType === "purchase_bill") {
+      await loadBillAttachments(ownerId);
+    } else {
+      await loadCaDocumentAttachments(ownerId, caDocumentAttachmentState.client_name);
+    }
+    if (failureCount === 0) {
+      setLoginStatus("ok", "Attachments uploaded", `${successCount} file(s) uploaded successfully.`);
+    } else if (successCount > 0) {
+      setLoginStatus("warn", "Attachment upload partially failed", `${successCount} file(s) uploaded and ${failureCount} failed.`);
+    } else {
+      setLoginStatus("danger", "Attachment upload failed", statusDetailText(results[0]?.payload?.detail) || "No files were uploaded.");
+    }
+  } else if (businessAction === "download-attachment") {
+    const ownerType = button.getAttribute("data-owner-type") || "";
+    const ownerId = button.getAttribute("data-owner-id") || "";
+    const attachmentId = button.getAttribute("data-attachment-id") || "";
+    const fileName = button.getAttribute("data-file-name") || "attachment";
+    if (!ownerType || !ownerId || !attachmentId) {
+      setLoginStatus("warn", "Attachment missing", "Refresh the document and try the download again.");
+      return;
+    }
+    downloadApiFile("mitrabooks", businessAttachmentPath(ownerType, ownerId, attachmentId), fileName);
   } else if (businessAction === "widget-collapse") {
     toggleWidgetCollapse(button.getAttribute("data-widget-id") || "");
   } else if (businessAction === "open-widget-settings") {

@@ -403,7 +403,7 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
     assert "original_voucher_id" not in reverse_block
 
 
-def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
+def test_ca_practice_documents_use_attachment_api_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     start = app_source.index("async function loadCaPracticeDocuments")
     end = app_source.index("async function updateBusinessParty", start)
@@ -419,12 +419,20 @@ def test_ca_practice_documents_use_metadata_api_without_file_upload() -> None:
     assert 'module_key: "ca_access"' in app_source
     nav_start = app_source.index('businessWorkspace: "ca-access"')
     assert 'enabled: true' in app_source[nav_start:nav_start + 220]
-    assert "File storage deferred" in app_source
-    assert 'type="file" multiple disabled' in app_source
     assert "data-ca-document-form" in app_source
     assert "data-ca-filter-form" in app_source
+    assert 'name="ca_attachments" type="file" multiple' in app_source
+    assert 'data-business-action="ca-doc-files"' in app_source
+    assert 'data-business-action="upload-attachments"' in app_source
+    assert 'data-business-action="download-attachment"' in app_source
+    assert 'data-business-action="refresh-attachments"' in app_source
     assert "client_owner" in ca_block
     assert "client_access_enabled" in ca_block
+    assert 'uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles)' in ca_block
+    assert 'listBusinessAttachments("ca_document", documentId)' in ca_block
+    assert '/api/v1/business/ca-documents/${safeOwnerId}/attachments' in app_source
+    assert '/api/v1/business/invoices/${safeOwnerId}/attachments' in app_source
+    assert '/api/v1/business/bills/${safeOwnerId}/attachments' in app_source
     assert "renderCaPracticeOperations" in app_source
     assert 'subtitle: "Client document workflow"' in app_source
     assert 'return renderCaPracticePortalWorkspace();' in app_source
