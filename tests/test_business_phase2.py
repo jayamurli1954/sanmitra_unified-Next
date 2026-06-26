@@ -2306,6 +2306,186 @@ def test_posted_output_guard_rejects_unposted_bill_document():
 
 
 @pytest.mark.asyncio
+async def test_sales_invoice_attachment_upload_list_and_download_are_tenant_scoped(monkeypatch, tmp_path):
+    invoices = FakeCollection()
+    attachments = FakeCollection()
+    invoices.docs = [
+        {
+            "invoice_id": "inv-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "invoice_number": "INV-1",
+            "status": "draft",
+        }
+    ]
+    audit_events = []
+
+    def fake_get_collection(name):
+        return {
+            business_service.SALES_INVOICES_COLLECTION: invoices,
+            business_service.BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION: attachments,
+        }[name]
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+    monkeypatch.setattr(business_service, "BUSINESS_ATTACHMENT_STORAGE_DIR", tmp_path / "business-attachments")
+
+    created = await business_service.create_business_document_attachment(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        owner_type="sales_invoice",
+        owner_id="inv-1",
+        uploaded_by="owner-1",
+        file_name="invoice-support.pdf",
+        content_type="application/pdf",
+        payload=b"%PDF-test",
+    )
+
+    attachments.docs.append(
+        {
+            **attachments.docs[0],
+            "attachment_id": "other-tenant-attachment",
+            "tenant_id": "other-tenant",
+            "owner_id": "inv-2",
+        }
+    )
+
+    listed = await business_service.list_business_document_attachments(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        owner_type="sales_invoice",
+        owner_id="inv-1",
+    )
+    downloaded = await business_service.download_business_document_attachment(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        owner_type="sales_invoice",
+        owner_id="inv-1",
+        attachment_id=created["attachment_id"],
+        downloaded_by="owner-2",
+    )
+
+    assert created["owner_type"] == "sales_invoice"
+    assert created["file_name"] == "invoice-support.pdf"
+    assert created["content_type"] == "application/pdf"
+    assert listed["total"] == 1
+    assert listed["items"][0]["attachment_id"] == created["attachment_id"]
+    assert downloaded["payload"] == b"%PDF-test"
+    assert audit_events[0]["action"] == "business_document_attachment_uploaded"
+    assert audit_events[-1]["action"] == "business_document_attachment_downloaded"
+
+
+@pytest.mark.asyncio
+async def test_purchase_bill_attachment_validates_owner_and_file_type(monkeypatch, tmp_path):
+    bills = FakeCollection()
+    attachments = FakeCollection()
+
+    def fake_get_collection(name):
+        return {
+            business_service.PURCHASE_BILLS_COLLECTION: bills,
+            business_service.BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION: attachments,
+        }[name]
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "BUSINESS_ATTACHMENT_STORAGE_DIR", tmp_path / "business-attachments")
+
+    with pytest.raises(business_service.AccountingNotFoundError, match="Purchase bill not found"):
+        await business_service.create_business_document_attachment(
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            owner_type="purchase_bill",
+            owner_id="missing-bill",
+            uploaded_by="owner-1",
+            file_name="support.pdf",
+            content_type="application/pdf",
+            payload=b"%PDF-test",
+        )
+
+    bills.docs.append(
+        {
+            "bill_id": "bill-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "bill_number": "SUP-1",
+            "status": "draft",
+        }
+    )
+
+    with pytest.raises(business_service.AccountingValidationError, match="Unsupported attachment type"):
+        await business_service.create_business_document_attachment(
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            owner_type="purchase_bill",
+            owner_id="bill-1",
+            uploaded_by="owner-1",
+            file_name="support.exe",
+            content_type="application/x-msdownload",
+            payload=b"MZ",
+        )
+
+
+@pytest.mark.asyncio
+async def test_ca_document_attachment_download_requires_matching_tenant_scope(monkeypatch, tmp_path):
+    ca_documents = FakeCollection()
+    attachments = FakeCollection()
+    ca_documents.docs = [
+        {
+            "document_id": "doc-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Jayam Publications",
+            "document_type": "GST working",
+            "period": "May 2026",
+            "status": "uploaded",
+        }
+    ]
+
+    def fake_get_collection(name):
+        return {
+            business_service.CA_DOCUMENTS_COLLECTION: ca_documents,
+            business_service.BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION: attachments,
+        }[name]
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_kwargs: _async_none())
+    monkeypatch.setattr(business_service, "BUSINESS_ATTACHMENT_STORAGE_DIR", tmp_path / "business-attachments")
+
+    created = await business_service.create_business_document_attachment(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        owner_type="ca_document",
+        owner_id="doc-1",
+        uploaded_by="reviewer-1",
+        file_name="gst-working.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        payload=b"PK\x03\x04",
+    )
+
+    with pytest.raises(business_service.AccountingNotFoundError):
+        await business_service.download_business_document_attachment(
+            tenant_id="other-tenant",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            owner_type="ca_document",
+            owner_id="doc-1",
+            attachment_id=created["attachment_id"],
+            downloaded_by="reviewer-2",
+        )
+
+
+@pytest.mark.asyncio
 async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
     documents = FakeCollection()
     audit_events = []

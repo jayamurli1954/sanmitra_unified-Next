@@ -10,6 +10,7 @@ VoucherType = Literal["payment", "receipt", "contra", "journal"]
 CaDocumentStatus = Literal["uploaded", "under_review", "query_raised", "reviewed", "posted"]
 CaDocumentPriority = Literal["low", "normal", "high", "urgent"]
 ApprovalStatus = Literal["auto_posted", "not_submitted", "pending_approval", "approved", "rejected"]
+BusinessAttachmentOwnerType = Literal["sales_invoice", "purchase_bill", "ca_document"]
 
 
 class GstHeadAmounts(BaseModel):
@@ -196,6 +197,25 @@ class CaDocumentResponse(BaseModel):
 
 class CaDocumentListResponse(BaseModel):
     items: list[CaDocumentResponse]
+    total: int
+
+
+class BusinessDocumentAttachmentResponse(BaseModel):
+    attachment_id: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    owner_type: BusinessAttachmentOwnerType
+    owner_id: str
+    file_name: str
+    content_type: str
+    size_bytes: int
+    uploaded_by: str
+    uploaded_at: datetime
+
+
+class BusinessDocumentAttachmentListResponse(BaseModel):
+    items: list[BusinessDocumentAttachmentResponse]
     total: int
 
 
