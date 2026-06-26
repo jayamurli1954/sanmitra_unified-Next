@@ -9,6 +9,7 @@ PartyType = Literal["customer", "vendor", "both"]
 VoucherType = Literal["payment", "receipt", "contra", "journal"]
 CaDocumentStatus = Literal["uploaded", "under_review", "query_raised", "reviewed", "posted"]
 CaDocumentPriority = Literal["low", "normal", "high", "urgent"]
+ApprovalStatus = Literal["auto_posted", "not_submitted", "pending_approval", "approved", "rejected"]
 
 
 class GstHeadAmounts(BaseModel):
@@ -120,6 +121,14 @@ class TypedVoucherResponse(BaseModel):
     reversal_reason: str | None = None
     reversed_at: datetime | None = None
     status: str
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_submitted_at: datetime | None = None
+    approval_submitted_by: str | None = None
+    approval_decided_at: datetime | None = None
+    approval_decided_by: str | None = None
+    approval_notes: str | None = None
+    rejection_reason: str | None = None
     created: bool
     created_by: str
     created_at: datetime
@@ -222,7 +231,7 @@ class CaRevokeResponse(BaseModel):
     message: str
 
 
-SalesInvoiceStatus = Literal["posted", "cancelled"]
+SalesInvoiceStatus = Literal["draft", "pending_approval", "posted", "rejected", "cancelled"]
 
 
 # Supply-type classification for GST returns. "taxable" is the default;
@@ -266,12 +275,20 @@ class SalesInvoiceCreateRequest(BaseModel):
     # Accounting dimensions (tags for reporting; no ledger impact).
     cost_centre_id: str | None = Field(default=None, max_length=80)
     project_id: str | None = Field(default=None, max_length=80)
+    save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
 class SalesInvoiceCancelRequest(BaseModel):
     reason: str = Field(default="Cancellation", min_length=1, max_length=240)
     cancel_date: date | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class ApprovalReviewRequest(BaseModel):
+    approve: bool = True
+    notes: str | None = Field(default=None, max_length=500)
+    rejection_reason: str | None = Field(default=None, max_length=240)
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -313,6 +330,14 @@ class SalesInvoiceResponse(BaseModel):
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_submitted_at: datetime | None = None
+    approval_submitted_by: str | None = None
+    approval_decided_at: datetime | None = None
+    approval_decided_by: str | None = None
+    approval_notes: str | None = None
+    rejection_reason: str | None = None
     cancel_reason: str | None = None
     cancelled_at: datetime | None = None
     created: bool = False
@@ -412,7 +437,7 @@ class InvoiceSettingsResponse(InvoiceSettings):
 
 # ---- Purchase Bills (vendor invoices, with Input GST / ITC) ----
 
-PurchaseBillStatus = Literal["posted", "cancelled"]
+PurchaseBillStatus = Literal["draft", "pending_approval", "posted", "rejected", "cancelled"]
 
 
 class PurchaseBillLineItem(BaseModel):
@@ -452,6 +477,7 @@ class PurchaseBillCreateRequest(BaseModel):
     # Accounting dimensions (tags for reporting; no ledger impact).
     cost_centre_id: str | None = Field(default=None, max_length=80)
     project_id: str | None = Field(default=None, max_length=80)
+    save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -498,6 +524,14 @@ class PurchaseBillResponse(BaseModel):
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_submitted_at: datetime | None = None
+    approval_submitted_by: str | None = None
+    approval_decided_at: datetime | None = None
+    approval_decided_by: str | None = None
+    approval_notes: str | None = None
+    rejection_reason: str | None = None
     cancel_reason: str | None = None
     cancelled_at: datetime | None = None
     # Payment tracking (drives GST Rule 37 180-day test)
@@ -619,6 +653,14 @@ class CreditNoteResponse(BaseModel):
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_submitted_at: datetime | None = None
+    approval_submitted_by: str | None = None
+    approval_decided_at: datetime | None = None
+    approval_decided_by: str | None = None
+    approval_notes: str | None = None
+    rejection_reason: str | None = None
     cancel_reason: str | None = None
     cancelled_at: datetime | None = None
     created: bool = False
@@ -701,6 +743,14 @@ class DebitNoteResponse(BaseModel):
     status: str
     journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_submitted_at: datetime | None = None
+    approval_submitted_by: str | None = None
+    approval_decided_at: datetime | None = None
+    approval_decided_by: str | None = None
+    approval_notes: str | None = None
+    rejection_reason: str | None = None
     cancel_reason: str | None = None
     cancelled_at: datetime | None = None
     created: bool = False
@@ -711,6 +761,30 @@ class DebitNoteResponse(BaseModel):
 
 class DebitNoteListResponse(BaseModel):
     items: list[DebitNoteResponse]
+    total: int
+
+
+class ApprovalQueueItem(BaseModel):
+    document_type: str
+    document_id: str
+    document_number: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    party_name: str | None = None
+    document_date: date | None = None
+    amount: Decimal | None = None
+    status: str
+    approval_status: ApprovalStatus = "auto_posted"
+    approval_required: bool = False
+    journal_entry_id: int | None = None
+    created_by: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ApprovalQueueResponse(BaseModel):
+    items: list[ApprovalQueueItem]
     total: int
 
 

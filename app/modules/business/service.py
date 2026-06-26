@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
@@ -22,6 +23,7 @@ from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.inventory import validate_item_refs
 from app.modules.business.tds import compute_tcs, compute_tds
 from app.modules.business.schemas import (
+    ApprovalReviewRequest,
     BillPaymentUpdateRequest,
     CaDocumentCreateRequest,
     CaDocumentUpdateRequest,
@@ -57,6 +59,8 @@ CREDIT_NOTES_COLLECTION = "business_credit_notes"
 DEBIT_NOTES_COLLECTION = "business_debit_notes"
 GST_SETTLEMENTS_COLLECTION = "business_gst_settlements"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+
+_logger = logging.getLogger(__name__)
 
 GST_PAYABLE_CODE = "22004"
 
@@ -117,8 +121,21 @@ def _json_safe_doc(doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key != "_id"}
 
 
+def _apply_approval_defaults(result: dict) -> dict:
+    result.setdefault("approval_required", False)
+    result.setdefault("approval_status", "auto_posted")
+    result.setdefault("approval_submitted_at", None)
+    result.setdefault("approval_submitted_by", None)
+    result.setdefault("approval_decided_at", None)
+    result.setdefault("approval_decided_by", None)
+    result.setdefault("approval_notes", None)
+    result.setdefault("rejection_reason", None)
+    return result
+
+
 def _voucher_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
+    _apply_approval_defaults(result)
     result.setdefault("created", created)
     return result
 
@@ -171,6 +188,102 @@ async def _audit_business_event(
         # Audit writes are best-effort here because accounting/domain writes may
         # already be committed by the time this hook runs.
         pass
+
+
+async def _reverse_after_domain_persistence_failure(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    created_by: str,
+    journal_entry_id: int,
+    document_label: str,
+    document_id: str,
+    reversal_reason: str,
+    reversal_idempotency_key: str,
+) -> None:
+    try:
+        await reverse_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=created_by,
+            journal_id=int(journal_entry_id),
+            reason=reversal_reason,
+            idempotency_key=reversal_idempotency_key,
+        )
+    except Exception as reversal_exc:
+        _logger.exception(
+            "Business compensation reversal failed for %s %s after persistence failure",
+            document_label,
+            document_id,
+        )
+        raise AccountingValidationError(
+            f"{document_label} persistence failed after journal posting, and automatic reversal also failed"
+        ) from reversal_exc
+
+
+async def _compensate_gst_settlement_failure(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    created_by: str,
+    period: str,
+    journal_entry_id: int,
+    unlock_period: bool,
+    failure_label: str,
+) -> None:
+    unlock_failed = False
+    reverse_failed = False
+
+    if unlock_period:
+        try:
+            await set_gst_period_lock(
+                tenant_id=tenant_id,
+                app_key=app_key,
+                updated_by=created_by,
+                payload=GstPeriodLockUpdateRequest(
+                    period=period,
+                    locked=False,
+                    note="Automatic unlock after GST settlement persistence failure",
+                    accounting_entity_id=accounting_entity_id,
+                ),
+            )
+        except Exception:
+            unlock_failed = True
+            _logger.exception("GST period unlock failed during settlement compensation for %s", period)
+
+    try:
+        await reverse_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=created_by,
+            journal_id=int(journal_entry_id),
+            reason=f"Compensation after GST settlement persistence failure for {period}",
+            idempotency_key=f"gst-settlement-compensate:{tenant_id}:{accounting_entity_id}:{period}:{journal_entry_id}",
+        )
+    except Exception:
+        reverse_failed = True
+        _logger.exception("GST settlement journal reversal failed during compensation for %s", period)
+
+    if unlock_failed and reverse_failed:
+        raise AccountingValidationError(
+            f"{failure_label} after GST settlement journal posting, and automatic period unlock plus journal reversal both failed"
+        )
+    if unlock_failed:
+        raise AccountingValidationError(
+            f"{failure_label} after GST settlement journal posting; the accounting entry was automatically reversed, but automatic GST period unlock failed"
+        )
+    if reverse_failed:
+        raise AccountingValidationError(
+            f"{failure_label} after GST settlement journal posting; the GST period compensation ran, but automatic journal reversal failed"
+        )
 
 
 async def _resolve_voucher_account_id(
@@ -691,6 +804,7 @@ async def list_vouchers(
     app_key: str,
     accounting_entity_id: str,
     voucher_type: str | None = None,
+    approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
     del session  # Voucher headers are stored in Mongo; posted accounting rows remain linked by journal_entry_id.
@@ -701,6 +815,8 @@ async def list_vouchers(
     }
     if voucher_type:
         filters["voucher_type"] = voucher_type
+    if approval_status:
+        filters["approval_status"] = approval_status
 
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
@@ -729,6 +845,58 @@ async def get_voucher(
         }
     )
     return _voucher_response_doc(row) if row else None
+
+
+async def review_typed_voucher(
+    *,
+    tenant_id: str,
+    app_key: str,
+    voucher_id: str,
+    reviewed_by: str,
+    payload: ApprovalReviewRequest,
+) -> dict:
+    vouchers = get_collection(VOUCHERS_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "voucher_id": voucher_id,
+    }
+    voucher = await vouchers.find_one(filters)
+    if voucher is None:
+        raise AccountingNotFoundError("Voucher not found")
+    if voucher.get("status") != "posted":
+        raise AccountingValidationError("Only posted vouchers can be reviewed for approval")
+
+    old_value = _voucher_response_doc(voucher)
+    approval_status = "approved" if payload.approve else "rejected"
+    patch = {
+        "approval_required": True,
+        "approval_status": approval_status,
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": payload.notes,
+        "rejection_reason": None if payload.approve else (payload.rejection_reason or "Rejected during manual review"),
+        "updated_at": _now(),
+    }
+    if voucher.get("approval_submitted_at") is None:
+        patch["approval_submitted_at"] = voucher.get("created_at")
+        patch["approval_submitted_by"] = voucher.get("created_by")
+
+    await vouchers.update_one(filters, {"$set": patch})
+    voucher.update(patch)
+    result = _voucher_response_doc(voucher)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_voucher_reviewed",
+        entity_type="business_voucher",
+        entity_id=voucher_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
 
 
 async def reverse_typed_voucher(
@@ -877,6 +1045,8 @@ async def post_typed_voucher(
         "description": payload.description,
         "reference": reference,
         "status": "posting",
+        "approval_required": False,
+        "approval_status": "auto_posted",
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -917,10 +1087,27 @@ async def post_typed_voucher(
         raise
 
     update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    await vouchers.update_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "voucher_id": voucher_id},
-        {"$set": update},
-    )
+    try:
+        await vouchers.update_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "voucher_id": voucher_id},
+            {"$set": update},
+        )
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Business voucher",
+            document_id=voucher_id,
+            reversal_reason=f"Compensation after business voucher persistence failure for {voucher_number}",
+            reversal_idempotency_key=f"business-voucher-compensate:{voucher_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Business voucher persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
     doc.update(update)
     doc["created"] = created
     result = _json_safe_doc(doc)
@@ -945,6 +1132,7 @@ def _q2(value) -> Decimal:
 
 def _invoice_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
+    _apply_approval_defaults(result)
     result.setdefault("created", created)
     return result
 
@@ -1248,6 +1436,7 @@ async def list_sales_invoices(
     app_key: str,
     accounting_entity_id: str,
     status: str | None = None,
+    approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
     filters = {
@@ -1257,6 +1446,8 @@ async def list_sales_invoices(
     }
     if status:
         filters["status"] = status
+    if approval_status:
+        filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
         await get_collection(SALES_INVOICES_COLLECTION)
@@ -1284,6 +1475,223 @@ async def get_sales_invoice(
         }
     )
     return _invoice_response_doc(row) if row else None
+
+
+async def review_sales_invoice(
+    *,
+    session: AsyncSession | None,
+    tenant_id: str,
+    app_key: str,
+    invoice_id: str,
+    reviewed_by: str,
+    payload: ApprovalReviewRequest,
+) -> dict:
+    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "invoice_id": invoice_id,
+    }
+    invoice = await invoices.find_one(filters)
+    if invoice is None:
+        raise AccountingNotFoundError("Sales invoice not found")
+    old_value = _invoice_response_doc(invoice)
+    current_status = str(invoice.get("status") or "").strip().lower()
+    if current_status in {"draft", "pending_approval"}:
+        if current_status == "draft":
+            raise AccountingValidationError("Only submitted sales invoices can be approved or rejected")
+        if payload.approve:
+            return await _approve_sales_invoice_document(
+                session=session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                reviewed_by=reviewed_by,
+                invoice=invoice,
+                old_value=old_value,
+                approval_notes=payload.notes,
+            )
+        approval_status = "rejected"
+        patch = {
+            "status": "rejected",
+            "approval_required": True,
+            "approval_status": approval_status,
+            "approval_decided_at": _now(),
+            "approval_decided_by": reviewed_by,
+            "approval_notes": payload.notes,
+            "rejection_reason": payload.rejection_reason or "Rejected during manual review",
+            "updated_at": _now(),
+        }
+        if invoice.get("approval_submitted_at") is None:
+            patch["approval_submitted_at"] = invoice.get("created_at")
+            patch["approval_submitted_by"] = invoice.get("created_by")
+        await invoices.update_one(filters, {"$set": patch})
+        invoice.update(patch)
+        result = _invoice_response_doc(invoice)
+        await _audit_business_event(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            user_id=reviewed_by,
+            action="business_sales_invoice_reviewed",
+            entity_type="business_sales_invoice",
+            entity_id=invoice_id,
+            old_value=old_value,
+            new_value=result,
+        )
+        return result
+    if current_status != "posted":
+        raise AccountingValidationError("Only posted or pending-approval sales invoices can be reviewed")
+
+    approval_status = "approved" if payload.approve else "rejected"
+    patch = {
+        "approval_required": True,
+        "approval_status": approval_status,
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": payload.notes,
+        "rejection_reason": None if payload.approve else (payload.rejection_reason or "Rejected during manual review"),
+        "updated_at": _now(),
+    }
+    if invoice.get("approval_submitted_at") is None:
+        patch["approval_submitted_at"] = invoice.get("created_at")
+        patch["approval_submitted_by"] = invoice.get("created_by")
+
+    await invoices.update_one(filters, {"$set": patch})
+    invoice.update(patch)
+    result = _invoice_response_doc(invoice)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_sales_invoice_reviewed",
+        entity_type="business_sales_invoice",
+        entity_id=invoice_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
+
+
+async def _approve_sales_invoice_document(
+    *,
+    session,
+    tenant_id: str,
+    app_key: str,
+    reviewed_by: str,
+    invoice: dict,
+    old_value: dict,
+    approval_notes: str | None,
+) -> dict:
+    if session is None:
+        raise AccountingValidationError("Approval posting requires an active accounting session")
+    invoice_id = str(invoice.get("invoice_id") or "")
+    invoice_number = str(invoice.get("invoice_number") or invoice_id)
+    accounting_entity_id = str(invoice.get("accounting_entity_id") or "primary")
+    customer_party_id = str(invoice.get("customer_party_id") or "")
+    taxable_total = Decimal(str(invoice.get("taxable_total") or "0"))
+    cgst_total = Decimal(str(invoice.get("cgst_total") or "0"))
+    sgst_total = Decimal(str(invoice.get("sgst_total") or "0"))
+    igst_total = Decimal(str(invoice.get("igst_total") or "0"))
+    grand_total = Decimal(str(invoice.get("grand_total") or invoice.get("invoice_total") or "0"))
+    tcs_amount = Decimal(str(invoice.get("tcs_amount") or "0"))
+    income_account_code = str(invoice.get("income_account_code") or "41001")
+
+    receivable_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        account_id=None, account_code=SALES_RECEIVABLE_CODE, side="receivable",
+    )
+    income_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        account_id=None, account_code=income_account_code, side="income",
+    )
+    journal_lines = [
+        JournalLineIn(account_id=receivable_id, debit=grand_total, credit=Decimal("0"), party_id=customer_party_id),
+        JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
+    ]
+    if tcs_amount > Decimal("0"):
+        tcs_payable_id = await _resolve_voucher_account_id(
+            session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+            account_id=None, account_code=TCS_PAYABLE_CODE, side="TCS payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=tcs_payable_id, debit=Decimal("0"), credit=tcs_amount))
+    for gst_amount, code in ((cgst_total, OUTPUT_CGST_CODE), (sgst_total, OUTPUT_SGST_CODE), (igst_total, OUTPUT_IGST_CODE)):
+        if gst_amount > Decimal("0"):
+            gst_account_id = await _resolve_voucher_account_id(
+                session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+                account_id=None, account_code=code, side="output GST",
+            )
+            journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=Decimal("0"), credit=gst_amount))
+
+    description = f"Sales Invoice {invoice_number} - {invoice.get('customer_name') or customer_party_id}"
+    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    try:
+        journal_entry, created = await post_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            payload=JournalPostRequest(
+                entry_date=date.fromisoformat(str(invoice.get("invoice_date"))[:10]),
+                description=description,
+                reference=invoice_number,
+                source_module="business",
+                source_document_type="sales_invoice",
+                source_document_id=invoice_id,
+                lines=journal_lines,
+            ),
+            idempotency_key=f"sales-invoice:{invoice_id}",
+        )
+    except Exception as exc:
+        raise AccountingValidationError(f"Sales invoice approval posting failed: {exc}") from exc
+
+    patch = {
+        "status": "posted",
+        "journal_entry_id": journal_entry.id,
+        "approval_required": True,
+        "approval_status": "approved",
+        "approval_submitted_at": invoice.get("approval_submitted_at") or invoice.get("created_at"),
+        "approval_submitted_by": invoice.get("approval_submitted_by") or invoice.get("created_by"),
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": approval_notes or "Approved and posted",
+        "rejection_reason": None,
+        "updated_at": _now(),
+    }
+    try:
+        await invoices.update_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "invoice_id": invoice_id},
+            {"$set": patch},
+        )
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Sales invoice",
+            document_id=invoice_id,
+            reversal_reason=f"Compensation after sales invoice approval persistence failure for {invoice_number}",
+            reversal_idempotency_key=f"sales-invoice-approve-compensate:{invoice_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Sales invoice approval persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
+    invoice.update(patch)
+    result = _invoice_response_doc(invoice, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_sales_invoice_reviewed",
+        entity_type="business_sales_invoice",
+        entity_id=invoice_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
 
 
 async def create_sales_invoice(
@@ -1367,58 +1775,6 @@ async def create_sales_invoice(
             raise AccountingValidationError(str(exc))
     grand_total = invoice_total + (tcs_amount or Decimal("0"))
 
-    receivable_id = await _resolve_voucher_account_id(
-        session,
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=payload.accounting_entity_id,
-        account_id=None,
-        account_code=SALES_RECEIVABLE_CODE,
-        side="receivable",
-    )
-    income_id = await _resolve_voucher_account_id(
-        session,
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=payload.accounting_entity_id,
-        account_id=None,
-        account_code=payload.income_account_code,
-        side="income",
-    )
-
-    journal_lines = [
-        JournalLineIn(account_id=receivable_id, debit=grand_total, credit=Decimal("0"), party_id=payload.customer_party_id),
-        JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
-    ]
-    if tcs_amount and tcs_amount > Decimal("0"):
-        # Cr TCS Payable — collected from the customer, owed to the department.
-        tcs_payable_id = await _resolve_voucher_account_id(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            account_id=None,
-            account_code=TCS_PAYABLE_CODE,
-            side="TCS payable",
-        )
-        journal_lines.append(JournalLineIn(account_id=tcs_payable_id, debit=Decimal("0"), credit=tcs_amount))
-    for gst_amount, code in (
-        (cgst_total, OUTPUT_CGST_CODE),
-        (sgst_total, OUTPUT_SGST_CODE),
-        (igst_total, OUTPUT_IGST_CODE),
-    ):
-        if gst_amount > Decimal("0"):
-            gst_account_id = await _resolve_voucher_account_id(
-                session,
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=payload.accounting_entity_id,
-                account_id=None,
-                account_code=code,
-                side="output GST",
-            )
-            journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=Decimal("0"), credit=gst_amount))
-
     invoice_id = str(uuid4())
     numbering = InvoiceSettings(**{k: settings[k] for k in ("field_config", "numbering", "custom_fields", "branding") if k in settings}).numbering
     invoice_number = await _reserve_invoice_number(
@@ -1428,8 +1784,6 @@ async def create_sales_invoice(
         invoice_date=payload.invoice_date,
         numbering=numbering,
     )
-    doc_label = "Bill of Supply" if is_composition else "Sales Invoice"
-    description = f"{doc_label} {invoice_number} - {customer.get('party_name') or payload.customer_party_id}"
     now = _now()
     doc = {
         "invoice_id": invoice_id,
@@ -1456,7 +1810,6 @@ async def create_sales_invoice(
         "igst_total": str(igst_total),
         "gst_total": str(gst_total),
         "invoice_total": str(invoice_total),
-        # TCS collected on top of the invoice value (None section => none).
         "tcs_section": payload.tcs_section,
         "tcs_rate": str(tcs_rate) if tcs_rate is not None else None,
         "tcs_base_amount": str(invoice_total) if payload.tcs_section else None,
@@ -1466,7 +1819,11 @@ async def create_sales_invoice(
         "collectee_pan_missing": bool(payload.tcs_section) and not customer.get("pan"),
         "cost_centre_id": payload.cost_centre_id,
         "project_id": payload.project_id,
-        "status": "posting",
+        "status": "draft" if payload.save_as_draft else "pending_approval",
+        "approval_required": True,
+        "approval_status": "not_submitted" if payload.save_as_draft else "pending_approval",
+        "approval_submitted_at": None if payload.save_as_draft else now,
+        "approval_submitted_by": None if payload.save_as_draft else created_by,
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -1475,41 +1832,12 @@ async def create_sales_invoice(
         doc["idempotency_key"] = idempotency_key
     invoices = get_collection(SALES_INVOICES_COLLECTION)
     await invoices.insert_one(doc)
-
-    try:
-        journal_entry, created = await post_journal_entry(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            created_by=created_by,
-            payload=JournalPostRequest(
-                entry_date=payload.invoice_date,
-                description=description,
-                reference=invoice_number,
-                source_module="business",
-                source_document_type="sales_invoice",
-                source_document_id=invoice_id,
-                lines=journal_lines,
-            ),
-            idempotency_key=idempotency_key or f"sales-invoice:{invoice_id}",
-        )
-    except Exception:
-        await invoices.delete_one({"tenant_id": tenant_id, "app_key": app_key, "invoice_id": invoice_id})
-        raise
-
-    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    await invoices.update_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "invoice_id": invoice_id},
-        {"$set": update},
-    )
-    doc.update(update)
-    result = _invoice_response_doc(doc, created=created)
+    result = _invoice_response_doc(doc, created=True)
     await _audit_business_event(
         tenant_id=tenant_id,
         app_key=app_key,
         user_id=created_by,
-        action="business_sales_invoice_posted",
+        action="business_sales_invoice_created",
         entity_type="business_sales_invoice",
         entity_id=invoice_id,
         new_value=result,
@@ -1598,6 +1926,7 @@ async def cancel_sales_invoice(
 
 def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
+    _apply_approval_defaults(result)
     result.setdefault("created", created)
     # Defaults so bills created before payment / ITC-reversal tracking render cleanly.
     result.setdefault("payment_status", "unpaid")
@@ -1615,6 +1944,7 @@ async def list_purchase_bills(
     app_key: str,
     accounting_entity_id: str,
     status: str | None = None,
+    approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
     filters = {
@@ -1624,6 +1954,8 @@ async def list_purchase_bills(
     }
     if status:
         filters["status"] = status
+    if approval_status:
+        filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
         await get_collection(PURCHASE_BILLS_COLLECTION)
@@ -1651,6 +1983,234 @@ async def get_purchase_bill(
         }
     )
     return _bill_response_doc(row) if row else None
+
+
+async def review_purchase_bill(
+    *,
+    session: AsyncSession | None,
+    tenant_id: str,
+    app_key: str,
+    bill_id: str,
+    reviewed_by: str,
+    payload: ApprovalReviewRequest,
+) -> dict:
+    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "bill_id": bill_id,
+    }
+    bill = await bills.find_one(filters)
+    if bill is None:
+        raise AccountingNotFoundError("Purchase bill not found")
+    old_value = _bill_response_doc(bill)
+    current_status = str(bill.get("status") or "").strip().lower()
+    if current_status in {"draft", "pending_approval"}:
+        if current_status == "draft":
+            raise AccountingValidationError("Only submitted purchase bills can be approved or rejected")
+        if payload.approve:
+            return await _approve_purchase_bill_document(
+                session=session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                reviewed_by=reviewed_by,
+                bill=bill,
+                old_value=old_value,
+                approval_notes=payload.notes,
+            )
+        approval_status = "rejected"
+        patch = {
+            "status": "rejected",
+            "approval_required": True,
+            "approval_status": approval_status,
+            "approval_decided_at": _now(),
+            "approval_decided_by": reviewed_by,
+            "approval_notes": payload.notes,
+            "rejection_reason": payload.rejection_reason or "Rejected during manual review",
+            "updated_at": _now(),
+        }
+        if bill.get("approval_submitted_at") is None:
+            patch["approval_submitted_at"] = bill.get("created_at")
+            patch["approval_submitted_by"] = bill.get("created_by")
+        await bills.update_one(filters, {"$set": patch})
+        bill.update(patch)
+        result = _bill_response_doc(bill)
+        await _audit_business_event(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            user_id=reviewed_by,
+            action="business_purchase_bill_reviewed",
+            entity_type="business_purchase_bill",
+            entity_id=bill_id,
+            old_value=old_value,
+            new_value=result,
+        )
+        return result
+    if current_status != "posted":
+        raise AccountingValidationError("Only posted or pending-approval purchase bills can be reviewed")
+
+    approval_status = "approved" if payload.approve else "rejected"
+    patch = {
+        "approval_required": True,
+        "approval_status": approval_status,
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": payload.notes,
+        "rejection_reason": None if payload.approve else (payload.rejection_reason or "Rejected during manual review"),
+        "updated_at": _now(),
+    }
+    if bill.get("approval_submitted_at") is None:
+        patch["approval_submitted_at"] = bill.get("created_at")
+        patch["approval_submitted_by"] = bill.get("created_by")
+
+    await bills.update_one(filters, {"$set": patch})
+    bill.update(patch)
+    result = _bill_response_doc(bill)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_purchase_bill_reviewed",
+        entity_type="business_purchase_bill",
+        entity_id=bill_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
+
+
+async def _approve_purchase_bill_document(
+    *,
+    session: AsyncSession | None,
+    tenant_id: str,
+    app_key: str,
+    reviewed_by: str,
+    bill: dict,
+    old_value: dict,
+    approval_notes: str | None,
+) -> dict:
+    if session is None:
+        raise AccountingValidationError("Approval posting requires an active accounting session")
+    bill_id = str(bill.get("bill_id") or "")
+    bill_number = str(bill.get("bill_number") or bill_id)
+    accounting_entity_id = str(bill.get("accounting_entity_id") or "primary")
+    taxable_total = Decimal(str(bill.get("taxable_total") or "0"))
+    cgst_total = Decimal(str(bill.get("cgst_total") or "0"))
+    sgst_total = Decimal(str(bill.get("sgst_total") or "0"))
+    igst_total = Decimal(str(bill.get("igst_total") or "0"))
+    gst_total = Decimal(str(bill.get("gst_total") or "0"))
+    bill_total = Decimal(str(bill.get("bill_total") or "0"))
+    tds_amount = Decimal(str(bill.get("tds_amount") or "0"))
+    net_payable = Decimal(str(bill.get("net_payable") or bill_total))
+    is_composition = not bool(bill.get("itc_claimed", True))
+    is_rcm = bool(bill.get("is_reverse_charge"))
+    expense_account_code = str(bill.get("expense_account_code") or "51001")
+    vendor_party_id = str(bill.get("vendor_party_id") or "")
+
+    payable_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        account_id=None, account_code=PURCHASE_PAYABLE_CODE, side="payable",
+    )
+    expense_id = await _resolve_voucher_account_id(
+        session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+        account_id=None, account_code=expense_account_code, side="expense",
+    )
+    if is_composition:
+        journal_lines = [JournalLineIn(account_id=expense_id, debit=bill_total, credit=Decimal("0"))]
+    else:
+        journal_lines = [JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0"))]
+        for gst_amount, code in ((cgst_total, INPUT_CGST_CODE), (sgst_total, INPUT_SGST_CODE), (igst_total, INPUT_IGST_CODE)):
+            if gst_amount > Decimal("0"):
+                input_gst_id = await _resolve_voucher_account_id(
+                    session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+                    account_id=None, account_code=code, side="input GST",
+                )
+                journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
+    if is_rcm and gst_total > Decimal("0"):
+        rcm_payable_id = await _resolve_voucher_account_id(
+            session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+            account_id=None, account_code=RCM_PAYABLE_CODE, side="RCM payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=rcm_payable_id, debit=Decimal("0"), credit=gst_total))
+    if tds_amount > Decimal("0"):
+        tds_payable_id = await _resolve_voucher_account_id(
+            session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
+            account_id=None, account_code=TDS_PAYABLE_CODE, side="TDS payable",
+        )
+        journal_lines.append(JournalLineIn(account_id=tds_payable_id, debit=Decimal("0"), credit=tds_amount))
+    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=net_payable, party_id=vendor_party_id))
+
+    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    description = f"Purchase Bill {bill_number} - {bill.get('vendor_name') or vendor_party_id}"
+    try:
+        journal_entry, created = await post_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            payload=JournalPostRequest(
+                entry_date=date.fromisoformat(str(bill.get("bill_date"))[:10]),
+                description=description,
+                reference=bill_number,
+                source_module="business",
+                source_document_type="purchase_bill",
+                source_document_id=bill_id,
+                lines=journal_lines,
+            ),
+            idempotency_key=f"purchase-bill:{bill_id}",
+        )
+    except Exception as exc:
+        raise AccountingValidationError(f"Purchase bill approval posting failed: {exc}") from exc
+
+    patch = {
+        "status": "posted",
+        "journal_entry_id": journal_entry.id,
+        "approval_required": True,
+        "approval_status": "approved",
+        "approval_submitted_at": bill.get("approval_submitted_at") or bill.get("created_at"),
+        "approval_submitted_by": bill.get("approval_submitted_by") or bill.get("created_by"),
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": approval_notes or "Approved and posted",
+        "rejection_reason": None,
+        "updated_at": _now(),
+    }
+    try:
+        await bills.update_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "bill_id": bill_id},
+            {"$set": patch},
+        )
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Purchase bill",
+            document_id=bill_id,
+            reversal_reason=f"Compensation after purchase bill approval persistence failure for {bill_number}",
+            reversal_idempotency_key=f"purchase-bill-approve-compensate:{bill_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Purchase bill approval persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
+    bill.update(patch)
+    result = _bill_response_doc(bill, created=created)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_purchase_bill_reviewed",
+        entity_type="business_purchase_bill",
+        entity_id=bill_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
 
 
 async def create_purchase_bill(
@@ -1728,84 +2288,8 @@ async def create_purchase_bill(
     vendor_owed = taxable_total if is_rcm else bill_total
     net_payable = vendor_owed - (tds_amount or Decimal("0"))
 
-    payable_id = await _resolve_voucher_account_id(
-        session,
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=payload.accounting_entity_id,
-        account_id=None,
-        account_code=PURCHASE_PAYABLE_CODE,
-        side="payable",
-    )
-    expense_id = await _resolve_voucher_account_id(
-        session,
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=payload.accounting_entity_id,
-        account_id=None,
-        account_code=payload.expense_account_code,
-        side="expense",
-    )
-
-    if is_composition:
-        # Composition dealers cannot claim ITC — the vendor's GST is part of cost.
-        # Dr expense (full bill incl. GST); Cr Accounts Payable. No Input-GST legs.
-        # Under RCM the same holds: the self-assessed tax is also cost.
-        journal_lines = [
-            JournalLineIn(account_id=expense_id, debit=bill_total, credit=Decimal("0")),
-        ]
-    else:
-        # Dr expense (taxable) + Dr Input GST (ITC, asset); Cr Accounts Payable (total).
-        # Under RCM the ITC legs are unchanged (the recipient claims the credit of
-        # the tax it self-pays); only the credit side moves from AP to RCM Payable.
-        journal_lines = [
-            JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0")),
-        ]
-        for gst_amount, code in (
-            (cgst_total, INPUT_CGST_CODE),
-            (sgst_total, INPUT_SGST_CODE),
-            (igst_total, INPUT_IGST_CODE),
-        ):
-            if gst_amount > Decimal("0"):
-                input_gst_id = await _resolve_voucher_account_id(
-                    session,
-                    tenant_id=tenant_id,
-                    app_key=app_key,
-                    accounting_entity_id=payload.accounting_entity_id,
-                    account_id=None,
-                    account_code=code,
-                    side="input GST",
-                )
-                journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
-    if is_rcm and gst_total > Decimal("0"):
-        # Cr GST Payable under RCM — discharged by cash challan, never by ITC.
-        rcm_payable_id = await _resolve_voucher_account_id(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            account_id=None,
-            account_code=RCM_PAYABLE_CODE,
-            side="RCM payable",
-        )
-        journal_lines.append(JournalLineIn(account_id=rcm_payable_id, debit=Decimal("0"), credit=gst_total))
-    if tds_amount and tds_amount > Decimal("0"):
-        # Cr TDS Payable for the deduction; the vendor is only owed the net.
-        tds_payable_id = await _resolve_voucher_account_id(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            account_id=None,
-            account_code=TDS_PAYABLE_CODE,
-            side="TDS payable",
-        )
-        journal_lines.append(JournalLineIn(account_id=tds_payable_id, debit=Decimal("0"), credit=tds_amount))
-    journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=net_payable, party_id=payload.vendor_party_id))
-
     bill_id = str(uuid4())
     bill_number = payload.bill_number.strip()
-    description = f"Purchase Bill {bill_number} - {vendor.get('party_name') or payload.vendor_party_id}"
     now = _now()
     doc = {
         "bill_id": bill_id,
@@ -1831,7 +2315,6 @@ async def create_purchase_bill(
         "igst_total": str(igst_total),
         "gst_total": str(gst_total),
         "bill_total": str(bill_total),
-        # TDS deducted at source (None section => no deduction, net == total).
         "tds_section": payload.tds_section,
         "tds_rate": str(tds_rate) if tds_rate is not None else None,
         "tds_base_amount": str(taxable_total) if payload.tds_section else None,
@@ -1841,9 +2324,12 @@ async def create_purchase_bill(
         "deductee_pan_missing": bool(payload.tds_section) and not vendor.get("pan"),
         "cost_centre_id": payload.cost_centre_id,
         "project_id": payload.project_id,
-        # Composition dealers capitalise input GST into cost (no ITC claimed).
         "itc_claimed": not is_composition,
-        "status": "posting",
+        "status": "draft" if payload.save_as_draft else "pending_approval",
+        "approval_required": True,
+        "approval_status": "not_submitted" if payload.save_as_draft else "pending_approval",
+        "approval_submitted_at": None if payload.save_as_draft else now,
+        "approval_submitted_by": None if payload.save_as_draft else created_by,
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -1852,41 +2338,12 @@ async def create_purchase_bill(
         doc["idempotency_key"] = idempotency_key
     bills = get_collection(PURCHASE_BILLS_COLLECTION)
     await bills.insert_one(doc)
-
-    try:
-        journal_entry, created = await post_journal_entry(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            created_by=created_by,
-            payload=JournalPostRequest(
-                entry_date=payload.bill_date,
-                description=description,
-                reference=bill_number,
-                source_module="business",
-                source_document_type="purchase_bill",
-                source_document_id=bill_id,
-                lines=journal_lines,
-            ),
-            idempotency_key=idempotency_key or f"purchase-bill:{bill_id}",
-        )
-    except Exception:
-        await bills.delete_one({"tenant_id": tenant_id, "app_key": app_key, "bill_id": bill_id})
-        raise
-
-    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    await bills.update_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "bill_id": bill_id},
-        {"$set": update},
-    )
-    doc.update(update)
-    result = _bill_response_doc(doc, created=created)
+    result = _bill_response_doc(doc, created=True)
     await _audit_business_event(
         tenant_id=tenant_id,
         app_key=app_key,
         user_id=created_by,
-        action="business_purchase_bill_posted",
+        action="business_purchase_bill_created",
         entity_type="business_purchase_bill",
         entity_id=bill_id,
         new_value=result,
@@ -2554,6 +3011,7 @@ async def _reserve_sequence_number(
 
 def _credit_note_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
+    _apply_approval_defaults(result)
     result.setdefault("created", created)
     return result
 
@@ -2564,11 +3022,14 @@ async def list_credit_notes(
     app_key: str,
     accounting_entity_id: str,
     status: str | None = None,
+    approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
     if status:
         filters["status"] = status
+    if approval_status:
+        filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
         await get_collection(CREDIT_NOTES_COLLECTION)
@@ -2591,6 +3052,58 @@ async def get_credit_note(
         {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id, "credit_note_id": credit_note_id}
     )
     return _credit_note_response_doc(row) if row else None
+
+
+async def review_credit_note(
+    *,
+    tenant_id: str,
+    app_key: str,
+    credit_note_id: str,
+    reviewed_by: str,
+    payload: ApprovalReviewRequest,
+) -> dict:
+    notes = get_collection(CREDIT_NOTES_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "credit_note_id": credit_note_id,
+    }
+    note = await notes.find_one(filters)
+    if note is None:
+        raise AccountingNotFoundError("Credit note not found")
+    if note.get("status") != "posted":
+        raise AccountingValidationError("Only posted credit notes can be reviewed for approval")
+
+    old_value = _credit_note_response_doc(note)
+    approval_status = "approved" if payload.approve else "rejected"
+    patch = {
+        "approval_required": True,
+        "approval_status": approval_status,
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": payload.notes,
+        "rejection_reason": None if payload.approve else (payload.rejection_reason or "Rejected during manual review"),
+        "updated_at": _now(),
+    }
+    if note.get("approval_submitted_at") is None:
+        patch["approval_submitted_at"] = note.get("created_at")
+        patch["approval_submitted_by"] = note.get("created_by")
+
+    await notes.update_one(filters, {"$set": patch})
+    note.update(patch)
+    result = _credit_note_response_doc(note)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_credit_note_reviewed",
+        entity_type="business_credit_note",
+        entity_id=credit_note_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
 
 
 async def create_credit_note(
@@ -2691,6 +3204,8 @@ async def create_credit_note(
         "gst_total": str(gst_total),
         "note_total": str(note_total),
         "status": "posting",
+        "approval_required": False,
+        "approval_status": "auto_posted",
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -2716,7 +3231,24 @@ async def create_credit_note(
         raise
 
     update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    await credit_notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "credit_note_id": credit_note_id}, {"$set": update})
+    try:
+        await credit_notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "credit_note_id": credit_note_id}, {"$set": update})
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Credit note",
+            document_id=credit_note_id,
+            reversal_reason=f"Compensation after credit note persistence failure for {credit_note_number}",
+            reversal_idempotency_key=f"credit-note-compensate:{credit_note_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Credit note persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
     doc.update(update)
     result = _credit_note_response_doc(doc, created=created)
     await _audit_business_event(
@@ -2784,6 +3316,7 @@ async def cancel_credit_note(
 
 def _debit_note_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
+    _apply_approval_defaults(result)
     result.setdefault("created", created)
     return result
 
@@ -2794,11 +3327,14 @@ async def list_debit_notes(
     app_key: str,
     accounting_entity_id: str,
     status: str | None = None,
+    approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
     if status:
         filters["status"] = status
+    if approval_status:
+        filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
         await get_collection(DEBIT_NOTES_COLLECTION)
@@ -2821,6 +3357,245 @@ async def get_debit_note(
         {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id, "debit_note_id": debit_note_id}
     )
     return _debit_note_response_doc(row) if row else None
+
+
+async def review_debit_note(
+    *,
+    tenant_id: str,
+    app_key: str,
+    debit_note_id: str,
+    reviewed_by: str,
+    payload: ApprovalReviewRequest,
+) -> dict:
+    notes = get_collection(DEBIT_NOTES_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "debit_note_id": debit_note_id,
+    }
+    note = await notes.find_one(filters)
+    if note is None:
+        raise AccountingNotFoundError("Debit note not found")
+    if note.get("status") != "posted":
+        raise AccountingValidationError("Only posted debit notes can be reviewed for approval")
+
+    old_value = _debit_note_response_doc(note)
+    approval_status = "approved" if payload.approve else "rejected"
+    patch = {
+        "approval_required": True,
+        "approval_status": approval_status,
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": payload.notes,
+        "rejection_reason": None if payload.approve else (payload.rejection_reason or "Rejected during manual review"),
+        "updated_at": _now(),
+    }
+    if note.get("approval_submitted_at") is None:
+        patch["approval_submitted_at"] = note.get("created_at")
+        patch["approval_submitted_by"] = note.get("created_by")
+
+    await notes.update_one(filters, {"$set": patch})
+    note.update(patch)
+    result = _debit_note_response_doc(note)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_debit_note_reviewed",
+        entity_type="business_debit_note",
+        entity_id=debit_note_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
+
+
+def _approval_queue_item(
+    *,
+    document_type: str,
+    document_id: str,
+    document_number: str,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    party_name: str | None,
+    document_date,
+    amount,
+    status: str,
+    approval_status: str | None,
+    approval_required: bool | None,
+    journal_entry_id,
+    created_by,
+    created_at,
+    updated_at,
+) -> dict:
+    return {
+        "document_type": document_type,
+        "document_id": document_id,
+        "document_number": document_number,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "party_name": party_name,
+        "document_date": document_date,
+        "amount": amount,
+        "status": status,
+        "approval_status": approval_status or "auto_posted",
+        "approval_required": bool(approval_required),
+        "journal_entry_id": journal_entry_id,
+        "created_by": created_by,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
+async def list_documents_for_approval_queue(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    include_reviewed: bool = False,
+    limit: int = 100,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "status": "posted",
+    }
+    safe_limit = max(1, min(int(limit or 100), 500))
+
+    collections = [
+        (VOUCHERS_COLLECTION, "voucher"),
+        (SALES_INVOICES_COLLECTION, "sales_invoice"),
+        (PURCHASE_BILLS_COLLECTION, "purchase_bill"),
+        (CREDIT_NOTES_COLLECTION, "credit_note"),
+        (DEBIT_NOTES_COLLECTION, "debit_note"),
+    ]
+    rows_by_type: dict[str, list[dict]] = {}
+    for collection_name, doc_type in collections:
+        rows = (
+            await get_collection(collection_name)
+            .find(filters)
+            .sort("updated_at", -1)
+            .limit(safe_limit)
+            .to_list(length=safe_limit)
+        )
+        if not include_reviewed:
+            rows = [row for row in rows if str(row.get("approval_status") or "auto_posted") != "approved"]
+        rows_by_type[doc_type] = rows
+
+    items: list[dict] = []
+    for row in rows_by_type["voucher"]:
+        items.append(
+            _approval_queue_item(
+                document_type="voucher",
+                document_id=str(row.get("voucher_id") or ""),
+                document_number=str(row.get("voucher_number") or ""),
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                party_name=None,
+                document_date=row.get("entry_date"),
+                amount=row.get("amount"),
+                status=str(row.get("status") or ""),
+                approval_status=row.get("approval_status"),
+                approval_required=row.get("approval_required"),
+                journal_entry_id=row.get("journal_entry_id"),
+                created_by=row.get("created_by"),
+                created_at=row.get("created_at"),
+                updated_at=row.get("updated_at"),
+            )
+        )
+    for row in rows_by_type["sales_invoice"]:
+        items.append(
+            _approval_queue_item(
+                document_type="sales_invoice",
+                document_id=str(row.get("invoice_id") or ""),
+                document_number=str(row.get("invoice_number") or ""),
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                party_name=row.get("customer_name"),
+                document_date=row.get("invoice_date"),
+                amount=row.get("invoice_total"),
+                status=str(row.get("status") or ""),
+                approval_status=row.get("approval_status"),
+                approval_required=row.get("approval_required"),
+                journal_entry_id=row.get("journal_entry_id"),
+                created_by=row.get("created_by"),
+                created_at=row.get("created_at"),
+                updated_at=row.get("updated_at"),
+            )
+        )
+    for row in rows_by_type["purchase_bill"]:
+        items.append(
+            _approval_queue_item(
+                document_type="purchase_bill",
+                document_id=str(row.get("bill_id") or ""),
+                document_number=str(row.get("bill_number") or ""),
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                party_name=row.get("vendor_name"),
+                document_date=row.get("bill_date"),
+                amount=row.get("bill_total"),
+                status=str(row.get("status") or ""),
+                approval_status=row.get("approval_status"),
+                approval_required=row.get("approval_required"),
+                journal_entry_id=row.get("journal_entry_id"),
+                created_by=row.get("created_by"),
+                created_at=row.get("created_at"),
+                updated_at=row.get("updated_at"),
+            )
+        )
+    for row in rows_by_type["credit_note"]:
+        items.append(
+            _approval_queue_item(
+                document_type="credit_note",
+                document_id=str(row.get("credit_note_id") or ""),
+                document_number=str(row.get("credit_note_number") or ""),
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                party_name=row.get("customer_name"),
+                document_date=row.get("note_date"),
+                amount=row.get("note_total"),
+                status=str(row.get("status") or ""),
+                approval_status=row.get("approval_status"),
+                approval_required=row.get("approval_required"),
+                journal_entry_id=row.get("journal_entry_id"),
+                created_by=row.get("created_by"),
+                created_at=row.get("created_at"),
+                updated_at=row.get("updated_at"),
+            )
+        )
+    for row in rows_by_type["debit_note"]:
+        items.append(
+            _approval_queue_item(
+                document_type="debit_note",
+                document_id=str(row.get("debit_note_id") or ""),
+                document_number=str(row.get("debit_note_number") or ""),
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                party_name=row.get("vendor_name"),
+                document_date=row.get("note_date"),
+                amount=row.get("note_total"),
+                status=str(row.get("status") or ""),
+                approval_status=row.get("approval_status"),
+                approval_required=row.get("approval_required"),
+                journal_entry_id=row.get("journal_entry_id"),
+                created_by=row.get("created_by"),
+                created_at=row.get("created_at"),
+                updated_at=row.get("updated_at"),
+            )
+        )
+
+    items.sort(key=lambda row: row.get("updated_at") or "", reverse=True)
+    items = items[:safe_limit]
+    return {"items": items, "total": len(items)}
 
 
 async def create_debit_note(
@@ -2920,6 +3695,8 @@ async def create_debit_note(
         "gst_total": str(gst_total),
         "note_total": str(note_total),
         "status": "posting",
+        "approval_required": False,
+        "approval_status": "auto_posted",
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -2945,7 +3722,24 @@ async def create_debit_note(
         raise
 
     update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    await debit_notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "debit_note_id": debit_note_id}, {"$set": update})
+    try:
+        await debit_notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "debit_note_id": debit_note_id}, {"$set": update})
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Debit note",
+            document_id=debit_note_id,
+            reversal_reason=f"Compensation after debit note persistence failure for {debit_note_number}",
+            reversal_idempotency_key=f"debit-note-compensate:{debit_note_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Debit note persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
     doc.update(update)
     result = _debit_note_response_doc(doc, created=created)
     await _audit_business_event(
@@ -3260,11 +4054,27 @@ async def create_gst_settlement(
 
     period_locked = False
     if payload.lock_period:
-        await set_gst_period_lock(
-            tenant_id=tenant_id, app_key=app_key, updated_by=created_by,
-            payload=GstPeriodLockUpdateRequest(period=period, locked=True, note=f"Auto-locked on GST settlement", accounting_entity_id=payload.accounting_entity_id),
-        )
-        period_locked = True
+        try:
+            await set_gst_period_lock(
+                tenant_id=tenant_id, app_key=app_key, updated_by=created_by,
+                payload=GstPeriodLockUpdateRequest(period=period, locked=True, note=f"Auto-locked on GST settlement", accounting_entity_id=payload.accounting_entity_id),
+            )
+            period_locked = True
+        except Exception as exc:
+            await _compensate_gst_settlement_failure(
+                session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                accounting_entity_id=payload.accounting_entity_id,
+                created_by=created_by,
+                period=period,
+                journal_entry_id=int(journal_entry.id),
+                unlock_period=False,
+                failure_label="GST period locking failed",
+            )
+            raise AccountingValidationError(
+                "GST period locking failed after settlement journal posting; the accounting entry was automatically reversed"
+            ) from exc
 
     doc = {
         "tenant_id": tenant_id,
@@ -3280,7 +4090,27 @@ async def create_gst_settlement(
         "updated_at": _now(),
     }
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "period": period}
-    await settlements.update_one(filters, {"$set": doc, "$setOnInsert": filters}, upsert=True)
+    try:
+        await settlements.update_one(filters, {"$set": doc, "$setOnInsert": filters}, upsert=True)
+    except Exception as exc:
+        await _compensate_gst_settlement_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            created_by=created_by,
+            period=period,
+            journal_entry_id=int(journal_entry.id),
+            unlock_period=period_locked,
+            failure_label="GST settlement persistence failed",
+        )
+        if period_locked:
+            raise AccountingValidationError(
+                "GST settlement persistence failed after journal posting; the accounting entry was automatically reversed and the GST period was unlocked"
+            ) from exc
+        raise AccountingValidationError(
+            "GST settlement persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
     result = _settlement_doc_to_response(doc)
     await _audit_business_event(
         tenant_id=tenant_id, app_key=app_key, user_id=created_by,

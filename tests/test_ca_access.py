@@ -1,4 +1,4 @@
-"""CA Access — invite flow, accept, revoke, list. Uses fake Mongo via mongomock."""
+"""CA Access — token-based invite flow, accept, revoke, list. Uses fake Mongo via mongomock."""
 from __future__ import annotations
 
 import pytest
@@ -60,7 +60,7 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
     assert payload["user_id"] == "u-1"
 
 @pytest.mark.asyncio
-async def test_invite_provisions_ca_user_and_sends_temporary_password_email():
+async def test_invite_provisions_inactive_ca_user_and_sends_token_email():
     from app.modules.business import ca_access
 
     mock_invites = AsyncMock()
@@ -78,8 +78,7 @@ async def test_invite_provisions_ca_user_and_sends_temporary_password_email():
         return mock_users
 
     with patch("app.modules.business.ca_access.get_collection", side_effect=_col), \
-         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email, \
-         patch("app.modules.business.ca_access.hash_password", return_value="hashed-temp-password"):
+         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
         mock_email.return_value = email_delivery
         result = await ca_access.invite_ca(
             tenant_id="t1", app_key="mitrabooks",
@@ -92,19 +91,22 @@ async def test_invite_provisions_ca_user_and_sends_temporary_password_email():
     assert result["user_id"]
     assert result["email_delivery"] == email_delivery
     assert result["resent"] is False
-    assert "temp_password" not in result
     mock_email.assert_awaited_once()
     assert mock_email.call_args.kwargs["email"] == "ca@example.com"
-    assert mock_email.call_args.kwargs["temporary_password"]
+    assert mock_email.call_args.kwargs["token"] == result["token"]
+    assert mock_email.call_args.kwargs["expires_at"] == result["expires_at"]
     mock_users.insert_one.assert_awaited_once()
     inserted_user = mock_users.insert_one.call_args[0][0]
     assert inserted_user["role"] == "ca_viewer"
-    assert inserted_user["must_change_password"] is True
-    assert inserted_user["hashed_password"] == "hashed-temp-password"
+    assert inserted_user["auth_provider"] == "password_setup_pending"
+    assert inserted_user["provider_subject"] == "invite:ca@example.com"
+    assert inserted_user["is_active"] is False
+    assert inserted_user["invite_pending"] is True
+    assert "hashed_password" not in inserted_user
 
 
 @pytest.mark.asyncio
-async def test_existing_ca_invite_resends_credentials_and_rotates_temporary_password():
+async def test_existing_ca_invite_resends_token_and_keeps_existing_user_in_pending_state():
     from app.modules.business import ca_access
 
     invite = _make_invite("pending")
@@ -133,8 +135,7 @@ async def test_existing_ca_invite_resends_credentials_and_rotates_temporary_pass
         return mock_users
 
     with patch("app.modules.business.ca_access.get_collection", side_effect=_col), \
-         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email, \
-         patch("app.modules.business.ca_access.hash_password", return_value="new-temp-hash"):
+         patch("app.modules.business.ca_access._send_invite_email", new_callable=AsyncMock) as mock_email:
         mock_email.return_value = email_delivery
         result = await ca_access.invite_ca(
             tenant_id="t1", app_key="mitrabooks",
@@ -146,14 +147,14 @@ async def test_existing_ca_invite_resends_credentials_and_rotates_temporary_pass
     assert result["email_delivery"] == email_delivery
     assert result["status"] == "invited"
     assert result["user_id"] == "u-existing"
-    assert "temp_password" not in result
     mock_invites.update_one.assert_awaited_once()
     mock_users.update_one.assert_awaited_once()
     mock_email.assert_awaited_once()
-    assert mock_email.call_args.kwargs["temporary_password"]
+    assert mock_email.call_args.kwargs["token"] == result["token"]
     user_update = mock_users.update_one.call_args[0][1]["$set"]
-    assert user_update["must_change_password"] is True
-    assert user_update["hashed_password"] == "new-temp-hash"
+    assert user_update["invite_pending"] is True
+    assert user_update["role"] == "ca_viewer"
+    assert user_update["must_change_password"] is False
 
 
 @pytest.mark.asyncio
@@ -185,6 +186,9 @@ async def test_accept_invite_creates_user():
     inserted = mock_users_col.insert_one.call_args[0][0]
     assert inserted["role"] == "ca_viewer"
     assert inserted["is_active"] is True
+    assert inserted["invite_pending"] is False
+    assert inserted["must_change_password"] is False
+    assert inserted["auth_provider"] == "password"
 
 
 @pytest.mark.asyncio
@@ -224,6 +228,8 @@ async def test_accept_invite_updates_existing_tenant_user_password():
     assert update_doc["is_active"] is True
     assert update_doc["hashed_password"] == "new-hash"
     assert update_doc["auth_provider"] == "password"
+    assert update_doc["invite_pending"] is False
+    assert update_doc["must_change_password"] is False
 
 
 @pytest.mark.asyncio
@@ -237,6 +243,20 @@ async def test_accept_expired_invite_raises():
 
     with patch("app.modules.business.ca_access.get_collection", return_value=mock_inv_col):
         with pytest.raises(ValueError, match="expired"):
+            await ca_access.accept_ca_invite(token="tok123", password="Secret123!")
+
+
+@pytest.mark.asyncio
+async def test_accept_accepted_invite_raises_single_use_error():
+    from app.modules.business import ca_access
+
+    invite = _make_invite("accepted", expired=False)
+    mock_inv_col = AsyncMock()
+    mock_inv_col.find_one = AsyncMock(return_value=invite)
+    mock_inv_col.create_index = AsyncMock()
+
+    with patch("app.modules.business.ca_access.get_collection", return_value=mock_inv_col):
+        with pytest.raises(ValueError, match="already been accepted"):
             await ca_access.accept_ca_invite(token="tok123", password="Secret123!")
 
 

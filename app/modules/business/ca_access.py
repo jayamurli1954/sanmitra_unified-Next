@@ -3,16 +3,15 @@ CA Access — invite a Chartered Accountant to read-only access of one tenant's 
 
 Invite flow:
   1. tenant_admin  POST /business/ca/invite        {email, full_name}
-  2. core_users entry is created or refreshed with role=ca_viewer.
-  3. A temporary password email is sent with the normal MitraBooks login URL.
-  4. CA signs in with the temporary password and must change it on first login.
+  2. core_users entry is created or refreshed in an inactive invite-pending state.
+  3. A single-use invite link email is sent with token expiry.
+  4. CA accepts the invite by setting a password on first use.
   5. tenant_admin  DELETE /business/ca/{user_id}/revoke  → is_active=False
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import string
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -40,11 +39,6 @@ _USERS = "core_users"
 _TOKEN_TTL_DAYS = 7
 
 
-def _generate_temporary_password(length: int = 14) -> str:
-    alphabet = string.ascii_letters + string.digits + "@#$%&*!"
-    return "".join(secrets.choice(alphabet) for _ in range(length))
-
-
 async def _ensure_indexes() -> None:
     col = get_collection(_CA_INVITES)
     await col.create_index("token", unique=True, sparse=True)
@@ -60,14 +54,13 @@ async def invite_ca(
     full_name: str,
     invited_by: str,
 ) -> dict:
-    """Provision or refresh a CA viewer account and send temporary login credentials."""
+    """Provision or refresh a CA viewer invite and send a token-based acceptance link."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
     users = get_collection(_USERS)
 
     normalized_email = email.strip().lower()
     existing = await col.find_one({"tenant_id": tenant_id, "email": normalized_email})
-    temp_password = _generate_temporary_password()
     now = datetime.now(timezone.utc)
     resolved_name = full_name.strip()
 
@@ -86,12 +79,13 @@ async def invite_ca(
                     "full_name": resolved_name,
                     "tenant_id": tenant_id,
                     "app_key": app_key,
-                    "role": "ca_viewer",
-                    "hashed_password": hash_password(temp_password),
-                    "auth_provider": "password",
-                    "provider_subject": f"password:{normalized_email}",
-                    "is_active": True,
-                    "must_change_password": True,
+                    "role": existing_user.get("role") or "ca_viewer",
+                    "auth_provider": existing_user.get("auth_provider"),
+                    "provider_subject": existing_user.get("provider_subject"),
+                    "is_active": bool(existing_user.get("is_active", False)),
+                    "must_change_password": False,
+                    "invite_pending": True,
+                    "invited_role": "ca_viewer",
                     "subscription_tier": existing_user.get("subscription_tier", "free"),
                     "subscription_status": existing_user.get("subscription_status", "active"),
                     "accepted_terms_at": existing_user.get("accepted_terms_at"),
@@ -109,11 +103,12 @@ async def invite_ca(
             "tenant_id": tenant_id,
             "app_key": app_key,
             "role": "ca_viewer",
-            "hashed_password": hash_password(temp_password),
-            "auth_provider": "password",
-            "provider_subject": f"password:{normalized_email}",
-            "is_active": True,
-            "must_change_password": True,
+            "auth_provider": "password_setup_pending",
+            "provider_subject": f"invite:{normalized_email}",
+            "is_active": False,
+            "must_change_password": False,
+            "invite_pending": True,
+            "invited_role": "ca_viewer",
             "subscription_tier": "free",
             "subscription_status": "active",
             "accepted_terms_at": None,
@@ -140,8 +135,9 @@ async def invite_ca(
         delivery = await _send_invite_email(
             email=normalized_email,
             full_name=resolved_name,
-            temporary_password=temp_password,
             tenant_id=tenant_id,
+            token=token,
+            expires_at=expires_at,
         )
         existing.update(update_doc)
         existing["email_delivery"] = delivery
@@ -167,8 +163,9 @@ async def invite_ca(
     delivery = await _send_invite_email(
         email=normalized_email,
         full_name=resolved_name,
-        temporary_password=temp_password,
         tenant_id=tenant_id,
+        token=token,
+        expires_at=doc["expires_at"],
     )
     doc["email_delivery"] = delivery
     doc["resent"] = False
@@ -176,25 +173,29 @@ async def invite_ca(
     return doc
 
 
-async def _send_invite_email(*, email: str, full_name: str, temporary_password: str, tenant_id: str) -> dict:
+async def _send_invite_email(*, email: str, full_name: str, tenant_id: str, token: str, expires_at: datetime) -> dict:
     settings = get_settings()
     mitrabooks_base = (
         str(getattr(settings, "MITRABOOKS_PUBLIC_URL", "") or "").rstrip("/")
         or "https://www.mitrabooks.sanmitratech.in"
     )
-    login_url = f"{mitrabooks_base}/mitrabooks-erp/login.html"
+    invite_accept_url = f"{mitrabooks_base}/mitrabooks-erp/ca-invite-accept.html?token={token}"
+    invite_preview_url = f"{mitrabooks_base}/api/v1/business/ca/invite/{token}/preview"
+    expiry_text = _as_utc(expires_at).strftime("%Y-%m-%d %H:%M UTC")
 
     subject = "You have been invited to access MitraBooks financial data"
     body = (
         f"Hello {full_name},\n\n"
         f"You have been invited as a Chartered Accountant (CA) to review the financial data"
         f" for business tenant '{tenant_id}' on MitraBooks.\n\n"
-        f"Use the normal MitraBooks login page below:\n\n"
-        f"  {login_url}\n\n"
-        f"Sign in with the following temporary credentials:\n"
-        f"  Email: {email}\n"
-        f"  Temporary password: {temporary_password}\n\n"
-        f"You must change this temporary password immediately after the first login.\n\n"
+        f"Accept the invite and set your password using the secure invite link below:\n\n"
+        f"  {invite_accept_url}\n\n"
+        f"If the invite page is not yet available in your environment, your administrator can"
+        f" use this preview/API link to confirm the token details before acceptance:\n"
+        f"  {invite_preview_url}\n\n"
+        f"Email for acceptance: {email}\n"
+        f"Invite expires at: {expiry_text}\n"
+        f"This link is single-use and will stop working after acceptance, expiry, or revoke.\n\n"
         f"You will have read-only access to:\n"
         f"  - Financial Statements (Trial Balance, P&L, Balance Sheet, General Ledger)\n"
         f"  - GST Returns (GSTR-1, GSTR-3B, GSTR-2B Reconciliation)\n"
@@ -273,7 +274,7 @@ async def preview_ca_invite(*, token: str) -> dict:
 
 
 async def accept_ca_invite(*, token: str, password: str, full_name: str | None = None) -> dict:
-    """Accept a legacy invite: create the ca_viewer user account. Returns basic user info."""
+    """Accept a token-based invite and activate CA access by setting the first password."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
     invite = await col.find_one({"token": token})
@@ -308,6 +309,9 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
                     "hashed_password": hash_password(password),
                     "auth_provider": "password",
                     "provider_subject": f"password:{email}",
+                    "must_change_password": False,
+                    "invite_pending": False,
+                    "invited_role": None,
                     "updated_at": now,
                 }
             },
@@ -325,6 +329,9 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
             "auth_provider": "password",
             "provider_subject": f"password:{email}",
             "is_active": True,
+            "must_change_password": False,
+            "invite_pending": False,
+            "invited_role": None,
             "subscription_tier": "free",
             "subscription_status": "active",
             "accepted_terms_at": None,
@@ -335,7 +342,7 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
 
     await col.update_one(
         {"_id": invite["_id"]},
-        {"$set": {"status": "accepted", "accepted_at": now, "user_id": user_id}},
+        {"$set": {"status": "accepted", "accepted_at": now, "user_id": user_id, "token_consumed_at": now}},
     )
     return {"user_id": user_id, "email": email, "full_name": resolved_name, "role": "ca_viewer"}
 
@@ -345,7 +352,7 @@ async def revoke_ca_access(*, tenant_id: str, user_id: str) -> None:
     users = get_collection(_USERS)
     result = await users.update_one(
         {"user_id": user_id, "tenant_id": tenant_id, "role": "ca_viewer"},
-        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}},
+        {"$set": {"is_active": False, "invite_pending": False, "updated_at": datetime.now(timezone.utc)}},
     )
     if result.matched_count == 0:
         raise ValueError(f"CA user '{user_id}' not found in this tenant")
@@ -361,7 +368,7 @@ async def reinstate_ca_access(*, tenant_id: str, user_id: str) -> None:
     users = get_collection(_USERS)
     result = await users.update_one(
         {"user_id": user_id, "tenant_id": tenant_id, "role": "ca_viewer"},
-        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc)}},
+        {"$set": {"is_active": True, "invite_pending": False, "updated_at": datetime.now(timezone.utc)}},
     )
     if result.matched_count == 0:
         raise ValueError(f"CA user '{user_id}' not found in this tenant")

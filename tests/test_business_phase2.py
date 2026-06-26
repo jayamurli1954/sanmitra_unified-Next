@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from app.modules.business import router as business_router
 import app.modules.business.service as business_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.modules.business.schemas import (
@@ -91,6 +92,27 @@ class FakeCollection:
             new_doc.update(update.get("$setOnInsert", {}))
             new_doc.update(update.get("$set", {}))
             self.docs.append(new_doc)
+
+
+class FailingUpdateCollection(FakeCollection):
+    def __init__(self, *, fail_on_update_after_insert: bool = False):
+        super().__init__()
+        self.fail_on_update_after_insert = fail_on_update_after_insert
+        self.insert_count = 0
+
+    async def insert_one(self, doc):
+        self.insert_count += 1
+        await super().insert_one(doc)
+
+    async def update_one(self, filters, update, upsert=False):
+        if self.fail_on_update_after_insert and self.insert_count > 0:
+            raise RuntimeError("simulated mongo update failure")
+        await super().update_one(filters, update, upsert=upsert)
+
+
+class AlwaysFailUpdateCollection(FakeCollection):
+    async def update_one(self, filters, update, upsert=False):
+        raise RuntimeError("simulated mongo update failure")
 
 
 class FakeCursor:
@@ -308,6 +330,8 @@ async def test_typed_voucher_posts_balanced_journal(monkeypatch):
     assert result["status"] == "posted"
     assert result["journal_entry_id"] == 77
     assert result["voucher_number"] == "RV-1"
+    assert result["approval_required"] is False
+    assert result["approval_status"] == "auto_posted"
     assert vouchers.docs[0]["status"] == "posted"
     assert audit_events[0]["tenant_id"] == "business-tenant"
     assert audit_events[0]["product"] == "mitrabooks"
@@ -350,6 +374,104 @@ async def test_typed_voucher_rolls_back_domain_record_when_posting_fails(monkeyp
     assert vouchers.docs == []
     assert vouchers.deleted[0]["tenant_id"] == "business-tenant"
     assert vouchers.deleted[0]["app_key"] == "mitrabooks"
+
+
+@pytest.mark.asyncio
+async def test_typed_voucher_reverses_journal_when_status_update_fails(monkeypatch):
+    vouchers = FailingUpdateCollection(fail_on_update_after_insert=True)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=78), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=88), True
+
+    async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
+        return int(account_id)
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.post_typed_voucher(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="owner-1",
+            payload=TypedVoucherCreateRequest(
+                voucher_type="receipt",
+                entry_date=date(2026, 5, 20),
+                amount=Decimal("500.00"),
+                debit_account_id=10,
+                credit_account_id=20,
+                description="Receipt from customer",
+                reference="RV-2",
+            ),
+            idempotency_key="idem-2",
+        )
+
+    assert captured["journal_id"] == 78
+    assert captured["reason"].startswith("Compensation after business voucher persistence failure")
+    assert captured["idempotency_key"].startswith("business-voucher-compensate:")
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
+
+
+@pytest.mark.asyncio
+async def test_review_typed_voucher_updates_approval_state(monkeypatch):
+    vouchers = FakeCollection()
+    vouchers.docs = [
+        {
+            "voucher_id": "v-1",
+            "voucher_number": "RV-1",
+            "voucher_type": "receipt",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "amount": "500.00",
+            "entry_date": "2026-05-20",
+            "debit_account_id": 10,
+            "credit_account_id": 20,
+            "description": "Receipt from customer",
+            "reference": "RV-1",
+            "status": "posted",
+            "journal_entry_id": 77,
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.review_typed_voucher(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        voucher_id="v-1",
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(
+            approve=True,
+            notes="Voucher reviewed",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
+    assert result["approval_decided_by"] == "admin-1"
+    assert result["approval_notes"] == "Voucher reviewed"
+    assert audit_events[0]["action"] == "business_voucher_reviewed"
 
 
 @pytest.mark.asyncio
@@ -612,7 +734,7 @@ async def test_sales_invoice_posts_balanced_gst_journal(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
-    result = await business_service.create_sales_invoice(
+    created_doc = await business_service.create_sales_invoice(
         None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
@@ -629,6 +751,15 @@ async def test_sales_invoice_posts_balanced_gst_journal(monkeypatch):
         idempotency_key="inv-idem-1",
     )
 
+    result = await business_service.review_sales_invoice(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=created_doc["invoice_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="ok", accounting_entity_id="primary"),
+    )
+
     lines = captured["payload"].lines
     total_debit = sum(line.debit for line in lines)
     total_credit = sum(line.credit for line in lines)
@@ -643,6 +774,8 @@ async def test_sales_invoice_posts_balanced_gst_journal(monkeypatch):
     assert gst_lines == {_INVOICE_ACCOUNT_IDS["22001"]: Decimal("540.00"), _INVOICE_ACCOUNT_IDS["22002"]: Decimal("540.00")}
     assert captured["payload"].source_document_type == "sales_invoice"
 
+    assert created_doc["status"] == "pending_approval"
+    assert created_doc["approval_status"] == "pending_approval"
     assert result["status"] == "posted"
     assert result["journal_entry_id"] == 501
     assert result["invoice_number"].startswith("INV-2026-2027-")
@@ -651,8 +784,10 @@ async def test_sales_invoice_posts_balanced_gst_journal(monkeypatch):
     assert result["sgst_total"] == "540.00"
     assert result["igst_total"] == "0.00"
     assert result["invoice_total"] == "7080.00"
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
     assert result["customer_name"] == "Acme Traders"
-    assert audit_events[0]["action"] == "business_sales_invoice_posted"
+    assert audit_events[-1]["action"] == "business_sales_invoice_reviewed"
 
 
 @pytest.mark.asyncio
@@ -675,7 +810,7 @@ async def test_sales_invoice_inter_state_uses_igst(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
-    result = await business_service.create_sales_invoice(
+    created_doc = await business_service.create_sales_invoice(
         None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
@@ -689,11 +824,75 @@ async def test_sales_invoice_inter_state_uses_igst(monkeypatch):
         idempotency_key=None,
     )
 
+    result = await business_service.review_sales_invoice(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=created_doc["invoice_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+    )
+
     gst_lines = {line.account_id: line.credit for line in captured["payload"].lines[2:]}
     assert gst_lines == {_INVOICE_ACCOUNT_IDS["22003"]: Decimal("180.00")}
     assert result["igst_total"] == "180.00"
     assert result["cgst_total"] == "0.00"
     assert result["invoice_total"] == "1180.00"
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_approval_reverses_journal_when_status_update_fails(monkeypatch):
+    store = FailingUpdateCollection(fail_on_update_after_insert=True)
+    _seed_customer(store)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=551), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=651), True
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    created_doc = await business_service.create_sales_invoice(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(
+            customer_party_id="cust-1",
+            invoice_date=date(2026, 6, 8),
+            is_inter_state=False,
+            line_items=[SalesInvoiceLineItem(description="Widget", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key="inv-comp-1",
+    )
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.review_sales_invoice(
+            session=object(),
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            invoice_id=created_doc["invoice_id"],
+            reviewed_by="admin-1",
+            payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+        )
+
+    assert captured["journal_id"] == 551
+    assert captured["reason"].startswith("Compensation after sales invoice approval persistence failure")
+    assert captured["idempotency_key"].startswith("sales-invoice-approve-compensate:")
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
 
 
 @pytest.mark.asyncio
@@ -749,6 +948,55 @@ async def test_cancel_sales_invoice_posts_reversal(monkeypatch):
     assert audit_events[0]["action"] == "business_sales_invoice_cancelled"
 
 
+@pytest.mark.asyncio
+async def test_review_sales_invoice_updates_approval_state(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        {
+            "invoice_id": "inv-1",
+            "invoice_number": "INV-2026-2027-000001",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "customer_party_id": "cust-1",
+            "invoice_date": "2026-06-08",
+            "journal_entry_id": 501,
+            "status": "posted",
+            "invoice_total": "1180.00",
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.review_sales_invoice(
+        session=None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id="inv-1",
+        reviewed_by="admin-2",
+        payload=business_service.ApprovalReviewRequest(
+            approve=True,
+            notes="Checked and approved",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
+    assert result["approval_decided_by"] == "admin-2"
+    assert result["approval_notes"] == "Checked and approved"
+    assert result["approval_submitted_by"] == "owner-1"
+    assert audit_events[0]["action"] == "business_sales_invoice_reviewed"
+
+
 def _seed_vendor(collection):
     collection.docs.append(
         {
@@ -790,7 +1038,7 @@ async def test_purchase_bill_posts_balanced_itc_journal(monkeypatch):
 
     monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
-    result = await business_service.create_purchase_bill(
+    created_doc = await business_service.create_purchase_bill(
         None,
         tenant_id="business-tenant",
         app_key="mitrabooks",
@@ -803,6 +1051,15 @@ async def test_purchase_bill_posts_balanced_itc_journal(monkeypatch):
             line_items=[PurchaseBillLineItem(description="Raw material", quantity=Decimal("10"), rate=Decimal("100"), gst_rate=Decimal("18"))],
         ),
         idempotency_key=None,
+    )
+
+    result = await business_service.review_purchase_bill(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=created_doc["bill_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="ok", accounting_entity_id="primary"),
     )
 
     lines = captured["payload"].lines
@@ -819,13 +1076,17 @@ async def test_purchase_bill_posts_balanced_itc_journal(monkeypatch):
     assert credits == {_INVOICE_ACCOUNT_IDS["21001"]: Decimal("1180.00")}
     assert captured["payload"].source_document_type == "purchase_bill"
 
+    assert created_doc["status"] == "pending_approval"
+    assert created_doc["approval_status"] == "pending_approval"
     assert result["status"] == "posted"
     assert result["journal_entry_id"] == 801
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
     assert result["bill_number"] == "SUP-2026-77"
     assert result["vendor_name"] == "Bharat Supplies"
     assert result["igst_total"] == "0.00"
     assert result["bill_total"] == "1180.00"
-    assert audit_events[0]["action"] == "business_purchase_bill_posted"
+    assert audit_events[-1]["action"] == "business_purchase_bill_reviewed"
 
 
 @pytest.mark.asyncio
@@ -872,6 +1133,111 @@ async def test_cancel_purchase_bill_posts_reversal(monkeypatch):
     assert result["status"] == "cancelled"
     assert result["reversal_journal_entry_id"] == 901
     assert store.docs[0]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_review_purchase_bill_can_reject_document(monkeypatch):
+    store = FakeCollection()
+    store.docs = [
+        {
+            "bill_id": "bill-1",
+            "bill_number": "SUP-2026-77",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "vendor_party_id": "vend-1",
+            "bill_date": "2026-06-08",
+            "journal_entry_id": 801,
+            "status": "posted",
+            "bill_total": "1180.00",
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.review_purchase_bill(
+        session=None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id="bill-1",
+        reviewed_by="admin-3",
+        payload=business_service.ApprovalReviewRequest(
+            approve=False,
+            notes="Need vendor clarification",
+            rejection_reason="Mismatch with supplier support",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "rejected"
+    assert result["approval_decided_by"] == "admin-3"
+    assert result["approval_notes"] == "Need vendor clarification"
+    assert result["rejection_reason"] == "Mismatch with supplier support"
+    assert audit_events[0]["action"] == "business_purchase_bill_reviewed"
+
+
+@pytest.mark.asyncio
+async def test_purchase_bill_approval_reverses_journal_when_status_update_fails(monkeypatch):
+    store = FailingUpdateCollection(fail_on_update_after_insert=True)
+    _seed_vendor(store)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=851), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=951), True
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    created_doc = await business_service.create_purchase_bill(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1",
+            bill_number="SUP-2026-88",
+            bill_date=date(2026, 6, 8),
+            is_inter_state=False,
+            line_items=[PurchaseBillLineItem(description="Raw material", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+        ),
+        idempotency_key="bill-comp-1",
+    )
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.review_purchase_bill(
+            session=object(),
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            bill_id=created_doc["bill_id"],
+            reviewed_by="admin-1",
+            payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+        )
+
+    assert captured["journal_id"] == 851
+    assert captured["reason"].startswith("Compensation after purchase bill approval persistence failure")
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
 
 
 def _posted_invoice_doc():
@@ -1051,6 +1417,53 @@ async def test_credit_note_blocked_in_locked_period(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_credit_note_reverses_journal_when_status_update_fails(monkeypatch):
+    store = FailingUpdateCollection(fail_on_update_after_insert=True)
+    _seed_customer(store)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=1051), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2051), True
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.create_credit_note(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="owner-1",
+            payload=CreditNoteCreateRequest(
+                customer_party_id="cust-1",
+                note_date=date(2026, 6, 20),
+                original_invoice_number="INV-2026-2027-000001",
+                reason="sales_return",
+                is_inter_state=False,
+                line_items=[CreditNoteLineItem(description="Returned widget", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+            ),
+            idempotency_key="cn-comp-1",
+        )
+
+    assert captured["journal_id"] == 1051
+    assert captured["reason"].startswith("Compensation after credit note persistence failure")
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
+
+
+@pytest.mark.asyncio
 async def test_cancel_credit_note_posts_reversal(monkeypatch):
     store = FakeCollection()
     store.docs.append({
@@ -1117,6 +1530,54 @@ async def test_cancel_credit_note_posts_reversal(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_review_credit_note_can_reject_document(monkeypatch):
+    store = FakeCollection()
+    store.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "credit_note_id": "cn-1",
+        "credit_note_number": "CN-2026-2027-000001",
+        "customer_party_id": "cust-1",
+        "customer_name": "Acme Customer",
+        "note_date": date(2026, 6, 20),
+        "reason": "sales_return",
+        "note_total": Decimal("1180.00"),
+        "status": "posted",
+        "journal_entry_id": 1001,
+        "created_by": "owner-1",
+        "created_at": business_service._now(),
+        "updated_at": business_service._now(),
+    })
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.review_credit_note(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        credit_note_id="cn-1",
+        reviewed_by="admin-4",
+        payload=business_service.ApprovalReviewRequest(
+            approve=False,
+            notes="Support mismatch",
+            rejection_reason="Return support incomplete",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "rejected"
+    assert result["approval_decided_by"] == "admin-4"
+    assert result["rejection_reason"] == "Return support incomplete"
+    assert audit_events[0]["action"] == "business_credit_note_reviewed"
+
+
+@pytest.mark.asyncio
 async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     store = FakeCollection()
     _seed_vendor(store)
@@ -1169,7 +1630,56 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
     assert result["debit_note_number"].startswith("DN-2026-2027-")
     assert result["note_total"] == "1180.00"
     assert result["status"] == "posted"
+    assert result["approval_required"] is False
+    assert result["approval_status"] == "auto_posted"
     assert audit_events[0]["action"] == "business_debit_note_posted"
+
+
+@pytest.mark.asyncio
+async def test_debit_note_reverses_journal_when_status_update_fails(monkeypatch):
+    store = FailingUpdateCollection(fail_on_update_after_insert=True)
+    _seed_vendor(store)
+    captured = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=1151), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2151), True
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.create_debit_note(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="owner-1",
+            payload=DebitNoteCreateRequest(
+                vendor_party_id="vend-1",
+                note_date=date(2026, 6, 20),
+                original_bill_number="SUP-2026-77",
+                reason="purchase_return",
+                is_inter_state=False,
+                line_items=[DebitNoteLineItem(description="Returned material", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
+            ),
+            idempotency_key="dn-comp-1",
+        )
+
+    assert captured["journal_id"] == 1151
+    assert captured["reason"].startswith("Compensation after debit note persistence failure")
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
 
 
 @pytest.mark.asyncio
@@ -1236,6 +1746,121 @@ async def test_cancel_debit_note_posts_reversal(monkeypatch):
     assert result["cancel_reason"] == "Vendor return confirmed"
     assert store.docs[0]["status"] == "cancelled"
     assert audit_events[0]["action"] == "business_debit_note_cancelled"
+
+
+@pytest.mark.asyncio
+async def test_review_debit_note_updates_approval_state(monkeypatch):
+    store = FakeCollection()
+    store.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "debit_note_id": "dn-1",
+        "debit_note_number": "DN-2026-2027-000001",
+        "vendor_party_id": "vend-1",
+        "vendor_name": "Acme Vendor",
+        "note_date": date(2026, 6, 20),
+        "reason": "purchase_return",
+        "note_total": Decimal("1180.00"),
+        "status": "posted",
+        "journal_entry_id": 1101,
+        "created_by": "owner-1",
+        "created_at": business_service._now(),
+        "updated_at": business_service._now(),
+    })
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.review_debit_note(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        debit_note_id="dn-1",
+        reviewed_by="admin-5",
+        payload=business_service.ApprovalReviewRequest(
+            approve=True,
+            notes="Debit note approved",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "approved"
+    assert result["approval_decided_by"] == "admin-5"
+    assert result["approval_notes"] == "Debit note approved"
+    assert audit_events[0]["action"] == "business_debit_note_reviewed"
+
+
+@pytest.mark.asyncio
+async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
+    vouchers = FakeCollection()
+    vouchers.docs = [{
+        "voucher_id": "v-1", "voucher_number": "RV-1", "voucher_type": "receipt",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "amount": "500.00", "entry_date": "2026-05-20", "status": "posted", "journal_entry_id": 77,
+        "approval_status": "auto_posted", "approval_required": False, "created_by": "owner-1",
+        "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+    invoices = FakeCollection()
+    invoices.docs = [{
+        "invoice_id": "inv-1", "invoice_number": "INV-1",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "customer_name": "Acme", "invoice_date": "2026-06-08", "invoice_total": "1180.00",
+        "status": "posted", "journal_entry_id": 501, "approval_status": "approved", "approval_required": True,
+        "created_by": "owner-1", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+    bills = FakeCollection()
+    bills.docs = [{
+        "bill_id": "bill-1", "bill_number": "BILL-1",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "vendor_name": "Vendor", "bill_date": "2026-06-08", "bill_total": "900.00",
+        "status": "posted", "journal_entry_id": 801, "approval_status": "rejected", "approval_required": True,
+        "created_by": "owner-2", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+    credit_notes = FakeCollection()
+    credit_notes.docs = [{
+        "credit_note_id": "cn-1", "credit_note_number": "CN-1",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "customer_name": "Acme", "note_date": "2026-06-20", "note_total": "200.00",
+        "status": "posted", "journal_entry_id": 1001, "approval_status": "auto_posted", "approval_required": False,
+        "created_by": "owner-3", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+    debit_notes = FakeCollection()
+    debit_notes.docs = [{
+        "debit_note_id": "dn-1", "debit_note_number": "DN-1",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "vendor_name": "Vendor", "note_date": "2026-06-21", "note_total": "150.00",
+        "status": "posted", "journal_entry_id": 1101, "approval_status": "auto_posted", "approval_required": False,
+        "created_by": "owner-4", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+
+    def fake_get_collection(name):
+        return {
+            business_service.VOUCHERS_COLLECTION: vouchers,
+            business_service.SALES_INVOICES_COLLECTION: invoices,
+            business_service.PURCHASE_BILLS_COLLECTION: bills,
+            business_service.CREDIT_NOTES_COLLECTION: credit_notes,
+            business_service.DEBIT_NOTES_COLLECTION: debit_notes,
+        }[name]
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+
+    result = await business_service.list_documents_for_approval_queue(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        include_reviewed=False,
+        limit=20,
+    )
+
+    types = {item["document_type"] for item in result["items"]}
+    assert "sales_invoice" not in types
+    assert {"voucher", "purchase_bill", "credit_note", "debit_note"} <= types
+    assert all(item["approval_status"] != "approved" for item in result["items"])
 
 
 def test_gst_setoff_follows_statutory_order():
@@ -1314,6 +1939,127 @@ async def test_gst_settlement_posts_balanced_setoff_entry(monkeypatch):
     assert any(d.get("period") == "2026-06" and d.get("locked") for d in store.docs)
 
 
+@pytest.mark.asyncio
+async def test_gst_settlement_reverses_journal_and_unlocks_period_when_persistence_fails(monkeypatch):
+    from app.modules.business.schemas import GstSettlementCreateRequest
+
+    settlements = AlwaysFailUpdateCollection()
+    locks = FakeCollection()
+    captured = {}
+
+    def fake_get_collection(name):
+        if name == business_service.GST_SETTLEMENTS_COLLECTION:
+            return settlements
+        if name == business_service.GST_PERIOD_LOCKS_COLLECTION:
+            return locks
+        return FakeCollection()
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_balances(session, **_kwargs):
+        return {
+            "output": {"igst": Decimal("100"), "cgst": Decimal("500"), "sgst": Decimal("500")},
+            "credit": {"igst": Decimal("600"), "cgst": Decimal("200"), "sgst": Decimal("100")},
+        }
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=1251), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2251), True
+
+    monkeypatch.setattr(business_service, "_gst_period_balances", fake_balances)
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    with pytest.raises(business_service.AccountingValidationError, match="period was unlocked"):
+        await business_service.create_gst_settlement(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="admin-1",
+            payload=GstSettlementCreateRequest(period="2026-06", lock_period=True),
+            idempotency_key="gst-comp-1",
+        )
+
+    assert captured["journal_id"] == 1251
+    assert captured["reason"] == "Compensation after GST settlement persistence failure for 2026-06"
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
+    assert await business_service.is_gst_period_locked(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        period="2026-06",
+    ) is False
+
+
+@pytest.mark.asyncio
+async def test_gst_settlement_reverses_journal_when_lock_step_fails(monkeypatch):
+    from app.modules.business.schemas import GstSettlementCreateRequest
+
+    settlements = FakeCollection()
+    locks = AlwaysFailUpdateCollection()
+    captured = {}
+
+    def fake_get_collection(name):
+        if name == business_service.GST_SETTLEMENTS_COLLECTION:
+            return settlements
+        if name == business_service.GST_PERIOD_LOCKS_COLLECTION:
+            return locks
+        return FakeCollection()
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "initialize_default_chart_of_accounts", lambda *a, **k: _async_none())
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    async def fake_balances(session, **_kwargs):
+        return {
+            "output": {"igst": Decimal("100"), "cgst": Decimal("500"), "sgst": Decimal("500")},
+            "credit": {"igst": Decimal("600"), "cgst": Decimal("200"), "sgst": Decimal("100")},
+        }
+
+    async def fake_resolve(_session, *, account_code, **_kwargs):
+        return _INVOICE_ACCOUNT_IDS[account_code]
+
+    async def fake_post_journal_entry(_session, **_kwargs):
+        return SimpleNamespace(id=1252), True
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2252), True
+
+    monkeypatch.setattr(business_service, "_gst_period_balances", fake_balances)
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve)
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+
+    with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
+        await business_service.create_gst_settlement(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="admin-1",
+            payload=GstSettlementCreateRequest(period="2026-06", lock_period=True),
+            idempotency_key="gst-comp-2",
+        )
+
+    assert captured["journal_id"] == 1252
+    assert captured["reason"] == "Compensation after GST settlement persistence failure for 2026-06"
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
+    assert settlements.docs == []
+
+
 def _async_none():
     async def _noop():
         return None
@@ -1390,13 +2136,14 @@ async def test_sales_invoice_uses_custom_numbering_and_enforces_required(monkeyp
             payload=SalesInvoiceCreateRequest(**base), idempotency_key=None,
         )
 
-    # With due_date -> posts, and uses the custom number format.
+    # With due_date -> creates a pending-approval invoice and uses the custom number format.
     result = await business_service.create_sales_invoice(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=SalesInvoiceCreateRequest(due_date=date(2026, 7, 8), **base), idempotency_key=None,
     )
     assert result["invoice_number"] == "ACME/2026-27/0001"
-    assert result["status"] == "posted"
+    assert result["status"] == "pending_approval"
+    assert result["approval_status"] == "pending_approval"
 
 
 def test_business_resolver_rejects_wrong_app_key():
@@ -1423,6 +2170,84 @@ def test_business_resolver_blocks_default_tenant_for_writes():
         )
 
     assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_pdf_requires_posted_status(monkeypatch):
+    async def fake_get_sales_invoice(**_kwargs):
+        return {
+            "invoice_id": "inv-draft-1",
+            "invoice_number": "INV-1",
+            "status": "pending_approval",
+        }
+
+    monkeypatch.setattr(business_router, "get_sales_invoice", fake_get_sales_invoice)
+
+    with pytest.raises(HTTPException) as exc:
+        await business_router.get_business_sales_invoice_pdf(
+            invoice_id="inv-draft-1",
+            accounting_entity_id="primary",
+            _module_context={},
+            current_user={"tenant_id": "business-tenant", "app_key": "mitrabooks"},
+            x_tenant_id=None,
+            x_app_key="mitrabooks",
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "Only posted sales invoices can be rendered or exported"
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_pdf_allows_posted_document(monkeypatch):
+    async def fake_get_sales_invoice(**_kwargs):
+        return {
+            "invoice_id": "inv-posted-1",
+            "invoice_number": "INV-1",
+            "status": "posted",
+        }
+
+    async def fake_get_invoice_settings(**_kwargs):
+        return {"branding": {"company_name": "Acme"}}
+
+    monkeypatch.setattr(business_router, "get_sales_invoice", fake_get_sales_invoice)
+    monkeypatch.setattr(business_router, "get_invoice_settings", fake_get_invoice_settings)
+    monkeypatch.setattr(business_router, "build_sales_invoice_pdf", lambda invoice, branding: b"%PDF-test")
+
+    response = await business_router.get_business_sales_invoice_pdf(
+        invoice_id="inv-posted-1",
+        accounting_entity_id="primary",
+        _module_context={},
+        current_user={"tenant_id": "business-tenant", "app_key": "mitrabooks"},
+        x_tenant_id=None,
+        x_app_key="mitrabooks",
+    )
+
+    assert response.media_type == "application/pdf"
+    assert response.body == b"%PDF-test"
+
+
+def test_posted_output_guard_rejects_missing_bill_document():
+    with pytest.raises(HTTPException) as exc:
+        business_router._require_posted_document_for_output(
+            None,
+            not_found_detail="Purchase bill not found",
+            label="purchase bills",
+        )
+
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Purchase bill not found"
+
+
+def test_posted_output_guard_rejects_unposted_bill_document():
+    with pytest.raises(HTTPException) as exc:
+        business_router._require_posted_document_for_output(
+            {"bill_id": "bill-1", "status": "draft"},
+            not_found_detail="Purchase bill not found",
+            label="purchase bills",
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "Only posted purchase bills can be rendered or exported"
 
 
 @pytest.mark.asyncio
@@ -1884,13 +2709,21 @@ def _party_tag_mocks(monkeypatch, store, captured):
 async def test_sales_invoice_tags_receivable_line_with_customer(monkeypatch):
     store = FakeCollection(); _seed_customer(store); captured = {}
     _party_tag_mocks(monkeypatch, store, captured)
-    await business_service.create_sales_invoice(
+    created_doc = await business_service.create_sales_invoice(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=SalesInvoiceCreateRequest(
             customer_party_id="cust-1", invoice_date=date(2026, 6, 8), is_inter_state=False,
             line_items=[SalesInvoiceLineItem(description="W", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
         ),
         idempotency_key=None,
+    )
+    await business_service.review_sales_invoice(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=created_doc["invoice_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
     )
     lines = captured["payload"].lines
     receivable = lines[0]  # Dr receivable is first
@@ -1904,13 +2737,21 @@ async def test_sales_invoice_tags_receivable_line_with_customer(monkeypatch):
 async def test_purchase_bill_tags_payable_line_with_vendor(monkeypatch):
     store = FakeCollection(); _seed_vendor(store); captured = {}
     _party_tag_mocks(monkeypatch, store, captured)
-    await business_service.create_purchase_bill(
+    created_doc = await business_service.create_purchase_bill(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=PurchaseBillCreateRequest(
             vendor_party_id="vend-1", bill_number="B-1", bill_date=date(2026, 6, 8), is_inter_state=False,
             line_items=[PurchaseBillLineItem(description="G", quantity=Decimal("1"), rate=Decimal("100"), gst_rate=Decimal("18"))],
         ),
         idempotency_key=None,
+    )
+    await business_service.review_purchase_bill(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=created_doc["bill_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
     )
     lines = captured["payload"].lines
     payable = [l for l in lines if l.account_id == _INVOICE_ACCOUNT_IDS["21001"]][0]

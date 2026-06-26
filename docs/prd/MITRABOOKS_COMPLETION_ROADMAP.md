@@ -4,6 +4,13 @@
 
 MitraBooks has working business-accounting slices for parties, vouchers, invoices, bills, credit/debit notes, GST preparation, TDS/TCS, statements, bank reconciliation, inventory basics, fixed assets, dimensions, opening balances, year-end close, audit trails, and financial health checks.
 
+Current implementation classification:
+
+- Implemented but not production-ready: typed vouchers, sales invoices, purchase bills, credit/debit notes, GST settlement, statements, bank reconciliation, fixed assets, dimensions, inventory basics, opening balances, and year-end close.
+- Implemented: cross-store compensation/reversal protection for payroll, bulk import, typed vouchers, sales invoices, purchase bills, credit notes, debit notes, and GST settlement.
+- Implemented but not production-ready: CA invite backend hardening now uses token-based invite acceptance with expiry, single-use acceptance, and revoke handling; browser/operator UX still needs completion.
+- Planned/deferred: attachment/document workflow, browser E2E depth, compliance signoff, export governance, Data Health Score, advanced inventory depth, and multi-client CA practice modeling.
+
 The landing page, public legal pages, pricing content, and backend MitraBooks pricing catalog are in place.
 
 The settings screen intentionally shows several items as planned because the UI should not pretend that backend contracts, external integrations, or high-risk accounting controls are complete before they are implemented and tested.
@@ -12,6 +19,7 @@ The settings screen intentionally shows several items as planned because the UI 
 
 | Phase | Dates | Scope | Completion Definition |
 | --- | --- | --- | --- |
+| Phase 1 closeout | 2026-06-24 to 2026-06-26 | High-risk correctness and security hardening: compensation pattern across business posting flows, true invoice/bill draft-to-approve lifecycle, posted-only invoice output guard, and CA token-based invite acceptance | Cross-store posting flows reverse automatically on post-persist failure, invoices/bills no longer auto-post on create, CA invites no longer expose or rely on temporary passwords, and local preflight passes |
 | Phase 2A | 2026-06-12 to 2026-06-14 | Landing page pricing polish, separate regular-business and CA/bookkeeper pricing, LegalMitra/MandirMitra/GruhaMitra/MitraBooks shared Razorpay account configuration, and billing metadata capture | Pricing is visible, all four product pricing endpoints exist, MitraBooks business and CA practice pricing are separate, Razorpay config uses the SanMitra account env, and webhook transactions record app/plan metadata |
 | Phase 2B | 2026-06-15 to 2026-06-21 | Core settings backend contracts: organization profile, branches, roles, permissions, voucher numbering, financial locks, templates, notifications | Settings cards stop saying only "Needs Backend Contract" and either save tenant-scoped settings or route to implemented workspaces |
 | Phase 2C | 2026-06-22 to 2026-06-30 | CA practice onboarding: client master, multi-company dashboard, client access controls, compliance tracking, and work assignment | CA Practice Portal supports tenant-safe client records, staff assignment, document review queues, and company switching |
@@ -110,3 +118,11 @@ Regular business account pricing and CA Practice / Bookkeeper pricing must stay 
 - Do not store payment card details or Razorpay secrets in tenant records.
 - Do not bypass tenant/app-key checks for CA practice client switching.
 - Do not enable live GST filing or bank payment execution until provider contracts, tenant authorization, and E2E checks are complete.
+
+## Immediate Remaining Gaps After Phase 1 Closeout
+
+- Approval workflow depth beyond invoices and bills is still implemented but not complete as one uniform lifecycle across every ERP document.
+- Attachment/document support is still planned.
+- Browser E2E for invoice, bill, reconciliation, inventory, and fixed-asset workflows is still planned.
+- Compliance signoff for GST/TDS remains pending and should stay labeled preparation/reporting until reviewed.
+- Export governance, Data Health Score, advanced inventory, and multi-client CA practice modeling remain planned/deferred.

@@ -13,6 +13,7 @@ from app.modules.business.service import (
     _compute_invoice_lines,
 )
 from app.modules.business.schemas import (
+    ApprovalReviewRequest,
     PurchaseBillCreateRequest,
     PurchaseBillLineItem,
     SalesInvoiceCreateRequest,
@@ -94,9 +95,17 @@ async def test_composition_sale_is_bill_of_supply_without_gst(monkeypatch):
     captured = {}
     _patch_common(monkeypatch, store, captured)
 
-    result = await business_service.create_sales_invoice(
+    created_doc = await business_service.create_sales_invoice(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=_payload(), idempotency_key="bos-1",
+    )
+    result = await business_service.review_sales_invoice(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=created_doc["invoice_id"],
+        reviewed_by="admin-1",
+        payload=ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
     )
 
     # Journal has only AR debit + income credit — no output-GST legs.
@@ -135,7 +144,7 @@ async def test_composition_purchase_capitalises_gst_no_itc(monkeypatch):
     captured = {}
     _patch_common(monkeypatch, store, captured, category="goods")
 
-    result = await business_service.create_purchase_bill(
+    created_doc = await business_service.create_purchase_bill(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=PurchaseBillCreateRequest(
             vendor_party_id="vend-1",
@@ -146,6 +155,14 @@ async def test_composition_purchase_capitalises_gst_no_itc(monkeypatch):
                                              rate=Decimal("100"), gst_rate=Decimal("18"))],
         ),
         idempotency_key="cbill-1",
+    )
+    result = await business_service.review_purchase_bill(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=created_doc["bill_id"],
+        reviewed_by="admin-1",
+        payload=ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
     )
 
     # Composition: GST folded into expense, no Input-GST (ITC) legs.
