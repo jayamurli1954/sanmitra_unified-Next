@@ -622,6 +622,7 @@ Before reporting work complete:
 - Confirm files changed are only under `D:\sanmitra_unified-Next`.
 - Mention if `D:\sanmitra-backend` was read as reference.
 - Mention if no tests were run because this workspace has docs only.
+- Confirm `python scripts/preflight.py` was run and passed before any commit/push (see §28), or state why it was not applicable.
 - Mention any remaining ambiguity or implementation risk.
 
 ## 24. Repo-Local Skills
@@ -660,6 +661,7 @@ Required checklist:
 - Security and privacy: no secrets, tokens, payment data, broker credentials, legal documents, PII exports, or database dumps are committed or logged.
 - Release and rollback: schema, migration, accounting, or tenant-risk changes include rollback/reversal notes or an explicit reason they are not needed.
 - Tests: CI-relevant tests are added or updated for the changed risk area, or the PR states why tests are not applicable.
+- Local preflight: `python scripts/preflight.py` (plus `--frontend`/`--security` when relevant) was run and passed before the push, per §28.
 
 The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains present and wired into repository validation. It is a policy-presence gate, not a substitute for code review or domain-specific tests.
 
@@ -672,6 +674,7 @@ The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains
 | 1.2 | 2026-05-20 | Added repo-local skill routing for SanMitra domain workflows |
 | 1.3 | 2026-05-26 | Added PR acceptance checklist and AGENTS compliance gate |
 | 1.4 | 2026-06-23 | Marked master planning references as non-negotiable and reinforced InvestMitra unified-scope exclusion |
+| 1.5 | 2026-06-24 | Added §28 mandatory local preflight (`scripts/preflight.py`) + local CI/security SOP, wired into validation and PR checklist |
 
 ## 27. CI/CD and Release Discipline
 
@@ -692,3 +695,38 @@ Version rules:
 - Production deploys must reference an existing release tag.
 - Rollback must target the previous known-good `backend-v*` tag.
 - Do not roll back financial data by editing ledger rows; use reversal or adjustment entries.
+
+## 28. Local Preflight Before Push (Mandatory)
+
+GitHub Actions for this repo is expensive (2500+ runs and counting). Every developer
+and agent MUST run the locally-reproducible CI gates before committing/pushing so a
+green local run becomes a green push. Do not bypass this to "let CI catch it."
+
+Single command (Tier 1 — always required, zero install):
+
+```bash
+python scripts/preflight.py
+```
+
+It reproduces `backend-ci` and `accounting-stability-gate` exactly: repository safety,
+AGENTS compliance, `compileall`, text integrity, frontend/backend route contract, and
+pytest. A non-zero exit means do NOT push.
+
+Additional tiers, by change type:
+
+- Frontend change (`frontend/**`): `python scripts/preflight.py --frontend`
+  (reproduces `mitrabooks-shell-smoke` and `global-e2e-playwright`).
+- Dependency/lockfile change: `python scripts/preflight.py --security`
+  (runs `trivy` locally if installed).
+- Before a release: `python scripts/preflight.py --all`, then `scripts/release_preflight.py`.
+
+Security-scanner reality (documented, not optional knowledge):
+
+- `trivy` is runnable locally (Windows binary) and SHOULD be run for dependency changes.
+- `semgrep` has no native Windows support and `codeql` is impractical locally — they are
+  **CI-only gates**. `preflight.py --security` prints `SKIPPED` for any scanner that is
+  not installed; it never silently treats a non-run scanner as passing.
+
+Full procedure and the per-change SOP: `docs/LOCAL_CI_AND_SECURITY_SOP.md`. Commit
+batching (one grouped commit per feature; standalone commits only for bug fixes to
+already-live features) keeps the run count down and is part of this discipline.

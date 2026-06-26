@@ -186,6 +186,9 @@ async def _read_business_upload(file: UploadFile) -> bytes:
 
 @router.get("/approval-queue", response_model=ApprovalQueueResponse)
 async def business_approval_queue(
+    document_type: str | None = Query(default=None, pattern="^(voucher|sales_invoice|purchase_bill|credit_note|debit_note)$"),
+    status: str | None = Query(default=None, pattern="^(draft|pending_approval|posted|rejected|cancelled|reversed|posting)$"),
+    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
     include_reviewed: bool = Query(default=False),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
@@ -205,6 +208,9 @@ async def business_approval_queue(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
+        document_type=document_type,
+        status=status,
+        approval_status=approval_status,
         include_reviewed=include_reviewed,
         limit=limit,
     )
@@ -1350,7 +1356,7 @@ async def create_typed_voucher(
         x_tenant_id=x_tenant_id,
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
-        operation="voucher posting",
+        operation="voucher creation",
     )
     try:
         return await post_typed_voucher(
@@ -1370,7 +1376,8 @@ async def create_typed_voucher(
 @router.get("/vouchers", response_model=TypedVoucherListResponse)
 async def list_business_vouchers(
     voucher_type: str | None = Query(default=None, pattern="^(payment|receipt|contra|journal)$"),
-    approval_status: str | None = Query(default=None, pattern="^(auto_posted|pending_approval|approved|rejected)$"),
+    status: str | None = Query(default=None, pattern="^(pending_approval|posted|rejected|reversed|posting)$"),
+    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
     session: AsyncSession = Depends(get_async_session),
@@ -1392,6 +1399,7 @@ async def list_business_vouchers(
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
         voucher_type=voucher_type,
+        status=status,
         approval_status=approval_status,
         limit=limit,
     )
@@ -1429,6 +1437,7 @@ async def get_business_voucher(
 async def review_business_voucher(
     voucher_id: str,
     payload: ApprovalReviewRequest,
+    session: AsyncSession = Depends(get_async_session),
     _module_context: dict = Depends(require_enabled_module("business")),
     current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -1443,6 +1452,7 @@ async def review_business_voucher(
     )
     try:
         return await review_typed_voucher(
+            session=session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
             voucher_id=voucher_id,

@@ -136,6 +136,19 @@ async def _post_seed_voucher(
         ),
         idempotency_key=f"mitrabooks-e2e:{reference.lower()}",
     )
+    if str(doc.get("status") or "") == "pending_approval":
+        await business_service.review_typed_voucher(
+            session=session,
+            tenant_id=tenant_id,
+            app_key=APP_KEY,
+            voucher_id=str(doc["voucher_id"]),
+            reviewed_by=created_by,
+            payload=business_service.ApprovalReviewRequest(
+                approve=True,
+                notes="Auto-approved for MitraBooks E2E seed",
+                accounting_entity_id=ACCOUNTING_ENTITY_ID,
+            ),
+        )
     return bool(doc.get("created"))
 
 

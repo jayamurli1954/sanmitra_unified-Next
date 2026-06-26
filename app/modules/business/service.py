@@ -160,6 +160,10 @@ def _apply_approval_defaults(result: dict) -> dict:
 def _voucher_response_doc(doc: dict, *, created: bool = False) -> dict:
     result = _json_safe_doc(doc)
     _apply_approval_defaults(result)
+    result.setdefault("journal_entry_id", None)
+    result.setdefault("reversal_journal_entry_id", None)
+    result.setdefault("reversal_reason", None)
+    result.setdefault("reversed_at", None)
     result.setdefault("created", created)
     return result
 
@@ -831,6 +835,7 @@ async def list_vouchers(
     app_key: str,
     accounting_entity_id: str,
     voucher_type: str | None = None,
+    status: str | None = None,
     approval_status: str | None = None,
     limit: int = 100,
 ) -> dict:
@@ -842,6 +847,8 @@ async def list_vouchers(
     }
     if voucher_type:
         filters["voucher_type"] = voucher_type
+    if status:
+        filters["status"] = status
     if approval_status:
         filters["approval_status"] = approval_status
 
@@ -876,6 +883,7 @@ async def get_voucher(
 
 async def review_typed_voucher(
     *,
+    session: AsyncSession | None = None,
     tenant_id: str,
     app_key: str,
     voucher_id: str,
@@ -892,10 +900,51 @@ async def review_typed_voucher(
     voucher = await vouchers.find_one(filters)
     if voucher is None:
         raise AccountingNotFoundError("Voucher not found")
-    if voucher.get("status") != "posted":
-        raise AccountingValidationError("Only posted vouchers can be reviewed for approval")
-
     old_value = _voucher_response_doc(voucher)
+    current_status = str(voucher.get("status") or "").strip().lower()
+    if current_status in {"draft", "pending_approval"}:
+        if current_status == "draft":
+            raise AccountingValidationError("Only submitted vouchers can be approved or rejected")
+        if payload.approve:
+            return await _approve_typed_voucher_document(
+                session=session,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                reviewed_by=reviewed_by,
+                voucher=voucher,
+                old_value=old_value,
+                approval_notes=payload.notes,
+            )
+        patch = {
+            "status": "rejected",
+            "approval_required": True,
+            "approval_status": "rejected",
+            "approval_decided_at": _now(),
+            "approval_decided_by": reviewed_by,
+            "approval_notes": payload.notes,
+            "rejection_reason": payload.rejection_reason or "Rejected during manual review",
+            "updated_at": _now(),
+        }
+        if voucher.get("approval_submitted_at") is None:
+            patch["approval_submitted_at"] = voucher.get("created_at")
+            patch["approval_submitted_by"] = voucher.get("created_by")
+        await vouchers.update_one(filters, {"$set": patch})
+        voucher.update(patch)
+        result = _voucher_response_doc(voucher)
+        await _audit_business_event(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            user_id=reviewed_by,
+            action="business_voucher_reviewed",
+            entity_type="business_voucher",
+            entity_id=voucher_id,
+            old_value=old_value,
+            new_value=result,
+        )
+        return result
+    if current_status != "posted":
+        raise AccountingValidationError("Only posted or pending-approval vouchers can be reviewed")
+
     approval_status = "approved" if payload.approve else "rejected"
     patch = {
         "approval_required": True,
@@ -913,6 +962,115 @@ async def review_typed_voucher(
     await vouchers.update_one(filters, {"$set": patch})
     voucher.update(patch)
     result = _voucher_response_doc(voucher)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=reviewed_by,
+        action="business_voucher_reviewed",
+        entity_type="business_voucher",
+        entity_id=voucher_id,
+        old_value=old_value,
+        new_value=result,
+    )
+    return result
+
+
+async def _approve_typed_voucher_document(
+    *,
+    session,
+    tenant_id: str,
+    app_key: str,
+    reviewed_by: str,
+    voucher: dict,
+    old_value: dict,
+    approval_notes: str | None,
+) -> dict:
+    if session is None:
+        raise AccountingValidationError("Approval posting requires an active accounting session")
+
+    voucher_id = str(voucher.get("voucher_id") or "")
+    voucher_number = str(voucher.get("voucher_number") or voucher_id)
+    accounting_entity_id = str(voucher.get("accounting_entity_id") or "primary")
+    entry_date = date.fromisoformat(str(voucher.get("entry_date") or "")[:10])
+    amount = Decimal(str(voucher.get("amount") or "0")).quantize(Decimal("0.01"))
+    debit_account_id = int(voucher.get("debit_account_id"))
+    credit_account_id = int(voucher.get("credit_account_id"))
+    party_id = voucher.get("party_id")
+    voucher_type = str(voucher.get("voucher_type") or "journal")
+    description = str(voucher.get("description") or f"{voucher_type.title()} voucher")
+    reference = str(voucher.get("reference") or voucher_number)
+    vouchers = get_collection(VOUCHERS_COLLECTION)
+
+    try:
+        journal_entry, created = await post_journal_entry(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            payload=JournalPostRequest(
+                entry_date=entry_date,
+                description=description,
+                reference=reference,
+                source_module="business",
+                source_document_type="voucher",
+                source_document_id=voucher_id,
+                lines=[
+                    JournalLineIn(
+                        account_id=debit_account_id,
+                        debit=amount,
+                        credit=Decimal("0"),
+                        party_id=party_id if voucher_type == "payment" else None,
+                    ),
+                    JournalLineIn(
+                        account_id=credit_account_id,
+                        debit=Decimal("0"),
+                        credit=amount,
+                        party_id=party_id if voucher_type == "receipt" else None,
+                    ),
+                ],
+            ),
+            idempotency_key=f"business-voucher:{voucher_id}",
+        )
+    except Exception as exc:
+        raise AccountingValidationError(f"Voucher approval posting failed: {exc}") from exc
+
+    patch = {
+        "status": "posted",
+        "journal_entry_id": journal_entry.id,
+        "approval_required": True,
+        "approval_status": "approved",
+        "approval_submitted_at": voucher.get("approval_submitted_at") or voucher.get("created_at"),
+        "approval_submitted_by": voucher.get("approval_submitted_by") or voucher.get("created_by"),
+        "approval_decided_at": _now(),
+        "approval_decided_by": reviewed_by,
+        "approval_notes": approval_notes or "Approved and posted",
+        "rejection_reason": None,
+        "updated_at": _now(),
+    }
+    try:
+        await vouchers.update_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "voucher_id": voucher_id},
+            {"$set": patch},
+        )
+    except Exception as exc:
+        await _reverse_after_domain_persistence_failure(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            created_by=reviewed_by,
+            journal_entry_id=int(journal_entry.id),
+            document_label="Business voucher",
+            document_id=voucher_id,
+            reversal_reason=f"Compensation after business voucher approval persistence failure for {voucher_number}",
+            reversal_idempotency_key=f"business-voucher-approve-compensate:{voucher_id}:{journal_entry.id}",
+        )
+        raise AccountingValidationError(
+            "Business voucher approval persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
+    voucher.update(patch)
+    result = _voucher_response_doc(voucher, created=created)
     await _audit_business_event(
         tenant_id=tenant_id,
         app_key=app_key,
@@ -1265,9 +1423,11 @@ async def post_typed_voucher(
         "credit_account_id": credit_account_id,
         "description": payload.description,
         "reference": reference,
-        "status": "posting",
-        "approval_required": False,
-        "approval_status": "auto_posted",
+        "status": "pending_approval",
+        "approval_required": True,
+        "approval_status": "pending_approval",
+        "approval_submitted_at": now,
+        "approval_submitted_by": created_by,
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -1277,66 +1437,12 @@ async def post_typed_voucher(
     vouchers = get_collection(VOUCHERS_COLLECTION)
     await vouchers.insert_one(doc)
 
-    try:
-        journal_entry, created = await post_journal_entry(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            created_by=created_by,
-            payload=JournalPostRequest(
-                entry_date=payload.entry_date,
-                description=payload.description,
-                reference=reference,
-                lines=[
-                    JournalLineIn(
-                        account_id=debit_account_id, debit=amount, credit=Decimal("0"),
-                        # Payment: debit line hits the vendor (payable) sub-ledger.
-                        party_id=payload.party_id if payload.voucher_type == "payment" else None,
-                    ),
-                    JournalLineIn(
-                        account_id=credit_account_id, debit=Decimal("0"), credit=amount,
-                        # Receipt: credit line hits the customer (receivable) sub-ledger.
-                        party_id=payload.party_id if payload.voucher_type == "receipt" else None,
-                    ),
-                ],
-            ),
-            idempotency_key=idempotency_key or f"business-voucher:{voucher_id}",
-        )
-    except Exception:
-        await vouchers.delete_one({"tenant_id": tenant_id, "app_key": app_key, "voucher_id": voucher_id})
-        raise
-
-    update = {"status": "posted", "journal_entry_id": journal_entry.id, "updated_at": _now()}
-    try:
-        await vouchers.update_one(
-            {"tenant_id": tenant_id, "app_key": app_key, "voucher_id": voucher_id},
-            {"$set": update},
-        )
-    except Exception as exc:
-        await _reverse_after_domain_persistence_failure(
-            session,
-            tenant_id=tenant_id,
-            app_key=app_key,
-            accounting_entity_id=payload.accounting_entity_id,
-            created_by=created_by,
-            journal_entry_id=int(journal_entry.id),
-            document_label="Business voucher",
-            document_id=voucher_id,
-            reversal_reason=f"Compensation after business voucher persistence failure for {voucher_number}",
-            reversal_idempotency_key=f"business-voucher-compensate:{voucher_id}:{journal_entry.id}",
-        )
-        raise AccountingValidationError(
-            "Business voucher persistence failed after journal posting; the accounting entry was automatically reversed"
-        ) from exc
-    doc.update(update)
-    doc["created"] = created
-    result = _json_safe_doc(doc)
+    result = _voucher_response_doc(doc, created=True)
     await _audit_business_event(
         tenant_id=tenant_id,
         app_key=app_key,
         user_id=created_by,
-        action="business_voucher_posted",
+        action="business_voucher_created",
         entity_type="business_voucher",
         entity_id=voucher_id,
         new_value=result,
@@ -3923,6 +4029,9 @@ async def list_documents_for_approval_queue(
     tenant_id: str,
     app_key: str,
     accounting_entity_id: str,
+    document_type: str | None = None,
+    status: str | None = None,
+    approval_status: str | None = None,
     include_reviewed: bool = False,
     limit: int = 100,
 ) -> dict:
@@ -3940,6 +4049,8 @@ async def list_documents_for_approval_queue(
         (CREDIT_NOTES_COLLECTION, "credit_note"),
         (DEBIT_NOTES_COLLECTION, "debit_note"),
     ]
+    if document_type:
+        collections = [item for item in collections if item[1] == document_type]
     rows_by_type: dict[str, list[dict]] = {}
     for collection_name, doc_type in collections:
         rows = (
@@ -3953,12 +4064,20 @@ async def list_documents_for_approval_queue(
             row for row in rows
             if str(row.get("status") or "").strip().lower() in {"posted", "pending_approval"}
         ]
+        rows = [
+            row for row in rows
+            if bool(row.get("approval_required")) or str(row.get("approval_status") or "").strip().lower() in {"pending_approval", "approved", "rejected"}
+        ]
+        if status:
+            rows = [row for row in rows if str(row.get("status") or "").strip().lower() == status]
+        if approval_status:
+            rows = [row for row in rows if str(row.get("approval_status") or "auto_posted").strip().lower() == approval_status]
         if not include_reviewed:
             rows = [row for row in rows if str(row.get("approval_status") or "auto_posted") != "approved"]
         rows_by_type[doc_type] = rows
 
     items: list[dict] = []
-    for row in rows_by_type["voucher"]:
+    for row in rows_by_type.get("voucher", []):
         items.append(
             _approval_queue_item(
                 document_type="voucher",
@@ -3979,7 +4098,7 @@ async def list_documents_for_approval_queue(
                 updated_at=row.get("updated_at"),
             )
         )
-    for row in rows_by_type["sales_invoice"]:
+    for row in rows_by_type.get("sales_invoice", []):
         items.append(
             _approval_queue_item(
                 document_type="sales_invoice",
@@ -4000,7 +4119,7 @@ async def list_documents_for_approval_queue(
                 updated_at=row.get("updated_at"),
             )
         )
-    for row in rows_by_type["purchase_bill"]:
+    for row in rows_by_type.get("purchase_bill", []):
         items.append(
             _approval_queue_item(
                 document_type="purchase_bill",
@@ -4021,7 +4140,7 @@ async def list_documents_for_approval_queue(
                 updated_at=row.get("updated_at"),
             )
         )
-    for row in rows_by_type["credit_note"]:
+    for row in rows_by_type.get("credit_note", []):
         items.append(
             _approval_queue_item(
                 document_type="credit_note",
@@ -4042,7 +4161,7 @@ async def list_documents_for_approval_queue(
                 updated_at=row.get("updated_at"),
             )
         )
-    for row in rows_by_type["debit_note"]:
+    for row in rows_by_type.get("debit_note", []):
         items.append(
             _approval_queue_item(
                 document_type="debit_note",

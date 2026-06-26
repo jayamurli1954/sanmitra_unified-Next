@@ -2851,6 +2851,7 @@ function signOutAndReturnToLogin() {
   lastBusinessAccounts = [];
   lastBusinessParties = [];
   lastBusinessVouchers = [];
+  lastVoucherApprovalQueue = [];
   lastAccountingDrilldown = null;
   if (tokenInput) {
     tokenInput.value = "";
@@ -5094,6 +5095,13 @@ const businessListState = {
     from_date: "",
     to_date: "",
   },
+  vouchers: {
+    offset: 0,
+    voucher_type: "",
+    status: "",
+    approval_status: "",
+    include_reviewed: false,
+  },
 };
 
 
@@ -5237,6 +5245,7 @@ function renderBusinessVouchersTable(rows) {
             <th>Amount</th>
             <th>Narration</th>
             <th>Status</th>
+            <th>Approval</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -5244,6 +5253,10 @@ function renderBusinessVouchersTable(rows) {
           ${rows.slice(0, 20).map((row) => {
             const status = row.status || "posted";
             const isReversed = status === "reversed";
+            const approvalStatus = row.approval_status || "not_submitted";
+            const reviewer = row.approval_decided_by || row.reviewed_by || "";
+            const canApprove = status === "pending_approval";
+            const canReject = status === "pending_approval";
             return `
               <tr>
                 <td>${escapeHtml(String(row.entry_date || row.created_at || "").slice(0, 10))}</td>
@@ -5253,16 +5266,37 @@ function renderBusinessVouchersTable(rows) {
                 <td>${escapeHtml((row.description || row.narration || "").slice(0, 40))}</td>
                 <td><span class="pill ${isReversed ? "warn" : "ok"}">${escapeHtml(status)}</span></td>
                 <td>
-                  ${!isReversed ? `
-                    <button
-                      class="secondary"
-                      type="button"
-                      data-business-action="reverse-voucher"
-                      data-voucher-id="${escapeHtml(row.voucher_id || row.id || "")}"
-                    >Reverse</button>
-                  ` : `
-                    <button class="secondary" type="button" disabled>Reversed</button>
-                  `}
+                  <span class="pill ${approvalStatus === "rejected" ? "warn" : approvalStatus === "approved" ? "ok" : ""}">${escapeHtml(approvalStatus)}</span>
+                  <span class="row-subtext">${escapeHtml(reviewer || "Unreviewed")}</span>
+                </td>
+                <td>
+                  <div class="action-row">
+                    ${canApprove ? `
+                      <button
+                        type="button"
+                        data-business-action="review-voucher-approve"
+                        data-voucher-id="${escapeHtml(row.voucher_id || row.id || "")}"
+                      >Approve</button>
+                    ` : ""}
+                    ${canReject ? `
+                      <button
+                        class="secondary"
+                        type="button"
+                        data-business-action="review-voucher-reject"
+                        data-voucher-id="${escapeHtml(row.voucher_id || row.id || "")}"
+                      >Reject</button>
+                    ` : ""}
+                    ${!isReversed ? `
+                      <button
+                        class="secondary"
+                        type="button"
+                        data-business-action="reverse-voucher"
+                        data-voucher-id="${escapeHtml(row.voucher_id || row.id || "")}"
+                      >Reverse</button>
+                    ` : `
+                      <button class="secondary" type="button" disabled>Reversed</button>
+                    `}
+                  </div>
                 </td>
               </tr>
             `;
@@ -6884,6 +6918,8 @@ function renderBusinessWorkspace() {
           </div>
           <button class="secondary" type="button" data-business-action="open-create-voucher">+ New Voucher</button>
         </div>
+        ${renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)}
+        ${renderBusinessVouchersListFilters(lastBusinessVouchers.length)}
         ${renderBusinessVouchersTable(lastBusinessVouchers)}
       </div>
     `;
@@ -7688,6 +7724,7 @@ function setBusinessWorkspace(workspace) {
   } else if (workspace === "vouchers") {
     loadBusinessAccounts();
     loadBusinessVouchers();
+    loadVoucherApprovalQueue();
   } else if (workspace === "audit") {
     loadAuditEvents();
   } else if (workspace === "accounting") {
@@ -7809,6 +7846,20 @@ function applyBusinessListFilter(listKind) {
     businessListState.parties.offset = 0;
 
     loadBusinessParties();
+  } else if (listKind === "vouchers") {
+    const panel = document.querySelector("[data-business-list='vouchers']");
+    if (!panel) return;
+
+    const voucherTypeInput = panel.querySelector("select[name='voucher_type']");
+    const statusInput = panel.querySelector("select[name='status']");
+    const approvalInput = panel.querySelector("select[name='approval_status']");
+
+    businessListState.vouchers.voucher_type = voucherTypeInput?.value || "";
+    businessListState.vouchers.status = statusInput?.value || "";
+    businessListState.vouchers.approval_status = approvalInput?.value || "";
+    businessListState.vouchers.offset = 0;
+
+    loadBusinessVouchers();
   }
 }
 
@@ -7822,6 +7873,15 @@ function resetBusinessListFilter(listKind) {
       to_date: "",
     };
     loadBusinessParties();
+  } else if (listKind === "vouchers") {
+    businessListState.vouchers = {
+      offset: 0,
+      voucher_type: "",
+      status: "",
+      approval_status: "",
+      include_reviewed: false,
+    };
+    loadBusinessVouchers();
   }
 }
 
@@ -7830,6 +7890,10 @@ function pageBusinessList(listKind, direction) {
     const offset = Number(businessListState.parties.offset || 0);
     businessListState.parties.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
     loadBusinessParties();
+  } else if (listKind === "vouchers") {
+    const offset = Number(businessListState.vouchers.offset || 0);
+    businessListState.vouchers.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
+    loadBusinessVouchers();
   }
 }
 
@@ -12048,6 +12112,123 @@ function renderInvoiceDetail() {
   `;
 }
 
+function renderBusinessVouchersListFilters(rowsLength) {
+  const state = businessListState.vouchers;
+  const offset = Number(state.offset || 0);
+  const startRow = rowsLength > 0 ? offset + 1 : 0;
+  const endRow = rowsLength > 0 ? offset + Math.min(rowsLength, 20) : 0;
+  const nextDisabled = rowsLength < 20 ? "disabled" : "";
+  const prevDisabled = offset <= 0 ? "disabled" : "";
+
+  return `
+    <div class="list-filter-panel" data-business-list="vouchers">
+      <div class="list-filter-bar">
+        <label class="field">
+          <span>Type</span>
+          <select name="voucher_type">
+            <option value="">All types</option>
+            <option value="payment" ${state.voucher_type === "payment" ? "selected" : ""}>Payment</option>
+            <option value="receipt" ${state.voucher_type === "receipt" ? "selected" : ""}>Receipt</option>
+            <option value="contra" ${state.voucher_type === "contra" ? "selected" : ""}>Contra</option>
+            <option value="journal" ${state.voucher_type === "journal" ? "selected" : ""}>Journal</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select name="status">
+            <option value="">All statuses</option>
+            <option value="posted" ${state.status === "posted" ? "selected" : ""}>Posted</option>
+            <option value="reversed" ${state.status === "reversed" ? "selected" : ""}>Reversed</option>
+            <option value="posting" ${state.status === "posting" ? "selected" : ""}>Posting</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Approval</span>
+          <select name="approval_status">
+            <option value="">All approvals</option>
+            <option value="auto_posted" ${state.approval_status === "auto_posted" ? "selected" : ""}>Auto-posted</option>
+            <option value="approved" ${state.approval_status === "approved" ? "selected" : ""}>Approved</option>
+            <option value="rejected" ${state.approval_status === "rejected" ? "selected" : ""}>Rejected</option>
+            <option value="pending_approval" ${state.approval_status === "pending_approval" ? "selected" : ""}>Pending approval</option>
+          </select>
+        </label>
+        <div class="list-filter-actions">
+          <button type="button" data-business-action="apply-list-filter" data-list-kind="vouchers">Apply</button>
+          <button class="secondary" type="button" data-business-action="reset-list-filter" data-list-kind="vouchers">Reset</button>
+        </div>
+      </div>
+      <div class="paging-row">
+        <span class="muted">Showing ${escapeHtml(startRow)}-${escapeHtml(endRow)}</span>
+        <button class="secondary" type="button" data-business-action="page-list" data-list-kind="vouchers" data-page-direction="prev" ${prevDisabled}>Prev</button>
+        <button class="secondary" type="button" data-business-action="page-list" data-list-kind="vouchers" data-page-direction="next" ${nextDisabled}>Next</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderVoucherApprovalQueuePanel(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const openItems = rows.filter((row) => ["pending_approval", "rejected"].includes(row.approval_status || "not_submitted"));
+  const rejectedCount = openItems.filter((row) => row.approval_status === "rejected").length;
+  const pendingCount = openItems.filter((row) => row.approval_status === "pending_approval").length;
+
+  if (openItems.length === 0) {
+    return `
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h5>Voucher review queue</h5>
+            <p>No voucher reviews are pending in the current tenant context.</p>
+          </div>
+          <button class="secondary" type="button" data-business-action="voucher-queue-refresh">Refresh</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="verification-panel">
+      <div class="preview-heading compact">
+        <div>
+          <h5>Voucher review queue</h5>
+          <p>${escapeHtml(String(openItems.length))} voucher(s) still need explicit review visibility.</p>
+        </div>
+        <button class="secondary" type="button" data-business-action="voucher-queue-refresh">Refresh</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><span>Open items</span><strong>${escapeHtml(String(openItems.length))}</strong></div>
+        <div class="stat-card"><span>Pending</span><strong>${escapeHtml(String(pendingCount))}</strong></div>
+        <div class="stat-card"><span>Rejected</span><strong>${escapeHtml(String(rejectedCount))}</strong></div>
+      </div>
+      <div class="table-preview compact-table erp-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Voucher</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Approval</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${openItems.slice(0, 10).map((row) => `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(row.document_number || row.document_id || "-")}</strong>
+                  <span class="row-subtext">${escapeHtml(row.document_type || "voucher")}</span>
+                </td>
+                <td>${escapeHtml(String(row.document_date || row.created_at || "").slice(0, 10))}</td>
+                <td class="amount">${escapeHtml(formatCurrency(row.amount || 0))}</td>
+                <td><span class="pill ${row.approval_status === "rejected" ? "warn" : ""}">${escapeHtml(row.approval_status || "not_submitted")}</span></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function openInvoiceSettings() {
   if (!lastInvoiceSettings) loadInvoiceSettings();
   setBusinessSalesView("settings");
@@ -13623,6 +13804,7 @@ function renderBusinessDebitNoteWorkspace() {
 // ========== Business Module: Typed Vouchers ==========
 
 let lastBusinessVouchers = [];
+let lastVoucherApprovalQueue = [];
 let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
@@ -14714,14 +14896,15 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Voucher posted", `${voucherType.toUpperCase()} voucher created successfully.`);
+    setLoginStatus("ok", "Voucher submitted", `${voucherType.toUpperCase()} voucher sent for approval.`);
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
+    await loadVoucherApprovalQueue(true);
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
   } else {
-    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+    setLoginStatus("danger", "Create voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
   renderJson(apiOutput, { create_voucher: result });
 }
@@ -14776,14 +14959,15 @@ async function createContraVoucher(appKey, date) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Voucher posted", "Contra voucher created successfully.");
+    setLoginStatus("ok", "Voucher submitted", "Contra voucher sent for approval.");
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
+    await loadVoucherApprovalQueue(true);
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
   } else {
-    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+    setLoginStatus("danger", "Create voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
   renderJson(apiOutput, { create_voucher: result });
 }
@@ -14850,14 +15034,15 @@ async function createJournalVoucher(appKey, date) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Voucher posted", "Journal entry posted successfully.");
+    setLoginStatus("ok", "Voucher submitted", "Journal entry sent for approval.");
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
+    await loadVoucherApprovalQueue(true);
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
   } else {
-    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+    setLoginStatus("danger", "Create voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
   renderJson(apiOutput, { create_voucher: result });
 }
@@ -14913,16 +15098,17 @@ async function createBusinessVoucher(voucherData) {
   });
 
   if (result.ok) {
-    setLoginStatus("ok", "Voucher posted", `Journal entry ${result.payload?.id || "created"} posted.`);
+    setLoginStatus("ok", "Voucher submitted", `Journal entry ${result.payload?.voucher_number || "created"} sent for approval.`);
     document.getElementById("business-voucher-create-dialog")?.close();
     clearVoucherForm();
     await loadBusinessVouchers();
+    await loadVoucherApprovalQueue(true);
     // Force refresh of current workspace
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
   } else {
-    setLoginStatus("danger", "Post voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
+    setLoginStatus("danger", "Create voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
   }
   renderJson(apiOutput, { create_voucher: result });
 }
@@ -14937,8 +15123,20 @@ async function createBusinessVoucher(voucherData) {
 async function loadBusinessVouchers(filters = {}) {
   const appKey = "mitrabooks";
   const params = new URLSearchParams();
-  params.append("offset", 0);
-  params.append("limit", 20);
+  const state = businessListState.vouchers;
+  const merged = {
+    offset: state.offset || 0,
+    limit: 20,
+    voucher_type: state.voucher_type || "",
+    status: state.status || "",
+    approval_status: state.approval_status || "",
+    ...filters,
+  };
+  params.append("offset", merged.offset);
+  params.append("limit", merged.limit);
+  if (merged.voucher_type) params.append("voucher_type", merged.voucher_type);
+  if (merged.status) params.append("status", merged.status);
+  if (merged.approval_status) params.append("approval_status", merged.approval_status);
 
   const queryString = params.toString();
   const url = `/api/v1/business/vouchers${queryString ? "?" + queryString : ""}`;
@@ -14957,6 +15155,50 @@ async function loadBusinessVouchers(filters = {}) {
     }
   }
   renderJson(apiOutput, { vouchers: { ok: result.ok, status: result.status, count: lastBusinessVouchers.length, detail: result.payload?.detail || null } });
+}
+
+async function loadVoucherApprovalQueue(includeReviewed = true) {
+  const appKey = "mitrabooks";
+  const params = new URLSearchParams({
+    document_type: "voucher",
+    include_reviewed: includeReviewed ? "true" : "false",
+    limit: "100",
+  });
+  const result = await apiRequest(appKey, `/api/v1/business/approval-queue?${params.toString()}`, { method: "GET" });
+
+  if (result.ok) {
+    const items = Array.isArray(result.payload?.items) ? result.payload.items : [];
+    lastVoucherApprovalQueue = items;
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    lastVoucherApprovalQueue = [];
+    setLoginStatus("danger", "Unable to load voucher review queue", statusDetailText(result.payload?.detail) || `Approval queue request failed with HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { approval_queue: { ok: result.ok, status: result.status, count: lastVoucherApprovalQueue.length, detail: result.payload?.detail || null } });
+}
+
+async function reviewBusinessVoucher(voucherId, approve, notes, rejectionReason = "") {
+  const appKey = "mitrabooks";
+  const result = await apiRequest(appKey, `/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/review`, {
+    method: "POST",
+    body: JSON.stringify({
+      approve,
+      notes,
+      rejection_reason: rejectionReason || null,
+      accounting_entity_id: "primary",
+    }),
+  });
+
+  if (result.ok) {
+    setLoginStatus("ok", approve ? "Voucher approved" : "Voucher rejected", approve ? "Voucher review recorded." : "Voucher rejection recorded.");
+    await loadBusinessVouchers();
+    await loadVoucherApprovalQueue(true);
+  } else {
+    setLoginStatus("danger", approve ? "Voucher approval failed" : "Voucher rejection failed", statusDetailText(result.payload?.detail) || "Try again.");
+  }
+  renderJson(apiOutput, { review_voucher: result });
 }
 
 async function reverseBusinessVoucher(voucherId) {
@@ -17007,6 +17249,7 @@ window.addEventListener("auth-session-expired", () => {
   lastBusinessAccounts = [];
   lastBusinessParties = [];
   lastBusinessVouchers = [];
+  lastVoucherApprovalQueue = [];
   lastAccountingDrilldown = null;
   clearAllTokens();
   if (loginPassword) loginPassword.value = "";
@@ -17174,6 +17417,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     resetBusinessListFilter(button.getAttribute("data-list-kind") || "");
   } else if (businessAction === "page-list") {
     pageBusinessList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
+  } else if (businessAction === "voucher-queue-refresh") {
+    loadVoucherApprovalQueue(true);
   } else if (businessAction === "workspace-view") {
     setBusinessWorkspace(button.getAttribute("data-workspace-view") || "overview");
   } else if (businessAction === "settings-detail") {
@@ -17309,6 +17554,15 @@ dashboardPreview.addEventListener("click", async (event) => {
     const voucherId = button.getAttribute("data-voucher-id") || "";
     if (confirm("Reverse this voucher? A reversal entry will be created.")) {
       reverseBusinessVoucher(voucherId);
+    }
+  } else if (businessAction === "review-voucher-approve") {
+    const voucherId = button.getAttribute("data-voucher-id") || "";
+    reviewBusinessVoucher(voucherId, true, "Approved from voucher queue");
+  } else if (businessAction === "review-voucher-reject") {
+    const voucherId = button.getAttribute("data-voucher-id") || "";
+    const rejectionReason = prompt("Enter rejection reason for this voucher:", "Needs correction") || "";
+    if (rejectionReason) {
+      reviewBusinessVoucher(voucherId, false, "Rejected from voucher queue", rejectionReason);
     }
   } else if (businessAction === "view-audit-event") {
     openAuditEventDetailDialog(button.getAttribute("data-event-id") || "");

@@ -284,21 +284,6 @@ async def test_typed_voucher_posts_balanced_journal(monkeypatch):
 
     monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
 
-    async def fake_post_journal_entry(session, *, tenant_id, app_key, accounting_entity_id, created_by, payload, idempotency_key):
-        captured.update(
-            {
-                "tenant_id": tenant_id,
-                "app_key": app_key,
-                "accounting_entity_id": accounting_entity_id,
-                "created_by": created_by,
-                "payload": payload,
-                "idempotency_key": idempotency_key,
-            }
-        )
-        return SimpleNamespace(id=77), True
-
-    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
-
     async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
         return int(account_id)
 
@@ -321,64 +306,52 @@ async def test_typed_voucher_posts_balanced_journal(monkeypatch):
         idempotency_key="idem-1",
     )
 
-    assert captured["tenant_id"] == "business-tenant"
-    assert captured["app_key"] == "mitrabooks"
-    assert captured["accounting_entity_id"] == "primary"
-    assert captured["idempotency_key"] == "idem-1"
-    assert captured["payload"].lines[0].debit == Decimal("500.00")
-    assert captured["payload"].lines[1].credit == Decimal("500.00")
-    assert result["status"] == "posted"
-    assert result["journal_entry_id"] == 77
+    assert result["status"] == "pending_approval"
+    assert result["journal_entry_id"] is None
     assert result["voucher_number"] == "RV-1"
-    assert result["approval_required"] is False
-    assert result["approval_status"] == "auto_posted"
-    assert vouchers.docs[0]["status"] == "posted"
+    assert result["approval_required"] is True
+    assert result["approval_status"] == "pending_approval"
+    assert vouchers.docs[0]["status"] == "pending_approval"
     assert audit_events[0]["tenant_id"] == "business-tenant"
     assert audit_events[0]["product"] == "mitrabooks"
-    assert audit_events[0]["action"] == "business_voucher_posted"
-    assert audit_events[0]["new_value"]["journal_entry_id"] == 77
+    assert audit_events[0]["action"] == "business_voucher_created"
+    assert audit_events[0]["new_value"]["journal_entry_id"] is None
 
 
 @pytest.mark.asyncio
-async def test_typed_voucher_rolls_back_domain_record_when_posting_fails(monkeypatch):
+async def test_typed_voucher_creation_persists_pending_document_without_posting(monkeypatch):
     vouchers = FakeCollection()
     monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
-
-    async def fake_post_journal_entry(*_args, **_kwargs):
-        raise ValueError("debits must equal credits")
-
-    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
     async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
         return int(account_id)
 
     monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
 
-    with pytest.raises(ValueError):
-        await business_service.post_typed_voucher(
-            None,
-            tenant_id="business-tenant",
-            app_key="mitrabooks",
-            created_by="owner-1",
-            payload=TypedVoucherCreateRequest(
-                voucher_type="payment",
-                entry_date=date(2026, 5, 20),
-                amount=Decimal("100.00"),
-                debit_account_id=30,
-                credit_account_id=40,
-                description="Payment to vendor",
-            ),
-            idempotency_key=None,
-        )
+    result = await business_service.post_typed_voucher(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=TypedVoucherCreateRequest(
+            voucher_type="payment",
+            entry_date=date(2026, 5, 20),
+            amount=Decimal("100.00"),
+            debit_account_id=30,
+            credit_account_id=40,
+            description="Payment to vendor",
+        ),
+        idempotency_key=None,
+    )
 
-    assert vouchers.docs == []
-    assert vouchers.deleted[0]["tenant_id"] == "business-tenant"
-    assert vouchers.deleted[0]["app_key"] == "mitrabooks"
+    assert result["status"] == "pending_approval"
+    assert result["approval_status"] == "pending_approval"
+    assert len(vouchers.docs) == 1
 
 
 @pytest.mark.asyncio
-async def test_typed_voucher_reverses_journal_when_status_update_fails(monkeypatch):
-    vouchers = FailingUpdateCollection(fail_on_update_after_insert=True)
+async def test_typed_voucher_approval_reverses_journal_when_status_update_fails(monkeypatch):
+    vouchers = AlwaysFailUpdateCollection()
     captured = {}
     monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
     monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
@@ -397,35 +370,53 @@ async def test_typed_voucher_reverses_journal_when_status_update_fails(monkeypat
     monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
     monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
 
+    vouchers.docs = [{
+        "voucher_id": "v-approve-1",
+        "voucher_number": "RV-2",
+        "voucher_type": "receipt",
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "amount": "500.00",
+        "entry_date": "2026-05-20",
+        "debit_account_id": 10,
+        "credit_account_id": 20,
+        "description": "Receipt from customer",
+        "reference": "RV-2",
+        "status": "pending_approval",
+        "approval_required": True,
+        "approval_status": "pending_approval",
+        "created_by": "owner-1",
+        "created_at": business_service._now(),
+        "updated_at": business_service._now(),
+    }]
+
     with pytest.raises(business_service.AccountingValidationError, match="automatically reversed"):
-        await business_service.post_typed_voucher(
-            None,
+        await business_service.review_typed_voucher(
+            session=object(),
             tenant_id="business-tenant",
             app_key="mitrabooks",
-            created_by="owner-1",
-            payload=TypedVoucherCreateRequest(
-                voucher_type="receipt",
-                entry_date=date(2026, 5, 20),
-                amount=Decimal("500.00"),
-                debit_account_id=10,
-                credit_account_id=20,
-                description="Receipt from customer",
-                reference="RV-2",
+            voucher_id="v-approve-1",
+            reviewed_by="admin-1",
+            payload=business_service.ApprovalReviewRequest(
+                approve=True,
+                notes="Approve and post",
+                accounting_entity_id="primary",
             ),
-            idempotency_key="idem-2",
         )
 
     assert captured["journal_id"] == 78
-    assert captured["reason"].startswith("Compensation after business voucher persistence failure")
-    assert captured["idempotency_key"].startswith("business-voucher-compensate:")
+    assert captured["reason"].startswith("Compensation after business voucher approval persistence failure")
+    assert captured["idempotency_key"].startswith("business-voucher-approve-compensate:")
     assert captured["tenant_id"] == "business-tenant"
     assert captured["app_key"] == "mitrabooks"
     assert captured["accounting_entity_id"] == "primary"
 
 
 @pytest.mark.asyncio
-async def test_review_typed_voucher_updates_approval_state(monkeypatch):
+async def test_review_typed_voucher_approval_posts_journal_and_updates_state(monkeypatch):
     vouchers = FakeCollection()
+    captured = {}
     vouchers.docs = [
         {
             "voucher_id": "v-1",
@@ -440,8 +431,9 @@ async def test_review_typed_voucher_updates_approval_state(monkeypatch):
             "credit_account_id": 20,
             "description": "Receipt from customer",
             "reference": "RV-1",
-            "status": "posted",
-            "journal_entry_id": 77,
+            "status": "pending_approval",
+            "approval_required": True,
+            "approval_status": "pending_approval",
             "created_by": "owner-1",
             "created_at": business_service._now(),
             "updated_at": business_service._now(),
@@ -455,7 +447,14 @@ async def test_review_typed_voucher_updates_approval_state(monkeypatch):
 
     monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
 
+    async def fake_post_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=77), True
+
+    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
+
     result = await business_service.review_typed_voucher(
+        session=object(),
         tenant_id="business-tenant",
         app_key="mitrabooks",
         voucher_id="v-1",
@@ -468,21 +467,125 @@ async def test_review_typed_voucher_updates_approval_state(monkeypatch):
     )
 
     assert result["approval_required"] is True
+    assert result["status"] == "posted"
+    assert result["journal_entry_id"] == 77
     assert result["approval_status"] == "approved"
     assert result["approval_decided_by"] == "admin-1"
     assert result["approval_notes"] == "Voucher reviewed"
+    assert captured["payload"].lines[0].debit == Decimal("500.00")
+    assert captured["payload"].lines[1].credit == Decimal("500.00")
     assert audit_events[0]["action"] == "business_voucher_reviewed"
+
+
+@pytest.mark.asyncio
+async def test_review_typed_voucher_rejects_pending_document(monkeypatch):
+    vouchers = FakeCollection()
+    vouchers.docs = [
+        {
+            "voucher_id": "v-reject-1",
+            "voucher_number": "PV-1",
+            "voucher_type": "payment",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "amount": "200.00",
+            "entry_date": "2026-05-20",
+            "debit_account_id": 30,
+            "credit_account_id": 40,
+            "description": "Payment to vendor",
+            "reference": "PV-1",
+            "status": "pending_approval",
+            "approval_required": True,
+            "approval_status": "pending_approval",
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        }
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    result = await business_service.review_typed_voucher(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        voucher_id="v-reject-1",
+        reviewed_by="admin-2",
+        payload=business_service.ApprovalReviewRequest(
+            approve=False,
+            notes="Incorrect party mapping",
+            rejection_reason="Incorrect party mapping",
+            accounting_entity_id="primary",
+        ),
+    )
+
+    assert result["status"] == "rejected"
+    assert result["approval_status"] == "rejected"
+    assert result["rejection_reason"] == "Incorrect party mapping"
+
+
+@pytest.mark.asyncio
+async def test_list_vouchers_filters_by_status_and_approval_state(monkeypatch):
+    vouchers = FakeCollection()
+    vouchers.docs = [
+        {
+            "voucher_id": "v-1",
+            "voucher_number": "RV-1",
+            "voucher_type": "receipt",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "amount": "500.00",
+            "entry_date": "2026-05-20",
+            "status": "posted",
+            "approval_status": "approved",
+        },
+        {
+            "voucher_id": "v-2",
+            "voucher_number": "PV-1",
+            "voucher_type": "payment",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "amount": "125.00",
+            "entry_date": "2026-05-21",
+            "status": "reversed",
+            "approval_status": "rejected",
+        },
+        {
+            "voucher_id": "v-3",
+            "voucher_number": "JV-1",
+            "voucher_type": "journal",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "amount": "75.00",
+            "entry_date": "2026-05-22",
+            "status": "pending_approval",
+            "approval_status": "pending_approval",
+        },
+    ]
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
+
+    result = await business_service.list_vouchers(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        status="pending_approval",
+        approval_status="pending_approval",
+        limit=20,
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["voucher_id"] == "v-3"
+    assert result["items"][0]["status"] == "pending_approval"
+    assert result["items"][0]["approval_status"] == "pending_approval"
 
 
 @pytest.mark.asyncio
 async def test_typed_voucher_reuses_idempotent_business_record(monkeypatch):
     vouchers = FakeCollection()
     monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
-
-    async def fake_post_journal_entry(*_args, **_kwargs):
-        return SimpleNamespace(id=88), True
-
-    monkeypatch.setattr(business_service, "post_journal_entry", fake_post_journal_entry)
 
     async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
         return int(account_id)
@@ -519,6 +622,7 @@ async def test_typed_voucher_reuses_idempotent_business_record(monkeypatch):
     assert first["voucher_number"] == second["voucher_number"]
     assert first["created"] is True
     assert second["created"] is False
+    assert first["status"] == "pending_approval"
     assert len(vouchers.docs) == 1
 
 
@@ -1841,8 +1945,14 @@ async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
     vouchers.docs = [{
         "voucher_id": "v-1", "voucher_number": "RV-1", "voucher_type": "receipt",
         "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
-        "amount": "500.00", "entry_date": "2026-05-20", "status": "posted", "journal_entry_id": 77,
-        "approval_status": "auto_posted", "approval_required": False, "created_by": "owner-1",
+        "amount": "500.00", "entry_date": "2026-05-20", "status": "pending_approval",
+        "approval_status": "pending_approval", "approval_required": True, "created_by": "owner-1",
+        "created_at": business_service._now(), "updated_at": business_service._now(),
+    }, {
+        "voucher_id": "v-legacy", "voucher_number": "JV-LEGACY", "voucher_type": "journal",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "amount": "50.00", "entry_date": "2026-05-18", "status": "posted",
+        "journal_entry_id": 222, "approval_required": False, "created_by": "owner-legacy",
         "created_at": business_service._now(), "updated_at": business_service._now(),
     }]
     invoices = FakeCollection()
@@ -1916,6 +2026,53 @@ async def test_approval_queue_aggregates_unreviewed_documents(monkeypatch):
     )
     assert all(item["status"] != "draft" for item in result["items"])
     assert all(item["approval_status"] != "approved" for item in result["items"])
+    assert all(item["document_number"] != "JV-LEGACY" for item in result["items"])
+
+
+@pytest.mark.asyncio
+async def test_approval_queue_supports_voucher_only_filters(monkeypatch):
+    vouchers = FakeCollection()
+    vouchers.docs = [{
+        "voucher_id": "v-1", "voucher_number": "RV-1", "voucher_type": "receipt",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "amount": "500.00", "entry_date": "2026-05-20", "status": "pending_approval",
+        "approval_status": "pending_approval", "approval_required": True, "created_by": "owner-1",
+        "created_at": business_service._now(), "updated_at": business_service._now(),
+    }, {
+        "voucher_id": "v-2", "voucher_number": "PV-2", "voucher_type": "payment",
+        "tenant_id": "business-tenant", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+        "amount": "600.00", "entry_date": "2026-05-21", "status": "posted",
+        "approval_status": "approved", "approval_required": True, "journal_entry_id": 900,
+        "created_by": "owner-2", "created_at": business_service._now(), "updated_at": business_service._now(),
+    }]
+
+    def fake_get_collection(name):
+        return {
+            business_service.VOUCHERS_COLLECTION: vouchers,
+            business_service.SALES_INVOICES_COLLECTION: FakeCollection(),
+            business_service.PURCHASE_BILLS_COLLECTION: FakeCollection(),
+            business_service.CREDIT_NOTES_COLLECTION: FakeCollection(),
+            business_service.DEBIT_NOTES_COLLECTION: FakeCollection(),
+        }[name]
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+
+    result = await business_service.list_documents_for_approval_queue(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        document_type="voucher",
+        status="pending_approval",
+        approval_status="pending_approval",
+        include_reviewed=True,
+        limit=20,
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["document_type"] == "voucher"
+    assert result["items"][0]["document_number"] == "RV-1"
+    assert result["items"][0]["status"] == "pending_approval"
+    assert result["items"][0]["approval_status"] == "pending_approval"
 
 
 def test_gst_setoff_follows_statutory_order():
@@ -3000,7 +3157,7 @@ async def test_receipt_voucher_tags_credit_line_payment_tags_debit(monkeypatch):
     # Receipt → party on the credit (customer/receivable) line.
     store = FakeCollection(); captured = {}
     _party_tag_mocks(monkeypatch, store, captured)
-    await business_service.post_typed_voucher(
+    created_receipt = await business_service.post_typed_voucher(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=TypedVoucherCreateRequest(
             voucher_type="receipt", entry_date=date(2026, 6, 8), amount=Decimal("500"),
@@ -3009,6 +3166,14 @@ async def test_receipt_voucher_tags_credit_line_payment_tags_debit(monkeypatch):
         ),
         idempotency_key=None,
     )
+    await business_service.review_typed_voucher(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        voucher_id=created_receipt["voucher_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
+    )
     rlines = captured["payload"].lines
     assert rlines[0].party_id is None          # debit (bank) untagged
     assert rlines[1].party_id == "cust-1"      # credit (customer) tagged
@@ -3016,7 +3181,7 @@ async def test_receipt_voucher_tags_credit_line_payment_tags_debit(monkeypatch):
     # Payment → party on the debit (vendor/payable) line.
     store2 = FakeCollection(); captured2 = {}
     _party_tag_mocks(monkeypatch, store2, captured2)
-    await business_service.post_typed_voucher(
+    created_payment = await business_service.post_typed_voucher(
         None, tenant_id="business-tenant", app_key="mitrabooks", created_by="owner-1",
         payload=TypedVoucherCreateRequest(
             voucher_type="payment", entry_date=date(2026, 6, 8), amount=Decimal("500"),
@@ -3024,6 +3189,14 @@ async def test_receipt_voucher_tags_credit_line_payment_tags_debit(monkeypatch):
             description="Payment to vendor",
         ),
         idempotency_key=None,
+    )
+    await business_service.review_typed_voucher(
+        session=object(),
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        voucher_id=created_payment["voucher_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, accounting_entity_id="primary"),
     )
     plines = captured2["payload"].lines
     assert plines[0].party_id == "vend-1"      # debit (vendor) tagged

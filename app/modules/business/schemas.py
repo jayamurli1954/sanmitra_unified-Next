@@ -117,13 +117,13 @@ class TypedVoucherResponse(BaseModel):
     credit_account_id: int
     description: str
     reference: str
-    journal_entry_id: int
+    journal_entry_id: int | None = None
     reversal_journal_entry_id: int | None = None
     reversal_reason: str | None = None
     reversed_at: datetime | None = None
     status: str
-    approval_required: bool = False
-    approval_status: ApprovalStatus = "auto_posted"
+    approval_required: bool = True
+    approval_status: ApprovalStatus = "pending_approval"
     approval_submitted_at: datetime | None = None
     approval_submitted_by: str | None = None
     approval_decided_at: datetime | None = None

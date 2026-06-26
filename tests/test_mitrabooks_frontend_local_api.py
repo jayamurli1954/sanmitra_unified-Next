@@ -383,12 +383,15 @@ def test_business_voucher_payload_matches_typed_voucher_api() -> None:
 def test_business_voucher_loader_surfaces_backend_errors() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     start = app_source.index("async function loadBusinessVouchers")
-    end = app_source.index("async function reverseBusinessVoucher", start)
+    end = app_source.index("async function loadVoucherApprovalQueue", start)
     load_block = app_source[start:end]
 
     assert 'setLoginStatus("danger", "Unable to load vouchers"' in load_block
     assert "statusDetailText(result.payload?.detail)" in load_block
     assert "renderJson(apiOutput, { vouchers:" in load_block
+    assert 'params.append("voucher_type", merged.voucher_type)' in load_block
+    assert 'params.append("status", merged.status)' in load_block
+    assert 'params.append("approval_status", merged.approval_status)' in load_block
 
 
 def test_business_voucher_reversal_uses_business_route_contract() -> None:
@@ -401,6 +404,27 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
     assert "/api/v1/accounting/reversals" not in reverse_block
     assert '"X-Idempotency-Key"' in reverse_block
     assert "original_voucher_id" not in reverse_block
+
+
+def test_business_voucher_review_and_queue_use_business_routes() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    queue_start = app_source.index("async function loadVoucherApprovalQueue")
+    queue_end = app_source.index("async function reviewBusinessVoucher", queue_start)
+    queue_block = app_source[queue_start:queue_end]
+    review_start = queue_end
+    review_end = app_source.index("async function reverseBusinessVoucher", review_start)
+    review_block = app_source[review_start:review_end]
+
+    assert "/api/v1/business/approval-queue?" in queue_block
+    assert 'document_type: "voucher"' in queue_block
+    assert 'lastVoucherApprovalQueue = items;' in queue_block
+    assert "/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/review" in review_block
+    assert 'accounting_entity_id: "primary"' in review_block
+    assert 'data-business-action="review-voucher-approve"' in app_source
+    assert 'data-business-action="review-voucher-reject"' in app_source
+    assert 'data-business-action="voucher-queue-refresh"' in app_source
+    assert 'renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)' in app_source
+    assert 'renderBusinessVouchersListFilters(lastBusinessVouchers.length)' in app_source
 
 
 def test_ca_practice_documents_use_attachment_api_routes() -> None:

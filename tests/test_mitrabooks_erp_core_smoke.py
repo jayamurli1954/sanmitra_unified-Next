@@ -246,6 +246,20 @@ async def test_mitrabooks_erp_core_smoke_login_modules_accounts_party_voucher_re
             )
             assert voucher_response.status_code == 200
             voucher = voucher_response.json()
+            assert voucher["status"] == "pending_approval"
+            assert voucher["journal_entry_id"] is None
+
+            approve_response = await client.post(
+                f"/api/v1/business/vouchers/{voucher['voucher_id']}/review",
+                json={
+                    "approve": True,
+                    "notes": "Smoke approval for posted voucher assertions",
+                    "accounting_entity_id": ACCOUNTING_ENTITY_ID,
+                },
+                headers=headers,
+            )
+            assert approve_response.status_code == 200
+            voucher = approve_response.json()
             assert voucher["status"] == "posted"
             assert voucher["journal_entry_id"]
 
@@ -413,9 +427,25 @@ async def test_mitrabooks_voucher_posting_resolves_account_codes(async_session, 
 
         assert response.status_code == 200
         voucher = response.json()
-        assert voucher["status"] == "posted"
+        assert voucher["status"] == "pending_approval"
         assert voucher["debit_account_id"] == debit_account["id"]
         assert voucher["credit_account_id"] == credit_account["id"]
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            approve_response = await client.post(
+                f"/api/v1/business/vouchers/{voucher['voucher_id']}/review",
+                json={
+                    "approve": True,
+                    "notes": "Approve code-resolved smoke voucher",
+                    "accounting_entity_id": ACCOUNTING_ENTITY_ID,
+                },
+                headers=headers,
+            )
+
+        assert approve_response.status_code == 200
+        approved_voucher = approve_response.json()
+        assert approved_voucher["status"] == "posted"
+        assert approved_voucher["journal_entry_id"]
     finally:
         _clear_dependency_overrides()
 
@@ -445,10 +475,26 @@ async def test_mitrabooks_voucher_posting_initializes_default_accounts_for_codes
 
         assert response.status_code == 200
         voucher = response.json()
-        assert voucher["status"] == "posted"
+        assert voucher["status"] == "pending_approval"
         assert accounts_response.status_code == 200
         codes = {account["code"] for account in accounts_response.json()}
         assert {"11010", "24001"}.issubset(codes)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            approve_response = await client.post(
+                f"/api/v1/business/vouchers/{voucher['voucher_id']}/review",
+                json={
+                    "approve": True,
+                    "notes": "Approve auto-chart smoke voucher",
+                    "accounting_entity_id": ACCOUNTING_ENTITY_ID,
+                },
+                headers=headers,
+            )
+
+        assert approve_response.status_code == 200
+        approved_voucher = approve_response.json()
+        assert approved_voucher["status"] == "posted"
+        assert approved_voucher["journal_entry_id"]
     finally:
         _clear_dependency_overrides()
 
