@@ -1,27 +1,29 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Global SanMitra public smoke', () => {
-  test('login page renders without authentication', async ({ page }) => {
+  test('local frontend landing page renders', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByAltText('MandirMitra')).toBeVisible();
-    await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: /^password$/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SanMitra Local Frontends' })).toBeVisible();
+    await expect(page.getByAltText('SanMitra')).toBeVisible();
+    await expect(page.getByText(/pre-deployment testing against the unified backend/i)).toBeVisible();
   });
 
-  test('protected dashboard redirects unauthenticated users to login', async ({ page }) => {
+  test('mitrabooks entrypoint opens the login shell', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page).toHaveURL(/\/login/);
+    await page.getByRole('link', { name: 'Open' }).first().click();
+
+    await expect(page).toHaveURL(/\/mitrabooks-erp\/?$/);
     await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible();
+    await expect(page.locator('#brand-title')).toContainText('MitraBooks');
   });
 
-  test('public payment entry route is reachable', async ({ page }) => {
+  test('legalmitra entrypoint is reachable', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /book a seva|make a donation/i }).click();
+    await page.getByRole('link', { name: 'Open' }).nth(1).click();
 
-    await expect(page).toHaveURL(/\/pay/);
-    await expect(page.locator('body')).toContainText(/seva|donation|temple/i);
+    await expect(page).toHaveURL(/\/legalmitra\/?$/);
+    await expect(page.locator('body')).toContainText(/LegalMitra/i);
   });
 });
