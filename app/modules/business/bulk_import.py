@@ -5,6 +5,7 @@ Ensures double-entry integrity and tenant isolation.
 """
 import csv
 import io
+import logging
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -12,7 +13,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
-from app.accounting.service import post_journal_entry, AccountingValidationError
+from app.accounting.service import post_journal_entry, reverse_journal_entry, AccountingValidationError
 from app.db.mongo import get_collection
 from app.modules.business.service import VOUCHERS_COLLECTION, PARTIES_COLLECTION
 from app.modules.business.opening_close import _account_lookups, _party_lookups, _norm_header, _parse_amount, _q2
@@ -30,6 +31,8 @@ _VOUCHER_HEADER_ALIASES = {
     "description": ["description", "narration", "particulars", "remarks"],
     "party": ["party", "party code", "party name", "customer/vendor", "customer", "vendor", "party id"],
 }
+
+_logger = logging.getLogger(__name__)
 
 
 def voucher_csv_template() -> str:
@@ -445,7 +448,28 @@ async def post_bulk_import_vouchers(
         )
 
         doc["journal_entry_id"] = journal_entry.id
-        await vouchers_col.insert_one(doc)
+        try:
+            await vouchers_col.insert_one(doc)
+        except Exception as exc:
+            try:
+                await reverse_journal_entry(
+                    session,
+                    tenant_id=tenant_id,
+                    journal_id=int(journal_entry.id),
+                    app_key=app_key,
+                    accounting_entity_id=accounting_entity_id,
+                    created_by=created_by,
+                    reason=f"Compensation after bulk import persistence failure for {voucher_number}",
+                    idempotency_key=f"bulk-import-compensate:{voucher_id}:{journal_entry.id}",
+                )
+            except Exception as reversal_exc:
+                _logger.exception("Bulk import compensation reversal failed for voucher %s", voucher_id)
+                raise AccountingValidationError(
+                    "Bulk import persistence failed after journal posting, and automatic reversal also failed"
+                ) from reversal_exc
+            raise AccountingValidationError(
+                "Bulk import persistence failed after journal posting; the accounting entry was automatically reversed"
+            ) from exc
 
         imported_vouchers.append({
             "voucher_id": voucher_id,

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException
 
-from app.core.tenants.context import get_tenant_id, resolve_app_key, resolve_tenant_id
+from app.core.tenants.context import InvalidAppKeyError, get_tenant_id, resolve_app_key, resolve_tenant_id, validate_app_key
 
 
 UNSAFE_BUSINESS_TENANTS = {"default", ""}
@@ -34,7 +34,12 @@ def resolve_business_app_tenant(
     """
 
     expected = resolve_app_key(expected_app_key)
-    app_key = resolve_app_key(x_app_key or current_user.get("app_key") or expected)
+    try:
+        header_app_key = validate_app_key(x_app_key) if x_app_key else None
+    except InvalidAppKeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    app_key = resolve_app_key(header_app_key or current_user.get("app_key") or expected)
     if app_key != expected:
         raise HTTPException(status_code=403, detail=f"{expected} app context required")
 

@@ -3002,7 +3002,6 @@ async def invite_ca_user(
             "resent": bool(doc.get("resent")),
             "email_sent": bool(delivery.get("sent", False)),
             "email_error": delivery.get("error"),
-            "temp_password": doc.get("temp_password"),
         }
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

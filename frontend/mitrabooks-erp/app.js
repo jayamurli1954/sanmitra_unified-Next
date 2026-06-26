@@ -17307,8 +17307,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        const pwLine = payload.temp_password ? ` Temporary password: ${payload.temp_password}` : "";
-        caInviteSuccess = `${payload.resent ? "Credentials resent" : "Credentials sent"} to ${email}.${pwLine}`;
+        caInviteSuccess = `${payload.resent ? "Credentials resent" : "Credentials sent"} to ${email}.`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";
@@ -17336,8 +17335,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        const pwLine = payload.temp_password ? ` Temporary password: ${payload.temp_password}` : "";
-        caInviteSuccess = `New temporary password sent to ${email}.${pwLine}`;
+        caInviteSuccess = `New temporary password sent to ${email}.`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";

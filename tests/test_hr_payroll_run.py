@@ -112,6 +112,18 @@ def captured_journal(monkeypatch):
     return box
 
 
+@pytest.fixture
+def captured_reversal(monkeypatch):
+    box = {}
+
+    async def _fake_reverse(session, **kwargs):
+        box.update(kwargs)
+        return _Journal(), True
+
+    monkeypatch.setattr(pr, "reverse_journal_entry", _fake_reverse)
+    return box
+
+
 def _seed(cols):
     emp = cols.setdefault("hr_employees", FakeCollection())
     asg = cols.setdefault("hr_salary_assignments", FakeCollection())
@@ -201,3 +213,25 @@ async def test_slips_persisted_and_listable(fake_db, captured_journal):
     a = next(s for s in slips if s["employee_id"] == "A")
     assert a["net_pay"] == D("114875.00")
     assert a["deductions"]["tds"] == D("8125.00")
+
+
+@pytest.mark.asyncio
+async def test_payroll_run_reverses_journal_when_mongo_persistence_fails(fake_db, captured_journal, captured_reversal):
+    _seed(fake_db)
+
+    runs = fake_db.setdefault("hr_payroll_runs", FakeCollection())
+
+    async def _failing_insert_one(doc):
+        raise RuntimeError("mongo write failed")
+
+    runs.insert_one = _failing_insert_one
+
+    with pytest.raises(hr_service.HrValidationError, match="automatically reversed"):
+        await pr.run_payroll(
+            object(), tenant_id="t1", app_key="mitrabooks", accounting_entity_id="primary",
+            created_by="admin", year=2026, month=2, total_days=28,
+        )
+
+    assert captured_reversal["tenant_id"] == "t1"
+    assert captured_reversal["journal_id"] == 42
+    assert captured_reversal["app_key"] == "mitrabooks"

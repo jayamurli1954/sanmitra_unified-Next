@@ -92,6 +92,7 @@ async def test_invite_provisions_ca_user_and_sends_temporary_password_email():
     assert result["user_id"]
     assert result["email_delivery"] == email_delivery
     assert result["resent"] is False
+    assert "temp_password" not in result
     mock_email.assert_awaited_once()
     assert mock_email.call_args.kwargs["email"] == "ca@example.com"
     assert mock_email.call_args.kwargs["temporary_password"]
@@ -145,6 +146,7 @@ async def test_existing_ca_invite_resends_credentials_and_rotates_temporary_pass
     assert result["email_delivery"] == email_delivery
     assert result["status"] == "invited"
     assert result["user_id"] == "u-existing"
+    assert "temp_password" not in result
     mock_invites.update_one.assert_awaited_once()
     mock_users.update_one.assert_awaited_once()
     mock_email.assert_awaited_once()

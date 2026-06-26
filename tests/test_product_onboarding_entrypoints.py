@@ -41,7 +41,7 @@ def test_mitrabooks_build_publishes_landing_as_folder_index() -> None:
     onboarding_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "onboarding.html").read_text(encoding="utf-8")
 
     assert "publishMitraBooksLandingIndex" in build_script
-    assert "fs.copyFileSync(appShell, loginShell)" in build_script
+    assert "fs.copyFileSync(appShell, loginShell)" not in build_script
     assert "fs.copyFileSync(landingShell, appShell)" in build_script
     assert '"/mitrabooks-erp/login"' in vercel_config
     assert '"/mitrabooks-erp/login.html"' in vercel_config

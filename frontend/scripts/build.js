@@ -35,19 +35,6 @@ function copyStaticFile(name) {
   fs.copyFileSync(source, destination);
 }
 
-function publishMitraBooksAppShellAsLogin() {
-  // Preserve the ERP app shell as login.html before the landing page overwrites index.html.
-  // login.html = ERP workspace (login form + dashboard after auth)
-  // index.html = marketing landing page (set by publishMitraBooksLandingIndex below)
-  const mitraDir = path.join(buildDir, 'mitrabooks-erp');
-  const appShell = path.join(mitraDir, 'index.html');
-  const loginShell = path.join(mitraDir, 'login.html');
-  if (!fs.existsSync(appShell)) {
-    return;
-  }
-  fs.copyFileSync(appShell, loginShell);
-}
-
 function publishMitraBooksLandingIndex() {
   const mitraDir = path.join(buildDir, 'mitrabooks-erp');
   const appShell = path.join(mitraDir, 'index.html');
@@ -87,7 +74,6 @@ async function run() {
   copyStaticDir('shared');
   copyStaticDir('legalmitra');
   copyStaticDir('mitrabooks-erp');
-  publishMitraBooksAppShellAsLogin();
   publishMitraBooksLandingIndex();
   copyStaticFile('service-worker.js');
   copyStaticFile('sw-register.js');

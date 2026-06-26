@@ -323,6 +323,20 @@ async def test_mitrabooks_business_routes_reject_wrong_app_key_header(async_sess
 
 
 @pytest.mark.asyncio
+async def test_mitrabooks_business_routes_reject_invalid_app_key_header(async_session, monkeypatch):
+    _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/business/parties", headers={"X-App-Key": "not-a-real-app"})
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid X-App-Key header"
+    finally:
+        _clear_dependency_overrides()
+
+
+@pytest.mark.asyncio
 async def test_mitrabooks_business_routes_fail_closed_when_business_module_disabled(async_session, monkeypatch):
     tenant = _default_tenant(enabled_modules=["accounting", "audit"])
     _install_smoke_context(async_session=async_session, monkeypatch=monkeypatch, tenant=tenant)

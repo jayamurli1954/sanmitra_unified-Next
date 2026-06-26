@@ -12,6 +12,7 @@ and is replaced by the leave-ledger reconciler in Step 4.
 from __future__ import annotations
 
 import calendar
+import logging
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models.entities import Account
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
-from app.accounting.service import initialize_default_chart_of_accounts, post_journal_entry
+from app.accounting.service import initialize_default_chart_of_accounts, post_journal_entry, reverse_journal_entry
 from app.core.audit.service import log_audit_event
 from app.db.mongo import get_collection
 from app.modules.hr.payroll_engine import PayrollInput, SalaryComponent, compute_payroll, q
@@ -44,6 +45,8 @@ ACC_ESI_PAYABLE = "23006"           # Cr ESI (employee + employer)
 ACC_PT_PAYABLE = "23007"            # Cr professional tax
 ACC_TDS_PAYABLE = "23008"           # Cr salary TDS
 ACC_SALARIES_PAYABLE = "21003"      # Cr net pay
+
+_logger = logging.getLogger(__name__)
 
 
 async def _resolve_lop_days(
@@ -290,9 +293,30 @@ async def run_payroll(
         "created_by": created_by,
         "created_at": _now(),
     }
-    await runs.insert_one(dict(run_doc))
-    if slips:
-        await get_collection(HR_SLIPS_COLLECTION).insert_many([dict(s) for s in slips])
+    try:
+        await runs.insert_one(dict(run_doc))
+        if slips:
+            await get_collection(HR_SLIPS_COLLECTION).insert_many([dict(s) for s in slips])
+    except Exception as exc:
+        try:
+            await reverse_journal_entry(
+                session,
+                tenant_id=tenant_id,
+                journal_id=int(journal_entry.id),
+                app_key=app_key,
+                accounting_entity_id=accounting_entity_id,
+                created_by=created_by,
+                reason=f"Compensation after payroll persistence failure for {period}",
+                idempotency_key=f"hr-payroll-compensate:{tenant_id}:{accounting_entity_id}:{period}:{journal_entry.id}",
+            )
+        except Exception as reversal_exc:
+            _logger.exception("Payroll compensation reversal failed for run %s", run_id)
+            raise HrValidationError(
+                "Payroll domain persistence failed after journal posting, and automatic reversal also failed"
+            ) from reversal_exc
+        raise HrValidationError(
+            "Payroll domain persistence failed after journal posting; the accounting entry was automatically reversed"
+        ) from exc
 
     try:
         await log_audit_event(

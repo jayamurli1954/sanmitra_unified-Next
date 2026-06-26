@@ -2,12 +2,17 @@ from contextvars import ContextVar
 from typing import Optional
 
 from fastapi import Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import get_settings
 
 _tenant_id_ctx: ContextVar[Optional[str]] = ContextVar("tenant_id", default=None)
 _app_key_ctx: ContextVar[str] = ContextVar("app_key", default="mandirmitra")
+
+
+class InvalidAppKeyError(ValueError):
+    pass
 
 
 def set_tenant_id(tenant_id: Optional[str]) -> None:
@@ -27,16 +32,31 @@ def _allowed_app_keys() -> set[str]:
     return keys
 
 
-def resolve_app_key(value: Optional[str]) -> str:
-    settings = get_settings()
-    default_key = str(settings.DEFAULT_APP_KEY or "mandirmitra").strip().lower() or "mandirmitra"
+def _normalize_app_key(value: Optional[str]) -> str:
     raw = str(value or "").strip().lower()
     app_key_aliases = {
         "gharmitra": "gruhamitra",
         "ghar-mitra": "gruhamitra",
         "gruha-mitra": "gruhamitra",
     }
-    raw = app_key_aliases.get(raw, raw)
+    return app_key_aliases.get(raw, raw)
+
+
+def validate_app_key(value: Optional[str]) -> str | None:
+    normalized = _normalize_app_key(value)
+    if not normalized:
+        return None
+
+    allowed = _allowed_app_keys()
+    if normalized not in allowed:
+        raise InvalidAppKeyError("Invalid X-App-Key header")
+    return normalized
+
+
+def resolve_app_key(value: Optional[str]) -> str:
+    settings = get_settings()
+    default_key = str(settings.DEFAULT_APP_KEY or "mandirmitra").strip().lower() or "mandirmitra"
+    raw = _normalize_app_key(value)
     if not raw:
         return default_key
 
@@ -86,7 +106,10 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         elif not tenant_id:
             tenant_id = temple_tenant_id
 
-        app_key = resolve_app_key(request.headers.get("X-App-Key"))
+        try:
+            app_key = validate_app_key(request.headers.get("X-App-Key")) or resolve_app_key(None)
+        except InvalidAppKeyError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
 
         tenant_token = _tenant_id_ctx.set(tenant_id)
         app_token = _app_key_ctx.set(app_key)

@@ -3,7 +3,7 @@ from fastapi.params import Header as HeaderParam
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.auth.security import decode_token
-from app.core.tenants.context import get_app_key, resolve_app_key
+from app.core.tenants.context import InvalidAppKeyError, get_app_key, resolve_app_key, validate_app_key
 from app.core.tenants.service import ensure_tenant_is_active
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -28,7 +28,10 @@ async def get_current_user(
 
     header_value = None if isinstance(x_app_key, HeaderParam) else x_app_key
     token_app_key = resolve_app_key(payload.get("app_key") or get_app_key())
-    header_app_key = resolve_app_key(header_value) if header_value else None
+    try:
+        header_app_key = validate_app_key(header_value) if header_value else None
+    except InvalidAppKeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     role = str(payload.get("role") or "").strip()
 
     if header_app_key and header_app_key != token_app_key and role != "super_admin":
