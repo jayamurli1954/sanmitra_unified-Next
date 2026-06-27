@@ -26,12 +26,18 @@ from app.modules.business.tds import compute_tcs, compute_tds
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     BillPaymentUpdateRequest,
+    BusinessAdminSettings,
+    BusinessAdminSettingsUpdateRequest,
+    BusinessAiSettings,
     CaDocumentCreateRequest,
+    CaClientCreateRequest,
+    CaClientUpdateRequest,
     CaDocumentUpdateRequest,
     CreditNoteCancelRequest,
     CreditNoteCreateRequest,
     DebitNoteCancelRequest,
     DebitNoteCreateRequest,
+    BusinessIntegrationSettings,
     GstPeriodLockUpdateRequest,
     GstSettlementCreateRequest,
     ItcReclaimActionRequest,
@@ -55,11 +61,13 @@ VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
 SALES_INVOICES_COLLECTION = "business_sales_invoices"
 PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
 INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
+ADMIN_SETTINGS_COLLECTION = "business_admin_settings"
 GST_PERIOD_LOCKS_COLLECTION = "business_gst_period_locks"
 CREDIT_NOTES_COLLECTION = "business_credit_notes"
 DEBIT_NOTES_COLLECTION = "business_debit_notes"
 GST_SETTLEMENTS_COLLECTION = "business_gst_settlements"
 CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
+CA_CLIENTS_COLLECTION = "business_ca_clients"
 BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION = "business_document_attachments"
 
 _logger = logging.getLogger(__name__)
@@ -389,6 +397,9 @@ async def ensure_business_indexes() -> None:
     ca_documents = get_collection(CA_DOCUMENTS_COLLECTION)
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("updated_at", -1)])
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True)
+    ca_clients = get_collection(CA_CLIENTS_COLLECTION)
+    await ca_clients.create_index([("tenant_id", 1), ("app_key", 1), ("client_id", 1)], unique=True)
+    await ca_clients.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("client_name", 1)])
     attachments = get_collection(BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION)
     await attachments.create_index([("tenant_id", 1), ("app_key", 1), ("attachment_id", 1)], unique=True)
     await attachments.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("owner_type", 1), ("owner_id", 1), ("uploaded_at", -1)])
@@ -398,6 +409,8 @@ async def ensure_business_indexes() -> None:
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
     invoice_settings = get_collection(INVOICE_SETTINGS_COLLECTION)
     await invoice_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
+    admin_settings = get_collection(ADMIN_SETTINGS_COLLECTION)
+    await admin_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
     bills = get_collection(PURCHASE_BILLS_COLLECTION)
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("bill_date", -1)])
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("bill_id", 1)], unique=True)
@@ -451,6 +464,148 @@ def _ca_document_response_doc(doc: dict) -> dict:
     result.setdefault("due_date", None)
     result.setdefault("compliance_area", None)
     result.setdefault("client_access_enabled", False)
+    return result
+
+
+def _ca_client_response_doc(doc: dict) -> dict:
+    result = _json_safe_doc(doc)
+    result.setdefault("gstin", None)
+    result.setdefault("pan", None)
+    result.setdefault("contact_person", None)
+    result.setdefault("contact_email", None)
+    result.setdefault("contact_phone", None)
+    result.setdefault("engagement_type", None)
+    result.setdefault("assigned_to", None)
+    result.setdefault("client_owner", None)
+    result.setdefault("access_level", "view_only")
+    result.setdefault("compliance_tracks", [])
+    result.setdefault("notes", None)
+    result.setdefault("active", True)
+    return result
+
+
+async def create_ca_client(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    created_by: str,
+    payload: CaClientCreateRequest,
+) -> dict:
+    client_id = str(uuid4())
+    now = _now()
+    doc = {
+        "client_id": client_id,
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "client_name": payload.client_name.strip(),
+        "gstin": payload.gstin.strip() if payload.gstin else None,
+        "pan": payload.pan.strip() if payload.pan else None,
+        "contact_person": payload.contact_person.strip() if payload.contact_person else None,
+        "contact_email": payload.contact_email.strip() if payload.contact_email else None,
+        "contact_phone": payload.contact_phone.strip() if payload.contact_phone else None,
+        "engagement_type": payload.engagement_type.strip() if payload.engagement_type else None,
+        "assigned_to": payload.assigned_to.strip() if payload.assigned_to else None,
+        "client_owner": payload.client_owner.strip() if payload.client_owner else None,
+        "access_level": payload.access_level,
+        "compliance_tracks": [str(item).strip() for item in payload.compliance_tracks if str(item).strip()],
+        "notes": payload.notes.strip() if payload.notes else None,
+        "active": True,
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await get_collection(CA_CLIENTS_COLLECTION).insert_one(doc)
+    result = _ca_client_response_doc(doc)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_ca_client_created",
+        entity_type="business_ca_client",
+        entity_id=client_id,
+        new_value=result,
+    )
+    return result
+
+
+async def list_ca_clients(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    q: str | None = None,
+    active_only: bool = True,
+    limit: int = 100,
+) -> dict:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+    }
+    if active_only:
+        filters["active"] = True
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = (
+        await get_collection(CA_CLIENTS_COLLECTION)
+        .find(filters)
+        .sort("client_name", 1)
+        .limit(safe_limit)
+        .to_list(length=safe_limit)
+    )
+    if q:
+        needle = q.strip().lower()
+        rows = [
+            row for row in rows
+            if needle in str(row.get("client_name") or "").lower()
+            or needle in str(row.get("gstin") or "").lower()
+            or needle in str(row.get("contact_person") or "").lower()
+        ]
+    return {"items": [_ca_client_response_doc(row) for row in rows], "total": len(rows)}
+
+
+async def update_ca_client(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    client_id: str,
+    updated_by: str,
+    payload: CaClientUpdateRequest,
+) -> dict | None:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": accounting_entity_id,
+        "client_id": client_id,
+    }
+    collection = get_collection(CA_CLIENTS_COLLECTION)
+    existing = await collection.find_one(filters)
+    if existing is None:
+        return None
+    patch = payload.model_dump(exclude_unset=True)
+    patch.pop("accounting_entity_id", None)
+    if "compliance_tracks" in patch and patch["compliance_tracks"] is not None:
+        patch["compliance_tracks"] = [str(item).strip() for item in patch["compliance_tracks"] if str(item).strip()]
+    for key in ("client_name", "gstin", "pan", "contact_person", "contact_email", "contact_phone", "engagement_type", "assigned_to", "client_owner", "notes"):
+        if key in patch and patch[key] is not None:
+            patch[key] = str(patch[key]).strip() or None
+    patch["updated_by"] = updated_by
+    patch["updated_at"] = _now()
+    await collection.update_one(filters, {"$set": patch})
+    updated = await collection.find_one(filters)
+    result = _ca_client_response_doc(updated)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=updated_by,
+        action="business_ca_client_updated",
+        entity_type="business_ca_client",
+        entity_id=client_id,
+        old_value=_ca_client_response_doc(existing),
+        new_value=result,
+    )
     return result
 
 
@@ -1700,6 +1855,101 @@ async def save_invoice_settings(
         new_value=doc,
     )
     return await get_invoice_settings(tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id)
+
+
+async def get_business_admin_settings(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+) -> dict:
+    row = await get_collection(ADMIN_SETTINGS_COLLECTION).find_one(
+        {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    )
+    if row is None:
+        result = BusinessAdminSettings().model_dump()
+    else:
+        stored = {
+            k: v for k, v in row.items()
+            if k in {
+                "organization",
+                "branches",
+                "roles",
+                "permissions",
+                "voucher_configuration",
+                "financial_controls",
+                "security",
+                "templates",
+                "notifications",
+                "subscription_billing",
+                "integrations",
+                "ai_settings",
+            }
+        }
+        result = BusinessAdminSettings(**stored).model_dump()
+    result.update(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "updated_by": (row or {}).get("updated_by"),
+            "updated_at": (row or {}).get("updated_at"),
+        }
+    )
+    return result
+
+
+async def save_business_admin_settings(
+    *,
+    tenant_id: str,
+    app_key: str,
+    updated_by: str,
+    payload: BusinessAdminSettingsUpdateRequest,
+) -> dict:
+    accounting_entity_id = payload.accounting_entity_id
+    settings = BusinessAdminSettings(
+        organization=payload.organization,
+        branches=payload.branches,
+        roles=payload.roles,
+        permissions=payload.permissions,
+        voucher_configuration=payload.voucher_configuration,
+        financial_controls=payload.financial_controls,
+        security=payload.security,
+        templates=payload.templates,
+        notifications=payload.notifications,
+        subscription_billing=payload.subscription_billing,
+        integrations=BusinessIntegrationSettings(**payload.integrations.model_dump()),
+        ai_settings=BusinessAiSettings(
+            **{
+                **payload.ai_settings.model_dump(),
+                "auto_post_to_ledger": False,
+                "document_review_required": True,
+                "posting_review_required": True,
+            }
+        ),
+    )
+    doc = settings.model_dump()
+    doc.update({"updated_by": updated_by, "updated_at": _now()})
+    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+    await get_collection(ADMIN_SETTINGS_COLLECTION).update_one(
+        filters,
+        {"$set": doc, "$setOnInsert": {**filters, "created_at": _now()}},
+        upsert=True,
+    )
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=updated_by,
+        action="business_admin_settings_updated",
+        entity_type="business_admin_settings",
+        entity_id=accounting_entity_id,
+        new_value=doc,
+    )
+    return await get_business_admin_settings(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
 
 
 async def set_hr_enabled(

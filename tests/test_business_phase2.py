@@ -9,6 +9,8 @@ from app.modules.business import router as business_router
 import app.modules.business.service as business_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.modules.business.schemas import (
+    CaClientCreateRequest,
+    CaClientUpdateRequest,
     CaDocumentCreateRequest,
     CaDocumentUpdateRequest,
     PartyCreateRequest,
@@ -2304,6 +2306,127 @@ async def test_invoice_settings_save_and_get_round_trip(monkeypatch):
     )
     assert fetched["numbering"]["number_format"] == "{PREFIX}/{FYSHORT}/{SEQ}"
     assert fetched["updated_by"] == "admin-1"
+
+
+@pytest.mark.asyncio
+async def test_business_admin_settings_save_and_get_round_trip(monkeypatch):
+    from app.modules.business.schemas import (
+        BusinessAdminSettingsUpdateRequest,
+        BusinessBranchSettingsItem,
+        BusinessOrganizationSettings,
+    )
+
+    store = FakeCollection()
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_k: _async_none())
+
+    payload = BusinessAdminSettingsUpdateRequest(
+        organization=BusinessOrganizationSettings(
+            legal_name="Acme Traders Private Limited",
+            trade_name="Acme Traders",
+            gstin="29ABCDE1234F1Z5",
+            currency_code="INR",
+            timezone="Asia/Calcutta",
+        ),
+        branches=[
+            BusinessBranchSettingsItem(
+                branch_code="BLR",
+                branch_name="Bengaluru Head Office",
+                gstin="29ABCDE1234F1Z5",
+                warehouse_code="WH-BLR",
+            )
+        ],
+    )
+    saved = await business_service.save_business_admin_settings(
+        tenant_id="business-tenant", app_key="mitrabooks", updated_by="admin-1", payload=payload,
+    )
+    assert saved["organization"]["legal_name"] == "Acme Traders Private Limited"
+    assert saved["branches"][0]["branch_code"] == "BLR"
+    assert saved["voucher_configuration"]["journal_prefix"] == "JV"
+    assert saved["updated_by"] == "admin-1"
+
+    fetched = await business_service.get_business_admin_settings(
+        tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary",
+    )
+    assert fetched["organization"]["trade_name"] == "Acme Traders"
+    assert fetched["permissions"]["action_permissions"]["settings_manage"] == ["owner", "admin"]
+    assert fetched["integrations"]["document_storage_provider"] == "local_filesystem"
+    assert fetched["ai_settings"]["auto_post_to_ledger"] is False
+
+
+@pytest.mark.asyncio
+async def test_ca_client_records_are_tenant_scoped_and_updatable(monkeypatch):
+    clients = FakeCollection()
+    audit_events = []
+
+    def fake_get_collection(_name):
+        return clients
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    created = await business_service.create_ca_client(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        created_by="partner-1",
+        payload=CaClientCreateRequest(
+            client_name="Jayam Publications",
+            gstin="29ABCDE1234F1Z5",
+            pan="ABCDE1234F",
+            contact_person="Mr Jayam",
+            assigned_to="Staff A",
+            client_owner="Partner A",
+            engagement_type="GST and bookkeeping",
+            access_level="full_access",
+            compliance_tracks=["GST", "TDS"],
+            notes="Priority client",
+        ),
+    )
+
+    clients.docs.append(
+        {
+            **clients.docs[0],
+            "client_id": "other-client",
+            "tenant_id": "other-tenant",
+            "client_name": "Other Client",
+        }
+    )
+
+    listed = await business_service.list_ca_clients(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        q="jayam",
+    )
+    updated = await business_service.update_ca_client(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        client_id=created["client_id"],
+        updated_by="partner-2",
+        payload=CaClientUpdateRequest(
+            assigned_to="Staff B",
+            access_level="restricted_filing",
+            active=False,
+            compliance_tracks=["GST", "Audit"],
+        ),
+    )
+
+    assert created["tenant_id"] == "business-tenant"
+    assert created["access_level"] == "full_access"
+    assert listed["total"] == 1
+    assert listed["items"][0]["client_name"] == "Jayam Publications"
+    assert updated is not None
+    assert updated["assigned_to"] == "Staff B"
+    assert updated["access_level"] == "restricted_filing"
+    assert updated["active"] is False
+    assert updated["compliance_tracks"] == ["GST", "Audit"]
+    assert audit_events[0]["action"] == "business_ca_client_created"
+    assert audit_events[1]["action"] == "business_ca_client_updated"
 
 
 @pytest.mark.asyncio

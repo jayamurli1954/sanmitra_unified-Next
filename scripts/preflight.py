@@ -31,6 +31,7 @@ a commit (e.g. `python scripts/preflight.py && git commit ...`).
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -50,9 +51,9 @@ TIER1 = [
 ]
 
 
-def run(label: str, command: list[str], *, cwd: Path = ROOT) -> bool:
+def run(label: str, command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> bool:
     print(f"\n=== {label} ===\n+ {' '.join(command)}", flush=True)
-    result = subprocess.run(command, cwd=cwd)
+    result = subprocess.run(command, cwd=cwd, env=env)
     ok = result.returncode == 0
     print(f"  -> {'PASS' if ok else 'FAIL'} ({label})", flush=True)
     return ok
@@ -80,6 +81,8 @@ def run_frontend() -> list[tuple[str, bool]]:
 
     # Serve the frontends in the background (no webServer in playwright.config.js).
     print("\n=== frontend smoke ===\n+ starting serve_frontends.py on 127.0.0.1:3300", flush=True)
+    frontend_env = dict(os.environ)
+    frontend_env["PLAYWRIGHT_BASE_URL"] = "http://127.0.0.1:3300"
     server = subprocess.Popen(
         [PY, "scripts/serve_frontends.py", "--host", "127.0.0.1", "--port", "3300"], cwd=ROOT,
     )
@@ -88,11 +91,11 @@ def run_frontend() -> list[tuple[str, bool]]:
         results = [
             ("global smoke", run("global smoke",
                                  [npx, "playwright", "test", "e2e/global-smoke.spec.js", "--project=chromium"],
-                                 cwd=frontend)),
+                                 cwd=frontend, env=frontend_env)),
             ("mitrabooks shell smoke", run("mitrabooks shell smoke",
                                            [npx, "playwright", "test", "e2e/mitrabooks-shell.spec.js",
                                             "--project=chromium", "--timeout=90000", "--reporter=list"],
-                                           cwd=frontend)),
+                                           cwd=frontend, env=frontend_env)),
         ]
     finally:
         server.terminate()

@@ -25,6 +25,8 @@ from app.modules.business.schemas import (
     AllocationCreateRequest,
     AllocationCreateResponse,
     AllocationRecord,
+    BusinessAdminSettingsResponse,
+    BusinessAdminSettingsUpdateRequest,
     ApprovalQueueResponse,
     ApprovalReviewRequest,
     BillPaymentUpdateRequest,
@@ -32,6 +34,10 @@ from app.modules.business.schemas import (
     BusinessDocumentAttachmentResponse,
     CaAccessListResponse,
     CaAccessRecord,
+    CaClientCreateRequest,
+    CaClientListResponse,
+    CaClientResponse,
+    CaClientUpdateRequest,
     CaDocumentCreateRequest,
     CaDocumentListResponse,
     CaDocumentResponse,
@@ -101,6 +107,7 @@ from app.modules.business.service import (
     cancel_purchase_bill,
     cancel_sales_invoice,
     create_business_document_attachment,
+    create_ca_client,
     create_ca_document_metadata,
     create_credit_note,
     create_debit_note,
@@ -111,6 +118,7 @@ from app.modules.business.service import (
     create_sales_invoice,
     deactivate_party,
     get_credit_note,
+    get_business_admin_settings,
     get_debit_note,
     get_invoice_settings,
     get_purchase_bill,
@@ -118,6 +126,7 @@ from app.modules.business.service import (
     list_credit_notes,
     list_debit_notes,
     list_business_document_attachments,
+    list_ca_clients,
     list_documents_for_approval_queue,
     preview_gst_settlement,
     list_ca_document_metadata,
@@ -141,8 +150,10 @@ from app.modules.business.service import (
     review_typed_voucher,
     reverse_itc_for_bill,
     reverse_typed_voucher,
+    save_business_admin_settings,
     save_invoice_settings,
     set_gst_period_lock,
+    update_ca_client,
     update_ca_document_metadata,
     update_party,
 )
@@ -949,6 +960,89 @@ async def deactivate_business_party(
     if party is None:
         raise HTTPException(status_code=404, detail="Business party not found")
     return party
+
+
+@router.post("/ca-clients", response_model=CaClientResponse)
+async def create_ca_client_record(
+    payload: CaClientCreateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA client creation",
+        x_accounting_entity_id=x_accounting_entity_id,
+    )
+    return await create_ca_client(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
+        created_by=_created_by(current_user),
+        payload=payload,
+    )
+
+
+@router.get("/ca-clients", response_model=CaClientListResponse)
+async def list_ca_client_records(
+    q: str | None = Query(default=None, min_length=1, max_length=160),
+    active_only: bool = Query(default=True),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    limit: int = Query(default=100, ge=1, le=500),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA client listing",
+    )
+    return await list_ca_clients(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        q=q,
+        active_only=active_only,
+        limit=limit,
+    )
+
+
+@router.patch("/ca-clients/{client_id}", response_model=CaClientResponse)
+async def update_ca_client_record(
+    client_id: str,
+    payload: CaClientUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="CA client update",
+    )
+    result = await update_ca_client(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        client_id=client_id,
+        updated_by=_created_by(current_user),
+        payload=payload,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="CA client not found")
+    return result
 
 
 @router.post("/ca-documents", response_model=CaDocumentResponse)
@@ -1798,6 +1892,51 @@ async def get_business_invoice_settings(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
+    )
+
+
+@router.get("/admin-settings", response_model=BusinessAdminSettingsResponse)
+async def get_business_admin_settings_route(
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="business admin settings lookup",
+    )
+    return await get_business_admin_settings(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+    )
+
+
+@router.put("/admin-settings", response_model=BusinessAdminSettingsResponse)
+async def update_business_admin_settings_route(
+    payload: BusinessAdminSettingsUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="business admin settings update",
+    )
+    return await save_business_admin_settings(
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        updated_by=_created_by(current_user),
+        payload=payload,
     )
 
 

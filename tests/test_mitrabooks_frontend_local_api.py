@@ -162,9 +162,12 @@ def test_mitrabooks_settings_menu_is_business_specific() -> None:
     assert 'data-business-action="settings-detail"' in app_source
     assert 'businessAction === "settings-detail"' in app_source
     assert 'businessAction === "settings-back"' in app_source
-    assert "Backend contract pending" in app_source
+    assert "/api/v1/business/admin-settings" in app_source
+    assert 'data-business-action="save-settings-section"' in app_source
+    assert 'businessAction === "save-settings-section"' in app_source
     assert "Client Management" in app_source
     assert "Multi-Company Dashboard" in app_source
+    assert "Integrations" in app_source
     assert "AI Settings" in app_source
     assert "MITRABOOKS_COMPLETION_PHASES" in app_source
     assert "Jun 15-21" in app_source
@@ -427,6 +430,23 @@ def test_business_voucher_review_and_queue_use_business_routes() -> None:
     assert 'renderBusinessVouchersListFilters(lastBusinessVouchers.length)' in app_source
 
 
+def test_mitrabooks_admin_settings_use_business_routes() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    load_start = app_source.index("async function loadBusinessAdminSettings")
+    load_end = app_source.index("async function saveBusinessAdminSettingsSection", load_start)
+    load_block = app_source[load_start:load_end]
+    save_start = load_end
+    save_end = app_source.index("function round2", save_start)
+    save_block = app_source[save_start:save_end]
+
+    assert '/api/v1/business/admin-settings' in load_block
+    assert '/api/v1/business/admin-settings' in save_block
+    assert 'method: "GET"' in load_block
+    assert 'method: "PUT"' in save_block
+    assert 'JSON.parse(editor.value || "{}")' in save_block
+    assert 'buildBusinessAdminSettingsPayload(lastBusinessAdminSettings || {})' in save_block
+
+
 def test_ca_practice_documents_use_attachment_api_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     start = app_source.index("async function loadCaPracticeDocuments")
@@ -435,15 +455,22 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
 
     assert 'new URLSearchParams({ limit: "100" })' in ca_block
     assert "/api/v1/business/ca-documents?${params.toString()}" in ca_block
+    assert '/api/v1/business/ca-clients?active_only=true&limit=100' in ca_block
+    assert 'apiRequest("mitrabooks", "/api/v1/business/ca-clients"' in ca_block
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
     assert 'method: "PATCH"' in ca_block
     assert 'label: "CA Practice Portal"' in app_source
     assert 'businessWorkspace: "ca-access"' in app_source
     assert 'activeBusinessWorkspace === "ca-access"' in app_source
+    assert 'data-business-action="ca-client-filter"' in app_source
+    assert 'businessAction === "ca-client-filter"' in app_source
+    assert 'businessAction === "ca-client-filter-clear"' in app_source
+    assert 'businessAction === "ca-client-refresh"' in app_source
     assert 'module_key: "ca_access"' in app_source
     nav_start = app_source.index('businessWorkspace: "ca-access"')
     assert 'enabled: true' in app_source[nav_start:nav_start + 220]
     assert "data-ca-document-form" in app_source
+    assert "data-ca-client-form" in app_source
     assert "data-ca-filter-form" in app_source
     assert 'name="ca_attachments" type="file" multiple' in app_source
     assert 'data-business-action="ca-doc-files"' in app_source
@@ -458,6 +485,7 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert '/api/v1/business/invoices/${safeOwnerId}/attachments' in app_source
     assert '/api/v1/business/bills/${safeOwnerId}/attachments' in app_source
     assert "renderCaPracticeOperations" in app_source
+    assert "renderCaClientMaster" in app_source
     assert 'subtitle: "Client document workflow"' in app_source
     assert 'return renderCaPracticePortalWorkspace();' in app_source
     assert "CA Practice Portal planned" not in app_source

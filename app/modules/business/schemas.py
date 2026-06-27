@@ -200,6 +200,71 @@ class CaDocumentListResponse(BaseModel):
     total: int
 
 
+CaClientAccessLevel = Literal["view_only", "data_entry", "full_access", "restricted_filing"]
+
+
+class CaClientCreateRequest(BaseModel):
+    client_name: str = Field(..., min_length=2, max_length=160)
+    gstin: str | None = Field(default=None, max_length=20)
+    pan: str | None = Field(default=None, max_length=20)
+    contact_person: str | None = Field(default=None, max_length=120)
+    contact_email: str | None = Field(default=None, max_length=160)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    engagement_type: str | None = Field(default=None, max_length=80)
+    assigned_to: str | None = Field(default=None, max_length=120)
+    client_owner: str | None = Field(default=None, max_length=120)
+    access_level: CaClientAccessLevel = "view_only"
+    compliance_tracks: list[str] = Field(default_factory=list)
+    notes: str | None = Field(default=None, max_length=500)
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class CaClientUpdateRequest(BaseModel):
+    client_name: str | None = Field(default=None, min_length=2, max_length=160)
+    gstin: str | None = Field(default=None, max_length=20)
+    pan: str | None = Field(default=None, max_length=20)
+    contact_person: str | None = Field(default=None, max_length=120)
+    contact_email: str | None = Field(default=None, max_length=160)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    engagement_type: str | None = Field(default=None, max_length=80)
+    assigned_to: str | None = Field(default=None, max_length=120)
+    client_owner: str | None = Field(default=None, max_length=120)
+    access_level: CaClientAccessLevel | None = None
+    compliance_tracks: list[str] | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    active: bool | None = None
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class CaClientResponse(BaseModel):
+    client_id: str
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    client_name: str
+    gstin: str | None = None
+    pan: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    engagement_type: str | None = None
+    assigned_to: str | None = None
+    client_owner: str | None = None
+    access_level: CaClientAccessLevel = "view_only"
+    compliance_tracks: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    active: bool = True
+    created_by: str
+    updated_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaClientListResponse(BaseModel):
+    items: list[CaClientResponse]
+    total: int
+
+
 class BusinessDocumentAttachmentResponse(BaseModel):
     attachment_id: str
     tenant_id: str
@@ -448,6 +513,199 @@ class InvoiceSettingsUpdateRequest(InvoiceSettings):
 
 
 class InvoiceSettingsResponse(InvoiceSettings):
+    tenant_id: str
+    app_key: str
+    accounting_entity_id: str
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+# ---- MitraBooks admin/settings workspace (Phase 2B backend contracts) ----
+
+BusinessRoleKey = Literal["owner", "admin", "accountant", "cashier", "auditor", "viewer"]
+
+
+class BusinessOrganizationSettings(BaseModel):
+    legal_name: str | None = Field(default=None, max_length=160)
+    trade_name: str | None = Field(default=None, max_length=160)
+    gstin: str | None = Field(default=None, max_length=20)
+    pan: str | None = Field(default=None, max_length=20)
+    tan: str | None = Field(default=None, max_length=20)
+    cin_llpin: str | None = Field(default=None, max_length=30)
+    address: str | None = Field(default=None, max_length=500)
+    contact_email: str | None = Field(default=None, max_length=160)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    financial_year_start_month: int = Field(default=4, ge=1, le=12)
+    currency_code: str = Field(default="INR", min_length=3, max_length=3)
+    timezone: str = Field(default="Asia/Calcutta", min_length=1, max_length=80)
+    logo_url: str | None = Field(default=None, max_length=400)
+
+
+class BusinessBranchSettingsItem(BaseModel):
+    branch_code: str = Field(..., min_length=1, max_length=30)
+    branch_name: str = Field(..., min_length=1, max_length=160)
+    gstin: str | None = Field(default=None, max_length=20)
+    address: str | None = Field(default=None, max_length=400)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    warehouse_code: str | None = Field(default=None, max_length=40)
+    cost_centre_code: str | None = Field(default=None, max_length=40)
+    active: bool = True
+
+
+class BusinessRoleTemplate(BaseModel):
+    role_key: BusinessRoleKey
+    display_name: str = Field(..., min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=240)
+    can_invite_users: bool = False
+    can_approve_documents: bool = False
+    can_manage_settings: bool = False
+
+
+class BusinessPermissionMatrix(BaseModel):
+    module_permissions: dict[str, list[BusinessRoleKey]] = Field(default_factory=dict)
+    action_permissions: dict[str, list[BusinessRoleKey]] = Field(default_factory=dict)
+
+
+class BusinessVoucherConfigurationSettings(BaseModel):
+    journal_prefix: str = Field(default="JV", min_length=1, max_length=20)
+    receipt_prefix: str = Field(default="RV", min_length=1, max_length=20)
+    payment_prefix: str = Field(default="PV", min_length=1, max_length=20)
+    contra_prefix: str = Field(default="CV", min_length=1, max_length=20)
+    approval_threshold_amount: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    approval_required_above_threshold: bool = True
+    default_approver_role: BusinessRoleKey = "admin"
+
+
+class BusinessFinancialControlSettings(BaseModel):
+    voucher_lock_date: date | None = None
+    backdated_entry_requires_approval: bool = True
+    allow_posting_in_locked_period_with_super_admin: bool = False
+    period_close_note: str | None = Field(default=None, max_length=240)
+
+
+class BusinessSecuritySettings(BaseModel):
+    mfa_required_for_admins: bool = False
+    password_min_length: int = Field(default=10, ge=8, le=128)
+    session_timeout_minutes: int = Field(default=480, ge=15, le=1440)
+    allow_concurrent_sessions: bool = True
+    login_alert_email: str | None = Field(default=None, max_length=160)
+
+
+class BusinessTemplateSettings(BaseModel):
+    invoice_template: str = Field(default="standard", min_length=1, max_length=40)
+    receipt_template: str = Field(default="standard", min_length=1, max_length=40)
+    payment_voucher_template: str = Field(default="standard", min_length=1, max_length=40)
+    statement_template: str = Field(default="standard", min_length=1, max_length=40)
+    report_footer: str | None = Field(default=None, max_length=300)
+
+
+class BusinessNotificationSettings(BaseModel):
+    email_enabled: bool = True
+    sms_enabled: bool = False
+    whatsapp_enabled: bool = False
+    due_date_reminders: bool = True
+    approval_reminders: bool = True
+    compliance_reminders: bool = True
+    reminder_recipients: list[str] = Field(default_factory=list)
+
+
+class BusinessSubscriptionBillingSettings(BaseModel):
+    billing_contact_name: str | None = Field(default=None, max_length=160)
+    billing_email: str | None = Field(default=None, max_length=160)
+    billing_phone: str | None = Field(default=None, max_length=40)
+    invoice_delivery_email: str | None = Field(default=None, max_length=160)
+    renewal_mode: Literal["manual", "notify_only", "auto_renew_request"] = "notify_only"
+    payment_provider: str = Field(default="razorpay", min_length=1, max_length=40)
+
+
+class BusinessIntegrationSettings(BaseModel):
+    payment_gateway_provider: str = Field(default="razorpay", min_length=1, max_length=40)
+    payment_gateway_enabled: bool = False
+    gst_portal_enabled: bool = False
+    gst_portal_username_hint: str | None = Field(default=None, max_length=160)
+    bank_feed_mode: Literal["manual_import", "api_shell"] = "manual_import"
+    bank_provider_label: str | None = Field(default=None, max_length=120)
+    whatsapp_enabled: bool = False
+    whatsapp_sender_name: str | None = Field(default=None, max_length=120)
+    email_provider_enabled: bool = False
+    email_from_name: str | None = Field(default=None, max_length=160)
+    email_reply_to: str | None = Field(default=None, max_length=160)
+    document_storage_provider: Literal["local_filesystem", "supabase", "s3", "gcs", "azure_blob"] = "local_filesystem"
+    document_storage_path_prefix: str | None = Field(default=None, max_length=240)
+    allowed_upload_mime_types: list[str] = Field(default_factory=lambda: [
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ])
+    max_upload_size_mb: int = Field(default=10, ge=1, le=100)
+    provider_secrets_configured: dict[str, bool] = Field(default_factory=dict)
+
+
+class BusinessAiSettings(BaseModel):
+    ai_mis_enabled: bool = False
+    ocr_enabled: bool = False
+    ocr_provider: str | None = Field(default=None, max_length=80)
+    categorization_suggestions_enabled: bool = False
+    reconciliation_suggestions_enabled: bool = False
+    forecasting_enabled: bool = False
+    document_review_required: bool = True
+    posting_review_required: bool = True
+    auto_post_to_ledger: bool = False
+    model_label: str | None = Field(default=None, max_length=120)
+
+
+def _default_role_templates() -> list[BusinessRoleTemplate]:
+    return [
+        BusinessRoleTemplate(role_key="owner", display_name="Owner", can_invite_users=True, can_approve_documents=True, can_manage_settings=True),
+        BusinessRoleTemplate(role_key="admin", display_name="Admin", can_invite_users=True, can_approve_documents=True, can_manage_settings=True),
+        BusinessRoleTemplate(role_key="accountant", display_name="Accountant", can_approve_documents=False, can_manage_settings=False),
+        BusinessRoleTemplate(role_key="cashier", display_name="Cashier"),
+        BusinessRoleTemplate(role_key="auditor", display_name="Auditor"),
+        BusinessRoleTemplate(role_key="viewer", display_name="Viewer"),
+    ]
+
+
+def _default_permission_matrix() -> BusinessPermissionMatrix:
+    return BusinessPermissionMatrix(
+        module_permissions={
+            "business": ["owner", "admin", "accountant", "cashier", "auditor", "viewer"],
+            "accounting": ["owner", "admin", "accountant", "auditor", "viewer"],
+            "inventory": ["owner", "admin", "accountant"],
+            "banking": ["owner", "admin", "accountant", "cashier"],
+            "reports": ["owner", "admin", "accountant", "auditor", "viewer"],
+        },
+        action_permissions={
+            "voucher_approve": ["owner", "admin"],
+            "voucher_reverse": ["owner", "admin", "accountant"],
+            "invoice_approve": ["owner", "admin"],
+            "bill_approve": ["owner", "admin"],
+            "settings_manage": ["owner", "admin"],
+        },
+    )
+
+
+class BusinessAdminSettings(BaseModel):
+    organization: BusinessOrganizationSettings = Field(default_factory=BusinessOrganizationSettings)
+    branches: list[BusinessBranchSettingsItem] = Field(default_factory=list)
+    roles: list[BusinessRoleTemplate] = Field(default_factory=_default_role_templates)
+    permissions: BusinessPermissionMatrix = Field(default_factory=_default_permission_matrix)
+    voucher_configuration: BusinessVoucherConfigurationSettings = Field(default_factory=BusinessVoucherConfigurationSettings)
+    financial_controls: BusinessFinancialControlSettings = Field(default_factory=BusinessFinancialControlSettings)
+    security: BusinessSecuritySettings = Field(default_factory=BusinessSecuritySettings)
+    templates: BusinessTemplateSettings = Field(default_factory=BusinessTemplateSettings)
+    notifications: BusinessNotificationSettings = Field(default_factory=BusinessNotificationSettings)
+    subscription_billing: BusinessSubscriptionBillingSettings = Field(default_factory=BusinessSubscriptionBillingSettings)
+    integrations: BusinessIntegrationSettings = Field(default_factory=BusinessIntegrationSettings)
+    ai_settings: BusinessAiSettings = Field(default_factory=BusinessAiSettings)
+
+
+class BusinessAdminSettingsUpdateRequest(BusinessAdminSettings):
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class BusinessAdminSettingsResponse(BusinessAdminSettings):
     tenant_id: str
     app_key: str
     accounting_entity_id: str

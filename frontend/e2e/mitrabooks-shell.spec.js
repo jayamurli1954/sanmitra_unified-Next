@@ -32,6 +32,7 @@ async function mockVerifiedMitraBooksSession(page) {
   const creditNotes = [];
   const debitNotes = [];
   const caDocuments = [];
+  const caClients = [];
   const json = (route, body, status = 200) => route.fulfill({
     status,
     contentType: 'application/json',
@@ -185,6 +186,56 @@ async function mockVerifiedMitraBooksSession(page) {
     numbering: { prefix: 'INV', number_format: '{PREFIX}-{FY}-{SEQ}', seq_padding: 3, start_number: 1 },
     branding: {},
   }));
+  await page.route('**/api/v1/business/admin-settings**', async route => {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      return json(route, request.postDataJSON());
+    }
+    return json(route, {
+      organization: { legal_name: 'Acme Corp Ltd', trade_name: 'Acme' },
+      branches: [],
+      roles: [],
+      permissions: { module_permissions: {}, action_permissions: {} },
+      voucher_configuration: { journal_prefix: 'JV' },
+      financial_controls: {},
+      security: {},
+      templates: {},
+      notifications: {},
+      subscription_billing: {},
+      integrations: { payment_gateway_provider: 'razorpay', document_storage_provider: 'local_filesystem' },
+      ai_settings: { document_review_required: true, posting_review_required: true, auto_post_to_ledger: false },
+    });
+  });
+  await page.route('**/api/v1/business/ca-clients**', async route => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      const payload = request.postDataJSON();
+      const client = {
+        client_id: `caclient${caClients.length + 1}`,
+        tenant_id: 'demo-mitrabooks-business',
+        app_key: 'mitrabooks',
+        accounting_entity_id: 'primary',
+        client_name: payload.client_name,
+        gstin: payload.gstin || '',
+        pan: payload.pan || '',
+        contact_person: payload.contact_person || '',
+        assigned_to: payload.assigned_to || '',
+        client_owner: payload.client_owner || '',
+        engagement_type: payload.engagement_type || '',
+        access_level: payload.access_level || 'view_only',
+        compliance_tracks: payload.compliance_tracks || [],
+        notes: payload.notes || '',
+        active: true,
+        created_by: 'businessadmin@sanmitra.local',
+        updated_by: '',
+        created_at: '2026-06-14T00:00:00Z',
+        updated_at: '2026-06-14T00:00:00Z',
+      };
+      caClients.push(client);
+      return json(route, client);
+    }
+    return json(route, { items: caClients, total: caClients.length });
+  });
   await page.route('**/api/v1/business/ca-documents**', async route => {
     const request = route.request();
     const method = request.method();
@@ -697,9 +748,9 @@ test.describe('MitraBooks ERP static shell', () => {
       await expect(page.locator('.erp-workspace-panel')).toContainText(marker);
     }
 
-    await page.locator('[data-settings-card="organization"]').getByRole('button', { name: 'View Setup' }).click();
+    await page.locator('[data-settings-card="organization"]').getByRole('button', { name: 'Open Setup' }).click();
     await expect(page.locator('[data-settings-detail="organization"]')).toContainText('Organization');
-    await expect(page.locator('[data-settings-detail="organization"]')).toContainText('Backend contract pending');
+    await expect(page.locator('[data-settings-detail="organization"]')).toContainText('Tenant-scoped setup');
     await page.getByRole('button', { name: 'Back to Settings' }).click();
     await expect(page.locator('[data-settings-detail="organization"]')).toBeHidden();
     await page.locator('[data-settings-card="chart-of-accounts"]').getByRole('button', { name: 'Open Related Area' }).click();
@@ -707,6 +758,16 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.locator('nav#nav a[data-business-workspace="ca-access"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('CA Practice Portal');
+    await page.locator('[data-ca-client-form] input[name="client_name"]').fill('Jayam Publications');
+    await page.locator('[data-ca-client-form] input[name="gstin"]').fill('29ABCDE1234F1Z5');
+    await page.locator('[data-ca-client-form] input[name="contact_person"]').fill('Mr Jayam');
+    await page.locator('[data-ca-client-form] input[name="assigned_to"]').fill('Staff A');
+    await page.locator('[data-ca-client-form] input[name="client_owner"]').fill('Partner A');
+    await page.locator('[data-ca-client-form] input[name="engagement_type"]').fill('GST and bookkeeping');
+    await page.locator('[data-ca-client-form] input[name="compliance_tracks"]').fill('GST, TDS');
+    await page.getByRole('button', { name: 'Add Client' }).click();
+    await expect(page.locator('#login-status')).toContainText('CA client added');
+    await expect(page.locator('.erp-workspace-panel')).toContainText('Jayam Publications');
     await page.locator('[data-ca-document-form] input[name="client_name"]').fill('Jayam Publications');
     await page.locator('[data-ca-document-form] select[name="document_type"]').selectOption('Bank statement');
     await page.locator('[data-ca-document-form] input[name="period"]').fill('May 2026');

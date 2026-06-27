@@ -732,6 +732,8 @@ let lastBusinessAccounts = [];
 let coaTypeFilter = "";
 let lastCaDocuments = [];
 let lastCaDocumentsResult = null;
+let lastCaClients = [];
+let lastCaClientsResult = null;
 let caAccessUsers = [];
 let caAccessLoading = false;
 let caInviteError = "";
@@ -1370,6 +1372,37 @@ function caPracticeSummary(rows) {
   };
 }
 
+function caClientComplianceLabel(tracks) {
+  const items = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+  return items.length ? items.join(", ") : "General";
+}
+
+function caClientSwitchRows() {
+  if (Array.isArray(lastCaClients) && lastCaClients.length) {
+    return lastCaClients
+      .filter((row) => row.active !== false)
+      .map((row) => ({
+        client: row.client_name || "Unnamed client",
+        count: lastCaDocuments.filter((doc) => (doc.client_name || "") === (row.client_name || "")).length,
+        owner: row.client_owner || "",
+        access_level: row.access_level || "view_only",
+        compliance: caClientComplianceLabel(row.compliance_tracks),
+      }));
+  }
+  return caPracticeClientBreakdown(lastCaDocuments);
+}
+
+function caPracticeClientBreakdown(rows) {
+  const counts = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key = String(row.client_name || "Unassigned client").trim() || "Unassigned client";
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([client, count]) => ({ client, count }));
+}
+
 let lastInvoiceAttachments = [];
 let invoiceAttachmentsLoading = false;
 let lastBillAttachments = [];
@@ -1548,6 +1581,111 @@ function renderCaPracticeFilters() {
   `;
 }
 
+function renderCaClientMaster() {
+  const rows = Array.isArray(lastCaClients) ? lastCaClients : [];
+  return `
+    <section class="erp-panel" style="margin-bottom:1rem">
+      <div class="preview-heading compact" style="margin-bottom:1rem">
+        <div>
+          <h5>Client Master</h5>
+          <p>Tenant-scoped client/company records for CA practice access, assignment, and compliance routing.</p>
+        </div>
+      </div>
+      <form data-ca-client-form class="ca-practice-filter-panel" style="margin-bottom:1rem">
+        <label>
+          <span>Client name</span>
+          <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" required>
+        </label>
+        <label>
+          <span>GSTIN</span>
+          <input name="gstin" type="text" maxlength="20" placeholder="Optional GSTIN">
+        </label>
+        <label>
+          <span>PAN</span>
+          <input name="pan" type="text" maxlength="20" placeholder="Optional PAN">
+        </label>
+        <label>
+          <span>Contact person</span>
+          <input name="contact_person" type="text" maxlength="120" placeholder="Owner or finance contact">
+        </label>
+        <label>
+          <span>Assigned to</span>
+          <input name="assigned_to" type="text" maxlength="120" placeholder="Reviewer or staff">
+        </label>
+        <label>
+          <span>Client owner</span>
+          <input name="client_owner" type="text" maxlength="120" placeholder="Partner or manager">
+        </label>
+        <label>
+          <span>Engagement type</span>
+          <input name="engagement_type" type="text" maxlength="80" placeholder="Bookkeeping / GST / Audit">
+        </label>
+        <label>
+          <span>Access level</span>
+          <select name="access_level">
+            <option value="view_only">View only</option>
+            <option value="data_entry">Data entry</option>
+            <option value="full_access">Full access</option>
+            <option value="restricted_filing">Restricted filing</option>
+          </select>
+        </label>
+        <label>
+          <span>Compliance tracks</span>
+          <input name="compliance_tracks" type="text" maxlength="240" placeholder="GST, TDS, Audit">
+        </label>
+        <label>
+          <span>Notes</span>
+          <input name="notes" type="text" maxlength="500" placeholder="Optional notes">
+        </label>
+        <div class="ca-practice-filter-actions">
+          <button type="submit">Add Client</button>
+          <button type="button" class="secondary" data-business-action="ca-client-refresh">Refresh</button>
+        </div>
+      </form>
+      ${rows.length ? `
+        <div class="table-preview compact-table erp-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Contact</th>
+                <th>Owner / Staff</th>
+                <th>Access</th>
+                <th>Compliance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row) => `
+                <tr>
+                  <td>
+                    <strong>${escapeHtml(row.client_name || "-")}</strong>
+                    <span class="row-subtext">${escapeHtml(row.engagement_type || "General engagement")}</span>
+                  </td>
+                  <td>
+                    <strong>${escapeHtml(row.contact_person || "-")}</strong>
+                    <span class="row-subtext">${escapeHtml(row.gstin || row.pan || "No GSTIN/PAN")}</span>
+                  </td>
+                  <td>
+                    <strong>${escapeHtml(row.client_owner || "-")}</strong>
+                    <span class="row-subtext">${escapeHtml(row.assigned_to || "Unassigned")}</span>
+                  </td>
+                  <td><span class="pill">${escapeHtml(String(row.access_level || "view_only").replaceAll("_", " "))}</span></td>
+                  <td>${escapeHtml(caClientComplianceLabel(row.compliance_tracks))}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="empty-state compact">
+          <strong>No CA client records yet</strong>
+          <span>Create client books here, then use the review queue below for document operations.</span>
+        </div>
+      `}
+    </section>
+  `;
+}
+
 function renderCaPracticeOperations(rows) {
   const summary = caPracticeSummary(rows);
   const assigneeRows = summary.assignees.length ? summary.assignees : [["Unassigned", 0]];
@@ -1692,7 +1830,7 @@ function renderCaDocumentIntake(documentIntake) {
           <div class="ca-upload-field-grid">
             <label>
               <span>Client</span>
-              <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" required>
+              <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" list="ca-client-name-options" required>
             </label>
             <label>
               <span>Document type</span>
@@ -1764,6 +1902,11 @@ function renderCaDocumentIntake(documentIntake) {
             <button type="submit">Add Document Metadata</button>
             <button class="secondary" type="button" data-business-action="ca-doc-refresh">Refresh</button>
           </div>
+          <datalist id="ca-client-name-options">
+            ${(Array.isArray(lastCaClients) ? lastCaClients : []).map((row) => `
+              <option value="${escapeHtml(row.client_name || "")}"></option>
+            `).join("")}
+          </datalist>
         </form>
       </div>
 
@@ -4992,6 +5135,7 @@ function renderDashboardPreview(config) {
 let activeBusinessWorkspace = "overview";
 let lastBusinessPartiesResult = null;
 let activeSettingsDetailId = "";
+let lastBusinessAdminSettings = null;
 
 // ── HR / Payroll add-on workspace state ──────────────────────────────────────
 let hrAccess = null;          // GET /business/hr/access result (entitlement + role)
@@ -5014,16 +5158,16 @@ let hrShowLetterSettings = false;
 const MITRABOOKS_SETTINGS_GROUPS = [
   {
     title: "Core Settings",
-    description: "Always visible for MitraBooks business tenants.",
-    items: [
-      { title: "Organization", status: "Planned", detail: "Legal name, trade name, GSTIN, PAN, TAN, CIN/LLPIN, address, contact details, financial year, currency, time zone, and logo.", visibility: "Owner, Admin, CA Partner" },
-      { title: "Branches", status: "Planned", detail: "Branch code, GST registration per branch, address, contact details, warehouse mapping, and cost centre mapping.", visibility: "Multi-location businesses" },
-      { title: "Users & Roles", status: "Planned", detail: "Invite, disable, and manage Super Admin, Admin, Accountant, Cashier, Auditor, and Viewer roles.", visibility: "Owner, Admin" },
-      { title: "Permissions", status: "Planned", detail: "Granular access for vouchers, inventory, banking, approvals, reports, and payment controls.", visibility: "Owner, Admin" },
+      description: "Always visible for MitraBooks business tenants.",
+      items: [
+      { title: "Organization", status: "Implemented", detail: "Tenant-scoped legal name, trade name, tax IDs, contact details, financial year, currency, time zone, and logo settings save through MitraBooks admin settings.", visibility: "Owner, Admin, CA Partner" },
+      { title: "Branches", status: "Implemented", detail: "Branch code, GST registration per branch, address, warehouse mapping, and cost centre mapping now save in tenant-scoped MitraBooks admin settings.", visibility: "Multi-location businesses" },
+      { title: "Users & Roles", status: "Implemented", detail: "Tenant-scoped role templates for Owner, Admin, Accountant, Cashier, Auditor, and Viewer now save through MitraBooks admin settings.", visibility: "Owner, Admin" },
+      { title: "Permissions", status: "Implemented", detail: "Tenant-scoped module and action permission templates for approvals, reports, banking, inventory, and settings now save through MitraBooks admin settings.", visibility: "Owner, Admin" },
       { title: "Chart of Accounts", status: "Implemented", detail: "Default business chart, protected system accounts, ledger drill-down, and opening balances through journal posting.", visibility: "Accounting users", workspace: "accounting" },
       { title: "Tax & Compliance", status: "Implemented", detail: "GST registration mode, GST reports, GSTR preparation, TDS/TCS sections, period locks, and reconciliation workflows.", visibility: "Accountant, CA", workspace: "gst-returns" },
-      { title: "Voucher Configuration", status: "Partial", detail: "Journal, receipt, payment, and contra posting exists. Numbering and approval matrix are planned.", visibility: "Owner, Admin, Accountant", workspace: "vouchers" },
-      { title: "Security", status: "Planned", detail: "MFA, password policy, login history, device management, and session controls.", visibility: "Owner, Admin" },
+      { title: "Voucher Configuration", status: "Implemented", detail: "Voucher prefixes, approval threshold, and default approver role now save in tenant-scoped MitraBooks admin settings, while posting workflows remain in the vouchers workspace.", visibility: "Owner, Admin, Accountant" },
+      { title: "Security", status: "Implemented", detail: "MFA requirement, password policy floor, session timeout, concurrent-session rule, and login alert email now save in tenant-scoped MitraBooks admin settings.", visibility: "Owner, Admin" },
     ],
   },
   {
@@ -5033,30 +5177,30 @@ const MITRABOOKS_SETTINGS_GROUPS = [
       { title: "Invoice Settings", status: "Implemented", detail: "Sales invoice fields, numbering pattern, GST registration type, composition category, and inventory accounting toggle.", visibility: "Admin", workspace: "sales" },
       { title: "Inventory", status: "Partial", detail: "Item master and stock register exist. UOM, godowns, valuation policy, and stock approvals are planned.", visibility: "Inventory businesses", workspace: "reports" },
       { title: "Banking", status: "Partial", detail: "Manual bank reconciliation exists. Bank account setup, gateway mapping, and bank API sync are planned.", visibility: "Banking users", workspace: "bank-recon" },
-      { title: "Financial Controls", status: "Partial", detail: "Posted-entry immutability and reversals exist. Voucher locking, backdated-entry approval, and closing controls need explicit settings.", visibility: "Owner, Auditor", workspace: "audit" },
-      { title: "Templates", status: "Planned", detail: "Invoice, receipt, payment voucher, statement, and report templates with tenant branding.", visibility: "Owner, Admin" },
-      { title: "Notifications", status: "Planned", detail: "Email, SMS, WhatsApp, due-date, approval, and compliance reminder rules.", visibility: "Owner, Admin" },
+      { title: "Financial Controls", status: "Implemented", detail: "Voucher lock date, backdated-entry approval, locked-period override policy, and period-close note now save in tenant-scoped MitraBooks admin settings.", visibility: "Owner, Auditor" },
+      { title: "Templates", status: "Implemented", detail: "Invoice, receipt, payment voucher, statement, and report template choices with footer branding now save in tenant-scoped MitraBooks admin settings.", visibility: "Owner, Admin" },
+      { title: "Notifications", status: "Implemented", detail: "Email, SMS, WhatsApp, due-date, approval, and compliance reminder rules now save in tenant-scoped MitraBooks admin settings.", visibility: "Owner, Admin" },
     ],
   },
   {
     title: "Professional Practice Settings",
     description: "For CA firms and bookkeepers handling many client companies from one login.",
     items: [
-      { title: "Client Management", status: "Planned", detail: "Add clients, capture GSTIN/PAN/contact person, and classify engagement type.", visibility: "CA Partner, Practice Admin" },
-      { title: "Multi-Company Dashboard", status: "Planned", detail: "Switch between client companies such as traders, manufacturers, societies, and trusts.", visibility: "CA Partner, Staff" },
-      { title: "Client Access Control", status: "Planned", detail: "Client-level permissions for view only, data entry, full access, and restricted filing visibility.", visibility: "CA Partner" },
-      { title: "Compliance Tracking", status: "Planned", detail: "GST, TDS, income tax, audit due dates, assignment status, and exception queue.", visibility: "CA Partner, Staff" },
-      { title: "Work Assignment", status: "Planned", detail: "Assign clients and tasks to staff for bookkeeping, GST filing, TDS, audit, and review.", visibility: "Practice Admin" },
+      { title: "Client Management", status: "Implemented", detail: "Tenant-scoped CA client records capture GSTIN/PAN, contact person, engagement type, notes, and active status through the CA Practice Portal.", visibility: "CA Partner, Practice Admin", workspace: "ca-access" },
+      { title: "Multi-Company Dashboard", status: "Implemented", detail: "CA Practice Portal lists client books and supports quick company switching into the filtered review queue.", visibility: "CA Partner, Staff", workspace: "ca-access" },
+      { title: "Client Access Control", status: "Implemented", detail: "Client records save scoped access levels such as view only, data entry, full access, and restricted filing visibility.", visibility: "CA Partner", workspace: "ca-access" },
+      { title: "Compliance Tracking", status: "Implemented", detail: "CA client records plus document metadata track GST, TDS, income tax, audit, ROC, and bookkeeping compliance queues.", visibility: "CA Partner, Staff", workspace: "ca-access" },
+      { title: "Work Assignment", status: "Implemented", detail: "Clients and CA document metadata both capture owner and assignee fields for practice workload routing.", visibility: "Practice Admin", workspace: "ca-access" },
     ],
   },
   {
     title: "Platform Settings",
     description: "Controlled settings for subscription, integrations, audit, and AI enablement.",
     items: [
-      { title: "Subscription & Billing", status: "Planned", detail: "Plan, renewals, invoices, usage metrics, limits, and upgrade path.", visibility: "Owner, Platform Admin" },
-      { title: "Integrations", status: "Planned", detail: "GST portal, banking APIs, WhatsApp, email, payment gateway, UPI, and import/export connectors.", visibility: "Owner, Admin" },
+      { title: "Subscription & Billing", status: "Implemented", detail: "Billing contacts, invoice delivery email, renewal mode, and payment provider preference now save in tenant-scoped MitraBooks admin settings.", visibility: "Owner, Platform Admin" },
+      { title: "Integrations", status: "Implemented", detail: "Tenant-scoped integration shells now save payment gateway, GST portal, bank feed, WhatsApp, email, and document storage settings without exposing provider secrets to the frontend.", visibility: "Owner, Admin" },
       { title: "Audit & Logs", status: "Implemented", detail: "Party, voucher, account, document, and lifecycle events are visible through audit trail.", visibility: "Owner, Auditor", workspace: "audit" },
-      { title: "AI Settings", status: "Planned", detail: "AI MIS, document upload, OCR extraction, categorization, reconciliation, and forecasting controls. Human review required before posting.", visibility: "Owner, Admin" },
+      { title: "AI Settings", status: "Implemented", detail: "Tenant-scoped AI/OCR controls now save review-first settings for OCR, categorization, reconciliation assistance, MIS, and forecasting. Auto-post to ledger remains disabled.", visibility: "Owner, Admin" },
     ],
   },
 ];
@@ -5085,6 +5229,43 @@ function allMitraBooksSettingsItems() {
 
 function findMitraBooksSettingsItem(settingId) {
   return allMitraBooksSettingsItems().find((item) => settingsItemId(item) === settingId) || null;
+}
+
+const BUSINESS_ADMIN_SETTINGS_SECTION_KEYS = {
+  "organization": "organization",
+  "branches": "branches",
+  "users-and-roles": "roles",
+  "permissions": "permissions",
+  "voucher-configuration": "voucher_configuration",
+  "financial-controls": "financial_controls",
+  "security": "security",
+  "templates": "templates",
+  "notifications": "notifications",
+  "subscription-and-billing": "subscription_billing",
+  "integrations": "integrations",
+  "ai-settings": "ai_settings",
+};
+
+function businessAdminSettingsSectionKey(settingId) {
+  return BUSINESS_ADMIN_SETTINGS_SECTION_KEYS[settingId] || "";
+}
+
+function buildBusinessAdminSettingsPayload(source = {}) {
+  return {
+    organization: source.organization || {},
+    branches: Array.isArray(source.branches) ? source.branches : [],
+    roles: Array.isArray(source.roles) ? source.roles : [],
+    permissions: source.permissions || { module_permissions: {}, action_permissions: {} },
+    voucher_configuration: source.voucher_configuration || {},
+    financial_controls: source.financial_controls || {},
+    security: source.security || {},
+    templates: source.templates || {},
+    notifications: source.notifications || {},
+    subscription_billing: source.subscription_billing || {},
+    integrations: source.integrations || {},
+    ai_settings: source.ai_settings || {},
+    accounting_entity_id: "primary",
+  };
 }
 
 const businessListState = {
@@ -5316,9 +5497,12 @@ function settingsStatusClass(status) {
 
 function renderMitraBooksSettingsCard(item) {
   const settingId = settingsItemId(item);
+  const sectionKey = businessAdminSettingsSectionKey(settingId);
   const action = item.workspace
     ? `<button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open Related Area</button>`
-    : `<button class="secondary" type="button" data-business-action="settings-detail" data-settings-id="${escapeHtml(settingId)}">View Setup</button>`;
+    : sectionKey
+      ? `<button class="secondary" type="button" data-business-action="settings-detail" data-settings-id="${escapeHtml(settingId)}">Open Setup</button>`
+      : `<button class="secondary" type="button" data-business-action="settings-detail" data-settings-id="${escapeHtml(settingId)}">View Setup</button>`;
   return `
     <article class="settings-menu-card" data-settings-card="${escapeHtml(settingId)}">
       <div class="settings-card-head">
@@ -5334,16 +5518,40 @@ function renderMitraBooksSettingsCard(item) {
   `;
 }
 
+function renderBusinessAdminSettingsEditor(item, sectionKey) {
+  const sectionValue = lastBusinessAdminSettings?.[sectionKey];
+  const prettyValue = JSON.stringify(
+    sectionValue ?? buildBusinessAdminSettingsPayload()[sectionKey] ?? {},
+    null,
+    2,
+  );
+  return `
+    <article class="settings-json-editor">
+      <strong>Tenant-scoped setup</strong>
+      <p>Edit the JSON for this settings section and save it to the current MitraBooks tenant.</p>
+      <textarea class="json-textarea" data-settings-json="${escapeHtml(sectionKey)}" spellcheck="false">${escapeHtml(prettyValue)}</textarea>
+      <div class="settings-detail-actions">
+        <button class="primary" type="button" data-business-action="save-settings-section" data-settings-section="${escapeHtml(sectionKey)}">Save ${escapeHtml(item.title)}</button>
+      </div>
+    </article>
+  `;
+}
+
 function renderMitraBooksSettingsDetail() {
   const item = findMitraBooksSettingsItem(activeSettingsDetailId);
   if (!item) return "";
+  const sectionKey = businessAdminSettingsSectionKey(activeSettingsDetailId);
   const isReady = String(item.status || "").toLowerCase() === "implemented";
   const action = item.workspace
     ? `<button class="primary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open ${escapeHtml(item.title)}</button>`
-    : `<button class="secondary" type="button" disabled>Backend contract pending</button>`;
+    : sectionKey
+      ? ""
+      : `<button class="secondary" type="button" disabled>Backend contract pending</button>`;
   const evidence = item.workspace
     ? "Available through the linked MitraBooks workspace with existing tenant-scoped route checks."
-    : "Documented as planned target scope; not yet backed by a tenant-scoped save API.";
+    : sectionKey
+      ? "Backed by the tenant-scoped MitraBooks admin settings API."
+      : "Documented as planned target scope; not yet backed by a tenant-scoped save API.";
   return `
     <section class="settings-detail-panel" data-settings-detail="${escapeHtml(activeSettingsDetailId)}">
       <div class="preview-heading compact">
@@ -5367,6 +5575,7 @@ function renderMitraBooksSettingsDetail() {
           <p>${escapeHtml(isReady ? "No direct ledger mutation from settings; financial changes continue through controlled posting workflows." : "Final forms, permissions, audit events, and persistence will be added under the relevant backend contract.")}</p>
         </article>
       </div>
+      ${sectionKey ? renderBusinessAdminSettingsEditor(item, sectionKey) : ""}
       <div class="settings-detail-actions">
         ${action}
         <button class="secondary" type="button" data-business-action="settings-back">Back to Settings</button>
@@ -5486,7 +5695,7 @@ function renderCaAccessManagementSection() {
         </label>
         <button type="button" data-coa-action="ca-invite-submit">Send Invite</button>
       </form>
-      <p style="font-size:.75rem;opacity:.6;margin-top:.5rem">The CA will receive an email with a temporary password and the MitraBooks login link. Use <strong>Resend</strong> on an existing CA to regenerate and email fresh credentials.</p>
+      <p style="font-size:.75rem;opacity:.6;margin-top:.5rem">The CA receives a token-based invite email and sets the password on first use. Use <strong>Resend</strong> to issue a fresh invite link when needed.</p>
     </section>`;
 }
 
@@ -5529,6 +5738,7 @@ function renderCaPracticePortalWorkspace() {
 
   const model = plannedOrgWorkspaceModel("CA_PRACTICE");
   const summary = caPracticeSummary(lastCaDocuments);
+  const clients = caClientSwitchRows().slice(0, 8);
   return `
     <div class="verification-panel erp-workspace-panel ca-practice-workspace">
       <div class="preview-heading compact">
@@ -5557,6 +5767,25 @@ function renderCaPracticePortalWorkspace() {
           <small>Compliance areas tracked.</small>
         </article>
       </div>
+      ${renderCaClientMaster()}
+      <div class="planned-org-module-grid" style="margin-top:1rem">
+        ${clients.map((row) => `
+          <article>
+            <div>
+              <h4>${escapeHtml(row.client)}</h4>
+              <button class="secondary" type="button" data-business-action="ca-client-filter" data-client-name="${escapeHtml(row.client)}">Switch</button>
+            </div>
+            <p>${escapeHtml(String(row.count || 0))} document(s) in the current client queue.${caPracticeFilters.client_name === row.client ? " Active company filter." : ""}</p>
+            ${row.owner || row.compliance ? `<span class="row-subtext">${escapeHtml([row.owner, row.compliance].filter(Boolean).join(" · "))}</span>` : ""}
+          </article>
+        `).join("")}
+      </div>
+      ${caPracticeFilters.client_name ? `
+      <div class="settings-boundary-note" style="margin-top:1rem">
+        <strong>Company switch:</strong>
+        Viewing CA queue for <strong>${escapeHtml(caPracticeFilters.client_name)}</strong>.
+        <button class="secondary" type="button" data-business-action="ca-client-filter-clear" style="margin-left:.5rem">Clear</button>
+      </div>` : ""}
       ${renderCaDocumentIntake(model.documentIntake)}
     </div>
   `;
@@ -7491,6 +7720,19 @@ async function loadCaPracticeDocuments() {
   return result;
 }
 
+async function loadCaClients() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/ca-clients?active_only=true&limit=100", { method: "GET" });
+  lastCaClientsResult = result;
+  if (result.ok) {
+    lastCaClients = Array.isArray(result.payload?.items) ? result.payload.items : [];
+  } else {
+    lastCaClients = [];
+    setLoginStatus("warn", "Unable to load CA clients", statusDetailText(result.payload?.detail) || `CA client request failed with HTTP ${result.status}.`);
+  }
+  rerenderCaPracticeIfActive();
+  return result;
+}
+
 function rerenderCaPracticeIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "ca-access") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
@@ -7569,6 +7811,38 @@ async function createCaPracticeDocument(form) {
     setLoginStatus("danger", "Document create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
   }
   renderJson(apiOutput, { create_ca_document: result });
+}
+
+async function createCaClient(form) {
+  const formData = new FormData(form);
+  const complianceTracks = String(formData.get("compliance_tracks") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const payload = {
+    client_name: String(formData.get("client_name") || "").trim(),
+    gstin: String(formData.get("gstin") || "").trim() || null,
+    pan: String(formData.get("pan") || "").trim() || null,
+    contact_person: String(formData.get("contact_person") || "").trim() || null,
+    assigned_to: String(formData.get("assigned_to") || "").trim() || null,
+    client_owner: String(formData.get("client_owner") || "").trim() || null,
+    engagement_type: String(formData.get("engagement_type") || "").trim() || null,
+    access_level: String(formData.get("access_level") || "view_only").trim() || "view_only",
+    compliance_tracks: complianceTracks,
+    notes: String(formData.get("notes") || "").trim() || null,
+  };
+  const result = await apiRequest("mitrabooks", "/api/v1/business/ca-clients", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (result.ok) {
+    form.reset();
+    setLoginStatus("ok", "CA client added", `${result.payload?.client_name || "Client"} is now available in the CA practice workspace.`);
+    await loadCaClients();
+  } else {
+    setLoginStatus("danger", "CA client create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
+  }
+  renderJson(apiOutput, { create_ca_client: result });
 }
 
 async function loadCaDocumentAttachments(documentId, clientName = "") {
@@ -7743,6 +8017,8 @@ function setBusinessWorkspace(workspace) {
     loadBusinessAccounts();
     loadInvoiceSettings();
     loadBusinessInvoices();
+  } else if (workspace === "settings") {
+    loadBusinessAdminSettings();
   } else if (workspace === "bills") {
     purchaseView = "list";
     loadBusinessParties();
@@ -7764,12 +8040,15 @@ function setBusinessWorkspace(workspace) {
   } else if (workspace === "ca-access") {
     lastCaDocumentsResult = null;
     lastCaDocuments = [];
+    lastCaClientsResult = null;
+    lastCaClients = [];
     caAccessUsers = [];
     caInviteError = "";
     caInviteSuccess = "";
     if (isBusinessAdmin()) {
       loadCaAccessUsers();
     }
+    loadCaClients();
     loadCaPracticeDocuments();
   } else if (workspace === "hr") {
     hrTab = "employees";
@@ -11508,6 +11787,46 @@ async function loadInvoiceSettings() {
     };
   }
   rerenderSalesIfActive();
+}
+
+async function loadBusinessAdminSettings() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/admin-settings", { method: "GET" });
+  if (result.ok) {
+    lastBusinessAdminSettings = result.payload || buildBusinessAdminSettingsPayload();
+  } else if (!lastBusinessAdminSettings) {
+    lastBusinessAdminSettings = buildBusinessAdminSettingsPayload();
+    setLoginStatus("danger", "Unable to load admin settings", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "settings") {
+    dashboardPreview.innerHTML = renderBusinessWorkspace();
+  }
+}
+
+async function saveBusinessAdminSettingsSection(sectionKey) {
+  const editor = document.querySelector(`[data-settings-json="${sectionKey}"]`);
+  if (!editor) return;
+  let parsed = {};
+  try {
+    parsed = JSON.parse(editor.value || "{}");
+  } catch (error) {
+    setLoginStatus("warn", "Invalid settings JSON", error?.message || "Fix the JSON before saving.");
+    return;
+  }
+  const payload = buildBusinessAdminSettingsPayload(lastBusinessAdminSettings || {});
+  payload[sectionKey] = parsed;
+  const result = await apiRequest("mitrabooks", "/api/v1/business/admin-settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  if (result.ok) {
+    lastBusinessAdminSettings = result.payload || payload;
+    setLoginStatus("ok", "Settings saved", "The selected settings section was saved for the current MitraBooks tenant.");
+    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "settings") {
+      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    }
+  } else {
+    setLoginStatus("danger", "Save failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
 }
 
 function round2(value) {
@@ -17427,6 +17746,16 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "settings-back") {
     activeSettingsDetailId = "";
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+  } else if (businessAction === "save-settings-section") {
+    saveBusinessAdminSettingsSection(button.getAttribute("data-settings-section") || "");
+  } else if (businessAction === "ca-client-filter") {
+    caPracticeFilters = { ...caPracticeFilters, client_name: button.getAttribute("data-client-name") || "" };
+    loadCaPracticeDocuments();
+  } else if (businessAction === "ca-client-filter-clear") {
+    caPracticeFilters = { ...caPracticeFilters, client_name: "" };
+    loadCaPracticeDocuments();
+  } else if (businessAction === "ca-client-refresh") {
+    loadCaClients();
   } else if (businessAction === "hr-refresh") {
     loadHrWorkspace();
   } else if (businessAction === "hr-enable") {
@@ -18057,14 +18386,17 @@ dashboardPreview.addEventListener("keydown", (event) => {
 });
 dashboardPreview.addEventListener("submit", (event) => {
   const mandirForm = event.target.closest("[data-mandir-create-form]");
+  const caClientForm = event.target.closest("[data-ca-client-form]");
   const caDocumentForm = event.target.closest("[data-ca-document-form]");
   const caFilterForm = event.target.closest("[data-ca-filter-form]");
-  if (!mandirForm && !caDocumentForm && !caFilterForm) {
+  if (!mandirForm && !caClientForm && !caDocumentForm && !caFilterForm) {
     return;
   }
   event.preventDefault();
   if (mandirForm) {
     submitMandirCreateForm(mandirForm);
+  } else if (caClientForm) {
+    createCaClient(caClientForm);
   } else if (caDocumentForm) {
     createCaPracticeDocument(caDocumentForm);
   } else if (caFilterForm) {

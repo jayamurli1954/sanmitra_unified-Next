@@ -287,10 +287,18 @@ class Settings:
         if not self.VAPID_PUBLIC_KEY or not self.VAPID_PRIVATE_KEY:
             try:
                 import base64
+                from cryptography.hazmat.primitives import serialization
                 from py_vapid import Vapid
                 vapid = Vapid()
                 vapid.generate_keys()
-                public_key_bytes = vapid.public_key.to_string("uncompressed")
+                public_key = vapid.public_key
+                if hasattr(public_key, "public_bytes"):
+                    public_key_bytes = public_key.public_bytes(
+                        encoding=serialization.Encoding.X962,
+                        format=serialization.PublicFormat.UncompressedPoint,
+                    )
+                else:
+                    public_key_bytes = public_key.to_string("uncompressed")
                 self.VAPID_PUBLIC_KEY = base64.urlsafe_b64encode(public_key_bytes).decode('utf-8').rstrip('=')
                 private_value = vapid.private_key.private_numbers().private_value
                 private_key_bytes = private_value.to_bytes(32, byteorder="big")

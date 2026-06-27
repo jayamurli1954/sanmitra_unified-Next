@@ -44,7 +44,7 @@ Current gap:
 
 - MitraBooks business workflows now have implemented backend slices for parties, typed vouchers, sales invoices, purchase bills, credit/debit notes, GST preparation reports, TDS/TCS, payment allocation, statements, bank reconciliation, fixed assets, dimensions, inventory, opening balances, and year-end close.
 - Phase 1 high-risk hardening is implemented but not production-ready as a whole: cross-store compensation coverage is implemented across typed vouchers, sales invoices, purchase bills, credit notes, debit notes, GST settlement, payroll, and bulk import; CA access now uses token-based invite acceptance with invite expiry, single-use acceptance, and revoke handling, but the acceptance UX still needs browser E2E and operator polish.
-- Remaining gaps are browser E2E coverage, compliance review, role/approval depth, advanced inventory, data health, MIS, export portability, CA/bookkeeper practice modeling, attachment/document workflows, and AI/document workflows.
+- Remaining gaps are deeper browser E2E coverage, compliance review, role/approval depth, advanced inventory, data health, MIS, export portability, deeper CA/bookkeeper practice modeling, and AI/document workflow depth beyond review-first shells.
 - The legacy desktop plan contains useful product ideas but incompatible architecture assumptions.
 
 ## Progress Log
@@ -77,6 +77,7 @@ Update this section as implementation and E2E checks progress. Do not move a pla
 | 2026-05-21 | Business parties and typed vouchers | Pending review in working tree | `/api/v1/business` source and tests exist locally but are not yet committed in the current reviewed batch | Treat as Phase 2; review separately from foundation/audit/platform-owner work |
 | 2026-06-26 | Phase 1 accounting compensation boundary | Implemented but not production-ready | Payroll and bulk import were already covered; MitraBooks business posting flows now cover typed vouchers, sales invoices, purchase bills, credit notes, debit notes, and GST settlement with compensation reversal tests for journal-posted/Mongo-failed paths | Expand the same rigor to any remaining receipt/refund-style flows and add browser E2E over the business lifecycle |
 | 2026-06-26 | Phase 1 CA access hardening | Implemented but not production-ready | Plaintext password exposure is removed; CA invites are token-based, acceptance sets the password on first use, expiry/revoke/accepted checks are enforced, and focused tests cover the backend flow | Add the actual invite-accept frontend UX, operator/browser E2E, and wider CA practice modeling |
+| 2026-06-27 | Phase 2 settings / CA practice / integrations shells | Implemented but not production-ready | Tenant-scoped business admin settings now save organization/branches/roles/permissions/controls/templates/notifications/billing plus integration and AI review-first config shells; CA Practice Portal now has tenant-scoped client master records, company switching, document queues, and document attachments with route-contract and focused test coverage | Run full local frontend preflight, extend browser E2E depth, and keep staging/provider/compliance claims conservative |
 
 ## Target State
 
