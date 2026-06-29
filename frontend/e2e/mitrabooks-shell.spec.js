@@ -756,16 +756,30 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-settings-card="chart-of-accounts"]').getByRole('button', { name: 'Open Related Area' }).click();
     await expect(page.locator('.accounting-drilldown-panel')).toContainText('Monthly Voucher Drill Down');
 
+    const caClientsLoaded = page.waitForResponse(response =>
+      response.url().includes('/api/v1/business/ca-clients') &&
+      response.request().method() === 'GET'
+    ).catch(() => null);
     await page.locator('nav#nav a[data-business-workspace="ca-access"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('CA Practice Portal');
-    await page.locator('[data-ca-client-form] input[name="client_name"]').fill('Jayam Publications');
-    await page.locator('[data-ca-client-form] input[name="gstin"]').fill('29ABCDE1234F1Z5');
-    await page.locator('[data-ca-client-form] input[name="contact_person"]').fill('Mr Jayam');
-    await page.locator('[data-ca-client-form] input[name="assigned_to"]').fill('Staff A');
-    await page.locator('[data-ca-client-form] input[name="client_owner"]').fill('Partner A');
-    await page.locator('[data-ca-client-form] input[name="engagement_type"]').fill('GST and bookkeeping');
-    await page.locator('[data-ca-client-form] input[name="compliance_tracks"]').fill('GST, TDS');
-    await page.getByRole('button', { name: 'Add Client' }).click();
+    await caClientsLoaded;
+    const caClientForm = page.locator('[data-ca-client-form]');
+    await expect(caClientForm.locator('input[name="client_name"]')).toBeVisible();
+    await caClientForm.locator('input[name="client_name"]').fill('Jayam Publications');
+    await caClientForm.locator('input[name="gstin"]').fill('29ABCDE1234F1Z5');
+    await caClientForm.locator('input[name="contact_person"]').fill('Mr Jayam');
+    await caClientForm.locator('input[name="assigned_to"]').fill('Staff A');
+    await caClientForm.locator('input[name="client_owner"]').fill('Partner A');
+    await caClientForm.locator('input[name="engagement_type"]').fill('GST and bookkeeping');
+    await caClientForm.locator('input[name="compliance_tracks"]').fill('GST, TDS');
+    await expect(caClientForm.locator('input[name="client_name"]')).toHaveValue('Jayam Publications');
+    await Promise.all([
+      page.waitForResponse(response =>
+        response.url().includes('/api/v1/business/ca-clients') &&
+        response.request().method() === 'POST'
+      ),
+      caClientForm.locator('button[type="submit"]').click(),
+    ]);
     await expect(page.locator('.erp-workspace-panel')).toContainText('Jayam Publications');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();

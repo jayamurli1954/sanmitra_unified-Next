@@ -220,6 +220,8 @@
     "scanQRDesc": "Amount is pre-filled - just scan and confirm in your UPI app",
     "upiApps": "Works with GPay, PhonePe, Paytm, BHIM & all UPI apps",
     "upiId": "UPI ID",
+    "openUpiApp": "Open UPI App",
+    "openUpiAppDesc": "On this mobile, tap here to pay without scanning the QR.",
     "enterUtr": "Enter UTR / Transaction Reference",
     "utrHelp": "Copy the 12-digit UTR from your payment app after paying",
     "sendToAdmin": "Send to Admin on WhatsApp",

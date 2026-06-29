@@ -13,6 +13,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import TempleHinduIcon from '@mui/icons-material/TempleHindu';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { buildApiUrl } from '../utils/apiBaseUrl';
 import { useTranslation } from 'react-i18next';
 
@@ -46,6 +47,19 @@ const emptyForm = {
   phone: '', name: '', email: '', address: '',
   pincode: '', city: '', state: '',
   gothra: '', nakshtra: '', rashi: '',
+};
+
+const buildUpiIntentUri = (result) => {
+  if (!result?.upi_id) return '';
+  const params = new URLSearchParams({
+    pa: result.upi_id,
+    pn: result.upi_payee_name || 'Temple',
+    cu: 'INR',
+  });
+  if (result.amount) params.set('am', String(result.amount));
+  const note = (result.seva_name || result.payment_type || 'Temple payment').slice(0, 50);
+  if (note) params.set('tn', note);
+  return `upi://pay?${params.toString()}`;
 };
 
 export default function PublicSevaPayment() {
@@ -214,6 +228,7 @@ export default function PublicSevaPayment() {
   };
 
   const step0Valid = paymentType === 'seva' ? !!form.seva_name : !!form.category_name;
+  const upiIntentUri = buildUpiIntentUri(paymentResult);
 
   // ── HEADER ──────────────────────────────────────────────────────────────
   const HeaderBar = () => (
@@ -511,7 +526,7 @@ export default function PublicSevaPayment() {
                   }}
                 >
                   <QRCodeSVG
-                    value={`upi://pay?pa=${encodeURIComponent(paymentResult.upi_id)}&pn=${encodeURIComponent(paymentResult.upi_payee_name || 'Temple')}&am=${paymentResult.amount || ''}&cu=INR&tn=${encodeURIComponent((paymentResult.seva_name || '').slice(0, 50))}`}
+                    value={upiIntentUri}
                     size={206}
                     level="H"
                     includeMargin={false}
@@ -539,6 +554,18 @@ export default function PublicSevaPayment() {
               >
                 <Typography variant="body2" color="text.secondary">{t('publicPayment.upiId')}</Typography>
                 <Typography variant="h6" fontWeight="bold" letterSpacing={0.5}>{paymentResult.upi_id}</Typography>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  startIcon={<AccountBalanceWalletIcon />}
+                  href={upiIntentUri}
+                  sx={{ mt: 1.25, mb: 0.75, bgcolor: '#FF9933', '&:hover': { bgcolor: '#e65c00' } }}
+                >
+                  {t('publicPayment.openUpiApp')}
+                </Button>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
+                  {t('publicPayment.openUpiAppDesc')}
+                </Typography>
                 <Button size="small" startIcon={copied ? <CheckCircleIcon /> : <ContentCopyIcon />}
                   onClick={() => handleCopy(paymentResult.upi_id)} sx={{ mt: 0.5 }}>
                   {copied ? 'Copied!' : 'Copy UPI ID'}
@@ -575,7 +602,7 @@ export default function PublicSevaPayment() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0, mt: 0.5 }}>1</Box>
                 <Box>
                   <Typography variant="body2" fontWeight="bold">Make the UPI payment</Typography>
-                  <Typography variant="caption" color="text.secondary">Scan the QR or use the UPI ID to complete payment</Typography>
+                  <Typography variant="caption" color="text.secondary">Tap Open UPI App on this phone, or scan the QR from another phone</Typography>
                 </Box>
               </Box>
 

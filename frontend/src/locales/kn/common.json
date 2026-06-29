@@ -220,6 +220,8 @@
     "scanQRDesc": "ಮೊತ್ತ ತಾನಾಗಿ ತುಂಬಲ್ಪಡುತ್ತದೆ — UPI ಆ್ಯಪ್‌ನಲ್ಲಿ ದೃಢೀಕರಿಸಿ",
     "upiApps": "GPay, PhonePe, Paytm, BHIM ಹಾಗೂ ಎಲ್ಲಾ UPI ಆ್ಯಪ್‌ಗಳಲ್ಲಿ ಕಾರ್ಯ ನಿರ್ವಹಿಸುತ್ತದೆ",
     "upiId": "UPI ID",
+    "openUpiApp": "Open UPI App",
+    "openUpiAppDesc": "On this mobile, tap here to pay without scanning the QR.",
     "enterUtr": "UTR / ವಹಿವಾಟು ಸಂಖ್ಯೆ ನಮೂದಿಸಿ",
     "utrHelp": "ಪಾವತಿಯ ನಂತರ ನಿಮ್ಮ UPI ಆ್ಯಪ್‌ನಿಂದ 12 ಅಂಕಿಯ UTR ನಕಲಿಸಿ",
     "sendToAdmin": "ವಾಟ್ಸ್ಆ್ಯಪ್ ಮೂಲಕ ಆಡ್ಮಿನ್‌ಗೆ ಕಳಿಸಿ",

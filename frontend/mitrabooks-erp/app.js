@@ -738,6 +738,18 @@ let caAccessUsers = [];
 let caAccessLoading = false;
 let caInviteError = "";
 let caInviteSuccess = "";
+let caClientDraft = {
+  client_name: "",
+  gstin: "",
+  pan: "",
+  contact_person: "",
+  assigned_to: "",
+  client_owner: "",
+  engagement_type: "",
+  access_level: "view_only",
+  compliance_tracks: "",
+  notes: "",
+};
 let caPracticeFilters = {
   status: "",
   client_name: "",
@@ -1594,48 +1606,48 @@ function renderCaClientMaster() {
       <form data-ca-client-form class="ca-practice-filter-panel" style="margin-bottom:1rem">
         <label>
           <span>Client name</span>
-          <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" required>
+          <input name="client_name" type="text" maxlength="160" value="${escapeHtml(caClientDraft.client_name)}" placeholder="Client book or company name" required>
         </label>
         <label>
           <span>GSTIN</span>
-          <input name="gstin" type="text" maxlength="20" placeholder="Optional GSTIN">
+          <input name="gstin" type="text" maxlength="20" value="${escapeHtml(caClientDraft.gstin)}" placeholder="Optional GSTIN">
         </label>
         <label>
           <span>PAN</span>
-          <input name="pan" type="text" maxlength="20" placeholder="Optional PAN">
+          <input name="pan" type="text" maxlength="20" value="${escapeHtml(caClientDraft.pan)}" placeholder="Optional PAN">
         </label>
         <label>
           <span>Contact person</span>
-          <input name="contact_person" type="text" maxlength="120" placeholder="Owner or finance contact">
+          <input name="contact_person" type="text" maxlength="120" value="${escapeHtml(caClientDraft.contact_person)}" placeholder="Owner or finance contact">
         </label>
         <label>
           <span>Assigned to</span>
-          <input name="assigned_to" type="text" maxlength="120" placeholder="Reviewer or staff">
+          <input name="assigned_to" type="text" maxlength="120" value="${escapeHtml(caClientDraft.assigned_to)}" placeholder="Reviewer or staff">
         </label>
         <label>
           <span>Client owner</span>
-          <input name="client_owner" type="text" maxlength="120" placeholder="Partner or manager">
+          <input name="client_owner" type="text" maxlength="120" value="${escapeHtml(caClientDraft.client_owner)}" placeholder="Partner or manager">
         </label>
         <label>
           <span>Engagement type</span>
-          <input name="engagement_type" type="text" maxlength="80" placeholder="Bookkeeping / GST / Audit">
+          <input name="engagement_type" type="text" maxlength="80" value="${escapeHtml(caClientDraft.engagement_type)}" placeholder="Bookkeeping / GST / Audit">
         </label>
         <label>
           <span>Access level</span>
           <select name="access_level">
-            <option value="view_only">View only</option>
-            <option value="data_entry">Data entry</option>
-            <option value="full_access">Full access</option>
-            <option value="restricted_filing">Restricted filing</option>
+            <option value="view_only" ${caClientDraft.access_level === "view_only" ? "selected" : ""}>View only</option>
+            <option value="data_entry" ${caClientDraft.access_level === "data_entry" ? "selected" : ""}>Data entry</option>
+            <option value="full_access" ${caClientDraft.access_level === "full_access" ? "selected" : ""}>Full access</option>
+            <option value="restricted_filing" ${caClientDraft.access_level === "restricted_filing" ? "selected" : ""}>Restricted filing</option>
           </select>
         </label>
         <label>
           <span>Compliance tracks</span>
-          <input name="compliance_tracks" type="text" maxlength="240" placeholder="GST, TDS, Audit">
+          <input name="compliance_tracks" type="text" maxlength="240" value="${escapeHtml(caClientDraft.compliance_tracks)}" placeholder="GST, TDS, Audit">
         </label>
         <label>
           <span>Notes</span>
-          <input name="notes" type="text" maxlength="500" placeholder="Optional notes">
+          <input name="notes" type="text" maxlength="500" value="${escapeHtml(caClientDraft.notes)}" placeholder="Optional notes">
         </label>
         <div class="ca-practice-filter-actions">
           <button type="submit">Add Client</button>
@@ -7841,6 +7853,18 @@ async function createCaClient(form) {
     body: JSON.stringify(payload),
   });
   if (result.ok) {
+    caClientDraft = {
+      client_name: "",
+      gstin: "",
+      pan: "",
+      contact_person: "",
+      assigned_to: "",
+      client_owner: "",
+      engagement_type: "",
+      access_level: "view_only",
+      compliance_tracks: "",
+      notes: "",
+    };
     form.reset();
     await loadCaClients();
     setLoginStatus("ok", "CA client added", `${result.payload?.client_name || "Client"} is now available in the CA practice workspace.`);
@@ -18397,6 +18421,16 @@ dashboardPreview.addEventListener("keydown", (event) => {
   } else if (businessPanel) {
     applyBusinessListFilter(businessPanel.getAttribute("data-business-list") || "");
   }
+});
+dashboardPreview.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-ca-client-form] input, [data-ca-client-form] select");
+  if (!field || !field.name) {
+    return;
+  }
+  caClientDraft = {
+    ...caClientDraft,
+    [field.name]: field.value,
+  };
 });
 dashboardPreview.addEventListener("submit", (event) => {
   const mandirForm = event.target.closest("[data-mandir-create-form]");

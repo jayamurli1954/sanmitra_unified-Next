@@ -220,6 +220,8 @@
     "scanQRDesc": "राशि पहले से भरी है — UPI ऐप में पुष्टि करें",
     "upiApps": "GPay, PhonePe, Paytm, BHIM और सभी UPI ऐप्स पर काम करता है",
     "upiId": "UPI ID",
+    "openUpiApp": "Open UPI App",
+    "openUpiAppDesc": "On this mobile, tap here to pay without scanning the QR.",
     "enterUtr": "UTR / लेनदेन संख्या दर्ज करें",
     "utrHelp": "भुगतान के बाद अपने UPI ऐप से 12 अंकों का UTR कॉपी करें",
     "sendToAdmin": "WhatsApp पर एडमिन को भेजें",
