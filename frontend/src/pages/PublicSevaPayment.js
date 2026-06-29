@@ -236,7 +236,14 @@ export default function PublicSevaPayment() {
   };
 
   const step0Valid = paymentType === 'seva' ? !!form.seva_name : !!form.category_name;
-  const upiIntentUri = buildUpiIntentUri(paymentResult);
+  const paymentDetails = paymentResult ? {
+    ...paymentResult,
+    upi_id: paymentResult.upi_id || templeInfo?.upi_id || null,
+    upi_payee_name: paymentResult.upi_payee_name || templeInfo?.upi_payee_name || templeInfo?.trust_name || templeInfo?.temple_name || null,
+    qr_code_image_url: paymentResult.qr_code_image_url || templeInfo?.qr_code_image_url || null,
+    admin_whatsapp: paymentResult.admin_whatsapp || templeInfo?.admin_whatsapp || null,
+  } : null;
+  const upiIntentUri = buildUpiIntentUri(paymentDetails);
 
   // ── HEADER ──────────────────────────────────────────────────────────────
   const HeaderBar = () => (
@@ -502,7 +509,7 @@ export default function PublicSevaPayment() {
               {paymentResult.seva_name}{paymentResult.amount && ` — ₹${paymentResult.amount}`}
             </Alert>
 
-            {(paymentResult.qr_code_image_url || paymentResult.upi_id) && (
+            {(paymentDetails?.qr_code_image_url || upiIntentUri) && (
               <Box
                 textAlign="center"
                 sx={{
@@ -513,10 +520,10 @@ export default function PublicSevaPayment() {
                 }}
               >
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  {paymentResult.qr_code_image_url ? 'Bank QR Code to Pay' : t('publicPayment.scanQR')}
+                  {paymentDetails?.qr_code_image_url ? 'Bank QR Code to Pay' : t('publicPayment.scanQR')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
-                  {paymentResult.qr_code_image_url
+                  {paymentDetails?.qr_code_image_url
                     ? 'Use the bank-provided QR if the generated UPI link fails.'
                     : t('publicPayment.scanQRDesc')}
                 </Typography>
@@ -535,10 +542,10 @@ export default function PublicSevaPayment() {
                     },
                   }}
                 >
-                  {paymentResult.qr_code_image_url ? (
+                  {paymentDetails?.qr_code_image_url ? (
                     <Box
                       component="img"
-                      src={paymentResult.qr_code_image_url}
+                      src={paymentDetails.qr_code_image_url}
                       alt="Bank UPI QR code"
                       sx={{
                         width: { xs: 176, sm: 196, md: 206 },
@@ -562,7 +569,7 @@ export default function PublicSevaPayment() {
               </Box>
             )}
 
-            {paymentResult.upi_id && (
+            {paymentDetails?.upi_id && (
               <Paper
                 variant="outlined"
                 sx={{
@@ -577,7 +584,7 @@ export default function PublicSevaPayment() {
                 }}
               >
                 <Typography variant="body2" color="text.secondary">{t('publicPayment.upiId')}</Typography>
-                <Typography variant="h6" fontWeight="bold" letterSpacing={0.5}>{paymentResult.upi_id}</Typography>
+                <Typography variant="h6" fontWeight="bold" letterSpacing={0.5}>{paymentDetails.upi_id}</Typography>
                 <Button
                   variant="contained"
                   fullWidth
@@ -591,7 +598,7 @@ export default function PublicSevaPayment() {
                   {t('publicPayment.openUpiAppDesc')}
                 </Typography>
                 <Button size="small" startIcon={copied ? <CheckCircleIcon /> : <ContentCopyIcon />}
-                  onClick={() => handleCopy(paymentResult.upi_id)} sx={{ mt: 0.5 }}>
+                  onClick={() => handleCopy(paymentDetails.upi_id)} sx={{ mt: 0.5 }}>
                   {copied ? 'Copied!' : 'Copy UPI ID'}
                 </Button>
                 <Alert severity="warning" sx={{ mt: 1.5, textAlign: 'left' }}>
@@ -600,7 +607,7 @@ export default function PublicSevaPayment() {
               </Paper>
             )}
 
-            {!paymentResult.upi_id && !paymentResult.qr_code_image_url && (
+            {!paymentDetails?.upi_id && !paymentDetails?.qr_code_image_url && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Payment details not configured yet. Please contact the temple for payment instructions.
               </Alert>
@@ -669,7 +676,7 @@ export default function PublicSevaPayment() {
                       ? 'Confirmation opened. The admin will verify the UTR and confirm your booking.'
                       : 'After payment, enter the UTR above. Then open WhatsApp or copy the message for desktop/laptop use.'}
                   </Typography>
-                  {paymentResult.admin_whatsapp && (
+                  {paymentDetails?.admin_whatsapp && (
                     <>
                       {!utr.trim() && (
                         <Alert severity="warning" sx={{ mb: 1 }}>
@@ -680,7 +687,7 @@ export default function PublicSevaPayment() {
                         variant="contained"
                         fullWidth
                         startIcon={<WhatsAppIcon />}
-                        href={utr.trim() ? buildWhatsappLink(paymentResult, utr) : undefined}
+                        href={utr.trim() ? buildWhatsappLink(paymentDetails, utr) : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         disabled={!utr.trim()}
@@ -702,7 +709,7 @@ export default function PublicSevaPayment() {
                         fullWidth
                         startIcon={confirmationCopied ? <CheckCircleIcon /> : <ContentCopyIcon />}
                         disabled={!utr.trim()}
-                        onClick={() => handleCopyConfirmation(paymentResult, utr)}
+                        onClick={() => handleCopyConfirmation(paymentDetails, utr)}
                         sx={{ mt: 1, bgcolor: '#fff', fontWeight: 'bold' }}
                       >
                         {confirmationCopied ? 'Confirmation copied' : 'Copy confirmation message'}
@@ -712,7 +719,7 @@ export default function PublicSevaPayment() {
                       </Typography>
                     </>
                   )}
-                  {!paymentResult.admin_whatsapp && (
+                  {!paymentDetails?.admin_whatsapp && (
                     <Alert severity="info" sx={{ mt: 1 }}>
                       Please call or visit the temple office to confirm your payment.
                     </Alert>
