@@ -51,15 +51,15 @@ const emptyForm = {
 
 const buildUpiIntentUri = (result) => {
   if (!result?.upi_id) return '';
-  const params = new URLSearchParams({
-    pa: result.upi_id,
-    pn: result.upi_payee_name || 'Temple',
-    cu: 'INR',
-  });
-  if (result.amount) params.set('am', String(result.amount));
+  const params = [
+    ['pa', result.upi_id],
+    ['pn', result.upi_payee_name || 'Temple'],
+    ['cu', 'INR'],
+  ];
+  if (result.amount) params.push(['am', Number(result.amount).toFixed(2)]);
   const note = (result.seva_name || result.payment_type || 'Temple payment').slice(0, 50);
-  if (note) params.set('tn', note);
-  return `upi://pay?${params.toString()}`;
+  if (note) params.push(['tn', note]);
+  return `upi://pay?${params.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&')}`;
 };
 
 export default function PublicSevaPayment() {
@@ -502,7 +502,7 @@ export default function PublicSevaPayment() {
               {paymentResult.seva_name}{paymentResult.amount && ` — ₹${paymentResult.amount}`}
             </Alert>
 
-            {paymentResult.upi_id && (
+            {(paymentResult.qr_code_image_url || paymentResult.upi_id) && (
               <Box
                 textAlign="center"
                 sx={{
@@ -513,10 +513,12 @@ export default function PublicSevaPayment() {
                 }}
               >
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  {t('publicPayment.scanQR')}
+                  {paymentResult.qr_code_image_url ? 'Bank QR Code to Pay' : t('publicPayment.scanQR')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
-                  {t('publicPayment.scanQRDesc')}
+                  {paymentResult.qr_code_image_url
+                    ? 'Use the bank-provided QR if the generated UPI link fails.'
+                    : t('publicPayment.scanQRDesc')}
                 </Typography>
                 <Box
                   display="inline-block"
@@ -533,12 +535,26 @@ export default function PublicSevaPayment() {
                     },
                   }}
                 >
-                  <QRCodeSVG
-                    value={upiIntentUri}
-                    size={206}
-                    level="H"
-                    includeMargin={false}
-                  />
+                  {paymentResult.qr_code_image_url ? (
+                    <Box
+                      component="img"
+                      src={paymentResult.qr_code_image_url}
+                      alt="Bank UPI QR code"
+                      sx={{
+                        width: { xs: 176, sm: 196, md: 206 },
+                        height: { xs: 176, sm: 196, md: 206 },
+                        objectFit: 'contain',
+                        display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <QRCodeSVG
+                      value={upiIntentUri}
+                      size={206}
+                      level="H"
+                      includeMargin={false}
+                    />
+                  )}
                 </Box>
                 <Typography variant="caption" color="text.secondary" display="block" mt={1}>
                   {t('publicPayment.upiApps')}
@@ -578,6 +594,9 @@ export default function PublicSevaPayment() {
                   onClick={() => handleCopy(paymentResult.upi_id)} sx={{ mt: 0.5 }}>
                   {copied ? 'Copied!' : 'Copy UPI ID'}
                 </Button>
+                <Alert severity="warning" sx={{ mt: 1.5, textAlign: 'left' }}>
+                  If your UPI app says receiver is not allowed, do not send confirmation yet. The temple must verify this UPI ID / bank QR with its bank or provide another payment option.
+                </Alert>
               </Paper>
             )}
 
