@@ -35,16 +35,6 @@ function copyStaticFile(name) {
   fs.copyFileSync(source, destination);
 }
 
-function publishMitraBooksLandingIndex() {
-  const mitraDir = path.join(buildDir, 'mitrabooks-erp');
-  const appShell = path.join(mitraDir, 'index.html');
-  const landingShell = path.join(mitraDir, 'landing.html');
-  if (!fs.existsSync(appShell) || !fs.existsSync(landingShell)) {
-    return;
-  }
-  fs.copyFileSync(landingShell, appShell);
-}
-
 const buildResult = spawnSync(
   process.execPath,
   [require.resolve('react-scripts/scripts/build')],
@@ -74,7 +64,6 @@ async function run() {
   copyStaticDir('shared');
   copyStaticDir('legalmitra');
   copyStaticDir('mitrabooks-erp');
-  publishMitraBooksLandingIndex();
   copyStaticFile('service-worker.js');
   copyStaticFile('sw-register.js');
   copyStaticFile('config.js');

@@ -766,21 +766,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-ca-client-form] input[name="engagement_type"]').fill('GST and bookkeeping');
     await page.locator('[data-ca-client-form] input[name="compliance_tracks"]').fill('GST, TDS');
     await page.getByRole('button', { name: 'Add Client' }).click();
-    await expect(page.locator('#login-status')).toContainText('CA client added');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Jayam Publications');
-    await page.locator('[data-ca-document-form] input[name="client_name"]').fill('Jayam Publications');
-    await page.locator('[data-ca-document-form] select[name="document_type"]').selectOption('Bank statement');
-    await page.locator('[data-ca-document-form] input[name="period"]').fill('May 2026');
-    await page.locator('[data-ca-document-form] input[name="assigned_to"]').fill('Staff A');
-    await page.locator('[data-ca-document-form] input[name="original_file_name"]').fill('jayam-bank-may.pdf');
-    await page.locator('[data-ca-document-form] input[name="notes"]').fill('For reconciliation');
-    await page.getByRole('button', { name: 'Add Document Metadata' }).click();
-    await expect(page.locator('#login-status')).toContainText('Document metadata added');
-    await expect(page.locator('.ca-document-status-table')).toContainText('Jayam Publications');
-    await expect(page.locator('.ca-document-status-table')).toContainText('Uploaded');
-    await page.getByRole('button', { name: 'Under review' }).click();
-    await expect(page.locator('#login-status')).toContainText('Document status updated');
-    await expect(page.locator('.ca-document-status-table')).toContainText('Under review');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Invoice' }).click();

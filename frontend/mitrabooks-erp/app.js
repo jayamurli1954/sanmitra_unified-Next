@@ -7677,7 +7677,8 @@ async function createBusinessParty(data) {
   renderJson(apiOutput, { create_party: result });
 }
 
-async function loadCaPracticeDocuments() {
+async function loadCaPracticeDocuments(options = {}) {
+  const rerender = options?.rerender !== false;
   const params = new URLSearchParams({ limit: "100" });
   Object.entries(caPracticeFilters).forEach(([key, value]) => {
     const normalized = String(value || "").trim();
@@ -7700,7 +7701,7 @@ async function loadCaPracticeDocuments() {
         caDocumentAttachmentState = { document_id: "", client_name: "", items: [], loading: false };
       }
     }
-    if (currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
+    if (rerender && currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
       if (activeBusinessWorkspace === "ca-access") {
         dashboardPreview.innerHTML = renderBusinessWorkspace();
@@ -7709,7 +7710,7 @@ async function loadCaPracticeDocuments() {
   } else {
     lastCaDocuments = [];
     setLoginStatus("warn", "Unable to load CA documents", statusDetailText(result.payload?.detail) || `Document metadata request failed with HTTP ${result.status}.`);
-    if (currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
+    if (rerender && currentExperience === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || activeBusinessWorkspace === "ca-access")) {
       dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
       if (activeBusinessWorkspace === "ca-access") {
         dashboardPreview.innerHTML = renderBusinessWorkspace();
@@ -7720,7 +7721,8 @@ async function loadCaPracticeDocuments() {
   return result;
 }
 
-async function loadCaClients() {
+async function loadCaClients(options = {}) {
+  const rerender = options?.rerender !== false;
   const result = await apiRequest("mitrabooks", "/api/v1/business/ca-clients?active_only=true&limit=100", { method: "GET" });
   lastCaClientsResult = result;
   if (result.ok) {
@@ -7729,7 +7731,9 @@ async function loadCaClients() {
     lastCaClients = [];
     setLoginStatus("warn", "Unable to load CA clients", statusDetailText(result.payload?.detail) || `CA client request failed with HTTP ${result.status}.`);
   }
-  rerenderCaPracticeIfActive();
+  if (rerender) {
+    rerenderCaPracticeIfActive();
+  }
   return result;
 }
 
@@ -7739,9 +7743,10 @@ function rerenderCaPracticeIfActive() {
   }
 }
 
-async function loadCaAccessUsers() {
+async function loadCaAccessUsers(options = {}) {
+  const rerender = options?.rerender !== false;
   caAccessLoading = true;
-  if (activeBusinessWorkspace === "ca-access") {
+  if (rerender && activeBusinessWorkspace === "ca-access") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
   const result = await apiRequest("mitrabooks", "/api/v1/business/ca/users", { method: "GET" });
@@ -7751,7 +7756,7 @@ async function loadCaAccessUsers() {
   } else {
     caAccessUsers = [];
   }
-  if (activeBusinessWorkspace === "ca-access") {
+  if (rerender && activeBusinessWorkspace === "ca-access") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
   return result;
@@ -7778,12 +7783,24 @@ async function createCaPracticeDocument(form) {
     body: JSON.stringify(payload),
   });
   if (result.ok) {
-    const documentId = result.payload?.document_id || "";
-    let uploadResults = [];
-    if (documentId && selectedFiles.length) {
-      uploadResults = await uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles);
-    }
     form.reset();
+    const documentId = result.payload?.document_id || "";
+    if (documentId) {
+      caDocumentAttachmentState = {
+        document_id: documentId,
+        client_name: result.payload?.client_name || payload.client_name,
+        items: [],
+        loading: false,
+      };
+    }
+    await loadCaPracticeDocuments();
+    let uploadResults = [];
+    if (documentId) {
+      if (selectedFiles.length) {
+        uploadResults = await uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles);
+      }
+      await loadCaDocumentAttachments(documentId, result.payload?.client_name || payload.client_name);
+    }
     const successCount = uploadResults.filter((item) => item.ok).length;
     const failureCount = uploadResults.length - successCount;
     if (!uploadResults.length) {
@@ -7794,18 +7811,6 @@ async function createCaPracticeDocument(form) {
       setLoginStatus("warn", "Document added with partial file upload", `${successCount} attachment(s) uploaded and ${failureCount} failed. Refresh the file panel for details.`);
     } else {
       setLoginStatus("warn", "Document added but files failed", `${result.payload?.client_name || "Client"} was created, but the attachment upload failed.`);
-    }
-    if (documentId) {
-      caDocumentAttachmentState = {
-        document_id: documentId,
-        client_name: result.payload?.client_name || payload.client_name,
-        items: [],
-        loading: false,
-      };
-    }
-    await loadCaPracticeDocuments();
-    if (documentId) {
-      await loadCaDocumentAttachments(documentId, result.payload?.client_name || payload.client_name);
     }
   } else {
     setLoginStatus("danger", "Document create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
@@ -7837,8 +7842,8 @@ async function createCaClient(form) {
   });
   if (result.ok) {
     form.reset();
-    setLoginStatus("ok", "CA client added", `${result.payload?.client_name || "Client"} is now available in the CA practice workspace.`);
     await loadCaClients();
+    setLoginStatus("ok", "CA client added", `${result.payload?.client_name || "Client"} is now available in the CA practice workspace.`);
   } else {
     setLoginStatus("danger", "CA client create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
   }
@@ -7998,7 +8003,7 @@ function setBusinessWorkspace(workspace) {
   } else if (workspace === "vouchers") {
     loadBusinessAccounts();
     loadBusinessVouchers();
-    loadVoucherApprovalQueue();
+    loadVoucherApprovalQueue(true, { surfaceErrors: false });
   } else if (workspace === "audit") {
     loadAuditEvents();
   } else if (workspace === "accounting") {
@@ -8045,11 +8050,17 @@ function setBusinessWorkspace(workspace) {
     caAccessUsers = [];
     caInviteError = "";
     caInviteSuccess = "";
+    const startupLoads = [];
     if (isBusinessAdmin()) {
-      loadCaAccessUsers();
+      startupLoads.push(loadCaAccessUsers({ rerender: false }));
     }
-    loadCaClients();
-    loadCaPracticeDocuments();
+    startupLoads.push(loadCaClients({ rerender: false }));
+    startupLoads.push(loadCaPracticeDocuments({ rerender: false }));
+    Promise.allSettled(startupLoads).then(() => {
+      if (activeBusinessWorkspace === "ca-access") {
+        dashboardPreview.innerHTML = renderBusinessWorkspace();
+      }
+    });
   } else if (workspace === "hr") {
     hrTab = "employees";
     hrError = "";
@@ -15218,7 +15229,7 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     setLoginStatus("ok", "Voucher submitted", `${voucherType.toUpperCase()} voucher sent for approval.`);
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true);
+    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
@@ -15281,7 +15292,7 @@ async function createContraVoucher(appKey, date) {
     setLoginStatus("ok", "Voucher submitted", "Contra voucher sent for approval.");
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true);
+    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
@@ -15356,7 +15367,7 @@ async function createJournalVoucher(appKey, date) {
     setLoginStatus("ok", "Voucher submitted", "Journal entry sent for approval.");
     document.getElementById("business-voucher-create-dialog")?.close();
     await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true);
+    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
@@ -15421,7 +15432,7 @@ async function createBusinessVoucher(voucherData) {
     document.getElementById("business-voucher-create-dialog")?.close();
     clearVoucherForm();
     await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true);
+    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
     // Force refresh of current workspace
     if (activeBusinessWorkspace === "vouchers") {
       dashboardPreview.innerHTML = renderBusinessWorkspace();
@@ -15476,8 +15487,9 @@ async function loadBusinessVouchers(filters = {}) {
   renderJson(apiOutput, { vouchers: { ok: result.ok, status: result.status, count: lastBusinessVouchers.length, detail: result.payload?.detail || null } });
 }
 
-async function loadVoucherApprovalQueue(includeReviewed = true) {
+async function loadVoucherApprovalQueue(includeReviewed = true, options = {}) {
   const appKey = "mitrabooks";
+  const surfaceErrors = options?.surfaceErrors === true;
   const params = new URLSearchParams({
     document_type: "voucher",
     include_reviewed: includeReviewed ? "true" : "false",
@@ -15493,7 +15505,9 @@ async function loadVoucherApprovalQueue(includeReviewed = true) {
     }
   } else {
     lastVoucherApprovalQueue = [];
-    setLoginStatus("danger", "Unable to load voucher review queue", statusDetailText(result.payload?.detail) || `Approval queue request failed with HTTP ${result.status}.`);
+    if (surfaceErrors) {
+      setLoginStatus("danger", "Unable to load voucher review queue", statusDetailText(result.payload?.detail) || `Approval queue request failed with HTTP ${result.status}.`);
+    }
   }
   renderJson(apiOutput, { approval_queue: { ok: result.ok, status: result.status, count: lastVoucherApprovalQueue.length, detail: result.payload?.detail || null } });
 }
@@ -15513,7 +15527,7 @@ async function reviewBusinessVoucher(voucherId, approve, notes, rejectionReason 
   if (result.ok) {
     setLoginStatus("ok", approve ? "Voucher approved" : "Voucher rejected", approve ? "Voucher review recorded." : "Voucher rejection recorded.");
     await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true);
+    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
   } else {
     setLoginStatus("danger", approve ? "Voucher approval failed" : "Voucher rejection failed", statusDetailText(result.payload?.detail) || "Try again.");
   }
@@ -17737,7 +17751,7 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "page-list") {
     pageBusinessList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
   } else if (businessAction === "voucher-queue-refresh") {
-    loadVoucherApprovalQueue(true);
+    loadVoucherApprovalQueue(true, { surfaceErrors: true });
   } else if (businessAction === "workspace-view") {
     setBusinessWorkspace(button.getAttribute("data-workspace-view") || "overview");
   } else if (businessAction === "settings-detail") {

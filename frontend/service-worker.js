@@ -5,16 +5,11 @@
   static assets are cache-first.
 */
 
-const CACHE_NAME = 'mitrabooks-erp-v16';
-const RUNTIME_CACHE = 'mitrabooks-runtime-v16';
+const CACHE_NAME = 'mitrabooks-erp-v17';
+const RUNTIME_CACHE = 'mitrabooks-runtime-v17';
 
 // Assets to cache on install (critical for offline)
 const CRITICAL_ASSETS = [
-  // HTML
-  '/mitrabooks-erp/',
-  '/mitrabooks-erp/index.html',
-  '/mitrabooks-erp/login.html',
-
   // CSS (theme tokens + styles)
   '/shared/theme-tokens.css',
   '/shared/app-shell.css',
@@ -99,6 +94,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (isMitraBooksHtmlRequest(request, url)) {
+    event.respondWith(networkOnlyStrategy(request));
+    return;
+  }
+
   // JS/CSS should update immediately after deploys; other static assets can stay cache-first.
   if (isVersionedCodeAsset(url)) {
     event.respondWith(networkFirstStrategy(request));
@@ -113,6 +113,15 @@ self.addEventListener('fetch', (event) => {
   // Everything else - network-first with cache fallback
   event.respondWith(networkFirstStrategy(request));
 });
+
+async function networkOnlyStrategy(request) {
+  try {
+    return await fetch(request);
+  } catch (error) {
+    console.warn('[SW] Network required resource unavailable:', request.url);
+    return new Response('Offline - live page unavailable', { status: 503 });
+  }
+}
 
 // Strategy 1: Network-first (try network, fallback to cache)
 async function networkFirstStrategy(request) {
@@ -189,11 +198,25 @@ function isVersionedCodeAsset(url) {
   return /\.(css|js)$/.test(url.pathname);
 }
 
+function isMitraBooksHtmlRequest(request, url) {
+  if (!url.pathname.startsWith('/mitrabooks-erp/')) {
+    return false;
+  }
+
+  if (request.mode === 'navigate') {
+    return true;
+  }
+
+  return /\/mitrabooks-erp\/($|[^/]+\.html$)/.test(url.pathname);
+}
+
 function shouldCacheResponse(request, response) {
+  const url = new URL(request.url);
   return request.method === 'GET' &&
          response.status === 200 &&
          response.type !== 'opaqueredirect' &&
-         !request.headers.has('range');
+         !request.headers.has('range') &&
+         !isMitraBooksHtmlRequest(request, url);
 }
 
 // Message handler - allow clients to skip waiting (instant updates)

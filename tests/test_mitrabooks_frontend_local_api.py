@@ -26,7 +26,9 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     assert "app.js?v=mitrabooks-erp-v32" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v16'" in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v17'" in worker_source
+    assert "'/mitrabooks-erp/index.html'" not in worker_source
+    assert "'/mitrabooks-erp/login.html'" not in worker_source
 
 
 def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
@@ -58,7 +60,8 @@ def test_local_frontend_server_disables_browser_cache() -> None:
 def test_frontend_build_keeps_standalone_mitrabooks_login_page() -> None:
     build_source = (REPO_ROOT / "frontend" / "scripts" / "build.js").read_text(encoding="utf-8")
 
-    assert "fs.copyFileSync(landingShell, appShell);" in build_source
+    assert "publishMitraBooksLandingIndex" not in build_source
+    assert "fs.copyFileSync(landingShell, appShell);" not in build_source
     assert "fs.copyFileSync(appShell, loginShell);" not in build_source
 
 
