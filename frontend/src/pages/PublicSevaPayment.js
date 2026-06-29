@@ -88,6 +88,7 @@ export default function PublicSevaPayment() {
   const [form, setForm] = useState(emptyForm);
   const [utr, setUtr] = useState('');
   const [whatsappSent, setWhatsappSent] = useState(false);
+  const [confirmationCopied, setConfirmationCopied] = useState(false);
   const [idempotencyKey] = useState(() => {
     // Generate once per page load — prevents duplicate submissions on retry/double-tap
     const arr = new Uint8Array(16);
@@ -195,10 +196,6 @@ export default function PublicSevaPayment() {
       if (!res.ok) { setError(data.detail || t('publicPayment.submissionFailed')); return; }
       setPaymentResult(data);
       setActiveStep(2);
-      // Auto-open WhatsApp so admin is notified immediately without devotee having to click
-      if (data.whatsapp_link) {
-        setTimeout(() => { window.open(data.whatsapp_link, '_blank'); }, 800);
-      }
     } catch (_e) {
       setError(t('publicPayment.networkError'));
     } finally {
@@ -208,22 +205,33 @@ export default function PublicSevaPayment() {
 
   const handleCopy = (text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
+  const buildWhatsappMessage = (result, utrValue) => {
+    const template = result.whatsapp_message_template || '';
+    return utrValue
+      ? template.replace('[PASTE UTR HERE]', utrValue.trim())
+      : template;
+  };
+
   // Build WhatsApp link with UTR substituted into the template
   const buildWhatsappLink = (result, utrValue) => {
     if (!result?.admin_whatsapp) return null;
     const phone = result.admin_whatsapp.replace(/\D/g, '');
-    const template = result.whatsapp_message_template || '';
-    const msg = utrValue
-      ? template.replace('[PASTE UTR HERE]', utrValue.trim())
-      : template;
+    const msg = buildWhatsappMessage(result, utrValue);
     try {
       return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
     } catch (_e) { /* best-effort */ return result.whatsapp_link; }
   };
 
+  const handleCopyConfirmation = (result, utrValue) => {
+    const phone = result?.admin_whatsapp ? `Temple WhatsApp: ${result.admin_whatsapp}\n\n` : '';
+    navigator.clipboard.writeText(`${phone}${buildWhatsappMessage(result, utrValue)}`);
+    setConfirmationCopied(true);
+    setTimeout(() => setConfirmationCopied(false), 2500);
+  };
+
   const resetForm = () => {
     setActiveStep(0); setPaymentResult(null); setPaymentType('seva'); setForm(emptyForm);
-    setUtr(''); setWhatsappSent(false);
+    setUtr(''); setWhatsappSent(false); setConfirmationCopied(false);
     if (!initialTempleId) { setTempleId(''); setTempleInfo(null); }
   };
 
@@ -639,30 +647,51 @@ export default function PublicSevaPayment() {
                   </Typography>
                   <Typography variant="caption" color="text.secondary" display="block" mb={1}>
                     {whatsappSent
-                      ? '✅ WhatsApp opened! The admin will verify and confirm your booking.'
-                      : 'Tap the button below — WhatsApp will open with a pre-filled message. Just press Send.'}
+                      ? 'Confirmation opened. The admin will verify the UTR and confirm your booking.'
+                      : 'After payment, enter the UTR above. Then open WhatsApp or copy the message for desktop/laptop use.'}
                   </Typography>
                   {paymentResult.admin_whatsapp && (
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      startIcon={<WhatsAppIcon />}
-                      href={buildWhatsappLink(paymentResult, utr)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setWhatsappSent(true)}
-                      sx={{
-                        bgcolor: whatsappSent ? '#128C7E' : '#25D366',
-                        '&:hover': { bgcolor: '#075E54' },
-                        fontWeight: 'bold',
-                        py: 1.2,
-                        fontSize: { xs: 13, sm: 14 },
-                        whiteSpace: 'normal',
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {whatsappSent ? 'Send Again / Resend' : '📲 Send WhatsApp to Temple Admin'}
-                    </Button>
+                    <>
+                      {!utr.trim() && (
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                          Please complete the UPI payment and enter the UTR / transaction reference before sending confirmation.
+                        </Alert>
+                      )}
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        startIcon={<WhatsAppIcon />}
+                        href={utr.trim() ? buildWhatsappLink(paymentResult, utr) : undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        disabled={!utr.trim()}
+                        onClick={() => setWhatsappSent(true)}
+                        sx={{
+                          bgcolor: whatsappSent ? '#128C7E' : '#25D366',
+                          '&:hover': { bgcolor: '#075E54' },
+                          fontWeight: 'bold',
+                          py: 1.2,
+                          fontSize: { xs: 13, sm: 14 },
+                          whiteSpace: 'normal',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {whatsappSent ? 'Send Again / Resend' : 'Send WhatsApp to Temple Admin'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        startIcon={confirmationCopied ? <CheckCircleIcon /> : <ContentCopyIcon />}
+                        disabled={!utr.trim()}
+                        onClick={() => handleCopyConfirmation(paymentResult, utr)}
+                        sx={{ mt: 1, bgcolor: '#fff', fontWeight: 'bold' }}
+                      >
+                        {confirmationCopied ? 'Confirmation copied' : 'Copy confirmation message'}
+                      </Button>
+                      <Typography variant="caption" color="text.secondary" display="block" mt={0.75}>
+                        On desktop/laptop, WhatsApp opens in the browser. If it is not available, copy the message and send it manually to the temple WhatsApp number.
+                      </Typography>
+                    </>
                   )}
                   {!paymentResult.admin_whatsapp && (
                     <Alert severity="info" sx={{ mt: 1 }}>
