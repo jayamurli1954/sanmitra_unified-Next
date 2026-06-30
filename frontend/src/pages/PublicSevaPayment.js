@@ -81,6 +81,7 @@ export default function PublicSevaPayment() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
+  const [upiIntentDetails, setUpiIntentDetails] = useState(null);
   const [copied, setCopied] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [mobileSearching, setMobileSearching] = useState(false);
@@ -195,6 +196,7 @@ export default function PublicSevaPayment() {
       const data = await res.json();
       if (!res.ok) { setError(data.detail || t('publicPayment.submissionFailed')); return; }
       setPaymentResult(data);
+      await loadUpiIntent(data);
       setActiveStep(2);
     } catch (_e) {
       setError(t('publicPayment.networkError'));
@@ -204,6 +206,26 @@ export default function PublicSevaPayment() {
   };
 
   const handleCopy = (text) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
+  const loadUpiIntent = async (result) => {
+    if (!templeId) return;
+    const params = new URLSearchParams();
+    const amount = result?.amount || form.amount;
+    if (amount) params.set('amount', String(amount));
+    params.set('purpose', result?.seva_name || form.seva_name || form.category_name || 'Temple payment');
+    if (result?.payment_id) params.set('reference', result.payment_id);
+    try {
+      const url = `/api/v1/public/temples/${templeId}/upi-intent${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(buildApiUrl(url));
+      if (res.ok) {
+        setUpiIntentDetails(await res.json());
+      } else {
+        setUpiIntentDetails(null);
+      }
+    } catch (_e) {
+      setUpiIntentDetails(null);
+    }
+  };
 
   const buildWhatsappMessage = (result, utrValue) => {
     const template = result.whatsapp_message_template || '';
@@ -231,19 +253,21 @@ export default function PublicSevaPayment() {
 
   const resetForm = () => {
     setActiveStep(0); setPaymentResult(null); setPaymentType('seva'); setForm(emptyForm);
-    setUtr(''); setWhatsappSent(false); setConfirmationCopied(false);
+    setUpiIntentDetails(null); setUtr(''); setWhatsappSent(false); setConfirmationCopied(false);
     if (!initialTempleId) { setTempleId(''); setTempleInfo(null); }
   };
 
   const step0Valid = paymentType === 'seva' ? !!form.seva_name : !!form.category_name;
   const paymentDetails = paymentResult ? {
     ...paymentResult,
-    upi_id: paymentResult.upi_id || templeInfo?.upi_id || null,
-    upi_payee_name: paymentResult.upi_payee_name || templeInfo?.upi_payee_name || templeInfo?.trust_name || templeInfo?.temple_name || null,
+    upi_id: paymentResult.upi_id || upiIntentDetails?.upi_id || templeInfo?.upi_id || null,
+    upi_payee_name: paymentResult.upi_payee_name || upiIntentDetails?.payee_name || templeInfo?.upi_payee_name || templeInfo?.trust_name || templeInfo?.temple_name || null,
     qr_code_image_url: paymentResult.qr_code_image_url || templeInfo?.qr_code_image_url || null,
     admin_whatsapp: paymentResult.admin_whatsapp || templeInfo?.admin_whatsapp || null,
   } : null;
   const upiIntentUri = buildUpiIntentUri(paymentDetails);
+  const directUpiUri = upiIntentDetails?.intent_uri || upiIntentUri;
+  const qrPayload = upiIntentDetails?.qr_payload || upiIntentUri;
 
   // ── HEADER ──────────────────────────────────────────────────────────────
   const HeaderBar = () => (
@@ -509,14 +533,14 @@ export default function PublicSevaPayment() {
               {paymentResult.seva_name}{paymentResult.amount && ` — ₹${paymentResult.amount}`}
             </Alert>
 
-            {(paymentDetails?.qr_code_image_url || upiIntentUri) && (
+            {(paymentDetails?.qr_code_image_url || qrPayload) && (
               <Box
                 textAlign="center"
                 sx={{
                   mb: 2,
-                  width: { xs: '100%', md: '42%' },
-                  float: { xs: 'none', md: 'left' },
-                  pr: { xs: 0, md: 2 },
+                  width: '100%',
+                  float: 'none',
+                  pr: 0,
                 }}
               >
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
@@ -556,7 +580,7 @@ export default function PublicSevaPayment() {
                     />
                   ) : (
                     <QRCodeSVG
-                      value={upiIntentUri}
+                      value={qrPayload}
                       size={206}
                       level="H"
                       includeMargin={false}
@@ -577,9 +601,9 @@ export default function PublicSevaPayment() {
                   mb: 2,
                   textAlign: 'center',
                   bgcolor: '#F9F9F9',
-                  width: { xs: '100%', md: '42%' },
-                  float: { xs: 'none', md: 'left' },
-                  clear: { xs: 'none', md: 'left' },
+                  width: '100%',
+                  float: 'none',
+                  clear: 'both',
                   overflowWrap: 'anywhere',
                 }}
               >
@@ -589,7 +613,7 @@ export default function PublicSevaPayment() {
                   variant="contained"
                   fullWidth
                   startIcon={<AccountBalanceWalletIcon />}
-                  href={upiIntentUri}
+                  href={directUpiUri}
                   sx={{ mt: 1.25, mb: 0.75, bgcolor: '#FF9933', '&:hover': { bgcolor: '#e65c00' } }}
                 >
                   {t('publicPayment.openUpiApp')}
@@ -620,10 +644,10 @@ export default function PublicSevaPayment() {
                 borderRadius: 2,
                 p: 2,
                 mb: 2,
-                mt: { xs: 0, md: -18 },
+                mt: 0,
                 bgcolor: '#FFFDE7',
-                width: { xs: '100%', md: '56%' },
-                float: { xs: 'none', md: 'right' },
+                width: '100%',
+                float: 'none',
               }}
             >
               <Typography variant="subtitle1" fontWeight="bold" color="#e65c00" gutterBottom>
