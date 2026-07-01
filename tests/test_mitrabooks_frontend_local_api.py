@@ -49,6 +49,28 @@ def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
     assert "/ca/invite/" not in source
 
 
+def test_mitrabooks_ca_invite_accept_page_is_public_token_acceptance_flow() -> None:
+    accept_html = REPO_ROOT / "frontend" / "mitrabooks-erp" / "ca-invite-accept.html"
+    accept_js = REPO_ROOT / "frontend" / "mitrabooks-erp" / "ca-invite-accept.js"
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    html_source = accept_html.read_text(encoding="utf-8")
+    js_source = accept_js.read_text(encoding="utf-8")
+
+    assert "Accept CA Invite" in html_source
+    assert "./ca-invite-accept.js?v=phase-1-closeout" in html_source
+    assert 'autocomplete="new-password"' in html_source
+    assert "clearAllTokens();" in js_source
+    assert "/api/v1/business/ca/invite/" in js_source
+    assert "preview" in js_source
+    assert "accept" in js_source
+    assert "textContent" in js_source
+    assert "innerHTML" not in js_source
+    assert "A new temporary password will be generated and emailed" not in app_source
+    assert "New temporary password sent" not in app_source
+    assert "secure invite link" in app_source
+
+
 def test_local_frontend_server_disables_browser_cache() -> None:
     server_source = (REPO_ROOT / "scripts" / "serve_frontends.py").read_text(encoding="utf-8")
 

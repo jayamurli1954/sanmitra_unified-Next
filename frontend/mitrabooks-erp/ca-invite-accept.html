@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#121826">
+    <meta name="sanmitra-api-base-url" content="/api">
+    <link rel="icon" href="../assets/brand/mitrabooks-pro-logo.png" type="image/png">
+    <title>Accept CA Invite | MitraBooks</title>
+    <link rel="stylesheet" href="../shared/theme-tokens.css?v=phase-1c">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=mitrabooks-erp-v10">
+    <link rel="stylesheet" href="./index.css?v=mitrabooks-erp-v32">
+    <style>
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: var(--bg, #090c14);
+        color: var(--text, #f8fafc);
+      }
+      .invite-shell {
+        width: min(560px, calc(100vw - 32px));
+        padding: 28px;
+        border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+        border-radius: 8px;
+        background: var(--panel, #0f1424);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      }
+      .invite-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .invite-brand img {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+      }
+      .invite-brand h1 {
+        margin: 0;
+        font-size: 1.35rem;
+      }
+      .invite-brand p,
+      .invite-muted {
+        margin: 4px 0 0;
+        color: var(--muted, #94a3b8);
+      }
+      .invite-details {
+        display: grid;
+        gap: 8px;
+        margin: 18px 0;
+        padding: 14px;
+        border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .invite-form {
+        display: grid;
+        gap: 14px;
+      }
+      .invite-form[hidden] {
+        display: none;
+      }
+      .invite-form label {
+        display: grid;
+        gap: 6px;
+        font-size: 0.88rem;
+        color: var(--muted, #94a3b8);
+      }
+      .invite-form input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text, #f8fafc);
+      }
+      .invite-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .invite-status {
+        min-height: 24px;
+        font-size: 0.9rem;
+      }
+      .invite-status[data-tone="ok"] {
+        color: var(--success, #10b981);
+      }
+      .invite-status[data-tone="warn"] {
+        color: var(--warning, #f59e0b);
+      }
+      .invite-status[data-tone="danger"] {
+        color: var(--danger, #ef4444);
+      }
+      @media (max-width: 560px) {
+        .invite-shell {
+          padding: 20px;
+        }
+        .invite-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="invite-shell" aria-labelledby="invite-title">
+      <div class="invite-brand">
+        <img src="../assets/brand/mitrabooks-pro-logo.png" alt="MitraBooks">
+        <div>
+          <h1 id="invite-title">Accept CA Invite</h1>
+          <p>Set your password to access the assigned MitraBooks tenant.</p>
+        </div>
+      </div>
+
+      <section class="invite-details" aria-live="polite">
+        <strong id="invite-name">Checking invite...</strong>
+        <span id="invite-email" class="invite-muted"></span>
+        <span id="invite-tenant" class="invite-muted"></span>
+      </section>
+
+      <form class="invite-form" id="ca-invite-form" novalidate hidden>
+        <label>
+          Full name
+          <input id="full-name" name="full_name" autocomplete="name" maxlength="120">
+        </label>
+        <label>
+          Password
+          <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        </label>
+        <label>
+          Confirm password
+          <input id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        </label>
+        <div class="invite-actions">
+          <a class="secondary" href="./index.html">Back to sign in</a>
+          <button id="accept-submit" type="submit">Accept Invite</button>
+        </div>
+      </form>
+
+      <p id="invite-status" class="invite-status" data-tone="warn">Loading invite details...</p>
+    </main>
+
+    <script type="module" src="./ca-invite-accept.js?v=phase-1-closeout"></script>
+  </body>
+</html>

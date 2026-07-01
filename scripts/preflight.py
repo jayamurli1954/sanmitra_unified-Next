@@ -11,7 +11,8 @@ Tier 1 (always, zero install) — mirrors `backend-ci` and `accounting-stability
     repo-safety, AGENTS compliance, compileall, text integrity, route contract, pytest.
 
 Tier 2 (--frontend) — mirrors `mitrabooks-shell-smoke` and `global-e2e-playwright`:
-    serves the frontends and runs the Playwright smoke specs (needs node + browsers).
+    serves the frontends and runs the Playwright smoke specs, including focused
+    MitraBooks Phase 1 closeout checks (needs node + browsers).
 
 Tier 3 (--security) — best-effort local run of `security-trivy` / `semgrep`:
     runs each scanner IF its binary is on PATH, otherwise prints SKIPPED with a note.
@@ -96,6 +97,10 @@ def run_frontend() -> list[tuple[str, bool]]:
                                            [npx, "playwright", "test", "e2e/mitrabooks-shell.spec.js",
                                             "--project=chromium", "--timeout=90000", "--reporter=list"],
                                            cwd=frontend, env=frontend_env)),
+            ("mitrabooks CA invite smoke", run("mitrabooks CA invite smoke",
+                                               [npx, "playwright", "test", "e2e/ca-invite-accept.spec.js",
+                                                "--project=chromium", "--reporter=list"],
+                                               cwd=frontend, env=frontend_env)),
         ]
     finally:
         server.terminate()

@@ -18284,7 +18284,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        caInviteSuccess = `${payload.resent ? "Credentials resent" : "Credentials sent"} to ${email}.`;
+        caInviteSuccess = `${payload.resent ? "Invite link resent" : "Invite link sent"} to ${email}.`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";
@@ -18301,7 +18301,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     const email = button.getAttribute("data-ca-email");
     const full_name = button.getAttribute("data-ca-name") || "";
     if (!email) return;
-    if (!confirm(`Resend login credentials to ${email}? A new temporary password will be generated and emailed.`)) return;
+    if (!confirm(`Resend the secure invite link to ${email}? The recipient will set their password on first use.`)) return;
     button.disabled = true;
     const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
       method: "POST",
@@ -18312,7 +18312,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     if (result.ok) {
       const payload = result.payload || {};
       if (payload.email_sent) {
-        caInviteSuccess = `New temporary password sent to ${email}.`;
+        caInviteSuccess = `New invite link sent to ${email}.`;
         caInviteError = "";
       } else {
         caInviteSuccess = "";

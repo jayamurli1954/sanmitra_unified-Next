@@ -8,7 +8,7 @@ Current implementation classification:
 
 - Implemented but not production-ready: typed vouchers, sales invoices, purchase bills, credit/debit notes, GST settlement, statements, bank reconciliation, fixed assets, dimensions, inventory basics, opening balances, and year-end close.
 - Implemented: cross-store compensation/reversal protection for payroll, bulk import, typed vouchers, sales invoices, purchase bills, credit notes, debit notes, and GST settlement.
-- Implemented but not production-ready: CA invite backend hardening now uses token-based invite acceptance with expiry, single-use acceptance, and revoke handling; browser/operator UX still needs completion.
+- Implemented locally: CA invite backend hardening now uses token-based invite acceptance with expiry, single-use acceptance, and revoke handling; the public invite-accept UX and browser coverage are in place.
 - Implemented but not production-ready: core settings backend contracts, CA practice client master/document queue/company switching, tenant-scoped document attachments, and tenant-scoped integration/AI configuration shells.
 - Planned/deferred: browser E2E depth beyond local smoke/preflight, compliance signoff, export governance, Data Health Score, advanced inventory depth, and deeper multi-client CA practice modeling.
 
@@ -20,7 +20,7 @@ The settings screen now saves tenant-scoped core business settings plus integrat
 
 | Phase | Dates | Scope | Completion Definition |
 | --- | --- | --- | --- |
-| Phase 1 closeout | 2026-06-24 to 2026-06-26 | High-risk correctness and security hardening: compensation pattern across business posting flows, true invoice/bill draft-to-approve lifecycle, posted-only invoice output guard, and CA token-based invite acceptance | Cross-store posting flows reverse automatically on post-persist failure, invoices/bills no longer auto-post on create, CA invites no longer expose or rely on temporary passwords, and local preflight passes |
+| Phase 1 closeout | 2026-06-24 to 2026-07-01 | High-risk correctness and security hardening: compensation pattern across business posting flows, true invoice/bill draft-to-approve lifecycle, posted-only invoice output guard, and CA token-based invite acceptance | Cross-store posting flows reverse automatically on post-persist failure, invoices/bills no longer auto-post on create, CA invites no longer expose or rely on temporary passwords, public invite acceptance has browser coverage, and local frontend preflight passes |
 | Phase 2A | 2026-06-12 to 2026-06-14 | Landing page pricing polish, separate regular-business and CA/bookkeeper pricing, LegalMitra/MandirMitra/GruhaMitra/MitraBooks shared Razorpay account configuration, and billing metadata capture | Pricing is visible, all four product pricing endpoints exist, MitraBooks business and CA practice pricing are separate, Razorpay config uses the SanMitra account env, and webhook transactions record app/plan metadata |
 | Phase 2B | 2026-06-15 to 2026-06-21 | Core settings backend contracts: organization profile, branches, roles, permissions, voucher numbering, financial locks, templates, notifications | Implemented locally: settings cards now save tenant-scoped business admin settings through `/api/v1/business/admin-settings` |
 | Phase 2C | 2026-06-22 to 2026-06-30 | CA practice onboarding: client master, multi-company dashboard, client access controls, compliance tracking, and work assignment | Implemented locally: CA Practice Portal now supports tenant-safe client records, staff assignment, document review queues, and company switching |
