@@ -163,7 +163,7 @@ Gate: the unified ERP can be maintained as one product surface.
 
 ## Gap
 
-The repo still needs stage-specific E2E checklists and scripts. Until those exist, use this plan as the manual validation order and record pass/fail notes per stage.
+The repo now has a focused MitraBooks Phase 2E local gate at `scripts/mitrabooks_phase2e_gate.py` and a checklist at `docs/operations/MITRABOOKS_PHASE2E_VALIDATION.md`. Later stages still need the same level of stage-specific checklist and script discipline before they are treated as closed.
 
 ## Non-Goals
 

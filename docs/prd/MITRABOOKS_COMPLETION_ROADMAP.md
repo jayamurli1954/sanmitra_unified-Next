@@ -25,7 +25,7 @@ The settings screen now saves tenant-scoped core business settings plus integrat
 | Phase 2B | 2026-06-15 to 2026-06-21 | Core settings backend contracts: organization profile, branches, roles, permissions, voucher numbering, financial locks, templates, notifications | Implemented locally: settings cards now save tenant-scoped business admin settings through `/api/v1/business/admin-settings` |
 | Phase 2C | 2026-06-22 to 2026-06-30 | CA practice onboarding: client master, multi-company dashboard, client access controls, compliance tracking, and work assignment | Implemented locally: CA Practice Portal now supports tenant-safe client records, staff assignment, document review queues, and company switching |
 | Phase 2D | 2026-07-01 to 2026-07-12 | Integrations and automation: payment gateway mapping, document storage, OCR pipeline, AI settings, GST/bank/WhatsApp/email configuration shells | Implemented locally as review-first config shells: integrations are tenant-configurable, provider secrets are not exposed to the frontend, and AI/OCR auto-posting remains disabled |
-| Phase 2E | 2026-07-13 to 2026-07-19 | Browser E2E, accounting guardrail checks, tenant/app isolation checks, staging deployment validation | Local route tests and frontend smoke/preflight must pass; staging validation remains a separate signoff step before production claims |
+| Phase 2E | 2026-07-13 to 2026-07-19 | Browser E2E, accounting guardrail checks, tenant/app isolation checks, staging deployment validation | Local gate is now repeatable through `python scripts/mitrabooks_phase2e_gate.py`; staging validation remains a separate signoff step before production claims |
 
 ## Razorpay Direction
 
