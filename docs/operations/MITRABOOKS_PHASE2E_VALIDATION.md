@@ -43,6 +43,8 @@ python scripts/mitrabooks_phase2e_gate.py --staging-url https://example-staging-
 
 The staging mode is read-only browser smoke. Destructive staging checks must use a clearly marked demo tenant and a documented reset policy.
 
+When the URL points directly to `/mitrabooks-erp/`, the gate runs the MitraBooks ERP shell smoke only for staging. The global launcher smoke is reserved for staging URLs that serve the SanMitra local/global frontend launcher at `/`.
+
 ## Validation Matrix
 
 | Gate area | Local evidence | Required before Phase 2E closeout | Current status |
@@ -50,8 +52,8 @@ The staging mode is read-only browser smoke. Destructive staging checks must use
 | Accounting guardrails | `scripts/mitrabooks_phase2e_gate.py` focused pytest group | Passing local gate and CI preflight | Passed locally on 2026-07-01: 40 focused tests |
 | Tenant/app isolation | `scripts/mitrabooks_phase2e_gate.py` focused pytest group | Passing local gate and CI preflight | Passed locally on 2026-07-01: 67 focused tests |
 | Browser E2E depth | Local Playwright smoke for global, MitraBooks shell, and CA acceptance | Passing local gate plus `python scripts/preflight.py --frontend` before push | Passed locally on 2026-07-01: 3 global, 3 MitraBooks shell, and 3 CA invite Playwright checks |
-| Staging deployment | GitHub Render/Vercel workflows and optional `--staging-url` smoke | Successful deployment plus read-only staging smoke evidence | Blocked until staging credentials/DNS/demo-tenant policy are confirmed |
-| Production readiness | Staged E2E evidence and deployment signoff | Phase 2E passed, no open critical tenant/accounting/security blockers | Not ready until staging validation is recorded |
+| Staging deployment | GitHub Render/Vercel workflows and optional `--staging-url` smoke | Successful deployment plus read-only staging smoke evidence | Passed read-only smoke on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
+| Production readiness | Staged E2E evidence and deployment signoff | Phase 2E passed, no open critical tenant/accounting/security blockers | Phase 2E validation gate passed; broader production readiness still depends on later phase/deferred-scope signoffs |
 
 ## Latest Local Run
 
@@ -69,6 +71,22 @@ Result:
 - PASS: local Playwright MitraBooks shell smoke, 3 checks.
 - PASS: local Playwright CA invite acceptance smoke, 3 checks.
 - SKIPPED: staging/deployment smoke because no safe staging/demo URL was provided.
+
+2026-07-02:
+
+```powershell
+python scripts/mitrabooks_phase2e_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/
+```
+
+Result:
+
+- PASS: accounting guardrail pytest group, 40 tests.
+- PASS: tenant/app isolation pytest group, 67 tests.
+- PASS: local Playwright global smoke, 3 checks.
+- PASS: local Playwright MitraBooks shell smoke, 3 checks.
+- PASS: local Playwright CA invite acceptance smoke, 3 checks.
+- PASS: read-only staging MitraBooks ERP shell smoke, 3 checks.
+- Note: the approved staging URL points directly to `/mitrabooks-erp/`, so the local launcher/global staging smoke is intentionally skipped.
 
 ## Gaps
 

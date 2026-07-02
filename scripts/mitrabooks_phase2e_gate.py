@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
@@ -104,7 +105,15 @@ def run_staging_smoke(staging_url: str) -> list[tuple[str, bool]]:
     env = dict(os.environ)
     env["E2E_BASE_URL"] = staging_url.rstrip("/")
     results = []
-    for spec in ("e2e/global-smoke.spec.js", "e2e/mitrabooks-shell.spec.js"):
+    parsed = urlparse(staging_url)
+    if parsed.path.rstrip("/").endswith("/mitrabooks-erp"):
+        specs = ("e2e/mitrabooks-shell.spec.js",)
+        print("\n=== staging smoke scope ===")
+        print("  -> Direct MitraBooks ERP URL detected; skipping local launcher/global smoke.")
+    else:
+        specs = ("e2e/global-smoke.spec.js", "e2e/mitrabooks-shell.spec.js")
+
+    for spec in specs:
         results.append((
             f"staging read-only smoke: {spec}",
             run(
