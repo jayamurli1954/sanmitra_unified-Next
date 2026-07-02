@@ -165,6 +165,8 @@ Gate: the unified ERP can be maintained as one product surface.
 
 The repo now has a focused MitraBooks Phase 2E local gate at `scripts/mitrabooks_phase2e_gate.py` and a checklist at `docs/operations/MITRABOOKS_PHASE2E_VALIDATION.md`. Later stages still need the same level of stage-specific checklist and script discipline before they are treated as closed.
 
+The first Phase 3 business-workflow signoff gate is tracked at `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md` and can be run with `python scripts/mitrabooks_phase3_business_gate.py`.
+
 ## Non-Goals
 
 - Do not merge all frontends before staged E2E passes.
