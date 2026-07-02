@@ -10,8 +10,10 @@ layers:
 2. browser workflow smoke for the MitraBooks ERP shell covering create, post,
    detail, report navigation, and reversal surfaces.
 
-Staging URLs are read-only unless a separate demo-tenant reset policy is
-approved. Do not run destructive browser mutations against real tenant data.
+Staging URLs are read-only by default. Destructive deployed browser checks are
+allowed only against the documented MitraBooks business demo tenant, with an
+operator confirmation and staging-only credentials supplied through the runtime
+environment.
 """
 from __future__ import annotations
 
@@ -48,6 +50,11 @@ FRONTEND_CONTRACT_TESTS = [
 LOCAL_BROWSER_SPECS = [
     "e2e/mitrabooks-shell.spec.js",
 ]
+
+DEMO_TENANT_ID = "demo-mitrabooks-business"
+DEMO_CONFIRM_ENV = "MITRABOOKS_DEMO_E2E_CONFIRM"
+DEMO_USER_ENV = "E2E_USER_EMAIL"
+DEMO_PASSWORD_ENV = "E2E_USER_PASSWORD"
 
 
 def run(label: str, command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> bool:
@@ -123,10 +130,55 @@ def run_staging_read_only_smoke(staging_url: str) -> list[tuple[str, bool]]:
     ]
 
 
+def validate_destructive_demo_policy(tenant_id: str, env: dict[str, str] | None = None) -> tuple[bool, list[str]]:
+    """Fail closed unless destructive staging checks are scoped to the demo tenant."""
+    runtime_env = env or os.environ
+    errors: list[str] = []
+    normalized_tenant = str(tenant_id or "").strip()
+    confirmation = str(runtime_env.get(DEMO_CONFIRM_ENV, "")).strip()
+    user_email = str(runtime_env.get(DEMO_USER_ENV, "")).strip()
+    user_password = str(runtime_env.get(DEMO_PASSWORD_ENV, "")).strip()
+
+    if normalized_tenant != DEMO_TENANT_ID:
+        errors.append(f"--demo-tenant-id must be {DEMO_TENANT_ID!r}; got {normalized_tenant!r}.")
+    if confirmation != DEMO_TENANT_ID:
+        errors.append(f"{DEMO_CONFIRM_ENV} must equal {DEMO_TENANT_ID!r}.")
+    if not user_email:
+        errors.append(f"{DEMO_USER_ENV} must be set to a staging-only demo admin/operator email.")
+    if not user_password:
+        errors.append(f"{DEMO_PASSWORD_ENV} must be set to the staging-only demo password.")
+    return (not errors, errors)
+
+
+def print_destructive_demo_policy(tenant_id: str) -> bool:
+    ok, errors = validate_destructive_demo_policy(tenant_id)
+    print("\n=== destructive deployed demo policy ===")
+    print(f"  tenant_id: {tenant_id or '<missing>'}")
+    print(f"  allowed_tenant_id: {DEMO_TENANT_ID}")
+    print("  allowed_app_key: mitrabooks")
+    print("  allowed_organization_type: BUSINESS")
+    print("  reset: reseed demo tenant before/after destructive browser mutation; never use real tenant data")
+    if ok:
+        print("  -> PASS (demo tenant policy and credentials are present)")
+        return True
+    for error in errors:
+        print(f"  -> FAIL: {error}")
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the MitraBooks Phase 3 core business workflow gate.")
     parser.add_argument("--skip-browser", action="store_true", help="Skip local Playwright browser workflow smoke.")
     parser.add_argument("--staging-url", help="Optional safe staging/demo frontend URL for read-only shell smoke.")
+    parser.add_argument(
+        "--destructive-demo-policy-check",
+        action="store_true",
+        help=(
+            "Validate the opt-in safety preconditions for destructive deployed demo mutation. "
+            "This does not run mutation tests."
+        ),
+    )
+    parser.add_argument("--demo-tenant-id", default=DEMO_TENANT_ID)
     args = parser.parse_args()
 
     results: list[tuple[str, bool]] = [
@@ -145,6 +197,17 @@ def main() -> int:
         print("\n=== staging business smoke ===")
         print("  -> SKIPPED (pass --staging-url for read-only deployed shell smoke)")
 
+    if args.destructive_demo_policy_check:
+        results.append(
+            (
+                "destructive deployed demo policy",
+                print_destructive_demo_policy(args.demo_tenant_id),
+            )
+        )
+    else:
+        print("\n=== destructive deployed demo policy ===")
+        print("  -> SKIPPED (pass --destructive-demo-policy-check after seeding the demo tenant)")
+
     print("\n" + "=" * 60)
     print("MITRABOOKS PHASE 3 BUSINESS WORKFLOW GATE SUMMARY")
     print("=" * 60)
@@ -157,6 +220,8 @@ def main() -> int:
     print("\nAll executed Phase 3 core business workflow checks passed.")
     if not args.staging_url:
         print("Staging shell validation remains optional/read-only unless a safe demo tenant is approved.")
+    if not args.destructive_demo_policy_check:
+        print("Destructive deployed mutation remains opt-in and demo-tenant guarded.")
     return 0
 
 

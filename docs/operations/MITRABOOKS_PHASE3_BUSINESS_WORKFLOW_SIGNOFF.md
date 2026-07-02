@@ -49,7 +49,38 @@ For read-only deployed shell validation, run:
 python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/
 ```
 
-Staging mode is read-only. Destructive staging tests need a clearly marked business demo tenant, seed data, and reset policy.
+Staging mode is read-only by default. Destructive deployed browser mutation is allowed only after the guarded demo policy check passes.
+
+## Destructive Demo Tenant Policy
+
+The approved destructive browser target is the MitraBooks business demo tenant only:
+
+| Field | Required value |
+| --- | --- |
+| Tenant id | `demo-mitrabooks-business` |
+| App key | `mitrabooks` |
+| Organization type | `BUSINESS` |
+| Demo modules | `business`, `accounting`, `gst`, `inventory`, `audit` |
+| Admin bootstrap | `DEMO_MITRABOOKS_BOOTSTRAP=true` with a staging-only `DEMO_MITRABOOKS_ADMIN_PASSWORD` |
+| E2E seed | `DEMO_MITRABOOKS_E2E_SEED_ENABLED=true` or an operator-run demo seed before mutation |
+
+Reset policy:
+
+1. Never run create/post/reverse browser tests against a real customer, trust, housing society, CA practice, or production tenant.
+2. Before a destructive deployed run, reset or reseed `demo-mitrabooks-business` with the MitraBooks demo seed path and confirm the login belongs to that tenant.
+3. After a destructive deployed run, reseed the same demo tenant or discard the staging database snapshot so generated vouchers, invoices, bills, notes, and reversals do not become baseline data.
+4. Keep demo credentials in deployment/runtime secrets only; do not commit them or print them in reports.
+
+Policy check:
+
+```powershell
+$env:MITRABOOKS_DEMO_E2E_CONFIRM="demo-mitrabooks-business"
+$env:E2E_USER_EMAIL="<staging demo admin email>"
+$env:E2E_USER_PASSWORD="<staging demo password>"
+python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --destructive-demo-policy-check --demo-tenant-id demo-mitrabooks-business
+```
+
+This command validates the destructive deployed mutation preconditions. It does not execute destructive mutation by itself.
 
 ## Validation Matrix
 
@@ -92,12 +123,13 @@ Result:
 - PASS: frontend business contract pytest group, 30 tests.
 - PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
 - PASS: read-only staging MitraBooks ERP shell smoke, 3 checks.
+- PASS: destructive deployed mutation policy is now defined and guarded for `demo-mitrabooks-business`; actual mutation remains an explicit operator action after demo credentials and reset are present.
 
-This closes the Phase 3 core workflow signoff gate for local backend/API proof plus local/deployed shell browser proof. It does not close destructive deployed mutation testing.
+This closes the Phase 3 core workflow signoff gate for local backend/API proof, local/deployed shell browser proof, and the previously missing demo tenant/reset policy. Destructive deployed mutation remains intentionally opt-in and must not run unless the guarded demo-policy check passes.
 
 ## Remaining Gaps After This Gate
 
-- Real-stack browser mutation against a deployed backend still requires a safe business demo tenant and reset policy.
+- Real-stack browser mutation against a deployed backend is guarded and limited to `demo-mitrabooks-business`; it still requires staging demo credentials and an operator-run reset/reseed before execution.
 - Compliance signoff is still required for GST/TDS/GSTR/e-invoice/e-way bill positioning.
 - Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.

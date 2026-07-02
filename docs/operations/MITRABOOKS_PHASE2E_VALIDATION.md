@@ -41,7 +41,7 @@ For a safe staging/demo frontend URL, run:
 python scripts/mitrabooks_phase2e_gate.py --staging-url https://example-staging-url
 ```
 
-The staging mode is read-only browser smoke. Destructive staging checks must use a clearly marked demo tenant and a documented reset policy.
+The staging mode is read-only browser smoke. Destructive staging checks are governed by the Phase 3 MitraBooks business demo policy: only `demo-mitrabooks-business`, only with staging-only demo credentials, only after reset/reseed, and only after the guarded policy check in `scripts/mitrabooks_phase3_business_gate.py` passes.
 
 When the URL points directly to `/mitrabooks-erp/`, the gate runs the MitraBooks ERP shell smoke only for staging. The global launcher smoke is reserved for staging URLs that serve the SanMitra local/global frontend launcher at `/`.
 
