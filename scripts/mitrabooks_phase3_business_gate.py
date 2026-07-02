@@ -51,10 +51,13 @@ LOCAL_BROWSER_SPECS = [
     "e2e/mitrabooks-shell.spec.js",
 ]
 
+DESTRUCTIVE_BROWSER_SPEC = "e2e/mitrabooks-realstack-destructive.spec.js"
+
 DEMO_TENANT_ID = "demo-mitrabooks-business"
 DEMO_CONFIRM_ENV = "MITRABOOKS_DEMO_E2E_CONFIRM"
 DEMO_USER_ENV = "E2E_USER_EMAIL"
 DEMO_PASSWORD_ENV = "E2E_USER_PASSWORD"
+DEMO_RUN_ENV = "MITRABOOKS_RUN_DESTRUCTIVE_E2E"
 
 
 def run(label: str, command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> bool:
@@ -166,6 +169,35 @@ def print_destructive_demo_policy(tenant_id: str) -> bool:
     return False
 
 
+def run_destructive_demo_browser(staging_url: str, tenant_id: str) -> list[tuple[str, bool]]:
+    npx = shutil.which("npx")
+    if npx is None:
+        print("\n=== destructive deployed browser mutation ===\n  -> FAIL (npx/node not found)")
+        return [("destructive deployed browser mutation", False)]
+
+    policy_ok, errors = validate_destructive_demo_policy(tenant_id)
+    if not policy_ok:
+        print("\n=== destructive deployed browser mutation ===")
+        for error in errors:
+            print(f"  -> FAIL: {error}")
+        return [("destructive deployed browser mutation policy", False)]
+
+    env = dict(os.environ)
+    env["E2E_BASE_URL"] = staging_url.rstrip("/")
+    env[DEMO_RUN_ENV] = "true"
+    return [
+        (
+            "destructive deployed browser mutation",
+            run(
+                "destructive deployed browser mutation",
+                [npx, "playwright", "test", DESTRUCTIVE_BROWSER_SPEC, "--project=chromium", "--reporter=list"],
+                cwd=FRONTEND,
+                env=env,
+            ),
+        )
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the MitraBooks Phase 3 core business workflow gate.")
     parser.add_argument("--skip-browser", action="store_true", help="Skip local Playwright browser workflow smoke.")
@@ -178,8 +210,22 @@ def main() -> int:
             "This does not run mutation tests."
         ),
     )
+    parser.add_argument(
+        "--run-destructive-demo",
+        action="store_true",
+        help=(
+            "Run destructive deployed browser mutation against the approved demo tenant. "
+            "Requires --staging-url plus the destructive demo policy env vars."
+        ),
+    )
     parser.add_argument("--demo-tenant-id", default=DEMO_TENANT_ID)
     args = parser.parse_args()
+
+    if args.run_destructive_demo:
+        args.destructive_demo_policy_check = True
+        if not args.staging_url:
+            print("--run-destructive-demo requires --staging-url.")
+            return 2
 
     results: list[tuple[str, bool]] = [
         ("backend business workflow pytest", run_pytest_group("backend business workflow pytest", BACKEND_WORKFLOW_TESTS)),
@@ -207,6 +253,12 @@ def main() -> int:
     else:
         print("\n=== destructive deployed demo policy ===")
         print("  -> SKIPPED (pass --destructive-demo-policy-check after seeding the demo tenant)")
+
+    if args.run_destructive_demo:
+        results += run_destructive_demo_browser(args.staging_url, args.demo_tenant_id)
+    else:
+        print("\n=== destructive deployed browser mutation ===")
+        print("  -> SKIPPED (pass --run-destructive-demo after reset/reseed and policy confirmation)")
 
     print("\n" + "=" * 60)
     print("MITRABOOKS PHASE 3 BUSINESS WORKFLOW GATE SUMMARY")

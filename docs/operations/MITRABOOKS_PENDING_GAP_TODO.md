@@ -1,0 +1,111 @@
+# MitraBooks Pending Gap Todo
+
+## Purpose
+
+This is the living completion tracker for MitraBooks ERP and the SanMitra unified ERP path. Use this file to mark completed work with strikethrough while keeping pending gaps visible.
+
+Status convention:
+
+- `~~[x] Completed item~~` means the task is closed and evidence is recorded.
+- `[ ] Pending item` means the task is still open.
+- `[~] In progress / partially closed` means implementation exists but production signoff is not complete.
+
+## Closed Baseline
+
+- ~~[x] Phase 1 local closeout: accounting compensation patterns, invoice/bill lifecycle, posted-only invoice output guard, CA invite hardening, and local frontend preflight evidence recorded.~~
+- ~~[x] Phase 2A: pricing/catalog/Razorpay metadata direction implemented locally.~~
+- ~~[x] Phase 2B: core business settings backend contracts implemented locally.~~
+- ~~[x] Phase 2C: CA practice client master, document queue, work assignment, and company switching implemented locally.~~
+- ~~[x] Phase 2D: review-first integration, document storage, OCR, AI, GST, bank, WhatsApp, and email configuration shells implemented locally; live provider execution remains deferred.~~
+- ~~[x] Phase 2E: local validation, accounting guardrail checks, tenant/app isolation checks, and read-only staging shell smoke closed for the planned validation scope.~~
+- ~~[x] Phase 3 core workflow gate foundation: backend/API tests, frontend contract tests, local browser shell smoke, read-only deployed shell smoke, and guarded destructive demo-tenant policy recorded.~~
+- ~~[x] Phase 3 destructive real-stack runner added: `frontend/e2e/mitrabooks-realstack-destructive.spec.js` and `--run-destructive-demo` gate support are available but intentionally opt-in.~~
+
+## Immediate Gate: Phase 3 Core Business Workflow Staging Mutation
+
+- [ ] Provision or confirm the staging demo tenant `demo-mitrabooks-business`.
+- [ ] Confirm staging-only demo admin/operator credentials are stored only in runtime/deployment secrets.
+- [ ] Reset or reseed `demo-mitrabooks-business` before destructive browser mutation.
+- [ ] Run the guarded policy check:
+
+```powershell
+$env:MITRABOOKS_DEMO_E2E_CONFIRM="demo-mitrabooks-business"
+$env:E2E_USER_EMAIL="<staging demo admin email>"
+$env:E2E_USER_PASSWORD="<staging demo password>"
+python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --destructive-demo-policy-check --demo-tenant-id demo-mitrabooks-business
+```
+
+- [ ] Run destructive deployed browser E2E only against `demo-mitrabooks-business`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.
+- [ ] Record pass/fail evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.
+- [ ] Reseed or discard the staging demo data after mutation so generated business documents do not become baseline data.
+
+## Phase 3 Open Gaps
+
+- [ ] Sales invoice browser E2E depth against real backend for create -> approve/post -> report -> cancel/reverse.
+- [ ] Purchase bill browser E2E depth against real backend for create -> approve/post -> report -> payment/ITC paths -> cancel/reverse.
+- [ ] Receivables browser E2E for statements, ageing, allocation, reminders/dunning, and collection status UX.
+- [ ] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export depth.
+- [ ] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX.
+- [ ] Opening balance browser E2E, maker-checker review, and rollback/reversal runbook examples.
+- [ ] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples.
+- [ ] Keyboard-first voucher/business-entry polish after route/API contracts are stable.
+- [ ] Multi-client CA/bookkeeper accounting entity model and scoped client/book access rules.
+
+## Phase 4 Open Gaps
+
+- [ ] Credit note source-document enforcement, browser E2E, and print/export polish.
+- [ ] Debit note source-document enforcement, browser E2E, and print/export polish.
+- [ ] GST report browser E2E for GSTR-1, GSTR-3B, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement, and export hardening.
+- [ ] Inventory browser E2E for item master, stock register, closing-stock posting, valuation policy settings, stock issue, and stock adjustment.
+- [ ] Banking/reconciliation browser E2E for CSV import, matching, reversal, reconciliation summary, bank book, and cash book polish.
+- [ ] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review.
+- [ ] Dimensions/tagging coverage across vouchers, invoices, bills, notes, reports, and exports.
+- [ ] Multi-location/branch dimension and consolidated reporting.
+- [ ] Tenant-scoped document upload inbox with manual review, attachment linking, audit trail, and client/book scoping.
+
+## Phase 5 Open Gaps
+
+- [ ] MIS KPI contracts for monthly sales/purchase trends, top customers/vendors, working capital, overdue dashboards, and financial-health summaries.
+- [ ] Data Health Score rules for missing GSTIN, unposted drafts, stale reconciliation, duplicate invoices, and overdue exposure.
+- [ ] Data-health issue list with actionable remediation workflow.
+- [ ] Tenant-safe Excel/PDF/JSON export governance with permissions and audit.
+- [ ] Tally XML export design or proof of concept.
+
+## Deferred Scope
+
+- [ ] Live GST IRP/e-invoice API integration after compliance review and tenant policy are ready.
+- [ ] Live e-way bill API integration after compliance review and tenant policy are ready.
+- [ ] Bank API sync and bank execution after provider contracts, tenant authorization, and E2E checks are complete.
+- [ ] OCR/AI document extraction and suggested account allocation after deterministic document workflow passes E2E.
+- [ ] AI MIS summaries after MIS data contracts are stable and source-backed.
+- [ ] Advanced batch/serial/multi-location inventory after basic inventory E2E is stable.
+- [ ] SaaS backup/restore and tenant export policy.
+- [ ] Mobile apps after the web ERP is stable.
+- [ ] Desktop Electron, SQLite local database, hardware fingerprinting, and desktop licensing remain out of current unified ERP scope.
+
+## MandirMitra Inside MitraBooks ERP
+
+- [ ] MandirMitra donation create -> receipt -> accounting report -> cancel/reverse browser E2E inside the ERP shell.
+- [ ] MandirMitra seva booking -> receipt -> accounting report -> cancel/reverse browser E2E inside the ERP shell.
+- [ ] Hundi, festival, fund, and sponsorship accounting sub-gates after MitraBooks business core destructive staging mutation is closed.
+- [ ] 80G/FCRA tenant configuration, eligibility, receipt text, and reports remain default-off until implemented and reviewed.
+
+## GruhaMitra Inside MitraBooks ERP
+
+- [ ] GruhaMitra maintenance bill -> collection -> accounting report -> reverse browser E2E inside the ERP shell.
+- [ ] Housing unit/resident lifecycle browser E2E with tenant isolation and audit checks.
+- [ ] Complaints/service requests, parking, vendors, and society accounting sub-gates after MandirMitra ERP workflows pass.
+
+## Combined ERP Regression
+
+- [ ] Combined MitraBooks, MandirMitra, and GruhaMitra ERP regression after each individual product workflow gate passes.
+- [ ] Cross-app tenant/app-key isolation checks across business, temple, and housing workflows.
+- [ ] Module visibility and permissions regression based on enabled modules, not hardcoded product names.
+- [ ] Mixed workflow accounting report regression after business invoices, temple donations/sevas, and housing maintenance collections post in the same ERP environment.
+
+## Non-Goals
+
+- Do not mark a pending item as complete without evidence in the relevant gate/report.
+- Do not run destructive staging actions on real tenant data.
+- Do not treat provider configuration shells as live integrations.
+- Do not include InvestMitra in SanMitra unified ERP scope.

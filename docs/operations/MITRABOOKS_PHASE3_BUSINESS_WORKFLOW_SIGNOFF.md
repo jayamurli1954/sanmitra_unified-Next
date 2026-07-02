@@ -82,6 +82,17 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitr
 
 This command validates the destructive deployed mutation preconditions. It does not execute destructive mutation by itself.
 
+After the demo tenant has been reset/reseeded and the policy check is green, run the destructive real-stack browser/API mutation gate explicitly:
+
+```powershell
+$env:MITRABOOKS_DEMO_E2E_CONFIRM="demo-mitrabooks-business"
+$env:E2E_USER_EMAIL="<staging demo admin email>"
+$env:E2E_USER_PASSWORD="<staging demo password>"
+python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
+```
+
+This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which signs in through the browser, confirms the tenant context is `demo-mitrabooks-business`, creates/reviews/posts the core business documents through the real backend, verifies accounting report availability, and reverses/cancels the generated documents.
+
 ## Validation Matrix
 
 | Gate area | Evidence | Current status |
@@ -124,6 +135,7 @@ Result:
 - PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
 - PASS: read-only staging MitraBooks ERP shell smoke, 3 checks.
 - PASS: destructive deployed mutation policy is now defined and guarded for `demo-mitrabooks-business`; actual mutation remains an explicit operator action after demo credentials and reset are present.
+- ADDED: guarded destructive real-stack Playwright runner for the demo tenant; not executed until staging credentials and reset/reseed are present.
 
 This closes the Phase 3 core workflow signoff gate for local backend/API proof, local/deployed shell browser proof, and the previously missing demo tenant/reset policy. Destructive deployed mutation remains intentionally opt-in and must not run unless the guarded demo-policy check passes.
 

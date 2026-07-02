@@ -167,6 +167,8 @@ The repo now has a focused MitraBooks Phase 2E local gate at `scripts/mitrabooks
 
 The first Phase 3 business-workflow signoff gate is tracked at `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md` and can be run with `python scripts/mitrabooks_phase3_business_gate.py`.
 
+The living pending/gap tracker is `docs/operations/MITRABOOKS_PENDING_GAP_TODO.md`. Update that checklist after each gate by striking through completed items and leaving remaining gaps open.
+
 ## Non-Goals
 
 - Do not merge all frontends before staged E2E passes.

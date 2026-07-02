@@ -1,4 +1,5 @@
 from scripts.mitrabooks_phase3_business_gate import DEMO_TENANT_ID
+from scripts.mitrabooks_phase3_business_gate import main
 from scripts.mitrabooks_phase3_business_gate import validate_destructive_demo_policy
 
 
@@ -37,3 +38,9 @@ def test_destructive_demo_policy_requires_confirmation_and_credentials() -> None
     assert any("MITRABOOKS_DEMO_E2E_CONFIRM" in error for error in errors)
     assert any("E2E_USER_EMAIL" in error for error in errors)
     assert any("E2E_USER_PASSWORD" in error for error in errors)
+
+
+def test_run_destructive_demo_requires_staging_url(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["mitrabooks_phase3_business_gate.py", "--run-destructive-demo", "--skip-browser"])
+
+    assert main() == 2
