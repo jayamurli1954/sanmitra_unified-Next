@@ -51,6 +51,8 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitr
 
 Staging mode is read-only by default. Destructive deployed browser mutation is allowed only after the guarded demo policy check passes.
 
+Demo credential setup is documented in `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`. The operator-facing demo admin email is `business.admin@sanmitra.local`; the password must remain a staging/runtime secret.
+
 ## Destructive Demo Tenant Policy
 
 The approved destructive browser target is the MitraBooks business demo tenant only:

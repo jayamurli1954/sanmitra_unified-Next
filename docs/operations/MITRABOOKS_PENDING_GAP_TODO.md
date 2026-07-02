@@ -24,7 +24,7 @@ Status convention:
 ## Immediate Gate: Phase 3 Core Business Workflow Staging Mutation
 
 - [ ] Provision or confirm the staging demo tenant `demo-mitrabooks-business`.
-- [ ] Confirm staging-only demo admin/operator credentials are stored only in runtime/deployment secrets.
+- [ ] Configure the MitraBooks ERP demo admin per `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`; use `business.admin@sanmitra.local` as the operator email and keep the password only in runtime/deployment secrets.
 - [ ] Reset or reseed `demo-mitrabooks-business` before destructive browser mutation.
 - [ ] Run the guarded policy check:
 
