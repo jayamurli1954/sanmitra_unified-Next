@@ -113,6 +113,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Receivables browser shell E2E | Local Playwright shell smoke for receivables/payables party ledger, AR/AP ageing kind switch, receipt allocation FIFO/open-item match, reconciliation status, customer statement, and dunning reminder record | Passed on 2026-07-03 |
 | Payables browser shell E2E | Local Playwright shell smoke for vendor statement, payable allocation FIFO/open-item match, reconciliation status, Rule 37 ITC bill-payment marking, and TDS register vendor evidence | Passed on 2026-07-03 |
 | GST/TDS compliance browser shell slice | Local Playwright shell smoke for tenant GST profile evidence, GST settlement preview/post with period lock, GSTR-3B summary, GSTR-1 outward/HSN evidence, TDS section/register evidence, and manual period lock/unlock | Passed on 2026-07-03 |
+| Opening Balance browser shell E2E | Local Playwright shell smoke for opening-balance CSV upload, maker-checker preview, party-wise debtor/creditor evidence, Opening Balance Equity balancing line, admin post, trial balance impact, customer statement opening balance, existing-entry override warning, and export route evidence | Passed on 2026-07-03 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -274,6 +275,20 @@ Result:
 - The local shell smoke now covers the first GST/TDS compliance workflow slice: tenant GST profile evidence in settings, GST settlement preview/post, locked-period indication, GSTR-3B summary with GSTIN and payment-of-tax table, GSTR-1 outward/HSN evidence, TDS section/register evidence, and manual GST period lock/unlock.
 - SKIPPED: staging shell smoke and destructive deployed mutation because no staging URL or demo-tenant destructive flags were supplied for this local-only run.
 
+2026-07-03:
+
+```powershell
+python scripts/mitrabooks_phase3_business_gate.py
+```
+
+Result:
+
+- PASS: backend business workflow pytest group, 135 tests.
+- PASS: frontend business contract pytest group, 30 tests.
+- PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
+- The local shell smoke now covers the Opening Balance browser workflow: CSV upload, maker-checker preview, party-wise debtor/creditor opening evidence, Opening Balance Equity balancing line, admin post, trial balance impact, customer statement opening balance, existing-entry override warning, and export route evidence.
+- SKIPPED: staging shell smoke and destructive deployed mutation because no staging URL or demo-tenant destructive flags were supplied for this local-only run.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -282,7 +297,8 @@ Result:
 - Receivables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current receivables browser coverage is local mocked-shell E2E.
 - Payables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current payables browser coverage is local mocked-shell E2E.
 - Compliance signoff is still required for deeper GSTR-2B upload reconciliation, CMP-08/GSTR-4, real-stack GST/TDS mutation, e-invoice/e-way bill positioning, and production tax-review semantics.
-- Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
+- Opening Balance real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open; the current opening-balance browser coverage is local mocked-shell E2E.
+- Approval depth still needs production operator review across tenant settings, opening balances, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
 - Bank reconciliation, inventory, fixed assets, CA practice operations, and data-health/MIS need separate Phase 3-4 sub-gates.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.

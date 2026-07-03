@@ -3,6 +3,10 @@ const { test, expect } = require('@playwright/test');
 async function mockVerifiedMitraBooksSession(page) {
   const accounts = [
     { id: 101, code: '1001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
+    { id: 102, code: '11010', name: 'Bank Account', account_type: 'asset', type: 'asset' },
+    { id: 103, code: '12001', name: 'Sundry Debtors', account_type: 'asset', type: 'asset' },
+    { id: 104, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
+    { id: 105, code: '31004', name: 'Opening Balance Equity', account_type: 'equity', type: 'equity' },
     { id: 201, code: '4001', name: 'Sales', account_type: 'revenue', type: 'revenue' },
     { id: 301, code: '5001', name: 'Office Expense', account_type: 'expense', type: 'expense' },
   ];
@@ -33,6 +37,8 @@ async function mockVerifiedMitraBooksSession(page) {
   const debitNotes = [];
   const allocations = [];
   const paidBillIds = new Set();
+  let openingBalancePosted = false;
+  let openingBalancePostCount = 0;
   const gstPeriodLocks = [
     { period: '2026-05', locked: true, updated_by: 'businessadmin@sanmitra.local', updated_at: '2026-06-20T00:00:00Z' },
   ];
@@ -310,6 +316,69 @@ async function mockVerifiedMitraBooksSession(page) {
   }));
   await page.route('**/api/v1/business/dimensions**', route => json(route, { items: [] }));
   await page.route('**/api/v1/business/inventory/items**', route => json(route, { items: [] }));
+  await page.route('**/api/v1/business/opening-balances**', async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const csvText = [
+      'account_code,account_name,party,debit,credit',
+      '11010,Bank Account,,150000,',
+      '12001,Sundry Debtors,CUST-001,40000,',
+      '21001,Sundry Creditors,VEND-001,,30000',
+      '',
+    ].join('\n');
+
+    if (request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/csv',
+        headers: { 'Content-Disposition': path.endsWith('/export') ? 'attachment; filename="opening_balances.csv"' : 'attachment; filename="opening_balances_template.csv"' },
+        body: csvText,
+      });
+    }
+
+    const payload = request.postDataJSON();
+    const existing = openingBalancePosted
+      ? [{ journal_entry_id: 'OB-2026-001', entry_date: '2026-04-01', description: 'Opening balances as of 2026-04-01' }]
+      : [];
+    const preview = {
+      as_of: payload.as_of || '2026-04-01',
+      lines: [
+        { row_number: 2, account_id: 102, account_code: '11010', account_name: 'Bank Account', party_id: null, party_name: null, debit: '150000.00', credit: '0.00' },
+        { row_number: 3, account_id: 103, account_code: '12001', account_name: 'Sundry Debtors', party_id: 'p2', party_name: 'Bengaluru Retail Customer', debit: '40000.00', credit: '0.00' },
+        { row_number: 4, account_id: 104, account_code: '21001', account_name: 'Sundry Creditors', party_id: 'p1', party_name: 'Karnataka Office Supplies', debit: '0.00', credit: '30000.00' },
+      ],
+      errors: [],
+      line_count: 3,
+      error_count: 0,
+      total_debit: '190000.00',
+      total_credit: '30000.00',
+      difference: '160000.00',
+      balancing_line: { account_code: '31004', account_name: 'Opening Balance Equity', debit: '0.00', credit: '160000.00' },
+      can_post: true,
+      existing_opening_entries: existing,
+      notes: [
+        'Posting writes ONE opening journal entry dated as-of; any debit/credit difference goes to Opening Balance Equity.',
+        'Rows on Sundry Debtors/Creditors with a party post party-wise - they appear in aging, statements and allocation.',
+        'To redo an opening balance, reverse the previous opening journal first, then upload again.',
+      ],
+    };
+
+    if (path.endsWith('/preview')) {
+      return json(route, preview);
+    }
+
+    openingBalancePosted = true;
+    openingBalancePostCount += 1;
+    return json(route, {
+      journal_entry_id: 'OB-2026-001',
+      created: openingBalancePostCount === 1,
+      as_of: preview.as_of,
+      line_count: 4,
+      total_debit: preview.total_debit,
+      total_credit: preview.total_credit,
+      balancing_line: preview.balancing_line,
+    });
+  });
   await page.route('**/api/v1/business/invoices**', async route => {
     const request = route.request();
     const method = request.method();
@@ -660,16 +729,18 @@ async function mockVerifiedMitraBooksSession(page) {
     const kind = url.searchParams.get('kind') || 'receivable';
     if (kind === 'payable') {
       const party = parties.find(item => item.party_id === partyId) || parties.find(item => item.party_type === 'vendor');
+      const openingBalance = openingBalancePosted ? '30000.00' : '0.00';
+      const closingBalance = openingBalancePosted ? '31770.00' : '1770.00';
       return json(route, {
         party: { party_id: party?.party_id || 'p1', party_name: party?.party_name || 'Karnataka Office Supplies', gstin: party?.gstin || '' },
         business_name: 'Acme Corp Ltd',
         kind,
         from_date: url.searchParams.get('from_date') || '2026-04-01',
         to_date: url.searchParams.get('to_date') || '2026-06-30',
-        opening_balance: '0.00',
+        opening_balance: openingBalance,
         total_debit: '0.00',
         total_credit: '1770.00',
-        closing_balance: '1770.00',
+        closing_balance: closingBalance,
         transactions: [
           { entry_date: '2026-06-13', document_type: 'Bill', reference: 'BILL-100', description: 'Office supplies payable', debit: '0.00', credit: '1770.00', balance: '1770.00' },
         ],
@@ -681,16 +752,18 @@ async function mockVerifiedMitraBooksSession(page) {
       });
     }
     const party = parties.find(item => item.party_id === partyId) || parties.find(item => item.party_type === 'customer');
+    const openingBalance = openingBalancePosted ? '40000.00' : '0.00';
+    const closingBalance = openingBalancePosted ? '42360.00' : '2360.00';
     return json(route, {
       party: { party_id: party?.party_id || 'p2', party_name: party?.party_name || 'Bengaluru Retail Customer', gstin: party?.gstin || '' },
       business_name: 'Acme Corp Ltd',
       kind,
       from_date: url.searchParams.get('from_date') || '2026-04-01',
       to_date: url.searchParams.get('to_date') || '2026-06-30',
-      opening_balance: '0.00',
+      opening_balance: openingBalance,
       total_debit: '2360.00',
       total_credit: '0.00',
-      closing_balance: '2360.00',
+      closing_balance: closingBalance,
       transactions: [
         { entry_date: '2026-06-13', document_type: 'Invoice', reference: 'INV-2026-001', description: 'Consulting service', debit: '2360.00', credit: '0.00', balance: '2360.00' },
       ],
@@ -916,11 +989,22 @@ async function mockVerifiedMitraBooksSession(page) {
     contentType: 'application/json',
     body: JSON.stringify({ summary: { voucher_count: 0 }, items: [] }),
   }));
-  await page.route('**/api/v1/accounting/reports/**', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ rows: [], totals: {}, summary: {} }),
-  }));
+  await page.route('**/api/v1/accounting/reports/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes('/trial-balance')) {
+      return json(route, {
+        as_of: '2026-06-13',
+        balanced: true,
+        lines: openingBalancePosted ? [
+          { account_id: 102, account_code: '11010', account_name: 'Bank Account', debit_total: '150000.00', credit_total: '0.00', net_balance: '150000.00' },
+          { account_id: 103, account_code: '12001', account_name: 'Sundry Debtors', debit_total: '40000.00', credit_total: '0.00', net_balance: '40000.00' },
+          { account_id: 104, account_code: '21001', account_name: 'Sundry Creditors', debit_total: '0.00', credit_total: '30000.00', net_balance: '-30000.00' },
+          { account_id: 105, account_code: '31004', account_name: 'Opening Balance Equity', debit_total: '0.00', credit_total: '160000.00', net_balance: '-160000.00' },
+        ] : [],
+      });
+    }
+    return json(route, { rows: [], totals: {}, summary: {} });
+  });
 }
 
 test.describe('MitraBooks ERP static shell', () => {
@@ -1203,6 +1287,61 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('2026-06');
     await page.locator('[data-business-action="unlock-period"][data-period="2026-06"]').click();
     await expect(page.locator('#login-status')).toContainText('Period unlocked');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="opening-yearend"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Opening balances (CSV import)');
+    await page.locator('[data-ob-asof]').fill('2026-04-01');
+    await page.locator('[data-ob-file]').setInputFiles({
+      name: 'opening-balances.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from([
+        'account_code,account_name,party,debit,credit',
+        '11010,Bank Account,,150000,',
+        '12001,Sundry Debtors,CUST-001,40000,',
+        '21001,Sundry Creditors,VEND-001,,30000',
+        '',
+      ].join('\n')),
+    });
+    await page.locator('[data-business-action="ob-preview"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('3 line(s) resolved as of 2026-04-01');
+    await expect(page.locator('#business-report-printable')).toContainText('ready to post');
+    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru Retail Customer');
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+    await expect(page.locator('#business-report-printable')).toContainText('31004 - Opening Balance Equity');
+    await expect(page.locator('#business-report-printable')).toContainText('1,60,000.00');
+    await expect(page.locator('[data-business-action="ob-post"]')).toBeVisible();
+    await page.locator('[data-business-action="ob-post"]').click();
+    await expect(page.locator('#login-status')).toContainText('Opening balances posted');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="trial-balance"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('balanced');
+    await expect(page.locator('#business-report-printable')).toContainText('Bank Account');
+    await expect(page.locator('#business-report-printable')).toContainText('Sundry Debtors');
+    await expect(page.locator('#business-report-printable')).toContainText('Sundry Creditors');
+    await expect(page.locator('#business-report-printable')).toContainText('Opening Balance Equity');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="statements"]').click();
+    await page.locator('[data-stmt-party]').selectOption('p2');
+    await page.locator('[data-stmt-kind]').selectOption('receivable');
+    await page.locator('[data-stmt-from]').fill('2026-06-01');
+    await page.locator('[data-stmt-to]').fill('2026-06-30');
+    await page.locator('[data-business-action="stmt-load"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Opening');
+    await expect(page.locator('#business-report-printable')).toContainText('40,000.00');
+    await expect(page.locator('#business-report-printable')).toContainText('42,360.00');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="opening-yearend"]').click();
+    await page.locator('[data-ob-file]').setInputFiles({
+      name: 'opening-balances.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('account_code,account_name,party,debit,credit\n11010,Bank Account,,150000,\n'),
+    });
+    await page.locator('[data-business-action="ob-preview"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Opening journal already posted');
+    await expect(page.locator('#business-report-printable')).toContainText('Reverse it first');
+    await expect(page.locator('[data-ob-allow-duplicate]')).toBeVisible();
+    await page.locator('[data-business-action="ob-export"]').click();
+    await expect(page.locator('#api-output')).toContainText('ob_export');
 
     const enabledWorkspaces = [
       ['sales', 'Sales Invoices', '+ New Invoice'],
