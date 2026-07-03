@@ -25,6 +25,7 @@ Status convention:
 - ~~[x] Phase 3 Sales Invoice deep API/E2E hardening passed locally on 2026-07-03: create customer-scoped sales invoice -> approve/post -> verify AR/revenue/GST journal lines -> trial balance -> customer statement -> PDF/export artifact -> cancel/reverse -> reversal journal -> zero receivable -> tenant denial.~~
 - ~~[x] Phase 3 Purchase Bill deep API/E2E hardening passed locally on 2026-07-03: create vendor-scoped purchase bill -> approve/post -> verify expense/input GST/AP journal lines -> trial balance -> vendor statement/export -> Rule 37 ITC preview/reversal/reclaim -> payment marking -> cancel/reverse -> reversal journal -> zero payable -> tenant denial.~~
 - ~~[x] Phase 3 Credit Note deep API/E2E hardening passed locally on 2026-07-03: create customer invoice source -> create credit note linked to source invoice -> approve/post -> verify revenue/output GST debit and AR credit journal lines -> trial balance -> customer statement/export -> cancel/reverse -> reversal journal -> restored receivable -> tenant denial.~~
+- ~~[x] Phase 3 Debit Note deep API/E2E hardening passed locally on 2026-07-03: create vendor bill source -> create debit note linked to source bill -> approve/post -> verify AP debit and expense/input GST credit journal lines -> trial balance -> vendor statement/export -> cancel/reverse -> reversal journal -> restored payable -> tenant denial.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -57,6 +58,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Sales invoice API/E2E depth against real backend service/accounting layers for create -> approve/post -> report/statement/PDF/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; further visual/template signoff stays under print/PDF production review.
 - ~~[x] Purchase bill API/E2E depth against real backend service/accounting layers for create -> approve/post -> report/vendor statement/export -> payment/ITC paths -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated purchase-bill PDF is not implemented yet and remains under print/export production polish.
 - ~~[x] Credit note API/E2E depth against real backend service/accounting layers for source invoice linkage -> approve/post -> report/customer statement/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated credit-note PDF/template polish remains under print/export production review.
+- ~~[x] Debit note API/E2E depth against real backend service/accounting layers for source bill linkage -> approve/post -> report/vendor statement/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated debit-note PDF/template polish remains under print/export production review.
 - [ ] Receivables browser E2E for statements, ageing, allocation, reminders/dunning, and collection status UX.
 - [ ] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export depth.
 - [ ] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX.
@@ -68,7 +70,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 ## Phase 4 Open Gaps
 
 - [~] Credit note source-document linkage and accounting/report/reversal API depth are closed; dedicated browser source-document enforcement and print/export polish remain open for production signoff.
-- [ ] Debit note source-document enforcement, browser E2E, and print/export polish.
+- [~] Debit note source-document linkage and accounting/report/reversal API depth are closed; dedicated browser source-document enforcement and print/export polish remain open for production signoff.
 - [ ] GST report browser E2E for GSTR-1, GSTR-3B, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement, and export hardening.
 - [ ] Inventory browser E2E for item master, stock register, closing-stock posting, valuation policy settings, stock issue, and stock adjustment.
 - [ ] Banking/reconciliation browser E2E for CSV import, matching, reversal, reconciliation summary, bank book, and cash book polish.

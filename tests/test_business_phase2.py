@@ -2399,6 +2399,214 @@ async def test_debit_note_posts_mirror_of_bill(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_debit_note_deep_e2e_posts_reports_exports_and_reverses(async_session, monkeypatch):
+    store = FakeCollection()
+    _seed_vendor(store)
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **kwargs: audit_events.append(kwargs))
+    monkeypatch.setattr("app.db.mongo.get_collection", lambda _name: store)
+
+    async def fake_list_open_items(**_kwargs):
+        return {"items": []}
+
+    monkeypatch.setattr("app.modules.business.allocation_service.list_open_items", fake_list_open_items)
+
+    bill_doc = await business_service.create_purchase_bill(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1",
+            bill_number="SUP-DN-DEEP-2026-001",
+            bill_date=date(2026, 6, 8),
+            due_date=date(2026, 6, 30),
+            expense_account_code="51001",
+            place_of_supply="Karnataka",
+            line_items=[
+                PurchaseBillLineItem(
+                    description="Raw material purchase",
+                    hsn_sac="4820",
+                    quantity=Decimal("1"),
+                    rate=Decimal("1000"),
+                    gst_rate=Decimal("18"),
+                )
+            ],
+        ),
+        idempotency_key="debit-note-deep-bill-create-1",
+    )
+    bill = await business_service.review_purchase_bill(
+        session=async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=bill_doc["bill_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="Debit note source bill", accounting_entity_id="primary"),
+    )
+
+    created_doc = await business_service.create_debit_note(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=DebitNoteCreateRequest(
+            vendor_party_id="vend-1",
+            note_date=date(2026, 6, 20),
+            original_bill_id=bill["bill_id"],
+            original_bill_number=bill["bill_number"],
+            reason="purchase_return",
+            expense_account_code="51001",
+            place_of_supply="Karnataka",
+            line_items=[
+                DebitNoteLineItem(
+                    description="Returned raw material",
+                    hsn_sac="4820",
+                    quantity=Decimal("1"),
+                    rate=Decimal("1000"),
+                    gst_rate=Decimal("18"),
+                )
+            ],
+        ),
+        idempotency_key="debit-note-deep-create-1",
+    )
+    posted = await business_service.review_debit_note(
+        session=async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        debit_note_id=created_doc["debit_note_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="Debit note deep E2E", accounting_entity_id="primary"),
+    )
+
+    assert posted["status"] == "posted"
+    assert posted["journal_entry_id"]
+    assert posted["original_bill_id"] == bill["bill_id"]
+    assert posted["original_bill_number"] == bill["bill_number"]
+    assert posted["note_total"] == "1180.00"
+    assert posted["taxable_total"] == "1000.00"
+    assert posted["cgst_total"] == "90.00"
+    assert posted["sgst_total"] == "90.00"
+
+    journal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=posted["journal_entry_id"],
+    )
+    assert journal_detail["reference"] == posted["debit_note_number"]
+    assert journal_detail["total_debit"] == 1180.0
+    assert journal_detail["total_credit"] == 1180.0
+    line_by_code = {line["account_code"]: line for line in journal_detail["lines"]}
+    assert line_by_code["21001"]["debit"] == 1180.0
+    assert line_by_code["51001"]["credit"] == 1000.0
+    assert line_by_code["14001"]["credit"] == 90.0
+    assert line_by_code["14002"]["credit"] == 90.0
+
+    trial_lines, trial_debit, trial_credit = await get_trial_balance(
+        async_session,
+        tenant_id="business-tenant",
+        as_of=date(2026, 6, 30),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert trial_debit == trial_credit == Decimal("2360.00")
+    trial_by_code = {line["account_code"]: line for line in trial_lines}
+    assert trial_by_code["21001"]["net_balance"] == Decimal("0.00")
+    assert trial_by_code["51001"]["net_balance"] == Decimal("0.00")
+    assert trial_by_code["14001"]["net_balance"] == Decimal("0.00")
+    assert trial_by_code["14002"]["net_balance"] == Decimal("0.00")
+
+    statement = await build_party_statement(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        party_id="vend-1",
+        kind="payable",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 6, 30),
+    )
+    assert statement["party"]["party_id"] == "vend-1"
+    assert statement["closing_balance"] == "0.00"
+    assert [row["document_type"] for row in statement["transactions"]] == ["Bill", "Debit Note"]
+    assert statement["transactions"][1]["reference"] == posted["debit_note_number"]
+
+    export_response = report_export.export_report(
+        "csv",
+        title="Debit Note Vendor Statement",
+        columns=[{"key": "reference", "label": "Reference"}, {"key": "balance", "label": "Balance", "numeric": True}],
+        rows=statement["transactions"],
+        filename_base="statement_debit_note_vend_1",
+        org_name=statement["business_name"],
+    )
+    assert export_response.media_type == "text/csv"
+
+    cancelled = await business_service.cancel_debit_note(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        debit_note_id=posted["debit_note_id"],
+        created_by="admin-1",
+        payload=DebitNoteCancelRequest(
+            reason="Debit note deep E2E reversal",
+            cancel_date=date(2026, 6, 20),
+        ),
+        idempotency_key="debit-note-deep-cancel-1",
+    )
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["reversal_journal_entry_id"]
+
+    reversal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=cancelled["reversal_journal_entry_id"],
+    )
+    assert reversal_detail["reversal_of_journal_id"] == posted["journal_entry_id"]
+    reversal_by_code = {line["account_code"]: line for line in reversal_detail["lines"]}
+    assert reversal_by_code["21001"]["credit"] == 1180.0
+    assert reversal_by_code["51001"]["debit"] == 1000.0
+    assert reversal_by_code["14001"]["debit"] == 90.0
+    assert reversal_by_code["14002"]["debit"] == 90.0
+
+    outstanding = await get_party_outstanding(
+        async_session,
+        tenant_id="business-tenant",
+        party_id="vend-1",
+        as_of=date(2026, 6, 30),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert outstanding["payable"] == Decimal("1180.00")
+
+    post_reversal_statement = await build_party_statement(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        party_id="vend-1",
+        kind="payable",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 6, 30),
+    )
+    assert post_reversal_statement["closing_balance"] == "1180.00"
+    assert [row["document_type"] for row in post_reversal_statement["transactions"]] == ["Bill", "Debit Note", "journal_reversal"]
+
+    with pytest.raises(AccountingNotFoundError):
+        await get_journal_voucher_detail(
+            async_session,
+            app_key="mitrabooks",
+            tenant_id="other-tenant",
+            accounting_entity_id="primary",
+            journal_id=posted["journal_entry_id"],
+        )
+    assert audit_events[-1]["action"] == "business_debit_note_cancelled"
+
+
+@pytest.mark.asyncio
 async def test_debit_note_reverses_journal_when_status_update_fails(monkeypatch):
     store = FailingUpdateCollection(fail_on_update_after_insert=True)
     _seed_vendor(store)
