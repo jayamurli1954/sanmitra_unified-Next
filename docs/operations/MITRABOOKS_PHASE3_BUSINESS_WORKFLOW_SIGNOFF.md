@@ -111,6 +111,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Debit note deep E2E/API hardening | Real accounting service test for source purchase bill -> create linked debit note -> approve/post -> AP debit and expense/input GST credit journal lines -> trial balance -> vendor statement/export -> cancel/reverse -> reversal journal -> restored payable -> tenant denial | Passed on 2026-07-03 |
 | Reports and drill-down | Accounting report tests, party sub-ledger tests, ERP accounting panel smoke | Passed on 2026-07-02 |
 | Receivables browser shell E2E | Local Playwright shell smoke for receivables/payables party ledger, AR/AP ageing kind switch, receipt allocation FIFO/open-item match, reconciliation status, customer statement, and dunning reminder record | Passed on 2026-07-03 |
+| Payables browser shell E2E | Local Playwright shell smoke for vendor statement, payable allocation FIFO/open-item match, reconciliation status, Rule 37 ITC bill-payment marking, and TDS register vendor evidence | Passed on 2026-07-03 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -244,12 +245,27 @@ Result:
 - The local shell smoke now covers the receivables workflow surfaces: receivables/payables party ledger tab, AR/AP ageing with receivable/payable switch, receipt allocation with FIFO/open-item prefill and reconciliation status, customer statement loading, and dunning reminder recording.
 - SKIPPED: staging shell smoke and destructive deployed mutation because no staging URL or demo-tenant destructive flags were supplied for this local-only run.
 
+2026-07-03:
+
+```powershell
+python scripts/mitrabooks_phase3_business_gate.py
+```
+
+Result:
+
+- PASS: backend business workflow pytest group, 135 tests.
+- PASS: frontend business contract pytest group, 30 tests.
+- PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
+- The local shell smoke now covers the payables workflow surfaces: vendor statement loading, payable allocation with FIFO/open-item prefill and reconciliation status, Rule 37 ITC candidate review, bill payment marking, and TDS register vendor evidence.
+- SKIPPED: staging shell smoke and destructive deployed mutation because no staging URL or demo-tenant destructive flags were supplied for this local-only run.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Hosted staging demo database cleanup may still be needed if the hosted tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Credit Note and Debit Note browser source-document enforcement plus dedicated print/export polish remain open for later production signoff; API/accounting/report/reversal depth is closed for the local gate.
 - Receivables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current receivables browser coverage is local mocked-shell E2E.
+- Payables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current payables browser coverage is local mocked-shell E2E.
 - Compliance signoff is still required for GST/TDS/GSTR/e-invoice/e-way bill positioning.
 - Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.

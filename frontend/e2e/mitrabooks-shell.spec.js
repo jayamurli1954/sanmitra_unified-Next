@@ -32,6 +32,7 @@ async function mockVerifiedMitraBooksSession(page) {
   const creditNotes = [];
   const debitNotes = [];
   const allocations = [];
+  const paidBillIds = new Set();
   const caDocuments = [];
   const caClients = [];
   const json = (route, body, status = 200) => route.fulfill({
@@ -366,6 +367,26 @@ async function mockVerifiedMitraBooksSession(page) {
       return json(route, bill);
     }
 
+    if (method === 'POST' && path.endsWith('/payment')) {
+      const payload = request.postDataJSON();
+      const billId = path.split('/').at(-2);
+      const bill = bills.find(item => item.bill_id === billId) || {
+        bill_id: billId,
+        bill_number: billId === 'bill1' ? 'BILL-100' : billId,
+        bill_total: '1770.00',
+        net_payable: '1770.00',
+      };
+      paidBillIds.add(billId);
+      Object.assign(bill, {
+        paid_amount: payload.paid_amount,
+        paid_date: payload.paid_date,
+        payment_status: Number(payload.paid_amount || 0) >= Number(bill.net_payable || bill.bill_total || 0)
+          ? 'paid'
+          : 'partial',
+      });
+      return json(route, bill);
+    }
+
     if (method === 'GET' && !path.endsWith('/bills')) {
       const billId = path.split('/').at(-1);
       const bill = bills.find(item => item.bill_id === billId);
@@ -392,6 +413,8 @@ async function mockVerifiedMitraBooksSession(page) {
         igst_total: 0,
         gst_total: gstTotal,
         bill_total: taxableTotal + gstTotal,
+        net_payable: taxableTotal + gstTotal,
+        payment_status: 'unpaid',
         status: 'posted',
         line_items: lineItems,
         is_inter_state: !!payload.is_inter_state,
@@ -617,6 +640,28 @@ async function mockVerifiedMitraBooksSession(page) {
     }
     const partyId = path.split('/').filter(Boolean).at(-1);
     const kind = url.searchParams.get('kind') || 'receivable';
+    if (kind === 'payable') {
+      const party = parties.find(item => item.party_id === partyId) || parties.find(item => item.party_type === 'vendor');
+      return json(route, {
+        party: { party_id: party?.party_id || 'p1', party_name: party?.party_name || 'Karnataka Office Supplies', gstin: party?.gstin || '' },
+        business_name: 'Acme Corp Ltd',
+        kind,
+        from_date: url.searchParams.get('from_date') || '2026-04-01',
+        to_date: url.searchParams.get('to_date') || '2026-06-30',
+        opening_balance: '0.00',
+        total_debit: '0.00',
+        total_credit: '1770.00',
+        closing_balance: '1770.00',
+        transactions: [
+          { entry_date: '2026-06-13', document_type: 'Bill', reference: 'BILL-100', description: 'Office supplies payable', debit: '0.00', credit: '1770.00', balance: '1770.00' },
+        ],
+        open_items: [
+          { open_item_id: 'bill1', open_item_number: 'BILL-100', item_date: '2026-06-13', due_date: '2026-06-30', total: '1770.00', outstanding: '1770.00', days_overdue: 0 },
+        ],
+        dunning: { suggestion: { level: 0, label: 'No reminder needed' }, letter: '', log: [] },
+        notes: ['Vendor statement lines come from the posted party sub-ledger.'],
+      });
+    }
     const party = parties.find(item => item.party_id === partyId) || parties.find(item => item.party_type === 'customer');
     return json(route, {
       party: { party_id: party?.party_id || 'p2', party_name: party?.party_name || 'Bengaluru Retail Customer', gstin: party?.gstin || '' },
@@ -642,6 +687,40 @@ async function mockVerifiedMitraBooksSession(page) {
       notes: ['Statement lines come from the posted party sub-ledger.'],
     });
   });
+  await page.route('**/api/v1/business/itc-reversals/preview**', async route => {
+    const candidate = bills.find(item => item.bill_id === 'bill1') || {
+      bill_id: 'bill1',
+      bill_number: 'BILL-100',
+      vendor_name: 'Karnataka Office Supplies',
+      bill_date: '2026-06-13',
+      due_date: '2026-06-30',
+      bill_total: '1770.00',
+      net_payable: '1770.00',
+      gst_total: '270.00',
+      payment_status: 'unpaid',
+    };
+    const candidates = candidate.payment_status === 'paid' || paidBillIds.has(candidate.bill_id) ? [] : [{
+      bill_id: candidate.bill_id,
+      bill_number: candidate.bill_number,
+      vendor_name: candidate.vendor_name || 'Karnataka Office Supplies',
+      bill_date: candidate.bill_date || '2026-06-13',
+      due_date: candidate.due_date || '2026-06-30',
+      days_overdue: 181,
+      itc_total: candidate.gst_total || '270.00',
+      interest_amount: '23.96',
+      net_payable: candidate.net_payable || candidate.bill_total || '1770.00',
+      bill_total: candidate.bill_total || '1770.00',
+      payment_status: candidate.payment_status || 'unpaid',
+      gstr3b_ref: '4(B)(2)',
+    }];
+    return json(route, {
+      as_of: new URL(route.request().url()).searchParams.get('as_of') || '2026-12-28',
+      count: candidates.length,
+      candidates,
+      total_itc: candidates.length ? '270.00' : '0.00',
+      total_interest: candidates.length ? '23.96' : '0.00',
+    });
+  });
   await page.route('**/api/v1/business/financial-health**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -664,7 +743,41 @@ async function mockVerifiedMitraBooksSession(page) {
   await page.route('**/api/v1/business/tds/register**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ quarter: 'Q1', rows: [], summary: {} }),
+    body: JSON.stringify({
+      quarter: '2026-Q1',
+      period_start: '2026-04-01',
+      period_end: '2026-06-30',
+      tds: {
+        total_tax: '100.00',
+        total_base: '10000.00',
+        entry_count: 1,
+        pan_missing_count: 0,
+        sections: [{
+          section: '194C',
+          label: 'Contractor payments',
+          total_base: '10000.00',
+          total_tax: '100.00',
+          entries: [{
+            doc_date: '2026-06-13',
+            doc_number: 'BILL-100',
+            party_name: 'Karnataka Office Supplies',
+            pan: 'ABCDE1234F',
+            pan_missing: false,
+            base_amount: '10000.00',
+            rate: '1',
+            tax_amount: '100.00',
+          }],
+        }],
+      },
+      tcs: {
+        total_tax: '0.00',
+        total_base: '0.00',
+        entry_count: 0,
+        pan_missing_count: 0,
+        sections: [],
+      },
+      generated_notes: ['TDS is deducted on the GST-exclusive taxable value.'],
+    }),
   }));
   await page.route('**/api/v1/business/bank-recon**', route => route.fulfill({
     status: 200,
@@ -894,6 +1007,44 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-dunning-note]').fill('emailed to accounts team');
     await page.locator('[data-business-action="dunning-record"]').click();
     await expect(page.locator('#login-status')).toContainText('Reminder recorded');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="statements"]').click();
+    await page.locator('[data-stmt-party]').selectOption('p1');
+    await page.locator('[data-stmt-kind]').selectOption('payable');
+    await page.locator('[data-stmt-from]').fill('2026-06-01');
+    await page.locator('[data-stmt-to]').fill('2026-06-30');
+    await page.locator('[data-business-action="stmt-load"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+    await expect(page.locator('#business-report-printable')).toContainText('Bill');
+    await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
+    await expect(page.locator('#business-report-printable')).toContainText('Open items');
+    await expect(page.locator('#business-report-printable')).not.toContainText('Payment reminders');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="payment-allocation"]').click();
+    await page.locator('[data-business-action="alloc-kind"][data-alloc-kind="payable"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Unallocated Payments');
+    await expect(page.locator('#business-report-printable')).toContainText('PAY-2026-001');
+    await page.locator('[data-business-action="alloc-select-payment"][data-payment-id="pay1"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Match against open items');
+    await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
+    await expect(page.locator('input[data-alloc-line="bill1"]')).toHaveValue('1770.00');
+    await page.locator('[data-business-action="alloc-submit"]').click();
+    await expect(page.locator('#login-status')).toContainText('Allocation posted');
+    await expect(page.locator('#business-report-printable')).toContainText('reconciled');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="itc-reversals"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+    await expect(page.locator('#business-report-printable')).toContainText('Mark paid');
+    await page.locator('[data-business-action="bill-mark-paid"][data-bill-id="bill1"]').click();
+    await expect(page.locator('#login-status')).toContainText('Payment recorded');
+    await expect(page.locator('#business-report-printable')).toContainText('No bills are overdue beyond 180 days');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="tds"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('TDS deducted (26Q)');
+    await expect(page.locator('#business-report-printable')).toContainText('194C');
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+    await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
 
     const enabledWorkspaces = [
       ['sales', 'Sales Invoices', '+ New Invoice'],

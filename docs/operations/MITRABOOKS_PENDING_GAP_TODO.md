@@ -27,6 +27,7 @@ Status convention:
 - ~~[x] Phase 3 Credit Note deep API/E2E hardening passed locally on 2026-07-03: create customer invoice source -> create credit note linked to source invoice -> approve/post -> verify revenue/output GST debit and AR credit journal lines -> trial balance -> customer statement/export -> cancel/reverse -> reversal journal -> restored receivable -> tenant denial.~~
 - ~~[x] Phase 3 Debit Note deep API/E2E hardening passed locally on 2026-07-03: create vendor bill source -> create debit note linked to source bill -> approve/post -> verify AP debit and expense/input GST credit journal lines -> trial balance -> vendor statement/export -> cancel/reverse -> reversal journal -> restored payable -> tenant denial.~~
 - ~~[x] Phase 3 Receivables browser E2E shell hardening passed locally on 2026-07-03: party-ledger receivables/payables tab -> AR/AP ageing kind switch -> receipt allocation FIFO/open-item match -> reconciliation status -> customer statement -> dunning reminder record.~~
+- ~~[x] Phase 3 Payables browser E2E shell hardening passed locally on 2026-07-03: vendor statement -> payable allocation FIFO/open-item match -> reconciliation status -> Rule 37 ITC bill-payment marking -> TDS register vendor evidence.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -61,7 +62,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Credit note API/E2E depth against real backend service/accounting layers for source invoice linkage -> approve/post -> report/customer statement/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated credit-note PDF/template polish remains under print/export production review.
 - ~~[x] Debit note API/E2E depth against real backend service/accounting layers for source bill linkage -> approve/post -> report/vendor statement/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated debit-note PDF/template polish remains under print/export production review.
 - ~~[x] Receivables browser E2E for statements, ageing, allocation, reminders/dunning, and collection status UX in the mocked local MitraBooks shell.~~ Real-stack/deployed receivables mutation remains part of later demo-tenant production signoff.
-- [ ] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export depth.
+- ~~[x] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export surfaces in the mocked local MitraBooks shell.~~ Real-stack/deployed payables mutation remains part of later demo-tenant production signoff.
 - [ ] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX.
 - [ ] Opening balance browser E2E, maker-checker review, and rollback/reversal runbook examples.
 - [ ] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples.
