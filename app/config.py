@@ -18,6 +18,19 @@ def _get_app_version() -> str:
     return os.getenv("APP_VERSION", "1.2.0")
 
 
+def _unique_lower_emails(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        email = str(value or "").strip().lower()
+        if email and email not in normalized:
+            normalized.append(email)
+    return normalized
+
+
+def _csv_env_lower(name: str, default: str) -> list[str]:
+    return _unique_lower_emails(os.getenv(name, default).split(","))
+
+
 class Settings:
     APP_NAME = os.getenv("APP_NAME", "SanMitra Unified Backend")
     APP_VERSION = _get_app_version()
@@ -253,14 +266,15 @@ class Settings:
     DEMO_MITRABOOKS_ADMIN_EMAIL = os.getenv("DEMO_MITRABOOKS_ADMIN_EMAIL", "admin@mitrabooks.local")
     DEMO_MITRABOOKS_ADMIN_PASSWORD = os.getenv("DEMO_MITRABOOKS_ADMIN_PASSWORD", "")
     DEMO_MITRABOOKS_ADMIN_FULL_NAME = os.getenv("DEMO_MITRABOOKS_ADMIN_FULL_NAME", "MitraBooks Admin")
-    DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS = [
-        email.strip().lower()
-        for email in os.getenv(
-            "DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS",
-            "business.admin@sanmitra.local,businessadmin@sanmitra.local",
-        ).split(",")
-        if email.strip()
-    ]
+    DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS = _unique_lower_emails(
+        [
+            DEMO_MITRABOOKS_ADMIN_EMAIL,
+            *_csv_env_lower(
+                "DEMO_MITRABOOKS_ADMIN_ALIAS_EMAILS",
+                "business.admin@sanmitra.local,businessadmin@sanmitra.local",
+            ),
+        ]
+    )
     DEMO_MITRABOOKS_E2E_SEED_ENABLED = os.getenv("DEMO_MITRABOOKS_E2E_SEED_ENABLED", "false").lower() in {
         "1",
         "true",
