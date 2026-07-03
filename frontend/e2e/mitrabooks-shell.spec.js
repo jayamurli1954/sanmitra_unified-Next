@@ -31,6 +31,7 @@ async function mockVerifiedMitraBooksSession(page) {
   const bills = [];
   const creditNotes = [];
   const debitNotes = [];
+  const allocations = [];
   const caDocuments = [];
   const caClients = [];
   const json = (route, body, status = 200) => route.fulfill({
@@ -515,6 +516,132 @@ async function mockVerifiedMitraBooksSession(page) {
 
     return json(route, { items: debitNotes });
   });
+  await page.route('**/api/v1/business/party-ledger**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const receivableItems = [
+      { party_id: 'p2', party_name: 'Bengaluru Retail Customer', balance: '2360.00' },
+    ];
+    const payableItems = [
+      { party_id: 'p1', party_name: 'Karnataka Office Supplies', balance: '1770.00' },
+    ];
+    const items = kind === 'payable' ? payableItems : receivableItems;
+    return json(route, { kind, as_of: url.searchParams.get('as_of') || '2026-06-13', items, total_balance: items[0]?.balance || '0.00' });
+  });
+  await page.route('**/api/v1/business/allocations/aging**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const bucketsOrder = ['0-30', '31-60', '61-90', '90+'];
+    const byParty = kind === 'payable'
+      ? [{ party_id: 'p1', party_name: 'Karnataka Office Supplies', buckets: { '0-30': '1770.00', '31-60': '0.00', '61-90': '0.00', '90+': '0.00' }, total: '1770.00' }]
+      : [{ party_id: 'p2', party_name: 'Bengaluru Retail Customer', buckets: { '0-30': '0.00', '31-60': '2360.00', '61-90': '0.00', '90+': '0.00' }, total: '2360.00' }];
+    const totals = byParty[0].buckets;
+    return json(route, {
+      kind,
+      as_of: url.searchParams.get('as_of') || '2026-06-13',
+      buckets_order: bucketsOrder,
+      by_party: byParty,
+      totals,
+      grand_total: byParty[0].total,
+    });
+  });
+  await page.route('**/api/v1/business/allocations/unallocated-payments**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const items = kind === 'payable'
+      ? [{ payment_id: 'pay1', payment_number: 'PAY-2026-001', payment_date: '2026-06-18', amount: '1770.00', unallocated: '1770.00' }]
+      : [{ payment_id: 'rcpt1', payment_number: 'RCT-2026-001', payment_date: '2026-06-18', amount: '2360.00', unallocated: '2360.00' }];
+    return json(route, { kind, items, total_unallocated: items[0].unallocated });
+  });
+  await page.route('**/api/v1/business/allocations/open-items**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const items = kind === 'payable'
+      ? [{ open_item_id: 'bill1', open_item_number: 'BILL-100', item_date: '2026-06-13', due_date: '2026-06-30', total: '1770.00', outstanding: '1770.00', days_overdue: 0 }]
+      : [{ open_item_id: 'inv1', open_item_number: 'INV-2026-001', item_date: '2026-06-13', due_date: '2026-06-30', total: '2360.00', outstanding: '2360.00', days_overdue: 45 }];
+    return json(route, { kind, items, total_outstanding: items[0].outstanding });
+  });
+  await page.route('**/api/v1/business/allocations/fifo-suggestion**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const allocationsPayload = kind === 'payable'
+      ? [{ open_item_id: 'bill1', allocated_amount: '1770.00' }]
+      : [{ open_item_id: 'inv1', allocated_amount: '2360.00' }];
+    return json(route, { kind, payment_id: url.searchParams.get('payment_id'), allocations: allocationsPayload });
+  });
+  await page.route('**/api/v1/business/allocations/reconciliation**', async route => {
+    const url = new URL(route.request().url());
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const value = kind === 'payable' ? '1770.00' : '2360.00';
+    return json(route, {
+      kind,
+      as_of: url.searchParams.get('as_of') || '2026-06-13',
+      open_items_outstanding: value,
+      unallocated_payments: allocations.length ? '0.00' : value,
+      computed_net: allocations.length ? value : '0.00',
+      ledger_balance: value,
+      difference: allocations.length ? '0.00' : value,
+      balanced: allocations.length > 0,
+    });
+  });
+  await page.route('**/api/v1/business/allocations', async route => {
+    const request = route.request();
+    if (request.method() !== 'POST') return json(route, { items: allocations, total: allocations.length });
+    const payload = request.postDataJSON();
+    const docs = (payload.allocations || []).map((line, index) => ({
+      allocation_id: `alloc${allocations.length + index + 1}`,
+      kind: payload.kind,
+      payment_id: payload.payment_id,
+      open_item_id: line.open_item_id,
+      allocated_amount: String(line.allocated_amount),
+      status: 'active',
+    }));
+    allocations.push(...docs);
+    return json(route, { count: docs.length, allocations: docs });
+  });
+  await page.route('**/api/v1/business/statements/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    if (request.method() === 'POST' && path.endsWith('/dunning')) {
+      return json(route, {
+        dunning_log_id: 'dun1',
+        party_id: 'p2',
+        level: 2,
+        label: 'Second reminder',
+        overdue_total: '2360.00',
+        note: request.postDataJSON().note || '',
+        created_by: 'businessadmin@sanmitra.local',
+        created_at: '2026-06-20T00:00:00Z',
+      });
+    }
+    const partyId = path.split('/').filter(Boolean).at(-1);
+    const kind = url.searchParams.get('kind') || 'receivable';
+    const party = parties.find(item => item.party_id === partyId) || parties.find(item => item.party_type === 'customer');
+    return json(route, {
+      party: { party_id: party?.party_id || 'p2', party_name: party?.party_name || 'Bengaluru Retail Customer', gstin: party?.gstin || '' },
+      business_name: 'Acme Corp Ltd',
+      kind,
+      from_date: url.searchParams.get('from_date') || '2026-04-01',
+      to_date: url.searchParams.get('to_date') || '2026-06-30',
+      opening_balance: '0.00',
+      total_debit: '2360.00',
+      total_credit: '0.00',
+      closing_balance: '2360.00',
+      transactions: [
+        { entry_date: '2026-06-13', document_type: 'Invoice', reference: 'INV-2026-001', description: 'Consulting service', debit: '2360.00', credit: '0.00', balance: '2360.00' },
+      ],
+      open_items: [
+        { open_item_id: 'inv1', open_item_number: 'INV-2026-001', item_date: '2026-06-13', due_date: '2026-06-30', total: '2360.00', outstanding: '2360.00', days_overdue: 45 },
+      ],
+      dunning: {
+        suggestion: { level: 2, label: 'Second reminder', max_days_overdue: 45, overdue_count: 1, overdue_total: '2360.00' },
+        letter: 'Dear Bengaluru Retail Customer,\\nPlease clear overdue invoice INV-2026-001.',
+        log: [],
+      },
+      notes: ['Statement lines come from the posted party sub-ledger.'],
+    });
+  });
   await page.route('**/api/v1/business/financial-health**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -726,6 +853,47 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('nav#nav a[data-business-workspace="accounting"]').click();
     await expect(page.locator('.accounting-drilldown-panel')).toBeVisible();
     await expect(page.locator('.accounting-drilldown-panel')).toContainText('Monthly Voucher Drill Down');
+
+    await page.locator('nav#nav a[data-business-workspace="reports"]').click();
+    await expect(page.locator('.erp-workspace-panel')).toContainText('Financial Reports');
+    await page.locator('[data-business-action="report-tab"][data-report-tab="receivables-payables"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Sundry Debtors');
+    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru Retail Customer');
+    await expect(page.locator('#business-report-printable')).toContainText('Sundry Creditors');
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="aging"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Receivables aging');
+    await expect(page.locator('#business-report-printable')).toContainText('31-60');
+    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru Retail Customer');
+    await page.locator('[data-business-action="aging-kind"][data-alloc-kind="payable"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Payables aging');
+    await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="payment-allocation"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Unallocated Receipts');
+    await expect(page.locator('#business-report-printable')).toContainText('RCT-2026-001');
+    await page.getByRole('button', { name: 'Allocate' }).click();
+    await expect(page.locator('#business-report-printable')).toContainText('Match against open items');
+    await expect(page.locator('#business-report-printable')).toContainText('INV-2026-001');
+    await expect(page.locator('input[data-alloc-line="inv1"]')).toHaveValue('2360.00');
+    await page.getByRole('button', { name: 'Post Allocation' }).click();
+    await expect(page.locator('#login-status')).toContainText('Allocation posted');
+    await expect(page.locator('#business-report-printable')).toContainText('reconciled');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="statements"]').click();
+    await page.locator('[data-stmt-party]').selectOption('p2');
+    await page.locator('[data-stmt-kind]').selectOption('receivable');
+    await page.locator('[data-stmt-from]').fill('2026-06-01');
+    await page.locator('[data-stmt-to]').fill('2026-06-30');
+    await page.locator('[data-business-action="stmt-load"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Statement for');
+    await expect(page.locator('#business-report-printable')).toContainText('INV-2026-001');
+    await expect(page.locator('#business-report-printable')).toContainText('Payment reminders');
+    await expect(page.locator('#business-report-printable')).toContainText('Second reminder');
+    await page.locator('[data-dunning-note]').fill('emailed to accounts team');
+    await page.locator('[data-business-action="dunning-record"]').click();
+    await expect(page.locator('#login-status')).toContainText('Reminder recorded');
 
     const enabledWorkspaces = [
       ['sales', 'Sales Invoices', '+ New Invoice'],
