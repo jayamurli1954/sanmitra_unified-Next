@@ -32,6 +32,11 @@ function headers(token, extra = {}) {
   };
 }
 
+function decimalValue(value) {
+  const parsed = Number.parseFloat(String(value ?? '0'));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 async function jsonRequest(page, token, method, path, body = undefined, extraHeaders = {}) {
   const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
     method,
@@ -67,6 +72,7 @@ async function createParty(page, token, runId, partyType) {
     party_type: partyType,
     party_code: `E2E-${partyType.toUpperCase()}-${runId}`,
     gstin: partyType === 'customer' ? '29AAAAA0000A1Z5' : '29ABCDE1234F1Z5',
+    pan: partyType === 'customer' ? 'AAAAA0000A' : 'ABCDE1234F',
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560001',
@@ -140,6 +146,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
         place_of_supply: 'Karnataka',
         reference: `PH3-INV-${runId}`,
         line_items: [{ description: 'Phase 3 E2E service', hsn_sac: '9983', quantity: '1', rate: '1000', gst_rate: '18' }],
+        tcs_section: '206C-1H',
       },
       { 'X-Idempotency-Key': `phase3-demo-invoice-${runId}` }
     );
@@ -160,6 +167,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
         expense_account_code: '51001',
         place_of_supply: 'Karnataka',
         line_items: [{ description: 'Phase 3 E2E purchase', hsn_sac: '4820', quantity: '1', rate: '500', gst_rate: '18' }],
+        tds_section: '194C',
       },
       { 'X-Idempotency-Key': `phase3-demo-bill-${runId}` }
     );
@@ -209,6 +217,103 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
 
     const trialBalance = await jsonRequest(page, token, 'GET', '/accounting/reports/trial-balance?as_of=2026-07-02');
     expect(trialBalance).toBeTruthy();
+
+    const tdsSections = await jsonRequest(page, token, 'GET', '/business/tds/sections');
+    expect((tdsSections.tds || []).map((row) => row.section)).toEqual(expect.arrayContaining(['194C']));
+    expect((tdsSections.tcs || []).map((row) => row.section)).toEqual(expect.arrayContaining(['206C-1H']));
+
+    const tdsRegister = await jsonRequest(page, token, 'GET', '/business/tds/register?quarter=2026-Q2');
+    const tds194c = (tdsRegister.tds?.sections || []).find((row) => row.section === '194C');
+    expect(tds194c?.entries?.some((entry) => entry.doc_number === bill.bill_number)).toBeTruthy();
+    expect(decimalValue(tds194c?.total_tax)).toBeGreaterThan(0);
+    const tcs206c = (tdsRegister.tcs?.sections || []).find((row) => row.section === '206C-1H');
+    expect(tcs206c?.entries?.some((entry) => entry.doc_number === invoice.invoice_number)).toBeTruthy();
+    expect(decimalValue(tcs206c?.total_tax)).toBeGreaterThan(0);
+
+    const gstr3b = await jsonRequest(page, token, 'GET', '/business/returns/gstr-3b?period=2026-07');
+    expect(gstr3b.return_type).toBe('GSTR-3B');
+    expect(decimalValue(gstr3b.outward_supplies?.taxable?.taxable_value)).toBeGreaterThan(0);
+    expect(decimalValue(gstr3b.totals?.total_output_tax)).toBeGreaterThan(0);
+    expect(gstr3b.gstn_json?.ret_period).toBe('072026');
+
+    const gstr1 = await jsonRequest(page, token, 'GET', '/business/returns/gstr-1?period=2026-07');
+    expect(gstr1.return_type).toBe('GSTR-1');
+    expect(gstr1.sections?.b2b?.invoices).toBeGreaterThan(0);
+    expect(gstr1.sections?.cdnr?.notes).toBeGreaterThan(0);
+    expect(gstr1.gstn_json?.fp).toBe('072026');
+
+    const gstr2b = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/returns/gstr-2b/reconcile?period=2026-07',
+      {
+        data: {
+          docdata: {
+            b2b: [
+              {
+                ctin: vendor.gstin,
+                inv: [
+                  {
+                    inum: bill.bill_number,
+                    idt: '2026-07-02',
+                    val: decimalValue(bill.bill_total),
+                    itms: [
+                      {
+                        itm_det: {
+                          rt: 18,
+                          txval: decimalValue(bill.taxable_total),
+                          iamt: decimalValue(bill.igst_total),
+                          camt: decimalValue(bill.cgst_total),
+                          samt: decimalValue(bill.sgst_total),
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }
+    );
+    expect(gstr2b.report_type).toBe('GSTR-2B-reconciliation');
+    expect(gstr2b.summary?.matched_count).toBeGreaterThan(0);
+    expect(decimalValue(gstr2b.summary?.matched_itc)).toBeGreaterThan(0);
+
+    const cmp08 = await jsonRequest(page, token, 'GET', '/business/returns/cmp-08?quarter=2026-Q2');
+    expect(cmp08.return_type).toBe('CMP-08');
+    expect(cmp08.gstn_json?.ret_period).toBe('2026-Q2');
+    const gstr4 = await jsonRequest(page, token, 'GET', '/business/returns/gstr-4?financial_year=2026-27');
+    expect(gstr4.return_type).toBe('GSTR-4');
+    expect(gstr4.gstn_json?.fy).toBe('2026-27');
+
+    const settlementPreview = await jsonRequest(page, token, 'GET', '/business/gst-settlement/preview?period=2026-07');
+    expect(settlementPreview.status).toBe('preview');
+    expect(settlementPreview.posted).toBe(false);
+    expect(decimalValue(settlementPreview.total_output)).toBeGreaterThan(0);
+
+    let gstPeriodLocked = false;
+    try {
+      const lockedPeriod = await jsonRequest(page, token, 'PUT', '/business/gst-period-locks', {
+        period: '2026-07',
+        locked: true,
+        note: `Phase 3 E2E temporary compliance lock ${runId}`,
+        accounting_entity_id: 'primary',
+      });
+      gstPeriodLocked = lockedPeriod.locked === true;
+      expect(lockedPeriod.locked).toBe(true);
+    } finally {
+      if (gstPeriodLocked) {
+        const unlockedPeriod = await jsonRequest(page, token, 'PUT', '/business/gst-period-locks', {
+          period: '2026-07',
+          locked: false,
+          note: `Phase 3 E2E unlock before cleanup ${runId}`,
+          accounting_entity_id: 'primary',
+        });
+        expect(unlockedPeriod.locked).toBe(false);
+      }
+    }
 
     const reversals = [
       ['invoice', `/business/invoices/${invoice.invoice_id}/cancel`, `phase3-demo-invoice-cancel-${runId}`],

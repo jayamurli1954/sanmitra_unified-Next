@@ -52,6 +52,13 @@ def test_business_phase2_target_routes_are_registered() -> None:
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/debit-notes/{param}/cancel", "phase2-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/gst-settlement/preview", "phase2-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/gst-settlement", "phase2-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/returns/gstr-3b", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/returns/gstr-1", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/returns/gstr-2b/reconcile", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/returns/cmp-08", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/returns/gstr-4", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/tds/sections", "phase3-realstack-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/tds/register", "phase3-realstack-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/audit/events", "phase2-contract", 1),
     ]
 
