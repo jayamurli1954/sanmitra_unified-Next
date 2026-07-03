@@ -5,7 +5,16 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from app.accounting.service import (
+    AccountingNotFoundError,
+    get_journal_voucher_detail,
+    get_party_outstanding,
+    get_trial_balance,
+)
 from app.modules.business import router as business_router
+from app.modules.business import report_export
+from app.modules.business.invoice_pdf import build_sales_invoice_pdf
+from app.modules.business.statements import build_party_statement
 import app.modules.business.service as business_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.modules.business.schemas import (
@@ -944,6 +953,178 @@ async def test_sales_invoice_inter_state_uses_igst(monkeypatch):
     assert result["igst_total"] == "180.00"
     assert result["cgst_total"] == "0.00"
     assert result["invoice_total"] == "1180.00"
+
+
+@pytest.mark.asyncio
+async def test_sales_invoice_deep_e2e_posts_reports_exports_and_reverses(async_session, monkeypatch):
+    store = FakeCollection()
+    _seed_customer(store)
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **kwargs: audit_events.append(kwargs))
+    monkeypatch.setattr("app.db.mongo.get_collection", lambda _name: store)
+
+    async def fake_list_open_items(**_kwargs):
+        return {"items": []}
+
+    monkeypatch.setattr("app.modules.business.allocation_service.list_open_items", fake_list_open_items)
+
+    created_doc = await business_service.create_sales_invoice(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=SalesInvoiceCreateRequest(
+            customer_party_id="cust-1",
+            invoice_date=date(2026, 6, 8),
+            due_date=date(2026, 6, 30),
+            income_account_code="41001",
+            place_of_supply="Karnataka",
+            reference="PO-SI-DEEP-1",
+            line_items=[
+                SalesInvoiceLineItem(
+                    description="Implementation service",
+                    hsn_sac="9983",
+                    quantity=Decimal("1"),
+                    rate=Decimal("1000"),
+                    gst_rate=Decimal("18"),
+                )
+            ],
+        ),
+        idempotency_key="sales-invoice-deep-create-1",
+    )
+    posted = await business_service.review_sales_invoice(
+        session=async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=created_doc["invoice_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="Sales invoice deep E2E", accounting_entity_id="primary"),
+    )
+
+    assert posted["status"] == "posted"
+    assert posted["journal_entry_id"]
+    assert posted["invoice_total"] == "1180.00"
+    assert posted["taxable_total"] == "1000.00"
+    assert posted["cgst_total"] == "90.00"
+    assert posted["sgst_total"] == "90.00"
+
+    journal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=posted["journal_entry_id"],
+    )
+    assert journal_detail["reference"] == posted["invoice_number"]
+    assert journal_detail["total_debit"] == 1180.0
+    assert journal_detail["total_credit"] == 1180.0
+    line_by_code = {line["account_code"]: line for line in journal_detail["lines"]}
+    assert line_by_code["12001"]["debit"] == 1180.0
+    assert line_by_code["41001"]["credit"] == 1000.0
+    assert line_by_code["22001"]["credit"] == 90.0
+    assert line_by_code["22002"]["credit"] == 90.0
+
+    trial_lines, trial_debit, trial_credit = await get_trial_balance(
+        async_session,
+        tenant_id="business-tenant",
+        as_of=date(2026, 6, 30),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert trial_debit == trial_credit == Decimal("1180.00")
+    trial_by_code = {line["account_code"]: line for line in trial_lines}
+    assert trial_by_code["12001"]["net_balance"] == Decimal("1180.00")
+    assert trial_by_code["41001"]["net_balance"] == Decimal("-1000.00")
+
+    statement = await build_party_statement(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        party_id="cust-1",
+        kind="receivable",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 6, 30),
+    )
+    assert statement["party"]["party_id"] == "cust-1"
+    assert statement["closing_balance"] == "1180.00"
+    assert statement["transactions"][0]["reference"] == posted["invoice_number"]
+    assert statement["transactions"][0]["document_type"] == "Invoice"
+
+    pdf_bytes = build_sales_invoice_pdf(posted, {})
+    assert pdf_bytes.startswith(b"%PDF")
+    export_response = report_export.export_report(
+        "csv",
+        title="Statement of Account",
+        columns=[{"key": "reference", "label": "Reference"}, {"key": "balance", "label": "Balance", "numeric": True}],
+        rows=statement["transactions"],
+        filename_base="statement_cust_1",
+        org_name=statement["business_name"],
+    )
+    assert export_response.media_type == "text/csv"
+
+    cancelled = await business_service.cancel_sales_invoice(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        invoice_id=posted["invoice_id"],
+        created_by="admin-1",
+        payload=SalesInvoiceCancelRequest(
+            reason="Sales invoice deep E2E reversal",
+            cancel_date=date(2026, 6, 8),
+        ),
+        idempotency_key="sales-invoice-deep-cancel-1",
+    )
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["reversal_journal_entry_id"]
+
+    reversal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=cancelled["reversal_journal_entry_id"],
+    )
+    assert reversal_detail["reversal_of_journal_id"] == posted["journal_entry_id"]
+    reversal_by_code = {line["account_code"]: line for line in reversal_detail["lines"]}
+    assert reversal_by_code["12001"]["credit"] == 1180.0
+    assert reversal_by_code["41001"]["debit"] == 1000.0
+    assert reversal_by_code["22001"]["debit"] == 90.0
+    assert reversal_by_code["22002"]["debit"] == 90.0
+
+    outstanding = await get_party_outstanding(
+        async_session,
+        tenant_id="business-tenant",
+        party_id="cust-1",
+        as_of=date(2026, 6, 30),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert outstanding["receivable"] == Decimal("0.00")
+
+    post_reversal_statement = await build_party_statement(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        party_id="cust-1",
+        kind="receivable",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 6, 30),
+    )
+    assert post_reversal_statement["closing_balance"] == "0.00"
+    assert [row["document_type"] for row in post_reversal_statement["transactions"]] == ["Invoice", "journal_reversal"]
+
+    with pytest.raises(AccountingNotFoundError):
+        await get_journal_voucher_detail(
+            async_session,
+            app_key="mitrabooks",
+            tenant_id="other-tenant",
+            accounting_entity_id="primary",
+            journal_id=posted["journal_entry_id"],
+        )
+    assert audit_events[-1]["action"] == "business_sales_invoice_cancelled"
 
 
 @pytest.mark.asyncio

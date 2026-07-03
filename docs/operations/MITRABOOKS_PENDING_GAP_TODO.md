@@ -22,6 +22,7 @@ Status convention:
 - ~~[x] Phase 3 destructive real-stack runner added: `frontend/e2e/mitrabooks-realstack-destructive.spec.js` and `--run-destructive-demo` gate support are available but intentionally opt-in.~~
 - ~~[x] Phase 3 local destructive real-stack demo mutation passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
 - ~~[x] Phase 3 hosted staging destructive real-stack demo mutation passed on 2026-07-03 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
+- ~~[x] Phase 3 Sales Invoice deep API/E2E hardening passed locally on 2026-07-03: create customer-scoped sales invoice -> approve/post -> verify AR/revenue/GST journal lines -> trial balance -> customer statement -> PDF/export artifact -> cancel/reverse -> reversal journal -> zero receivable -> tenant denial.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -51,7 +52,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 
 ## Phase 3 Open Gaps
 
-- [ ] Sales invoice browser E2E depth against real backend for create -> approve/post -> report -> cancel/reverse.
+- ~~[x] Sales invoice API/E2E depth against real backend service/accounting layers for create -> approve/post -> report/statement/PDF/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; further visual/template signoff stays under print/PDF production review.
 - [ ] Purchase bill browser E2E depth against real backend for create -> approve/post -> report -> payment/ITC paths -> cancel/reverse.
 - [ ] Receivables browser E2E for statements, ageing, allocation, reminders/dunning, and collection status UX.
 - [ ] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export depth.

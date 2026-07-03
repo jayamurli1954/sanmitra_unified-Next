@@ -102,6 +102,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Parties | Backend service tests and browser workflow smoke | Passed on 2026-07-02 |
 | Vouchers | Backend API smoke, approval/reversal tests, browser create/reverse smoke | Passed on 2026-07-02 |
 | Sales invoices | Backend posting/approval/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
+| Sales invoice deep E2E/API hardening | Real accounting service test for create -> approve/post -> AR/revenue/GST journal lines -> trial balance -> customer statement -> PDF/export artifact -> cancel/reverse -> reversal journal -> zero receivable -> tenant denial | Passed on 2026-07-03 |
 | Purchase bills | Backend posting/approval/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
 | Credit notes | Backend posting/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
 | Debit notes | Backend posting/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
@@ -173,10 +174,25 @@ Result:
 - PASS: destructive demo policy for `demo-mitrabooks-business`.
 - PASS: destructive hosted staging real-stack browser/API mutation. The E2E signed in as the MitraBooks demo admin, created a customer and vendor party, posted a voucher, sales invoice, purchase bill, credit note, and debit note, verified accounting report availability, and reversed/cancelled the generated financial documents.
 
+2026-07-03:
+
+```powershell
+python -m pytest tests/test_business_phase2.py::test_sales_invoice_deep_e2e_posts_reports_exports_and_reverses -q
+python -m pytest tests/test_business_phase2.py -q
+```
+
+Result:
+
+- PASS: focused Sales Invoice deep E2E/API hardening test.
+- PASS: full `tests/test_business_phase2.py` suite, 66 tests.
+- The Sales Invoice deep test uses the real accounting service and test database for posting, trial balance, voucher detail, party sub-ledger statement, reversal, outstanding balance, and tenant-denial checks. Mongo-backed business document storage and dunning log reads are faked in-memory for deterministic local execution.
+- The test creates a customer-scoped GST sales invoice, approves/posts it, verifies debit receivable and credit revenue/CGST/SGST lines, checks trial balance and customer statement effects, builds a sales-invoice PDF and CSV export artifact, cancels the invoice, verifies reversal lines and zero receivable outstanding, and confirms cross-tenant voucher access is denied.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Hosted staging demo database cleanup may still be needed if the hosted tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
+- Purchase Bill deep hardening remains the next Phase 3 sub-gate: create -> approve/post -> AP/expense/input GST report effects -> payment/ITC paths -> cancel/reverse.
 - Compliance signoff is still required for GST/TDS/GSTR/e-invoice/e-way bill positioning.
 - Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
