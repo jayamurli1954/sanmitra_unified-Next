@@ -33,6 +33,9 @@ from app.modules.business.schemas import (
     PurchaseBillCancelRequest,
     PurchaseBillCreateRequest,
     PurchaseBillLineItem,
+    BillPaymentUpdateRequest,
+    ItcReclaimActionRequest,
+    ItcReversalActionRequest,
     SalesInvoiceCancelRequest,
     SalesInvoiceCreateRequest,
     SalesInvoiceLineItem,
@@ -1374,6 +1377,241 @@ async def test_purchase_bill_posts_balanced_itc_journal(monkeypatch):
     assert result["igst_total"] == "0.00"
     assert result["bill_total"] == "1180.00"
     assert audit_events[-1]["action"] == "business_purchase_bill_reviewed"
+
+
+@pytest.mark.asyncio
+async def test_purchase_bill_deep_e2e_posts_reports_payment_itc_and_reverses(async_session, monkeypatch):
+    store = FakeCollection()
+    _seed_vendor(store)
+    audit_events = []
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **kwargs: audit_events.append(kwargs))
+    monkeypatch.setattr("app.db.mongo.get_collection", lambda _name: store)
+    monkeypatch.setattr(business_service, "is_gst_period_locked", lambda **_kwargs: _async_none())
+
+    async def fake_list_open_items(**_kwargs):
+        return {"items": []}
+
+    monkeypatch.setattr("app.modules.business.allocation_service.list_open_items", fake_list_open_items)
+
+    created_doc = await business_service.create_purchase_bill(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=PurchaseBillCreateRequest(
+            vendor_party_id="vend-1",
+            bill_number="SUP-DEEP-2026-001",
+            bill_date=date(2026, 1, 1),
+            due_date=date(2026, 1, 31),
+            expense_account_code="51001",
+            place_of_supply="Karnataka",
+            line_items=[
+                PurchaseBillLineItem(
+                    description="Raw material purchase",
+                    hsn_sac="4820",
+                    quantity=Decimal("1"),
+                    rate=Decimal("1000"),
+                    gst_rate=Decimal("18"),
+                )
+            ],
+        ),
+        idempotency_key="purchase-bill-deep-create-1",
+    )
+    posted = await business_service.review_purchase_bill(
+        session=async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=created_doc["bill_id"],
+        reviewed_by="admin-1",
+        payload=business_service.ApprovalReviewRequest(approve=True, notes="Purchase bill deep E2E", accounting_entity_id="primary"),
+    )
+
+    assert posted["status"] == "posted"
+    assert posted["journal_entry_id"]
+    assert posted["bill_total"] == "1180.00"
+    assert posted["taxable_total"] == "1000.00"
+    assert posted["cgst_total"] == "90.00"
+    assert posted["sgst_total"] == "90.00"
+    assert posted["payment_status"] == "unpaid"
+
+    journal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=posted["journal_entry_id"],
+    )
+    assert journal_detail["reference"] == "SUP-DEEP-2026-001"
+    assert journal_detail["total_debit"] == 1180.0
+    assert journal_detail["total_credit"] == 1180.0
+    line_by_code = {line["account_code"]: line for line in journal_detail["lines"]}
+    assert line_by_code["51001"]["debit"] == 1000.0
+    assert line_by_code["14001"]["debit"] == 90.0
+    assert line_by_code["14002"]["debit"] == 90.0
+    assert line_by_code["21001"]["credit"] == 1180.0
+
+    trial_lines, trial_debit, trial_credit = await get_trial_balance(
+        async_session,
+        tenant_id="business-tenant",
+        as_of=date(2026, 1, 31),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert trial_debit == trial_credit == Decimal("1180.00")
+    trial_by_code = {line["account_code"]: line for line in trial_lines}
+    assert trial_by_code["51001"]["net_balance"] == Decimal("1000.00")
+    assert trial_by_code["14001"]["net_balance"] == Decimal("90.00")
+    assert trial_by_code["14002"]["net_balance"] == Decimal("90.00")
+    assert trial_by_code["21001"]["net_balance"] == Decimal("-1180.00")
+
+    statement = await build_party_statement(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        party_id="vend-1",
+        kind="payable",
+        from_date=date(2026, 1, 1),
+        to_date=date(2026, 1, 31),
+    )
+    assert statement["party"]["party_id"] == "vend-1"
+    assert statement["closing_balance"] == "1180.00"
+    assert statement["transactions"][0]["reference"] == "SUP-DEEP-2026-001"
+    assert statement["transactions"][0]["document_type"] == "Bill"
+
+    export_response = report_export.export_report(
+        "csv",
+        title="Vendor Statement",
+        columns=[{"key": "reference", "label": "Reference"}, {"key": "balance", "label": "Balance", "numeric": True}],
+        rows=statement["transactions"],
+        filename_base="statement_vend_1",
+        org_name=statement["business_name"],
+    )
+    assert export_response.media_type == "text/csv"
+
+    preview = await business_service.preview_itc_reversals(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        as_of=date(2026, 7, 1),
+    )
+    assert preview["count"] == 1
+    assert preview["candidates"][0]["bill_id"] == posted["bill_id"]
+    assert preview["candidates"][0]["itc_total"] == "180.00"
+
+    itc_reversed = await business_service.reverse_itc_for_bill(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=posted["bill_id"],
+        created_by="admin-1",
+        payload=ItcReversalActionRequest(reversal_date=date(2026, 7, 1)),
+        idempotency_key="purchase-bill-deep-itc-reverse-1",
+    )
+    assert itc_reversed["itc_reversed"] is True
+    assert itc_reversed["itc_reversal_journal_entry_id"]
+    assert itc_reversed["itc_interest_amount"] == "16.07"
+
+    itc_reversal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=itc_reversed["itc_reversal_journal_entry_id"],
+    )
+    itc_reversal_by_code = {line["account_code"]: line for line in itc_reversal_detail["lines"]}
+    assert itc_reversal_by_code["14004"]["debit"] == 180.0
+    assert itc_reversal_by_code["54006"]["debit"] == 16.07
+    assert itc_reversal_by_code["14001"]["credit"] == 90.0
+    assert itc_reversal_by_code["14002"]["credit"] == 90.0
+    assert itc_reversal_by_code["23003"]["credit"] == 16.07
+
+    paid = await business_service.mark_bill_payment(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=posted["bill_id"],
+        created_by="admin-1",
+        payload=BillPaymentUpdateRequest(
+            paid_amount=Decimal("1180.00"),
+            paid_date=date(2026, 7, 2),
+        ),
+    )
+    assert paid["payment_status"] == "paid"
+    assert paid["paid_amount"] == "1180.00"
+
+    itc_reclaimed = await business_service.reclaim_itc_for_bill(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=posted["bill_id"],
+        created_by="admin-1",
+        payload=ItcReclaimActionRequest(reclaim_date=date(2026, 7, 2)),
+        idempotency_key="purchase-bill-deep-itc-reclaim-1",
+    )
+    assert itc_reclaimed["itc_reclaimed"] is True
+    assert itc_reclaimed["itc_reclaim_journal_entry_id"]
+
+    itc_reclaim_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=itc_reclaimed["itc_reclaim_journal_entry_id"],
+    )
+    itc_reclaim_by_code = {line["account_code"]: line for line in itc_reclaim_detail["lines"]}
+    assert itc_reclaim_by_code["14001"]["debit"] == 90.0
+    assert itc_reclaim_by_code["14002"]["debit"] == 90.0
+    assert itc_reclaim_by_code["14004"]["credit"] == 180.0
+
+    cancelled = await business_service.cancel_purchase_bill(
+        async_session,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        bill_id=posted["bill_id"],
+        created_by="admin-1",
+        payload=PurchaseBillCancelRequest(
+            reason="Purchase bill deep E2E reversal",
+            cancel_date=date(2026, 1, 1),
+        ),
+        idempotency_key="purchase-bill-deep-cancel-1",
+    )
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["reversal_journal_entry_id"]
+
+    reversal_detail = await get_journal_voucher_detail(
+        async_session,
+        app_key="mitrabooks",
+        tenant_id="business-tenant",
+        accounting_entity_id="primary",
+        journal_id=cancelled["reversal_journal_entry_id"],
+    )
+    assert reversal_detail["reversal_of_journal_id"] == posted["journal_entry_id"]
+    reversal_by_code = {line["account_code"]: line for line in reversal_detail["lines"]}
+    assert reversal_by_code["51001"]["credit"] == 1000.0
+    assert reversal_by_code["14001"]["credit"] == 90.0
+    assert reversal_by_code["14002"]["credit"] == 90.0
+    assert reversal_by_code["21001"]["debit"] == 1180.0
+
+    outstanding = await get_party_outstanding(
+        async_session,
+        tenant_id="business-tenant",
+        party_id="vend-1",
+        as_of=date(2026, 7, 31),
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+    )
+    assert outstanding["payable"] == Decimal("0.00")
+
+    with pytest.raises(AccountingNotFoundError):
+        await get_journal_voucher_detail(
+            async_session,
+            app_key="mitrabooks",
+            tenant_id="other-tenant",
+            accounting_entity_id="primary",
+            journal_id=posted["journal_entry_id"],
+        )
+    assert audit_events[-1]["action"] == "business_purchase_bill_cancelled"
 
 
 @pytest.mark.asyncio

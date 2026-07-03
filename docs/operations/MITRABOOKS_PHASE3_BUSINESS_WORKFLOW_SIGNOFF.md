@@ -104,6 +104,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Sales invoices | Backend posting/approval/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
 | Sales invoice deep E2E/API hardening | Real accounting service test for create -> approve/post -> AR/revenue/GST journal lines -> trial balance -> customer statement -> PDF/export artifact -> cancel/reverse -> reversal journal -> zero receivable -> tenant denial | Passed on 2026-07-03 |
 | Purchase bills | Backend posting/approval/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
+| Purchase bill deep E2E/API hardening | Real accounting service test for create -> approve/post -> expense/input GST/AP journal lines -> trial balance -> vendor statement/export -> Rule 37 ITC preview/reversal/reclaim -> payment marking -> cancel/reverse -> reversal journal -> zero payable -> tenant denial | Passed on 2026-07-03 |
 | Credit notes | Backend posting/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
 | Debit notes | Backend posting/cancel tests and browser create/detail/reverse smoke | Passed on 2026-07-02 |
 | Reports and drill-down | Accounting report tests, party sub-ledger tests, ERP accounting panel smoke | Passed on 2026-07-02 |
@@ -188,11 +189,25 @@ Result:
 - The Sales Invoice deep test uses the real accounting service and test database for posting, trial balance, voucher detail, party sub-ledger statement, reversal, outstanding balance, and tenant-denial checks. Mongo-backed business document storage and dunning log reads are faked in-memory for deterministic local execution.
 - The test creates a customer-scoped GST sales invoice, approves/posts it, verifies debit receivable and credit revenue/CGST/SGST lines, checks trial balance and customer statement effects, builds a sales-invoice PDF and CSV export artifact, cancels the invoice, verifies reversal lines and zero receivable outstanding, and confirms cross-tenant voucher access is denied.
 
+2026-07-03:
+
+```powershell
+python -m pytest tests/test_business_phase2.py::test_purchase_bill_deep_e2e_posts_reports_payment_itc_and_reverses -q
+python -m pytest tests/test_business_phase2.py -q
+```
+
+Result:
+
+- PASS: focused Purchase Bill deep E2E/API hardening test.
+- PASS: full `tests/test_business_phase2.py` suite, 67 tests.
+- The Purchase Bill deep test uses the real accounting service and test database for posting, trial balance, voucher detail, party sub-ledger statement, ITC reversal/reclaim journals, reversal, outstanding balance, and tenant-denial checks. Mongo-backed business document storage and dunning log reads are faked in-memory for deterministic local execution.
+- The test creates a vendor-scoped GST purchase bill, approves/posts it, verifies debit expense/input CGST/input SGST and credit AP lines, checks trial balance and vendor statement/export effects, previews Rule 37 ITC reversal, posts ITC reversal with interest, marks the bill paid, reclaims ITC, cancels the purchase bill, verifies reversal lines and zero payable outstanding, and confirms cross-tenant voucher access is denied.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Hosted staging demo database cleanup may still be needed if the hosted tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
-- Purchase Bill deep hardening remains the next Phase 3 sub-gate: create -> approve/post -> AP/expense/input GST report effects -> payment/ITC paths -> cancel/reverse.
+- Credit Note and Debit Note deep hardening remain the next Phase 3 sub-gates: source document linkage, posting impact, statement/report effects, cancel/reverse, and tenant denial.
 - Compliance signoff is still required for GST/TDS/GSTR/e-invoice/e-way bill positioning.
 - Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
