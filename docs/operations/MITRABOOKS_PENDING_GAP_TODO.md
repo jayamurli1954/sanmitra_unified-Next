@@ -20,24 +20,33 @@ Status convention:
 - ~~[x] Phase 2E: local validation, accounting guardrail checks, tenant/app isolation checks, and read-only staging shell smoke closed for the planned validation scope.~~
 - ~~[x] Phase 3 core workflow gate foundation: backend/API tests, frontend contract tests, local browser shell smoke, read-only deployed shell smoke, and guarded destructive demo-tenant policy recorded.~~
 - ~~[x] Phase 3 destructive real-stack runner added: `frontend/e2e/mitrabooks-realstack-destructive.spec.js` and `--run-destructive-demo` gate support are available but intentionally opt-in.~~
+- ~~[x] Phase 3 local destructive real-stack demo mutation passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
 
-## Immediate Gate: Phase 3 Core Business Workflow Staging Mutation
+## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
-- [ ] Provision or confirm the staging demo tenant `demo-mitrabooks-business`.
-- [ ] Configure the MitraBooks ERP demo admin per `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`; use `business.admin@sanmitra.local` as the operator email and keep the password only in runtime/deployment secrets.
-- [ ] Reset or reseed `demo-mitrabooks-business` before destructive browser mutation.
-- [ ] Run the guarded policy check:
+- ~~[x] Provision or confirm the local demo tenant `demo-mitrabooks-business`.~~
+- ~~[x] Configure the MitraBooks ERP demo admin per `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`; use `business.admin@sanmitra.local` as the operator email and keep the password only in runtime/deployment secrets.~~
+- ~~[x] Reset or reseed `demo-mitrabooks-business` before local destructive browser mutation.~~
+- ~~[x] Run the guarded policy check locally:~~
 
 ```powershell
 $env:MITRABOOKS_DEMO_E2E_CONFIRM="demo-mitrabooks-business"
-$env:E2E_USER_EMAIL="<staging demo admin email>"
-$env:E2E_USER_PASSWORD="<staging demo password>"
-python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --destructive-demo-policy-check --demo-tenant-id demo-mitrabooks-business
+$env:E2E_USER_EMAIL="business.admin@sanmitra.local"
+$env:E2E_USER_PASSWORD="<local demo password>"
+python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1:3300/mitrabooks-erp/ --destructive-demo-policy-check --demo-tenant-id demo-mitrabooks-business
 ```
 
-- [ ] Run destructive deployed browser E2E only against `demo-mitrabooks-business`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.
-- [ ] Record pass/fail evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.
-- [ ] Reseed or discard the staging demo data after mutation so generated business documents do not become baseline data.
+- ~~[x] Run destructive local browser E2E only against `demo-mitrabooks-business`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
+- ~~[x] Record pass evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.~~
+- [ ] Reseed or discard local demo data after mutation if the local database must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
+
+## Immediate Gate: Hosted Staging Business Workflow Mutation
+
+- [ ] Confirm hosted staging backend has the MitraBooks demo admin secrets from `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`.
+- [ ] Reset or reseed hosted `demo-mitrabooks-business` before destructive browser mutation.
+- [ ] Run the guarded policy check against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.
+- [ ] Run destructive hosted browser E2E only against `demo-mitrabooks-business`.
+- [ ] Reseed or discard hosted staging demo data after mutation so generated business documents do not become baseline data.
 
 ## Phase 3 Open Gaps
 
