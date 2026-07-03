@@ -28,6 +28,7 @@ Status convention:
 - ~~[x] Phase 3 Debit Note deep API/E2E hardening passed locally on 2026-07-03: create vendor bill source -> create debit note linked to source bill -> approve/post -> verify AP debit and expense/input GST credit journal lines -> trial balance -> vendor statement/export -> cancel/reverse -> reversal journal -> restored payable -> tenant denial.~~
 - ~~[x] Phase 3 Receivables browser E2E shell hardening passed locally on 2026-07-03: party-ledger receivables/payables tab -> AR/AP ageing kind switch -> receipt allocation FIFO/open-item match -> reconciliation status -> customer statement -> dunning reminder record.~~
 - ~~[x] Phase 3 Payables browser E2E shell hardening passed locally on 2026-07-03: vendor statement -> payable allocation FIFO/open-item match -> reconciliation status -> Rule 37 ITC bill-payment marking -> TDS register vendor evidence.~~
+- ~~[x] Phase 3 GST/TDS compliance browser shell slice passed locally on 2026-07-03: tenant GST profile evidence -> GST settlement preview/post with period lock -> GSTR-3B summary -> GSTR-1 outward/HSN evidence -> TDS section/register evidence -> manual period lock/unlock.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -63,7 +64,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Debit note API/E2E depth against real backend service/accounting layers for source bill linkage -> approve/post -> report/vendor statement/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; dedicated debit-note PDF/template polish remains under print/export production review.
 - ~~[x] Receivables browser E2E for statements, ageing, allocation, reminders/dunning, and collection status UX in the mocked local MitraBooks shell.~~ Real-stack/deployed receivables mutation remains part of later demo-tenant production signoff.
 - ~~[x] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export surfaces in the mocked local MitraBooks shell.~~ Real-stack/deployed payables mutation remains part of later demo-tenant production signoff.
-- [ ] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX.
+- [~] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX. Local mocked-shell coverage is closed for GST profile evidence, settlement posting, GSTR-3B, GSTR-1, TDS register, and period locks; deeper GSTR-2B upload reconciliation, CMP-08/GSTR-4, real-stack mutation, and production compliance review remain open.
 - [ ] Opening balance browser E2E, maker-checker review, and rollback/reversal runbook examples.
 - [ ] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples.
 - [ ] Keyboard-first voucher/business-entry polish after route/API contracts are stable.

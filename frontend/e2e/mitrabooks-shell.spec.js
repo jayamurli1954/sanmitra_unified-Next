@@ -33,6 +33,10 @@ async function mockVerifiedMitraBooksSession(page) {
   const debitNotes = [];
   const allocations = [];
   const paidBillIds = new Set();
+  const gstPeriodLocks = [
+    { period: '2026-05', locked: true, updated_by: 'businessadmin@sanmitra.local', updated_at: '2026-06-20T00:00:00Z' },
+  ];
+  let gstSettlementPosted = false;
   const caDocuments = [];
   const caClients = [];
   const json = (route, body, status = 200) => route.fulfill({
@@ -194,7 +198,13 @@ async function mockVerifiedMitraBooksSession(page) {
       return json(route, request.postDataJSON());
     }
     return json(route, {
-      organization: { legal_name: 'Acme Corp Ltd', trade_name: 'Acme' },
+      organization: {
+        legal_name: 'Acme Corp Ltd',
+        trade_name: 'Acme',
+        gstin: '29ABCDE1234F1Z5',
+        gst_registration_type: 'regular',
+        financial_year_start: '2026-04-01',
+      },
       branches: [],
       roles: [],
       permissions: { module_permissions: {}, action_permissions: {} },
@@ -289,7 +299,15 @@ async function mockVerifiedMitraBooksSession(page) {
 
     return json(route, { items: caDocuments, total: caDocuments.length });
   });
-  await page.route('**/api/v1/business/tds/sections**', route => json(route, { items: [] }));
+  await page.route('**/api/v1/business/tds/sections**', route => json(route, {
+    tds: [
+      { section: '194C', label: 'Contractor payments', rate: '1.00', applies_to: 'vendor_payments' },
+      { section: '194J', label: 'Professional fees', rate: '10.00', applies_to: 'vendor_payments' },
+    ],
+    tcs: [
+      { section: '206C(1H)', label: 'Sale of goods', rate: '0.10', applies_to: 'customer_receipts' },
+    ],
+  }));
   await page.route('**/api/v1/business/dimensions**', route => json(route, { items: [] }));
   await page.route('**/api/v1/business/inventory/items**', route => json(route, { items: [] }));
   await page.route('**/api/v1/business/invoices**', async route => {
@@ -721,6 +739,73 @@ async function mockVerifiedMitraBooksSession(page) {
       total_interest: candidates.length ? '23.96' : '0.00',
     });
   });
+  await page.route('**/api/v1/business/gst-period-locks**', async route => {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      const payload = request.postDataJSON();
+      const existing = gstPeriodLocks.find(item => item.period === payload.period);
+      if (existing) {
+        existing.locked = !!payload.locked;
+        existing.updated_by = 'businessadmin@sanmitra.local';
+      } else {
+        gstPeriodLocks.push({
+          period: payload.period,
+          locked: !!payload.locked,
+          updated_by: 'businessadmin@sanmitra.local',
+          updated_at: '2026-06-20T00:00:00Z',
+        });
+      }
+      return json(route, gstPeriodLocks.find(item => item.period === payload.period));
+    }
+    return json(route, { items: gstPeriodLocks });
+  });
+  await page.route('**/api/v1/business/gst-settlement/preview**', async route => {
+    const period = new URL(route.request().url()).searchParams.get('period') || '2026-06';
+    return json(route, {
+      period,
+      status: gstSettlementPosted ? 'posted' : 'preview',
+      period_locked: gstSettlementPosted,
+      settled_by: gstSettlementPosted ? 'businessadmin@sanmitra.local' : '',
+      journal_entry_id: gstSettlementPosted ? 'GSTSET-2026-06' : '',
+      output: { igst: '0.00', cgst: '180.00', sgst: '180.00' },
+      input_credit: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+      utilized: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+      cash_payable: { igst: '0.00', cgst: '45.00', sgst: '45.00' },
+      itc_carry_forward: { igst: '0.00', cgst: '0.00', sgst: '0.00' },
+      total_output: '360.00',
+      total_input: '270.00',
+      net_cash_payable: '90.00',
+      note: 'Preview uses posted invoices, purchase bills, and GST ledger balances only.',
+    });
+  });
+  await page.route('**/api/v1/business/gst-settlement', async route => {
+    const payload = route.request().postDataJSON();
+    gstSettlementPosted = true;
+    if (payload.lock_period && !gstPeriodLocks.some(item => item.period === payload.period)) {
+      gstPeriodLocks.push({
+        period: payload.period,
+        locked: true,
+        updated_by: 'businessadmin@sanmitra.local',
+        updated_at: '2026-06-20T00:00:00Z',
+      });
+    }
+    return json(route, {
+      period: payload.period,
+      status: 'posted',
+      period_locked: !!payload.lock_period,
+      settled_by: 'businessadmin@sanmitra.local',
+      journal_entry_id: 'GSTSET-2026-06',
+      output: { igst: '0.00', cgst: '180.00', sgst: '180.00' },
+      input_credit: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+      utilized: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+      cash_payable: { igst: '0.00', cgst: '45.00', sgst: '45.00' },
+      itc_carry_forward: { igst: '0.00', cgst: '0.00', sgst: '0.00' },
+      total_output: '360.00',
+      total_input: '270.00',
+      net_cash_payable: '90.00',
+      note: 'Settlement posted through the GST control accounts.',
+    });
+  });
   await page.route('**/api/v1/business/financial-health**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -735,11 +820,53 @@ async function mockVerifiedMitraBooksSession(page) {
       charts: [],
     }),
   }));
-  await page.route('**/api/v1/business/returns/**', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ period: '2026-06', rows: [], summary: {} }),
-  }));
+  await page.route('**/api/v1/business/returns/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes('/gstr-3b')) {
+      return json(route, {
+        period: '2026-06',
+        gstin: '29ABCDE1234F1Z5',
+        outward_supplies: {
+          taxable: { taxable_value: '2000.00', igst: '0.00', cgst: '180.00', sgst: '180.00' },
+          inward_reverse_charge: { taxable_value: '0.00', igst: '0.00', cgst: '0.00', sgst: '0.00' },
+        },
+        itc: {
+          available_rcm: { igst: '0.00', cgst: '0.00', sgst: '0.00' },
+          available_all_other: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+          reversed_others: { igst: '0.00', cgst: '0.00', sgst: '0.00' },
+          net_available: { igst: '0.00', cgst: '135.00', sgst: '135.00' },
+        },
+        tax_payment: {
+          igst: { tax_payable: '0.00', paid_through_itc: '0.00', paid_in_cash: '0.00' },
+          cgst: { tax_payable: '180.00', paid_through_itc: '135.00', paid_in_cash: '45.00' },
+          sgst: { tax_payable: '180.00', paid_through_itc: '135.00', paid_in_cash: '45.00' },
+        },
+        totals: { total_output_tax: '360.00', total_itc_net: '270.00', total_cash_payable: '90.00' },
+        gstn_json: { gstin: '29ABCDE1234F1Z5', ret_period: '062026' },
+        notes: ['GSTR-3B is assembled from posted GST ledgers only.'],
+      });
+    }
+    if (path.includes('/gstr-1')) {
+      return json(route, {
+        period: '2026-06',
+        gstin: '29ABCDE1234F1Z5',
+        sections: {
+          docs: { total: 1, from: 'INV-2026-001', to: 'INV-2026-001' },
+          b2b: { invoices: 1, recipients: 1, taxable_value: '2000.00', tax: '360.00' },
+          b2cl: { invoices: 0, taxable_value: '0.00', tax: '0.00' },
+          b2cs: { rows: 1, taxable_value: '2000.00', tax: '360.00' },
+          exp: { invoices: 0, taxable_value: '0.00', tax: '0.00' },
+          cdnr: { notes: 0, taxable_value: '0.00', tax: '0.00' },
+          hsn: { rows: 1, taxable_value: '2000.00', tax: '360.00' },
+        },
+        b2cs_rows: [{ pos: '29-Karnataka', supply_type: 'INTRA', rate: '18', taxable_value: '2000.00', igst: '0.00', cgst: '180.00', sgst: '180.00' }],
+        hsn_rows: [{ hsn_sac: '9983', uqc: 'NOS', rate: '18', quantity: '2', taxable_value: '2000.00', igst: '0.00', cgst: '180.00', sgst: '180.00' }],
+        gstn_json: { gstin: '29ABCDE1234F1Z5', fp: '062026' },
+        notes: ['GSTR-1 uses posted sales invoices and credit notes.'],
+      });
+    }
+    return json(route, { period: '2026-06', rows: [], summary: {} });
+  });
   await page.route('**/api/v1/business/tds/register**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -1046,6 +1173,37 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
     await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
 
+    await page.locator('[data-business-action="report-tab"][data-report-tab="gst-settlement"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Set-off for');
+    await expect(page.locator('#business-report-printable')).toContainText('Net cash payable');
+    await expect(page.locator('#business-report-printable')).toContainText('90.00');
+    await expect(page.locator('#business-report-printable')).toContainText('Lock this period after settlement');
+    await page.locator('[data-business-action="gst-post"]').click();
+    await expect(page.locator('#login-status')).toContainText('GST settled');
+    await expect(page.locator('#business-report-printable')).toContainText('settled');
+    await expect(page.locator('#business-report-printable')).toContainText('period locked');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="gst-returns"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('GSTR-3B summary');
+    await expect(page.locator('#business-report-printable')).toContainText('GSTIN 29ABCDE1234F1Z5');
+    await expect(page.locator('#business-report-printable')).toContainText('6.1 Payment of tax');
+    await expect(page.locator('#business-report-printable')).toContainText('Net cash payable');
+    await page.locator('[data-business-action="gst-return-type"][data-return-type="gstr1"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('GSTR-1 outward supplies');
+    await expect(page.locator('#business-report-printable')).toContainText('B2B (4A)');
+    await expect(page.locator('#business-report-printable')).toContainText('HSN summary');
+    await expect(page.locator('#business-report-printable')).toContainText('9983');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="period-locks"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Finalise a month after filing its GST return');
+    await expect(page.locator('#business-report-printable')).toContainText('2026-05');
+    await page.locator('[data-period-lock-input]').fill('2026-06');
+    await page.locator('[data-business-action="lock-period"]').click();
+    await expect(page.locator('#login-status')).toContainText('Period locked');
+    await expect(page.locator('#business-report-printable')).toContainText('2026-06');
+    await page.locator('[data-business-action="unlock-period"][data-period="2026-06"]').click();
+    await expect(page.locator('#login-status')).toContainText('Period unlocked');
+
     const enabledWorkspaces = [
       ['sales', 'Sales Invoices', '+ New Invoice'],
       ['bills', 'Purchase Bills', '+ New Bill'],
@@ -1070,8 +1228,15 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-settings-card="organization"]').getByRole('button', { name: 'Open Setup' }).click();
     await expect(page.locator('[data-settings-detail="organization"]')).toContainText('Organization');
     await expect(page.locator('[data-settings-detail="organization"]')).toContainText('Tenant-scoped setup');
+    await expect(page.locator('[data-settings-detail="organization"] textarea[data-settings-json="organization"]')).toContainText('29ABCDE1234F1Z5');
+    await expect(page.locator('[data-settings-detail="organization"] textarea[data-settings-json="organization"]')).toContainText('regular');
     await page.getByRole('button', { name: 'Back to Settings' }).click();
     await expect(page.locator('[data-settings-detail="organization"]')).toBeHidden();
+    await expect(page.locator('[data-settings-card="tax-and-compliance"]')).toContainText('GST registration mode');
+    await page.locator('[data-settings-card="tax-and-compliance"]').getByRole('button', { name: 'Open Related Area' }).click();
+    await expect(page.locator('.erp-workspace-panel')).toContainText('GST Returns');
+    await expect(page.locator('.erp-workspace-panel')).toContainText('GSTR-1');
+    await page.locator('nav#nav a[data-business-workspace="settings"]').click();
     await page.locator('[data-settings-card="chart-of-accounts"]').getByRole('button', { name: 'Open Related Area' }).click();
     await expect(page.locator('.accounting-drilldown-panel')).toContainText('Monthly Voucher Drill Down');
 
