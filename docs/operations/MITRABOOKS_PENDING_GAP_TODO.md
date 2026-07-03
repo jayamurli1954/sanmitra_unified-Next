@@ -30,6 +30,7 @@ Status convention:
 - ~~[x] Phase 3 Payables browser E2E shell hardening passed locally on 2026-07-03: vendor statement -> payable allocation FIFO/open-item match -> reconciliation status -> Rule 37 ITC bill-payment marking -> TDS register vendor evidence.~~
 - ~~[x] Phase 3 GST/TDS compliance browser shell slice passed locally on 2026-07-03: tenant GST profile evidence -> GST settlement preview/post with period lock -> GSTR-3B summary -> GSTR-1 outward/HSN evidence -> TDS section/register evidence -> manual period lock/unlock.~~
 - ~~[x] Phase 3 Opening Balance browser shell hardening passed locally on 2026-07-03: CSV upload -> maker-checker preview -> party-wise debtor/creditor evidence -> Opening Balance Equity balancing line -> admin post -> trial balance impact -> customer statement opening balance -> existing-entry override warning -> export route evidence.~~
+- ~~[x] Phase 3 Year-End Close browser shell hardening passed locally on 2026-07-03: FY selection -> close preview -> income/expense closing lines -> retained earnings movement -> admin post -> already-closed/idempotency warning -> reopen-by-reversal guidance.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -67,7 +68,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Payables browser E2E for vendor statements, ageing, bill payment marking, TDS, payment planning, and payout/export surfaces in the mocked local MitraBooks shell.~~ Real-stack/deployed payables mutation remains part of later demo-tenant production signoff.
 - [~] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX. Local mocked-shell coverage is closed for GST profile evidence, settlement posting, GSTR-3B, GSTR-1, TDS register, and period locks; deeper GSTR-2B upload reconciliation, CMP-08/GSTR-4, real-stack mutation, and production compliance review remain open.
 - [~] Opening balance browser E2E, maker-checker review, and rollback/reversal runbook examples. Local mocked-shell browser coverage is closed for CSV preview/post/export, party-wise opening balances, balancing line, trial balance impact, statement impact, and existing-entry warning; real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open.
-- [ ] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples.
+- [~] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples. Local mocked-shell browser coverage is closed for FY close preview, income/expense closing lines, retained earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance; real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open.
 - [ ] Keyboard-first voucher/business-entry polish after route/API contracts are stable.
 - [ ] Multi-client CA/bookkeeper accounting entity model and scoped client/book access rules.
 

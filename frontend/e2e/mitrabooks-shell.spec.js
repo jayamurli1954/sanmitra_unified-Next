@@ -7,6 +7,7 @@ async function mockVerifiedMitraBooksSession(page) {
     { id: 103, code: '12001', name: 'Sundry Debtors', account_type: 'asset', type: 'asset' },
     { id: 104, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
     { id: 105, code: '31004', name: 'Opening Balance Equity', account_type: 'equity', type: 'equity' },
+    { id: 106, code: '31003', name: 'Retained Earnings', account_type: 'equity', type: 'equity' },
     { id: 201, code: '4001', name: 'Sales', account_type: 'revenue', type: 'revenue' },
     { id: 301, code: '5001', name: 'Office Expense', account_type: 'expense', type: 'expense' },
   ];
@@ -39,6 +40,7 @@ async function mockVerifiedMitraBooksSession(page) {
   const paidBillIds = new Set();
   let openingBalancePosted = false;
   let openingBalancePostCount = 0;
+  let yearEndClosed = false;
   const gstPeriodLocks = [
     { period: '2026-05', locked: true, updated_by: 'businessadmin@sanmitra.local', updated_at: '2026-06-20T00:00:00Z' },
   ];
@@ -377,6 +379,48 @@ async function mockVerifiedMitraBooksSession(page) {
       total_debit: preview.total_debit,
       total_credit: preview.total_credit,
       balancing_line: preview.balancing_line,
+    });
+  });
+  await page.route('**/api/v1/business/year-end/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    const financialYear = request.method() === 'POST'
+      ? request.postDataJSON().financial_year
+      : (url.searchParams.get('financial_year') || '2025-26');
+    const preview = {
+      financial_year: financialYear,
+      from_date: '2025-04-01',
+      to_date: '2026-03-31',
+      income_total: '100000.00',
+      expense_total: '60000.00',
+      net_profit: '40000.00',
+      closing_lines: [
+        { account_id: 201, account_code: '4001', account_name: 'Sales', account_type: 'income', debit: '100000.00', credit: '0.00' },
+        { account_id: 301, account_code: '5001', account_name: 'Office Expense', account_type: 'expense', debit: '0.00', credit: '60000.00' },
+      ],
+      retained_earnings: { account_code: '31003', account_name: 'Retained Earnings', debit: '0.00', credit: '40000.00' },
+      already_closed: yearEndClosed ? [{ journal_entry_id: 'YE-2025-26-001', entry_date: '2026-03-31' }] : [],
+      can_post: !yearEndClosed,
+      notes: [
+        'Closing zeroes every income/expense account for the year and moves the net result to Retained Earnings on 31 March.',
+        'Post all year-end adjustments (depreciation, provisions) BEFORE closing.',
+        'The close is one reversible journal entry - reverse it to reopen the year.',
+      ],
+    };
+
+    if (path.endsWith('/preview')) {
+      return json(route, preview);
+    }
+
+    yearEndClosed = true;
+    return json(route, {
+      journal_entry_id: 'YE-2025-26-001',
+      created: true,
+      financial_year: financialYear,
+      entry_date: '2026-03-31',
+      net_profit: '40000.00',
+      line_count: 3,
     });
   });
   await page.route('**/api/v1/business/invoices**', async route => {
@@ -1342,6 +1386,24 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('[data-ob-allow-duplicate]')).toBeVisible();
     await page.locator('[data-business-action="ob-export"]').click();
     await expect(page.locator('#api-output')).toContainText('ob_export');
+
+    await page.locator('[data-ye-fy]').selectOption('2025-26');
+    await page.locator('[data-business-action="ye-preview"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('FY 2025-26');
+    await expect(page.locator('#business-report-printable')).toContainText('ready to close');
+    await expect(page.locator('#business-report-printable')).toContainText('4001 - Sales');
+    await expect(page.locator('#business-report-printable')).toContainText('5001 - Office Expense');
+    await expect(page.locator('#business-report-printable')).toContainText('31003 - Retained Earnings');
+    await expect(page.locator('#business-report-printable')).toContainText('1,00,000.00');
+    await expect(page.locator('#business-report-printable')).toContainText('60,000.00');
+    await expect(page.locator('#business-report-printable')).toContainText('40,000.00');
+    await expect(page.locator('[data-business-action="ye-post"]')).toBeVisible();
+    await page.locator('[data-business-action="ye-post"]').click();
+    await expect(page.locator('#login-status')).toContainText('Year closed');
+    await expect(page.locator('#business-report-printable')).toContainText('already closed');
+    await expect(page.locator('#business-report-printable')).toContainText('YE-2025-26-001');
+    await expect(page.locator('#business-report-printable')).toContainText('Reverse that entry to reopen the year');
+    await expect(page.locator('[data-business-action="ye-post"]')).toHaveCount(0);
 
     const enabledWorkspaces = [
       ['sales', 'Sales Invoices', '+ New Invoice'],
