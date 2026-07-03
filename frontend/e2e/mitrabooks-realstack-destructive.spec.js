@@ -5,13 +5,21 @@ const email = process.env.E2E_USER_EMAIL || '';
 const password = process.env.E2E_USER_PASSWORD || '';
 const confirmation = process.env.MITRABOOKS_DEMO_E2E_CONFIRM || '';
 const runDestructive = process.env.MITRABOOKS_RUN_DESTRUCTIVE_E2E === 'true';
+const baseUrl = (process.env.E2E_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || '').replace(/\/+$/, '');
+const apiBaseUrl = (process.env.E2E_API_BASE_URL || '').replace(/\/+$/, '');
 
 function requireDemoGate() {
   return runDestructive && email && password && confirmation === DEMO_TENANT_ID;
 }
 
 function apiBaseFromPage(page) {
+  if (apiBaseUrl) {
+    return `${apiBaseUrl}/api/v1`;
+  }
   const current = new URL(page.url());
+  if (['127.0.0.1', 'localhost'].includes(current.hostname) && current.port === '3300') {
+    return `${current.protocol}//${current.hostname}:8000/api/v1`;
+  }
   return `${current.origin}/api/v1`;
 }
 
@@ -70,7 +78,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
   test.skip(!requireDemoGate(), 'Set MITRABOOKS_RUN_DESTRUCTIVE_E2E=true, MITRABOOKS_DEMO_E2E_CONFIRM=demo-mitrabooks-business, E2E_USER_EMAIL, and E2E_USER_PASSWORD.');
 
   test('creates, posts, reports, and reverses core business documents on the demo tenant', async ({ page }) => {
-    await page.goto('/');
+    await page.goto(baseUrl || '/mitrabooks-erp/');
     await page.locator('#login-email').fill(email);
     await page.locator('#login-password').fill(password);
     await page.locator('#login-submit').click();
