@@ -21,6 +21,7 @@ Status convention:
 - ~~[x] Phase 3 core workflow gate foundation: backend/API tests, frontend contract tests, local browser shell smoke, read-only deployed shell smoke, and guarded destructive demo-tenant policy recorded.~~
 - ~~[x] Phase 3 destructive real-stack runner added: `frontend/e2e/mitrabooks-realstack-destructive.spec.js` and `--run-destructive-demo` gate support are available but intentionally opt-in.~~
 - ~~[x] Phase 3 local destructive real-stack demo mutation passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
+- ~~[x] Phase 3 hosted staging destructive real-stack demo mutation passed on 2026-07-03 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -40,13 +41,13 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Record pass evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.~~
 - [ ] Reseed or discard local demo data after mutation if the local database must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
-## Immediate Gate: Hosted Staging Business Workflow Mutation
+## Closed Hosted Gate: Phase 3 Business Workflow Mutation
 
-- [ ] Confirm hosted staging backend has the MitraBooks demo admin secrets from `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`.
-- [ ] Reset or reseed hosted `demo-mitrabooks-business` before destructive browser mutation.
-- [ ] Run the guarded policy check against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.
-- [ ] Run destructive hosted browser E2E only against `demo-mitrabooks-business`.
-- [ ] Reseed or discard hosted staging demo data after mutation so generated business documents do not become baseline data.
+- ~~[x] Confirm hosted staging backend has the MitraBooks demo admin secrets from `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`.~~
+- ~~[x] Reset or reseed hosted `demo-mitrabooks-business` before destructive browser mutation.~~
+- ~~[x] Run the guarded policy check against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.~~
+- ~~[x] Run destructive hosted browser E2E only against `demo-mitrabooks-business`.~~
+- [ ] Reseed or discard hosted staging demo data after mutation if the hosted demo tenant must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
 ## Phase 3 Open Gaps
 

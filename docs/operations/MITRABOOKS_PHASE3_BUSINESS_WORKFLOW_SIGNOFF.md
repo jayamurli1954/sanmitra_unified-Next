@@ -109,6 +109,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
+| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Passed on 2026-07-03 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 
 ## Latest Run
 
@@ -157,10 +158,25 @@ Result:
 - PASS: destructive demo policy for `demo-mitrabooks-business`.
 - PASS: destructive local real-stack browser/API mutation. The E2E signed in as the MitraBooks demo admin, created a customer and vendor party, posted a voucher, sales invoice, purchase bill, credit note, and debit note, verified accounting report availability, and reversed/cancelled the generated financial documents.
 
+2026-07-03:
+
+```powershell
+python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
+```
+
+Result:
+
+- PASS: backend business workflow pytest group, 131 tests.
+- PASS: frontend business contract pytest group, 30 tests.
+- PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
+- PASS: read-only hosted MitraBooks shell smoke against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`, 3 checks.
+- PASS: destructive demo policy for `demo-mitrabooks-business`.
+- PASS: destructive hosted staging real-stack browser/API mutation. The E2E signed in as the MitraBooks demo admin, created a customer and vendor party, posted a voucher, sales invoice, purchase bill, credit note, and debit note, verified accounting report availability, and reversed/cancelled the generated financial documents.
+
 ## Remaining Gaps After This Gate
 
-- Hosted real-stack browser mutation against the deployed staging backend is guarded and limited to `demo-mitrabooks-business`; it still requires hosted staging demo credentials and an operator-run reset/reseed before execution.
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
+- Hosted staging demo database cleanup may still be needed if the hosted tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Compliance signoff is still required for GST/TDS/GSTR/e-invoice/e-way bill positioning.
 - Approval depth still needs production operator review across tenant settings, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
