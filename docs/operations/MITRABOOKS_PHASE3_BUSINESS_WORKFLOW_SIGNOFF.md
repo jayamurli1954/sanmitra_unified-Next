@@ -117,6 +117,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Opening Balance browser shell E2E | Local Playwright shell smoke for opening-balance CSV upload, maker-checker preview, party-wise debtor/creditor evidence, Opening Balance Equity balancing line, admin post, trial balance impact, customer statement opening balance, existing-entry override warning, and export route evidence | Passed on 2026-07-03 |
 | Year-End Close browser shell E2E | Local Playwright shell smoke for FY selection, close preview, income/expense closing lines, Retained Earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance | Passed on 2026-07-03 |
 | Inventory local API/browser hardening | Backend tests for item master tenant/app/entity scoping, item-reference validation, posted same-scope stock-register assembly, closing-stock journal posting guards, route contract coverage, and local Playwright shell item/register/closing-stock posting UX | Passed on 2026-07-04 |
+| Banking/Reconciliation local API/browser hardening | Backend tests for statement CSV import/dedupe, tenant/app/entity-scoped BRS assembly, exact amount/side match validation, soft unmatch/reversal, route contract coverage, and local Playwright shell import/match/BRS/unmatch UX | Passed on 2026-07-04 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -332,6 +333,20 @@ Result:
 - ADDED: route-contract coverage for `/api/v1/business/inventory/items`, item deactivation, stock register, closing-stock entry list, and closing-stock posting.
 - ADDED: local Playwright MitraBooks shell inventory flow for enabled inventory: item master display/create/deactivate, stock-register load, total closing-stock evidence, closing-stock post, and last-journal guidance.
 
+2026-07-04:
+
+```powershell
+python -m pytest tests/test_bank_recon.py tests/test_business_route_contract.py -q
+python scripts/preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused bank reconciliation and business route-contract tests.
+- ADDED: bank reconciliation service coverage for CSV import/dedupe, tenant/app/entity-scoped statement rows and active matches, exact side/amount match validation, duplicate-match prevention, cross-tenant denial, and soft unmatch/reversal.
+- ADDED: route-contract coverage for `/api/v1/business/bank-recon/statement`, `/api/v1/business/bank-recon`, match, and match reverse.
+- ADDED: local Playwright MitraBooks shell banking flow for statement CSV import, suggested match confirmation, BRS reconciled summary, and unmatch.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -346,6 +361,7 @@ Result:
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
 - Bank reconciliation, fixed assets, CA practice operations, and data-health/MIS need separate Phase 3-4 sub-gates.
 - Inventory still needs valuation policy settings, stock issue/adjustment workflows, real-stack/demo mutation, and production inventory signoff; the current gate closes local API plus mocked-shell item/register/closing-stock posting coverage.
+- Banking/reconciliation still needs bank-only voucher posting from imported statement lines, bank book/cash book production polish, real-stack/demo mutation, live bank feed policy, and production banking signoff; the current gate closes local API plus mocked-shell CSV import/match/BRS/unmatch coverage.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

@@ -61,6 +61,8 @@ async function mockVerifiedMitraBooksSession(page) {
     },
   ];
   const closingStockEntries = [];
+  let bankStatementImported = false;
+  const bankReconMatches = [];
   const json = (route, body, status = 200) => route.fulfill({
     status,
     contentType: 'application/json',
@@ -1118,11 +1120,105 @@ async function mockVerifiedMitraBooksSession(page) {
       generated_notes: ['TDS is deducted on the GST-exclusive taxable value.'],
     }),
   }));
-  await page.route('**/api/v1/business/bank-recon**', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ account_id: 'cash', rows: [], summary: {} }),
-  }));
+  await page.route('**/api/v1/business/bank-recon**', async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const activeMatches = bankReconMatches.filter(item => item.status === 'active');
+    const hasMatch = activeMatches.some(item => item.statement_line_id === 'stmt-1' && item.line_id === 7001);
+    const statementLines = bankStatementImported ? [
+      {
+        statement_line_id: 'stmt-1',
+        txn_date: '2026-06-14',
+        description: 'NEFT FROM BENGALURU RETAIL CUSTOMER',
+        ref: 'UTR-2360',
+        withdrawal: '0.00',
+        deposit: '2360.00',
+        balance: '2360.00',
+      },
+      {
+        statement_line_id: 'stmt-2',
+        txn_date: '2026-06-15',
+        description: 'BANK CHARGES',
+        ref: 'CHG-118',
+        withdrawal: '118.00',
+        deposit: '0.00',
+        balance: '2242.00',
+      },
+    ] : [];
+    const bookLine = {
+      line_id: 7001,
+      journal_id: 7101,
+      entry_date: '2026-06-13',
+      reference: 'RCT-2026-001 UTR-2360',
+      description: 'Receipt from Bengaluru Retail Customer',
+      debit: '2360.00',
+      credit: '0.00',
+    };
+    const bankReconPayload = () => ({
+      account: { account_id: 102, code: '11010', name: 'Bank Account' },
+      as_of: '2026-06-30',
+      summary: {
+        book_balance: '2360.00',
+        statement_balance: bankStatementImported ? '2242.00' : null,
+        expected_statement_balance: bankStatementImported ? '2242.00' : '2360.00',
+        difference: bankStatementImported ? '0.00' : null,
+        matched_count: activeMatches.length,
+        statement_lines_total: statementLines.length,
+        book_lines_total: 1,
+        uncleared_withdrawals: '0.00',
+        deposits_in_transit: hasMatch ? '0.00' : '2360.00',
+        bank_only_deposits: hasMatch ? '0.00' : (bankStatementImported ? '2360.00' : '0.00'),
+        bank_only_withdrawals: bankStatementImported ? '118.00' : '0.00',
+      },
+      matched: activeMatches,
+      in_bank_not_in_books: statementLines.filter(row => !(hasMatch && row.statement_line_id === 'stmt-1')),
+      in_books_not_in_bank: hasMatch ? [] : [bookLine],
+      suggestions: bankStatementImported && !hasMatch ? [{
+        statement_line_id: 'stmt-1',
+        line_id: 7001,
+        journal_id: 7101,
+        side: 'deposit',
+        amount: '2360.00',
+        date_diff_days: 1,
+        confidence: 'ref',
+        statement: { txn_date: '2026-06-14', description: 'NEFT FROM BENGALURU RETAIL CUSTOMER', ref: 'UTR-2360' },
+        book: { entry_date: '2026-06-13', reference: 'RCT-2026-001 UTR-2360', description: 'Receipt from Bengaluru Retail Customer' },
+      }] : [],
+      notes: ['Matching is metadata only - confirming a match never posts to the ledger.'],
+    });
+
+    if (request.method() === 'POST' && path.endsWith('/statement')) {
+      bankStatementImported = true;
+      return json(route, { inserted: 2, skipped_duplicates: 0, parsed: 2, batch_id: 'bank-batch-1' });
+    }
+
+    if (request.method() === 'POST' && path.includes('/match/') && path.endsWith('/reverse')) {
+      const matchId = path.split('/').at(-2);
+      const match = bankReconMatches.find(item => item.match_id === matchId);
+      if (match) match.status = 'reversed';
+      return json(route, { match_id: matchId, status: 'reversed' });
+    }
+
+    if (request.method() === 'POST' && path.endsWith('/match')) {
+      const payload = request.postDataJSON();
+      const match = {
+        match_id: 'match-1',
+        account_id: Number(payload.account_id || 102),
+        statement_line_id: payload.statement_line_id,
+        line_id: Number(payload.line_id),
+        journal_id: 7101,
+        side: 'deposit',
+        amount: '2360.00',
+        statement_txn_date: '2026-06-14',
+        book_entry_date: '2026-06-13',
+        status: 'active',
+      };
+      bankReconMatches.push(match);
+      return json(route, match);
+    }
+
+    return json(route, bankReconPayload());
+  });
   await page.route('**/api/v1/accounting/reports/drilldown**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -1394,6 +1490,32 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('194C');
     await expect(page.locator('#business-report-printable')).toContainText('Karnataka Office Supplies');
     await expect(page.locator('#business-report-printable')).toContainText('BILL-100');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="bank-recon"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Select bank account');
+    await page.locator('[data-bankrecon-account]').selectOption('102');
+    await page.locator('[data-bankrecon-file]').setInputFiles({
+      name: 'bank-statement.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from([
+        'Txn Date,Narration,Ref No,Withdrawal,Deposit,Balance',
+        '14/06/2026,NEFT FROM BENGALURU RETAIL CUSTOMER,UTR-2360,,2360,2360',
+        '15/06/2026,BANK CHARGES,CHG-118,118,,2242',
+        '',
+      ].join('\n')),
+    });
+    await page.locator('[data-business-action="bankrecon-upload"]').click();
+    await expect(page.locator('#login-status')).toContainText('Statement imported');
+    await expect(page.locator('#business-report-printable')).toContainText('Suggested matches');
+    await expect(page.locator('#business-report-printable')).toContainText('UTR-2360');
+    await expect(page.locator('#business-report-printable')).toContainText('BANK CHARGES');
+    await page.locator('[data-business-action="bankrecon-match"][data-stmt-id="stmt-1"]').click();
+    await expect(page.locator('#login-status')).toContainText('Matched');
+    await expect(page.locator('#business-report-printable')).toContainText('Matched (1)');
+    await expect(page.locator('#business-report-printable')).toContainText('reconciled');
+    await page.locator('[data-business-action="bankrecon-unmatch"][data-match-id="match-1"]').click();
+    await expect(page.locator('#login-status')).toContainText('Unmatched');
+    await expect(page.locator('#business-report-printable')).toContainText('Suggested matches');
 
     await page.locator('[data-business-action="report-tab"][data-report-tab="gst-settlement"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('Set-off for');

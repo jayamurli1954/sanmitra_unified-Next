@@ -3,10 +3,15 @@ assembler. Pure functions, no DB. Sign convention under test: a statement
 DEPOSIT corresponds to a book DEBIT on the bank account (asset increases)."""
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
+from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+from app.modules.business import bank_recon
 from app.modules.business.bank_recon import (
+    BANK_RECON_MATCHES_COLLECTION,
+    BANK_STATEMENT_LINES_COLLECTION,
     assemble_bank_reconciliation,
     parse_bank_statement_csv,
     statement_line_dedupe_key,
@@ -157,3 +162,248 @@ def test_brs_without_statement_balance_column():
     assert out["summary"]["statement_balance"] is None
     assert out["summary"]["difference"] is None
     assert out["summary"]["expected_statement_balance"] == "100.00"
+
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self.rows = list(rows)
+
+    def sort(self, field, direction):
+        self.rows.sort(key=lambda row: row.get(field), reverse=direction < 0)
+        return self
+
+    async def to_list(self, length):
+        return self.rows[:length]
+
+
+class _FakeCollection:
+    def __init__(self, rows=None):
+        self.rows = list(rows or [])
+
+    @staticmethod
+    def _matches(row, query):
+        for key, expected in query.items():
+            actual = row.get(key)
+            if isinstance(expected, dict):
+                if "$in" in expected and actual not in expected["$in"]:
+                    return False
+                continue
+            if actual != expected:
+                return False
+        return True
+
+    async def find_one(self, query):
+        return next((row for row in self.rows if self._matches(row, query)), None)
+
+    def find(self, query, projection=None):
+        rows = [row for row in self.rows if self._matches(row, query)]
+        if projection:
+            keys = {key for key, include in projection.items() if include}
+            rows = [{key: row.get(key) for key in keys if key in row} for row in rows]
+        return _FakeCursor(rows)
+
+    async def insert_one(self, doc):
+        self.rows.append(doc)
+        return SimpleNamespace(inserted_id=doc.get("match_id") or doc.get("statement_line_id"))
+
+    async def insert_many(self, docs):
+        self.rows.extend(docs)
+        return SimpleNamespace(inserted_ids=[doc.get("statement_line_id") for doc in docs])
+
+    async def update_one(self, query, update):
+        row = await self.find_one(query)
+        if row is not None:
+            row.update(update.get("$set", {}))
+        return SimpleNamespace(matched_count=1 if row else 0, modified_count=1 if row else 0)
+
+
+@pytest.fixture
+def fake_bank_collections(monkeypatch):
+    collections = {}
+
+    def _get_collection(name):
+        return collections.setdefault(name, _FakeCollection())
+
+    monkeypatch.setattr("app.db.mongo.get_collection", _get_collection)
+    return collections
+
+
+def _scope(tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary"):
+    return {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
+
+
+def _ledger_service(lines):
+    account = SimpleNamespace(id=102, code="11010", name="Bank Account")
+
+    async def _fake_get_ledger_lines(session, *, tenant_id, account_id, app_key, accounting_entity_id):
+        assert tenant_id == "tenant-a"
+        assert app_key == "mitrabooks"
+        assert accounting_entity_id == "primary"
+        assert account_id == 102
+        return account, list(lines)
+
+    return _fake_get_ledger_lines
+
+
+@pytest.mark.asyncio
+async def test_upload_bank_statement_is_scoped_and_dedupes(fake_bank_collections):
+    csv_text = (
+        "Txn Date,Narration,Ref No,Withdrawal,Deposit,Balance\n"
+        "01/04/2026,NEFT FROM ACME,UTR123,,50000,150000\n"
+        "03/04/2026,BANK CHARGES,CHG001,118,,149882\n"
+    )
+
+    first = await bank_recon.upload_bank_statement(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, csv_text=csv_text, created_by="tester",
+    )
+    second = await bank_recon.upload_bank_statement(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, csv_text=csv_text, created_by="tester",
+    )
+    other_tenant = await bank_recon.upload_bank_statement(
+        tenant_id="tenant-b", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, csv_text=csv_text, created_by="tester",
+    )
+
+    assert first["inserted"] == 2
+    assert first["skipped_duplicates"] == 0
+    assert second["inserted"] == 0
+    assert second["skipped_duplicates"] == 2
+    assert other_tenant["inserted"] == 2
+    stored = fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows
+    assert sum(1 for row in stored if row["tenant_id"] == "tenant-a") == 2
+    assert sum(1 for row in stored if row["tenant_id"] == "tenant-b") == 2
+
+
+@pytest.mark.asyncio
+async def test_build_bank_reconciliation_uses_same_scope_rows_and_active_matches(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "s-matched",
+            "txn_date": "2026-04-01", "description": "NEFT FROM ACME", "ref": "UTR123",
+            "withdrawal": "0.00", "deposit": "50000.00", "balance": "50000.00",
+        },
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "s-open",
+            "txn_date": "2026-04-03", "description": "CLIENT RECEIPT", "ref": "INV-88",
+            "withdrawal": "0.00", "deposit": "7500.00", "balance": "57500.00",
+        },
+        {
+            **_scope("tenant-b"), "account_id": 102, "statement_line_id": "s-other-tenant",
+            "txn_date": "2026-04-03", "description": "OTHER TENANT", "ref": "",
+            "withdrawal": "0.00", "deposit": "9999.00", "balance": "9999.00",
+        },
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection([
+        {
+            **_scope(), "match_id": "m1", "account_id": 102,
+            "statement_line_id": "s-matched", "line_id": 1, "journal_id": 101,
+            "side": "deposit", "amount": "50000.00", "status": "active",
+        },
+        {
+            **_scope(), "match_id": "m-reversed", "account_id": 102,
+            "statement_line_id": "s-old", "line_id": 99, "journal_id": 199,
+            "side": "deposit", "amount": "1.00", "status": "reversed",
+        },
+    ])
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service([
+        _book(1, "2026-04-01", debit="50000.00", reference="UTR123"),
+        _book(2, "2026-04-04", debit="7500.00", reference="Receipt INV-88"),
+        _book(3, "2026-05-01", debit="9999.00", reference="future"),
+    ]))
+
+    out = await bank_recon.build_bank_reconciliation(
+        object(), tenant_id="tenant-a", app_key="mitrabooks",
+        accounting_entity_id="primary", account_id=102, as_of=date(2026, 4, 30),
+    )
+
+    assert out["summary"]["matched_count"] == 1
+    assert out["summary"]["statement_lines_total"] == 2
+    assert out["summary"]["book_lines_total"] == 2
+    assert [row["statement_line_id"] for row in out["in_bank_not_in_books"]] == ["s-open"]
+    assert [row["line_id"] for row in out["in_books_not_in_bank"]] == [2]
+    assert len(out["suggestions"]) == 1
+    assert out["suggestions"][0]["statement_line_id"] == "s-open"
+    assert out["suggestions"][0]["line_id"] == 2
+    assert out["suggestions"][0]["confidence"] == "ref"
+
+
+@pytest.mark.asyncio
+async def test_create_bank_recon_match_validates_scope_amount_side_and_duplicates(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "s1",
+            "txn_date": "2026-04-01", "description": "NEFT FROM ACME", "ref": "UTR123",
+            "withdrawal": "0.00", "deposit": "50000.00", "balance": "50000.00",
+        },
+        {
+            **_scope("tenant-b"), "account_id": 102, "statement_line_id": "s-other",
+            "txn_date": "2026-04-01", "withdrawal": "0.00", "deposit": "50000.00",
+        },
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service([
+        _book(1, "2026-04-01", debit="50000.00", reference="UTR123"),
+        _book(2, "2026-04-02", credit="50000.00", reference="wrong side"),
+    ]))
+
+    match = await bank_recon.create_bank_recon_match(
+        object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, statement_line_id="s1", line_id=1, created_by="tester",
+    )
+
+    assert match["status"] == "active"
+    assert match["side"] == "deposit"
+    assert match["amount"] == "50000.00"
+    assert match["tenant_id"] == "tenant-a"
+
+    with pytest.raises(AccountingValidationError, match="already matched"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s1", line_id=1, created_by="tester",
+        )
+
+    with pytest.raises(AccountingValidationError, match="Statement line not found"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s-other", line_id=1, created_by="tester",
+        )
+
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows[0]["statement_line_id"] = "s2"
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows.clear()
+    with pytest.raises(AccountingValidationError, match="Amounts do not agree"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s2", line_id=2, created_by="tester",
+        )
+
+
+@pytest.mark.asyncio
+async def test_reverse_bank_recon_match_is_soft_and_scoped(fake_bank_collections):
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection([
+        {**_scope(), "match_id": "m1", "status": "active", "account_id": 102},
+        {**_scope("tenant-b"), "match_id": "m2", "status": "active", "account_id": 102},
+    ])
+
+    result = await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id="m1", reversed_by="tester",
+    )
+
+    assert result == {"match_id": "m1", "status": "reversed"}
+    row = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows[0]
+    assert row["status"] == "reversed"
+    assert row["reversed_by"] == "tester"
+
+    with pytest.raises(AccountingValidationError, match="already reversed"):
+        await bank_recon.reverse_bank_recon_match(
+            tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            match_id="m1", reversed_by="tester",
+        )
+
+    with pytest.raises(AccountingNotFoundError, match="Match not found"):
+        await bank_recon.reverse_bank_recon_match(
+            tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            match_id="m2", reversed_by="tester",
+        )
