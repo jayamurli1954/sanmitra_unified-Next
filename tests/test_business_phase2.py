@@ -3109,6 +3109,149 @@ async def test_gst_settlement_reverses_journal_when_lock_step_fails(monkeypatch)
     assert settlements.docs == []
 
 
+@pytest.mark.asyncio
+async def test_gst_settlement_reversal_requires_explicit_unlock_for_locked_period(monkeypatch):
+    from app.modules.business.schemas import GstSettlementReverseRequest
+
+    settlements = FakeCollection()
+    locks = FakeCollection()
+    settlements.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "period": "2026-06",
+        "status": "posted",
+        "posted": True,
+        "period_locked": True,
+        "journal_entry_id": 1301,
+        "output": {"igst": "0", "cgst": "90", "sgst": "90"},
+        "input_credit": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "utilized": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "cash_payable": {"igst": "0", "cgst": "90", "sgst": "90"},
+        "itc_carry_forward": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "net_cash_payable": "180",
+        "total_output": "180",
+        "total_input": "0",
+    })
+    locks.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "period": "2026-06",
+        "locked": True,
+    })
+
+    def fake_get_collection(name):
+        if name == business_service.GST_SETTLEMENTS_COLLECTION:
+            return settlements
+        if name == business_service.GST_PERIOD_LOCKS_COLLECTION:
+            return locks
+        return FakeCollection()
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+
+    with pytest.raises(business_service.AccountingValidationError, match="unlock_period=true"):
+        await business_service.reverse_gst_settlement(
+            None,
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            created_by="admin-1",
+            period="2026-06",
+            payload=GstSettlementReverseRequest(
+                reason="Operator correction",
+                reversal_date=date(2026, 6, 30),
+                unlock_period=False,
+            ),
+            idempotency_key="gst-settlement-reverse-locked",
+        )
+
+
+@pytest.mark.asyncio
+async def test_gst_settlement_reversal_unlocks_period_and_marks_settlement_reversed(monkeypatch):
+    from app.modules.business.schemas import GstSettlementReverseRequest
+
+    settlements = FakeCollection()
+    locks = FakeCollection()
+    captured = {}
+    audit_events = []
+    settlements.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "period": "2026-06",
+        "status": "posted",
+        "posted": True,
+        "period_locked": True,
+        "journal_entry_id": 1301,
+        "output": {"igst": "0", "cgst": "90", "sgst": "90"},
+        "input_credit": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "utilized": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "cash_payable": {"igst": "0", "cgst": "90", "sgst": "90"},
+        "itc_carry_forward": {"igst": "0", "cgst": "0", "sgst": "0"},
+        "net_cash_payable": "180",
+        "total_output": "180",
+        "total_input": "0",
+    })
+    locks.docs.append({
+        "tenant_id": "business-tenant",
+        "app_key": "mitrabooks",
+        "accounting_entity_id": "primary",
+        "period": "2026-06",
+        "locked": True,
+    })
+
+    def fake_get_collection(name):
+        if name == business_service.GST_SETTLEMENTS_COLLECTION:
+            return settlements
+        if name == business_service.GST_PERIOD_LOCKS_COLLECTION:
+            return locks
+        return FakeCollection()
+
+    async def fake_reverse_journal_entry(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id=2301), True
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
+    monkeypatch.setattr(business_service, "reverse_journal_entry", fake_reverse_journal_entry)
+    monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
+
+    result = await business_service.reverse_gst_settlement(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="admin-1",
+        period="2026-06",
+        payload=GstSettlementReverseRequest(
+            reason="Operator correction",
+            reversal_date=date(2026, 6, 30),
+            unlock_period=True,
+        ),
+        idempotency_key="gst-settlement-reverse-1",
+    )
+
+    assert captured["journal_id"] == 1301
+    assert captured["reversal_date"] == date(2026, 6, 30)
+    assert captured["reason"] == "Operator correction"
+    assert captured["tenant_id"] == "business-tenant"
+    assert captured["app_key"] == "mitrabooks"
+    assert captured["accounting_entity_id"] == "primary"
+    assert captured["idempotency_key"] == "gst-settlement-reverse-1"
+    assert result["status"] == "reversed"
+    assert result["posted"] is False
+    assert result["period_locked"] is False
+    assert result["reversal_journal_entry_id"] == 2301
+    assert await business_service.is_gst_period_locked(
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        period="2026-06",
+    ) is False
+    assert audit_events and audit_events[-1]["action"] == "business_gst_settlement_reversed"
+
+
 def _async_none():
     async def _noop():
         return None

@@ -109,6 +109,12 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(credit?.id, 'credit account missing').toBeTruthy();
 
     const runId = Date.now().toString().slice(-8);
+    const e2eDate = '2098-07-02';
+    const e2eDueDate = '2098-07-20';
+    const e2ePeriod = '2098-07';
+    const e2eQuarter = '2098-Q2';
+    const e2eFinancialYear = '2098-99';
+    const e2eReturnPeriod = '072098';
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
 
@@ -119,7 +125,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       '/business/vouchers',
       {
         voucher_type: 'journal',
-        entry_date: '2026-07-02',
+        entry_date: e2eDate,
         amount: '125.00',
         debit_account_id: asset.id,
         credit_account_id: credit.id,
@@ -140,8 +146,8 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       '/business/invoices',
       {
         customer_party_id: customer.party_id,
-        invoice_date: '2026-07-02',
-        due_date: '2026-07-20',
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
         income_account_code: '41001',
         place_of_supply: 'Karnataka',
         reference: `PH3-INV-${runId}`,
@@ -162,8 +168,8 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       {
         vendor_party_id: vendor.party_id,
         bill_number: `PH3-BILL-${runId}`,
-        bill_date: '2026-07-02',
-        due_date: '2026-07-20',
+        bill_date: e2eDate,
+        due_date: e2eDueDate,
         expense_account_code: '51001',
         place_of_supply: 'Karnataka',
         line_items: [{ description: 'Phase 3 E2E purchase', hsn_sac: '4820', quantity: '1', rate: '500', gst_rate: '18' }],
@@ -182,7 +188,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       '/business/credit-notes',
       {
         customer_party_id: customer.party_id,
-        note_date: '2026-07-02',
+        note_date: e2eDate,
         original_invoice_number: invoice.invoice_number,
         reason: 'sales_return',
         income_account_code: '41001',
@@ -202,7 +208,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       '/business/debit-notes',
       {
         vendor_party_id: vendor.party_id,
-        note_date: '2026-07-02',
+        note_date: e2eDate,
         original_bill_number: bill.bill_number,
         reason: 'purchase_return',
         expense_account_code: '51001',
@@ -215,14 +221,14 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(debitNote.status).toBe('posted');
     expect(debitNote.journal_entry_id).toBeTruthy();
 
-    const trialBalance = await jsonRequest(page, token, 'GET', '/accounting/reports/trial-balance?as_of=2026-07-02');
+    const trialBalance = await jsonRequest(page, token, 'GET', `/accounting/reports/trial-balance?as_of=${e2eDate}`);
     expect(trialBalance).toBeTruthy();
 
     const tdsSections = await jsonRequest(page, token, 'GET', '/business/tds/sections');
     expect((tdsSections.tds || []).map((row) => row.section)).toEqual(expect.arrayContaining(['194C']));
     expect((tdsSections.tcs || []).map((row) => row.section)).toEqual(expect.arrayContaining(['206C-1H']));
 
-    const tdsRegister = await jsonRequest(page, token, 'GET', '/business/tds/register?quarter=2026-Q2');
+    const tdsRegister = await jsonRequest(page, token, 'GET', `/business/tds/register?quarter=${e2eQuarter}`);
     const tds194c = (tdsRegister.tds?.sections || []).find((row) => row.section === '194C');
     expect(tds194c?.entries?.some((entry) => entry.doc_number === bill.bill_number)).toBeTruthy();
     expect(decimalValue(tds194c?.total_tax)).toBeGreaterThan(0);
@@ -230,23 +236,23 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(tcs206c?.entries?.some((entry) => entry.doc_number === invoice.invoice_number)).toBeTruthy();
     expect(decimalValue(tcs206c?.total_tax)).toBeGreaterThan(0);
 
-    const gstr3b = await jsonRequest(page, token, 'GET', '/business/returns/gstr-3b?period=2026-07');
+    const gstr3b = await jsonRequest(page, token, 'GET', `/business/returns/gstr-3b?period=${e2ePeriod}`);
     expect(gstr3b.return_type).toBe('GSTR-3B');
     expect(decimalValue(gstr3b.outward_supplies?.taxable?.taxable_value)).toBeGreaterThan(0);
     expect(decimalValue(gstr3b.totals?.total_output_tax)).toBeGreaterThan(0);
-    expect(gstr3b.gstn_json?.ret_period).toBe('072026');
+    expect(gstr3b.gstn_json?.ret_period).toBe(e2eReturnPeriod);
 
-    const gstr1 = await jsonRequest(page, token, 'GET', '/business/returns/gstr-1?period=2026-07');
+    const gstr1 = await jsonRequest(page, token, 'GET', `/business/returns/gstr-1?period=${e2ePeriod}`);
     expect(gstr1.return_type).toBe('GSTR-1');
     expect(gstr1.sections?.b2b?.invoices).toBeGreaterThan(0);
     expect(gstr1.sections?.cdnr?.notes).toBeGreaterThan(0);
-    expect(gstr1.gstn_json?.fp).toBe('072026');
+    expect(gstr1.gstn_json?.fp).toBe(e2eReturnPeriod);
 
     const gstr2b = await jsonRequest(
       page,
       token,
       'POST',
-      '/business/returns/gstr-2b/reconcile?period=2026-07',
+      `/business/returns/gstr-2b/reconcile?period=${e2ePeriod}`,
       {
         data: {
           docdata: {
@@ -256,7 +262,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
                 inv: [
                   {
                     inum: bill.bill_number,
-                    idt: '2026-07-02',
+                    idt: e2eDate,
                     val: decimalValue(bill.bill_total),
                     itms: [
                       {
@@ -281,22 +287,53 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(gstr2b.summary?.matched_count).toBeGreaterThan(0);
     expect(decimalValue(gstr2b.summary?.matched_itc)).toBeGreaterThan(0);
 
-    const cmp08 = await jsonRequest(page, token, 'GET', '/business/returns/cmp-08?quarter=2026-Q2');
+    const cmp08 = await jsonRequest(page, token, 'GET', `/business/returns/cmp-08?quarter=${e2eQuarter}`);
     expect(cmp08.return_type).toBe('CMP-08');
-    expect(cmp08.gstn_json?.ret_period).toBe('2026-Q2');
-    const gstr4 = await jsonRequest(page, token, 'GET', '/business/returns/gstr-4?financial_year=2026-27');
+    expect(cmp08.gstn_json?.ret_period).toBe(e2eQuarter);
+    const gstr4 = await jsonRequest(page, token, 'GET', `/business/returns/gstr-4?financial_year=${e2eFinancialYear}`);
     expect(gstr4.return_type).toBe('GSTR-4');
-    expect(gstr4.gstn_json?.fy).toBe('2026-27');
+    expect(gstr4.gstn_json?.fy).toBe(e2eFinancialYear);
 
-    const settlementPreview = await jsonRequest(page, token, 'GET', '/business/gst-settlement/preview?period=2026-07');
+    const settlementPreview = await jsonRequest(page, token, 'GET', `/business/gst-settlement/preview?period=${e2ePeriod}`);
     expect(settlementPreview.status).toBe('preview');
     expect(settlementPreview.posted).toBe(false);
     expect(decimalValue(settlementPreview.total_output)).toBeGreaterThan(0);
 
+    const settlement = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/gst-settlement',
+      { period: e2ePeriod, lock_period: true, accounting_entity_id: 'primary' },
+      { 'X-Idempotency-Key': `phase3-demo-gst-settlement-${runId}` }
+    );
+    expect(settlement.status).toBe('posted');
+    expect(settlement.posted).toBe(true);
+    expect(settlement.period_locked).toBe(true);
+    expect(settlement.journal_entry_id).toBeTruthy();
+
+    const settlementReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/gst-settlement/${e2ePeriod}/reverse`,
+      {
+        reason: `Phase 3 E2E reverse GST settlement ${runId}`,
+        reversal_date: e2eDate,
+        unlock_period: true,
+        accounting_entity_id: 'primary',
+      },
+      { 'X-Idempotency-Key': `phase3-demo-gst-settlement-reverse-${runId}` }
+    );
+    expect(settlementReversed.status).toBe('reversed');
+    expect(settlementReversed.posted).toBe(false);
+    expect(settlementReversed.period_locked).toBe(false);
+    expect(settlementReversed.reversal_journal_entry_id).toBeTruthy();
+
     let gstPeriodLocked = false;
     try {
       const lockedPeriod = await jsonRequest(page, token, 'PUT', '/business/gst-period-locks', {
-        period: '2026-07',
+        period: e2ePeriod,
         locked: true,
         note: `Phase 3 E2E temporary compliance lock ${runId}`,
         accounting_entity_id: 'primary',
@@ -306,7 +343,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     } finally {
       if (gstPeriodLocked) {
         const unlockedPeriod = await jsonRequest(page, token, 'PUT', '/business/gst-period-locks', {
-          period: '2026-07',
+          period: e2ePeriod,
           locked: false,
           note: `Phase 3 E2E unlock before cleanup ${runId}`,
           accounting_entity_id: 'primary',
@@ -327,7 +364,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
         token,
         'POST',
         path,
-        { reason: `Phase 3 E2E reverse ${label}`, cancel_date: '2026-07-02' },
+        { reason: `Phase 3 E2E reverse ${label}`, cancel_date: e2eDate },
         { 'X-Idempotency-Key': key }
       );
       expect(['cancelled', 'reversed']).toContain(String(reversed.status).toLowerCase());
@@ -339,7 +376,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       token,
       'POST',
       `/business/vouchers/${voucher.voucher_id}/reverse`,
-      { reason: 'Phase 3 E2E reverse voucher', reversal_date: '2026-07-02', accounting_entity_id: 'primary' },
+      { reason: 'Phase 3 E2E reverse voucher', reversal_date: e2eDate, accounting_entity_id: 'primary' },
       { 'X-Idempotency-Key': `phase3-demo-voucher-reverse-${runId}` }
     );
     expect(String(voucherReversed.status).toLowerCase()).toBe('reversed');

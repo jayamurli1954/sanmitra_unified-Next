@@ -40,6 +40,7 @@ from app.modules.business.schemas import (
     BusinessIntegrationSettings,
     GstPeriodLockUpdateRequest,
     GstSettlementCreateRequest,
+    GstSettlementReverseRequest,
     ItcReclaimActionRequest,
     ItcReversalActionRequest,
     INVOICE_STANDARD_FIELDS,
@@ -4700,9 +4701,12 @@ def _settlement_doc_to_response(doc: dict) -> dict:
         "posted": bool(doc.get("posted")),
         "period_locked": bool(doc.get("period_locked")),
         "journal_entry_id": doc.get("journal_entry_id"),
+        "reversal_journal_entry_id": doc.get("reversal_journal_entry_id"),
         "note": doc.get("note"),
         "settled_by": doc.get("settled_by"),
         "settled_at": doc.get("settled_at"),
+        "reversed_by": doc.get("reversed_by"),
+        "reversed_at": doc.get("reversed_at"),
     }
 
 
@@ -4897,6 +4901,101 @@ async def create_gst_settlement(
     await _audit_business_event(
         tenant_id=tenant_id, app_key=app_key, user_id=created_by,
         action="business_gst_settlement_posted", entity_type="business_gst_settlement", entity_id=period, new_value=result,
+    )
+    return result
+
+
+async def reverse_gst_settlement(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    created_by: str,
+    period: str,
+    payload: GstSettlementReverseRequest,
+    idempotency_key: str | None,
+) -> dict:
+    settlements = get_collection(GST_SETTLEMENTS_COLLECTION)
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "accounting_entity_id": payload.accounting_entity_id,
+        "period": period,
+    }
+    settlement = await settlements.find_one(filters)
+    if settlement is None:
+        raise AccountingNotFoundError("GST settlement not found")
+    if settlement.get("status") == "reversed" and settlement.get("reversal_journal_entry_id"):
+        return _settlement_doc_to_response(settlement)
+    if settlement.get("status") != "posted":
+        raise AccountingValidationError("Only posted GST settlements can be reversed")
+    journal_entry_id = settlement.get("journal_entry_id")
+    if not journal_entry_id:
+        raise AccountingValidationError("GST settlement is not linked to a posted journal entry")
+
+    _, period_end = _period_bounds(period)
+    reversal_date = payload.reversal_date or period_end
+    reversal_period = _period_key(reversal_date)
+    if reversal_period != period:
+        raise AccountingValidationError(
+            f"GST settlement reversal must be dated within {_period_label(period)}"
+        )
+
+    period_was_locked = await is_gst_period_locked(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        period=period,
+    )
+    if period_was_locked and not payload.unlock_period:
+        raise AccountingValidationError(
+            f"The {_period_label(period)} GST period is locked. Set unlock_period=true to reverse the settlement."
+        )
+    if period_was_locked:
+        await set_gst_period_lock(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            updated_by=created_by,
+            payload=GstPeriodLockUpdateRequest(
+                period=period,
+                locked=False,
+                note="Unlocked for GST settlement reversal",
+                accounting_entity_id=payload.accounting_entity_id,
+            ),
+        )
+
+    reversal, created = await reverse_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        created_by=created_by,
+        journal_id=int(journal_entry_id),
+        reversal_date=reversal_date,
+        reason=payload.reason,
+        idempotency_key=idempotency_key or f"gst-settlement-reversal:{tenant_id}:{payload.accounting_entity_id}:{period}",
+    )
+    update = {
+        "status": "reversed",
+        "posted": False,
+        "period_locked": False,
+        "reversal_journal_entry_id": reversal.id,
+        "reversed_by": created_by,
+        "reversed_at": _now(),
+        "reverse_reason": payload.reason,
+        "updated_at": _now(),
+    }
+    await settlements.update_one(filters, {"$set": update})
+    settlement.update(update)
+    result = _settlement_doc_to_response(settlement)
+    await _audit_business_event(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        user_id=created_by,
+        action="business_gst_settlement_reversed",
+        entity_type="business_gst_settlement",
+        entity_id=period,
+        new_value={**result, "created_reversal": created},
     )
     return result
 

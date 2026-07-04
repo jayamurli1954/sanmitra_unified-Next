@@ -113,7 +113,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Receivables browser shell E2E | Local Playwright shell smoke for receivables/payables party ledger, AR/AP ageing kind switch, receipt allocation FIFO/open-item match, reconciliation status, customer statement, and dunning reminder record | Passed on 2026-07-03 |
 | Payables browser shell E2E | Local Playwright shell smoke for vendor statement, payable allocation FIFO/open-item match, reconciliation status, Rule 37 ITC bill-payment marking, and TDS register vendor evidence | Passed on 2026-07-03 |
 | GST/TDS compliance browser shell slice | Local Playwright shell smoke for tenant GST profile evidence, GST settlement preview/post with period lock, GSTR-3B summary, GSTR-1 outward/HSN evidence, TDS section/register evidence, and manual period lock/unlock | Passed on 2026-07-03 |
-| GST/TDS real-stack compliance browser/API slice | Guarded destructive demo-tenant browser/API path for posted invoice/bill with TCS/TDS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08/GSTR-4 route shape, GST settlement preview, temporary period lock/unlock, and document cleanup | Added on 2026-07-03; execution remains opt-in through the destructive demo gate |
+| GST/TDS real-stack compliance browser/API slice | Guarded destructive demo-tenant browser/API path for posted invoice/bill with TCS/TDS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08/GSTR-4 route shape, GST settlement preview/post/reverse, temporary period lock/unlock, and document cleanup | Added on 2026-07-03; execution remains opt-in through the destructive demo gate |
 | Opening Balance browser shell E2E | Local Playwright shell smoke for opening-balance CSV upload, maker-checker preview, party-wise debtor/creditor evidence, Opening Balance Equity balancing line, admin post, trial balance impact, customer statement opening balance, existing-entry override warning, and export route evidence | Passed on 2026-07-03 |
 | Year-End Close browser shell E2E | Local Playwright shell smoke for FY selection, close preview, income/expense closing lines, Retained Earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance | Passed on 2026-07-03 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
@@ -313,9 +313,9 @@ python -m pytest tests/test_business_route_contract.py -q
 
 Result:
 
-- ADDED: the guarded destructive real-stack Playwright spec now exercises GST/TDS compliance routes against the demo tenant after posting reversible source documents: TCS/TDS on invoice/bill, TDS sections/register, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08, GSTR-4, GST settlement preview, and a temporary GST period lock/unlock.
+- ADDED: the guarded destructive real-stack Playwright spec now exercises GST/TDS compliance routes against the demo tenant after posting reversible source documents: TCS/TDS on invoice/bill, TDS sections/register, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08, GSTR-4, GST settlement preview/post/reverse, and a temporary GST period lock/unlock.
 - PASS: route-contract coverage now includes the new compliance endpoints used by the real-stack browser spec.
-- INTENTIONAL LIMIT: the destructive browser test does not post GST settlement, because the current settlement workflow is append-only and has no normal reversal route. Settlement posting remains covered by local mocked-shell UX and backend service tests, with production signoff still requiring a reversible/operator-safe strategy.
+- ADDED: GST settlement now has an operator-safe reversal route that reverses through the accounting journal reversal service, can explicitly unlock the GST period, and records reversal metadata on the settlement document.
 
 ## Remaining Gaps After This Gate
 
@@ -324,7 +324,7 @@ Result:
 - Credit Note and Debit Note browser source-document enforcement plus dedicated print/export polish remain open for later production signoff; API/accounting/report/reversal depth is closed for the local gate.
 - Receivables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current receivables browser coverage is local mocked-shell E2E.
 - Payables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current payables browser coverage is local mocked-shell E2E.
-- Compliance signoff is still required for GST settlement post/reversal strategy, export/file-download polish, e-invoice/e-way bill positioning, and production tax-review semantics. Guarded real-stack route/report coverage now exists for TDS/TCS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement preview, and temporary GST period lock/unlock.
+- Compliance signoff is still required for export/file-download polish, e-invoice/e-way bill positioning, and production tax-review semantics. Guarded real-stack route/report coverage now exists for TDS/TCS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement preview/post/reverse, and temporary GST period lock/unlock.
 - Opening Balance real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open; the current opening-balance browser coverage is local mocked-shell E2E.
 - Year-End Close real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open; the current year-end browser coverage is local mocked-shell E2E.
 - Approval depth still needs production operator review across tenant settings, opening balances, year-end, GST settlement, and sensitive exports.

@@ -1077,6 +1077,13 @@ class GstSettlementCreateRequest(BaseModel):
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
+class GstSettlementReverseRequest(BaseModel):
+    reason: str = Field(default="GST settlement reversal", min_length=1, max_length=240)
+    reversal_date: date | None = None
+    unlock_period: bool = True
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
 class GstSettlementResponse(BaseModel):
     period: str
     accounting_entity_id: str
@@ -1088,13 +1095,16 @@ class GstSettlementResponse(BaseModel):
     net_cash_payable: Decimal
     total_output: Decimal
     total_input: Decimal
-    status: str  # "preview" | "posted"
+    status: str  # "preview" | "posted" | "reversed"
     posted: bool = False
     period_locked: bool = False
     journal_entry_id: int | None = None
+    reversal_journal_entry_id: int | None = None
     note: str | None = None
     settled_by: str | None = None
     settled_at: datetime | None = None
+    reversed_by: str | None = None
+    reversed_at: datetime | None = None
 
 
 # ---- ITC reversal (GST Rule 37 — non-payment within 180 days) ----

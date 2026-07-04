@@ -59,6 +59,7 @@ from app.modules.business.schemas import (
     GstPeriodLockResponse,
     GstPeriodLockUpdateRequest,
     GstSettlementCreateRequest,
+    GstSettlementReverseRequest,
     GstSettlementResponse,
     ItcReclaimActionRequest,
     ItcReversalActionRequest,
@@ -129,6 +130,7 @@ from app.modules.business.service import (
     list_ca_clients,
     list_documents_for_approval_queue,
     preview_gst_settlement,
+    reverse_gst_settlement,
     list_ca_document_metadata,
     get_party,
     get_voucher,
@@ -2638,6 +2640,42 @@ async def create_business_gst_settlement(
             tenant_id=context.tenant_id,
             app_key=context.app_key,
             created_by=_created_by(current_user),
+            payload=payload,
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/gst-settlement/{period}/reverse", response_model=GstSettlementResponse)
+async def reverse_business_gst_settlement(
+    period: str,
+    payload: GstSettlementReverseRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
+        raise HTTPException(status_code=422, detail="period must be 'YYYY-MM'")
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="GST settlement reversal",
+    )
+    try:
+        return await reverse_gst_settlement(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            created_by=_created_by(current_user),
+            period=period,
             payload=payload,
             idempotency_key=x_idempotency_key,
         )
