@@ -9473,7 +9473,7 @@ function renderOpeningYearEndPanel() {
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: FIXED ASSETS + DEPRECIATION
-// API   : GET/POST /api/v1/business/fixed-assets  POST /api/v1/business/depreciation/run
+// API   : GET/POST /api/v1/business/fixed-assets  POST .../{asset_id}/dispose  POST /api/v1/business/depreciation/run
 // NOTE  : loadFixedAssets, createFixedAssetFromForm, renderFixedAssetsPanel
 // ══════════════════════════════════════════════════════════════════════
 
@@ -9555,6 +9555,39 @@ async function postDepreciationRun() {
   renderJson(apiOutput, { depreciation_run: { ok: result.ok, status: result.status } });
 }
 
+async function disposeFixedAsset(assetId, button) {
+  const row = button?.closest("tr");
+  const disposalDate = row?.querySelector("[data-fa-dispose-date]")?.value || todayIsoDate();
+  const saleValue = row?.querySelector("[data-fa-dispose-sale]")?.value || "0";
+  const bankCode = row?.querySelector("[data-fa-dispose-bank]")?.value || "11010";
+  if (!assetId || !disposalDate) {
+    setLoginStatus("warn", "Disposal details missing", "Choose an asset and disposal date.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", `/api/v1/business/fixed-assets/${encodeURIComponent(assetId)}/dispose`, {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `fixed-asset-disposal-${assetId}` },
+    body: JSON.stringify({
+      disposal_date: disposalDate,
+      sale_value: saleValue || "0",
+      cash_bank_account_code: Number(saleValue || 0) > 0 ? bankCode : null,
+      reason: "Disposed from MitraBooks ERP shell",
+    }),
+  });
+  if (result.ok) {
+    const gainLoss = Number(result.payload?.gain || 0) > 0
+      ? ` gain ${formatCurrency(Number(result.payload.gain || 0))}`
+      : (Number(result.payload?.loss || 0) > 0 ? ` loss ${formatCurrency(Number(result.payload.loss || 0))}` : "");
+    setLoginStatus("ok", "Asset disposed", `Journal entry #${result.payload?.journal_entry_id}${gainLoss}.`);
+    await loadFixedAssets();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can dispose fixed assets.");
+  } else {
+    setLoginStatus("danger", "Disposal failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { fixed_asset_disposal: { ok: result.ok, status: result.status, asset_id: assetId } });
+}
+
 function renderFixedAssetForm() {
   const accountOpts = fixedAssetAccountOptions().map((a) =>
     `<option value="${escapeHtml(a.code)}">${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("")
@@ -9591,6 +9624,9 @@ function renderFixedAssetsPanel() {
   } else if (r.ok === false) {
     registerBody = reportUnavailablePanel("Fixed Assets", r);
   } else {
+    const bankOpts = bankAccountOptions().map((a) =>
+      `<option value="${escapeHtml(a.code)}">${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("")
+      || `<option value="11010">11010 - Bank Account</option>`;
     const rows = (r.items || []).map((a) => `
       <tr>
         <td>${escapeHtml(a.asset_name || "")}${a.status !== "active" ? ` <span class="pill warn">${escapeHtml(a.status)}</span>` : ""}</td>
@@ -9600,13 +9636,20 @@ function renderFixedAssetsPanel() {
         <td class="amount">${num(a.cost)}</td>
         <td class="amount">${num(a.accumulated_depreciation)}</td>
         <td class="amount">${num(a.book_value)}</td>
+        <td>${a.status === "active" && isBusinessAdmin() ? `
+          <div class="report-date-controls compact">
+            <input type="date" data-fa-dispose-date value="${escapeHtml(todayIsoDate())}" aria-label="Disposal date for ${escapeHtml(a.asset_name || "asset")}">
+            <input type="number" data-fa-dispose-sale min="0" step="0.01" placeholder="Sale value" aria-label="Sale value for ${escapeHtml(a.asset_name || "asset")}">
+            <select data-fa-dispose-bank aria-label="Bank account for asset sale">${bankOpts}</select>
+            <button class="secondary" type="button" data-business-action="fa-dispose" data-asset-id="${escapeHtml(a.asset_id || "")}">Dispose</button>
+          </div>` : (a.status === "disposed" ? `Journal #${escapeHtml(String(a.disposal_journal_entry_id || ""))}${a.disposal_gain && Number(a.disposal_gain) > 0 ? ` · Gain ${num(a.disposal_gain)}` : ""}${a.disposal_loss && Number(a.disposal_loss) > 0 ? ` · Loss ${num(a.disposal_loss)}` : ""}` : "")}</td>
       </tr>`).join("");
     registerBody = `
       <div class="table-preview compact-table">
         <table>
-          <thead><tr><th>Asset</th><th>Account</th><th>Purchased</th><th>Method</th><th class="amount">Cost</th><th class="amount">Acc. depreciation</th><th class="amount">Book value</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="7" class="muted">No assets registered yet.</td></tr>`}</tbody>
-          ${rows ? `<tfoot><tr><th colspan="4">Total</th><td class="amount">${num(r.total_cost)}</td><td></td><td class="amount"><strong>${num(r.total_book_value)}</strong></td></tr></tfoot>` : ""}
+          <thead><tr><th>Asset</th><th>Account</th><th>Purchased</th><th>Method</th><th class="amount">Cost</th><th class="amount">Acc. depreciation</th><th class="amount">Book value</th><th>Disposal</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="8" class="muted">No assets registered yet.</td></tr>`}</tbody>
+          ${rows ? `<tfoot><tr><th colspan="4">Total</th><td class="amount">${num(r.total_cost)}</td><td></td><td class="amount"><strong>${num(r.total_book_value)}</strong></td><td></td></tr></tfoot>` : ""}
         </table>
       </div>`;
   }
@@ -18168,6 +18211,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     rerenderBusinessReportsIfActive();
   } else if (businessAction === "fa-create") {
     createFixedAssetFromForm();
+  } else if (businessAction === "fa-dispose") {
+    disposeFixedAsset(button.getAttribute("data-asset-id") || "", button);
   } else if (businessAction === "dep-preview") {
     previewDepreciation();
   } else if (businessAction === "dep-post") {

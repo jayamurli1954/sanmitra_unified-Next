@@ -34,6 +34,7 @@ Status convention:
 - ~~[x] Phase 3 Year-End Close browser shell hardening passed locally on 2026-07-03: FY selection -> close preview -> income/expense closing lines -> retained earnings movement -> admin post -> already-closed/idempotency warning -> reopen-by-reversal guidance.~~
 - ~~[x] Phase 3 Inventory local API/browser hardening passed on 2026-07-04: item master tenant/app/entity scoping, item-reference validation, posted same-scope stock register assembly, closing-stock journal posting guards, route contract coverage, and mocked-shell item/register/closing-stock posting UX.~~
 - ~~[x] Phase 3 Banking/Reconciliation local API/browser hardening passed on 2026-07-04: bank statement CSV import/dedupe, tenant/app/entity-scoped BRS assembly, exact amount/side match validation, soft unmatch/reversal, route contract coverage, and mocked-shell import -> match -> BRS -> unmatch UX.~~
+- ~~[x] Phase 3 Fixed Assets local API/browser hardening passed on 2026-07-04: depreciation math/posting review, balanced disposal journal plan, tenant/app/entity-scoped disposal route contract, admin-only shell disposal UX, and mocked-shell register -> depreciation -> disposal workflow.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -82,7 +83,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] GST report browser E2E for GSTR-1, GSTR-3B, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement, and export hardening. Guarded real-stack route/report coverage exists for returns and settlement preview/post/reverse; export hardening, visual filing UX, and production compliance review remain open.
 - [~] Inventory browser/API E2E for item master, stock register, closing-stock posting, valuation policy settings, stock issue, and stock adjustment. Local API and mocked-shell browser coverage is closed for item master, stock register, and closing-stock posting; valuation policy settings, stock issue/adjustment, real-stack/demo mutation, and production inventory signoff remain open.
 - [~] Banking/reconciliation browser/API E2E for CSV import, matching, reversal, reconciliation summary, bank book, and cash book polish. Local API and mocked-shell browser coverage is closed for CSV import/dedupe, matching, BRS summary, and unmatch; bank-only voucher posting, bank/cash book polish, real-stack/demo mutation, and production banking signoff remain open.
-- [ ] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review.
+- [~] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review. Local API and mocked-shell browser coverage is closed for register, depreciation preview/posting, and disposal journal UX; dedicated gain/loss COA polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff remain open.
 - [ ] Dimensions/tagging coverage across vouchers, invoices, bills, notes, reports, and exports.
 - [ ] Multi-location/branch dimension and consolidated reporting.
 - [ ] Tenant-scoped document upload inbox with manual review, attachment linking, audit trail, and client/book scoping.

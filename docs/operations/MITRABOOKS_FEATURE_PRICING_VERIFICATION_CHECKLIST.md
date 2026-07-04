@@ -128,8 +128,8 @@ Enterprise is a custom quote path and should be assessed through requirement rev
 | Inventory | Item master and basic stock register | Partially working | Not included | Not included | Included | Included | Implemented opt-in inventory basics; valuation policy settings and E2E pending. |
 | Inventory | Closing-stock journal posting | Partially working | Not included | Not included | Included | Included | Implemented weighted-average closing stock journal posting; verify tenant setting and report impact. |
 | Inventory | Batch/serial/multi-location | Planned / configuration-dependent | Not included | Not included | Not included | Optional/custom later | Deferred until basic inventory passes E2E. |
-| Fixed assets | Fixed asset register | Partially working | Not included | Not included | Included | Included | Implemented; disposal workflow and browser E2E pending. |
-| Fixed assets | Depreciation preview/posting | Partially working | Not included | Not included | Included | Included | Implemented SLM/WDV preview and depreciation journal posting; compliance review pending. |
+| Fixed assets | Fixed asset register | Partially working | Not included | Not included | Included | Included | Implemented with local mocked-shell E2E for register and disposal; production audit/reporting signoff pending. |
+| Fixed assets | Depreciation preview/posting | Partially working | Not included | Not included | Included | Included | Implemented SLM/WDV preview and depreciation journal posting with local mocked-shell E2E; compliance review pending. |
 | Dimensions | Cost centre / project master | Partially working | Not included | Not included | Included | Included | Implemented dimensions and income/expense/net reports; tagging coverage needs E2E. |
 | Migration | Opening balance import/posting | Partially working | Not included | Included where needed | Included | Included | Implemented controlled journal flow; maker-checker and rollback examples pending. |
 | Year end | Year-end close preview/posting | Partially working | Not included | Not included | Included | Included | Implemented; maker-checker and browser E2E pending. |

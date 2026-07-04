@@ -8,8 +8,13 @@ async function mockVerifiedMitraBooksSession(page) {
     { id: 104, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
     { id: 105, code: '31004', name: 'Opening Balance Equity', account_type: 'equity', type: 'equity' },
     { id: 106, code: '31003', name: 'Retained Earnings', account_type: 'equity', type: 'equity' },
+    { id: 107, code: '16001', name: 'Furniture and Fixtures', account_type: 'asset', type: 'asset' },
+    { id: 108, code: '16099', name: 'Accumulated Depreciation', account_type: 'asset', type: 'asset' },
     { id: 201, code: '4001', name: 'Sales', account_type: 'revenue', type: 'revenue' },
+    { id: 202, code: '42003', name: 'Miscellaneous Income', account_type: 'income', type: 'income' },
     { id: 301, code: '5001', name: 'Office Expense', account_type: 'expense', type: 'expense' },
+    { id: 302, code: '54003', name: 'Depreciation Expense', account_type: 'expense', type: 'expense' },
+    { id: 303, code: '54005', name: 'Miscellaneous Expense', account_type: 'expense', type: 'expense' },
   ];
   const parties = [
     {
@@ -61,6 +66,24 @@ async function mockVerifiedMitraBooksSession(page) {
     },
   ];
   const closingStockEntries = [];
+  const fixedAssets = [
+    {
+      asset_id: 'fa-van-1',
+      asset_name: 'Delivery Van',
+      asset_account_code: '16001',
+      purchase_date: '2026-04-01',
+      cost: '100000.00',
+      salvage_value: '10000.00',
+      method: 'slm',
+      useful_life_years: '5',
+      depreciation_rate: null,
+      opening_accumulated_depreciation: '0.00',
+      accumulated_depreciation: '0.00',
+      book_value: '100000.00',
+      status: 'active',
+    },
+  ];
+  let depreciationPosted = false;
   let bankStatementImported = false;
   const bankReconMatches = [];
   const json = (route, body, status = 200) => route.fulfill({
@@ -413,6 +436,130 @@ async function mockVerifiedMitraBooksSession(page) {
       as_of: entry.entry_date,
       closing_stock_value: '1800.00',
       item_count: inventoryItems.filter(row => row.is_active).length,
+    });
+  });
+  await page.route('**/api/v1/business/fixed-assets**', async route => {
+    const request = route.request();
+    const method = request.method();
+    const path = new URL(request.url()).pathname;
+    const listPayload = () => {
+      const items = fixedAssets.map(asset => {
+        const acc = asset.status === 'disposed' ? asset.accumulated_depreciation : (depreciationPosted ? '18000.00' : asset.accumulated_depreciation);
+        const book = asset.status === 'disposed' ? asset.disposal_book_value : (Number(asset.cost) - Number(acc)).toFixed(2);
+        return { ...asset, accumulated_depreciation: acc, book_value: book };
+      });
+      const activeItems = items.filter(asset => asset.status !== 'disposed');
+      return {
+        items,
+        count: items.length,
+        total_cost: items.reduce((sum, asset) => sum + Number(asset.cost || 0), 0).toFixed(2),
+        total_book_value: activeItems.reduce((sum, asset) => sum + Number(asset.book_value || 0), 0).toFixed(2),
+      };
+    };
+
+    if (method === 'POST' && path.endsWith('/dispose')) {
+      const assetId = path.split('/').at(-2);
+      const asset = fixedAssets.find(row => row.asset_id === assetId);
+      if (!asset) return json(route, { detail: 'Fixed asset not found' }, 404);
+      const payload = request.postDataJSON();
+      const accumulated = depreciationPosted ? 18000 : Number(asset.accumulated_depreciation || 0);
+      const bookValue = Number(asset.cost || 0) - accumulated;
+      const saleValue = Number(payload.sale_value || 0);
+      const gain = Math.max(0, saleValue - bookValue);
+      const loss = Math.max(0, bookValue - saleValue);
+      Object.assign(asset, {
+        status: 'disposed',
+        accumulated_depreciation: accumulated.toFixed(2),
+        book_value: bookValue.toFixed(2),
+        disposal_date: payload.disposal_date,
+        disposal_sale_value: saleValue.toFixed(2),
+        disposal_book_value: bookValue.toFixed(2),
+        disposal_gain: gain.toFixed(2),
+        disposal_loss: loss.toFixed(2),
+        disposal_journal_entry_id: 'FAD-2026-001',
+      });
+      return json(route, {
+        asset_id: assetId,
+        status: 'disposed',
+        created: true,
+        journal_entry_id: 'FAD-2026-001',
+        disposal_date: asset.disposal_date,
+        sale_value: asset.disposal_sale_value,
+        book_value: asset.disposal_book_value,
+        gain: asset.disposal_gain,
+        loss: asset.disposal_loss,
+      });
+    }
+
+    if (method === 'POST') {
+      const payload = request.postDataJSON();
+      const asset = {
+        asset_id: `fa-${fixedAssets.length + 1}`,
+        asset_name: payload.asset_name,
+        asset_account_code: payload.asset_account_code || '16001',
+        purchase_date: payload.purchase_date,
+        cost: Number(payload.cost || 0).toFixed(2),
+        salvage_value: Number(payload.salvage_value || 0).toFixed(2),
+        method: payload.method || 'slm',
+        useful_life_years: payload.useful_life_years || null,
+        depreciation_rate: payload.depreciation_rate || null,
+        opening_accumulated_depreciation: Number(payload.opening_accumulated_depreciation || 0).toFixed(2),
+        accumulated_depreciation: Number(payload.opening_accumulated_depreciation || 0).toFixed(2),
+        book_value: Number(payload.cost || 0).toFixed(2),
+        status: 'active',
+      };
+      fixedAssets.push(asset);
+      return json(route, asset);
+    }
+
+    return json(route, listPayload());
+  });
+  await page.route('**/api/v1/business/depreciation/preview**', route => {
+    const financialYear = new URL(route.request().url()).searchParams.get('financial_year') || '2026-27';
+    const rows = fixedAssets.filter(asset => asset.status === 'active').map(asset => {
+      const openingBook = depreciationPosted ? '82000.00' : asset.book_value;
+      return {
+        asset_id: asset.asset_id,
+        asset_name: asset.asset_name,
+        asset_account_code: asset.asset_account_code,
+        method: asset.method,
+        purchase_date: asset.purchase_date,
+        cost: asset.cost,
+        accumulated_before: depreciationPosted ? '18000.00' : '0.00',
+        opening_book_value: openingBook,
+        depreciation: depreciationPosted ? '18000.00' : '18000.00',
+        closing_book_value: depreciationPosted ? '82000.00' : '82000.00',
+      };
+    });
+    return json(route, {
+      financial_year: financialYear,
+      from_date: '2026-04-01',
+      to_date: '2027-03-31',
+      rows,
+      asset_count: rows.length,
+      total_depreciation: rows.length ? '18000.00' : '0.00',
+      already_run: depreciationPosted,
+      existing_run: depreciationPosted ? { run_id: 'dep-run-1', journal_entry_id: 'DEP-2026-001' } : null,
+      can_post: rows.length > 0 && !depreciationPosted,
+      notes: ['Posting writes one journal: Dr Depreciation Expense, Cr Accumulated Depreciation.'],
+    });
+  });
+  await page.route('**/api/v1/business/depreciation/run', route => {
+    depreciationPosted = true;
+    fixedAssets.forEach(asset => {
+      if (asset.status === 'active') {
+        asset.accumulated_depreciation = '18000.00';
+        asset.book_value = '82000.00';
+      }
+    });
+    return json(route, {
+      run_id: 'dep-run-1',
+      journal_entry_id: 'DEP-2026-001',
+      created: true,
+      financial_year: route.request().postDataJSON().financial_year || '2026-27',
+      entry_date: '2027-03-31',
+      total_depreciation: '18000.00',
+      asset_count: fixedAssets.filter(asset => asset.status === 'active').length,
     });
   });
   await page.route('**/api/v1/business/opening-balances**', async route => {
@@ -1549,6 +1696,36 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Last closing-stock journal');
     await page.locator('[data-business-action="item-deactivate"][data-item-id="item-2"]').click();
     await expect(page.locator('#login-status')).toContainText('Item deactivated');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="fixed-assets"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Fixed-asset register');
+    await expect(page.locator('#business-report-printable')).toContainText('Delivery Van');
+    await page.locator('[data-business-action="fa-toggle-form"]').click();
+    await page.locator('[data-fa-form] input[name="fa_name"]').fill('Office Laptop');
+    await page.locator('[data-fa-form] select[name="fa_account"]').selectOption('16001');
+    await page.locator('[data-fa-form] input[name="fa_date"]').fill('2026-04-01');
+    await page.locator('[data-fa-form] input[name="fa_cost"]').fill('60000');
+    await page.locator('[data-fa-form] input[name="fa_salvage"]').fill('5000');
+    await page.locator('[data-fa-form] input[name="fa_life"]').fill('5');
+    await page.locator('[data-business-action="fa-create"]').click();
+    await expect(page.locator('#login-status')).toContainText('Asset registered');
+    await expect(page.locator('#business-report-printable')).toContainText('Office Laptop');
+    await page.locator('[data-dep-fy]').selectOption('2026-27');
+    await page.locator('[data-business-action="dep-preview"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('ready to post');
+    await expect(page.locator('#business-report-printable')).toContainText('Depreciation run');
+    await page.locator('[data-business-action="dep-post"]').click();
+    await expect(page.locator('#login-status')).toContainText('Depreciation posted');
+    await expect(page.locator('#business-report-printable')).toContainText('already posted');
+    const fixedAssetRow = page.locator('#business-report-printable table').first().getByRole('row', { name: /Delivery Van/ });
+    await fixedAssetRow.locator('[data-fa-dispose-date]').fill('2027-03-31');
+    await fixedAssetRow.locator('[data-fa-dispose-sale]').fill('70000');
+    await fixedAssetRow.locator('[data-fa-dispose-bank]').selectOption('11010');
+    await fixedAssetRow.getByRole('button', { name: 'Dispose' }).click();
+    await expect(page.locator('#login-status')).toContainText('Asset disposed');
+    const disposedRegisterRow = page.locator('#business-report-printable table').first().getByRole('row', { name: /Delivery Van/ });
+    await expect(disposedRegisterRow).toContainText('disposed');
+    await expect(disposedRegisterRow).toContainText('Journal #FAD-2026-001');
 
     await page.locator('[data-business-action="report-tab"][data-report-tab="gst-returns"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('GSTR-3B summary');

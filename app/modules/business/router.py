@@ -3645,6 +3645,35 @@ async def business_list_fixed_assets(
     )
 
 
+@router.post("/fixed-assets/{asset_id}/dispose")
+async def business_dispose_fixed_asset(
+    asset_id: str,
+    payload: dict = Body(...),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Dispose an active fixed asset through a balanced journal and mark the
+    register row disposed. Admin only; posted journals stay immutable."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="fixed asset disposal",
+    )
+    try:
+        return await fixed_assets.dispose_fixed_asset(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, asset_id=asset_id,
+            payload=payload, created_by=_created_by(current_user),
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @router.get("/depreciation/preview")
 async def business_depreciation_preview(
     financial_year: str = Query(..., pattern=r"^\d{4}-\d{2}$"),

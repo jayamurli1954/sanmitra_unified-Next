@@ -4,7 +4,12 @@ from datetime import date
 from decimal import Decimal
 
 from app.modules.business.fixed_assets import (
+    ACCUMULATED_DEPRECIATION_CODE,
+    DEFAULT_DISPOSAL_BANK_CODE,
+    DISPOSAL_GAIN_CODE,
+    DISPOSAL_LOSS_CODE,
     assemble_depreciation_preview,
+    assemble_disposal_plan,
     compute_depreciation,
 )
 
@@ -93,3 +98,79 @@ def test_preview_totals_and_already_run_guard():
     )
     assert rerun["already_run"] is True
     assert rerun["can_post"] is False
+
+
+def _accounts():
+    codes = ["16003", ACCUMULATED_DEPRECIATION_CODE, DEFAULT_DISPOSAL_BANK_CODE, DISPOSAL_GAIN_CODE, DISPOSAL_LOSS_CODE]
+    return {code: {"account_id": index + 1, "account_code": code, "code": code} for index, code in enumerate(codes)}
+
+
+def test_disposal_plan_posts_loss_on_asset_disposal():
+    out = assemble_disposal_plan(
+        asset=_asset(cost="100000.00", asset_account_code="16003"),
+        accumulated_depreciation=Decimal("40000.00"),
+        sale_value=Decimal("50000.00"),
+        disposal_date=date(2027, 3, 31),
+        accounts_by_code=_accounts(),
+    )
+
+    by_code = {line["account_code"]: line for line in out["lines"]}
+    assert out["book_value"] == "60000.00"
+    assert out["loss"] == "10000.00"
+    assert out["gain"] == "0.00"
+    assert by_code[ACCUMULATED_DEPRECIATION_CODE]["debit"] == Decimal("40000.00")
+    assert by_code[DEFAULT_DISPOSAL_BANK_CODE]["debit"] == Decimal("50000.00")
+    assert by_code[DISPOSAL_LOSS_CODE]["debit"] == Decimal("10000.00")
+    assert by_code["16003"]["credit"] == Decimal("100000.00")
+    assert out["total_debit"] == out["total_credit"] == "100000.00"
+
+
+def test_disposal_plan_posts_gain_on_asset_disposal():
+    out = assemble_disposal_plan(
+        asset=_asset(cost="100000.00", asset_account_code="16003"),
+        accumulated_depreciation=Decimal("70000.00"),
+        sale_value=Decimal("35000.00"),
+        disposal_date=date(2027, 3, 31),
+        accounts_by_code=_accounts(),
+    )
+
+    by_code = {line["account_code"]: line for line in out["lines"]}
+    assert out["book_value"] == "30000.00"
+    assert out["gain"] == "5000.00"
+    assert out["loss"] == "0.00"
+    assert by_code[ACCUMULATED_DEPRECIATION_CODE]["debit"] == Decimal("70000.00")
+    assert by_code[DEFAULT_DISPOSAL_BANK_CODE]["debit"] == Decimal("35000.00")
+    assert by_code["16003"]["credit"] == Decimal("100000.00")
+    assert by_code[DISPOSAL_GAIN_CODE]["credit"] == Decimal("5000.00")
+    assert out["total_debit"] == out["total_credit"] == "105000.00"
+
+
+def test_disposal_plan_rejects_invalid_disposal_date_and_missing_accounts():
+    try:
+        assemble_disposal_plan(
+            asset=_asset(cost="100000.00", asset_account_code="16003"),
+            accumulated_depreciation=Decimal("0.00"),
+            sale_value=Decimal("0.00"),
+            disposal_date=date(2025, 3, 31),
+            accounts_by_code=_accounts(),
+        )
+    except Exception as exc:
+        assert "before purchase_date" in str(exc)
+    else:
+        raise AssertionError("expected invalid disposal date to fail")
+
+    try:
+        assemble_disposal_plan(
+            asset=_asset(cost="100000.00", asset_account_code="16003"),
+            accumulated_depreciation=Decimal("0.00"),
+            sale_value=Decimal("50000.00"),
+            disposal_date=date(2027, 3, 31),
+            accounts_by_code={"16003": {"account_id": 1}},
+        )
+    except Exception as exc:
+        detail = str(exc)
+        assert ACCUMULATED_DEPRECIATION_CODE in detail
+        assert DEFAULT_DISPOSAL_BANK_CODE in detail
+        assert DISPOSAL_LOSS_CODE in detail
+    else:
+        raise AssertionError("expected missing disposal accounts to fail")

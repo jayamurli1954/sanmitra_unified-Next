@@ -118,6 +118,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Year-End Close browser shell E2E | Local Playwright shell smoke for FY selection, close preview, income/expense closing lines, Retained Earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance | Passed on 2026-07-03 |
 | Inventory local API/browser hardening | Backend tests for item master tenant/app/entity scoping, item-reference validation, posted same-scope stock-register assembly, closing-stock journal posting guards, route contract coverage, and local Playwright shell item/register/closing-stock posting UX | Passed on 2026-07-04 |
 | Banking/Reconciliation local API/browser hardening | Backend tests for statement CSV import/dedupe, tenant/app/entity-scoped BRS assembly, exact amount/side match validation, soft unmatch/reversal, route contract coverage, and local Playwright shell import/match/BRS/unmatch UX | Passed on 2026-07-04 |
+| Fixed Assets local API/browser hardening | Backend tests for SLM/WDV depreciation math, balanced gain/loss disposal journal planning, admin-only tenant/app/entity-scoped disposal route contract, and local Playwright shell register/depreciation/disposal UX | Passed on 2026-07-04 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -359,9 +360,10 @@ Result:
 - Year-End Close real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open; the current year-end browser coverage is local mocked-shell E2E.
 - Approval depth still needs production operator review across tenant settings, opening balances, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
-- Bank reconciliation, fixed assets, CA practice operations, and data-health/MIS need separate Phase 3-4 sub-gates.
+- CA practice operations and data-health/MIS need separate Phase 3-4 sub-gates.
 - Inventory still needs valuation policy settings, stock issue/adjustment workflows, real-stack/demo mutation, and production inventory signoff; the current gate closes local API plus mocked-shell item/register/closing-stock posting coverage.
 - Banking/reconciliation still needs bank-only voucher posting from imported statement lines, bank book/cash book production polish, real-stack/demo mutation, live bank feed policy, and production banking signoff; the current gate closes local API plus mocked-shell CSV import/match/BRS/unmatch coverage.
+- Fixed assets still need dedicated disposal gain/loss account-code polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff; the current gate closes local API plus mocked-shell register/depreciation/disposal coverage.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals
