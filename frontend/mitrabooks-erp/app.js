@@ -13362,6 +13362,8 @@ const cnFormHeader = {
   income_account_code: "41001",
   place_of_supply: "",
   notes: "",
+  cost_centre_id: "",
+  project_id: "",
 };
 
 function rerenderCreditNoteIfActive() {
@@ -13390,6 +13392,8 @@ function syncCnFormFromDom() {
   cnFormHeader.income_account_code = val("select[name='income_account_code']") || "41001";
   cnFormHeader.place_of_supply = val("input[name='place_of_supply']");
   cnFormHeader.notes = val("textarea[name='notes']");
+  cnFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
+  cnFormHeader.project_id = val("select[name='project_id']");
   cnFormLines = Array.from(form.querySelectorAll("[data-cn-line]")).map((row) => ({
     id: row.getAttribute("data-cn-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -13455,8 +13459,11 @@ function openCreditNoteCreate() {
   cnFormHeader.income_account_code = "41001";
   cnFormHeader.place_of_supply = "";
   cnFormHeader.notes = "";
+  cnFormHeader.cost_centre_id = "";
+  cnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!lastDimensions) loadDimensions().then(() => rerenderCreditNoteIfActive());
   setCreditNoteView("create");
 }
 
@@ -13506,6 +13513,8 @@ async function submitCreditNote() {
     income_account_code: cnFormHeader.income_account_code || "41001",
     place_of_supply: String(cnFormHeader.place_of_supply || "").trim() || null,
     notes: String(cnFormHeader.notes || "").trim() || null,
+    cost_centre_id: cnFormHeader.cost_centre_id || null,
+    project_id: cnFormHeader.project_id || null,
     line_items: lineItems,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/credit-notes", {
@@ -13652,6 +13661,12 @@ function renderCreditNoteCreateForm() {
         <label>Place of supply
           <input type="text" name="place_of_supply" value="${escapeHtml(cnFormHeader.place_of_supply)}" placeholder="State / code">
         </label>
+        ${dimensionOptions("cost_centre", cnFormHeader.cost_centre_id) ? `<label>Cost centre
+          <select name="cost_centre_id">${dimensionOptions("cost_centre", cnFormHeader.cost_centre_id)}</select>
+        </label>` : ""}
+        ${dimensionOptions("project", cnFormHeader.project_id) ? `<label>Project
+          <select name="project_id">${dimensionOptions("project", cnFormHeader.project_id)}</select>
+        </label>` : ""}
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${cnFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)
@@ -13797,6 +13812,8 @@ const dnFormHeader = {
   expense_account_code: "51001",
   place_of_supply: "",
   notes: "",
+  cost_centre_id: "",
+  project_id: "",
 };
 
 function rerenderDebitNoteIfActive() {
@@ -13825,6 +13842,8 @@ function syncDnFormFromDom() {
   dnFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
   dnFormHeader.place_of_supply = val("input[name='place_of_supply']");
   dnFormHeader.notes = val("textarea[name='notes']");
+  dnFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
+  dnFormHeader.project_id = val("select[name='project_id']");
   dnFormLines = Array.from(form.querySelectorAll("[data-dn-line]")).map((row) => ({
     id: row.getAttribute("data-dn-line"),
     description: row.querySelector("input[name='description']")?.value || "",
@@ -13889,8 +13908,11 @@ function openDebitNoteCreate() {
   dnFormHeader.expense_account_code = "51001";
   dnFormHeader.place_of_supply = "";
   dnFormHeader.notes = "";
+  dnFormHeader.cost_centre_id = "";
+  dnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!lastDimensions) loadDimensions().then(() => rerenderDebitNoteIfActive());
   setDebitNoteView("create");
 }
 
@@ -13939,6 +13961,8 @@ async function submitDebitNote() {
     expense_account_code: dnFormHeader.expense_account_code || "51001",
     place_of_supply: String(dnFormHeader.place_of_supply || "").trim() || null,
     notes: String(dnFormHeader.notes || "").trim() || null,
+    cost_centre_id: dnFormHeader.cost_centre_id || null,
+    project_id: dnFormHeader.project_id || null,
     line_items: lineItems,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/debit-notes", {
@@ -14077,6 +14101,12 @@ function renderDebitNoteCreateForm() {
         <label>Place of supply
           <input type="text" name="place_of_supply" value="${escapeHtml(dnFormHeader.place_of_supply)}" placeholder="State / code">
         </label>
+        ${dimensionOptions("cost_centre", dnFormHeader.cost_centre_id) ? `<label>Cost centre
+          <select name="cost_centre_id">${dimensionOptions("cost_centre", dnFormHeader.cost_centre_id)}</select>
+        </label>` : ""}
+        ${dimensionOptions("project", dnFormHeader.project_id) ? `<label>Project
+          <select name="project_id">${dimensionOptions("project", dnFormHeader.project_id)}</select>
+        </label>` : ""}
         <label class="invoice-inter-toggle">
           <input type="checkbox" name="is_inter_state" ${dnFormHeader.is_inter_state ? "checked" : ""}>
           Inter-state supply (IGST)

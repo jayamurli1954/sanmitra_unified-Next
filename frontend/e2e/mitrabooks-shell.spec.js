@@ -41,6 +41,22 @@ async function mockVerifiedMitraBooksSession(page) {
   const bills = [];
   const creditNotes = [];
   const debitNotes = [];
+  const dimensions = [
+    {
+      dimension_id: 'dim-cc-blr',
+      dimension_type: 'cost_centre',
+      code: 'BLR',
+      name: 'Bengaluru',
+      is_active: true,
+    },
+    {
+      dimension_id: 'dim-prj-alpha',
+      dimension_type: 'project',
+      code: 'ALPHA',
+      name: 'Project Alpha',
+      is_active: true,
+    },
+  ];
   const allocations = [];
   const paidBillIds = new Set();
   let openingBalancePosted = false;
@@ -355,7 +371,104 @@ async function mockVerifiedMitraBooksSession(page) {
       { section: '206C(1H)', label: 'Sale of goods', rate: '0.10', applies_to: 'customer_receipts' },
     ],
   }));
-  await page.route('**/api/v1/business/dimensions**', route => json(route, { items: [] }));
+  await page.route('**/api/v1/business/dimensions**', async route => {
+    const request = route.request();
+    const method = request.method();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    const active = () => dimensions.filter(row => row.is_active !== false);
+    const listPayload = () => {
+      const items = active();
+      return {
+        items,
+        cost_centres: items.filter(row => row.dimension_type === 'cost_centre'),
+        projects: items.filter(row => row.dimension_type === 'project'),
+        count: items.length,
+      };
+    };
+    const taxable = row => Number(row.taxable_total || 0);
+    const reportPayload = () => {
+      const type = url.searchParams.get('dimension_type') || 'cost_centre';
+      const field = type === 'project' ? 'project_id' : 'cost_centre_id';
+      const dimRows = dimensions.filter(row => row.dimension_type === type);
+      const sums = new Map();
+      const bucket = id => {
+        const key = id || '__untagged__';
+        if (!sums.has(key)) sums.set(key, { income: 0, expense: 0 });
+        return sums.get(key);
+      };
+      invoices.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).income += taxable(row); });
+      creditNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).income -= taxable(row); });
+      bills.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense += taxable(row); });
+      debitNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense -= taxable(row); });
+      const rows = dimRows
+        .filter(row => sums.has(row.dimension_id))
+        .map(row => {
+          const v = sums.get(row.dimension_id);
+          return {
+            dimension_id: row.dimension_id,
+            code: row.code,
+            name: row.name,
+            income: v.income.toFixed(2),
+            expense: v.expense.toFixed(2),
+            net: (v.income - v.expense).toFixed(2),
+          };
+        });
+      const untagged = sums.get('__untagged__') || { income: 0, expense: 0 };
+      const totals = [...sums.values()].reduce((acc, row) => ({
+        income: acc.income + row.income,
+        expense: acc.expense + row.expense,
+      }), { income: 0, expense: 0 });
+      return {
+        dimension_type: type,
+        from_date: url.searchParams.get('from_date') || '2026-04-01',
+        to_date: url.searchParams.get('to_date') || '2027-03-31',
+        rows,
+        untagged: {
+          income: untagged.income.toFixed(2),
+          expense: untagged.expense.toFixed(2),
+          net: (untagged.income - untagged.expense).toFixed(2),
+        },
+        totals: {
+          income: totals.income.toFixed(2),
+          expense: totals.expense.toFixed(2),
+          net: (totals.income - totals.expense).toFixed(2),
+        },
+        document_counts: {
+          invoices: invoices.filter(row => row.status === 'posted').length,
+          bills: bills.filter(row => row.status === 'posted').length,
+          credit_notes: creditNotes.filter(row => row.status === 'posted').length,
+          debit_notes: debitNotes.filter(row => row.status === 'posted').length,
+        },
+        notes: ['Credit notes reduce income and debit notes reduce expense.'],
+      };
+    };
+
+    if (method === 'GET' && path.endsWith('/report')) return json(route, reportPayload());
+
+    if (method === 'PATCH' && path.endsWith('/deactivate')) {
+      const dimensionId = path.split('/').at(-2);
+      const dim = dimensions.find(row => row.dimension_id === dimensionId);
+      if (!dim) return json(route, { detail: 'Dimension not found' }, 404);
+      dim.is_active = false;
+      return json(route, dim);
+    }
+
+    if (method === 'POST') {
+      const payload = request.postDataJSON();
+      const dim = {
+        dimension_id: `dim-${dimensions.length + 1}`,
+        dimension_type: payload.dimension_type || 'cost_centre',
+        code: String(payload.code || payload.name || `DIM-${dimensions.length + 1}`).trim().toUpperCase(),
+        name: payload.name,
+        is_active: true,
+      };
+      dimensions.push(dim);
+      return json(route, dim);
+    }
+
+    return json(route, listPayload());
+  });
   await page.route('**/api/v1/business/inventory/items**', async route => {
     const request = route.request();
     const method = request.method();
@@ -718,6 +831,8 @@ async function mockVerifiedMitraBooksSession(page) {
         line_items: lineItems,
         is_inter_state: !!payload.is_inter_state,
         reference: payload.reference || '',
+        cost_centre_id: payload.cost_centre_id || null,
+        project_id: payload.project_id || null,
         journal_entry_id: `je-inv-${invoices.length + 1}`,
       };
       invoices.push(invoice);
@@ -794,6 +909,8 @@ async function mockVerifiedMitraBooksSession(page) {
         line_items: lineItems,
         is_inter_state: !!payload.is_inter_state,
         is_reverse_charge: !!payload.is_reverse_charge,
+        cost_centre_id: payload.cost_centre_id || null,
+        project_id: payload.project_id || null,
         journal_entry_id: `je-bill-${bills.length + 1}`,
       };
       bills.push(bill);
@@ -850,6 +967,8 @@ async function mockVerifiedMitraBooksSession(page) {
         status: 'posted',
         line_items: lineItems,
         is_inter_state: !!payload.is_inter_state,
+        cost_centre_id: payload.cost_centre_id || null,
+        project_id: payload.project_id || null,
         journal_entry_id: `je-cn-${creditNotes.length + 1}`,
       };
       creditNotes.push(note);
@@ -906,6 +1025,8 @@ async function mockVerifiedMitraBooksSession(page) {
         status: 'posted',
         line_items: lineItems,
         is_inter_state: !!payload.is_inter_state,
+        cost_centre_id: payload.cost_centre_id || null,
+        project_id: payload.project_id || null,
         journal_entry_id: `je-dn-${debitNotes.length + 1}`,
       };
       debitNotes.push(note);
@@ -1892,6 +2013,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-invoice-form] select[name="income_account_code"]').selectOption('4001');
     await page.locator('[data-invoice-form] input[name="place_of_supply"]').fill('Karnataka');
     await page.locator('[data-invoice-form] input[name="reference"]').fill('PO-100');
+    await page.locator('[data-invoice-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
+    await page.locator('[data-invoice-form] select[name="project_id"]').selectOption('dim-prj-alpha');
     await page.locator('[data-invoice-line] input[name="description"]').fill('Consulting service');
     await page.locator('[data-invoice-line] input[name="hsn_sac"]').fill('9983');
     await page.locator('[data-invoice-line] input[name="quantity"]').fill('2');
@@ -1903,6 +2026,13 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('INV-2026-001');
     await expect(page.getByRole('row', { name: /INV-2026-001/ })).toContainText('posted');
 
+    await page.locator('nav#nav a[data-business-workspace="reports"]').click();
+    await page.locator('[data-business-action="report-tab"][data-report-tab="dimensions"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru');
+    await expect(page.locator('#business-report-printable')).toContainText('2,000.00');
+    await expect(page.locator('#business-report-printable')).toContainText('Credit notes reduce income');
+
+    await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.getByRole('row', { name: /INV-2026-001/ }).getByRole('button', { name: 'View' }).click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Invoice INV-2026-001');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Consulting service');
@@ -1922,6 +2052,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-bill-form] input[name="due_date"]').fill('2026-06-30');
     await page.locator('[data-bill-form] select[name="expense_account_code"]').selectOption('5001');
     await page.locator('[data-bill-form] input[name="place_of_supply"]').fill('Karnataka');
+    await page.locator('[data-bill-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
+    await page.locator('[data-bill-form] select[name="project_id"]').selectOption('dim-prj-alpha');
     await page.locator('[data-bill-line] input[name="description"]').fill('Office supplies');
     await page.locator('[data-bill-line] input[name="hsn_sac"]').fill('4820');
     await page.locator('[data-bill-line] input[name="quantity"]').fill('3');
@@ -1952,6 +2084,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-cn-form] select[name="reason"]').selectOption('sales_return');
     await page.locator('[data-cn-form] select[name="income_account_code"]').selectOption('4001');
     await page.locator('[data-cn-form] input[name="place_of_supply"]').fill('Karnataka');
+    await page.locator('[data-cn-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
+    await page.locator('[data-cn-form] select[name="project_id"]').selectOption('dim-prj-alpha');
     await page.locator('[data-cn-line] input[name="description"]').fill('Returned consulting service');
     await page.locator('[data-cn-line] input[name="hsn_sac"]').fill('9983');
     await page.locator('[data-cn-line] input[name="uqc"]').fill('NOS');
@@ -1983,6 +2117,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-dn-form] select[name="reason"]').selectOption('purchase_return');
     await page.locator('[data-dn-form] select[name="expense_account_code"]').selectOption('5001');
     await page.locator('[data-dn-form] input[name="place_of_supply"]').fill('Karnataka');
+    await page.locator('[data-dn-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
+    await page.locator('[data-dn-form] select[name="project_id"]').selectOption('dim-prj-alpha');
     await page.locator('[data-dn-line] input[name="description"]').fill('Returned office supplies');
     await page.locator('[data-dn-line] input[name="hsn_sac"]').fill('4820');
     await page.locator('[data-dn-line] input[name="quantity"]').fill('1');

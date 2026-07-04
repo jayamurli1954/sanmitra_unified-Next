@@ -1,14 +1,14 @@
 """Accounting dimensions — cost centres and projects on transactions.
 
 Dimensions are tags, not ledger structure: the immutable double-entry journal
-stays untouched. A document (sales invoice / purchase bill) may carry a
-cost-centre and/or a project, and reporting aggregates the posted documents —
-income from invoices, expense from bills — per dimension with an explicit
-"untagged" bucket, so the report always reconciles to the document totals.
+stays untouched. A document (sales invoice / purchase bill / credit note /
+debit note) may carry a cost-centre and/or a project, and reporting aggregates
+the posted documents — income from invoices less credit notes, expense from
+bills less debit notes — per dimension with an explicit "untagged" bucket, so
+the report always reconciles to the document totals.
 
-v1 scope: tagging on sales invoices and purchase bills (the dominant income/
-expense sources here). Vouchers, credit/debit notes and per-line dimensions
-are v2 — noted in the report.
+Current scope: document-level tagging on invoices, bills, credit notes, and
+debit notes. Vouchers and per-line dimensions remain v2 — noted in the report.
 """
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -216,21 +216,30 @@ def assemble_dimension_report(
     dimensions: list[dict],
     invoices: list[dict],
     bills: list[dict],
+    credit_notes: list[dict] | None = None,
+    debit_notes: list[dict] | None = None,
 ) -> dict:
     """Income/expense/net per dimension over a period, plus the untagged
-    bucket. Income = posted sales invoices' taxable_total; expense = posted
-    purchase bills' taxable_total (GST is not P&L). The rows always sum to the
-    document totals, so nothing silently disappears."""
+    bucket. Income = posted sales invoices' taxable_total less credit notes;
+    expense = posted purchase bills' taxable_total less debit notes (GST is not
+    P&L). The rows always sum to the document totals, so nothing silently
+    disappears."""
     field = "cost_centre_id" if dimension_type == "cost_centre" else "project_id"
     rows: dict[str | None, dict] = {}
+    credit_notes = credit_notes or []
+    debit_notes = debit_notes or []
 
     def _bucket(dim_id: str | None) -> dict:
         return rows.setdefault(dim_id, {"income": Decimal("0.00"), "expense": Decimal("0.00")})
 
     for inv in invoices:
         _bucket(inv.get(field) or None)["income"] += _q2(inv.get("taxable_total") or 0)
+    for note in credit_notes:
+        _bucket(note.get(field) or None)["income"] -= _q2(note.get("taxable_total") or 0)
     for bill in bills:
         _bucket(bill.get(field) or None)["expense"] += _q2(bill.get("taxable_total") or 0)
+    for note in debit_notes:
+        _bucket(note.get(field) or None)["expense"] -= _q2(note.get("taxable_total") or 0)
 
     names = {d["dimension_id"]: d for d in dimensions if d.get("dimension_type") == dimension_type}
     out_rows: list[dict] = []
@@ -267,13 +276,19 @@ def assemble_dimension_report(
             "expense": str(_q2(total_expense)),
             "net": str(_q2(total_income - total_expense)),
         },
-        "document_counts": {"invoices": len(invoices), "bills": len(bills)},
+        "document_counts": {
+            "invoices": len(invoices),
+            "bills": len(bills),
+            "credit_notes": len(credit_notes),
+            "debit_notes": len(debit_notes),
+        },
         "notes": [
             "Income = posted sales invoices' taxable value; expense = posted purchase "
-            "bills' taxable value (GST is excluded — it is not P&L).",
+            "bills' taxable value (GST is excluded — it is not P&L). Credit notes "
+            "reduce income and debit notes reduce expense.",
             "The 'untagged' bucket holds documents without this dimension, so the "
             "report always ties to the period's document totals.",
-            "Vouchers, credit/debit notes and per-line dimensions are not yet tagged (v2).",
+            "Vouchers and per-line dimensions are not yet tagged (v2).",
         ],
     }
 
@@ -284,7 +299,12 @@ async def build_dimension_report(
 ) -> dict:
     from app.accounting.service import AccountingValidationError, _financial_year_start
     from app.db.mongo import get_collection
-    from app.modules.business.service import PURCHASE_BILLS_COLLECTION, SALES_INVOICES_COLLECTION
+    from app.modules.business.service import (
+        CREDIT_NOTES_COLLECTION,
+        DEBIT_NOTES_COLLECTION,
+        PURCHASE_BILLS_COLLECTION,
+        SALES_INVOICES_COLLECTION,
+    )
 
     if dimension_type not in DIMENSION_TYPES:
         raise AccountingValidationError("dimension_type must be 'cost_centre' or 'project'")
@@ -301,8 +321,17 @@ async def build_dimension_report(
         **scope, "status": "posted",
         "bill_date": {"$gte": from_date.isoformat(), "$lte": to_date.isoformat()},
     }).to_list(length=20000)
+    credit_notes = await get_collection(CREDIT_NOTES_COLLECTION).find({
+        **scope, "status": "posted",
+        "note_date": {"$gte": from_date.isoformat(), "$lte": to_date.isoformat()},
+    }).to_list(length=20000)
+    debit_notes = await get_collection(DEBIT_NOTES_COLLECTION).find({
+        **scope, "status": "posted",
+        "note_date": {"$gte": from_date.isoformat(), "$lte": to_date.isoformat()},
+    }).to_list(length=20000)
 
     return assemble_dimension_report(
         dimension_type=dimension_type, from_date=from_date, to_date=to_date,
         dimensions=[_response(d) for d in dims], invoices=invoices, bills=bills,
+        credit_notes=credit_notes, debit_notes=debit_notes,
     )

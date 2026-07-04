@@ -22,33 +22,43 @@ def _bill(taxable, cc=None, proj=None):
     return {"taxable_total": taxable, "cost_centre_id": cc, "project_id": proj}
 
 
+def _cn(taxable, cc=None, proj=None):
+    return {"taxable_total": taxable, "cost_centre_id": cc, "project_id": proj}
+
+
+def _dn(taxable, cc=None, proj=None):
+    return {"taxable_total": taxable, "cost_centre_id": cc, "project_id": proj}
+
+
 def test_report_groups_income_expense_and_untagged():
     out = assemble_dimension_report(
         dimension_type="cost_centre", from_date=FROM, to_date=TO, dimensions=DIMS,
         invoices=[_inv("10000", cc="cc1"), _inv("5000", cc="cc2"), _inv("2000")],
         bills=[_bill("4000", cc="cc1"), _bill("1000")],
+        credit_notes=[_cn("1500", cc="cc1"), _cn("200")],
+        debit_notes=[_dn("500", cc="cc1"), _dn("100")],
     )
     rows = {r["code"]: r for r in out["rows"]}
     assert rows["BLR"] == {"dimension_id": "cc1", "code": "BLR", "name": "Bengaluru",
-                           "income": "10000.00", "expense": "4000.00", "net": "6000.00"}
+                           "income": "8500.00", "expense": "3500.00", "net": "5000.00"}
     assert rows["MUM"]["net"] == "5000.00"
     # Sorted by net descending.
     assert [r["code"] for r in out["rows"]] == ["BLR", "MUM"]
-    assert out["untagged"] == {"income": "2000.00", "expense": "1000.00", "net": "1000.00"}
+    assert out["untagged"] == {"income": "1800.00", "expense": "900.00", "net": "900.00"}
     # Totals tie to all documents (tagged + untagged).
-    assert out["totals"] == {"income": "17000.00", "expense": "5000.00", "net": "12000.00"}
-    assert out["document_counts"] == {"invoices": 3, "bills": 2}
+    assert out["totals"] == {"income": "15300.00", "expense": "4400.00", "net": "10900.00"}
+    assert out["document_counts"] == {"invoices": 3, "bills": 2, "credit_notes": 2, "debit_notes": 2}
 
 
 def test_report_by_project_uses_project_field_and_keeps_deleted_tags():
     out = assemble_dimension_report(
         dimension_type="project", from_date=FROM, to_date=TO, dimensions=DIMS,
         invoices=[_inv("8000", cc="cc1", proj="p1"), _inv("3000", proj="ghost")],
-        bills=[],
+        bills=[], credit_notes=[_cn("500", proj="p1")], debit_notes=[],
     )
     rows = {r["dimension_id"]: r for r in out["rows"]}
     assert rows["p1"]["name"] == "Project Alpha"
-    assert rows["p1"]["income"] == "8000.00"
+    assert rows["p1"]["income"] == "7500.00"
     # A tag whose master was removed still appears (history never vanishes).
     assert rows["ghost"]["name"] == "(deleted dimension)"
     # Cost-centre tags are irrelevant for the project view.

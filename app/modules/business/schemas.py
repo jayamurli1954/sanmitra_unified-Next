@@ -895,6 +895,9 @@ class CreditNoteCreateRequest(BaseModel):
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[CreditNoteLineItem] = Field(..., min_length=1)
+    # Accounting dimensions (tags for reporting; no ledger impact).
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
     save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
@@ -923,6 +926,8 @@ class CreditNoteResponse(BaseModel):
     income_account_code: str
     notes: str | None = None
     line_items: list[CreditNoteLineResponse]
+    cost_centre_id: str | None = None
+    project_id: str | None = None
     taxable_total: Decimal
     cgst_total: Decimal
     sgst_total: Decimal
@@ -986,6 +991,9 @@ class DebitNoteCreateRequest(BaseModel):
     place_of_supply: str | None = Field(default=None, max_length=80)
     notes: str | None = Field(default=None, max_length=500)
     line_items: list[DebitNoteLineItem] = Field(..., min_length=1)
+    # Accounting dimensions (tags for reporting; no ledger impact).
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
     save_as_draft: bool = False
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
@@ -1014,6 +1022,8 @@ class DebitNoteResponse(BaseModel):
     expense_account_code: str
     notes: str | None = None
     line_items: list[DebitNoteLineResponse]
+    cost_centre_id: str | None = None
+    project_id: str | None = None
     taxable_total: Decimal
     cgst_total: Decimal
     sgst_total: Decimal

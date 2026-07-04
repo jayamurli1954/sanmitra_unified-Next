@@ -3871,6 +3871,13 @@ async def create_credit_note(
         raise AccountingValidationError(
             f"The {_period_label(_period_key(payload.note_date))} GST period is finalised and locked. Choose a date in an open period."
         )
+    await validate_dimension_refs(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        cost_centre_id=payload.cost_centre_id,
+        project_id=payload.project_id,
+    )
 
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, note_total = _compute_invoice_lines(payload)
     if note_total <= Decimal("0"):
@@ -3900,6 +3907,8 @@ async def create_credit_note(
         "income_account_code": payload.income_account_code,
         "notes": payload.notes,
         "line_items": lines,
+        "cost_centre_id": payload.cost_centre_id,
+        "project_id": payload.project_id,
         "taxable_total": str(taxable_total),
         "cgst_total": str(cgst_total),
         "sgst_total": str(sgst_total),
@@ -4476,6 +4485,13 @@ async def create_debit_note(
         raise AccountingValidationError(
             f"The {_period_label(_period_key(payload.note_date))} GST period is finalised and locked. Choose a date in an open period."
         )
+    await validate_dimension_refs(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        cost_centre_id=payload.cost_centre_id,
+        project_id=payload.project_id,
+    )
 
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, note_total = _compute_invoice_lines(payload)
     if note_total <= Decimal("0"):
@@ -4505,6 +4521,8 @@ async def create_debit_note(
         "expense_account_code": payload.expense_account_code,
         "notes": payload.notes,
         "line_items": lines,
+        "cost_centre_id": payload.cost_centre_id,
+        "project_id": payload.project_id,
         "taxable_total": str(taxable_total),
         "cgst_total": str(cgst_total),
         "sgst_total": str(sgst_total),
