@@ -116,6 +116,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | GST/TDS real-stack compliance browser/API slice | Guarded destructive demo-tenant browser/API path for posted invoice/bill with TCS/TDS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08/GSTR-4 route shape, GST settlement preview/post/reverse, temporary period lock/unlock, and document cleanup | Added on 2026-07-03; execution remains opt-in through the destructive demo gate |
 | Opening Balance browser shell E2E | Local Playwright shell smoke for opening-balance CSV upload, maker-checker preview, party-wise debtor/creditor evidence, Opening Balance Equity balancing line, admin post, trial balance impact, customer statement opening balance, existing-entry override warning, and export route evidence | Passed on 2026-07-03 |
 | Year-End Close browser shell E2E | Local Playwright shell smoke for FY selection, close preview, income/expense closing lines, Retained Earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance | Passed on 2026-07-03 |
+| Inventory local API/browser hardening | Backend tests for item master tenant/app/entity scoping, item-reference validation, posted same-scope stock-register assembly, closing-stock journal posting guards, route contract coverage, and local Playwright shell item/register/closing-stock posting UX | Passed on 2026-07-04 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -317,6 +318,20 @@ Result:
 - PASS: route-contract coverage now includes the new compliance endpoints used by the real-stack browser spec.
 - ADDED: GST settlement now has an operator-safe reversal route that reverses through the accounting journal reversal service, can explicitly unlock the GST period, and records reversal metadata on the settlement document.
 
+2026-07-04:
+
+```powershell
+python -m pytest tests/test_inventory.py tests/test_business_route_contract.py -q
+python scripts/preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused inventory and business route-contract tests, 12 tests.
+- ADDED: inventory service/API coverage for item master scoping, duplicate/opening-stock validation, line-item reference validation, posted same-scope stock-register assembly, and closing-stock journal posting/duplicate/negative-stock guards.
+- ADDED: route-contract coverage for `/api/v1/business/inventory/items`, item deactivation, stock register, closing-stock entry list, and closing-stock posting.
+- ADDED: local Playwright MitraBooks shell inventory flow for enabled inventory: item master display/create/deactivate, stock-register load, total closing-stock evidence, closing-stock post, and last-journal guidance.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -329,7 +344,8 @@ Result:
 - Year-End Close real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open; the current year-end browser coverage is local mocked-shell E2E.
 - Approval depth still needs production operator review across tenant settings, opening balances, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
-- Bank reconciliation, inventory, fixed assets, CA practice operations, and data-health/MIS need separate Phase 3-4 sub-gates.
+- Bank reconciliation, fixed assets, CA practice operations, and data-health/MIS need separate Phase 3-4 sub-gates.
+- Inventory still needs valuation policy settings, stock issue/adjustment workflows, real-stack/demo mutation, and production inventory signoff; the current gate closes local API plus mocked-shell item/register/closing-stock posting coverage.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

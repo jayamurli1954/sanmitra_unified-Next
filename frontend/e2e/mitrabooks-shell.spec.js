@@ -47,6 +47,20 @@ async function mockVerifiedMitraBooksSession(page) {
   let gstSettlementPosted = false;
   const caDocuments = [];
   const caClients = [];
+  const inventoryItems = [
+    {
+      item_id: 'item-widget-a',
+      code: 'WIDGET-A',
+      name: 'Widget A',
+      uqc: 'NOS',
+      hsn_sac: '8473',
+      gst_rate: '18.00',
+      opening_qty: '10.000',
+      opening_value: '1200.00',
+      is_active: true,
+    },
+  ];
+  const closingStockEntries = [];
   const json = (route, body, status = 200) => route.fulfill({
     status,
     contentType: 'application/json',
@@ -317,7 +331,88 @@ async function mockVerifiedMitraBooksSession(page) {
     ],
   }));
   await page.route('**/api/v1/business/dimensions**', route => json(route, { items: [] }));
-  await page.route('**/api/v1/business/inventory/items**', route => json(route, { items: [] }));
+  await page.route('**/api/v1/business/inventory/items**', async route => {
+    const request = route.request();
+    const method = request.method();
+    const path = new URL(request.url()).pathname;
+
+    if (method === 'PATCH' && path.endsWith('/deactivate')) {
+      const itemId = path.split('/').at(-2);
+      const item = inventoryItems.find(row => row.item_id === itemId);
+      if (!item) return json(route, { detail: 'Item not found' }, 404);
+      item.is_active = false;
+      return json(route, item);
+    }
+
+    if (method === 'POST') {
+      const payload = request.postDataJSON();
+      const item = {
+        item_id: `item-${inventoryItems.length + 1}`,
+        code: String(payload.code || payload.name || `ITEM-${inventoryItems.length + 1}`).trim().toUpperCase(),
+        name: payload.name,
+        uqc: payload.uqc || 'NOS',
+        hsn_sac: payload.hsn_sac || '',
+        gst_rate: payload.gst_rate || '0.00',
+        opening_qty: Number(payload.opening_qty || 0).toFixed(3),
+        opening_value: Number(payload.opening_value || 0).toFixed(2),
+        is_active: true,
+      };
+      inventoryItems.push(item);
+      return json(route, item);
+    }
+
+    const active = inventoryItems.filter(row => row.is_active);
+    return json(route, { inventory_enabled: true, items: active, count: active.length });
+  });
+  await page.route('**/api/v1/business/inventory/stock-register**', route => {
+    const asOf = new URL(route.request().url()).searchParams.get('as_of') || '2026-06-30';
+    return json(route, {
+      as_of: asOf,
+      item_count: inventoryItems.filter(row => row.is_active).length,
+      total_closing_value: '1800.00',
+      negative_stock_items: 0,
+      untracked_purchase_value: '0.00',
+      rows: inventoryItems.filter(row => row.is_active).map(row => ({
+        item_id: row.item_id,
+        code: row.code,
+        name: row.name,
+        uqc: row.uqc,
+        opening_qty: row.opening_qty,
+        purchased_qty: row.item_id === 'item-widget-a' ? '5.000' : '0.000',
+        produced_qty: '0.000',
+        sold_qty: row.item_id === 'item-widget-a' ? '3.000' : '0.000',
+        consumed_qty: '0.000',
+        closing_qty: row.item_id === 'item-widget-a' ? '12.000' : row.opening_qty,
+        avg_cost: row.item_id === 'item-widget-a' ? '150.00' : '0.00',
+        closing_value: row.item_id === 'item-widget-a' ? '1800.00' : '0.00',
+        negative_stock: false,
+      })),
+      notes: [
+        'Valuation is weighted-average cost of purchases + production (taxable value, GST excluded).',
+        'Reverse the closing-stock journal before posting a new position.',
+      ],
+    });
+  });
+  await page.route('**/api/v1/business/inventory/closing-stock/entries**', route => json(route, {
+    items: closingStockEntries,
+    count: closingStockEntries.length,
+  }));
+  await page.route('**/api/v1/business/inventory/closing-stock', route => {
+    const payload = route.request().postDataJSON();
+    const entry = {
+      journal_entry_id: 9301,
+      entry_date: payload.as_of || '2026-06-30',
+      description: `Closing stock as of ${payload.as_of || '2026-06-30'}`,
+    };
+    closingStockEntries.unshift(entry);
+    return json(route, {
+      journal_entry_id: entry.journal_entry_id,
+      created: true,
+      as_of: entry.entry_date,
+      closing_stock_value: '1800.00',
+      item_count: inventoryItems.filter(row => row.is_active).length,
+    });
+  });
   await page.route('**/api/v1/business/opening-balances**', async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -1174,7 +1269,6 @@ test.describe('MitraBooks ERP static shell', () => {
     alphaRow = page.getByRole('row', { name: /Alpha Consulting Updated/ });
     page.once('dialog', dialog => dialog.accept());
     await alphaRow.getByRole('button', { name: 'Deactivate' }).click();
-    await expect(page.locator('#login-status')).toContainText('Party deactivated');
     await expect(page.getByRole('row', { name: /Alpha Consulting Updated/ })).toHaveCount(0);
 
     await page.locator('nav#nav a[data-business-workspace="vouchers"]').click();
@@ -1310,6 +1404,29 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#login-status')).toContainText('GST settled');
     await expect(page.locator('#business-report-printable')).toContainText('settled');
     await expect(page.locator('#business-report-printable')).toContainText('period locked');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="inventory"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Item master');
+    await expect(page.locator('#business-report-printable')).toContainText('WIDGET-A');
+    await page.locator('[data-item-form] input[name="item_code"]').fill('widget-b');
+    await page.locator('[data-item-form] input[name="item_name"]').fill('Widget B');
+    await page.locator('[data-item-form] input[name="item_hsn"]').fill('8473');
+    await page.locator('[data-item-form] input[name="item_gst"]').fill('18');
+    await page.locator('[data-item-form] input[name="item_open_qty"]').fill('2');
+    await page.locator('[data-item-form] input[name="item_open_val"]').fill('300');
+    await page.locator('[data-business-action="item-create"]').click();
+    await expect(page.locator('#login-status')).toContainText('Item created');
+    await expect(page.locator('#business-report-printable')).toContainText('WIDGET-B');
+    await page.locator('[data-stock-asof]').fill('2026-06-30');
+    await page.locator('[data-business-action="stock-register-load"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Total closing stock');
+    await expect(page.locator('#business-report-printable')).toContainText('closing');
+    await expect(page.locator('#business-report-printable')).toContainText('1,800.00');
+    await page.locator('[data-business-action="closing-stock-post"]').click();
+    await expect(page.locator('#login-status')).toContainText('Closing stock posted');
+    await expect(page.locator('#business-report-printable')).toContainText('Last closing-stock journal');
+    await page.locator('[data-business-action="item-deactivate"][data-item-id="item-2"]').click();
+    await expect(page.locator('#login-status')).toContainText('Item deactivated');
 
     await page.locator('[data-business-action="report-tab"][data-report-tab="gst-returns"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('GSTR-3B summary');

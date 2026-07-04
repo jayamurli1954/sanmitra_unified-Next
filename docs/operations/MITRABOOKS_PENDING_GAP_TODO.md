@@ -32,6 +32,7 @@ Status convention:
 - ~~[x] Phase 3 GST/TDS real-stack compliance browser/API slice added on 2026-07-03: demo-tenant posted invoice/bill with TCS/TDS -> GSTR-3B -> GSTR-1/CDNR -> GSTR-2B reconciliation -> CMP-08/GSTR-4 route shape -> GST settlement preview/post/reverse -> temporary period lock/unlock -> document cleanup.~~
 - ~~[x] Phase 3 Opening Balance browser shell hardening passed locally on 2026-07-03: CSV upload -> maker-checker preview -> party-wise debtor/creditor evidence -> Opening Balance Equity balancing line -> admin post -> trial balance impact -> customer statement opening balance -> existing-entry override warning -> export route evidence.~~
 - ~~[x] Phase 3 Year-End Close browser shell hardening passed locally on 2026-07-03: FY selection -> close preview -> income/expense closing lines -> retained earnings movement -> admin post -> already-closed/idempotency warning -> reopen-by-reversal guidance.~~
+- ~~[x] Phase 3 Inventory local API/browser hardening passed on 2026-07-04: item master tenant/app/entity scoping, item-reference validation, posted same-scope stock register assembly, closing-stock journal posting guards, route contract coverage, and mocked-shell item/register/closing-stock posting UX.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -78,7 +79,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] Credit note source-document linkage and accounting/report/reversal API depth are closed; dedicated browser source-document enforcement and print/export polish remain open for production signoff.
 - [~] Debit note source-document linkage and accounting/report/reversal API depth are closed; dedicated browser source-document enforcement and print/export polish remain open for production signoff.
 - [~] GST report browser E2E for GSTR-1, GSTR-3B, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement, and export hardening. Guarded real-stack route/report coverage exists for returns and settlement preview/post/reverse; export hardening, visual filing UX, and production compliance review remain open.
-- [ ] Inventory browser E2E for item master, stock register, closing-stock posting, valuation policy settings, stock issue, and stock adjustment.
+- [~] Inventory browser/API E2E for item master, stock register, closing-stock posting, valuation policy settings, stock issue, and stock adjustment. Local API and mocked-shell browser coverage is closed for item master, stock register, and closing-stock posting; valuation policy settings, stock issue/adjustment, real-stack/demo mutation, and production inventory signoff remain open.
 - [ ] Banking/reconciliation browser E2E for CSV import, matching, reversal, reconciliation summary, bank book, and cash book polish.
 - [ ] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review.
 - [ ] Dimensions/tagging coverage across vouchers, invoices, bills, notes, reports, and exports.
