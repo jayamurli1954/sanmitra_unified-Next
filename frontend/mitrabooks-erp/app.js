@@ -9728,6 +9728,15 @@ function dimensionOptions(kind, selected) {
     `<option value="${escapeHtml(d.dimension_id)}" ${d.dimension_id === selected ? "selected" : ""}>${escapeHtml(`${d.code} - ${d.name}`)}</option>`).join("");
 }
 
+function voucherDimensionPayload() {
+  const costCentre = document.getElementById("business-voucher-cost-centre")?.value || "";
+  const project = document.getElementById("business-voucher-project")?.value || "";
+  return {
+    cost_centre_id: costCentre || null,
+    project_id: project || null,
+  };
+}
+
 async function createDimensionFromForm() {
   const form = document.querySelector("[data-dim-form]");
   if (!form) return;
@@ -9779,6 +9788,19 @@ async function loadDimensionReport() {
   renderJson(apiOutput, { dimension_report: { ok: result.ok, type: dimensionReportType } });
 }
 
+async function downloadDimensionReport(format) {
+  const typeSel = document.querySelector("[data-dim-report-type]");
+  const fromInput = document.querySelector("[data-dim-from]");
+  const toInput = document.querySelector("[data-dim-to]");
+  if (typeSel) dimensionReportType = typeSel.value || dimensionReportType;
+  const params = new URLSearchParams({ dimension_type: dimensionReportType, format });
+  if (fromInput?.value) params.set("from_date", fromInput.value);
+  if (toInput?.value) params.set("to_date", toInput.value);
+  const filename = `dimension_${dimensionReportType}.${format}`;
+  const result = await downloadApiFile("mitrabooks", `/api/v1/business/dimensions/report/export?${params.toString()}`, filename, { timeoutMs: 30000 });
+  renderJson(apiOutput, { dimension_report_export: { ok: result.ok, status: result.status, format } });
+}
+
 function renderDimensionsPanel() {
   const num = (v) => escapeHtml(formatCurrency(Number(v || 0)));
   const dims = lastDimensions;
@@ -9825,6 +9847,11 @@ function renderDimensionsPanel() {
       <div class="preview-heading compact">
         <div><p>${escapeHtml(r.from_date)} → ${escapeHtml(r.to_date)} · ${escapeHtml(String(r.document_counts?.invoices || 0))} invoice(s), ${escapeHtml(String(r.document_counts?.bills || 0))} bill(s).</p></div>
         <span class="pill">Net ${num(t.net)}</span>
+      </div>
+      <div class="report-date-controls">
+        <button class="secondary" type="button" data-business-action="dim-report-export" data-format="csv">CSV</button>
+        <button class="secondary" type="button" data-business-action="dim-report-export" data-format="xlsx">Excel</button>
+        <button class="secondary" type="button" data-business-action="dim-report-export" data-format="pdf">PDF</button>
       </div>
       <div class="table-preview compact-table">
         <table>
@@ -15312,6 +15339,7 @@ async function createSimplePartyVoucher(appKey, voucherType, date) {
     description: description || `${voucherType} voucher`,
     reference: reference || null,
     party_id: partyId,
+    ...voucherDimensionPayload(),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
@@ -15375,6 +15403,7 @@ async function createContraVoucher(appKey, date) {
     credit_account_code: fromAccount.code,
     description: description,
     reference: null,
+    ...voucherDimensionPayload(),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
@@ -15450,6 +15479,7 @@ async function createJournalVoucher(appKey, date) {
     credit_account_code: creditLines[0].account_code,
     description: description || "Journal entry",
     reference: null,
+    ...voucherDimensionPayload(),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
@@ -15514,6 +15544,7 @@ async function createBusinessVoucher(voucherData) {
     credit_account_id: creditLines[0].account_id,
     description: voucherData.narration || voucherData.reference || "Business voucher",
     reference: voucherData.reference || null,
+    ...voucherDimensionPayload(),
   };
 
   const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
@@ -15657,6 +15688,13 @@ async function reverseBusinessVoucher(voucherId) {
  */
 function renderVoucherTypeForm(voucherType) {
   const accountSelector = (fieldId) => renderAccountSelectorComponent(fieldId);
+  const costCentreOptions = dimensionOptions("cost_centre");
+  const projectOptions = dimensionOptions("project");
+  const dimensionFields = (costCentreOptions || projectOptions) ? `
+        <div class="report-date-controls voucher-dimension-fields">
+          ${costCentreOptions ? `<label>Cost centre <select id="business-voucher-cost-centre">${costCentreOptions}</select></label>` : ""}
+          ${projectOptions ? `<label>Project <select id="business-voucher-project">${projectOptions}</select></label>` : ""}
+        </div>` : "";
 
   if (voucherType === "payment") {
     return `
@@ -15685,6 +15723,7 @@ function renderVoucherTypeForm(voucherType) {
           <label for="business-voucher-amount">Amount (₹)</label>
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
+        ${dimensionFields}
         <div class="voucher-entry-lines">
           <div class="voucher-entry-line debit-line">
             <div>
@@ -15748,6 +15787,7 @@ function renderVoucherTypeForm(voucherType) {
           <label for="business-voucher-amount">Amount (₹)</label>
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
+        ${dimensionFields}
         <div class="voucher-entry-lines">
           <div class="voucher-entry-line debit-line">
             <div>
@@ -15799,6 +15839,7 @@ function renderVoucherTypeForm(voucherType) {
           <label for="business-voucher-amount">Amount (₹)</label>
           <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
         </div>
+        ${dimensionFields}
         <div class="field">
           <label for="business-voucher-description">Description</label>
           <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Transfer description (e.g., sweep to savings)"></textarea>
@@ -15820,6 +15861,7 @@ function renderVoucherTypeForm(voucherType) {
           <div id="business-voucher-lines"></div>
           <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
         </div>
+        ${dimensionFields}
         <div class="voucher-balance-panel">
           <strong>Balance Check:</strong>
           <span id="business-voucher-balance" style="font-weight: bold; margin-left: 8px;">Debit: ₹0 | Credit: ₹0</span>
@@ -15859,6 +15901,9 @@ async function openBusinessCreateVoucherDialog() {
   }
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) {
     await loadBusinessParties();
+  }
+  if (!lastDimensions) {
+    await loadDimensions();
   }
 
   // Reset form
@@ -18253,6 +18298,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     deactivateDimension(button.getAttribute("data-dimension-id") || "");
   } else if (businessAction === "dim-report-load") {
     loadDimensionReport();
+  } else if (businessAction === "dim-report-export") {
+    downloadDimensionReport(button.getAttribute("data-format") || "csv");
   } else if (businessAction === "einv-download") {
     downloadInv01Json();
   } else if (businessAction === "einv-record") {

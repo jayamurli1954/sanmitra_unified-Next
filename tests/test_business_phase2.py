@@ -364,6 +364,47 @@ async def test_typed_voucher_creation_persists_pending_document_without_posting(
 
 
 @pytest.mark.asyncio
+async def test_typed_voucher_creation_persists_dimension_tags(monkeypatch):
+    vouchers = FakeCollection()
+    validated = {}
+    monkeypatch.setattr(business_service, "get_collection", lambda _name: vouchers)
+
+    async def fake_resolve_voucher_account_id(_session, *, account_id, **_kwargs):
+        return int(account_id)
+
+    async def fake_validate_dimension_refs(**kwargs):
+        validated.update(kwargs)
+
+    monkeypatch.setattr(business_service, "_resolve_voucher_account_id", fake_resolve_voucher_account_id)
+    monkeypatch.setattr(business_service, "validate_dimension_refs", fake_validate_dimension_refs)
+
+    result = await business_service.post_typed_voucher(
+        None,
+        tenant_id="business-tenant",
+        app_key="mitrabooks",
+        created_by="owner-1",
+        payload=TypedVoucherCreateRequest(
+            voucher_type="journal",
+            entry_date=date(2026, 5, 21),
+            amount=Decimal("250.00"),
+            debit_account_id=30,
+            credit_account_id=40,
+            description="Dimension tagged journal",
+            cost_centre_id="cc-blr",
+            project_id="proj-alpha",
+        ),
+        idempotency_key=None,
+    )
+
+    assert validated["cost_centre_id"] == "cc-blr"
+    assert validated["project_id"] == "proj-alpha"
+    assert result["cost_centre_id"] == "cc-blr"
+    assert result["project_id"] == "proj-alpha"
+    assert vouchers.docs[0]["cost_centre_id"] == "cc-blr"
+    assert vouchers.docs[0]["project_id"] == "proj-alpha"
+
+
+@pytest.mark.asyncio
 async def test_typed_voucher_approval_reverses_journal_when_status_update_fails(monkeypatch):
     vouchers = AlwaysFailUpdateCollection()
     captured = {}

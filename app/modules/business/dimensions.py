@@ -218,6 +218,7 @@ def assemble_dimension_report(
     bills: list[dict],
     credit_notes: list[dict] | None = None,
     debit_notes: list[dict] | None = None,
+    voucher_impacts: list[dict] | None = None,
 ) -> dict:
     """Income/expense/net per dimension over a period, plus the untagged
     bucket. Income = posted sales invoices' taxable_total less credit notes;
@@ -228,6 +229,7 @@ def assemble_dimension_report(
     rows: dict[str | None, dict] = {}
     credit_notes = credit_notes or []
     debit_notes = debit_notes or []
+    voucher_impacts = voucher_impacts or []
 
     def _bucket(dim_id: str | None) -> dict:
         return rows.setdefault(dim_id, {"income": Decimal("0.00"), "expense": Decimal("0.00")})
@@ -240,6 +242,10 @@ def assemble_dimension_report(
         _bucket(bill.get(field) or None)["expense"] += _q2(bill.get("taxable_total") or 0)
     for note in debit_notes:
         _bucket(note.get(field) or None)["expense"] -= _q2(note.get("taxable_total") or 0)
+    for impact in voucher_impacts:
+        bucket = _bucket(impact.get(field) or None)
+        bucket["income"] += _q2(impact.get("income") or 0)
+        bucket["expense"] += _q2(impact.get("expense") or 0)
 
     names = {d["dimension_id"]: d for d in dimensions if d.get("dimension_type") == dimension_type}
     out_rows: list[dict] = []
@@ -281,21 +287,126 @@ def assemble_dimension_report(
             "bills": len(bills),
             "credit_notes": len(credit_notes),
             "debit_notes": len(debit_notes),
+            "vouchers": len(voucher_impacts),
         },
         "notes": [
             "Income = posted sales invoices' taxable value; expense = posted purchase "
             "bills' taxable value (GST is excluded — it is not P&L). Credit notes "
-            "reduce income and debit notes reduce expense.",
+            "reduce income, debit notes reduce expense, and vouchers count only "
+            "when their debit or credit account is income or expense.",
             "The 'untagged' bucket holds documents without this dimension, so the "
             "report always ties to the period's document totals.",
-            "Vouchers and per-line dimensions are not yet tagged (v2).",
+            "Per-line dimensions are not yet tagged; voucher dimensions are header-level.",
         ],
+    }
+
+
+async def _voucher_impacts_from_account_types(
+    *,
+    session,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    vouchers: list[dict],
+) -> list[dict]:
+    if not vouchers or session is None:
+        return []
+
+    from sqlalchemy import select
+
+    from app.accounting.models.entities import Account
+
+    account_ids = {
+        int(v.get("debit_account_id"))
+        for v in vouchers
+        if v.get("debit_account_id") is not None
+    } | {
+        int(v.get("credit_account_id"))
+        for v in vouchers
+        if v.get("credit_account_id") is not None
+    }
+    if not account_ids:
+        return []
+
+    result = await session.execute(
+        select(Account.id, Account.type).where(
+            Account.app_key == app_key,
+            Account.tenant_id == tenant_id,
+            Account.accounting_entity_id == accounting_entity_id,
+            Account.id.in_(account_ids),
+        )
+    )
+    account_types = {int(row[0]): str(row[1]) for row in result.all()}
+    impacts: list[dict] = []
+    income_types = {"income", "revenue"}
+
+    for voucher in vouchers:
+        amount = _q2(voucher.get("amount") or 0)
+        debit_type = account_types.get(int(voucher.get("debit_account_id") or 0))
+        credit_type = account_types.get(int(voucher.get("credit_account_id") or 0))
+        income = Decimal("0.00")
+        expense = Decimal("0.00")
+        if debit_type == "expense":
+            expense += amount
+        elif debit_type in income_types:
+            income -= amount
+        if credit_type == "expense":
+            expense -= amount
+        elif credit_type in income_types:
+            income += amount
+        if income or expense:
+            impacts.append({
+                "cost_centre_id": voucher.get("cost_centre_id"),
+                "project_id": voucher.get("project_id"),
+                "income": str(_q2(income)),
+                "expense": str(_q2(expense)),
+            })
+    return impacts
+
+
+def dimension_report_export_spec(report: dict) -> dict:
+    label = "Cost centre" if report.get("dimension_type") == "cost_centre" else "Project"
+    rows = [
+        {
+            "dimension": f"{row.get('code', '')} - {row.get('name', '')}",
+            "income": row.get("income", "0.00"),
+            "expense": row.get("expense", "0.00"),
+            "net": row.get("net", "0.00"),
+        }
+        for row in report.get("rows", [])
+    ]
+    untagged = report.get("untagged") or {}
+    rows.append({
+        "dimension": "Untagged",
+        "income": untagged.get("income", "0.00"),
+        "expense": untagged.get("expense", "0.00"),
+        "net": untagged.get("net", "0.00"),
+    })
+    return {
+        "title": f"Income / expense by {label.lower()}",
+        "columns": [
+            {"key": "dimension", "label": label},
+            {"key": "income", "label": "Income", "type": "amount"},
+            {"key": "expense", "label": "Expense", "type": "amount"},
+            {"key": "net", "label": "Net", "type": "amount"},
+        ],
+        "rows": rows,
+        "footer": {"dimension": "Total", **(report.get("totals") or {})},
+        "meta": [
+            ("From", report.get("from_date")),
+            ("To", report.get("to_date")),
+            ("Document counts", ", ".join(
+                f"{key}: {value}" for key, value in (report.get("document_counts") or {}).items()
+            )),
+        ],
+        "filename_base": f"dimension_{report.get('dimension_type')}_{report.get('to_date')}",
     }
 
 
 async def build_dimension_report(
     *, tenant_id: str, app_key: str, accounting_entity_id: str,
     dimension_type: str, from_date: date | None = None, to_date: date | None = None,
+    session=None,
 ) -> dict:
     from app.accounting.service import AccountingValidationError, _financial_year_start
     from app.db.mongo import get_collection
@@ -304,6 +415,7 @@ async def build_dimension_report(
         DEBIT_NOTES_COLLECTION,
         PURCHASE_BILLS_COLLECTION,
         SALES_INVOICES_COLLECTION,
+        VOUCHERS_COLLECTION,
     )
 
     if dimension_type not in DIMENSION_TYPES:
@@ -329,9 +441,21 @@ async def build_dimension_report(
         **scope, "status": "posted",
         "note_date": {"$gte": from_date.isoformat(), "$lte": to_date.isoformat()},
     }).to_list(length=20000)
+    vouchers = await get_collection(VOUCHERS_COLLECTION).find({
+        **scope, "status": "posted",
+        "entry_date": {"$gte": from_date.isoformat(), "$lte": to_date.isoformat()},
+    }).to_list(length=20000)
+    voucher_impacts = await _voucher_impacts_from_account_types(
+        session=session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        vouchers=vouchers,
+    )
 
     return assemble_dimension_report(
         dimension_type=dimension_type, from_date=from_date, to_date=to_date,
         dimensions=[_response(d) for d in dims], invoices=invoices, bills=bills,
         credit_notes=credit_notes, debit_notes=debit_notes,
+        voucher_impacts=voucher_impacts,
     )

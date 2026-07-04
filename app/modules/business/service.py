@@ -1541,6 +1541,14 @@ async def post_typed_voucher(
     if debit_account_id == credit_account_id:
         raise AccountingValidationError("Debit and credit accounts must be different")
 
+    await validate_dimension_refs(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=payload.accounting_entity_id,
+        cost_centre_id=payload.cost_centre_id,
+        project_id=payload.project_id,
+    )
+
     if idempotency_key:
         existing = await get_collection(VOUCHERS_COLLECTION).find_one(
             {
@@ -1573,6 +1581,8 @@ async def post_typed_voucher(
         "app_key": app_key,
         "accounting_entity_id": payload.accounting_entity_id,
         "party_id": payload.party_id,
+        "cost_centre_id": payload.cost_centre_id,
+        "project_id": payload.project_id,
         "amount": _money(amount),
         "entry_date": payload.entry_date.isoformat(),
         "debit_account_id": debit_account_id,

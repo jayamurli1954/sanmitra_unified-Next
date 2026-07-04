@@ -94,6 +94,8 @@ class TypedVoucherCreateRequest(BaseModel):
     description: str = Field(..., min_length=1, max_length=300)
     reference: str | None = Field(default=None, max_length=120)
     party_id: str | None = Field(default=None, max_length=80)
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
@@ -111,6 +113,8 @@ class TypedVoucherResponse(BaseModel):
     app_key: str
     accounting_entity_id: str
     party_id: str | None = None
+    cost_centre_id: str | None = None
+    project_id: str | None = None
     amount: Decimal
     entry_date: date
     debit_account_id: int

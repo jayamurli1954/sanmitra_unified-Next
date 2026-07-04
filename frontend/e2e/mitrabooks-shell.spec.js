@@ -235,6 +235,10 @@ async function mockVerifiedMitraBooksSession(page) {
         total_debit: Number(payload.amount || 0),
         total_credit: Number(payload.amount || 0),
         amount: Number(payload.amount || 0),
+        debit_account_id: payload.debit_account_id,
+        credit_account_id: payload.credit_account_id,
+        cost_centre_id: payload.cost_centre_id || null,
+        project_id: payload.project_id || null,
         status: 'posted',
         journal_entry_id: `je-${vouchers.length + 1}`,
       };
@@ -401,6 +405,15 @@ async function mockVerifiedMitraBooksSession(page) {
       creditNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).income -= taxable(row); });
       bills.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense += taxable(row); });
       debitNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense -= taxable(row); });
+      vouchers.filter(row => row.status === 'posted').forEach(row => {
+        const amount = Number(row.amount || 0);
+        const debitType = accounts.find(account => String(account.id) === String(row.debit_account_id))?.type;
+        const creditType = accounts.find(account => String(account.id) === String(row.credit_account_id))?.type;
+        if (debitType === 'expense') bucket(row[field]).expense += amount;
+        if (debitType === 'income' || debitType === 'revenue') bucket(row[field]).income -= amount;
+        if (creditType === 'expense') bucket(row[field]).expense -= amount;
+        if (creditType === 'income' || creditType === 'revenue') bucket(row[field]).income += amount;
+      });
       const rows = dimRows
         .filter(row => sums.has(row.dimension_id))
         .map(row => {
@@ -439,10 +452,20 @@ async function mockVerifiedMitraBooksSession(page) {
           bills: bills.filter(row => row.status === 'posted').length,
           credit_notes: creditNotes.filter(row => row.status === 'posted').length,
           debit_notes: debitNotes.filter(row => row.status === 'posted').length,
+          vouchers: vouchers.filter(row => row.status === 'posted').length,
         },
         notes: ['Credit notes reduce income and debit notes reduce expense.'],
       };
     };
+
+    if (method === 'GET' && path.endsWith('/report/export')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/csv',
+        headers: { 'Content-Disposition': 'attachment; filename="dimension_report.csv"' },
+        body: 'dimension,income,expense,net\nBLR,0.00,0.00,0.00\n',
+      });
+    }
 
     if (method === 'GET' && path.endsWith('/report')) return json(route, reportPayload());
 
@@ -1658,8 +1681,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.getByRole('button', { name: '+ New Voucher' }).click();
     await expect(page.locator('#business-voucher-create-dialog')).toBeVisible();
     await page.locator('#business-voucher-type-select').selectOption('journal');
+    await expect(page.locator('#business-voucher-cost-centre')).toBeVisible();
+    await expect(page.locator('#business-voucher-project')).toBeVisible();
+    await page.locator('#business-voucher-cost-centre').selectOption('dim-cc-blr');
+    await page.locator('#business-voucher-project').selectOption('dim-prj-alpha');
     await page.locator('#business-voucher-description').fill('Browser verified balanced journal');
-    await page.locator('#business-voucher-lines .account-picker-select').nth(0).selectOption('101');
+    await page.locator('#business-voucher-lines .account-picker-select').nth(0).selectOption('301');
     await page.locator('#business-voucher-lines .account-picker-select').nth(1).selectOption('201');
     await page.locator('#business-voucher-lines .voucher-debit').nth(0).fill('125.00');
     await page.locator('#business-voucher-lines .voucher-credit').nth(1).fill('125.00');
@@ -2031,6 +2058,10 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Bengaluru');
     await expect(page.locator('#business-report-printable')).toContainText('2,000.00');
     await expect(page.locator('#business-report-printable')).toContainText('Credit notes reduce income');
+    await Promise.all([
+      page.waitForResponse(response => response.url().includes('/api/v1/business/dimensions/report/export')),
+      page.locator('[data-business-action="dim-report-export"][data-format="csv"]').click(),
+    ]);
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.getByRole('row', { name: /INV-2026-001/ }).getByRole('button', { name: 'View' }).click();

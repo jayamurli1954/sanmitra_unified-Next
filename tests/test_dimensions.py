@@ -30,6 +30,10 @@ def _dn(taxable, cc=None, proj=None):
     return {"taxable_total": taxable, "cost_centre_id": cc, "project_id": proj}
 
 
+def _voucher(income="0", expense="0", cc=None, proj=None):
+    return {"income": income, "expense": expense, "cost_centre_id": cc, "project_id": proj}
+
+
 def test_report_groups_income_expense_and_untagged():
     out = assemble_dimension_report(
         dimension_type="cost_centre", from_date=FROM, to_date=TO, dimensions=DIMS,
@@ -37,17 +41,18 @@ def test_report_groups_income_expense_and_untagged():
         bills=[_bill("4000", cc="cc1"), _bill("1000")],
         credit_notes=[_cn("1500", cc="cc1"), _cn("200")],
         debit_notes=[_dn("500", cc="cc1"), _dn("100")],
+        voucher_impacts=[_voucher(income="750", cc="cc1"), _voucher(expense="250")],
     )
     rows = {r["code"]: r for r in out["rows"]}
     assert rows["BLR"] == {"dimension_id": "cc1", "code": "BLR", "name": "Bengaluru",
-                           "income": "8500.00", "expense": "3500.00", "net": "5000.00"}
+                           "income": "9250.00", "expense": "3500.00", "net": "5750.00"}
     assert rows["MUM"]["net"] == "5000.00"
     # Sorted by net descending.
     assert [r["code"] for r in out["rows"]] == ["BLR", "MUM"]
-    assert out["untagged"] == {"income": "1800.00", "expense": "900.00", "net": "900.00"}
+    assert out["untagged"] == {"income": "1800.00", "expense": "1150.00", "net": "650.00"}
     # Totals tie to all documents (tagged + untagged).
-    assert out["totals"] == {"income": "15300.00", "expense": "4400.00", "net": "10900.00"}
-    assert out["document_counts"] == {"invoices": 3, "bills": 2, "credit_notes": 2, "debit_notes": 2}
+    assert out["totals"] == {"income": "16050.00", "expense": "4650.00", "net": "11400.00"}
+    assert out["document_counts"] == {"invoices": 3, "bills": 2, "credit_notes": 2, "debit_notes": 2, "vouchers": 2}
 
 
 def test_report_by_project_uses_project_field_and_keeps_deleted_tags():

@@ -3584,6 +3584,7 @@ async def business_dimension_report(
     to_date: date | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
     _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
@@ -3598,7 +3599,37 @@ async def business_dimension_report(
         tenant_id=context.tenant_id, app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
         dimension_type=dimension_type, from_date=from_date, to_date=to_date,
+        session=session,
     )
+
+
+@router.get("/dimensions/report/export")
+async def business_dimension_report_export(
+    dimension_type: str = Query(..., pattern="^(cost_centre|project)$"),
+    format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="dimension report export",
+    )
+    try:
+        report = await dimensions_module.build_dimension_report(
+            tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            dimension_type=dimension_type, from_date=from_date, to_date=to_date,
+            session=session,
+        )
+        return report_export.export_report(format, **dimensions_module.dimension_report_export_spec(report))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/fixed-assets")
