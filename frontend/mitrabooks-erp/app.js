@@ -13510,6 +13510,8 @@ function syncCnFormFromDom() {
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
+    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
   }));
 }
 
@@ -13558,7 +13560,7 @@ function setCreditNoteView(view) {
 }
 
 function openCreditNoteCreate() {
-  cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" }];
+  cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   cnFormHeader.customer_party_id = "";
   cnFormHeader.note_date = todayIsoDate();
   cnFormHeader.original_invoice_number = "";
@@ -13577,7 +13579,7 @@ function openCreditNoteCreate() {
 
 function addCnLine() {
   syncCnFormFromDom();
-  cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
+  cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   rerenderCreditNoteIfActive();
   updateCnTotalsDisplay();
 }
@@ -13586,7 +13588,7 @@ function removeCnLine(lineId) {
   syncCnFormFromDom();
   cnFormLines = cnFormLines.filter((l) => l.id !== lineId);
   if (cnFormLines.length === 0) {
-    cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18" });
+    cnFormLines.push({ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   }
   rerenderCreditNoteIfActive();
   updateCnTotalsDisplay();
@@ -13607,6 +13609,8 @@ async function submitCreditNote() {
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
+      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
+      project_id: String(l.project_id || "").trim() || null,
     }));
   if (lineItems.length === 0) {
     setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
@@ -13719,6 +13723,8 @@ function renderCnListTable() {
 function renderCreditNoteCreateForm() {
   const customers = customerPartyOptions();
   const incomeAccounts = incomeAccountOptions();
+  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
+  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
   const lineRows = cnFormLines.map((l) => `
     <tr data-cn-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
@@ -13727,6 +13733,10 @@ function renderCreditNoteCreateForm() {
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      <td>
+        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
+        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
+      </td>
       <td class="amount" data-line-taxable>—</td>
       <td class="amount" data-line-gst>—</td>
       <td class="amount" data-line-total>—</td>
@@ -13785,7 +13795,7 @@ function renderCreditNoteCreateForm() {
         <table>
           <thead>
             <tr>
-              <th>Description</th><th>HSN/SAC</th><th>UQC</th><th>Qty</th><th>Rate</th><th>GST %</th>
+              <th>Description</th><th>HSN/SAC</th><th>UQC</th><th>Qty</th><th>Rate</th><th>GST %</th><th>Line tags</th>
               <th class="amount">Taxable</th><th class="amount">GST</th><th class="amount">Total</th><th></th>
             </tr>
           </thead>
@@ -13959,6 +13969,8 @@ function syncDnFormFromDom() {
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
+    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
   }));
 }
 
@@ -14007,7 +14019,7 @@ function setDebitNoteView(view) {
 }
 
 function openDebitNoteCreate() {
-  dnFormLines = [{ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  dnFormLines = [{ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   dnFormHeader.vendor_party_id = "";
   dnFormHeader.note_date = todayIsoDate();
   dnFormHeader.original_bill_number = "";
@@ -14026,7 +14038,7 @@ function openDebitNoteCreate() {
 
 function addDnLine() {
   syncDnFormFromDom();
-  dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   rerenderDebitNoteIfActive();
   updateDnTotalsDisplay();
 }
@@ -14035,7 +14047,7 @@ function removeDnLine(lineId) {
   syncDnFormFromDom();
   dnFormLines = dnFormLines.filter((l) => l.id !== lineId);
   if (dnFormLines.length === 0) {
-    dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+    dnFormLines.push({ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   }
   rerenderDebitNoteIfActive();
   updateDnTotalsDisplay();
@@ -14055,6 +14067,8 @@ async function submitDebitNote() {
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
+      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
+      project_id: String(l.project_id || "").trim() || null,
     }));
   if (lineItems.length === 0) {
     setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
@@ -14160,6 +14174,8 @@ function renderDnListTable() {
 function renderDebitNoteCreateForm() {
   const vendors = vendorPartyOptions();
   const expenseAccounts = expenseAccountOptions();
+  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
+  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
   const lineRows = dnFormLines.map((l) => `
     <tr data-dn-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
@@ -14167,6 +14183,10 @@ function renderDebitNoteCreateForm() {
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      <td>
+        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
+        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
+      </td>
       <td class="amount" data-line-taxable>—</td>
       <td class="amount" data-line-gst>—</td>
       <td class="amount" data-line-total>—</td>
@@ -14225,7 +14245,7 @@ function renderDebitNoteCreateForm() {
         <table>
           <thead>
             <tr>
-              <th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST %</th>
+              <th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>GST %</th><th>Line tags</th>
               <th class="amount">Taxable</th><th class="amount">ITC</th><th class="amount">Total</th><th></th>
             </tr>
           </thead>

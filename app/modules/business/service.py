@@ -3902,6 +3902,14 @@ async def create_credit_note(
         cost_centre_id=payload.cost_centre_id,
         project_id=payload.project_id,
     )
+    for item in payload.line_items:
+        await validate_dimension_refs(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            cost_centre_id=getattr(item, "cost_centre_id", None),
+            project_id=getattr(item, "project_id", None),
+        )
 
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, note_total = _compute_invoice_lines(payload)
     if note_total <= Decimal("0"):
@@ -4516,6 +4524,14 @@ async def create_debit_note(
         cost_centre_id=payload.cost_centre_id,
         project_id=payload.project_id,
     )
+    for item in payload.line_items:
+        await validate_dimension_refs(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            cost_centre_id=getattr(item, "cost_centre_id", None),
+            project_id=getattr(item, "project_id", None),
+        )
 
     lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, note_total = _compute_invoice_lines(payload)
     if note_total <= Decimal("0"):

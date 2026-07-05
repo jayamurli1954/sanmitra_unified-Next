@@ -86,6 +86,34 @@ def test_report_allocates_line_dimensions_with_document_fallback():
     assert out["document_counts"]["bills"] == 1
 
 
+def test_report_allocates_note_line_dimensions_with_document_fallback():
+    out = assemble_dimension_report(
+        dimension_type="cost_centre", from_date=FROM, to_date=TO, dimensions=DIMS,
+        invoices=[], bills=[],
+        credit_notes=[
+            {
+                "taxable_total": "700",
+                "cost_centre_id": "cc1",
+                "line_items": [_line("250", cc="cc2"), _line("450")],
+            },
+        ],
+        debit_notes=[
+            {
+                "taxable_total": "400",
+                "cost_centre_id": "cc1",
+                "line_items": [_line("150", cc="cc2"), _line("250")],
+            },
+        ],
+    )
+    rows = {r["code"]: r for r in out["rows"]}
+    assert rows["MUM"]["income"] == "-250.00"
+    assert rows["MUM"]["expense"] == "-150.00"
+    assert rows["BLR"]["income"] == "-450.00"
+    assert rows["BLR"]["expense"] == "-250.00"
+    assert out["document_counts"]["credit_notes"] == 1
+    assert out["document_counts"]["debit_notes"] == 1
+
+
 def test_report_by_project_uses_project_field_and_keeps_deleted_tags():
     out = assemble_dimension_report(
         dimension_type="project", from_date=FROM, to_date=TO, dimensions=DIMS,

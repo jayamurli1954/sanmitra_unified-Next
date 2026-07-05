@@ -882,6 +882,8 @@ class CreditNoteLineItem(BaseModel):
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
     gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
 
 
 class CreditNoteLineResponse(CreditNoteLineItem):
@@ -978,6 +980,8 @@ class DebitNoteLineItem(BaseModel):
     quantity: Decimal = Field(..., gt=Decimal("0"))
     rate: Decimal = Field(..., ge=Decimal("0"))
     gst_rate: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    cost_centre_id: str | None = Field(default=None, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
 
 
 class DebitNoteLineResponse(DebitNoteLineItem):
