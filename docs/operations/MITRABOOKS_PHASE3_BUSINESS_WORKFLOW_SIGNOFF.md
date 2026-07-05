@@ -441,6 +441,7 @@ Result:
 - ADDED: local Playwright shell remediation routing from the Data Health queue into the relevant MitraBooks workspace.
 - ADDED: shared MitraBooks export governance for report, dimension-report, opening-balance, and invoice-PDF downloads with role checks, audit events, and governed response headers.
 - ADDED: JSON as a governed tabular export format for generic report/dimension exports, with mocked-shell coverage for governed JSON export headers.
+- ADDED: local Tally XML proof of concept for Trial Balance ledger-master export, using the governed export/audit path and mocked-shell route coverage.
 
 ## Remaining Gaps After This Gate
 
@@ -464,6 +465,7 @@ Result:
 - MIS KPI contracts still need real-stack/demo mutation and production report signoff; the current gate closes deterministic local backend assembly plus mocked-shell rendering for posted-ledger and open-item-aging sources.
 - Data Health Score still needs real-stack/demo validation, persisted assignee/status workflow, and production signoff; the current gate closes deterministic local backend rules, issue-list normalization, and mocked-shell rendering/routing for score, failed-rule evidence, and remediation workspace actions.
 - Export governance still needs real-stack/demo validation, production audit-retention policy, and wider GST/e-invoice JSON download governance; the current gate closes local role checks, audit metadata, response headers, and JSON format support for generic report-style exports.
+- Tally XML still needs voucher-level XML, real Tally import validation, migration runbook examples, and production signoff; the current gate closes a local governed Trial Balance ledger-master XML proof of concept.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

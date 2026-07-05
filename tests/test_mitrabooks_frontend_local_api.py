@@ -550,6 +550,16 @@ def test_mitrabooks_report_exports_expose_governed_json_format() -> None:
     assert "/api/v1/business/dimensions/report/export" in app_source
 
 
+def test_mitrabooks_trial_balance_exposes_tally_xml_export() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'reportKey === "trial_balance"' in app_source
+    assert 'data-business-action="export-tally-xml"' in app_source
+    assert "async function downloadTallyXmlExport()" in app_source
+    assert "/api/v1/business/tally/xml-export" in app_source
+    assert "tally_trial_balance_" in app_source
+
+
 def test_professional_suite_routes_to_active_workspace_without_planned_cards() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")

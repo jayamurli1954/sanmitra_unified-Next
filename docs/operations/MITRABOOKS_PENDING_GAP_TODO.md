@@ -99,7 +99,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] Data Health Score rules for missing GSTIN, unposted drafts, stale reconciliation, duplicate invoices, and overdue exposure. Local deterministic backend contract, issue-list contract, mocked-shell score rendering, and remediation workspace routing are closed; real-stack/demo validation and production signoff remain open.
 - [~] Data-health issue list with actionable remediation workflow. Local API issue normalization and mocked-shell remediation navigation are closed; persisted assignee/status workflow, real-stack/demo mutation, and production signoff remain open.
 - [~] Tenant-safe Excel/PDF/JSON export governance with permissions and audit. Local report/dimension/opening-balance/invoice-PDF exports now use shared role checks, audit events, governed headers, and JSON report format coverage; real-stack/demo validation, wider GST JSON export governance, and production retention/signoff remain open.
-- [ ] Tally XML export design or proof of concept.
+- [~] Tally XML export design or proof of concept. Local governed Trial Balance ledger-master XML proof is closed with backend route, audit/governance headers, static shell button, and mocked-shell route coverage; voucher-level XML, real Tally import validation, migration runbook, and production signoff remain open.
 
 ## Deferred Scope
 

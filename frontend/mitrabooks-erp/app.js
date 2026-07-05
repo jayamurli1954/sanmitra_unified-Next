@@ -11258,6 +11258,9 @@ function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
   const kAttr = kind ? ` data-report-kind="${escapeHtml(kind)}"` : "";
   const key = escapeHtml(reportKey);
   const lbl = label ? `<span class="export-label muted">${escapeHtml(label)}</span>` : "";
+  const tallyXml = reportKey === "trial_balance"
+    ? `<button class="secondary" type="button" data-business-action="export-tally-xml">Tally XML</button>`
+    : "";
   return `
     <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;">
       ${lbl}
@@ -11265,6 +11268,7 @@ function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="xlsx"${kAttr}>Excel</button>
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="pdf"${kAttr}>PDF</button>
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="json"${kAttr}>JSON</button>
+      ${tallyXml}
       <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
     </div>`;
 }
@@ -11344,6 +11348,18 @@ async function downloadBusinessReport(reportKey, format, kind) {
     renderJson(apiOutput, { export: { report: reportKey, format, kind: kind || null, filename } });
   } else {
     renderJson(apiOutput, { export_error: { report: reportKey, format, status: result.status, detail: result.payload?.detail || result.payload } });
+  }
+}
+
+async function downloadTallyXmlExport() {
+  const params = new URLSearchParams();
+  if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
+  const filename = `tally_trial_balance_${businessReportState.as_of || todayIsoDate()}.xml`;
+  const result = await downloadApiFile("mitrabooks", `/api/v1/business/tally/xml-export?${params.toString()}`, filename, { timeoutMs: 30000 });
+  if (result.ok) {
+    renderJson(apiOutput, { tally_xml_export: { report: "trial_balance", filename } });
+  } else {
+    renderJson(apiOutput, { tally_xml_export_error: { status: result.status, detail: result.payload?.detail || result.payload } });
   }
 }
 
@@ -18494,6 +18510,8 @@ dashboardPreview.addEventListener("click", async (event) => {
       button.getAttribute("data-report-format") || "csv",
       button.getAttribute("data-report-kind") || "",
     );
+  } else if (businessAction === "export-tally-xml") {
+    downloadTallyXmlExport();
   } else if (businessAction === "print-report") {
     printBusinessReport();
   } else if (businessAction === "report-ledger") {

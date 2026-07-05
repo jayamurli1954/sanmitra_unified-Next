@@ -95,6 +95,7 @@ from app.modules.business import financial_health
 from app.modules.business import mis as mis_module
 from app.modules.business import gst_returns
 from app.modules.business import report_export
+from app.modules.business import tally_xml
 from app.modules.business import bank_recon
 from app.modules.business import dimensions as dimensions_module
 from app.modules.business import einvoice as einvoice_module
@@ -965,6 +966,48 @@ async def export_business_report(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/tally/xml-export")
+async def export_business_tally_xml(
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Proof-of-concept Tally XML export for posted trial-balance ledger masters."""
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "Tally XML export")
+    export_governance.require_export_permission(current_user, export_type="tally_xml")
+    try:
+        spec = await _build_business_report(
+            "trial_balance", session=session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, kind="receivable", as_of=as_of,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    as_of_str = (as_of or date.today()).isoformat()
+    xml_bytes = tally_xml.build_trial_balance_tally_xml(spec=spec, company_name=spec.get("org_name"), as_of=as_of_str)
+    response = Response(
+        content=xml_bytes,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="tally_trial_balance_{as_of_str}.xml"'},
+    )
+    return await export_governance.govern_export_response(
+        response,
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        current_user=current_user,
+        export_type="tally_xml",
+        export_format="xml",
+        report_key="trial_balance",
+        filters={"as_of": as_of_str},
+    )
 
 
 @router.patch("/parties/{party_id}", response_model=PartyResponse)
