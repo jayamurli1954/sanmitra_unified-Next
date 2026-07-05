@@ -3632,6 +3632,30 @@ async def business_dimension_report_export(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/dimensions/branch-report")
+async def business_branch_consolidated_report(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Consolidated branch P&L derived from branch -> cost-centre mappings."""
+    context = resolve_business_app_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        expected_app_key="mitrabooks", operation="branch consolidated report",
+    )
+    return await dimensions_module.build_branch_consolidated_report(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        from_date=from_date, to_date=to_date,
+        session=session,
+    )
+
+
 @router.post("/fixed-assets")
 async def business_create_fixed_asset(
     payload: dict = Body(...),

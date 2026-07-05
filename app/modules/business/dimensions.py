@@ -310,6 +310,81 @@ def assemble_dimension_report(
     }
 
 
+def assemble_branch_consolidated_report(*, branches: list[dict], cost_centre_report: dict) -> dict:
+    """Roll a cost-centre P&L report up to configured branches.
+
+    Branches map to cost centres by `cost_centre_code`; unmatched cost centres
+    and the dimension report's own untagged bucket remain visible as
+    `unassigned`, so branch reporting never hides unallocated P&L.
+    """
+    active_branches = [b for b in branches if b.get("active", True)]
+    report_rows = cost_centre_report.get("rows") or []
+    rows_by_code = {str(row.get("code") or "").upper(): row for row in report_rows}
+    consumed_codes: set[str] = set()
+    branch_rows: list[dict] = []
+
+    for branch in active_branches:
+        cc_code = str(branch.get("cost_centre_code") or branch.get("branch_code") or "").strip().upper()
+        source = rows_by_code.get(cc_code)
+        income = _q2((source or {}).get("income") or 0)
+        expense = _q2((source or {}).get("expense") or 0)
+        if source:
+            consumed_codes.add(cc_code)
+        branch_rows.append({
+            "branch_code": str(branch.get("branch_code") or "").strip().upper(),
+            "branch_name": branch.get("branch_name") or branch.get("branch_code") or "(unnamed branch)",
+            "gstin": branch.get("gstin"),
+            "cost_centre_code": cc_code or None,
+            "cost_centre_name": (source or {}).get("name"),
+            "income": str(_q2(income)),
+            "expense": str(_q2(expense)),
+            "net": str(_q2(income - expense)),
+        })
+
+    unassigned_income = _q2((cost_centre_report.get("untagged") or {}).get("income") or 0)
+    unassigned_expense = _q2((cost_centre_report.get("untagged") or {}).get("expense") or 0)
+    unmatched_cost_centres: list[dict] = []
+    for row in report_rows:
+        code = str(row.get("code") or "").upper()
+        if code in consumed_codes:
+            continue
+        income = _q2(row.get("income") or 0)
+        expense = _q2(row.get("expense") or 0)
+        unassigned_income += income
+        unassigned_expense += expense
+        unmatched_cost_centres.append({
+            "code": row.get("code"),
+            "name": row.get("name"),
+            "income": str(_q2(income)),
+            "expense": str(_q2(expense)),
+            "net": str(_q2(income - expense)),
+        })
+
+    totals = cost_centre_report.get("totals") or {}
+    return {
+        "report_type": "branch_consolidated",
+        "from_date": cost_centre_report.get("from_date"),
+        "to_date": cost_centre_report.get("to_date"),
+        "rows": branch_rows,
+        "unassigned": {
+            "income": str(_q2(unassigned_income)),
+            "expense": str(_q2(unassigned_expense)),
+            "net": str(_q2(unassigned_income - unassigned_expense)),
+            "unmatched_cost_centres": unmatched_cost_centres,
+        },
+        "totals": {
+            "income": str(_q2(totals.get("income") or 0)),
+            "expense": str(_q2(totals.get("expense") or 0)),
+            "net": str(_q2(totals.get("net") or 0)),
+        },
+        "document_counts": cost_centre_report.get("document_counts") or {},
+        "notes": [
+            "Branch consolidation maps each active branch to the cost centre code configured in business admin settings.",
+            "Unassigned includes untagged P&L and cost centres that are not mapped to an active branch, so totals still reconcile.",
+        ],
+    }
+
+
 async def _voucher_impacts_from_account_types(
     *,
     session,
@@ -467,4 +542,30 @@ async def build_dimension_report(
         dimensions=[_response(d) for d in dims], invoices=invoices, bills=bills,
         credit_notes=credit_notes, debit_notes=debit_notes,
         voucher_impacts=voucher_impacts,
+    )
+
+
+async def build_branch_consolidated_report(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str,
+    from_date: date | None = None, to_date: date | None = None,
+    session=None,
+) -> dict:
+    from app.db.mongo import get_collection
+    from app.modules.business.service import ADMIN_SETTINGS_COLLECTION
+
+    cost_centre_report = await build_dimension_report(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        accounting_entity_id=accounting_entity_id,
+        dimension_type="cost_centre",
+        from_date=from_date,
+        to_date=to_date,
+        session=session,
+    )
+    settings = await get_collection(ADMIN_SETTINGS_COLLECTION).find_one(
+        _scope(tenant_id, app_key, accounting_entity_id)
+    )
+    return assemble_branch_consolidated_report(
+        branches=list((settings or {}).get("branches") or []),
+        cost_centre_report=cost_centre_report,
     )

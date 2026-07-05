@@ -3,7 +3,7 @@ dimension masters and posted documents are passed in as Mongo shapes them."""
 from datetime import date
 from decimal import Decimal
 
-from app.modules.business.dimensions import assemble_dimension_report
+from app.modules.business.dimensions import assemble_branch_consolidated_report, assemble_dimension_report
 
 FROM, TO = date(2026, 4, 1), date(2026, 6, 30)
 
@@ -108,3 +108,28 @@ def test_report_empty_period():
     )
     assert out["rows"] == []
     assert out["totals"]["net"] == "0.00"
+
+
+def test_branch_consolidated_report_maps_cost_centres_and_keeps_unassigned():
+    cost_centre_report = assemble_dimension_report(
+        dimension_type="cost_centre", from_date=FROM, to_date=TO, dimensions=DIMS,
+        invoices=[_inv("1000", cc="cc1"), _inv("500", cc="cc2"), _inv("250")],
+        bills=[_bill("200", cc="cc1")],
+    )
+    out = assemble_branch_consolidated_report(
+        branches=[
+            {"branch_code": "BLR", "branch_name": "Bengaluru", "cost_centre_code": "BLR", "active": True},
+            {"branch_code": "DEL", "branch_name": "Delhi", "cost_centre_code": "DEL", "active": True},
+            {"branch_code": "OLD", "branch_name": "Old branch", "cost_centre_code": "MUM", "active": False},
+        ],
+        cost_centre_report=cost_centre_report,
+    )
+    rows = {r["branch_code"]: r for r in out["rows"]}
+    assert rows["BLR"]["income"] == "1000.00"
+    assert rows["BLR"]["expense"] == "200.00"
+    assert rows["BLR"]["net"] == "800.00"
+    assert rows["DEL"]["income"] == "0.00"
+    assert out["unassigned"]["income"] == "750.00"
+    assert out["unassigned"]["expense"] == "0.00"
+    assert [row["code"] for row in out["unassigned"]["unmatched_cost_centres"]] == ["MUM"]
+    assert out["totals"] == cost_centre_report["totals"]

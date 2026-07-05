@@ -37,6 +37,7 @@ Status convention:
 - ~~[x] Phase 3 Fixed Assets local API/browser hardening passed on 2026-07-04: depreciation math/posting review, balanced disposal journal plan, tenant/app/entity-scoped disposal route contract, admin-only shell disposal UX, and mocked-shell register -> depreciation -> disposal workflow.~~
 - ~~[x] Phase 3 Voucher Dimensions local API/browser hardening passed on 2026-07-04: typed voucher cost-centre/project tags, tenant/app/entity-scoped dimension report/export route, voucher P&L inclusion only for income/expense accounts, and mocked-shell voucher tag plus dimension export UX.~~
 - ~~[x] Phase 3 Per-line Dimensions local hardening passed on 2026-07-05: sales invoice and purchase bill line-level cost-centre/project tags, dimension validation, header fallback reporting, and mocked-shell line override evidence.~~
+- ~~[x] Phase 3 Branch Consolidated Reporting local hardening passed on 2026-07-05: branch settings mapped to cost-centre codes, tenant/app/entity-scoped branch P&L route, unassigned/unmapped reconciliation bucket, route-contract coverage, and mocked-shell branch rollup evidence.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -87,7 +88,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] Banking/reconciliation browser/API E2E for CSV import, matching, reversal, reconciliation summary, bank book, and cash book polish. Local API and mocked-shell browser coverage is closed for CSV import/dedupe, matching, BRS summary, and unmatch; bank-only voucher posting, bank/cash book polish, real-stack/demo mutation, and production banking signoff remain open.
 - [~] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review. Local API and mocked-shell browser coverage is closed for register, depreciation preview/posting, and disposal journal UX; dedicated gain/loss COA polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff remain open.
 - [~] Dimensions/tagging coverage across vouchers, invoices, bills, notes, reports, and exports. Document-level tags and reports are covered for invoices, bills, credit notes, debit notes, and typed vouchers with local API and mocked-shell browser coverage; dimension CSV/XLSX/PDF export route hardening is locally covered. Sales invoice and purchase bill per-line dimensions are locally covered with header fallback reporting; credit/debit note line dimensions, real-stack/demo mutation, and production signoff remain open.
-- [ ] Multi-location/branch dimension and consolidated reporting.
+- [~] Multi-location/branch dimension and consolidated reporting. Local branch-to-cost-centre consolidated P&L is covered with an unassigned/unmapped reconciliation bucket and mocked-shell evidence; real-stack/demo mutation, branch selector UX across document entry, export route, and production multi-branch signoff remain open.
 - [ ] Tenant-scoped document upload inbox with manual review, attachment linking, audit trail, and client/book scoping.
 
 ## Phase 5 Open Gaps

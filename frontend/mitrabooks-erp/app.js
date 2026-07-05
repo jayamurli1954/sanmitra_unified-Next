@@ -8268,6 +8268,7 @@ let depFy = currentFinancialYear();
 let faFormOpen = false;
 let lastDimensions = null;       // masters cache (also feeds the form selects)
 let lastDimensionReport = null;
+let lastBranchConsolidatedReport = null;
 let dimensionReportType = "cost_centre";
 let lastEinvoiceView = null;     // e-invoice readiness/payload for the open invoice
 let lastInventoryItems = null;   // item master cache (also feeds the line selects)
@@ -8508,6 +8509,7 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "dimensions") {
     await loadDimensions();
     await loadDimensionReport();
+    await loadBranchConsolidatedReport();
   } else if (tab === "inventory") {
     await loadInventoryItems();
     if (lastInventoryItems?.inventory_enabled) {
@@ -9756,6 +9758,7 @@ async function createDimensionFromForm() {
     setLoginStatus("ok", "Dimension created", `${result.payload?.code} — ${result.payload?.name}`);
     await loadDimensions();
     await loadDimensionReport();
+    await loadBranchConsolidatedReport();
   } else {
     setLoginStatus("danger", "Create failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
@@ -9768,6 +9771,7 @@ async function deactivateDimension(dimensionId) {
     setLoginStatus("ok", "Dimension deactivated", "Existing documents keep the tag; new ones stop offering it.");
     await loadDimensions();
     await loadDimensionReport();
+    await loadBranchConsolidatedReport();
   } else {
     setLoginStatus("danger", "Deactivate failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
@@ -9786,6 +9790,19 @@ async function loadDimensionReport() {
   lastDimensionReport = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
   rerenderBusinessReportsIfActive();
   renderJson(apiOutput, { dimension_report: { ok: result.ok, type: dimensionReportType } });
+}
+
+async function loadBranchConsolidatedReport() {
+  const fromInput = document.querySelector("[data-dim-from]");
+  const toInput = document.querySelector("[data-dim-to]");
+  const params = new URLSearchParams();
+  if (fromInput?.value) params.set("from_date", fromInput.value);
+  if (toInput?.value) params.set("to_date", toInput.value);
+  const query = params.toString();
+  const result = await apiRequest("mitrabooks", `/api/v1/business/dimensions/branch-report${query ? `?${query}` : ""}`, { method: "GET" });
+  lastBranchConsolidatedReport = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { branch_consolidated_report: { ok: result.ok } });
 }
 
 async function downloadDimensionReport(format) {
@@ -9866,6 +9883,43 @@ function renderDimensionsPanel() {
       ${(r.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}`;
   }
 
+  const br = lastBranchConsolidatedReport;
+  let branchReportBody = "";
+  if (br && br.ok === false) {
+    branchReportBody = reportUnavailablePanel("Branch consolidated report", br);
+  } else if (br) {
+    const rows = (br.rows || []).map((row) => `
+      <tr>
+        <td>${escapeHtml(`${row.branch_code || ""} - ${row.branch_name || ""}`)}</td>
+        <td>${escapeHtml(row.cost_centre_code || "Unmapped")}</td>
+        <td class="amount">${num(row.income)}</td>
+        <td class="amount">${num(row.expense)}</td>
+        <td class="amount"><strong>${num(row.net)}</strong></td>
+      </tr>`).join("");
+    const u = br.unassigned || {};
+    const t = br.totals || {};
+    const unmatched = Array.isArray(u.unmatched_cost_centres) && u.unmatched_cost_centres.length
+      ? `<p class="muted">Unmapped cost centres: ${u.unmatched_cost_centres.map((row) => escapeHtml(`${row.code || ""} - ${row.name || ""}`)).join(", ")}</p>`
+      : "";
+    branchReportBody = `
+      <div class="preview-heading compact">
+        <div><p>${escapeHtml(br.from_date || "")} â†’ ${escapeHtml(br.to_date || "")} Â· branch rollup from cost-centre tags.</p></div>
+        <span class="pill">Net ${num(t.net)}</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead><tr><th>Branch</th><th>Cost centre</th><th class="amount">Income</th><th class="amount">Expense</th><th class="amount">Net</th></tr></thead>
+          <tbody>
+            ${rows || `<tr><td colspan="5" class="muted">No active branches are mapped in admin settings.</td></tr>`}
+            <tr><td><em>Unassigned</em></td><td>Untagged / unmapped</td><td class="amount">${num(u.income)}</td><td class="amount">${num(u.expense)}</td><td class="amount">${num(u.net)}</td></tr>
+          </tbody>
+          <tfoot><tr><th>Total</th><td></td><td class="amount">${num(t.income)}</td><td class="amount">${num(t.expense)}</td><td class="amount"><strong>${num(t.net)}</strong></td></tr></tfoot>
+        </table>
+      </div>
+      ${unmatched}
+      ${(br.notes || []).map((n) => `<p class="muted">${escapeHtml(n)}</p>`).join("")}`;
+  }
+
   return `
     <div class="table-preview compact-table"><h4>Cost centres &amp; projects</h4></div>
     ${manage}
@@ -9881,6 +9935,9 @@ function renderDimensionsPanel() {
       <button class="secondary" type="button" data-business-action="dim-report-load">Load</button>
     </div>
     ${reportBody || `<p class="muted">Loading dimension report...</p>`}
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
+    <div class="table-preview compact-table"><h4>Branch consolidated P&amp;L</h4></div>
+    ${branchReportBody || `<p class="muted">Loading branch consolidated report...</p>`}
   `;
 }
 
@@ -18322,6 +18379,7 @@ dashboardPreview.addEventListener("click", async (event) => {
     deactivateDimension(button.getAttribute("data-dimension-id") || "");
   } else if (businessAction === "dim-report-load") {
     loadDimensionReport();
+    loadBranchConsolidatedReport();
   } else if (businessAction === "dim-report-export") {
     downloadDimensionReport(button.getAttribute("data-format") || "csv");
   } else if (businessAction === "einv-download") {

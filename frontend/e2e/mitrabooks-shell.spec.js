@@ -279,7 +279,15 @@ async function mockVerifiedMitraBooksSession(page) {
         gst_registration_type: 'regular',
         financial_year_start: '2026-04-01',
       },
-      branches: [],
+      branches: [
+        {
+          branch_code: 'BLR',
+          branch_name: 'Bengaluru Head Office',
+          gstin: '29ABCDE1234F1Z5',
+          cost_centre_code: 'BLR',
+          active: true,
+        },
+      ],
       roles: [],
       permissions: { module_permissions: {}, action_permissions: {} },
       voucher_configuration: { journal_prefix: 'JV' },
@@ -474,6 +482,38 @@ async function mockVerifiedMitraBooksSession(page) {
         notes: ['Credit notes reduce income and debit notes reduce expense.'],
       };
     };
+    const branchReportPayload = () => {
+      const report = reportPayload();
+      const byCode = new Map((report.rows || []).map(row => [String(row.code || '').toUpperCase(), row]));
+      const branchRows = [{
+        branch_code: 'BLR',
+        branch_name: 'Bengaluru Head Office',
+        gstin: '29ABCDE1234F1Z5',
+        cost_centre_code: 'BLR',
+        cost_centre_name: byCode.get('BLR')?.name || null,
+        income: byCode.get('BLR')?.income || '0.00',
+        expense: byCode.get('BLR')?.expense || '0.00',
+        net: byCode.get('BLR')?.net || '0.00',
+      }];
+      const unmatched = (report.rows || []).filter(row => String(row.code || '').toUpperCase() !== 'BLR');
+      const unassignedIncome = unmatched.reduce((sum, row) => sum + Number(row.income || 0), Number(report.untagged?.income || 0));
+      const unassignedExpense = unmatched.reduce((sum, row) => sum + Number(row.expense || 0), Number(report.untagged?.expense || 0));
+      return {
+        report_type: 'branch_consolidated',
+        from_date: report.from_date,
+        to_date: report.to_date,
+        rows: branchRows,
+        unassigned: {
+          income: unassignedIncome.toFixed(2),
+          expense: unassignedExpense.toFixed(2),
+          net: (unassignedIncome - unassignedExpense).toFixed(2),
+          unmatched_cost_centres: unmatched,
+        },
+        totals: report.totals,
+        document_counts: report.document_counts,
+        notes: ['Branch consolidation maps branch settings to cost-centre tags.'],
+      };
+    };
 
     if (method === 'GET' && path.endsWith('/report/export')) {
       return route.fulfill({
@@ -483,6 +523,8 @@ async function mockVerifiedMitraBooksSession(page) {
         body: 'dimension,income,expense,net\nBLR,0.00,0.00,0.00\n',
       });
     }
+
+    if (method === 'GET' && path.endsWith('/branch-report')) return json(route, branchReportPayload());
 
     if (method === 'GET' && path.endsWith('/report')) return json(route, reportPayload());
 
@@ -2077,6 +2119,10 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Mumbai');
     await expect(page.locator('#business-report-printable')).toContainText('2,000.00');
     await expect(page.locator('#business-report-printable')).toContainText('Credit notes reduce income');
+    await expect(page.locator('#business-report-printable')).toContainText('Branch consolidated P&L');
+    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru Head Office');
+    await expect(page.locator('#business-report-printable')).toContainText('Unassigned');
+    await expect(page.locator('#business-report-printable')).toContainText('MUM - Mumbai');
     await Promise.all([
       page.waitForResponse(response => response.url().includes('/api/v1/business/dimensions/report/export')),
       page.locator('[data-business-action="dim-report-export"][data-format="csv"]').click(),
