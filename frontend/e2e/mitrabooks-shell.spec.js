@@ -50,6 +50,13 @@ async function mockVerifiedMitraBooksSession(page) {
       is_active: true,
     },
     {
+      dimension_id: 'dim-cc-mum',
+      dimension_type: 'cost_centre',
+      code: 'MUM',
+      name: 'Mumbai',
+      is_active: true,
+    },
+    {
       dimension_id: 'dim-prj-alpha',
       dimension_type: 'project',
       code: 'ALPHA',
@@ -401,10 +408,20 @@ async function mockVerifiedMitraBooksSession(page) {
         if (!sums.has(key)) sums.set(key, { income: 0, expense: 0 });
         return sums.get(key);
       };
-      invoices.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).income += taxable(row); });
-      creditNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).income -= taxable(row); });
-      bills.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense += taxable(row); });
-      debitNotes.filter(row => row.status === 'posted').forEach(row => { bucket(row[field]).expense -= taxable(row); });
+      const applyDocument = (row, amountField, side, sign) => {
+        const lineItems = Array.isArray(row.line_items) ? row.line_items : [];
+        if (lineItems.length) {
+          lineItems.forEach(line => {
+            bucket(line[field] || row[field])[side] += sign * Number(line.taxable_amount || 0);
+          });
+          return;
+        }
+        bucket(row[field])[side] += sign * Number(row[amountField] || 0);
+      };
+      invoices.filter(row => row.status === 'posted').forEach(row => applyDocument(row, 'taxable_total', 'income', 1));
+      creditNotes.filter(row => row.status === 'posted').forEach(row => applyDocument(row, 'taxable_total', 'income', -1));
+      bills.filter(row => row.status === 'posted').forEach(row => applyDocument(row, 'taxable_total', 'expense', 1));
+      debitNotes.filter(row => row.status === 'posted').forEach(row => applyDocument(row, 'taxable_total', 'expense', -1));
       vouchers.filter(row => row.status === 'posted').forEach(row => {
         const amount = Number(row.amount || 0);
         const debitType = accounts.find(account => String(account.id) === String(row.debit_account_id))?.type;
@@ -2047,6 +2064,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-invoice-line] input[name="quantity"]').fill('2');
     await page.locator('[data-invoice-line] input[name="rate"]').fill('1000');
     await page.locator('[data-invoice-line] input[name="gst_rate"]').fill('18');
+    await page.locator('[data-invoice-line] select[name="line_cost_centre_id"]').selectOption('dim-cc-mum');
+    await page.locator('[data-invoice-line] select[name="line_project_id"]').selectOption('dim-prj-alpha');
     await expect(page.locator('[data-total-invoice]')).toContainText('2,360');
     await page.getByRole('button', { name: 'Post Invoice' }).click();
     await expect(page.locator('#login-status')).toContainText('Invoice posted');
@@ -2055,7 +2074,7 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.locator('nav#nav a[data-business-workspace="reports"]').click();
     await page.locator('[data-business-action="report-tab"][data-report-tab="dimensions"]').click();
-    await expect(page.locator('#business-report-printable')).toContainText('Bengaluru');
+    await expect(page.locator('#business-report-printable')).toContainText('Mumbai');
     await expect(page.locator('#business-report-printable')).toContainText('2,000.00');
     await expect(page.locator('#business-report-printable')).toContainText('Credit notes reduce income');
     await Promise.all([
@@ -2090,6 +2109,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-bill-line] input[name="quantity"]').fill('3');
     await page.locator('[data-bill-line] input[name="rate"]').fill('500');
     await page.locator('[data-bill-line] input[name="gst_rate"]').fill('18');
+    await page.locator('[data-bill-line] select[name="line_cost_centre_id"]').selectOption('dim-cc-mum');
+    await page.locator('[data-bill-line] select[name="line_project_id"]').selectOption('dim-prj-alpha');
     await expect(page.locator('[data-total-bill]')).toContainText('1,770');
     await page.getByRole('button', { name: 'Post Bill' }).click();
     await expect(page.locator('#login-status')).toContainText('Bill posted');

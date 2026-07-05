@@ -120,6 +120,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Banking/Reconciliation local API/browser hardening | Backend tests for statement CSV import/dedupe, tenant/app/entity-scoped BRS assembly, exact amount/side match validation, soft unmatch/reversal, route contract coverage, and local Playwright shell import/match/BRS/unmatch UX | Passed on 2026-07-04 |
 | Fixed Assets local API/browser hardening | Backend tests for SLM/WDV depreciation math, balanced gain/loss disposal journal planning, admin-only tenant/app/entity-scoped disposal route contract, and local Playwright shell register/depreciation/disposal UX | Passed on 2026-07-04 |
 | Dimensions local API/browser hardening | Backend tests for invoice/bill/credit-note/debit-note/voucher dimension report aggregation, typed voucher cost-centre/project tag persistence, tenant/app/entity-scoped JSON/export route contract coverage, note create-schema tags, and local Playwright shell cost-centre/project tagging/report/export UX | Passed on 2026-07-04 |
+| Per-line Dimensions local hardening | Backend and mocked-shell coverage for sales invoice and purchase bill line-level cost-centre/project tags, dimension validation, line-first report allocation, and document-header fallback when line tags are blank | Passed on 2026-07-05 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -321,7 +322,7 @@ Result:
 - PASS: route-contract coverage now includes the new compliance endpoints used by the real-stack browser spec.
 - ADDED: GST settlement now has an operator-safe reversal route that reverses through the accounting journal reversal service, can explicitly unlock the GST period, and records reversal metadata on the settlement document.
 
-2026-07-04:
+2026-07-05:
 
 ```powershell
 python -m pytest tests/test_inventory.py tests/test_business_route_contract.py -q
@@ -364,6 +365,21 @@ Result:
 - ADDED: dimension reports include posted voucher P&L effects only when voucher debit/credit accounts are income or expense; asset/liability/equity transfers remain excluded.
 - ADDED: `/api/v1/business/dimensions/report/export` for CSV/XLSX/PDF, plus local shell export-button smoke coverage.
 
+2026-07-04:
+
+```powershell
+python -m pytest tests\test_dimensions.py tests\test_business_route_contract.py tests\test_business_phase2.py tests\test_mitrabooks_frontend_local_api.py -q
+python scripts\preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused dimensions, business route-contract, business phase-2, and frontend local API tests.
+- PASS: mandatory frontend preflight, including full pytest, global Playwright smoke, MitraBooks shell smoke, and CA invite smoke.
+- ADDED: sales invoice and purchase bill line items carry `cost_centre_id` and `project_id` through schema, service persistence, and form payloads.
+- ADDED: dimension reports allocate posted invoice/bill line taxable amounts by line tag first, then document header tag when the line tag is blank.
+- ADDED: local Playwright shell coverage for line-level cost-centre/project selectors and report evidence that line tags override header tags.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -380,7 +396,7 @@ Result:
 - Inventory still needs valuation policy settings, stock issue/adjustment workflows, real-stack/demo mutation, and production inventory signoff; the current gate closes local API plus mocked-shell item/register/closing-stock posting coverage.
 - Banking/reconciliation still needs bank-only voucher posting from imported statement lines, bank book/cash book production polish, real-stack/demo mutation, live bank feed policy, and production banking signoff; the current gate closes local API plus mocked-shell CSV import/match/BRS/unmatch coverage.
 - Fixed assets still need dedicated disposal gain/loss account-code polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff; the current gate closes local API plus mocked-shell register/depreciation/disposal coverage.
-- Dimensions still need per-line tagging, real-stack/demo mutation, and production signoff; the current gate closes document/header-level invoice, bill, note, voucher, report, and export coverage locally.
+- Dimensions still need credit/debit note line tagging, real-stack/demo mutation, and production signoff; the current gate closes sales invoice and purchase bill line tagging plus document/header-level invoice, bill, note, voucher, report, and export coverage locally.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

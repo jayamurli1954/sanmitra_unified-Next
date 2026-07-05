@@ -12039,6 +12039,8 @@ function syncSalesFormFromDom() {
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
+    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
   }));
 }
 
@@ -12097,7 +12099,7 @@ function setBusinessSalesView(view) {
 }
 
 function openInvoiceCreate() {
-  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" }];
+  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   salesFormHeader.customer_party_id = "";
   salesFormHeader.invoice_date = todayIsoDate();
   salesFormHeader.due_date = "";
@@ -12121,7 +12123,7 @@ function openInvoiceCreate() {
 
 function addInvoiceLine() {
   syncSalesFormFromDom();
-  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" });
+  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
 }
@@ -12130,7 +12132,7 @@ function removeInvoiceLine(lineId) {
   syncSalesFormFromDom();
   invoiceFormLines = invoiceFormLines.filter((l) => l.id !== lineId);
   if (invoiceFormLines.length === 0) {
-    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18" });
+    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   }
   rerenderSalesIfActive();
   updateInvoiceTotalsDisplay();
@@ -12160,6 +12162,8 @@ async function submitInvoice() {
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
+      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
+      project_id: String(l.project_id || "").trim() || null,
     }));
   if (lineItems.length === 0) {
     setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
@@ -12335,7 +12339,10 @@ function renderInvoiceCreateForm() {
   const incomeAccounts = incomeAccountOptions();
   const hsnVisible = invoiceFieldVisible("hsn_sac");
   const hsnRequired = invoiceFieldRequired("hsn_sac");
-  const colspan = hsnVisible ? 9 : 8;
+  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
+  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
+  const hasLineDimensions = !!(lineCostCentreOptions("") || lineProjectOptions(""));
+  const colspan = (hsnVisible ? 9 : 8) + (hasLineDimensions ? 1 : 0);
   const itemSelectable = !!inventoryItemOptions("");
   const lineRows = invoiceFormLines.map((l) => `
     <tr data-invoice-line="${escapeHtml(l.id)}">
@@ -12350,6 +12357,10 @@ function renderInvoiceCreateForm() {
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      ${hasLineDimensions ? `<td class="line-dimensions">
+        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
+        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
+      </td>` : ""}
       <td class="amount" data-line-taxable>—</td>
       <td class="amount" data-line-gst>—</td>
       <td class="amount" data-line-total>—</td>
@@ -12426,6 +12437,7 @@ function renderInvoiceCreateForm() {
               <th>Qty</th>
               <th>Rate</th>
               <th>GST %</th>
+              ${hasLineDimensions ? `<th>Line dimensions</th>` : ""}
               <th class="amount">Taxable</th>
               <th class="amount">GST</th>
               <th class="amount">Total</th>
@@ -12895,6 +12907,8 @@ function syncBillFormFromDom() {
     quantity: row.querySelector("input[name='quantity']")?.value || "",
     rate: row.querySelector("input[name='rate']")?.value || "",
     gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
+    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
+    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
   }));
 }
 
@@ -12959,7 +12973,7 @@ function setBusinessPurchaseView(view) {
 }
 
 function openBillCreate() {
-  billFormLines = [{ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" }];
+  billFormLines = [{ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   billFormHeader.vendor_party_id = "";
   billFormHeader.bill_number = "";
   billFormHeader.bill_date = todayIsoDate();
@@ -12982,7 +12996,7 @@ function openBillCreate() {
 
 function addBillLine() {
   syncBillFormFromDom();
-  billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+  billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   rerenderPurchaseIfActive();
   updateBillTotalsDisplay();
 }
@@ -12991,7 +13005,7 @@ function removeBillLine(lineId) {
   syncBillFormFromDom();
   billFormLines = billFormLines.filter((l) => l.id !== lineId);
   if (billFormLines.length === 0) {
-    billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18" });
+    billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
   }
   rerenderPurchaseIfActive();
   updateBillTotalsDisplay();
@@ -13016,6 +13030,8 @@ async function submitBill() {
       quantity: String(Number(l.quantity)),
       rate: String(Number(l.rate || 0)),
       gst_rate: String(Number(l.gst_rate || 0)),
+      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
+      project_id: String(l.project_id || "").trim() || null,
     }));
   if (lineItems.length === 0) {
     setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
@@ -13148,6 +13164,9 @@ function renderBillCreateForm() {
   const vendors = vendorPartyOptions();
   const expenseAccounts = expenseAccountOptions();
   const itemSelectable = !!inventoryItemOptions("");
+  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
+  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
+  const hasLineDimensions = !!(lineCostCentreOptions("") || lineProjectOptions(""));
   const lineRows = billFormLines.map((l) => `
     <tr data-bill-line="${escapeHtml(l.id)}">
       <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
@@ -13156,6 +13175,10 @@ function renderBillCreateForm() {
       <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
       <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
       <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
+      ${hasLineDimensions ? `<td class="line-dimensions">
+        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
+        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
+      </td>` : ""}
       <td class="amount" data-line-taxable>—</td>
       <td class="amount" data-line-gst>—</td>
       <td class="amount" data-line-total>—</td>
@@ -13225,6 +13248,7 @@ function renderBillCreateForm() {
               <th>Qty</th>
               <th>Rate</th>
               <th>GST %</th>
+              ${hasLineDimensions ? `<th>Line dimensions</th>` : ""}
               <th class="amount">Taxable</th>
               <th class="amount">ITC</th>
               <th class="amount">Total</th>

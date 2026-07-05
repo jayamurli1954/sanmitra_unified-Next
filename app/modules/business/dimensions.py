@@ -234,14 +234,23 @@ def assemble_dimension_report(
     def _bucket(dim_id: str | None) -> dict:
         return rows.setdefault(dim_id, {"income": Decimal("0.00"), "expense": Decimal("0.00")})
 
+    def _apply_document(doc: dict, *, amount_key: str, side: str, sign: int) -> None:
+        line_items = doc.get("line_items") if isinstance(doc.get("line_items"), list) else []
+        if line_items:
+            for line in line_items:
+                dim_id = line.get(field) or doc.get(field) or None
+                _bucket(dim_id)[side] += _q2(line.get("taxable_amount") or 0) * sign
+            return
+        _bucket(doc.get(field) or None)[side] += _q2(doc.get(amount_key) or 0) * sign
+
     for inv in invoices:
-        _bucket(inv.get(field) or None)["income"] += _q2(inv.get("taxable_total") or 0)
+        _apply_document(inv, amount_key="taxable_total", side="income", sign=1)
     for note in credit_notes:
-        _bucket(note.get(field) or None)["income"] -= _q2(note.get("taxable_total") or 0)
+        _apply_document(note, amount_key="taxable_total", side="income", sign=-1)
     for bill in bills:
-        _bucket(bill.get(field) or None)["expense"] += _q2(bill.get("taxable_total") or 0)
+        _apply_document(bill, amount_key="taxable_total", side="expense", sign=1)
     for note in debit_notes:
-        _bucket(note.get(field) or None)["expense"] -= _q2(note.get("taxable_total") or 0)
+        _apply_document(note, amount_key="taxable_total", side="expense", sign=-1)
     for impact in voucher_impacts:
         bucket = _bucket(impact.get(field) or None)
         bucket["income"] += _q2(impact.get("income") or 0)

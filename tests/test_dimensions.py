@@ -30,6 +30,10 @@ def _dn(taxable, cc=None, proj=None):
     return {"taxable_total": taxable, "cost_centre_id": cc, "project_id": proj}
 
 
+def _line(taxable, cc=None, proj=None):
+    return {"taxable_amount": taxable, "cost_centre_id": cc, "project_id": proj}
+
+
 def _voucher(income="0", expense="0", cc=None, proj=None):
     return {"income": income, "expense": expense, "cost_centre_id": cc, "project_id": proj}
 
@@ -53,6 +57,33 @@ def test_report_groups_income_expense_and_untagged():
     # Totals tie to all documents (tagged + untagged).
     assert out["totals"] == {"income": "16050.00", "expense": "4650.00", "net": "11400.00"}
     assert out["document_counts"] == {"invoices": 3, "bills": 2, "credit_notes": 2, "debit_notes": 2, "vouchers": 2}
+
+
+def test_report_allocates_line_dimensions_with_document_fallback():
+    out = assemble_dimension_report(
+        dimension_type="cost_centre", from_date=FROM, to_date=TO, dimensions=DIMS,
+        invoices=[
+            {
+                "taxable_total": "1000",
+                "cost_centre_id": "cc1",
+                "line_items": [_line("600", cc="cc2"), _line("400")],
+            },
+        ],
+        bills=[
+            {
+                "taxable_total": "500",
+                "cost_centre_id": "cc1",
+                "line_items": [_line("300", cc="cc2"), _line("200")],
+            },
+        ],
+    )
+    rows = {r["code"]: r for r in out["rows"]}
+    assert rows["MUM"]["income"] == "600.00"
+    assert rows["MUM"]["expense"] == "300.00"
+    assert rows["BLR"]["income"] == "400.00"
+    assert rows["BLR"]["expense"] == "200.00"
+    assert out["document_counts"]["invoices"] == 1
+    assert out["document_counts"]["bills"] == 1
 
 
 def test_report_by_project_uses_project_field_and_keeps_deleted_tags():

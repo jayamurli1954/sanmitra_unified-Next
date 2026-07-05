@@ -4541,7 +4541,8 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
 .invoice-form-grid input,
 .invoice-form-grid select,
 .invoice-notes textarea,
-.invoice-lines input {
+.invoice-lines input,
+.invoice-lines select {
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
@@ -4570,6 +4571,16 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
 .invoice-lines input[name="description"] {
   min-width: 160px;
   width: 100%;
+}
+
+.invoice-lines .line-dimensions {
+  min-width: 150px;
+}
+
+.invoice-lines .line-dimensions select {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
 }
 
 .invoice-notes {

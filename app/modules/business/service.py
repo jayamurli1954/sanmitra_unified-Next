@@ -1668,6 +1668,8 @@ def _compute_invoice_lines(payload: SalesInvoiceCreateRequest, *, composition: b
             "quantity": str(Decimal(item.quantity)),
             "rate": _money(item.rate),
             "gst_rate": str(Decimal(item.gst_rate)),
+            "cost_centre_id": getattr(item, "cost_centre_id", None),
+            "project_id": getattr(item, "project_id", None),
             "taxable_amount": str(taxable),
             "cgst": str(cgst),
             "sgst": str(sgst),
@@ -2332,6 +2334,12 @@ async def create_sales_invoice(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
     )
+    for item in payload.line_items:
+        await validate_dimension_refs(
+            tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+            cost_centre_id=getattr(item, "cost_centre_id", None),
+            project_id=getattr(item, "project_id", None),
+        )
     await validate_item_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         line_items=payload.line_items,
@@ -2844,6 +2852,12 @@ async def create_purchase_bill(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
     )
+    for item in payload.line_items:
+        await validate_dimension_refs(
+            tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
+            cost_centre_id=getattr(item, "cost_centre_id", None),
+            project_id=getattr(item, "project_id", None),
+        )
     await validate_item_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         line_items=payload.line_items,
