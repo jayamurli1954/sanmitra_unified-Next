@@ -328,6 +328,15 @@ def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
     assert "Top Vendors" in app_source
 
 
+def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" })' in app_source
+    assert "lastBusinessDataHealth" in app_source
+    assert "Data Health Score" in app_source
+    assert "rule.score_impact" in app_source
+
+
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

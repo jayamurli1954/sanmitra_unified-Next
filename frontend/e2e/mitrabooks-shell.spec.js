@@ -218,6 +218,37 @@ async function mockVerifiedMitraBooksSession(page) {
       charts: [],
     },
   }));
+  await page.route('**/api/v1/business/data-health**', route => json(route, {
+    as_of: '2026-06-30',
+    score: 71,
+    grade: 'C',
+    status: 'needs_attention',
+    summary: '2 data-health rule(s) need attention.',
+    rules: [
+      {
+        key: 'missing_gstin',
+        label: 'Missing GSTIN',
+        status: 'fail',
+        severity: 'warning',
+        count: 1,
+        score_impact: 4,
+        detail: 'Active customers/vendors should carry GSTIN where the party is registered.',
+        action: 'Open Parties and complete GSTIN/PAN details before filing or e-invoice work.',
+        evidence: [{ party_id: 'p2', party_name: 'Bengaluru Retail Customer' }],
+      },
+      {
+        key: 'duplicate_invoices',
+        label: 'Duplicate invoice numbers',
+        status: 'fail',
+        severity: 'danger',
+        count: 1,
+        score_impact: 10,
+        detail: 'Invoice numbers must be unique inside the active tenant book.',
+        action: 'Investigate duplicate invoice numbers and correct with cancellation/reversal where needed.',
+        evidence: [{ invoice_number: 'INV-001', count: 2 }],
+      },
+    ],
+  }));
   await page.route('**/api/v1/business/parties**', async route => {
     const request = route.request();
     const method = request.method();
@@ -1794,6 +1825,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.business-quick-actions-clean')).toContainText('Journal');
     await expect(page.locator('.business-recent-activity-clean')).toBeVisible();
     await expect(page.locator('.business-recent-activity-clean')).toContainText('Recent Activity');
+    await expect(page.locator('.erp-health-panel')).toContainText('Data Health Score');
+    await expect(page.locator('.erp-health-panel')).toContainText('71/100');
+    await expect(page.locator('.erp-health-panel')).toContainText('Duplicate invoice numbers');
 
     // Dashboard is verified as visible, now test workspace navigation
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();

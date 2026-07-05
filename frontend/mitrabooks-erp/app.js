@@ -5235,6 +5235,8 @@ function renderDashboardPreview(config) {
           </div>
         </div>
 
+        ${renderBusinessDataHealthPanel()}
+
         <div class="business-recent-activity-clean">
           <h4>Recent Activity</h4>
           <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
@@ -14471,8 +14473,10 @@ let lastModuleContext = null;
 let voucherLineCounter = 0;
 let lastBusinessDashboardStats = null;
 let lastBusinessMisKpis = null;
+let lastBusinessDataHealth = null;
 let lastFinancialHealth = null;
 let financialHealthLoadInFlight = false;
+let businessDataHealthLoadInFlight = false;
 
 const voucherLineState = [];
 
@@ -14732,6 +14736,19 @@ function dataHealthAction(priority, title, detail, actionText) {
 
 function renderBusinessDataHealthActions(state) {
   const actions = [];
+  const backendRules = Array.isArray(lastBusinessDataHealth?.rules) ? lastBusinessDataHealth.rules : [];
+
+  backendRules
+    .filter((rule) => rule.status !== "pass")
+    .slice(0, 5)
+    .forEach((rule) => {
+      actions.push(dataHealthAction(
+        rule.severity || "Rule",
+        rule.label || rule.key || "Data-health rule",
+        rule.detail || `${rule.count || 0} issue(s) found.`,
+        rule.action || "Review the affected records."
+      ));
+    });
 
   if (!state.isBusinessTenant || !state.hasBusinessModule) {
     actions.push(dataHealthAction(
@@ -14864,8 +14881,17 @@ function getBusinessHealthState() {
 
 function renderBusinessDataHealthPanel() {
   const { healthState, organizationType, tenantId, partiesGstinCopy, voucherCount } = getBusinessHealthState();
+  if (hasTrustedSession() && !lastBusinessDataHealth && !businessDataHealthLoadInFlight) {
+    setTimeout(() => { loadBusinessDataHealth(); }, 0);
+  }
+  const dataHealth = lastBusinessDataHealth;
+  const score = Number(dataHealth?.score ?? 0);
+  const scoreLabel = dataHealth ? `${score}/100` : "Loading";
+  const gradeLabel = dataHealth?.grade ? `Grade ${dataHealth.grade}` : "backend score";
+  const backendRules = Array.isArray(dataHealth?.rules) ? dataHealth.rules : [];
 
   const checks = [
+    dataHealthItem("Data Health Score", !!dataHealth && score >= 75, `${scoreLabel}; ${gradeLabel}`),
     dataHealthItem("Business tenant context", healthState.isBusinessTenant, `organization_type=${organizationType}; tenant=${tenantId}`),
     dataHealthItem("Business module enabled", healthState.hasBusinessModule, "Required before parties and vouchers can return tenant data."),
     dataHealthItem("Accounting module enabled", healthState.hasAccountingModule, "Required for chart of accounts and drill-down reports."),
@@ -14876,15 +14902,22 @@ function renderBusinessDataHealthPanel() {
     dataHealthItem("Party GSTIN sample", healthState.partiesGstinReady, partiesGstinCopy),
     dataHealthItem("Voucher drill-down", healthState.drilldownReady, `Current period shows ${voucherCount} posted voucher(s).`),
   ];
+  backendRules.forEach((rule) => {
+    checks.push(dataHealthItem(
+      rule.label || rule.key || "Data-health rule",
+      rule.status === "pass",
+      `${rule.count || 0} issue(s); impact ${rule.score_impact || 0}`
+    ));
+  });
 
   return `
     <section class="erp-health-panel" aria-label="MitraBooks data health">
       <div class="preview-heading compact">
         <div>
           <h4>Data Health</h4>
-          <p>Tenant, module, chart, and drill-down readiness for the current MitraBooks context.</p>
+          <p>${escapeHtml(dataHealth?.summary || "Tenant, module, chart, and drill-down readiness for the current MitraBooks context.")}</p>
         </div>
-        <span class="pill ${healthState.accountsLoaded && healthState.hasBusinessModule && healthState.hasAccountingModule ? "ok" : "warn"}">Phase 2B</span>
+        <span class="pill ${dataHealth?.status === "ready" ? "ok" : "warn"}">${escapeHtml(scoreLabel)}</span>
       </div>
       <ul class="erp-health-list">${checks.join("")}</ul>
       ${renderBusinessDataHealthActions(healthState)}
@@ -15228,6 +15261,37 @@ async function loadBusinessMisKpis() {
   }
 
   renderJson(apiOutput, { misKpis: { ok: result.ok, hasData: !!lastBusinessMisKpis } });
+}
+
+async function loadBusinessDataHealth() {
+  if (!hasTrustedSession()) {
+    return;
+  }
+  businessDataHealthLoadInFlight = true;
+  let result;
+  try {
+    result = await apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" });
+  } finally {
+    businessDataHealthLoadInFlight = false;
+  }
+
+  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object"
+    && Array.isArray(result.payload.rules);
+
+  if (hasValidPayload) {
+    lastBusinessDataHealth = result.payload;
+    if (currentExperience === "mitrabooks") {
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+    }
+  } else if (!lastBusinessDataHealth) {
+    setLoginStatus(
+      "warn",
+      "Data Health unavailable",
+      result.payload?.detail || "Source-backed data-health rules could not be loaded.",
+    );
+  }
+
+  renderJson(apiOutput, { dataHealth: { ok: result.ok, hasData: !!lastBusinessDataHealth } });
 }
 
 // ========== Account Selector Component (Searchable) ==========

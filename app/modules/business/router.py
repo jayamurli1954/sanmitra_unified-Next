@@ -89,6 +89,7 @@ from app.modules.business.schemas import (
     UnallocatedPaymentListResponse,
 )
 from app.modules.business import allocation_service
+from app.modules.business import data_health as data_health_module
 from app.modules.business import financial_health
 from app.modules.business import mis as mis_module
 from app.modules.business import gst_returns
@@ -606,6 +607,23 @@ async def business_mis_kpis(
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/data-health")
+async def business_data_health(
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Read-only Data Health Score for tenant-scoped MitraBooks records."""
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "data health")
+    return await data_health_module.build_data_health_score(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id, as_of=as_of,
+    )
 
 
 # ===================== Report export (CSV / XLSX / PDF) =====================

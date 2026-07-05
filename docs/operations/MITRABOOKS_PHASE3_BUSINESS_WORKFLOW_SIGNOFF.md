@@ -435,6 +435,8 @@ Result:
 - ADDED: local Playwright shell coverage for client-book selection, document file upload, attachment count display, and manual review advancement.
 - ADDED: source-backed MIS KPI contract for monthly sales/purchase trend, top customers/vendors, working capital, overdue AR/AP dashboards, and deterministic financial-health summaries.
 - ADDED: local Playwright shell rendering for MIS KPI contracts with working capital, top customer/vendor, and open-item aging evidence.
+- ADDED: source-backed Data Health Score rules for missing GSTIN, unposted drafts, stale bank reconciliation, duplicate invoice numbers, and overdue receivables exposure.
+- ADDED: local Playwright shell rendering for Data Health Score and failed-rule evidence inside the MitraBooks dashboard health panel.
 
 ## Remaining Gaps After This Gate
 
@@ -456,6 +458,7 @@ Result:
 - Branch consolidated reporting still needs real-stack/demo mutation, branch selector UX across document entry, export route, and production multi-branch signoff; the current gate closes local API plus mocked-shell branch rollup coverage.
 - Tenant-scoped document upload inbox still needs real-stack/demo mutation, object-storage provider policy, OCR/provider handoff policy, and production signoff; the current gate closes local backend plus mocked-shell client/book metadata, attachment, audit, and review evidence.
 - MIS KPI contracts still need real-stack/demo mutation and production report signoff; the current gate closes deterministic local backend assembly plus mocked-shell rendering for posted-ledger and open-item-aging sources.
+- Data Health Score still needs real-stack/demo validation, actionable remediation workflow, and production signoff; the current gate closes deterministic local backend rules plus mocked-shell rendering for score and failed-rule evidence.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals
