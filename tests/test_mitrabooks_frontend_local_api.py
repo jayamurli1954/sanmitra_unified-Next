@@ -334,6 +334,9 @@ def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
     assert 'apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" })' in app_source
     assert "lastBusinessDataHealth" in app_source
     assert "Data Health Score" in app_source
+    assert "renderBusinessDataHealthIssueList" in app_source
+    assert "Remediation Queue" in app_source
+    assert 'data-data-health-rule="${escapeHtml(issue.rule_key || "")}"' in app_source
     assert "rule.score_impact" in app_source
 
 

@@ -85,6 +85,14 @@ def test_data_health_score_flags_all_target_rules():
     assert rules["stale_reconciliation"]["count"] == 1
     assert rules["overdue_exposure"]["severity"] == "danger"
     assert rules["overdue_exposure"]["evidence"][0]["over_90"] == "200.00"
+    issues = {issue["issue_id"]: issue for issue in out["issues"]}
+    assert out["issue_count"] == 6
+    assert issues["data-health:missing_gstin:business_party:cust-a"]["workspace"] == "parties"
+    assert issues["data-health:unposted_drafts:business_sales_invoice:inv-3"]["action_label"] == "Open Sales"
+    assert issues["data-health:unposted_drafts:business_purchase_bill:bill-1"]["workspace"] == "bills"
+    assert issues["data-health:duplicate_invoices:business_sales_invoice:inv-001"]["workspace"] == "sales"
+    assert issues["data-health:stale_reconciliation:bank_statement_line:stmt-old"]["action_label"] == "Open Bank Reconciliation"
+    assert issues["data-health:overdue_exposure:receivables_aging:receivables-aging"]["workspace"] == "financial-health"
 
 
 @pytest.mark.asyncio
@@ -129,3 +137,5 @@ async def test_data_health_builder_reads_tenant_scoped_collections(monkeypatch):
     assert rules["duplicate_invoices"]["count"] == 1
     assert rules["unposted_drafts"]["count"] == 1
     assert rules["stale_reconciliation"]["count"] == 1
+    assert all(issue["entity_id"] != "inv-x" for issue in out["issues"])
+    assert {issue["workspace"] for issue in out["issues"]} >= {"parties", "sales", "vouchers", "bank-recon", "financial-health"}

@@ -248,6 +248,37 @@ async function mockVerifiedMitraBooksSession(page) {
         evidence: [{ invoice_number: 'INV-001', count: 2 }],
       },
     ],
+    issues: [
+      {
+        issue_id: 'data-health:missing_gstin:business_party:p2',
+        rule_key: 'missing_gstin',
+        severity: 'warning',
+        title: 'Missing GSTIN',
+        description: 'Active customers/vendors should carry GSTIN where the party is registered.',
+        entity_type: 'business_party',
+        entity_id: 'p2',
+        entity_label: 'Bengaluru Retail Customer',
+        workspace: 'parties',
+        action_label: 'Open Parties',
+        action: 'Open Parties and complete GSTIN/PAN details before filing or e-invoice work.',
+        status: 'open',
+      },
+      {
+        issue_id: 'data-health:duplicate_invoices:business_sales_invoice:inv-001',
+        rule_key: 'duplicate_invoices',
+        severity: 'danger',
+        title: 'Duplicate invoice numbers',
+        description: 'Invoice numbers must be unique inside the active tenant book.',
+        entity_type: 'business_sales_invoice',
+        entity_id: 'INV-001',
+        entity_label: 'Invoice INV-001',
+        workspace: 'sales',
+        action_label: 'Open Sales',
+        action: 'Investigate duplicate invoice numbers and correct with cancellation/reversal where needed.',
+        status: 'open',
+      },
+    ],
+    issue_count: 2,
   }));
   await page.route('**/api/v1/business/parties**', async route => {
     const request = route.request();
@@ -1828,6 +1859,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-health-panel')).toContainText('Data Health Score');
     await expect(page.locator('.erp-health-panel')).toContainText('71/100');
     await expect(page.locator('.erp-health-panel')).toContainText('Duplicate invoice numbers');
+    await expect(page.locator('.erp-health-panel')).toContainText('Remediation Queue');
+    await page.locator('.erp-health-panel button[data-data-health-rule="duplicate_invoices"]').click();
+    await expect(page.locator('.erp-workspace-panel')).toContainText('Sales Invoices');
 
     // Dashboard is verified as visible, now test workspace navigation
     await page.locator('nav#nav a[data-business-workspace="parties"]').click();

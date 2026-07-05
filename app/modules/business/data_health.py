@@ -70,6 +70,88 @@ def _rule(key: str, label: str, *, count: int, severity: str, impact: int, detai
     }
 
 
+_DOCUMENT_WORKSPACES = {
+    "sales_invoice": ("sales", "business_sales_invoice", "Open Sales"),
+    "purchase_bill": ("bills", "business_purchase_bill", "Open Bills"),
+    "voucher": ("vouchers", "business_voucher", "Open Vouchers"),
+    "credit_note": ("credit-notes", "business_credit_note", "Open Credit Notes"),
+    "debit_note": ("debit-notes", "business_debit_note", "Open Debit Notes"),
+}
+
+
+def _issue_token(value) -> str:
+    text = str(value or "unknown").strip().lower()
+    return "".join(ch if ch.isalnum() else "-" for ch in text).strip("-") or "unknown"
+
+
+def _issue_for_evidence(rule: dict, evidence: dict, index: int) -> dict:
+    rule_key = str(rule.get("key") or "data_health")
+    workspace = "overview"
+    entity_type = "data_health_issue"
+    entity_id = f"{rule_key}-{index + 1}"
+    entity_label = str(rule.get("label") or rule_key)
+    action_label = "Review Issue"
+
+    if rule_key == "missing_gstin":
+        workspace = "parties"
+        entity_type = "business_party"
+        entity_id = evidence.get("party_id") or entity_id
+        entity_label = evidence.get("party_name") or entity_id
+        action_label = "Open Parties"
+    elif rule_key == "unposted_drafts":
+        workspace, entity_type, action_label = _DOCUMENT_WORKSPACES.get(
+            str(evidence.get("document_type") or ""),
+            ("vouchers", "business_document", "Open Documents"),
+        )
+        entity_id = evidence.get("document_id") or evidence.get("number") or entity_id
+        entity_label = evidence.get("number") or entity_id
+    elif rule_key == "duplicate_invoices":
+        workspace = "sales"
+        entity_type = "business_sales_invoice"
+        entity_id = evidence.get("invoice_number") or entity_id
+        entity_label = f"Invoice {entity_id}"
+        action_label = "Open Sales"
+    elif rule_key == "stale_reconciliation":
+        workspace = "bank-recon"
+        entity_type = "bank_statement_line"
+        entity_id = evidence.get("statement_line_id") or entity_id
+        entity_label = evidence.get("description") or entity_id
+        action_label = "Open Bank Reconciliation"
+    elif rule_key == "overdue_exposure":
+        workspace = "financial-health"
+        entity_type = "receivables_aging"
+        entity_id = "receivables-aging"
+        entity_label = f"Overdue {evidence.get('overdue') or '0.00'}"
+        action_label = "Open Financial Health"
+
+    return {
+        "issue_id": f"data-health:{rule_key}:{entity_type}:{_issue_token(entity_id)}",
+        "rule_key": rule_key,
+        "severity": rule.get("severity") or "warning",
+        "title": rule.get("label") or rule_key.replace("_", " ").title(),
+        "description": rule.get("detail") or "",
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "entity_label": entity_label,
+        "workspace": workspace,
+        "action_label": action_label,
+        "action": rule.get("action") or "Review the affected record.",
+        "status": "open",
+        "evidence": evidence,
+    }
+
+
+def _build_issues(rules: list[dict]) -> list[dict]:
+    issues = []
+    for rule in rules:
+        if rule.get("status") == "pass":
+            continue
+        evidence_rows = rule.get("evidence") or [{}]
+        for index, evidence in enumerate(evidence_rows[:10]):
+            issues.append(_issue_for_evidence(rule, evidence if isinstance(evidence, dict) else {}, index))
+    return issues
+
+
 def _grade(score: int) -> str:
     if score >= 90:
         return "A"
@@ -219,6 +301,7 @@ def assemble_data_health_score(*, parties: list[dict], documents: dict[str, list
     ]
     score = max(0, 100 - sum(int(rule["score_impact"]) for rule in rules))
     failing = [rule for rule in rules if rule["status"] != "pass"]
+    issues = _build_issues(rules)
     return {
         "as_of": as_of.isoformat(),
         "score": score,
@@ -226,6 +309,8 @@ def assemble_data_health_score(*, parties: list[dict], documents: dict[str, list
         "status": "ready" if not failing else "needs_attention",
         "summary": "Data health checks passed." if not failing else f"{len(failing)} data-health rule(s) need attention.",
         "rules": rules,
+        "issues": issues,
+        "issue_count": len(issues),
         "source": {
             "parties": PARTIES_COLLECTION,
             "documents": [SALES_INVOICES_COLLECTION, PURCHASE_BILLS_COLLECTION, VOUCHERS_COLLECTION, CREDIT_NOTES_COLLECTION, DEBIT_NOTES_COLLECTION],

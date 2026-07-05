@@ -14734,6 +14734,39 @@ function dataHealthAction(priority, title, detail, actionText) {
   `;
 }
 
+function renderBusinessDataHealthIssueList(dataHealth) {
+  const issues = Array.isArray(dataHealth?.issues) ? dataHealth.issues : [];
+  if (issues.length === 0) return "";
+  return `
+    <div class="erp-health-actions data-health-remediation">
+      <div>
+        <h5>Remediation Queue</h5>
+        <p>Source-backed issues with direct links to the workspace where the record can be reviewed.</p>
+      </div>
+      <ol>
+        ${issues.slice(0, 8).map((issue) => {
+          const workspace = issue.workspace || "overview";
+          return `
+            <li data-data-health-issue="${escapeHtml(issue.issue_id || "")}">
+              <span>${escapeHtml(issue.severity || "issue")}</span>
+              <strong>${escapeHtml(issue.title || "Data-health issue")}</strong>
+              <small>${escapeHtml(issue.entity_label || issue.description || "Affected record")}</small>
+              <em>${escapeHtml(issue.action || "Review the affected record.")}</em>
+              <button
+                class="secondary"
+                type="button"
+                data-business-action="workspace-view"
+                data-workspace-view="${escapeHtml(workspace)}"
+                data-data-health-rule="${escapeHtml(issue.rule_key || "")}"
+              >${escapeHtml(issue.action_label || "Open Workspace")}</button>
+            </li>
+          `;
+        }).join("")}
+      </ol>
+    </div>
+  `;
+}
+
 function renderBusinessDataHealthActions(state) {
   const actions = [];
   const backendRules = Array.isArray(lastBusinessDataHealth?.rules) ? lastBusinessDataHealth.rules : [];
@@ -14920,6 +14953,7 @@ function renderBusinessDataHealthPanel() {
         <span class="pill ${dataHealth?.status === "ready" ? "ok" : "warn"}">${escapeHtml(scoreLabel)}</span>
       </div>
       <ul class="erp-health-list">${checks.join("")}</ul>
+      ${renderBusinessDataHealthIssueList(dataHealth)}
       ${renderBusinessDataHealthActions(healthState)}
     </section>
   `;
