@@ -3772,6 +3772,10 @@ async def test_ca_document_attachment_download_requires_matching_tenant_scope(mo
         payload=b"PK\x03\x04",
     )
 
+    assert created["owner_type"] == "ca_document"
+    assert ca_documents.docs[0]["attachment_count"] == 1
+    assert ca_documents.docs[0]["last_attachment_at"] is not None
+
     with pytest.raises(business_service.AccountingNotFoundError):
         await business_service.download_business_document_attachment(
             tenant_id="other-tenant",
@@ -3787,8 +3791,39 @@ async def test_ca_document_attachment_download_requires_matching_tenant_scope(mo
 @pytest.mark.asyncio
 async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
     documents = FakeCollection()
+    clients = FakeCollection()
     audit_events = []
-    monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
+    clients.docs = [
+        {
+            "client_id": "client-1",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "primary",
+            "client_name": "Jayam Publications",
+            "assigned_to": "Staff A",
+            "client_owner": "Partner A",
+            "active": True,
+            "created_by": "owner-1",
+            "created_at": business_service._now(),
+            "updated_at": business_service._now(),
+        },
+        {
+            "client_id": "client-other-book",
+            "tenant_id": "business-tenant",
+            "app_key": "mitrabooks",
+            "accounting_entity_id": "other-book",
+            "client_name": "Wrong Book Client",
+            "active": True,
+        },
+    ]
+
+    def fake_get_collection(name):
+        return {
+            business_service.CA_DOCUMENTS_COLLECTION: documents,
+            business_service.CA_CLIENTS_COLLECTION: clients,
+        }[name]
+
+    monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -3801,11 +3836,10 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
         accounting_entity_id="primary",
         created_by="reviewer-1",
         payload=CaDocumentCreateRequest(
+            client_id="client-1",
             client_name="Jayam Publications",
             document_type="Bank statement",
             period="May 2026",
-            assigned_to="Staff A",
-            client_owner="Partner A",
             priority="high",
             due_date="2026-06-20",
             compliance_area="GST",
@@ -3832,9 +3866,14 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
 
     assert result["tenant_id"] == "business-tenant"
     assert result["app_key"] == "mitrabooks"
+    assert result["accounting_entity_id"] == "primary"
+    assert result["book_id"] == "primary"
+    assert result["client_id"] == "client-1"
     assert result["status"] == "uploaded"
     assert result["client_owner"] == "Partner A"
+    assert result["assigned_to"] == "Staff A"
     assert result["priority"] == "high"
+    assert result["attachment_count"] == 0
     assert result["due_date"] == "2026-06-20"
     assert result["compliance_area"] == "GST"
     assert result["client_access_enabled"] is True
@@ -3842,6 +3881,20 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
     assert [row["client_name"] for row in listed["items"]] == ["Jayam Publications"]
     assert audit_events[0]["action"] == "business_ca_document_metadata_created"
     assert audit_events[0]["tenant_id"] == "business-tenant"
+
+    with pytest.raises(business_service.AccountingValidationError, match="CA client is not active"):
+        await business_service.create_ca_document_metadata(
+            tenant_id="business-tenant",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            created_by="reviewer-1",
+            payload=CaDocumentCreateRequest(
+                client_id="client-other-book",
+                client_name="Wrong Book Client",
+                document_type="Bank statement",
+                period="May 2026",
+            ),
+        )
 
 
 @pytest.mark.asyncio
@@ -3874,7 +3927,7 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
-    monkeypatch.setattr(business_service, "log_audit_event", lambda **_kwargs: None)
+    monkeypatch.setattr(business_service, "log_audit_event", lambda **_kwargs: _async_none())
 
     result = await business_service.update_ca_document_metadata(
         tenant_id="business-tenant",
@@ -3906,6 +3959,8 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
     assert result["due_date"] == "2026-06-18"
     assert result["client_access_enabled"] is True
     assert result["next_action"] == "Review support and raise query if needed"
+    assert result["review_started_at"] is not None
+    assert result["review_started_by"] == "partner-1"
     assert wrong_tenant is None
 
 

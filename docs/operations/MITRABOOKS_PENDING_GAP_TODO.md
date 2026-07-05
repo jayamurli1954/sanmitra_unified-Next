@@ -39,6 +39,7 @@ Status convention:
 - ~~[x] Phase 3 Per-line Dimensions local hardening passed on 2026-07-05: sales invoice and purchase bill line-level cost-centre/project tags, dimension validation, header fallback reporting, and mocked-shell line override evidence.~~
 - ~~[x] Phase 3 Branch Consolidated Reporting local hardening passed on 2026-07-05: branch settings mapped to cost-centre codes, tenant/app/entity-scoped branch P&L route, unassigned/unmapped reconciliation bucket, route-contract coverage, and mocked-shell branch rollup evidence.~~
 - ~~[x] Phase 3 Credit/debit note line dimensions local hardening passed on 2026-07-05: credit note and debit note line-level cost-centre/project tags, dimension validation, header fallback reporting, and mocked-shell note line selector evidence.~~
+- ~~[x] Phase 3 Tenant-scoped document upload inbox local hardening passed on 2026-07-05: CA document metadata links to tenant/app/book-scoped client records, attachments update review-queue evidence, manual review timestamps are audited, and mocked-shell coverage exercises client book selection, file upload, and review advancement.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -90,7 +91,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] Fixed-asset disposal workflow, browser E2E, depreciation posting review, and compliance review. Local API and mocked-shell browser coverage is closed for register, depreciation preview/posting, and disposal journal UX; dedicated gain/loss COA polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff remain open.
 - [~] Dimensions/tagging coverage across vouchers, invoices, bills, notes, reports, and exports. Document-level tags and reports are covered for invoices, bills, credit notes, debit notes, and typed vouchers with local API and mocked-shell browser coverage; dimension CSV/XLSX/PDF export route hardening is locally covered. Sales invoice, purchase bill, credit note, and debit note per-line dimensions are locally covered with header fallback reporting; real-stack/demo mutation and production signoff remain open.
 - [~] Multi-location/branch dimension and consolidated reporting. Local branch-to-cost-centre consolidated P&L is covered with an unassigned/unmapped reconciliation bucket and mocked-shell evidence; real-stack/demo mutation, branch selector UX across document entry, export route, and production multi-branch signoff remain open.
-- [ ] Tenant-scoped document upload inbox with manual review, attachment linking, audit trail, and client/book scoping.
+- [~] Tenant-scoped document upload inbox with manual review, attachment linking, audit trail, and client/book scoping. Local backend and mocked-shell coverage is closed for CA document metadata, client/book linkage, attachment upload evidence, manual review timestamps, and audit events; real-stack/demo mutation, object-storage provider policy, OCR handoff, and production signoff remain open.
 
 ## Phase 5 Open Gaps
 

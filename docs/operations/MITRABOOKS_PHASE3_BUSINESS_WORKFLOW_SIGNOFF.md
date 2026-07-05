@@ -123,6 +123,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Per-line Dimensions local hardening | Backend and mocked-shell coverage for sales invoice and purchase bill line-level cost-centre/project tags, dimension validation, line-first report allocation, and document-header fallback when line tags are blank | Passed on 2026-07-05 |
 | Branch Consolidated Reporting local hardening | Backend and mocked-shell coverage for branch settings mapped to cost-centre codes, tenant/app/entity-scoped branch P&L route, unassigned/unmapped reconciliation bucket, and branch rollup evidence in the dimensions workspace | Passed on 2026-07-05 |
 | Credit/debit note line dimensions local hardening | Backend and mocked-shell coverage for credit note and debit note line-level cost-centre/project tags, dimension validation, line-first report allocation, and document-header fallback when line tags are blank | Passed on 2026-07-05 |
+| Tenant-scoped document upload inbox local hardening | Backend and mocked-shell coverage for tenant/app/book-scoped CA document metadata, stable client id linkage, attachment count evidence, manual review timestamps, upload/download audit events, client-book shell selection, file upload, and review advancement | Passed on 2026-07-05 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
@@ -415,6 +416,24 @@ Result:
 - ADDED: dimension report coverage proving credit/debit note line tags override document header tags, with header fallback when line tags are blank.
 - ADDED: local Playwright shell coverage for credit/debit note line-level cost-centre/project selectors.
 
+### 2026-07-05 - Tenant-Scoped Document Upload Inbox Local Hardening
+
+Commands:
+
+```powershell
+python -m pytest tests\test_business_phase2.py tests\test_business_route_contract.py tests\test_mitrabooks_frontend_local_api.py -q
+python scripts\preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused CA document inbox, attachment, route-contract, and frontend local API tests.
+- PASS: mandatory frontend preflight, including full pytest, global Playwright smoke, MitraBooks shell smoke, and CA invite smoke.
+- ADDED: CA document metadata can link to a tenant/app/accounting-entity-scoped CA client through `client_id`, while preserving manual `client_name` fallback.
+- ADDED: CA document records expose `book_id`, `attachment_count`, and manual review timestamps for uploaded, under-review, query, reviewed, and posted states.
+- ADDED: CA document attachment upload updates the owning document's attachment evidence and continues to audit upload/download events.
+- ADDED: local Playwright shell coverage for client-book selection, document file upload, attachment count display, and manual review advancement.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -433,6 +452,7 @@ Result:
 - Fixed assets still need dedicated disposal gain/loss account-code polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff; the current gate closes local API plus mocked-shell register/depreciation/disposal coverage.
 - Dimensions still need real-stack/demo mutation and production signoff; the current gate closes sales invoice, purchase bill, credit note, and debit note line tagging plus document/header-level invoice, bill, note, voucher, report, and export coverage locally.
 - Branch consolidated reporting still needs real-stack/demo mutation, branch selector UX across document entry, export route, and production multi-branch signoff; the current gate closes local API plus mocked-shell branch rollup coverage.
+- Tenant-scoped document upload inbox still needs real-stack/demo mutation, object-storage provider policy, OCR/provider handoff policy, and production signoff; the current gate closes local backend plus mocked-shell client/book metadata, attachment, audit, and review evidence.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

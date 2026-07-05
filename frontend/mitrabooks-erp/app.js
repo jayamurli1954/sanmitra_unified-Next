@@ -1404,6 +1404,11 @@ function caClientSwitchRows() {
   return caPracticeClientBreakdown(lastCaDocuments);
 }
 
+function caClientById(clientId) {
+  return (Array.isArray(lastCaClients) ? lastCaClients : [])
+    .find((row) => String(row.client_id || "") === String(clientId || "")) || null;
+}
+
 function caPracticeClientBreakdown(rows) {
   const counts = new Map();
   (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -1784,6 +1789,7 @@ function renderCaDocumentTable(rows) {
                 <td>
                   <strong>${escapeHtml(row.client_name || "-")}</strong>
                   <span class="row-subtext">${escapeHtml(row.original_file_name || "No file uploaded")}</span>
+                  <span class="row-subtext">Book ${escapeHtml(row.book_id || row.accounting_entity_id || "primary")}${row.client_id ? ` | Client ${escapeHtml(row.client_id)}` : ""}</span>
                 </td>
                 <td>${escapeHtml(row.document_type || "-")}</td>
                 <td>${escapeHtml(row.period || "-")}</td>
@@ -1799,6 +1805,7 @@ function renderCaDocumentTable(rows) {
                 <td>
                   ${escapeHtml(row.next_action || "-")}
                   <span class="row-subtext">${escapeHtml(row.compliance_area || "General")} ${row.client_access_enabled ? " | Client access flagged" : ""}</span>
+                  <span class="row-subtext">${escapeHtml(String(row.attachment_count || 0))} attachment(s)${row.reviewed_at ? ` | Reviewed ${escapeHtml(String(row.reviewed_at).slice(0, 10))}` : ""}</span>
                 </td>
                 <td>${escapeHtml(row.posting_reference || "-")}</td>
                 <td>
@@ -1840,6 +1847,15 @@ function renderCaDocumentIntake(documentIntake) {
           <h4>${escapeHtml(documentIntake.title)}</h4>
           <p>${escapeHtml(documentIntake.copy)}</p>
           <div class="ca-upload-field-grid">
+            <label>
+              <span>Client book</span>
+              <select name="client_id">
+                <option value="">Manual client name</option>
+                ${(Array.isArray(lastCaClients) ? lastCaClients : []).filter((row) => row.active !== false).map((row) => `
+                  <option value="${escapeHtml(row.client_id || "")}">${escapeHtml(row.client_name || row.client_id || "")} | ${escapeHtml(row.accounting_entity_id || "primary")}</option>
+                `).join("")}
+              </select>
+            </label>
             <label>
               <span>Client</span>
               <input name="client_name" type="text" maxlength="160" placeholder="Client book or company name" list="ca-client-name-options" required>
@@ -7777,8 +7793,11 @@ async function loadCaAccessUsers(options = {}) {
 async function createCaPracticeDocument(form) {
   const formData = new FormData(form);
   const selectedFiles = Array.from(form.querySelector("[name='ca_attachments']")?.files || []);
+  const selectedClientId = String(formData.get("client_id") || "").trim();
+  const selectedClient = caClientById(selectedClientId);
   const payload = {
-    client_name: String(formData.get("client_name") || "").trim(),
+    client_id: selectedClientId || null,
+    client_name: String(formData.get("client_name") || selectedClient?.client_name || "").trim(),
     document_type: String(formData.get("document_type") || "").trim(),
     period: String(formData.get("period") || "").trim(),
     assigned_to: String(formData.get("assigned_to") || "").trim() || null,
@@ -7810,6 +7829,7 @@ async function createCaPracticeDocument(form) {
     if (documentId) {
       if (selectedFiles.length) {
         uploadResults = await uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles);
+        await loadCaPracticeDocuments({ rerender: false });
       }
       await loadCaDocumentAttachments(documentId, result.payload?.client_name || payload.client_name);
     }

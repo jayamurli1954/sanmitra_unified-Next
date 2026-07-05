@@ -146,6 +146,7 @@ class TypedVoucherListResponse(BaseModel):
 
 
 class CaDocumentCreateRequest(BaseModel):
+    client_id: str | None = Field(default=None, max_length=80)
     client_name: str = Field(..., min_length=1, max_length=160)
     document_type: str = Field(..., min_length=1, max_length=80)
     period: str = Field(..., min_length=1, max_length=80)
@@ -179,6 +180,8 @@ class CaDocumentResponse(BaseModel):
     tenant_id: str
     app_key: str
     accounting_entity_id: str
+    book_id: str | None = None
+    client_id: str | None = None
     client_name: str
     document_type: str
     period: str
@@ -190,9 +193,18 @@ class CaDocumentResponse(BaseModel):
     compliance_area: str | None = None
     client_access_enabled: bool = False
     original_file_name: str | None = None
+    attachment_count: int = 0
     next_action: str
     posting_reference: str | None = None
     notes: str | None = None
+    review_started_at: datetime | None = None
+    review_started_by: str | None = None
+    query_raised_at: datetime | None = None
+    query_raised_by: str | None = None
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    posted_at: datetime | None = None
+    posted_by: str | None = None
     created_by: str
     updated_by: str | None = None
     created_at: datetime

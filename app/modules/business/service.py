@@ -150,6 +150,27 @@ def _safe_attachment_file_name(file_name: str | None) -> str:
     return cleaned[:240] or "attachment"
 
 
+async def _get_ca_client_in_scope(
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    client_id: str,
+) -> dict:
+    client = await get_collection(CA_CLIENTS_COLLECTION).find_one(
+        {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": accounting_entity_id,
+            "client_id": client_id,
+            "active": True,
+        }
+    )
+    if client is None:
+        raise AccountingValidationError("CA client is not active in this tenant book")
+    return client
+
+
 def _normalize_attachment_content_type(content_type: str | None) -> str:
     return str(content_type or "").split(";")[0].strip().lower()
 
@@ -459,12 +480,23 @@ async def ensure_business_indexes() -> None:
 
 def _ca_document_response_doc(doc: dict) -> dict:
     result = _json_safe_doc(doc)
+    result.setdefault("book_id", result.get("accounting_entity_id"))
+    result.setdefault("client_id", None)
     result.setdefault("next_action", CA_DOCUMENT_DEFAULT_NEXT_ACTION.get(str(result.get("status") or "uploaded"), "Review document metadata"))
     result.setdefault("client_owner", None)
     result.setdefault("priority", "normal")
     result.setdefault("due_date", None)
     result.setdefault("compliance_area", None)
     result.setdefault("client_access_enabled", False)
+    result.setdefault("attachment_count", 0)
+    result.setdefault("review_started_at", None)
+    result.setdefault("review_started_by", None)
+    result.setdefault("query_raised_at", None)
+    result.setdefault("query_raised_by", None)
+    result.setdefault("reviewed_at", None)
+    result.setdefault("reviewed_by", None)
+    result.setdefault("posted_at", None)
+    result.setdefault("posted_by", None)
     return result
 
 
@@ -620,25 +652,47 @@ async def create_ca_document_metadata(
 ) -> dict:
     document_id = str(uuid4())
     now = _now()
+    client = None
+    client_id = str(payload.client_id or "").strip() or None
+    if client_id:
+        client = await _get_ca_client_in_scope(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+            client_id=client_id,
+        )
+    client_name = str((client or {}).get("client_name") or payload.client_name).strip()
     doc = {
         "document_id": document_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
         "accounting_entity_id": accounting_entity_id,
-        "client_name": payload.client_name.strip(),
+        "book_id": accounting_entity_id,
+        "client_id": client_id,
+        "client_name": client_name,
         "document_type": payload.document_type.strip(),
         "period": payload.period.strip(),
         "status": "uploaded",
-        "assigned_to": payload.assigned_to.strip() if payload.assigned_to else None,
-        "client_owner": payload.client_owner.strip() if payload.client_owner else None,
+        "assigned_to": payload.assigned_to.strip() if payload.assigned_to else ((client or {}).get("assigned_to") or None),
+        "client_owner": payload.client_owner.strip() if payload.client_owner else ((client or {}).get("client_owner") or None),
         "priority": payload.priority,
         "due_date": payload.due_date.strip() if payload.due_date else None,
         "compliance_area": payload.compliance_area.strip() if payload.compliance_area else None,
         "client_access_enabled": bool(payload.client_access_enabled),
         "original_file_name": payload.original_file_name.strip() if payload.original_file_name else None,
+        "attachment_count": 0,
+        "last_attachment_at": None,
         "next_action": CA_DOCUMENT_DEFAULT_NEXT_ACTION["uploaded"],
         "posting_reference": None,
         "notes": payload.notes.strip() if payload.notes else None,
+        "review_started_at": None,
+        "review_started_by": None,
+        "query_raised_at": None,
+        "query_raised_by": None,
+        "reviewed_at": None,
+        "reviewed_by": None,
+        "posted_at": None,
+        "posted_by": None,
         "created_by": created_by,
         "created_at": now,
         "updated_at": now,
@@ -720,12 +774,29 @@ async def update_ca_document_metadata(
 
     patch = payload.model_dump(exclude_unset=True)
     patch.pop("accounting_entity_id", None)
+    patch.pop("client_id", None)
     patch = {key: value for key, value in patch.items() if value is not None}
     status = patch.get("status")
+    now = _now()
     if status and not patch.get("next_action"):
         patch["next_action"] = CA_DOCUMENT_DEFAULT_NEXT_ACTION.get(str(status), "Review document metadata")
+    if status == "under_review" and existing.get("review_started_at") is None:
+        patch["review_started_at"] = now
+        patch["review_started_by"] = updated_by
+    if status == "query_raised":
+        patch["query_raised_at"] = now
+        patch["query_raised_by"] = updated_by
+    if status == "reviewed":
+        patch["reviewed_at"] = now
+        patch["reviewed_by"] = updated_by
+    if status == "posted":
+        patch["posted_at"] = now
+        patch["posted_by"] = updated_by
+        if existing.get("reviewed_at") is None:
+            patch["reviewed_at"] = now
+            patch["reviewed_by"] = updated_by
     patch["updated_by"] = updated_by
-    patch["updated_at"] = _now()
+    patch["updated_at"] = now
 
     await collection.update_one(filters, {"$set": patch})
     updated = await collection.find_one(filters)
@@ -1302,7 +1373,7 @@ async def create_business_document_attachment(
     if suffix not in ALLOWED_BUSINESS_ATTACHMENT_TYPES[normalized_content_type]:
         raise AccountingValidationError("Attachment filename extension does not match the supplied content type")
 
-    await _get_business_attachment_owner(
+    owner, _owner_key = await _get_business_attachment_owner(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=accounting_entity_id,
@@ -1339,6 +1410,31 @@ async def create_business_document_attachment(
         "updated_at": now,
     }
     await get_collection(BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION).insert_one(doc)
+    if str(owner_type).strip().lower() == "ca_document":
+        attachment_count = await get_collection(BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION).count_documents(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "accounting_entity_id": accounting_entity_id,
+                "owner_type": "ca_document",
+                "owner_id": owner_id,
+            }
+        )
+        await get_collection(CA_DOCUMENTS_COLLECTION).update_one(
+            {
+                "tenant_id": tenant_id,
+                "app_key": app_key,
+                "accounting_entity_id": accounting_entity_id,
+                "document_id": owner_id,
+            },
+            {
+                "$set": {
+                    "attachment_count": attachment_count,
+                    "last_attachment_at": now,
+                    "updated_at": now,
+                }
+            },
+        )
     result = _business_attachment_response_doc(doc)
     await _audit_business_event(
         tenant_id=tenant_id,

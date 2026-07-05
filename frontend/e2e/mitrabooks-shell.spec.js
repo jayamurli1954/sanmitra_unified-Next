@@ -75,6 +75,7 @@ async function mockVerifiedMitraBooksSession(page) {
   let gstSettlementPosted = false;
   const caDocuments = [];
   const caClients = [];
+  const caAttachments = [];
   const inventoryItems = [
     {
       item_id: 'item-widget-a',
@@ -336,12 +337,52 @@ async function mockVerifiedMitraBooksSession(page) {
     const url = new URL(request.url());
     const path = url.pathname;
 
+    if (path.includes('/attachments')) {
+      const parts = path.split('/');
+      const documentId = path.endsWith('/attachments') ? parts.at(-2) : parts.at(-4);
+      const document = caDocuments.find(item => item.document_id === documentId);
+      if (!document) return json(route, { detail: 'Document not found' }, 404);
+      if (method === 'POST') {
+        const attachment = {
+          attachment_id: `caatt${caAttachments.length + 1}`,
+          tenant_id: 'demo-mitrabooks-business',
+          app_key: 'mitrabooks',
+          accounting_entity_id: document.accounting_entity_id || 'primary',
+          owner_type: 'ca_document',
+          owner_id: documentId,
+          file_name: 'gst-working.xlsx',
+          content_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          size_bytes: 4,
+          uploaded_by: 'businessadmin@sanmitra.local',
+          uploaded_at: '2026-06-14T00:00:00Z',
+        };
+        caAttachments.push(attachment);
+        document.attachment_count = caAttachments.filter(item => item.owner_id === documentId).length;
+        return json(route, attachment);
+      }
+      if (method === 'GET' && path.endsWith('/download')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          body: 'PK',
+        });
+      }
+      return json(route, {
+        items: caAttachments.filter(item => item.owner_id === documentId),
+        total: caAttachments.filter(item => item.owner_id === documentId).length,
+      });
+    }
+
     if (method === 'PATCH') {
       const documentId = path.split('/').at(-1);
       const document = caDocuments.find(item => item.document_id === documentId);
       if (!document) return json(route, { detail: 'Document not found' }, 404);
       const payload = request.postDataJSON();
       document.status = payload.status || document.status;
+      document.review_started_at = document.status === 'under_review' ? '2026-06-14T00:00:00Z' : document.review_started_at;
+      document.review_started_by = document.status === 'under_review' ? 'businessadmin@sanmitra.local' : document.review_started_by;
+      document.reviewed_at = document.status === 'reviewed' ? '2026-06-14T00:00:00Z' : document.reviewed_at;
+      document.reviewed_by = document.status === 'reviewed' ? 'businessadmin@sanmitra.local' : document.reviewed_by;
       document.next_action = document.status === 'under_review'
         ? 'Complete document review'
         : document.status === 'query_raised'
@@ -356,17 +397,22 @@ async function mockVerifiedMitraBooksSession(page) {
 
     if (method === 'POST') {
       const payload = request.postDataJSON();
+      const client = caClients.find(item => item.client_id === payload.client_id);
       const document = {
         document_id: `cadoc${caDocuments.length + 1}`,
         tenant_id: 'demo-mitrabooks-business',
         app_key: 'mitrabooks',
         accounting_entity_id: 'primary',
-        client_name: payload.client_name,
+        book_id: 'primary',
+        client_id: payload.client_id || '',
+        client_name: client?.client_name || payload.client_name,
         document_type: payload.document_type,
         period: payload.period,
         status: 'uploaded',
-        assigned_to: payload.assigned_to || '',
+        assigned_to: payload.assigned_to || client?.assigned_to || '',
+        client_owner: payload.client_owner || client?.client_owner || '',
         original_file_name: payload.original_file_name || '',
+        attachment_count: 0,
         next_action: 'Classify document and assign reviewer',
         posting_reference: '',
         notes: payload.notes || '',
@@ -2089,6 +2135,33 @@ test.describe('MitraBooks ERP static shell', () => {
       caClientForm.locator('button[type="submit"]').click(),
     ]);
     await expect(page.locator('.erp-workspace-panel')).toContainText('Jayam Publications');
+
+    const caDocumentForm = page.locator('[data-ca-document-form]');
+    await caDocumentForm.locator('select[name="client_id"]').selectOption('caclient1');
+    await caDocumentForm.locator('input[name="client_name"]').fill('Jayam Publications');
+    await caDocumentForm.locator('select[name="document_type"]').selectOption('Bank statement');
+    await caDocumentForm.locator('input[name="period"]').fill('May 2026');
+    await caDocumentForm.locator('input[name="assigned_to"]').fill('Staff A');
+    await caDocumentForm.locator('input[name="client_owner"]').fill('Partner A');
+    await caDocumentForm.locator('select[name="priority"]').selectOption('high');
+    await caDocumentForm.locator('select[name="compliance_area"]').selectOption('GST');
+    await caDocumentForm.locator('input[name="ca_attachments"]').setInputFiles({
+      name: 'gst-working.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from('PK'),
+    });
+    await Promise.all([
+      page.waitForResponse(response =>
+        response.url().includes('/api/v1/business/ca-documents') &&
+        response.request().method() === 'POST'
+      ),
+      caDocumentForm.locator('button[type="submit"]').click(),
+    ]);
+    await expect(page.locator('.erp-workspace-panel')).toContainText('Book primary');
+    await expect(page.locator('.erp-workspace-panel')).toContainText('1 attachment(s)');
+    await page.getByRole('row', { name: /Jayam Publications.*Bank statement/ }).getByRole('button', { name: 'Under review' }).click();
+    await expect(page.locator('#login-status')).toContainText('Document status updated');
+    await expect(page.getByRole('row', { name: /Jayam Publications.*Bank statement/ })).toContainText('Under review');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Invoice' }).click();
