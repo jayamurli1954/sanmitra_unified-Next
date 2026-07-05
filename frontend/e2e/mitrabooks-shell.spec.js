@@ -157,6 +157,67 @@ async function mockVerifiedMitraBooksSession(page) {
     contentType: 'application/json',
     body: JSON.stringify(accounts),
   }));
+  await page.route('**/api/v1/business/dashboard**', route => json(route, {
+    as_of: '2026-06-30',
+    financial_year_start: '2026-04-01',
+    income: { fytd: '1000000.00', current_month: '250000.00', ytd_growth: 8.0 },
+    expenses: { fytd: '600000.00' },
+    net_position: { profit_loss: '400000.00' },
+    cash_and_bank: '300000.00',
+    receivables: '250000.00',
+    payables: '150000.00',
+    gst: { payable: '50000.00', status: 'Due' },
+    monthly_trend: [
+      ['Jan', 1.0, 0.8],
+      ['Feb', 1.2, 0.9],
+      ['Mar', 1.1, 1.0],
+      ['Apr', 1.5, 1.1],
+      ['May', 1.3, 1.0],
+      ['Jun', 2.5, 1.2],
+    ],
+  }));
+  await page.route('**/api/v1/business/mis/kpis**', route => json(route, {
+    as_of: '2026-06-30',
+    financial_year_start: '2026-04-01',
+    source: {
+      sales_purchase_trend: 'posted_ledger',
+      working_capital: 'posted_ledger',
+      top_parties: 'open_item_aging',
+      overdue_dashboards: 'open_item_aging',
+      financial_health: 'deterministic_financial_health',
+    },
+    monthly_sales_purchase_trend: [
+      { month: 'Apr', sales: '150000.00', purchases: '110000.00', net: '40000.00' },
+      { month: 'May', sales: '130000.00', purchases: '100000.00', net: '30000.00' },
+      { month: 'Jun', sales: '250000.00', purchases: '120000.00', net: '130000.00' },
+    ],
+    top_customers: [
+      { rank: 1, party_id: 'p2', party_name: 'Bengaluru Retail Customer', outstanding: '125000.00', overdue: '75000.00', over_90: '10000.00' },
+    ],
+    top_vendors: [
+      { rank: 1, party_id: 'p1', party_name: 'Karnataka Office Supplies', outstanding: '150000.00', overdue: '30000.00', over_90: '0.00' },
+    ],
+    working_capital: {
+      cash_and_bank: '300000.00',
+      receivables: '250000.00',
+      payables: '150000.00',
+      gst_payable: '50000.00',
+      current_assets: '550000.00',
+      current_liabilities: '200000.00',
+      net_working_capital: '350000.00',
+      current_ratio: 2.75,
+    },
+    overdue: {
+      receivables: { total: '250000.00', current: '175000.00', overdue: '75000.00', over_90: '10000.00' },
+      payables: { total: '150000.00', current: '120000.00', overdue: '30000.00', over_90: '0.00' },
+    },
+    financial_health: {
+      summary: 'MIS KPI contracts are source-backed for this tenant.',
+      kpis: [],
+      alerts: [],
+      charts: [],
+    },
+  }));
   await page.route('**/api/v1/business/parties**', async route => {
     const request = route.request();
     const method = request.method();
@@ -1722,6 +1783,11 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.executive-dashboard')).toBeVisible();
     await expect(page.locator('.executive-dashboard')).toContainText('Sales & Expenses Trend');
     await expect(page.locator('.executive-dashboard')).toContainText('CEO Insights');
+    await expect(page.locator('.executive-dashboard')).toContainText('MIS KPI Contracts');
+    await expect(page.locator('.executive-dashboard')).toContainText('Working capital');
+    await expect(page.locator('.executive-dashboard')).toContainText('Top Customers');
+    await expect(page.locator('.executive-dashboard')).toContainText('Bengaluru Retail Customer');
+    await expect(page.locator('.executive-dashboard')).toContainText('Karnataka Office Supplies');
     await expect(page.locator('.finance-chart')).toBeVisible();
     await expect(page.locator('.business-bottom-metrics')).toBeVisible();
     await expect(page.locator('.business-quick-actions-clean')).toBeVisible();

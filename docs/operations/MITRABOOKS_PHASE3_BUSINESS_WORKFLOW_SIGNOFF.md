@@ -433,6 +433,8 @@ Result:
 - ADDED: CA document records expose `book_id`, `attachment_count`, and manual review timestamps for uploaded, under-review, query, reviewed, and posted states.
 - ADDED: CA document attachment upload updates the owning document's attachment evidence and continues to audit upload/download events.
 - ADDED: local Playwright shell coverage for client-book selection, document file upload, attachment count display, and manual review advancement.
+- ADDED: source-backed MIS KPI contract for monthly sales/purchase trend, top customers/vendors, working capital, overdue AR/AP dashboards, and deterministic financial-health summaries.
+- ADDED: local Playwright shell rendering for MIS KPI contracts with working capital, top customer/vendor, and open-item aging evidence.
 
 ## Remaining Gaps After This Gate
 
@@ -453,6 +455,7 @@ Result:
 - Dimensions still need real-stack/demo mutation and production signoff; the current gate closes sales invoice, purchase bill, credit note, and debit note line tagging plus document/header-level invoice, bill, note, voucher, report, and export coverage locally.
 - Branch consolidated reporting still needs real-stack/demo mutation, branch selector UX across document entry, export route, and production multi-branch signoff; the current gate closes local API plus mocked-shell branch rollup coverage.
 - Tenant-scoped document upload inbox still needs real-stack/demo mutation, object-storage provider policy, OCR/provider handoff policy, and production signoff; the current gate closes local backend plus mocked-shell client/book metadata, attachment, audit, and review evidence.
+- MIS KPI contracts still need real-stack/demo mutation and production report signoff; the current gate closes deterministic local backend assembly plus mocked-shell rendering for posted-ledger and open-item-aging sources.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

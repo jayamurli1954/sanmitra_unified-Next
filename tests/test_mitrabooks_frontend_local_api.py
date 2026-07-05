@@ -317,6 +317,17 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     assert "function computeInvoiceLine(" in app_source
 
 
+def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'apiRequest(appKey, "/api/v1/business/mis/kpis", { method: "GET" })' in app_source
+    assert "function renderMisKpiContractPanel(data)" in app_source
+    assert "MIS KPI Contracts" in app_source
+    assert "Monthly Sales / Purchase Trend" in app_source
+    assert "Top Customers" in app_source
+    assert "Top Vendors" in app_source
+
+
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

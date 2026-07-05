@@ -90,6 +90,7 @@ from app.modules.business.schemas import (
 )
 from app.modules.business import allocation_service
 from app.modules.business import financial_health
+from app.modules.business import mis as mis_module
 from app.modules.business import gst_returns
 from app.modules.business import report_export
 from app.modules.business import bank_recon
@@ -581,6 +582,27 @@ async def business_financial_health(
         return await financial_health.build_financial_health(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, as_of=as_of, narrate=narrate,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/mis/kpis")
+async def business_mis_kpis(
+    as_of: date | None = Query(default=None),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Source-backed MIS KPI contract for trends, top parties and overdue views."""
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "MIS KPI contracts")
+    try:
+        return await mis_module.build_mis_kpis(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, as_of=as_of,
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

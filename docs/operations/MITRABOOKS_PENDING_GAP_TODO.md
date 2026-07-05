@@ -95,7 +95,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 
 ## Phase 5 Open Gaps
 
-- [ ] MIS KPI contracts for monthly sales/purchase trends, top customers/vendors, working capital, overdue dashboards, and financial-health summaries.
+- [~] MIS KPI contracts for monthly sales/purchase trends, top customers/vendors, working capital, overdue dashboards, and financial-health summaries. Local deterministic backend contract and mocked-shell rendering are closed; real-stack/demo mutation, production report signoff, and AI MIS narration remain open.
 - [ ] Data Health Score rules for missing GSTIN, unposted drafts, stale reconciliation, duplicate invoices, and overdue exposure.
 - [ ] Data-health issue list with actionable remediation workflow.
 - [ ] Tenant-safe Excel/PDF/JSON export governance with permissions and audit.

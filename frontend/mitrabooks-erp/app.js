@@ -2094,6 +2094,7 @@ function renderSelectedOrgWorkspace() {
 }
 
 let businessDashboardLoadInFlight = false;
+let businessMisLoadInFlight = false;
 
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2101,6 +2102,86 @@ let businessDashboardLoadInFlight = false;
 // API   : GET /api/v1/business/dashboard/stats
 // NOTE  : renderBusinessExecutiveDashboard — KPI cards, quick actions, data-health panel
 // ══════════════════════════════════════════════════════════════════════
+
+function renderMisPartyRows(rows = [], label) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return `<tr><td colspan="4" class="muted">No ${escapeHtml(label)} outstanding in the open-item aging contract.</td></tr>`;
+  }
+  return rows.slice(0, 5).map((row) => `
+    <tr>
+      <td>${escapeHtml(row.rank || "")}</td>
+      <td>${escapeHtml(row.party_name || row.party_id || "Unallocated")}</td>
+      <td class="amount">${escapeHtml(formatCurrency(row.outstanding || 0))}</td>
+      <td class="amount">${escapeHtml(formatCurrency(row.overdue || 0))}</td>
+    </tr>
+  `).join("");
+}
+
+function renderMisKpiContractPanel(data) {
+  if (!data) {
+    return `<p class="muted">Loading source-backed MIS KPI contracts...</p>`;
+  }
+
+  const workingCapital = data.working_capital || {};
+  const overdue = data.overdue || {};
+  const receivables = overdue.receivables || {};
+  const payables = overdue.payables || {};
+  const trend = Array.isArray(data.monthly_sales_purchase_trend) ? data.monthly_sales_purchase_trend : [];
+  const trendRows = trend.length ? trend.slice(-6).map((row) => `
+    <tr>
+      <td>${escapeHtml(row.month || "")}</td>
+      <td class="amount">${escapeHtml(formatCurrency(row.sales || 0))}</td>
+      <td class="amount">${escapeHtml(formatCurrency(row.purchases || 0))}</td>
+      <td class="amount">${escapeHtml(formatCurrency(row.net || 0))}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="4" class="muted">No monthly posted sales or purchase trend yet.</td></tr>`;
+
+  return `
+    <div class="preview-heading compact">
+      <div>
+        <p>${escapeHtml(data.financial_health?.summary || "Monthly trends, top parties, working capital, and overdue dashboards are source-backed.")}</p>
+      </div>
+      <span class="pill ok">as of ${escapeHtml(data.as_of || todayIsoDate())}</span>
+    </div>
+    <div class="metric-grid four">
+      ${renderStatCards([
+        ["Working capital", formatCurrency(workingCapital.net_working_capital || 0), `current ratio ${workingCapital.current_ratio ?? "--"}x`],
+        ["Receivables overdue", formatCurrency(receivables.overdue || 0), `${formatCurrency(receivables.over_90 || 0)} over 90 days`],
+        ["Payables overdue", formatCurrency(payables.overdue || 0), `${formatCurrency(payables.over_90 || 0)} over 90 days`],
+        ["Source", "Posted ledger", "open-item aging"],
+      ])}
+    </div>
+    <div class="dashboard-main-grid platform-grid">
+      <article>
+        <h4>Monthly Sales / Purchase Trend</h4>
+        <div class="table-preview compact-table">
+          <table>
+            <thead><tr><th>Month</th><th>Sales</th><th>Purchases</th><th>Net</th></tr></thead>
+            <tbody>${trendRows}</tbody>
+          </table>
+        </div>
+      </article>
+      <article>
+        <h4>Top Customers</h4>
+        <div class="table-preview compact-table">
+          <table>
+            <thead><tr><th>#</th><th>Customer</th><th>Outstanding</th><th>Overdue</th></tr></thead>
+            <tbody>${renderMisPartyRows(data.top_customers, "customer")}</tbody>
+          </table>
+        </div>
+      </article>
+      <article>
+        <h4>Top Vendors</h4>
+        <div class="table-preview compact-table">
+          <table>
+            <thead><tr><th>#</th><th>Vendor</th><th>Outstanding</th><th>Overdue</th></tr></thead>
+            <tbody>${renderMisPartyRows(data.top_vendors, "vendor")}</tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  `;
+}
 
 function renderBusinessExecutiveDashboard() {
   const voucherCount = lastAccountingDrilldown?.summary?.voucher_count ?? 0;
@@ -2118,6 +2199,9 @@ function renderBusinessExecutiveDashboard() {
   // don't re-enter during the current innerHTML render; guarded so it fires once.
   if (hasTrustedSession() && !hasDashboard && !businessDashboardLoadInFlight) {
     setTimeout(() => { loadBusinessDashboardStats(); }, 0);
+  }
+  if (hasTrustedSession() && !lastBusinessMisKpis && !businessMisLoadInFlight) {
+    setTimeout(() => { loadBusinessMisKpis(); }, 0);
   }
 
   // KPI values (Rupees). FYTD = financial-year-to-date.
@@ -2236,6 +2320,7 @@ function renderBusinessExecutiveDashboard() {
   const kpiWidget = createWidgetWrapper("kpi-strip", "Key Performance Indicators", kpiStripContent, true);
   const chartWidget = createWidgetWrapper("finance-chart", "Sales & Expenses Trend", financeChartContent, true);
   const ceoWidget = createWidgetWrapper("ceo-panel", "CEO Insights", ceoPanelContent, true);
+  const misWidget = createWidgetWrapper("mis-kpi-contracts", "MIS KPI Contracts", renderMisKpiContractPanel(lastBusinessMisKpis), true);
 
   return `
     <section class="executive-dashboard" aria-label="MitraBooks executive dashboard">
@@ -2253,6 +2338,7 @@ function renderBusinessExecutiveDashboard() {
         ${chartWidget}
         ${ceoWidget}
       </div>
+      ${misWidget}
     </section>
   `;
 }
@@ -14384,6 +14470,7 @@ let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
 let lastBusinessDashboardStats = null;
+let lastBusinessMisKpis = null;
 let lastFinancialHealth = null;
 let financialHealthLoadInFlight = false;
 
@@ -15109,6 +15196,38 @@ async function loadFinancialHealth() {
   }
 
   renderJson(apiOutput, { financialHealth: { ok: result.ok, hasData: !!lastFinancialHealth } });
+}
+
+async function loadBusinessMisKpis() {
+  if (!hasTrustedSession()) {
+    return;
+  }
+  const appKey = "mitrabooks";
+  businessMisLoadInFlight = true;
+  let result;
+  try {
+    result = await apiRequest(appKey, "/api/v1/business/mis/kpis", { method: "GET" });
+  } finally {
+    businessMisLoadInFlight = false;
+  }
+
+  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object"
+    && Array.isArray(result.payload.monthly_sales_purchase_trend);
+
+  if (hasValidPayload) {
+    lastBusinessMisKpis = result.payload;
+    if (currentExperience === "mitrabooks") {
+      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
+    }
+  } else if (!lastBusinessMisKpis) {
+    setLoginStatus(
+      "warn",
+      "MIS KPIs unavailable",
+      result.payload?.detail || "Source-backed MIS KPI contracts could not be loaded.",
+    );
+  }
+
+  renderJson(apiOutput, { misKpis: { ok: result.ok, hasData: !!lastBusinessMisKpis } });
 }
 
 // ========== Account Selector Component (Searchable) ==========
