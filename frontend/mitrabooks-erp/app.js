@@ -9977,6 +9977,7 @@ function renderDimensionsPanel() {
         <button class="secondary" type="button" data-business-action="dim-report-export" data-format="csv">CSV</button>
         <button class="secondary" type="button" data-business-action="dim-report-export" data-format="xlsx">Excel</button>
         <button class="secondary" type="button" data-business-action="dim-report-export" data-format="pdf">PDF</button>
+        <button class="secondary" type="button" data-business-action="dim-report-export" data-format="json">JSON</button>
       </div>
       <div class="table-preview compact-table">
         <table>
@@ -11263,6 +11264,7 @@ function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="csv"${kAttr}>CSV</button>
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="xlsx"${kAttr}>Excel</button>
       <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="pdf"${kAttr}>PDF</button>
+      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="json"${kAttr}>JSON</button>
       <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
     </div>`;
 }

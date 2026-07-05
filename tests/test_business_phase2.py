@@ -3553,6 +3553,8 @@ async def test_sales_invoice_pdf_requires_posted_status(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sales_invoice_pdf_allows_posted_document(monkeypatch):
+    audit_events = []
+
     async def fake_get_sales_invoice(**_kwargs):
         return {
             "invoice_id": "inv-posted-1",
@@ -3563,21 +3565,30 @@ async def test_sales_invoice_pdf_allows_posted_document(monkeypatch):
     async def fake_get_invoice_settings(**_kwargs):
         return {"branding": {"company_name": "Acme"}}
 
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+        return "audit-1"
+
     monkeypatch.setattr(business_router, "get_sales_invoice", fake_get_sales_invoice)
     monkeypatch.setattr(business_router, "get_invoice_settings", fake_get_invoice_settings)
     monkeypatch.setattr(business_router, "build_sales_invoice_pdf", lambda invoice, branding: b"%PDF-test")
+    monkeypatch.setattr(business_router.export_governance, "log_audit_event", fake_log_audit_event)
 
     response = await business_router.get_business_sales_invoice_pdf(
         invoice_id="inv-posted-1",
         accounting_entity_id="primary",
         _module_context={},
-        current_user={"tenant_id": "business-tenant", "app_key": "mitrabooks"},
+        current_user={"tenant_id": "business-tenant", "app_key": "mitrabooks", "role": "accountant", "sub": "user-1"},
         x_tenant_id=None,
         x_app_key="mitrabooks",
     )
 
     assert response.media_type == "application/pdf"
     assert response.body == b"%PDF-test"
+    assert response.headers["X-SanMitra-Export-Governed"] == "true"
+    assert response.headers["X-SanMitra-Export-Type"] == "sales_invoice_pdf"
+    assert audit_events[0]["action"] == "business_export_downloaded"
+    assert audit_events[0]["entity_id"] == "sales_invoice_pdf:inv-posted-1:pdf"
 
 
 def test_posted_output_guard_rejects_missing_bill_document():

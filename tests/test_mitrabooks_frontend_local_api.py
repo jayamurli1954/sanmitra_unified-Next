@@ -540,6 +540,16 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert "Planned multi-client books" not in app_source
 
 
+def test_mitrabooks_report_exports_expose_governed_json_format() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'data-business-action="export-report"' in app_source
+    assert 'data-report-format="json"' in app_source
+    assert 'data-business-action="dim-report-export" data-format="json"' in app_source
+    assert "/api/v1/business/reports/export" in app_source
+    assert "/api/v1/business/dimensions/report/export" in app_source
+
+
 def test_professional_suite_routes_to_active_workspace_without_planned_cards() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")

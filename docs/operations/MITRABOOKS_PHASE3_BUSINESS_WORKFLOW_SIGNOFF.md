@@ -439,6 +439,8 @@ Result:
 - ADDED: local Playwright shell rendering for Data Health Score and failed-rule evidence inside the MitraBooks dashboard health panel.
 - ADDED: source-backed Data Health issue queue that normalizes failed-rule evidence into open remediation items with workspace/action labels.
 - ADDED: local Playwright shell remediation routing from the Data Health queue into the relevant MitraBooks workspace.
+- ADDED: shared MitraBooks export governance for report, dimension-report, opening-balance, and invoice-PDF downloads with role checks, audit events, and governed response headers.
+- ADDED: JSON as a governed tabular export format for generic report/dimension exports, with mocked-shell coverage for governed JSON export headers.
 
 ## Remaining Gaps After This Gate
 
@@ -461,6 +463,7 @@ Result:
 - Tenant-scoped document upload inbox still needs real-stack/demo mutation, object-storage provider policy, OCR/provider handoff policy, and production signoff; the current gate closes local backend plus mocked-shell client/book metadata, attachment, audit, and review evidence.
 - MIS KPI contracts still need real-stack/demo mutation and production report signoff; the current gate closes deterministic local backend assembly plus mocked-shell rendering for posted-ledger and open-item-aging sources.
 - Data Health Score still needs real-stack/demo validation, persisted assignee/status workflow, and production signoff; the current gate closes deterministic local backend rules, issue-list normalization, and mocked-shell rendering/routing for score, failed-rule evidence, and remediation workspace actions.
+- Export governance still needs real-stack/demo validation, production audit-retention policy, and wider GST/e-invoice JSON download governance; the current gate closes local role checks, audit metadata, response headers, and JSON format support for generic report-style exports.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

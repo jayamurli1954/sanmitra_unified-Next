@@ -90,6 +90,7 @@ from app.modules.business.schemas import (
 )
 from app.modules.business import allocation_service
 from app.modules.business import data_health as data_health_module
+from app.modules.business import export_governance
 from app.modules.business import financial_health
 from app.modules.business import mis as mis_module
 from app.modules.business import gst_returns
@@ -918,7 +919,7 @@ async def _build_business_report(
 @router.get("/reports/export")
 async def export_business_report(
     report: str = Query(..., pattern="^(party_ledger|aging|itc_reversals|trial_balance|general_ledger|balance_sheet|profit_loss|statement)$"),
-    format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
+    format: str = Query("csv", pattern="^(csv|xlsx|pdf|json)$"),
     kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
     as_of: date | None = Query(default=None),
     from_date: date | None = Query(default=None),
@@ -933,13 +934,33 @@ async def export_business_report(
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     context = _alloc_context(current_user, x_tenant_id, x_app_key, "report export")
+    export_format = export_governance.validate_export_format(format, allowed={"csv", "xlsx", "pdf", "json"})
+    export_governance.require_export_permission(current_user, export_type="business_report")
     try:
         spec = await _build_business_report(
             report, session=session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, kind=kind, as_of=as_of, account_id=account_id,
             from_date=from_date, to_date=to_date, party_id=party_id,
         )
-        return report_export.export_report(format, **spec)
+        response = report_export.export_report(export_format, **spec)
+        return await export_governance.govern_export_response(
+            response,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            current_user=current_user,
+            export_type="business_report",
+            export_format=export_format,
+            report_key=report,
+            filters={
+                "kind": kind,
+                "as_of": as_of.isoformat() if as_of else None,
+                "from_date": from_date.isoformat() if from_date else None,
+                "to_date": to_date.isoformat() if to_date else None,
+                "account_id": account_id,
+                "party_id": party_id,
+            },
+        )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AccountingNotFoundError as exc:
@@ -1851,6 +1872,7 @@ async def get_business_sales_invoice_pdf(
         expected_app_key="mitrabooks",
         operation="sales invoice PDF",
     )
+    export_governance.require_export_permission(current_user, export_type="sales_invoice_pdf")
     invoice = await get_sales_invoice(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
@@ -1874,10 +1896,22 @@ async def get_business_sales_invoice_pdf(
     # fallback plus an RFC 5987 filename* for the UTF-8 form.
     ascii_name = raw_name.encode("ascii", "ignore").decode("ascii").strip() or "invoice.pdf"
     encoded = quote(raw_name)
-    return Response(
+    response = Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"},
+    )
+    return await export_governance.govern_export_response(
+        response,
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        current_user=current_user,
+        export_type="sales_invoice_pdf",
+        export_format="pdf",
+        report_key="sales_invoice",
+        entity_id=invoice_id,
+        filters={"invoice_id": invoice_id},
     )
 
 
@@ -3206,15 +3240,26 @@ async def business_opening_balance_export(
         current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
         expected_app_key="mitrabooks", operation="opening balance export",
     )
+    export_governance.require_export_permission(current_user, export_type="opening_balances")
     from fastapi.responses import Response
     csv_content = await opening_close.export_opening_balances_csv(
         session, tenant_id=context.tenant_id, app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
     )
-    return Response(
+    response = Response(
         content=csv_content,
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="opening_balances.csv"'},
+    )
+    return await export_governance.govern_export_response(
+        response,
+        tenant_id=context.tenant_id,
+        app_key=context.app_key,
+        accounting_entity_id=accounting_entity_id,
+        current_user=current_user,
+        export_type="opening_balances",
+        export_format="csv",
+        report_key="opening_balances",
     )
 
 
@@ -3646,7 +3691,7 @@ async def business_dimension_report(
 @router.get("/dimensions/report/export")
 async def business_dimension_report_export(
     dimension_type: str = Query(..., pattern="^(cost_centre|project)$"),
-    format: str = Query("csv", pattern="^(csv|xlsx|pdf)$"),
+    format: str = Query("csv", pattern="^(csv|xlsx|pdf|json)$"),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
     accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
@@ -3660,6 +3705,8 @@ async def business_dimension_report_export(
         current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
         expected_app_key="mitrabooks", operation="dimension report export",
     )
+    export_format = export_governance.validate_export_format(format, allowed={"csv", "xlsx", "pdf", "json"})
+    export_governance.require_export_permission(current_user, export_type="dimension_report")
     try:
         report = await dimensions_module.build_dimension_report(
             tenant_id=context.tenant_id, app_key=context.app_key,
@@ -3667,7 +3714,22 @@ async def business_dimension_report_export(
             dimension_type=dimension_type, from_date=from_date, to_date=to_date,
             session=session,
         )
-        return report_export.export_report(format, **dimensions_module.dimension_report_export_spec(report))
+        response = report_export.export_report(export_format, **dimensions_module.dimension_report_export_spec(report))
+        return await export_governance.govern_export_response(
+            response,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            current_user=current_user,
+            export_type="dimension_report",
+            export_format=export_format,
+            report_key=dimension_type,
+            filters={
+                "dimension_type": dimension_type,
+                "from_date": from_date.isoformat() if from_date else None,
+                "to_date": to_date.isoformat() if to_date else None,
+            },
+        )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

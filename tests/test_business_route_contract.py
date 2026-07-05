@@ -74,6 +74,7 @@ def test_business_phase2_target_routes_are_registered() -> None:
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/dimensions/report", "phase3-dimensions-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/dimensions/report/export", "phase3-dimensions-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/dimensions/branch-report", "phase3-branch-report-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/reports/export", "phase5-export-governance-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/mis/kpis", "phase5-mis-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/data-health", "phase5-data-health-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/returns/gstr-3b", "phase3-realstack-contract", 1),

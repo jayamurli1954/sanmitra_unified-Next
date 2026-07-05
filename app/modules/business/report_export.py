@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -31,7 +32,8 @@ from reportlab.pdfgen import canvas
 CSV_MEDIA = "text/csv"
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF_MEDIA = "application/pdf"
-_MEDIA = {"csv": CSV_MEDIA, "xlsx": XLSX_MEDIA, "pdf": PDF_MEDIA}
+JSON_MEDIA = "application/json"
+_MEDIA = {"csv": CSV_MEDIA, "xlsx": XLSX_MEDIA, "pdf": PDF_MEDIA, "json": JSON_MEDIA}
 
 
 def _cell(value) -> str:
@@ -214,7 +216,19 @@ def build_pdf(*, title, columns, rows, footer=None, meta=None, org_name=None) ->
     return buffer.getvalue()
 
 
-_BUILDERS = {"csv": build_csv, "xlsx": build_xlsx, "pdf": build_pdf}
+def build_json(*, title, columns, rows, footer=None, meta=None, org_name=None) -> bytes:
+    payload = {
+        "org_name": org_name,
+        "title": title,
+        "meta": [{"label": label, "value": _cell(value)} for label, value in (meta or [])],
+        "columns": columns,
+        "rows": [{key: _cell(value) for key, value in row.items()} for row in rows],
+        "footer": {key: _cell(value) for key, value in (footer or {}).items()} if footer else None,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+_BUILDERS = {"csv": build_csv, "xlsx": build_xlsx, "pdf": build_pdf, "json": build_json}
 
 
 def export_report(
@@ -225,7 +239,7 @@ def export_report(
     fmt = (fmt or "").lower()
     builder = _BUILDERS.get(fmt)
     if builder is None:
-        raise ValueError("format must be one of: csv, xlsx, pdf")
+        raise ValueError("format must be one of: csv, json, pdf, xlsx")
     content = builder(title=title, columns=columns, rows=rows, footer=footer, meta=meta, org_name=org_name)
     filename = f"{filename_base}.{fmt}"
     return StreamingResponse(

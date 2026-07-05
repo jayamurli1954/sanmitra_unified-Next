@@ -68,7 +68,7 @@ def test_export_report_sets_filename_and_media_type():
 
 
 def test_export_report_rejects_unknown_format():
-    with pytest.raises(ValueError, match="csv, xlsx, pdf"):
+    with pytest.raises(ValueError, match="csv, json, pdf, xlsx"):
         export_report("docx", filename_base="x", **_kw())
 
 

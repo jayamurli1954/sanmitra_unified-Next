@@ -685,11 +685,19 @@ async function mockVerifiedMitraBooksSession(page) {
     };
 
     if (method === 'GET' && path.endsWith('/report/export')) {
+      const format = url.searchParams.get('format') || 'csv';
+      const body = format === 'json'
+        ? JSON.stringify({ title: 'Dimension Report', rows: [{ dimension: 'BLR', income: '0.00', expense: '0.00', net: '0.00' }] })
+        : 'dimension,income,expense,net\nBLR,0.00,0.00,0.00\n';
       return route.fulfill({
         status: 200,
-        contentType: 'text/csv',
-        headers: { 'Content-Disposition': 'attachment; filename="dimension_report.csv"' },
-        body: 'dimension,income,expense,net\nBLR,0.00,0.00,0.00\n',
+        contentType: format === 'json' ? 'application/json' : 'text/csv',
+        headers: {
+          'Content-Disposition': `attachment; filename="dimension_report.${format}"`,
+          'X-SanMitra-Export-Governed': 'true',
+          'X-SanMitra-Export-Format': format,
+        },
+        body,
       });
     }
 
@@ -2330,10 +2338,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Bengaluru Head Office');
     await expect(page.locator('#business-report-printable')).toContainText('Unassigned');
     await expect(page.locator('#business-report-printable')).toContainText('MUM - Mumbai');
-    await Promise.all([
+    const exportResponse = await Promise.all([
       page.waitForResponse(response => response.url().includes('/api/v1/business/dimensions/report/export')),
-      page.locator('[data-business-action="dim-report-export"][data-format="csv"]').click(),
+      page.locator('[data-business-action="dim-report-export"][data-format="json"]').click(),
     ]);
+    expect(exportResponse[0].headers()['x-sanmitra-export-governed']).toBe('true');
+    expect(exportResponse[0].headers()['x-sanmitra-export-format']).toBe('json');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.getByRole('row', { name: /INV-2026-001/ }).getByRole('button', { name: 'View' }).click();
