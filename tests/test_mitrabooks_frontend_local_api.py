@@ -299,6 +299,23 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "credit_account_code: creditAccount.code" in app_source
 
 
+def test_business_voucher_keyboard_shortcuts_are_wired() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    html_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
+
+    assert 'aria-keyshortcuts="Control+Alt+V"' in html_source
+    assert 'aria-keyshortcuts="Control+Enter"' in html_source
+    assert 'aria-keyshortcuts="Alt+L"' in app_source
+    assert "function openVoucherWorkspaceAndDialog()" in app_source
+    assert "function handleVoucherDialogKeyboard(event)" in app_source
+    assert 'event.ctrlKey && event.altKey && event.key.toLowerCase() === "v"' in app_source
+    assert 'event.key.toLowerCase() === "l" && event.altKey' in app_source
+    assert "submitVoucherDialogFromKeyboard()" in app_source
+    assert "focusFirstVoucherField()" in app_source
+    assert 'document.querySelectorAll(".voucher-line")' in app_source
+    assert "businessVoucherCreateDialog?.addEventListener(\"click\"" in app_source
+
+
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

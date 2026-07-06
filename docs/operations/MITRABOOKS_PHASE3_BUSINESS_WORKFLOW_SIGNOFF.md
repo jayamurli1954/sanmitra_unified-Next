@@ -443,6 +443,23 @@ Result:
 - ADDED: JSON as a governed tabular export format for generic report/dimension exports, with mocked-shell coverage for governed JSON export headers.
 - ADDED: local Tally XML proof of concept for Trial Balance ledger-master export, using the governed export/audit path and mocked-shell route coverage.
 
+### 2026-07-06 - Keyboard-First Voucher Entry Local Hardening
+
+Commands:
+
+```powershell
+python -m pytest tests\test_mitrabooks_frontend_local_api.py -q
+python scripts\preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused frontend local API shortcut contract test.
+- PASS: mandatory frontend preflight, including full pytest, global Playwright smoke, MitraBooks shell smoke, and CA invite smoke.
+- ADDED: voucher entry exposes keyboard shortcut metadata for Ctrl+Alt+V open, Alt+L add line, Escape close/cancel, and Ctrl+Enter balanced submit.
+- ADDED: voucher dialog focuses the voucher-type selector on open and keeps add-line/submit shortcuts scoped to the open voucher dialog.
+- ADDED: local Playwright shell coverage for opening voucher entry, adding/removing a journal line, and submitting a balanced voucher by keyboard.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -466,6 +483,7 @@ Result:
 - Data Health Score still needs real-stack/demo validation, persisted assignee/status workflow, and production signoff; the current gate closes deterministic local backend rules, issue-list normalization, and mocked-shell rendering/routing for score, failed-rule evidence, and remediation workspace actions.
 - Export governance still needs real-stack/demo validation, production audit-retention policy, and wider GST/e-invoice JSON download governance; the current gate closes local role checks, audit metadata, response headers, and JSON format support for generic report-style exports.
 - Tally XML still needs voucher-level XML, real Tally import validation, migration runbook examples, and production signoff; the current gate closes a local governed Trial Balance ledger-master XML proof of concept.
+- Keyboard-first voucher/business-entry polish still needs shortcut parity across sales, purchase, credit note, and debit note forms plus production operator UX signoff; the current gate closes local voucher-entry keyboard flow coverage.
 - Live GST/e-way bill APIs, bank execution, OCR/AI auto-posting, AI MIS, advanced inventory depth, full export governance, and mobile apps remain deferred.
 
 ## Non-Goals

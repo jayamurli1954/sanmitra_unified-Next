@@ -40,6 +40,7 @@ Status convention:
 - ~~[x] Phase 3 Branch Consolidated Reporting local hardening passed on 2026-07-05: branch settings mapped to cost-centre codes, tenant/app/entity-scoped branch P&L route, unassigned/unmapped reconciliation bucket, route-contract coverage, and mocked-shell branch rollup evidence.~~
 - ~~[x] Phase 3 Credit/debit note line dimensions local hardening passed on 2026-07-05: credit note and debit note line-level cost-centre/project tags, dimension validation, header fallback reporting, and mocked-shell note line selector evidence.~~
 - ~~[x] Phase 3 Tenant-scoped document upload inbox local hardening passed on 2026-07-05: CA document metadata links to tenant/app/book-scoped client records, attachments update review-queue evidence, manual review timestamps are audited, and mocked-shell coverage exercises client book selection, file upload, and review advancement.~~
+- ~~[x] Phase 3 Keyboard-first voucher entry local hardening passed on 2026-07-06: voucher dialog focus, Ctrl+Alt+V open shortcut, Alt+L journal line shortcut, Ctrl+Enter balanced submit, static shortcut contract checks, and mocked-shell keyboard flow evidence.~~
 
 ## Closed Local Gate: Phase 3 Core Business Workflow Mutation
 
@@ -78,7 +79,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] GST/TDS compliance signoff for setup, rates, locks, settlement, filing semantics, and tenant GST profile UX. Local mocked-shell coverage is closed for GST profile evidence, settlement posting, GSTR-3B, GSTR-1, TDS register, and period locks. Guarded real-stack demo coverage now exercises posted TCS/TDS documents, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08/GSTR-4 route shape, GST settlement preview/post/reverse, and temporary period lock/unlock. Production compliance review remains open.
 - [~] Opening balance browser E2E, maker-checker review, and rollback/reversal runbook examples. Local mocked-shell browser coverage is closed for CSV preview/post/export, party-wise opening balances, balancing line, trial balance impact, statement impact, and existing-entry warning; real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open.
 - [~] Year-end close browser E2E, maker-checker review, and rollback/reversal runbook examples. Local mocked-shell browser coverage is closed for FY close preview, income/expense closing lines, retained earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance; real-stack mutation, production operator maker-checker review, and reversal runbook examples remain open.
-- [ ] Keyboard-first voucher/business-entry polish after route/API contracts are stable.
+- [~] Keyboard-first voucher/business-entry polish after route/API contracts are stable. Local voucher-entry keyboard coverage is closed for focus, open, add-line, and balanced-submit shortcuts; broader sales/purchase note-entry shortcut parity and production operator UX signoff remain open.
 - [ ] Multi-client CA/bookkeeper accounting entity model and scoped client/book access rules.
 
 ## Phase 4 Open Gaps

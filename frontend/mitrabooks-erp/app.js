@@ -5194,7 +5194,7 @@ function renderDashboardPreview(config) {
         ${renderBusinessExecutiveDashboard()}
 
         <div class="business-quick-actions-clean">
-          <button class="quick-action-btn" type="button" data-business-action="open-create-voucher" title="Post a journal entry">
+          <button class="quick-action-btn" type="button" data-business-action="open-create-voucher" title="Post a journal entry" aria-keyshortcuts="Control+Alt+V">
             <span class="quick-icon">📝</span>
             <span>Journal</span>
           </button>
@@ -7261,7 +7261,7 @@ function renderBusinessWorkspace() {
             <h4>Vouchers</h4>
             <p>Posted journal entries, payments, receipts, and contra vouchers.</p>
           </div>
-          <button class="secondary" type="button" data-business-action="open-create-voucher">+ New Voucher</button>
+          <button class="secondary" type="button" data-business-action="open-create-voucher" aria-keyshortcuts="Control+Alt+V">+ New Voucher</button>
         </div>
         ${renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)}
         ${renderBusinessVouchersListFilters(lastBusinessVouchers.length)}
@@ -15158,7 +15158,8 @@ function addVoucherLine() {
 }
 
 function removeVoucherLine(lineId) {
-  const lineEl = document.querySelector(`[data-line-id="${escapeHtml(lineId)}"]`);
+  const lineEl = Array.from(document.querySelectorAll(".voucher-line"))
+    .find((candidate) => candidate.getAttribute("data-line-id") === lineId);
   if (lineEl) {
     lineEl.remove();
     updateVoucherBalanceState();
@@ -16215,7 +16216,7 @@ function renderVoucherTypeForm(voucherType) {
           <h4>Debit/Credit Lines</h4>
           <p class="muted" id="business-voucher-accounts-status">Select accounts and enter amounts.</p>
           <div id="business-voucher-lines"></div>
-          <button class="secondary" type="button" id="business-voucher-add-line">+ Add Line</button>
+          <button class="secondary" type="button" id="business-voucher-add-line" aria-keyshortcuts="Alt+L">+ Add Line</button>
         </div>
         ${dimensionFields}
         <div class="voucher-balance-panel">
@@ -16244,8 +16245,46 @@ function updateVoucherTypeForm(voucherType) {
     addVoucherLine();
   }
 
+  document.getElementById("business-voucher-add-line")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    addVoucherLine();
+  });
+
   // Re-attach event listeners for new elements
   updateVoucherBalance();
+}
+
+function focusFirstVoucherField() {
+  const firstField = document.getElementById("business-voucher-type-select");
+  if (firstField) {
+    setTimeout(() => firstField.focus(), 0);
+  }
+}
+
+function submitVoucherDialogFromKeyboard() {
+  const submitButton = document.getElementById("business-voucher-submit");
+  if (!submitButton || submitButton.disabled) {
+    return;
+  }
+  businessVoucherCreateForm?.requestSubmit();
+}
+
+function handleVoucherDialogKeyboard(event) {
+  if (!businessVoucherCreateDialog?.open) {
+    return;
+  }
+  if (event.key === "Enter" && event.ctrlKey) {
+    event.preventDefault();
+    submitVoucherDialogFromKeyboard();
+    return;
+  }
+  if (event.key.toLowerCase() === "l" && event.altKey) {
+    const voucherType = document.getElementById("business-voucher-type-select")?.value || "";
+    if (voucherType === "journal") {
+      event.preventDefault();
+      addVoucherLine();
+    }
+  }
 }
 
 async function openBusinessCreateVoucherDialog() {
@@ -16272,6 +16311,7 @@ async function openBusinessCreateVoucherDialog() {
   }
 
   dialog.showModal();
+  focusFirstVoucherField();
 }
 
 // ========== Business Module: Audit Trail ==========
@@ -19057,6 +19097,15 @@ if (businessVoucherCreateForm) {
 
 document.getElementById("business-voucher-create-close")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
 document.getElementById("business-voucher-create-cancel")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
+businessVoucherCreateDialog?.addEventListener("keydown", handleVoucherDialogKeyboard);
+businessVoucherCreateDialog?.addEventListener("click", (event) => {
+  const button = event.target.closest('[data-business-action="remove-voucher-line"]');
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+  removeVoucherLine(button.getAttribute("data-line-id") || "");
+});
 
 document.getElementById("business-voucher-add-line")?.addEventListener("click", (event) => {
   event.preventDefault();
@@ -19263,6 +19312,13 @@ function refreshBooksHealthWidget() {
 const btnQuickParty = document.getElementById("btn-quick-party");
 const btnQuickJournal = document.getElementById("btn-quick-post-journal");
 
+async function openVoucherWorkspaceAndDialog() {
+  activeBusinessWorkspace = "vouchers";
+  syncBusinessNavActiveState();
+  dashboardPreview.innerHTML = renderBusinessWorkspace();
+  await openBusinessCreateVoucherDialog();
+}
+
 if (btnQuickParty) {
   btnQuickParty.addEventListener("click", () => {
     activeBusinessWorkspace = "parties";
@@ -19274,12 +19330,23 @@ if (btnQuickParty) {
 
 if (btnQuickJournal) {
   btnQuickJournal.addEventListener("click", async () => {
-    activeBusinessWorkspace = "vouchers";
-    syncBusinessNavActiveState();
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    await openBusinessCreateVoucherDialog();
+    await openVoucherWorkspaceAndDialog();
   });
 }
+
+document.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey && event.altKey && event.key.toLowerCase() === "v")) {
+    return;
+  }
+  if (document.querySelector("dialog[open]")) {
+    return;
+  }
+  if (currentExperience !== "mitrabooks" || !hasTrustedSession()) {
+    return;
+  }
+  event.preventDefault();
+  openVoucherWorkspaceAndDialog();
+});
 
 /**
  * Update page title and breadcrumb based on current view

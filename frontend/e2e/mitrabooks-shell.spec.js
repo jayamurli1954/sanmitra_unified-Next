@@ -1920,8 +1920,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('Vouchers');
     await expect(page.getByRole('button', { name: '+ New Voucher' })).toBeVisible();
 
-    await page.getByRole('button', { name: '+ New Voucher' }).click();
+    await page.keyboard.press('Control+Alt+V');
     await expect(page.locator('#business-voucher-create-dialog')).toBeVisible();
+    await expect(page.locator('#business-voucher-type-select')).toBeFocused();
     await page.locator('#business-voucher-type-select').selectOption('receipt');
     await expect(page.locator('.voucher-entry-line')).toHaveCount(2);
     await expect(page.locator('.voucher-entry-line.debit-line')).toContainText('Bank / cash ledger');
@@ -1944,13 +1945,17 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('#business-voucher-cost-centre').selectOption('dim-cc-blr');
     await page.locator('#business-voucher-project').selectOption('dim-prj-alpha');
     await page.locator('#business-voucher-description').fill('Browser verified balanced journal');
+    await page.keyboard.press('Alt+L');
+    await expect(page.locator('#business-voucher-lines .voucher-line')).toHaveCount(3);
+    await page.locator('#business-voucher-lines .voucher-line').last().getByRole('button', { name: 'Remove' }).click();
+    await expect(page.locator('#business-voucher-lines .voucher-line')).toHaveCount(2);
     await page.locator('#business-voucher-lines .account-picker-select').nth(0).selectOption('301');
     await page.locator('#business-voucher-lines .account-picker-select').nth(1).selectOption('201');
     await page.locator('#business-voucher-lines .voucher-debit').nth(0).fill('125.00');
     await page.locator('#business-voucher-lines .voucher-credit').nth(1).fill('125.00');
     await expect(page.locator('#business-voucher-balance')).toHaveClass(/balanced/);
     await expect(page.locator('#business-voucher-submit')).toBeEnabled();
-    await page.locator('#business-voucher-submit').click();
+    await page.keyboard.press('Control+Enter');
     await expect(page.locator('#business-voucher-create-dialog')).toBeHidden();
     await expect(page.locator('.erp-workspace-panel')).toContainText('JV-001');
     await expect(page.getByRole('row', { name: /JV-001/ })).toContainText('posted');
