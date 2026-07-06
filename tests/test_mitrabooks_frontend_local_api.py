@@ -339,6 +339,31 @@ def test_business_document_entry_keyboard_shortcuts_are_wired() -> None:
     assert 'focusBusinessEntryField("[data-dn-form] select[name=\'vendor_party_id\']")' in app_source
 
 
+def test_credit_debit_notes_enforce_source_documents_and_local_exports() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert 'select name="original_invoice_id" required data-source-document="sales_invoice"' in app_source
+    assert "function resolveCreditNoteSourceInvoice(invoiceId)" in app_source
+    assert "original_invoice_id: cnFormHeader.original_invoice_id || null" in app_source
+    assert "Source invoice required" in app_source
+    assert 'data-credit-note-printable' in app_source
+    assert 'data-business-action="print-credit-note"' in app_source
+    assert 'data-business-action="export-credit-note-json"' in app_source
+
+    assert 'select name="original_bill_id" required data-source-document="purchase_bill"' in app_source
+    assert "function resolveDebitNoteSourceBill(billId)" in app_source
+    assert "original_bill_id: dnFormHeader.original_bill_id || null" in app_source
+    assert "Source bill required" in app_source
+    assert 'data-debit-note-printable' in app_source
+    assert 'data-business-action="print-debit-note"' in app_source
+    assert 'data-business-action="export-debit-note-json"' in app_source
+
+    assert "function downloadJsonObject(payload, filename)" in app_source
+    assert "function printBusinessDocumentDetail(title, selector)" in app_source
+    assert "credit_note_export" in app_source
+    assert "debit_note_export" in app_source
+
+
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

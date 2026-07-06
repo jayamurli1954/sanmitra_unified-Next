@@ -478,11 +478,29 @@ Result:
 - ADDED: shared `Alt+L` add-line and `Ctrl+Enter` submit shortcuts across sales invoice, purchase bill, credit note, and debit note create forms.
 - ADDED: local Playwright shell evidence for keyboard open, add-line, remove-line, and submit flows across the four business document forms.
 
+### 2026-07-06 - Credit/Debit Note Source-Document and Export Local Hardening
+
+Commands:
+
+```powershell
+python -m pytest tests\test_mitrabooks_frontend_local_api.py -q
+python scripts\preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused frontend local API source-document/export contract tests.
+- PASS: mandatory frontend preflight, including full pytest, global Playwright smoke, MitraBooks shell smoke, and CA invite smoke.
+- ADDED: credit note create flow requires selecting a known sales invoice and sends both `original_invoice_id` and `original_invoice_number`.
+- ADDED: debit note create flow requires selecting a known purchase bill and sends both `original_bill_id` and `original_bill_number`.
+- ADDED: credit/debit note detail panels expose stable printable regions plus local JSON export actions.
+- ADDED: local Playwright shell evidence for source selection, detail linkage text, and JSON export markers for credit and debit notes.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
 - Hosted staging demo database cleanup may still be needed if the hosted tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
-- Credit Note and Debit Note browser source-document enforcement plus dedicated print/export polish remain open for later production signoff; API/accounting/report/reversal depth is closed for the local gate.
+- Credit Note and Debit Note local browser source-document enforcement plus JSON/print detail actions are closed; production template/export signoff remains open.
 - Receivables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current receivables browser coverage is local mocked-shell E2E.
 - Payables real-stack/deployed mutation remains a later demo-tenant production signoff item; the current payables browser coverage is local mocked-shell E2E.
 - Compliance signoff is still required for export/file-download polish, e-invoice/e-way bill positioning, and production tax-review semantics. Guarded real-stack route/report coverage now exists for TDS/TCS, GSTR-3B, GSTR-1/CDNR, GSTR-2B reconciliation, CMP-08, GSTR-4, settlement preview/post/reverse, and temporary GST period lock/unlock.

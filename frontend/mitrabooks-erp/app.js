@@ -11386,6 +11386,68 @@ function printBusinessReport() {
   setTimeout(() => { try { win.print(); } catch (_e) {} }, 300);
 }
 
+function downloadJsonObject(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printBusinessDocumentDetail(title, selector) {
+  const node = document.querySelector(selector);
+  if (!node) { window.print(); return; }
+  const win = window.open("", "_blank", "width=940,height=720");
+  if (!win) { window.print(); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}
+      h3,h4{margin:0 0 6px;}
+      table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0 18px;}
+      th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}
+      td.amount,th.amount,.amount,.num,td.right{text-align:right;}
+      .muted{color:#666;font-size:11px;}
+      button,.invoice-detail-actions,.reversal-panel,input,select{display:none!important;}
+    </style></head><body>${node.innerHTML}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch (_e) {} }, 300);
+}
+
+function downloadCreditNoteJson() {
+  if (!lastCreditNoteDetail) {
+    renderJson(apiOutput, { credit_note_export_error: { detail: "Open a credit note before exporting." } });
+    return;
+  }
+  const filename = `${lastCreditNoteDetail.credit_note_number || lastCreditNoteDetail.credit_note_id || "credit_note"}.json`;
+  downloadJsonObject(lastCreditNoteDetail, filename);
+  renderJson(apiOutput, { credit_note_export: { format: "json", filename } });
+}
+
+function downloadDebitNoteJson() {
+  if (!lastDebitNoteDetail) {
+    renderJson(apiOutput, { debit_note_export_error: { detail: "Open a debit note before exporting." } });
+    return;
+  }
+  const filename = `${lastDebitNoteDetail.debit_note_number || lastDebitNoteDetail.debit_note_id || "debit_note"}.json`;
+  downloadJsonObject(lastDebitNoteDetail, filename);
+  renderJson(apiOutput, { debit_note_export: { format: "json", filename } });
+}
+
+function printCreditNoteDetail() {
+  printBusinessDocumentDetail("Credit Note", "[data-credit-note-printable]");
+  renderJson(apiOutput, { credit_note_print: { ok: true } });
+}
+
+function printDebitNoteDetail() {
+  printBusinessDocumentDetail("Debit Note", "[data-debit-note-printable]");
+  renderJson(apiOutput, { debit_note_print: { ok: true } });
+}
+
 function renderBusinessReportsWorkspace() {
   const tabs = BUSINESS_REPORT_TABS.map((tab) => `
     <button
@@ -13607,6 +13669,7 @@ const CN_REASONS = [
 const cnFormHeader = {
   customer_party_id: "",
   note_date: todayIsoDate(),
+  original_invoice_id: "",
   original_invoice_number: "",
   reason: "sales_return",
   is_inter_state: false,
@@ -13634,13 +13697,38 @@ async function loadCreditNotes() {
   renderJson(apiOutput, { credit_notes: { ok: result.ok, count: lastCreditNotes.length } });
 }
 
+function resolveCreditNoteSourceInvoice(invoiceId) {
+  return (Array.isArray(lastBusinessInvoices) ? lastBusinessInvoices : [])
+    .find((invoice) => String(invoice.invoice_id || "") === String(invoiceId || ""));
+}
+
+function creditNoteSourceInvoiceOptions(selectedId) {
+  const invoices = Array.isArray(lastBusinessInvoices) ? lastBusinessInvoices : [];
+  if (!invoices.length) {
+    return `<option value="">Load or create a source invoice first</option>`;
+  }
+  return [
+    `<option value="">Select source invoice</option>`,
+    ...invoices.map((invoice) => {
+      const id = String(invoice.invoice_id || "");
+      const number = String(invoice.invoice_number || id || "");
+      const customer = String(invoice.customer_name || invoice.customer_party_id || "");
+      const total = formatCurrency(invoice.invoice_total || invoice.grand_total || 0);
+      const selected = id && id === String(selectedId || "") ? "selected" : "";
+      return `<option value="${escapeHtml(id)}" ${selected}>${escapeHtml(number)} - ${escapeHtml(customer)} - ${escapeHtml(total)}</option>`;
+    }),
+  ].join("");
+}
+
 function syncCnFormFromDom() {
   const form = document.querySelector("[data-cn-form]");
   if (!form) return;
   const val = (sel) => form.querySelector(sel)?.value ?? "";
   cnFormHeader.customer_party_id = val("select[name='customer_party_id']");
   cnFormHeader.note_date = val("input[name='note_date']") || todayIsoDate();
-  cnFormHeader.original_invoice_number = val("input[name='original_invoice_number']");
+  cnFormHeader.original_invoice_id = val("select[name='original_invoice_id']");
+  const selectedInvoice = resolveCreditNoteSourceInvoice(cnFormHeader.original_invoice_id);
+  cnFormHeader.original_invoice_number = selectedInvoice?.invoice_number || "";
   cnFormHeader.reason = val("select[name='reason']") || "sales_return";
   cnFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
   cnFormHeader.income_account_code = val("select[name='income_account_code']") || "41001";
@@ -13710,6 +13798,7 @@ function openCreditNoteCreate() {
   cnFormLines = [{ id: `cn-${++cnLineSeq}`, description: "", hsn_sac: "", uqc: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   cnFormHeader.customer_party_id = "";
   cnFormHeader.note_date = todayIsoDate();
+  cnFormHeader.original_invoice_id = "";
   cnFormHeader.original_invoice_number = "";
   cnFormHeader.reason = "sales_return";
   cnFormHeader.is_inter_state = false;
@@ -13720,6 +13809,7 @@ function openCreditNoteCreate() {
   cnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!Array.isArray(lastBusinessInvoices) || lastBusinessInvoices.length === 0) loadBusinessInvoices();
   if (!lastDimensions) loadDimensions().then(() => rerenderCreditNoteIfActive());
   setCreditNoteView("create");
 }
@@ -13747,6 +13837,11 @@ async function submitCreditNote() {
     setLoginStatus("warn", "Customer required", "Select the customer for this credit note.");
     return;
   }
+  const sourceInvoice = resolveCreditNoteSourceInvoice(cnFormHeader.original_invoice_id);
+  if (!sourceInvoice) {
+    setLoginStatus("warn", "Source invoice required", "Select the source invoice this credit note adjusts.");
+    return;
+  }
   const lineItems = cnFormLines
     .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
     .map((l) => ({
@@ -13766,6 +13861,7 @@ async function submitCreditNote() {
   const body = {
     customer_party_id: cnFormHeader.customer_party_id,
     note_date: cnFormHeader.note_date || todayIsoDate(),
+    original_invoice_id: cnFormHeader.original_invoice_id || null,
     original_invoice_number: String(cnFormHeader.original_invoice_number || "").trim() || null,
     reason: cnFormHeader.reason || "sales_return",
     is_inter_state: !!cnFormHeader.is_inter_state,
@@ -13911,7 +14007,9 @@ function renderCreditNoteCreateForm() {
           <input type="date" name="note_date" value="${escapeHtml(cnFormHeader.note_date)}">
         </label>
         <label>Against invoice #
-          <input type="text" name="original_invoice_number" value="${escapeHtml(cnFormHeader.original_invoice_number)}" placeholder="Original invoice number">
+          <select name="original_invoice_id" required data-source-document="sales_invoice">
+            ${creditNoteSourceInvoiceOptions(cnFormHeader.original_invoice_id)}
+          </select>
         </label>
         <label>Reason
           <select name="reason">
@@ -13981,7 +14079,7 @@ function renderCreditNoteDetail() {
     ? `<div><span>IGST</span><strong>${formatCurrency(n.igst_total || 0)}</strong></div>`
     : `<div><span>CGST</span><strong>${formatCurrency(n.cgst_total || 0)}</strong></div><div><span>SGST</span><strong>${formatCurrency(n.sgst_total || 0)}</strong></div>`;
   return `
-    <div class="verification-panel erp-workspace-panel">
+    <div class="verification-panel erp-workspace-panel" data-credit-note-printable>
       <div class="preview-heading compact">
         <div>
           <h4>Credit Note ${escapeHtml(n.credit_note_number || "")} ${invoiceStatusPill(n.status)}</h4>
@@ -13989,6 +14087,8 @@ function renderCreditNoteDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="cn-back">← Back to list</button>
+          <button class="secondary" type="button" data-business-action="print-credit-note">Print</button>
+          <button class="secondary" type="button" data-business-action="export-credit-note-json">Export JSON</button>
           ${String(n.status).toLowerCase() === "posted" && !cnReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-cn">Reverse</button>` : ""}
         </div>
       </div>
@@ -14071,6 +14171,7 @@ const DN_REASONS = [
 const dnFormHeader = {
   vendor_party_id: "",
   note_date: todayIsoDate(),
+  original_bill_id: "",
   original_bill_number: "",
   reason: "purchase_return",
   is_inter_state: false,
@@ -14098,13 +14199,38 @@ async function loadDebitNotes() {
   renderJson(apiOutput, { debit_notes: { ok: result.ok, count: lastDebitNotes.length } });
 }
 
+function resolveDebitNoteSourceBill(billId) {
+  return (Array.isArray(lastBusinessBills) ? lastBusinessBills : [])
+    .find((bill) => String(bill.bill_id || "") === String(billId || ""));
+}
+
+function debitNoteSourceBillOptions(selectedId) {
+  const bills = Array.isArray(lastBusinessBills) ? lastBusinessBills : [];
+  if (!bills.length) {
+    return `<option value="">Load or create a source bill first</option>`;
+  }
+  return [
+    `<option value="">Select source bill</option>`,
+    ...bills.map((bill) => {
+      const id = String(bill.bill_id || "");
+      const number = String(bill.bill_number || id || "");
+      const vendor = String(bill.vendor_name || bill.vendor_party_id || "");
+      const total = formatCurrency(bill.bill_total || bill.net_payable || 0);
+      const selected = id && id === String(selectedId || "") ? "selected" : "";
+      return `<option value="${escapeHtml(id)}" ${selected}>${escapeHtml(number)} - ${escapeHtml(vendor)} - ${escapeHtml(total)}</option>`;
+    }),
+  ].join("");
+}
+
 function syncDnFormFromDom() {
   const form = document.querySelector("[data-dn-form]");
   if (!form) return;
   const val = (sel) => form.querySelector(sel)?.value ?? "";
   dnFormHeader.vendor_party_id = val("select[name='vendor_party_id']");
   dnFormHeader.note_date = val("input[name='note_date']") || todayIsoDate();
-  dnFormHeader.original_bill_number = val("input[name='original_bill_number']");
+  dnFormHeader.original_bill_id = val("select[name='original_bill_id']");
+  const selectedBill = resolveDebitNoteSourceBill(dnFormHeader.original_bill_id);
+  dnFormHeader.original_bill_number = selectedBill?.bill_number || "";
   dnFormHeader.reason = val("select[name='reason']") || "purchase_return";
   dnFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
   dnFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
@@ -14173,6 +14299,7 @@ function openDebitNoteCreate() {
   dnFormLines = [{ id: `dn-${++dnLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
   dnFormHeader.vendor_party_id = "";
   dnFormHeader.note_date = todayIsoDate();
+  dnFormHeader.original_bill_id = "";
   dnFormHeader.original_bill_number = "";
   dnFormHeader.reason = "purchase_return";
   dnFormHeader.is_inter_state = false;
@@ -14183,6 +14310,7 @@ function openDebitNoteCreate() {
   dnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
+  if (!Array.isArray(lastBusinessBills) || lastBusinessBills.length === 0) loadBusinessBills();
   if (!lastDimensions) loadDimensions().then(() => rerenderDebitNoteIfActive());
   setDebitNoteView("create");
 }
@@ -14210,6 +14338,11 @@ async function submitDebitNote() {
     setLoginStatus("warn", "Vendor required", "Select the vendor for this debit note.");
     return;
   }
+  const sourceBill = resolveDebitNoteSourceBill(dnFormHeader.original_bill_id);
+  if (!sourceBill) {
+    setLoginStatus("warn", "Source bill required", "Select the supplier bill this debit note adjusts.");
+    return;
+  }
   const lineItems = dnFormLines
     .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
     .map((l) => ({
@@ -14228,6 +14361,7 @@ async function submitDebitNote() {
   const body = {
     vendor_party_id: dnFormHeader.vendor_party_id,
     note_date: dnFormHeader.note_date || todayIsoDate(),
+    original_bill_id: dnFormHeader.original_bill_id || null,
     original_bill_number: String(dnFormHeader.original_bill_number || "").trim() || null,
     reason: dnFormHeader.reason || "purchase_return",
     is_inter_state: !!dnFormHeader.is_inter_state,
@@ -14365,7 +14499,9 @@ function renderDebitNoteCreateForm() {
           <input type="date" name="note_date" value="${escapeHtml(dnFormHeader.note_date)}">
         </label>
         <label>Against bill #
-          <input type="text" name="original_bill_number" value="${escapeHtml(dnFormHeader.original_bill_number)}" placeholder="Original supplier bill number">
+          <select name="original_bill_id" required data-source-document="purchase_bill">
+            ${debitNoteSourceBillOptions(dnFormHeader.original_bill_id)}
+          </select>
         </label>
         <label>Reason
           <select name="reason">
@@ -14435,7 +14571,7 @@ function renderDebitNoteDetail() {
     ? `<div><span>Input IGST</span><strong>${formatCurrency(n.igst_total || 0)}</strong></div>`
     : `<div><span>Input CGST</span><strong>${formatCurrency(n.cgst_total || 0)}</strong></div><div><span>Input SGST</span><strong>${formatCurrency(n.sgst_total || 0)}</strong></div>`;
   return `
-    <div class="verification-panel erp-workspace-panel">
+    <div class="verification-panel erp-workspace-panel" data-debit-note-printable>
       <div class="preview-heading compact">
         <div>
           <h4>Debit Note ${escapeHtml(n.debit_note_number || "")} ${invoiceStatusPill(n.status)}</h4>
@@ -14443,6 +14579,8 @@ function renderDebitNoteDetail() {
         </div>
         <div class="invoice-detail-actions">
           <button class="secondary" type="button" data-business-action="dn-back">← Back to list</button>
+          <button class="secondary" type="button" data-business-action="print-debit-note">Print</button>
+          <button class="secondary" type="button" data-business-action="export-debit-note-json">Export JSON</button>
           ${String(n.status).toLowerCase() === "posted" && !dnReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-dn">Reverse</button>` : ""}
         </div>
       </div>
@@ -18756,6 +18894,10 @@ dashboardPreview.addEventListener("click", async (event) => {
     setCreditNoteView("list");
   } else if (businessAction === "view-credit-note") {
     openCreditNoteDetail(button.getAttribute("data-cn-id") || "");
+  } else if (businessAction === "print-credit-note") {
+    printCreditNoteDetail();
+  } else if (businessAction === "export-credit-note-json") {
+    downloadCreditNoteJson();
   } else if (businessAction === "begin-reverse-cn") {
     cnReverseOpen = true;
     rerenderCreditNoteIfActive();
@@ -18778,6 +18920,10 @@ dashboardPreview.addEventListener("click", async (event) => {
     setDebitNoteView("list");
   } else if (businessAction === "view-debit-note") {
     openDebitNoteDetail(button.getAttribute("data-dn-id") || "");
+  } else if (businessAction === "print-debit-note") {
+    printDebitNoteDetail();
+  } else if (businessAction === "export-debit-note-json") {
+    downloadDebitNoteJson();
   } else if (businessAction === "begin-reverse-dn") {
     dnReverseOpen = true;
     rerenderDebitNoteIfActive();

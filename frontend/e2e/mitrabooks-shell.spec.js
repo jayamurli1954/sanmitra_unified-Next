@@ -2419,7 +2419,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('[data-cn-form] select[name="customer_party_id"]')).toBeFocused();
     await page.locator('[data-cn-form] select[name="customer_party_id"]').selectOption('p2');
     await page.locator('[data-cn-form] input[name="note_date"]').fill('2026-06-13');
-    await page.locator('[data-cn-form] input[name="original_invoice_number"]').fill('INV-2026-001');
+    await page.locator('[data-cn-form] select[name="original_invoice_id"]').selectOption('inv1');
+    await expect(page.locator('[data-cn-form] select[name="original_invoice_id"]')).toContainText('INV-2026-001');
     await page.locator('[data-cn-form] select[name="reason"]').selectOption('sales_return');
     await page.locator('[data-cn-form] select[name="income_account_code"]').selectOption('4001');
     await page.locator('[data-cn-form] input[name="place_of_supply"]').fill('Karnataka');
@@ -2445,7 +2446,11 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.getByRole('row', { name: /CN-2026-001/ }).getByRole('button', { name: 'View' }).click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Credit Note CN-2026-001');
+    await expect(page.locator('[data-credit-note-printable]')).toContainText('against INV-2026-001');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Returned consulting service');
+    await expect(page.locator('[data-credit-note-printable] [data-business-action="print-credit-note"]')).toBeVisible();
+    await page.locator('[data-credit-note-printable] [data-business-action="export-credit-note-json"]').click();
+    await expect(page.locator('#api-output')).toContainText('credit_note_export');
     await page.getByRole('button', { name: 'Reverse' }).click();
     await expect(page.locator('.reversal-panel')).toBeVisible();
     await page.locator('[data-reversal-date]').fill('2026-06-13');
@@ -2459,7 +2464,8 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('[data-dn-form] select[name="vendor_party_id"]')).toBeFocused();
     await page.locator('[data-dn-form] select[name="vendor_party_id"]').selectOption('p1');
     await page.locator('[data-dn-form] input[name="note_date"]').fill('2026-06-13');
-    await page.locator('[data-dn-form] input[name="original_bill_number"]').fill('BILL-100');
+    await page.locator('[data-dn-form] select[name="original_bill_id"]').selectOption('bill1');
+    await expect(page.locator('[data-dn-form] select[name="original_bill_id"]')).toContainText('BILL-100');
     await page.locator('[data-dn-form] select[name="reason"]').selectOption('purchase_return');
     await page.locator('[data-dn-form] select[name="expense_account_code"]').selectOption('5001');
     await page.locator('[data-dn-form] input[name="place_of_supply"]').fill('Karnataka');
@@ -2484,7 +2490,11 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.getByRole('row', { name: /DN-2026-001/ }).getByRole('button', { name: 'View' }).click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Debit Note DN-2026-001');
+    await expect(page.locator('[data-debit-note-printable]')).toContainText('against BILL-100');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Returned office supplies');
+    await expect(page.locator('[data-debit-note-printable] [data-business-action="print-debit-note"]')).toBeVisible();
+    await page.locator('[data-debit-note-printable] [data-business-action="export-debit-note-json"]').click();
+    await expect(page.locator('#api-output')).toContainText('debit_note_export');
     await page.getByRole('button', { name: 'Reverse' }).click();
     await expect(page.locator('.reversal-panel')).toBeVisible();
     await page.locator('[data-reversal-date]').fill('2026-06-13');
