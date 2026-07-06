@@ -2319,8 +2319,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('attachment(s)');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
-    await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Invoice' }).click();
+    await page.keyboard.press('Control+Alt+I');
     await expect(page.locator('[data-invoice-form]')).toBeVisible();
+    await expect(page.locator('[data-invoice-form] select[name="customer_party_id"]')).toBeFocused();
     await page.locator('[data-invoice-form] select[name="customer_party_id"]').selectOption('p2');
     await page.locator('[data-invoice-form] input[name="invoice_date"]').fill('2026-06-13');
     await page.locator('[data-invoice-form] input[name="due_date"]').fill('2026-06-30');
@@ -2336,8 +2337,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-invoice-line] input[name="gst_rate"]').fill('18');
     await page.locator('[data-invoice-line] select[name="line_cost_centre_id"]').selectOption('dim-cc-mum');
     await page.locator('[data-invoice-line] select[name="line_project_id"]').selectOption('dim-prj-alpha');
+    await page.keyboard.press('Alt+L');
+    await expect(page.locator('[data-invoice-line]')).toHaveCount(2);
+    await page.locator('[data-invoice-line]').last().getByRole('button').click();
+    await expect(page.locator('[data-invoice-line]')).toHaveCount(1);
     await expect(page.locator('[data-total-invoice]')).toContainText('2,360');
-    await page.getByRole('button', { name: 'Post Invoice' }).click();
+    await page.keyboard.press('Control+Enter');
     await expect(page.locator('#login-status')).toContainText('Invoice posted');
     await expect(page.locator('.erp-workspace-panel')).toContainText('INV-2026-001');
     await expect(page.getByRole('row', { name: /INV-2026-001/ })).toContainText('posted');
@@ -2370,8 +2375,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('reversed');
 
     await page.locator('nav#nav a[data-business-workspace="bills"]').click();
-    await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Bill' }).click();
+    await page.keyboard.press('Control+Alt+B');
     await expect(page.locator('[data-bill-form]')).toBeVisible();
+    await expect(page.locator('[data-bill-form] select[name="vendor_party_id"]')).toBeFocused();
     await page.locator('[data-bill-form] select[name="vendor_party_id"]').selectOption('p1');
     await page.locator('[data-bill-form] input[name="bill_number"]').fill('BILL-100');
     await page.locator('[data-bill-form] input[name="bill_date"]').fill('2026-06-13');
@@ -2387,8 +2393,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-bill-line] input[name="gst_rate"]').fill('18');
     await page.locator('[data-bill-line] select[name="line_cost_centre_id"]').selectOption('dim-cc-mum');
     await page.locator('[data-bill-line] select[name="line_project_id"]').selectOption('dim-prj-alpha');
+    await page.keyboard.press('Alt+L');
+    await expect(page.locator('[data-bill-line]')).toHaveCount(2);
+    await page.locator('[data-bill-line]').last().getByRole('button').click();
+    await expect(page.locator('[data-bill-line]')).toHaveCount(1);
     await expect(page.locator('[data-total-bill]')).toContainText('1,770');
-    await page.getByRole('button', { name: 'Post Bill' }).click();
+    await page.keyboard.press('Control+Enter');
     await expect(page.locator('#login-status')).toContainText('Bill posted');
     await expect(page.locator('.erp-workspace-panel')).toContainText('BILL-100');
     await expect(page.getByRole('row', { name: /BILL-100/ })).toContainText('posted');
@@ -2404,8 +2414,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('reversed');
 
     await page.locator('nav#nav a[data-business-workspace="credit-notes"]').click();
-    await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Credit Note' }).click();
+    await page.keyboard.press('Control+Alt+C');
     await expect(page.locator('[data-cn-form]')).toBeVisible();
+    await expect(page.locator('[data-cn-form] select[name="customer_party_id"]')).toBeFocused();
     await page.locator('[data-cn-form] select[name="customer_party_id"]').selectOption('p2');
     await page.locator('[data-cn-form] input[name="note_date"]').fill('2026-06-13');
     await page.locator('[data-cn-form] input[name="original_invoice_number"]').fill('INV-2026-001');
@@ -2422,8 +2433,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-cn-line] input[name="quantity"]').fill('1');
     await page.locator('[data-cn-line] input[name="rate"]').fill('1000');
     await page.locator('[data-cn-line] input[name="gst_rate"]').fill('18');
+    await page.keyboard.press('Alt+L');
+    await expect(page.locator('[data-cn-line]')).toHaveCount(2);
+    await page.locator('[data-cn-line]').last().getByRole('button').click();
+    await expect(page.locator('[data-cn-line]')).toHaveCount(1);
     await expect(page.locator('[data-total-note]')).toContainText('1,180');
-    await page.getByRole('button', { name: 'Post Credit Note' }).click();
+    await page.keyboard.press('Control+Enter');
     await expect(page.locator('#login-status')).toContainText('Credit note posted');
     await expect(page.locator('.erp-workspace-panel')).toContainText('CN-2026-001');
     await expect(page.getByRole('row', { name: /CN-2026-001/ })).toContainText('posted');
@@ -2439,8 +2454,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-workspace-panel')).toContainText('Reversed');
 
     await page.locator('nav#nav a[data-business-workspace="debit-notes"]').click();
-    await page.locator('.erp-workspace-panel').getByRole('button', { name: '+ New Debit Note' }).click();
+    await page.keyboard.press('Control+Alt+D');
     await expect(page.locator('[data-dn-form]')).toBeVisible();
+    await expect(page.locator('[data-dn-form] select[name="vendor_party_id"]')).toBeFocused();
     await page.locator('[data-dn-form] select[name="vendor_party_id"]').selectOption('p1');
     await page.locator('[data-dn-form] input[name="note_date"]').fill('2026-06-13');
     await page.locator('[data-dn-form] input[name="original_bill_number"]').fill('BILL-100');
@@ -2456,8 +2472,12 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-dn-line] input[name="quantity"]').fill('1');
     await page.locator('[data-dn-line] input[name="rate"]').fill('500');
     await page.locator('[data-dn-line] input[name="gst_rate"]').fill('18');
+    await page.keyboard.press('Alt+L');
+    await expect(page.locator('[data-dn-line]')).toHaveCount(2);
+    await page.locator('[data-dn-line]').last().getByRole('button').click();
+    await expect(page.locator('[data-dn-line]')).toHaveCount(1);
     await expect(page.locator('[data-total-note]')).toContainText('590');
-    await page.getByRole('button', { name: 'Post Debit Note' }).click();
+    await page.keyboard.press('Control+Enter');
     await expect(page.locator('#login-status')).toContainText('Debit note posted');
     await expect(page.locator('.erp-workspace-panel')).toContainText('DN-2026-001');
     await expect(page.getByRole('row', { name: /DN-2026-001/ })).toContainText('posted');

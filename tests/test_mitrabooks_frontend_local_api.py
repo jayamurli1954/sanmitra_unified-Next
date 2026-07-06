@@ -316,6 +316,29 @@ def test_business_voucher_keyboard_shortcuts_are_wired() -> None:
     assert "businessVoucherCreateDialog?.addEventListener(\"click\"" in app_source
 
 
+def test_business_document_entry_keyboard_shortcuts_are_wired() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    for shortcut in [
+        'aria-keyshortcuts="Control+Alt+I"',
+        'aria-keyshortcuts="Control+Alt+B"',
+        'aria-keyshortcuts="Control+Alt+C"',
+        'aria-keyshortcuts="Control+Alt+D"',
+        'aria-keyshortcuts="Alt+L"',
+        'aria-keyshortcuts="Control+Enter"',
+    ]:
+        assert shortcut in app_source
+    assert "function openBusinessDocumentWorkspaceAndForm(workspace)" in app_source
+    assert "function activeBusinessDocumentFormConfig()" in app_source
+    assert "function handleBusinessDocumentEntryKeyboard(event)" in app_source
+    assert 'const workspaceByKey = { i: "sales", b: "bills", c: "credit-notes", d: "debit-notes" }' in app_source
+    assert 'document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard)' in app_source
+    assert 'focusBusinessEntryField("[data-invoice-form] select[name=\'customer_party_id\']")' in app_source
+    assert 'focusBusinessEntryField("[data-bill-form] select[name=\'vendor_party_id\']")' in app_source
+    assert 'focusBusinessEntryField("[data-cn-form] select[name=\'customer_party_id\']")' in app_source
+    assert 'focusBusinessEntryField("[data-dn-form] select[name=\'vendor_party_id\']")' in app_source
+
+
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

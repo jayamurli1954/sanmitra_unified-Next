@@ -12160,6 +12160,9 @@ function reversalPanel(kind, id, isoDate) {
 function rerenderSalesIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "sales") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (salesView === "create") {
+      focusBusinessEntryField("[data-invoice-form] select[name='customer_party_id']");
+    }
   }
 }
 
@@ -12195,6 +12198,15 @@ function computeInvoiceLine(qty, rate, gstRate, inter) {
     sgst = round2(gst - cgst);
   }
   return { taxable, cgst, sgst, igst, total: round2(taxable + cgst + sgst + igst) };
+}
+
+function focusBusinessEntryField(selector) {
+  setTimeout(() => {
+    const field = document.querySelector(selector);
+    if (field) {
+      field.focus();
+    }
+  }, 0);
 }
 
 function syncSalesFormFromDom() {
@@ -12278,6 +12290,7 @@ function setBusinessSalesView(view) {
   rerenderSalesIfActive();
   if (view === "create") {
     updateInvoiceTotalsDisplay();
+    focusBusinessEntryField("[data-invoice-form] select[name='customer_party_id']");
   }
 }
 
@@ -12630,7 +12643,7 @@ function renderInvoiceCreateForm() {
           <tbody>${lineRows}</tbody>
         </table>
       </div>
-      <button class="secondary" type="button" data-business-action="add-invoice-line">+ Add line</button>
+      <button class="secondary" type="button" data-business-action="add-invoice-line" aria-keyshortcuts="Alt+L">+ Add line</button>
 
       <div class="invoice-totals">
         <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
@@ -12647,7 +12660,7 @@ function renderInvoiceCreateForm() {
       </label>` : ""}
 
       <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-invoice">Post Invoice</button>
+        <button class="primary" type="button" data-business-action="save-invoice" aria-keyshortcuts="Control+Enter">Post Invoice</button>
         <button class="secondary" type="button" data-business-action="invoice-back">Cancel</button>
       </div>
     </div>
@@ -13009,7 +13022,7 @@ function renderBusinessSalesWorkspace() {
         </div>
         <div class="invoice-detail-actions">
           ${isBusinessAdmin() ? `<button class="secondary" type="button" data-business-action="open-invoice-settings">⚙ Settings</button>` : ""}
-          <button class="secondary" type="button" data-business-action="open-create-invoice">+ New Invoice</button>
+          <button class="secondary" type="button" data-business-action="open-create-invoice" aria-keyshortcuts="Control+Alt+I">+ New Invoice</button>
         </div>
       </div>
       ${renderInvoiceListTable()}
@@ -13042,6 +13055,9 @@ const billFormHeader = {
 function rerenderPurchaseIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "bills") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (purchaseView === "create") {
+      focusBusinessEntryField("[data-bill-form] select[name='vendor_party_id']");
+    }
   }
 }
 
@@ -13152,6 +13168,7 @@ function setBusinessPurchaseView(view) {
   rerenderPurchaseIfActive();
   if (view === "create") {
     updateBillTotalsDisplay();
+    focusBusinessEntryField("[data-bill-form] select[name='vendor_party_id']");
   }
 }
 
@@ -13441,7 +13458,7 @@ function renderBillCreateForm() {
           <tbody>${lineRows}</tbody>
         </table>
       </div>
-      <button class="secondary" type="button" data-business-action="add-bill-line">+ Add line</button>
+      <button class="secondary" type="button" data-business-action="add-bill-line" aria-keyshortcuts="Alt+L">+ Add line</button>
 
       <div class="invoice-totals">
         <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
@@ -13459,7 +13476,7 @@ function renderBillCreateForm() {
       </label>
 
       <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-bill">Post Bill</button>
+        <button class="primary" type="button" data-business-action="save-bill" aria-keyshortcuts="Control+Enter">Post Bill</button>
         <button class="secondary" type="button" data-business-action="bill-back">Cancel</button>
       </div>
     </div>
@@ -13565,7 +13582,7 @@ function renderBusinessPurchaseWorkspace() {
           <h4>Purchase Bills</h4>
           <p>Vendor bills with input GST. Each posting updates expenses, ITC, and accounts payable.</p>
         </div>
-        <button class="secondary" type="button" data-business-action="open-create-bill">+ New Bill</button>
+        <button class="secondary" type="button" data-business-action="open-create-bill" aria-keyshortcuts="Control+Alt+B">+ New Bill</button>
       </div>
       ${renderBillListTable()}
     </div>
@@ -13603,6 +13620,9 @@ const cnFormHeader = {
 function rerenderCreditNoteIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "credit-notes") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (creditNoteView === "create") {
+      focusBusinessEntryField("[data-cn-form] select[name='customer_party_id']");
+    }
   }
 }
 
@@ -13682,6 +13702,7 @@ function setCreditNoteView(view) {
   rerenderCreditNoteIfActive();
   if (view === "create") {
     updateCnTotalsDisplay();
+    focusBusinessEntryField("[data-cn-form] select[name='customer_party_id']");
   }
 }
 
@@ -13928,7 +13949,7 @@ function renderCreditNoteCreateForm() {
           <tbody>${lineRows}</tbody>
         </table>
       </div>
-      <button class="secondary" type="button" data-business-action="add-cn-line">+ Add line</button>
+      <button class="secondary" type="button" data-business-action="add-cn-line" aria-keyshortcuts="Alt+L">+ Add line</button>
 
       <div class="invoice-totals">
         <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
@@ -13943,7 +13964,7 @@ function renderCreditNoteCreateForm() {
       </label>
 
       <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-credit-note">Post Credit Note</button>
+        <button class="primary" type="button" data-business-action="save-credit-note" aria-keyshortcuts="Control+Enter">Post Credit Note</button>
         <button class="secondary" type="button" data-business-action="cn-back">Cancel</button>
       </div>
     </div>
@@ -14025,7 +14046,7 @@ function renderBusinessCreditNoteWorkspace() {
           <h4>Credit Notes</h4>
           <p>Sales-side GST adjustments against invoices (returns, discounts, price revisions).</p>
         </div>
-        <button class="secondary" type="button" data-business-action="open-create-credit-note">+ New Credit Note</button>
+        <button class="secondary" type="button" data-business-action="open-create-credit-note" aria-keyshortcuts="Control+Alt+C">+ New Credit Note</button>
       </div>
       ${renderCnListTable()}
     </div>
@@ -14063,6 +14084,9 @@ const dnFormHeader = {
 function rerenderDebitNoteIfActive() {
   if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "debit-notes") {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (debitNoteView === "create") {
+      focusBusinessEntryField("[data-dn-form] select[name='vendor_party_id']");
+    }
   }
 }
 
@@ -14141,6 +14165,7 @@ function setDebitNoteView(view) {
   rerenderDebitNoteIfActive();
   if (view === "create") {
     updateDnTotalsDisplay();
+    focusBusinessEntryField("[data-dn-form] select[name='vendor_party_id']");
   }
 }
 
@@ -14378,7 +14403,7 @@ function renderDebitNoteCreateForm() {
           <tbody>${lineRows}</tbody>
         </table>
       </div>
-      <button class="secondary" type="button" data-business-action="add-dn-line">+ Add line</button>
+      <button class="secondary" type="button" data-business-action="add-dn-line" aria-keyshortcuts="Alt+L">+ Add line</button>
 
       <div class="invoice-totals">
         <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
@@ -14393,7 +14418,7 @@ function renderDebitNoteCreateForm() {
       </label>
 
       <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-debit-note">Post Debit Note</button>
+        <button class="primary" type="button" data-business-action="save-debit-note" aria-keyshortcuts="Control+Enter">Post Debit Note</button>
         <button class="secondary" type="button" data-business-action="dn-back">Cancel</button>
       </div>
     </div>
@@ -14475,7 +14500,7 @@ function renderBusinessDebitNoteWorkspace() {
           <h4>Debit Notes</h4>
           <p>Purchase-side GST adjustments against vendor bills (returns, rejected goods, price revisions).</p>
         </div>
-        <button class="secondary" type="button" data-business-action="open-create-debit-note">+ New Debit Note</button>
+        <button class="secondary" type="button" data-business-action="open-create-debit-note" aria-keyshortcuts="Control+Alt+D">+ New Debit Note</button>
       </div>
       ${renderDnListTable()}
     </div>
@@ -19319,6 +19344,70 @@ async function openVoucherWorkspaceAndDialog() {
   await openBusinessCreateVoucherDialog();
 }
 
+function openBusinessDocumentWorkspaceAndForm(workspace) {
+  activeBusinessWorkspace = workspace;
+  syncBusinessNavActiveState();
+  dashboardPreview.innerHTML = renderBusinessWorkspace();
+  if (workspace === "sales") {
+    openInvoiceCreate();
+  } else if (workspace === "bills") {
+    openBillCreate();
+  } else if (workspace === "credit-notes") {
+    openCreditNoteCreate();
+  } else if (workspace === "debit-notes") {
+    openDebitNoteCreate();
+  }
+}
+
+function activeBusinessDocumentFormConfig() {
+  if (activeBusinessWorkspace === "sales" && salesView === "create" && document.querySelector("[data-invoice-form]")) {
+    return { addLine: addInvoiceLine, submit: submitInvoice };
+  }
+  if (activeBusinessWorkspace === "bills" && purchaseView === "create" && document.querySelector("[data-bill-form]")) {
+    return { addLine: addBillLine, submit: submitBill };
+  }
+  if (activeBusinessWorkspace === "credit-notes" && creditNoteView === "create" && document.querySelector("[data-cn-form]")) {
+    return { addLine: addCnLine, submit: submitCreditNote };
+  }
+  if (activeBusinessWorkspace === "debit-notes" && debitNoteView === "create" && document.querySelector("[data-dn-form]")) {
+    return { addLine: addDnLine, submit: submitDebitNote };
+  }
+  return null;
+}
+
+function handleBusinessDocumentEntryKeyboard(event) {
+  if (currentExperience !== "mitrabooks" || !hasTrustedSession()) {
+    return;
+  }
+  if (document.querySelector("dialog[open]")) {
+    return;
+  }
+  const key = String(event.key || "").toLowerCase();
+  if (event.ctrlKey && event.altKey) {
+    const workspaceByKey = { i: "sales", b: "bills", c: "credit-notes", d: "debit-notes" };
+    const workspace = workspaceByKey[key];
+    if (workspace) {
+      event.preventDefault();
+      openBusinessDocumentWorkspaceAndForm(workspace);
+    }
+    return;
+  }
+
+  const formConfig = activeBusinessDocumentFormConfig();
+  if (!formConfig) {
+    return;
+  }
+  if (event.ctrlKey && event.key === "Enter") {
+    event.preventDefault();
+    formConfig.submit();
+    return;
+  }
+  if (event.altKey && !event.ctrlKey && key === "l") {
+    event.preventDefault();
+    formConfig.addLine();
+  }
+}
+
 if (btnQuickParty) {
   btnQuickParty.addEventListener("click", () => {
     activeBusinessWorkspace = "parties";
@@ -19347,6 +19436,8 @@ document.addEventListener("keydown", (event) => {
   event.preventDefault();
   openVoucherWorkspaceAndDialog();
 });
+
+document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard);
 
 /**
  * Update page title and breadcrumb based on current view
