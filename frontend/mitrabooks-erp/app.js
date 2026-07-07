@@ -8382,6 +8382,8 @@ let lastEinvoiceView = null;     // e-invoice readiness/payload for the open inv
 let lastInventoryItems = null;   // item master cache (also feeds the line selects)
 let lastStockRegister = null;
 let lastClosingStockEntries = null;
+let lastInventoryPolicy = null;
+let lastStockMovements = null;
 
 
 // ══════════════════════════════════════════════════════════════════════
@@ -8621,6 +8623,8 @@ async function refreshCurrentBusinessReport() {
   } else if (tab === "inventory") {
     await loadInventoryItems();
     if (lastInventoryItems?.inventory_enabled) {
+      await loadInventoryPolicy();
+      await loadStockMovements();
       await loadStockRegister();
       await loadClosingStockEntries();
     } else {
@@ -10074,6 +10078,12 @@ function inventoryItemOptions(selected) {
     `<option value="${escapeHtml(it.item_id)}" ${it.item_id === selected ? "selected" : ""}>${escapeHtml(`${it.code} - ${it.name}`)}</option>`).join("");
 }
 
+function inventoryMovementItemOptions(selected = "") {
+  const rows = lastInventoryItems?.items || [];
+  return `<option value="">Select item</option>` + rows.map((it) =>
+    `<option value="${escapeHtml(it.item_id)}" ${it.item_id === selected ? "selected" : ""}>${escapeHtml(`${it.code} - ${it.name}`)}</option>`).join("");
+}
+
 async function createInventoryItemFromForm() {
   const form = document.querySelector("[data-item-form]");
   if (!form) return;
@@ -10114,6 +10124,55 @@ async function deactivateInventoryItem(itemId) {
     setLoginStatus("danger", "Deactivate failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { item_deactivate: { ok: result.ok, status: result.status } });
+}
+
+async function loadInventoryPolicy() {
+  const result = await apiRequest("mitrabooks", "/api/v1/business/inventory/policy", { method: "GET" });
+  lastInventoryPolicy = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { inventory_policy: { ok: result.ok, policy: result.payload?.valuation_policy || null } });
+}
+
+async function loadStockMovements() {
+  const asOf = document.querySelector("[data-stock-asof]")?.value || "";
+  const params = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+  const result = await apiRequest("mitrabooks", `/api/v1/business/inventory/movements${params}`, { method: "GET" });
+  lastStockMovements = result.ok ? (result.payload?.items || []) : [];
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { stock_movements: { ok: result.ok, count: lastStockMovements.length } });
+}
+
+async function createStockMovementFromForm() {
+  const form = document.querySelector("[data-stock-movement-form]");
+  if (!form) return;
+  const val = (sel) => form.querySelector(sel)?.value ?? "";
+  const body = {
+    movement_type: val("select[name='movement_type']") || "issue",
+    item_id: val("select[name='item_id']"),
+    movement_date: val("input[name='movement_date']") || todayIsoDate(),
+    quantity: val("input[name='quantity']") || "0",
+    value: val("input[name='value']") || "0",
+    reason: val("input[name='reason']") || null,
+    reference: val("input[name='reference']") || null,
+  };
+  if (!body.item_id) {
+    setLoginStatus("warn", "Item required", "Select the stock item for this movement.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/inventory/movements", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (result.ok) {
+    setLoginStatus("ok", "Stock movement recorded", `${result.payload?.movement_type || "Movement"} for ${result.payload?.item_code || "item"}.`);
+    await loadStockMovements();
+    await loadStockRegister();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Admin only", "Only a tenant admin can record stock issues and adjustments.");
+  } else {
+    setLoginStatus("danger", "Movement failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { stock_movement_create: { ok: result.ok, status: result.status } });
 }
 
 async function loadStockRegister() {
@@ -10194,6 +10253,49 @@ function renderInventoryPanel() {
       </table>
     </div>`;
 
+  const policy = lastInventoryPolicy;
+  const policyPanel = policy ? `
+    <div class="table-preview compact-table">
+      <h4>Valuation policy</h4>
+      <p class="muted"><strong>${escapeHtml(policy.display_name || "Weighted average (periodic)")}</strong>${policy.policy_locked ? " - locked for this local gate" : ""}</p>
+      ${(policy.notes || []).map((note) => `<p class="muted">${escapeHtml(note)}</p>`).join("")}
+    </div>` : "";
+
+  const movementRows = (lastStockMovements || []).slice(0, 8).map((mv) => `
+    <tr>
+      <td>${escapeHtml(mv.movement_date || "")}</td>
+      <td>${escapeHtml(mv.movement_type || "")}</td>
+      <td>${escapeHtml(`${mv.item_code || ""} - ${mv.item_name || mv.item_id || ""}`)}</td>
+      <td class="amount">${escapeHtml(mv.quantity || "0")}</td>
+      <td class="amount">${num(mv.value)}</td>
+      <td>${escapeHtml(mv.reason || mv.reference || "")}</td>
+    </tr>`).join("");
+  const movementPanel = `
+    <div class="table-preview compact-table"><h4>Stock issues &amp; adjustments</h4></div>
+    <div class="invoice-form-grid" data-stock-movement-form>
+      <label>Type
+        <select name="movement_type">
+          <option value="issue">Stock issue / consumption</option>
+          <option value="adjustment">Stock adjustment</option>
+        </select>
+      </label>
+      <label>Item <select name="item_id">${inventoryMovementItemOptions()}</select></label>
+      <label>Date <input type="date" name="movement_date" value="${todayIsoDate()}"></label>
+      <label>Qty <input type="number" name="quantity" step="any" placeholder="Issue positive; adjustment can be negative"></label>
+      <label>Value <input type="number" name="value" step="0.01" placeholder="Positive adjustment value only"></label>
+      <label>Reason <input type="text" name="reason" maxlength="160" placeholder="Consumption, count correction"></label>
+      <label>Reference <input type="text" name="reference" maxlength="80" placeholder="Optional reference"></label>
+    </div>
+    <div class="report-date-controls">
+      <button class="primary" type="button" data-business-action="stock-movement-create">Record movement</button>
+    </div>
+    <div class="table-preview compact-table">
+      <table>
+        <thead><tr><th>Date</th><th>Type</th><th>Item</th><th class="amount">Qty</th><th class="amount">Value</th><th>Reason / ref</th></tr></thead>
+        <tbody>${movementRows || `<tr><td colspan="6" class="muted">No stock issues or adjustments recorded yet.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+
   const r = lastStockRegister;
   let registerBody = "";
   if (r && r.ok === false) {
@@ -10205,7 +10307,9 @@ function renderInventoryPanel() {
         <td>${escapeHtml(row.uqc || "")}</td>
         <td class="amount">${escapeHtml(row.opening_qty)}</td>
         <td class="amount">${escapeHtml(row.purchased_qty)}</td>
+        <td class="amount">${escapeHtml(row.adjustment_in_qty || "0.000")}</td>
         <td class="amount">${escapeHtml(row.sold_qty)}</td>
+        <td class="amount">${escapeHtml(row.adjustment_out_qty || "0.000")}</td>
         <td class="amount">${escapeHtml(row.closing_qty)}</td>
         <td class="amount">${num(row.avg_cost)}</td>
         <td class="amount">${num(row.closing_value)}</td>
@@ -10218,9 +10322,9 @@ function renderInventoryPanel() {
       </div>
       <div class="table-preview compact-table">
         <table>
-          <thead><tr><th>Item</th><th>UQC</th><th class="amount">Opening</th><th class="amount">In</th><th class="amount">Out</th><th class="amount">Closing</th><th class="amount">Avg cost</th><th class="amount">Value</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="8" class="muted">No items to report.</td></tr>`}</tbody>
-          ${rows ? `<tfoot><tr><th colspan="7">Total closing stock</th><td class="amount"><strong>${num(r.total_closing_value)}</strong></td></tr></tfoot>` : ""}
+          <thead><tr><th>Item</th><th>UQC</th><th class="amount">Opening</th><th class="amount">Purchased</th><th class="amount">Adj in</th><th class="amount">Sold</th><th class="amount">Issued/adj out</th><th class="amount">Closing</th><th class="amount">Avg cost</th><th class="amount">Value</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="10" class="muted">No items to report.</td></tr>`}</tbody>
+          ${rows ? `<tfoot><tr><th colspan="9">Total closing stock</th><td class="amount"><strong>${num(r.total_closing_value)}</strong></td></tr></tfoot>` : ""}
         </table>
       </div>
       ${lastEntry ? `<p class="muted">Last closing-stock journal: entry #${escapeHtml(String(lastEntry.journal_entry_id))} dated ${escapeHtml(lastEntry.entry_date)}. Reverse it before posting a new position.</p>` : ""}
@@ -10233,7 +10337,10 @@ function renderInventoryPanel() {
 
   return `
     <div class="table-preview compact-table"><h4>Item master</h4></div>
+    ${policyPanel}
     ${manage}
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
+    ${movementPanel}
     <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
     <div class="table-preview compact-table"><h4>Stock register &amp; closing stock</h4></div>
     <div class="report-date-controls">
@@ -12954,6 +13061,7 @@ async function saveInvoiceSettings() {
     composition_category: regType === "composition" ? regCategory : null,
   };
   const inventoryToggle = panel.querySelector("[data-inventory-enabled]");
+  const inventoryPolicy = panel.querySelector("[data-inventory-valuation-policy]")?.value || "weighted_average_periodic";
   const body = {
     field_config,
     numbering,
@@ -12961,6 +13069,7 @@ async function saveInvoiceSettings() {
     custom_fields: (lastInvoiceSettings && lastInvoiceSettings.custom_fields) || [],
     branding,
     inventory_enabled: inventoryToggle ? !!inventoryToggle.checked : !!lastInvoiceSettings?.inventory_enabled,
+    inventory_valuation_policy: inventoryPolicy,
   };
   const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", {
     method: "PUT",
@@ -13047,6 +13156,14 @@ function renderInvoiceSettingsPanel() {
         <input type="checkbox" data-inventory-enabled ${s.inventory_enabled ? "checked" : ""}>
         Enable inventory accounting (item master, stock register, closing stock)
       </label>
+      <div class="invoice-form-grid">
+        <label>Valuation policy
+          <select data-inventory-valuation-policy>
+            <option value="weighted_average_periodic" ${(s.inventory_valuation_policy || "weighted_average_periodic") === "weighted_average_periodic" ? "selected" : ""}>Weighted average (periodic)</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted">The current local policy is locked to weighted-average periodic costing. Stock issues and adjustments affect the register; the financial impact is posted through the closing-stock journal.</p>
 
       <p class="muted settings-coming-soon">Custom fields and invoice branding / print template are coming in the next update.</p>
 
@@ -18871,7 +18988,10 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "item-deactivate") {
     deactivateInventoryItem(button.getAttribute("data-item-id") || "");
   } else if (businessAction === "stock-register-load") {
+    loadStockMovements();
     loadStockRegister();
+  } else if (businessAction === "stock-movement-create") {
+    createStockMovementFromForm();
   } else if (businessAction === "closing-stock-post") {
     postClosingStock();
   } else if (businessAction === "itc-preview") {

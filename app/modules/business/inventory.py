@@ -24,6 +24,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 
 ITEMS_COLLECTION = "business_items"
+MOVEMENTS_COLLECTION = "business_stock_movements"
 
 INVENTORY_ACCOUNT_CODE = "13001"   # Inventory / Stock in Hand (asset)
 COGS_ACCOUNT_CODE = "51002"        # Cost of Goods Sold (expense)
@@ -55,6 +56,20 @@ def _response(doc: dict) -> dict:
         if isinstance(doc.get(key), datetime):
             doc[key] = doc[key].isoformat()
     return doc
+
+
+def inventory_policy() -> dict:
+    return {
+        "valuation_policy": "weighted_average_periodic",
+        "display_name": "Weighted average (periodic)",
+        "supported_policies": ["weighted_average_periodic"],
+        "policy_locked": True,
+        "notes": [
+            "Purchases, production, and positive adjustments build the weighted-average cost pool.",
+            "Sales, production consumption, stock issues, and negative adjustments reduce quantity.",
+            "The financial impact is posted only through the period-end closing-stock journal.",
+        ],
+    }
 
 
 async def is_inventory_enabled(*, tenant_id: str, app_key: str, accounting_entity_id: str) -> bool:
@@ -144,6 +159,71 @@ async def deactivate_item(
     return _response(row)
 
 
+async def create_stock_movement(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, payload: dict, created_by: str,
+) -> dict:
+    from app.accounting.service import AccountingNotFoundError, AccountingValidationError
+    from app.db.mongo import get_collection
+
+    item_id = str(payload.get("item_id") or "").strip()
+    movement_type = str(payload.get("movement_type") or "").strip().lower()
+    if movement_type not in {"issue", "adjustment"}:
+        raise AccountingValidationError("movement_type must be issue or adjustment")
+    movement_date = str(payload.get("movement_date") or date.today().isoformat()).strip()
+    try:
+        date.fromisoformat(movement_date)
+    except ValueError:
+        raise AccountingValidationError("movement_date must be YYYY-MM-DD")
+    quantity = _q3(payload.get("quantity"))
+    value = _q2(payload.get("value") or 0)
+    if movement_type == "issue" and quantity <= 0:
+        raise AccountingValidationError("Stock issue quantity must be positive")
+    if movement_type == "adjustment" and quantity == 0:
+        raise AccountingValidationError("Stock adjustment quantity cannot be zero")
+    if movement_type == "adjustment" and quantity < 0 and value:
+        raise AccountingValidationError("Negative stock adjustments do not carry a value")
+    if value < 0:
+        raise AccountingValidationError("Stock movement value cannot be negative")
+
+    scope = _scope(tenant_id, app_key, accounting_entity_id)
+    item = await get_collection(ITEMS_COLLECTION).find_one({**scope, "item_id": item_id, "is_active": True})
+    if item is None:
+        raise AccountingNotFoundError("Inventory item not found")
+
+    now = _now()
+    doc = {
+        **scope,
+        "movement_id": str(uuid4()),
+        "movement_type": movement_type,
+        "movement_date": movement_date,
+        "item_id": item_id,
+        "item_code": item.get("code"),
+        "item_name": item.get("name"),
+        "quantity": str(quantity),
+        "value": str(value),
+        "reason": str(payload.get("reason") or "").strip() or None,
+        "reference": str(payload.get("reference") or "").strip() or None,
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await get_collection(MOVEMENTS_COLLECTION).insert_one(doc)
+    return _response(doc)
+
+
+async def list_stock_movements(
+    *, tenant_id: str, app_key: str, accounting_entity_id: str, as_of: date | None = None,
+) -> dict:
+    from app.db.mongo import get_collection
+
+    filters = _scope(tenant_id, app_key, accounting_entity_id)
+    if as_of is not None:
+        filters["movement_date"] = {"$lte": as_of.isoformat()}
+    rows = await get_collection(MOVEMENTS_COLLECTION).find(filters).sort("movement_date", -1).to_list(length=2000)
+    movements = [_response(r) for r in rows]
+    return {"items": movements, "count": len(movements)}
+
+
 async def validate_item_refs(
     *, tenant_id: str, app_key: str, accounting_entity_id: str, line_items: list,
 ) -> None:
@@ -178,6 +258,7 @@ def assemble_stock_register(
     sales_lines: list[dict],      # {item_id, quantity}
     produced_lines: list[dict] | None = None,   # {item_id, quantity, value}  (manufactured FG)
     consumed_lines: list[dict] | None = None,   # {item_id, quantity}         (raw materials issued)
+    movement_lines: list[dict] | None = None,   # stock issue/adjustment records
 ) -> dict:
     """Per-item stock position as of a date, periodic method:
 
@@ -192,6 +273,7 @@ def assemble_stock_register(
     consumed than the books ever received or produced."""
     produced_lines = produced_lines or []
     consumed_lines = consumed_lines or []
+    movement_lines = movement_lines or []
     by_item: dict[str, dict] = {}
     for it in items:
         by_item[str(it["item_id"])] = {
@@ -199,6 +281,8 @@ def assemble_stock_register(
             "purchased_qty": Decimal("0"), "purchased_value": Decimal("0"),
             "produced_qty": Decimal("0"), "produced_value": Decimal("0"),
             "sold_qty": Decimal("0"), "consumed_qty": Decimal("0"),
+            "adjustment_in_qty": Decimal("0"), "adjustment_in_value": Decimal("0"),
+            "adjustment_out_qty": Decimal("0"),
         }
     untracked_purchase_value = Decimal("0")
     for ln in purchase_lines:
@@ -224,6 +308,19 @@ def assemble_stock_register(
         if bucket is None:
             continue
         bucket["consumed_qty"] += _q3(ln.get("quantity"))
+    for ln in movement_lines:
+        bucket = by_item.get(str(ln.get("item_id") or ""))
+        if bucket is None:
+            continue
+        movement_type = str(ln.get("movement_type") or "").lower()
+        qty = _q3(ln.get("quantity"))
+        if movement_type == "issue":
+            bucket["adjustment_out_qty"] += abs(qty)
+        elif movement_type == "adjustment" and qty > 0:
+            bucket["adjustment_in_qty"] += qty
+            bucket["adjustment_in_value"] += _q2(ln.get("value"))
+        elif movement_type == "adjustment" and qty < 0:
+            bucket["adjustment_out_qty"] += abs(qty)
 
     rows: list[dict] = []
     total_closing_value = Decimal("0.00")
@@ -232,11 +329,11 @@ def assemble_stock_register(
         it = b["item"]
         opening_qty = _q3(it.get("opening_qty"))
         opening_value = _q2(it.get("opening_value"))
-        in_qty = b["purchased_qty"] + b["produced_qty"]
+        in_qty = b["purchased_qty"] + b["produced_qty"] + b["adjustment_in_qty"]
         available_qty = opening_qty + in_qty
-        available_value = opening_value + b["purchased_value"] + b["produced_value"]
+        available_value = opening_value + b["purchased_value"] + b["produced_value"] + b["adjustment_in_value"]
         avg_cost = _q2(available_value / available_qty) if available_qty > 0 else Decimal("0.00")
-        out_qty = b["sold_qty"] + b["consumed_qty"]
+        out_qty = b["sold_qty"] + b["consumed_qty"] + b["adjustment_out_qty"]
         closing_qty = _q3(available_qty - out_qty)
         negative = closing_qty < 0
         if negative:
@@ -253,6 +350,8 @@ def assemble_stock_register(
             "produced_qty": str(_q3(b["produced_qty"])),
             "sold_qty": str(_q3(b["sold_qty"])),
             "consumed_qty": str(_q3(b["consumed_qty"])),
+            "adjustment_in_qty": str(_q3(b["adjustment_in_qty"])),
+            "adjustment_out_qty": str(_q3(b["adjustment_out_qty"])),
             "closing_qty": str(closing_qty),
             "avg_cost": str(avg_cost),
             "closing_value": str(closing_value),
@@ -275,6 +374,8 @@ def assemble_stock_register(
             "expense and are not part of closing stock.",
             "Manufactured finished goods are added at work-order production cost; raw materials "
             "consumed by completed work orders reduce stock at weighted-average cost.",
+            "Manual stock issues and adjustments are operational movements; the ledger impact "
+            "still flows through the closing-stock journal.",
         ],
     }
 
@@ -314,6 +415,7 @@ async def build_stock_register(
     # to the ledger here — this only keeps closing-stock valuation correct.
     produced_lines: list[dict] = []
     consumed_lines: list[dict] = []
+    movement_lines: list[dict] = []
     work_orders = await get_collection("manufacturing_work_orders").find({
         **scope, "status": "completed",
     }).to_list(length=20000)
@@ -331,10 +433,22 @@ async def build_stock_register(
         for comp in actual.get("components") or []:
             consumed_lines.append({"item_id": comp.get("item_id"), "quantity": comp.get("qty")})
 
+    movements = await get_collection(MOVEMENTS_COLLECTION).find({
+        **scope, "movement_date": {"$lte": as_of.isoformat()},
+    }).to_list(length=20000)
+    for mv in movements:
+        movement_lines.append({
+            "item_id": mv.get("item_id"),
+            "movement_type": mv.get("movement_type"),
+            "quantity": mv.get("quantity"),
+            "value": mv.get("value"),
+        })
+
     return assemble_stock_register(
         as_of=as_of, items=[_response(i) for i in items],
         purchase_lines=purchase_lines, sales_lines=sales_lines,
         produced_lines=produced_lines, consumed_lines=consumed_lines,
+        movement_lines=movement_lines,
     )
 
 

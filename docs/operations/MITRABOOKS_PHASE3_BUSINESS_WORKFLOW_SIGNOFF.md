@@ -496,6 +496,24 @@ Result:
 - ADDED: credit/debit note detail panels expose stable printable regions plus local JSON export actions.
 - ADDED: local Playwright shell evidence for source selection, detail linkage text, and JSON export markers for credit and debit notes.
 
+### 2026-07-07 - Inventory Stock Movement Local Hardening
+
+Commands:
+
+```powershell
+python -m pytest tests\test_inventory.py tests\test_business_route_contract.py tests\test_mitrabooks_frontend_local_api.py -q
+python scripts\preflight.py --frontend
+```
+
+Result:
+
+- PASS: focused inventory, route-contract, and frontend local API tests.
+- PASS: mandatory frontend preflight, including full pytest, global Playwright smoke, MitraBooks shell smoke, and CA invite smoke.
+- ADDED: invoice settings now carry an explicit `inventory_valuation_policy` set to weighted-average periodic costing.
+- ADDED: tenant/app/accounting-entity-scoped stock issue and stock adjustment records.
+- ADDED: stock register valuation consumes stock issues and positive/negative adjustments while keeping financial posting in the closing-stock journal.
+- ADDED: local Playwright shell evidence for valuation policy display, stock adjustment entry, movement history, and adjusted closing-stock value.
+
 ## Remaining Gaps After This Gate
 
 - Local demo database cleanup may still be needed if the local tenant must return to a clean baseline; the destructive E2E reverses/cancels generated financial documents, but generated test parties may remain.
@@ -509,7 +527,7 @@ Result:
 - Approval depth still needs production operator review across tenant settings, opening balances, year-end, GST settlement, and sensitive exports.
 - Print/PDF templates need visual signoff for numbering, signatures, branding, and export governance.
 - CA practice operations and data-health/MIS need separate Phase 3-4 sub-gates.
-- Inventory still needs valuation policy settings, stock issue/adjustment workflows, real-stack/demo mutation, and production inventory signoff; the current gate closes local API plus mocked-shell item/register/closing-stock posting coverage.
+- Inventory local coverage now includes item/register/closing-stock posting, explicit weighted-average periodic valuation policy, and stock issue/adjustment records; real-stack/demo mutation, multi-location controls, and production inventory signoff remain open.
 - Banking/reconciliation still needs bank-only voucher posting from imported statement lines, bank book/cash book production polish, real-stack/demo mutation, live bank feed policy, and production banking signoff; the current gate closes local API plus mocked-shell CSV import/match/BRS/unmatch coverage.
 - Fixed assets still need dedicated disposal gain/loss account-code polish, real-stack/demo mutation, production asset audit reporting, and compliance signoff; the current gate closes local API plus mocked-shell register/depreciation/disposal coverage.
 - Dimensions still need real-stack/demo mutation and production signoff; the current gate closes sales invoice, purchase bill, credit note, and debit note line tagging plus document/header-level invoice, bill, note, voucher, report, and export coverage locally.

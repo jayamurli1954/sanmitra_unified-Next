@@ -89,6 +89,7 @@ async function mockVerifiedMitraBooksSession(page) {
       is_active: true,
     },
   ];
+  const inventoryMovements = [];
   const closingStockEntries = [];
   const fixedAssets = [
     {
@@ -771,12 +772,55 @@ async function mockVerifiedMitraBooksSession(page) {
     const active = inventoryItems.filter(row => row.is_active);
     return json(route, { inventory_enabled: true, items: active, count: active.length });
   });
+  await page.route('**/api/v1/business/inventory/policy**', route => json(route, {
+    inventory_enabled: true,
+    accounting_entity_id: 'primary',
+    valuation_policy: 'weighted_average_periodic',
+    display_name: 'Weighted average (periodic)',
+    supported_policies: ['weighted_average_periodic'],
+    policy_locked: true,
+    notes: [
+      'Purchases and positive adjustments build the weighted-average cost pool.',
+      'Stock issues and negative adjustments reduce quantity.',
+    ],
+  }));
+  await page.route('**/api/v1/business/inventory/movements**', async route => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      const payload = request.postDataJSON();
+      const item = inventoryItems.find(row => row.item_id === payload.item_id);
+      const movement = {
+        movement_id: `move-${inventoryMovements.length + 1}`,
+        movement_type: payload.movement_type || 'issue',
+        movement_date: payload.movement_date || '2026-06-30',
+        item_id: payload.item_id,
+        item_code: item?.code || payload.item_id,
+        item_name: item?.name || payload.item_id,
+        quantity: Number(payload.quantity || 0).toFixed(3),
+        value: Number(payload.value || 0).toFixed(2),
+        reason: payload.reason || '',
+        reference: payload.reference || '',
+      };
+      inventoryMovements.unshift(movement);
+      return json(route, movement);
+    }
+    return json(route, { items: inventoryMovements, count: inventoryMovements.length });
+  });
   await page.route('**/api/v1/business/inventory/stock-register**', route => {
     const asOf = new URL(route.request().url()).searchParams.get('as_of') || '2026-06-30';
+    const widgetMovements = inventoryMovements.filter(row => row.item_id === 'item-widget-a');
+    const adjustmentIn = widgetMovements
+      .filter(row => row.movement_type === 'adjustment' && Number(row.quantity) > 0)
+      .reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    const adjustmentOut = widgetMovements
+      .filter(row => row.movement_type === 'issue' || Number(row.quantity) < 0)
+      .reduce((sum, row) => sum + Math.abs(Number(row.quantity || 0)), 0);
+    const widgetClosingQty = 12 + adjustmentIn - adjustmentOut;
+    const widgetClosingValue = widgetClosingQty * 150;
     return json(route, {
       as_of: asOf,
       item_count: inventoryItems.filter(row => row.is_active).length,
-      total_closing_value: '1800.00',
+      total_closing_value: widgetClosingValue.toFixed(2),
       negative_stock_items: 0,
       untracked_purchase_value: '0.00',
       rows: inventoryItems.filter(row => row.is_active).map(row => ({
@@ -789,9 +833,11 @@ async function mockVerifiedMitraBooksSession(page) {
         produced_qty: '0.000',
         sold_qty: row.item_id === 'item-widget-a' ? '3.000' : '0.000',
         consumed_qty: '0.000',
-        closing_qty: row.item_id === 'item-widget-a' ? '12.000' : row.opening_qty,
+        adjustment_in_qty: row.item_id === 'item-widget-a' ? adjustmentIn.toFixed(3) : '0.000',
+        adjustment_out_qty: row.item_id === 'item-widget-a' ? adjustmentOut.toFixed(3) : '0.000',
+        closing_qty: row.item_id === 'item-widget-a' ? widgetClosingQty.toFixed(3) : row.opening_qty,
         avg_cost: row.item_id === 'item-widget-a' ? '150.00' : '0.00',
-        closing_value: row.item_id === 'item-widget-a' ? '1800.00' : '0.00',
+        closing_value: row.item_id === 'item-widget-a' ? widgetClosingValue.toFixed(2) : '0.00',
         negative_stock: false,
       })),
       notes: [
@@ -2097,11 +2143,23 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-business-action="item-create"]').click();
     await expect(page.locator('#login-status')).toContainText('Item created');
     await expect(page.locator('#business-report-printable')).toContainText('WIDGET-B');
+    await expect(page.locator('#business-report-printable')).toContainText('Weighted average (periodic)');
+    await page.locator('[data-stock-movement-form] select[name="movement_type"]').selectOption('adjustment');
+    await page.locator('[data-stock-movement-form] select[name="item_id"]').selectOption('item-widget-a');
+    await page.locator('[data-stock-movement-form] input[name="movement_date"]').fill('2026-06-20');
+    await page.locator('[data-stock-movement-form] input[name="quantity"]').fill('2');
+    await page.locator('[data-stock-movement-form] input[name="value"]').fill('300');
+    await page.locator('[data-stock-movement-form] input[name="reason"]').fill('Cycle count correction');
+    await page.locator('[data-business-action="stock-movement-create"]').click();
+    await expect(page.locator('#login-status')).toContainText('Stock movement recorded');
+    await expect(page.locator('#business-report-printable')).toContainText('Cycle count correction');
     await page.locator('[data-stock-asof]').fill('2026-06-30');
     await page.locator('[data-business-action="stock-register-load"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('Total closing stock');
+    await expect(page.locator('#business-report-printable')).toContainText('Adj in');
+    await expect(page.locator('#business-report-printable')).toContainText('2.000');
     await expect(page.locator('#business-report-printable')).toContainText('closing');
-    await expect(page.locator('#business-report-printable')).toContainText('1,800.00');
+    await expect(page.locator('#business-report-printable')).toContainText('2,100.00');
     await page.locator('[data-business-action="closing-stock-post"]').click();
     await expect(page.locator('#login-status')).toContainText('Closing stock posted');
     await expect(page.locator('#business-report-printable')).toContainText('Last closing-stock journal');

@@ -486,6 +486,7 @@ class InvoiceCustomFieldDef(BaseModel):
 # Supply (no tax collected), cannot claim ITC, and file CMP-08 / GSTR-4.
 GstRegistrationType = Literal["regular", "composition"]
 CompositionCategory = Literal["goods", "restaurant", "services"]
+InventoryValuationPolicy = Literal["weighted_average_periodic"]
 
 
 class InvoiceBrandingConfig(BaseModel):
@@ -513,6 +514,7 @@ class InvoiceSettings(BaseModel):
     # no stock screens anywhere — service businesses see no change. ON: item
     # master, stock register and the periodic closing-stock journal light up.
     inventory_enabled: bool = False
+    inventory_valuation_policy: InventoryValuationPolicy = "weighted_average_periodic"
     # Tenant-admin on/off switch for the HR / Payroll add-on. Second of the
     # two-level HR gate: effective only once the platform owner has provisioned
     # the add-on for the tenant (core_tenants.hr_addon_available).

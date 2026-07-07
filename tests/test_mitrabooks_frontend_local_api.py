@@ -364,6 +364,23 @@ def test_credit_debit_notes_enforce_source_documents_and_local_exports() -> None
     assert "debit_note_export" in app_source
 
 
+def test_inventory_policy_and_stock_movements_are_wired() -> None:
+    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+
+    assert "/api/v1/business/inventory/policy" in app_source
+    assert "/api/v1/business/inventory/movements" in app_source
+    assert "function loadInventoryPolicy()" in app_source
+    assert "function loadStockMovements()" in app_source
+    assert "function createStockMovementFromForm()" in app_source
+    assert 'data-inventory-valuation-policy' in app_source
+    assert "weighted_average_periodic" in app_source
+    assert 'data-stock-movement-form' in app_source
+    assert 'data-business-action="stock-movement-create"' in app_source
+    assert "adjustment_in_qty" in app_source
+    assert "adjustment_out_qty" in app_source
+    assert "stock_movement_create" in app_source
+
+
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")

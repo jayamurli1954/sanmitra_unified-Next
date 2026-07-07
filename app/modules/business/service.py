@@ -1883,7 +1883,7 @@ async def get_invoice_settings(
         stored = {
             k: v for k, v in row.items()
             if k in {"field_config", "numbering", "custom_fields", "branding", "inventory_enabled",
-                     "hr_enabled", "cost_centre_enabled", "manufacturing_enabled"}
+                     "inventory_valuation_policy", "hr_enabled", "cost_centre_enabled", "manufacturing_enabled"}
         }
         result = InvoiceSettings(**stored).model_dump()
     # Backfill any standard field missing from a partially-saved config so the
@@ -1942,6 +1942,7 @@ async def save_invoice_settings(
         custom_fields=payload.custom_fields,
         branding=payload.branding,
         inventory_enabled=payload.inventory_enabled,
+        inventory_valuation_policy=payload.inventory_valuation_policy,
         hr_enabled=payload.hr_enabled,
         cost_centre_enabled=payload.cost_centre_enabled,
         manufacturing_enabled=payload.manufacturing_enabled,

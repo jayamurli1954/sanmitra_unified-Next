@@ -118,6 +118,27 @@ def test_register_manufacturing_overconsumption_flags_negative():
     assert out["negative_stock_items"] == 1
 
 
+def test_register_includes_stock_issues_and_adjustments():
+    out = assemble_stock_register(
+        as_of=AS_OF,
+        items=[_item("i1", "WIDGET", opening_qty="10", opening_value="1000.00")],
+        purchase_lines=[],
+        sales_lines=[],
+        movement_lines=[
+            {"item_id": "i1", "movement_type": "adjustment", "quantity": "5", "value": "650.00"},
+            {"item_id": "i1", "movement_type": "issue", "quantity": "3", "value": "0"},
+            {"item_id": "i1", "movement_type": "adjustment", "quantity": "-2", "value": "0"},
+        ],
+    )
+
+    row = out["rows"][0]
+    assert row["adjustment_in_qty"] == "5.000"
+    assert row["adjustment_out_qty"] == "5.000"
+    assert row["avg_cost"] == "110.00"
+    assert row["closing_qty"] == "10.000"
+    assert row["closing_value"] == "1100.00"
+
+
 class _FakeCursor:
     def __init__(self, rows):
         self.rows = list(rows)
@@ -259,6 +280,52 @@ async def test_item_master_rejects_duplicate_code_and_bad_opening_stock(fake_inv
 
 
 @pytest.mark.asyncio
+async def test_stock_movement_crud_is_scoped_and_validated(fake_inventory_collections):
+    fake_inventory_collections[inventory.ITEMS_COLLECTION] = _FakeCollection([
+        {**_item("i1", "WIDGET"), "tenant_id": "tenant-a", "app_key": "mitrabooks",
+         "accounting_entity_id": "primary", "is_active": True},
+        {**_item("i2", "OTHER"), "tenant_id": "tenant-b", "app_key": "mitrabooks",
+         "accounting_entity_id": "primary", "is_active": True},
+    ])
+
+    created = await inventory.create_stock_movement(
+        tenant_id="tenant-a",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        payload={"movement_type": "issue", "item_id": "i1", "quantity": "2.5", "movement_date": "2026-06-15"},
+        created_by="tester",
+    )
+
+    assert created["movement_type"] == "issue"
+    assert created["quantity"] == "2.500"
+    scoped = await inventory.list_stock_movements(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary", as_of=AS_OF,
+    )
+    assert [row["movement_id"] for row in scoped["items"]] == [created["movement_id"]]
+    other_tenant = await inventory.list_stock_movements(
+        tenant_id="tenant-b", app_key="mitrabooks", accounting_entity_id="primary", as_of=AS_OF,
+    )
+    assert other_tenant["items"] == []
+
+    with pytest.raises(AccountingValidationError, match="quantity must be positive"):
+        await inventory.create_stock_movement(
+            tenant_id="tenant-a",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            payload={"movement_type": "issue", "item_id": "i1", "quantity": "0"},
+            created_by="tester",
+        )
+    with pytest.raises(AccountingValidationError, match="do not carry a value"):
+        await inventory.create_stock_movement(
+            tenant_id="tenant-a",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            payload={"movement_type": "adjustment", "item_id": "i1", "quantity": "-1", "value": "10"},
+            created_by="tester",
+        )
+
+
+@pytest.mark.asyncio
 async def test_build_stock_register_uses_only_posted_same_scope_documents(fake_inventory_collections):
     from app.modules.business.service import PURCHASE_BILLS_COLLECTION, SALES_INVOICES_COLLECTION
 
@@ -302,6 +369,16 @@ async def test_build_stock_register_uses_only_posted_same_scope_documents(fake_i
             "line_items": [{"item_id": "i1", "quantity": "99"}],
         },
     ])
+    fake_inventory_collections[inventory.MOVEMENTS_COLLECTION] = _FakeCollection([
+        {
+            "tenant_id": "tenant-a", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+            "movement_type": "issue", "movement_date": "2026-06-25", "item_id": "i1", "quantity": "2", "value": "0",
+        },
+        {
+            "tenant_id": "tenant-a", "app_key": "mitrabooks", "accounting_entity_id": "primary",
+            "movement_type": "adjustment", "movement_date": "2026-07-01", "item_id": "i1", "quantity": "99", "value": "9900",
+        },
+    ])
 
     out = await inventory.build_stock_register(
         tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary", as_of=AS_OF,
@@ -312,8 +389,9 @@ async def test_build_stock_register_uses_only_posted_same_scope_documents(fake_i
     assert row["code"] == "WIDGET"
     assert row["purchased_qty"] == "5.000"
     assert row["sold_qty"] == "4.000"
-    assert row["closing_qty"] == "11.000"
-    assert out["total_closing_value"] == "1283.37"
+    assert row["adjustment_out_qty"] == "2.000"
+    assert row["closing_qty"] == "9.000"
+    assert out["total_closing_value"] == "1050.03"
 
 
 @pytest.mark.asyncio
