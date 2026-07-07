@@ -133,6 +133,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const yearEndFinancialYear = `${yearEndBaseYear}-${String((yearEndBaseYear + 1) % 100).padStart(2, '0')}`;
     const yearEndActivityDate = `${yearEndBaseYear}-07-05`;
     const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
+    const inventoryEntity = `inventory-e2e-${runId}`;
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
 
@@ -178,6 +179,165 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(openingExport).toContain('11001');
     expect(openingExport).toContain(customer.party_code);
     expect(openingExport).not.toContain('Opening Balance Equity');
+
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/accounting/initialize-chart-of-accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': inventoryEntity }
+    );
+    const inventorySettings = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/invoice-settings?accounting_entity_id=${inventoryEntity}`
+    );
+    const inventorySettingsPayload = {
+      field_config: inventorySettings.field_config || {},
+      numbering: inventorySettings.numbering || {},
+      custom_fields: inventorySettings.custom_fields || [],
+      branding: inventorySettings.branding || {},
+      inventory_enabled: true,
+      inventory_valuation_policy: 'weighted_average_periodic',
+      hr_enabled: !!inventorySettings.hr_enabled,
+      cost_centre_enabled: !!inventorySettings.cost_centre_enabled,
+      manufacturing_enabled: !!inventorySettings.manufacturing_enabled,
+      accounting_entity_id: inventoryEntity,
+    };
+    const inventorySettingsSaved = await jsonRequest(
+      page,
+      token,
+      'PUT',
+      '/business/invoice-settings',
+      inventorySettingsPayload
+    );
+    expect(inventorySettingsSaved.inventory_enabled).toBe(true);
+
+    const inventoryPolicy = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/inventory/policy?accounting_entity_id=${inventoryEntity}`
+    );
+    expect(inventoryPolicy.inventory_enabled).toBe(true);
+    expect(inventoryPolicy.valuation_policy).toBe('weighted_average_periodic');
+
+    const inventoryItem = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/inventory/items?accounting_entity_id=${inventoryEntity}`,
+      {
+        code: `E2E-STK-${runId}`,
+        name: `Phase 3 E2E Stock ${runId}`,
+        uqc: 'NOS',
+        hsn_sac: '8471',
+        gst_rate: '18',
+        opening_qty: '10',
+        opening_value: '1000.00',
+      }
+    );
+    expect(inventoryItem.item_id).toBeTruthy();
+    expect(inventoryItem.code).toBe(`E2E-STK-${runId}`);
+
+    const inventoryAdjustment = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/inventory/movements?accounting_entity_id=${inventoryEntity}`,
+      {
+        movement_type: 'adjustment',
+        movement_date: e2eDate,
+        item_id: inventoryItem.item_id,
+        quantity: '2',
+        value: '300.00',
+        reason: `Phase 3 E2E cycle count ${runId}`,
+        reference: `INV-ADJ-${runId}`,
+      }
+    );
+    expect(inventoryAdjustment.movement_id).toBeTruthy();
+
+    const inventoryIssue = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/inventory/movements?accounting_entity_id=${inventoryEntity}`,
+      {
+        movement_type: 'issue',
+        movement_date: e2eDate,
+        item_id: inventoryItem.item_id,
+        quantity: '1',
+        reason: `Phase 3 E2E stock issue ${runId}`,
+        reference: `INV-ISS-${runId}`,
+      }
+    );
+    expect(inventoryIssue.movement_id).toBeTruthy();
+
+    const stockMovements = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/inventory/movements?accounting_entity_id=${inventoryEntity}&as_of=${e2eDate}`
+    );
+    expect(stockMovements.items?.some((movement) => movement.movement_id === inventoryAdjustment.movement_id)).toBeTruthy();
+    expect(stockMovements.items?.some((movement) => movement.movement_id === inventoryIssue.movement_id)).toBeTruthy();
+
+    const stockRegister = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/inventory/stock-register?accounting_entity_id=${inventoryEntity}&as_of=${e2eDate}`
+    );
+    const stockRow = (stockRegister.rows || []).find((row) => row.item_id === inventoryItem.item_id);
+    expect(stockRow?.closing_qty).toBe('11.000');
+    expect(decimalValue(stockRow?.closing_value)).toBeGreaterThan(0);
+    expect(stockRegister.negative_stock_items).toBe(0);
+    expect(decimalValue(stockRegister.total_closing_value)).toBeGreaterThan(0);
+
+    const closingStock = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/inventory/closing-stock?accounting_entity_id=${inventoryEntity}`,
+      { as_of: e2eDate },
+      { 'X-Idempotency-Key': `phase3-demo-closing-stock-${runId}` }
+    );
+    expect(closingStock.created).toBe(true);
+    expect(closingStock.journal_entry_id).toBeTruthy();
+    expect(closingStock.as_of).toBe(e2eDate);
+    expect(decimalValue(closingStock.closing_stock_value)).toBeGreaterThan(0);
+
+    const closingStockEntries = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/inventory/closing-stock/entries?accounting_entity_id=${inventoryEntity}`
+    );
+    expect(closingStockEntries.items?.some((entry) => entry.journal_entry_id === closingStock.journal_entry_id)).toBeTruthy();
+
+    const closingStockReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/accounting/journal/${closingStock.journal_entry_id}/reverse`,
+      { entry_date: e2eDate, reason: `Phase 3 E2E reverse closing stock ${runId}` },
+      {
+        'X-Accounting-Entity-ID': inventoryEntity,
+        'X-Idempotency-Key': `phase3-demo-closing-stock-reverse-${runId}`,
+      }
+    );
+    expect(closingStockReversed.original_journal_id).toBe(closingStock.journal_entry_id);
+    expect(closingStockReversed.id).toBeTruthy();
+
+    const inventoryItemDeactivated = await jsonRequest(
+      page,
+      token,
+      'PATCH',
+      `/business/inventory/items/${inventoryItem.item_id}/deactivate?accounting_entity_id=${inventoryEntity}`
+    );
+    expect(inventoryItemDeactivated.is_active).toBe(false);
 
     const voucherCreated = await jsonRequest(
       page,
