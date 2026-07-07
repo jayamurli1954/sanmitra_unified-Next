@@ -48,6 +48,17 @@ async function jsonRequest(page, token, method, path, body = undefined, extraHea
   return payload;
 }
 
+async function textRequest(page, token, method, path, body = undefined, extraHeaders = {}) {
+  const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
+    method,
+    headers: headers(token, extraHeaders),
+    data: body,
+  });
+  const payload = await response.text().catch(() => '');
+  expect(response.ok(), `${method} ${path} failed: ${response.status()} ${payload}`).toBeTruthy();
+  return payload;
+}
+
 async function approveIfNeeded(page, token, kind, id, doc) {
   if (doc.status !== 'pending_approval' && doc.approval_status !== 'pending_approval') {
     return doc;
@@ -115,8 +126,52 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const e2eQuarter = '2098-Q2';
     const e2eFinancialYear = '2098-99';
     const e2eReturnPeriod = '072098';
+    const openingAsOf = '2098-06-30';
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
+
+    const openingCsv = [
+      'account_code,account_name,party,debit,credit',
+      `11001,Cash in Hand,,2500.00,`,
+      `12001,Sundry Debtors,${customer.party_code},750.00,`,
+      `21001,Sundry Creditors,${vendor.party_code},,300.00`,
+    ].join('\n');
+    const openingPreview = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/opening-balances/preview?accounting_entity_id=primary',
+      { csv: openingCsv, as_of: openingAsOf }
+    );
+    expect(openingPreview.can_post).toBe(true);
+    expect(openingPreview.balancing_line?.account_code).toBe('31004');
+    expect(decimalValue(openingPreview.balancing_line?.credit)).toBeGreaterThan(0);
+    expect(openingPreview.lines?.some((line) => line.party_id === customer.party_id)).toBeTruthy();
+    expect(openingPreview.lines?.some((line) => line.party_id === vendor.party_id)).toBeTruthy();
+
+    const openingPost = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/opening-balances?accounting_entity_id=primary',
+      { csv: openingCsv, as_of: openingAsOf, allow_duplicate: true },
+      { 'X-Idempotency-Key': `phase3-demo-opening-balance-${runId}` }
+    );
+    expect(openingPost.created).toBe(true);
+    expect(openingPost.journal_entry_id).toBeTruthy();
+    expect(openingPost.line_count).toBeGreaterThanOrEqual(4);
+    expect(openingPost.balancing_line?.account_code).toBe('31004');
+
+    const openingExport = await textRequest(
+      page,
+      token,
+      'GET',
+      '/business/opening-balances/export?accounting_entity_id=primary'
+    );
+    expect(openingExport).toContain('account_code');
+    expect(openingExport).toContain('11001');
+    expect(openingExport).toContain(customer.party_code);
+    expect(openingExport).not.toContain('Opening Balance Equity');
 
     const voucherCreated = await jsonRequest(
       page,
@@ -286,6 +341,17 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(gstr2b.report_type).toBe('GSTR-2B-reconciliation');
     expect(gstr2b.summary?.matched_count).toBeGreaterThan(0);
     expect(decimalValue(gstr2b.summary?.matched_itc)).toBeGreaterThan(0);
+
+    const openingReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/accounting/journal/${openingPost.journal_entry_id}/reverse`,
+      { entry_date: e2eDate, reason: `Phase 3 E2E reverse opening balance ${runId}` },
+      { 'X-Idempotency-Key': `phase3-demo-opening-balance-reverse-${runId}` }
+    );
+    expect(openingReversed.original_journal_id).toBe(openingPost.journal_entry_id);
+    expect(openingReversed.id).toBeTruthy();
 
     const cmp08 = await jsonRequest(page, token, 'GET', `/business/returns/cmp-08?quarter=${e2eQuarter}`);
     expect(cmp08.return_type).toBe('CMP-08');
