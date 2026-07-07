@@ -92,6 +92,13 @@ Only after the demo tenant is reset/reseeded and the policy check passes, run:
 python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
 ```
 
+The destructive run now performs an auth/context precheck before the browser mutation. If it reports `Invalid credentials`, the document workflow has not started. Treat that as a staging seed or secret mismatch:
+
+- confirm the staging backend has `DEMO_MITRABOOKS_BOOTSTRAP=true`;
+- confirm `DEMO_MITRABOOKS_ADMIN_PASSWORD` is the same value as the operator shell's `E2E_USER_PASSWORD`;
+- reset or reseed `demo-mitrabooks-business`;
+- rerun the destructive command after the credential check is green.
+
 ## Reset Policy
 
 - Run destructive browser tests only against `demo-mitrabooks-business`.

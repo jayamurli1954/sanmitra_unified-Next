@@ -95,6 +95,8 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitr
 
 This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which signs in through the browser, confirms the tenant context is `demo-mitrabooks-business`, creates/reviews/posts the core business documents through the real backend, verifies accounting report availability, and reverses/cancels the generated documents.
 
+If the destructive run fails at `#login-status` with `Invalid credentials`, the destructive document workflow did not start. Realign the hosted demo seed or staging password secret, then rerun the same destructive command. Current production signoff must remain open until a fresh hosted run passes.
+
 ## Validation Matrix
 
 | Gate area | Evidence | Current status |
@@ -127,7 +129,7 @@ This executes `frontend/e2e/mitrabooks-realstack-destructive.spec.js`, which sig
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
-| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Passed on 2026-07-03 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
+| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; current 2026-07-07 rerun failed at deployed login with `Invalid credentials`, so staging demo credential/seed realignment and fresh pass evidence are required before production signoff is current. |
 
 ## Latest Run
 

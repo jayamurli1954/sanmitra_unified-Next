@@ -23,8 +23,11 @@ import shutil
 import subprocess
 import sys
 import time
+import json
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
@@ -58,6 +61,8 @@ DEMO_CONFIRM_ENV = "MITRABOOKS_DEMO_E2E_CONFIRM"
 DEMO_USER_ENV = "E2E_USER_EMAIL"
 DEMO_PASSWORD_ENV = "E2E_USER_PASSWORD"
 DEMO_RUN_ENV = "MITRABOOKS_RUN_DESTRUCTIVE_E2E"
+DEMO_API_BASE_ENV = "E2E_API_BASE_URL"
+DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com"
 
 
 def run(label: str, command: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> bool:
@@ -153,6 +158,113 @@ def validate_destructive_demo_policy(tenant_id: str, env: dict[str, str] | None 
     return (not errors, errors)
 
 
+def destructive_demo_api_base(staging_url: str, env: dict[str, str] | None = None) -> str:
+    """Resolve the API base used for the destructive deployed demo precheck."""
+    runtime_env = env or os.environ
+    explicit_api_base = str(runtime_env.get(DEMO_API_BASE_ENV, "")).strip().rstrip("/")
+    if explicit_api_base:
+        return explicit_api_base
+
+    parsed = urlparse(staging_url)
+    host = (parsed.hostname or "").lower()
+    if host in {"127.0.0.1", "localhost"} and parsed.port == 3300:
+        return f"{parsed.scheme or 'http'}://{host}:8000"
+    if host and host not in {"127.0.0.1", "localhost"}:
+        return DEFAULT_DEPLOYED_API_BASE_URL
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def _read_json_response(request: Request, timeout: int = 20) -> tuple[int, dict]:
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", 200))
+            body = response.read().decode("utf-8")
+            return status, json.loads(body or "{}")
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(body or "{}")
+        except json.JSONDecodeError:
+            payload = {"detail": body or exc.reason}
+        return int(exc.code), payload
+
+
+def _payload_detail(payload: dict) -> str:
+    detail = payload.get("detail") if isinstance(payload, dict) else None
+    if isinstance(detail, str):
+        return detail
+    if isinstance(detail, list):
+        return "; ".join(str(item) for item in detail)
+    return str(detail or payload or "unknown error")
+
+
+def validate_destructive_demo_auth_context(staging_url: str, tenant_id: str, env: dict[str, str] | None = None) -> tuple[bool, list[str]]:
+    """Verify deployed credentials before running destructive browser mutations."""
+    runtime_env = env or os.environ
+    api_base = destructive_demo_api_base(staging_url, runtime_env)
+    login_url = f"{api_base}/api/v1/auth/login"
+    email = str(runtime_env.get(DEMO_USER_ENV, "")).strip()
+    password = str(runtime_env.get(DEMO_PASSWORD_ENV, "")).strip()
+    errors: list[str] = []
+
+    login_body = json.dumps({"email": email, "password": password}).encode("utf-8")
+    login_request = Request(
+        login_url,
+        data=login_body,
+        headers={"Content-Type": "application/json", "X-App-Key": "mitrabooks"},
+        method="POST",
+    )
+    try:
+        status, payload = _read_json_response(login_request)
+    except (OSError, URLError) as exc:
+        return False, [f"Auth precheck could not reach {login_url}: {exc}."]
+
+    if status < 200 or status >= 300:
+        errors.append(
+            f"Auth precheck failed at {login_url}: HTTP {status} {_payload_detail(payload)}. "
+            "Reset/reseed the hosted demo admin or align E2E_USER_PASSWORD with the staging backend secret."
+        )
+        return False, errors
+
+    access_token = str(payload.get("access_token") or "").strip()
+    if not access_token:
+        return False, [f"Auth precheck at {login_url} did not return an access token."]
+
+    modules_request = Request(
+        f"{api_base}/api/v1/modules/me",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-App-Key": "mitrabooks",
+        },
+        method="GET",
+    )
+    try:
+        modules_status, modules_payload = _read_json_response(modules_request)
+    except (OSError, URLError) as exc:
+        return False, [f"Tenant context precheck could not reach {api_base}/api/v1/modules/me: {exc}."]
+
+    if modules_status < 200 or modules_status >= 300:
+        errors.append(
+            f"Tenant context precheck failed: HTTP {modules_status} {_payload_detail(modules_payload)}."
+        )
+        return False, errors
+
+    if str(modules_payload.get("tenant_id") or "").strip() != tenant_id:
+        errors.append(
+            f"Tenant context precheck resolved tenant {modules_payload.get('tenant_id')!r}; expected {tenant_id!r}."
+        )
+    if str(modules_payload.get("organization_type") or "").strip().upper() != "BUSINESS":
+        errors.append(
+            f"Tenant context precheck resolved organization_type {modules_payload.get('organization_type')!r}; expected 'BUSINESS'."
+        )
+    module_keys = {str(item.get("module_key") or "") for item in modules_payload.get("enabled_modules") or []}
+    missing = {"business", "accounting", "audit"} - module_keys
+    if missing:
+        errors.append(f"Tenant context precheck missing enabled module(s): {', '.join(sorted(missing))}.")
+    return (not errors, errors)
+
+
 def print_destructive_demo_policy(tenant_id: str) -> bool:
     ok, errors = validate_destructive_demo_policy(tenant_id)
     print("\n=== destructive deployed demo policy ===")
@@ -181,6 +293,14 @@ def run_destructive_demo_browser(staging_url: str, tenant_id: str) -> list[tuple
         for error in errors:
             print(f"  -> FAIL: {error}")
         return [("destructive deployed browser mutation policy", False)]
+
+    print("\n=== destructive deployed auth precheck ===")
+    auth_ok, auth_errors = validate_destructive_demo_auth_context(staging_url, tenant_id)
+    if not auth_ok:
+        for error in auth_errors:
+            print(f"  -> FAIL: {error}")
+        return [("destructive deployed auth precheck", False)]
+    print("  -> PASS (demo credentials resolve to the approved tenant/app context)")
 
     env = dict(os.environ)
     env["E2E_BASE_URL"] = staging_url.rstrip("/")

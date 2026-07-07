@@ -62,12 +62,13 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - ~~[x] Record pass evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.~~
 - [ ] Reseed or discard local demo data after mutation if the local database must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
-## Closed Hosted Gate: Phase 3 Business Workflow Mutation
+## Hosted Gate Evidence: Phase 3 Business Workflow Mutation
 
 - ~~[x] Confirm hosted staging backend has the MitraBooks demo admin secrets from `docs/operations/MITRABOOKS_ERP_DEMO_CREDENTIALS.md`.~~
 - ~~[x] Reset or reseed hosted `demo-mitrabooks-business` before destructive browser mutation.~~
 - ~~[x] Run the guarded policy check against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.~~
 - ~~[x] Run destructive hosted browser E2E only against `demo-mitrabooks-business`.~~
+- [ ] Reconfirm hosted staging destructive mutation after the 2026-07-07 credential drift: latest rerun reached deployed login and failed with `Invalid credentials`, so the demo admin password/seed must be realigned before production signoff can be treated as current.
 - [ ] Reseed or discard hosted staging demo data after mutation if the hosted demo tenant must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
 ## Phase 3 Open Gaps
