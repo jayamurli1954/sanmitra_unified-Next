@@ -452,6 +452,20 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     );
     expect((bankReconAfterChargePost.suggestions || []).some((suggestion) => suggestion.statement?.ref === `CHG-${runId}`)).toBeTruthy();
 
+    const bankCashBook = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/banking/books?from_date=${e2eDate}&to_date=${e2eDate}&book_type=bank&accounting_entity_id=primary`
+    );
+    expect(bankCashBook.book_type).toBe('bank');
+    expect((bankCashBook.accounts || []).some((account) =>
+      account.account_id === bankAccount.id
+      && (account.lines || []).some((line) => line.reference === `CHG-${runId}`)
+    )).toBeTruthy();
+    expect(decimalValue(bankCashBook.summary?.total_receipts)).toBeGreaterThan(0);
+    expect(decimalValue(bankCashBook.summary?.total_payments)).toBeGreaterThan(0);
+
     const bankMatch = await jsonRequest(
       page,
       token,

@@ -8334,6 +8334,7 @@ const BUSINESS_REPORT_TABS = [
   { id: "gst-returns", label: "GST Returns" },
   { id: "tds", label: "TDS / TCS" },
   { id: "bank-recon", label: "Bank Reconciliation" },
+  { id: "bank-cash-book", label: "Bank / Cash Book" },
   { id: "opening-yearend", label: "Opening & Year-End" },
   { id: "fixed-assets", label: "Fixed Assets" },
   { id: "dimensions", label: "Dimensions" },
@@ -8359,6 +8360,8 @@ let lastTdsRegister = null;
 let tdsQuarter = currentFyQuarter();
 let lastBankRecon = null;
 let bankReconAccountId = "";
+let lastBankCashBook = null;
+let bankCashBookType = "all";
 let lastPartyStatement = null;
 let statementPartyId = "";
 let statementKind = "receivable";
@@ -8606,6 +8609,8 @@ async function refreshCurrentBusinessReport() {
     if (!hasLoadedBusinessAccounts()) await loadBusinessAccounts();
     if (bankReconAccountId) await loadBankReconciliation(bankReconAccountId);
     else rerenderBusinessReportsIfActive();
+  } else if (tab === "bank-cash-book") {
+    await loadBankCashBook();
   } else if (tab === "statements") {
     if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) await loadBusinessParties();
     if (statementPartyId) await loadPartyStatement();
@@ -10530,6 +10535,17 @@ function bankAccountOptions() {
   return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("11"));
 }
 
+async function loadBankCashBook() {
+  const params = new URLSearchParams();
+  params.set("from_date", businessReportState.from_date);
+  params.set("to_date", businessReportState.to_date);
+  params.set("book_type", bankCashBookType);
+  const result = await apiRequest("mitrabooks", `/api/v1/business/banking/books?${params.toString()}`, { method: "GET" });
+  lastBankCashBook = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(apiOutput, { bank_cash_book: { ok: result.ok, status: result.status, book_type: bankCashBookType } });
+}
+
 async function loadBankReconciliation(accountId) {
   bankReconAccountId = String(accountId || bankReconAccountId || "");
   if (!bankReconAccountId) { rerenderBusinessReportsIfActive(); return; }
@@ -10596,6 +10612,60 @@ async function reverseBankReconMatch(matchId) {
     setLoginStatus("danger", "Unmatch failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
   }
   renderJson(apiOutput, { bank_recon_unmatch: { ok: result.ok, status: result.status } });
+}
+
+function renderBankCashBookPanel() {
+  const payload = lastBankCashBook;
+  if (!payload) return `<p class="muted">Loading bank and cash book...</p>`;
+  if (payload.ok === false) return reportUnavailablePanel("Bank / Cash Book", payload);
+  const s = payload.summary || {};
+  const num = (value) => escapeHtml(formatCurrency(Number(value || 0)));
+  const accountSections = (payload.accounts || []).map((account) => {
+    const rows = (account.lines || []).map((line) => `
+      <tr>
+        <td>${escapeHtml(line.entry_date || "")}</td>
+        <td>${escapeHtml(line.reference || "")}</td>
+        <td>${escapeHtml(line.description || "")}</td>
+        <td>${escapeHtml(line.source_document_type || "")}</td>
+        <td class="amount">${Number(line.receipt || 0) > 0 ? num(line.receipt) : ""}</td>
+        <td class="amount">${Number(line.payment || 0) > 0 ? num(line.payment) : ""}</td>
+        <td class="amount">${num(line.running_balance)}</td>
+      </tr>`).join("");
+    return `
+      <div class="table-preview compact-table">
+        <h4>${escapeHtml(`${account.account_code || ""} - ${account.account_name || ""}`)} <span class="pill">${escapeHtml(account.book_type || "")}</span></h4>
+        <div class="metric-grid three">
+          ${renderStatCards([
+            ["Opening", formatCurrency(account.opening_balance || 0), "before period"],
+            ["Receipts", formatCurrency(account.total_receipts || 0), "period debit"],
+            ["Payments", formatCurrency(account.total_payments || 0), "period credit"],
+          ])}
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Source</th><th class="amount">Receipt</th><th class="amount">Payment</th><th class="amount">Balance</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7" class="muted">No cash/bank movement in this period.</td></tr>`}</tbody>
+          <tfoot><tr><th colspan="6">Closing balance</th><th class="amount">${num(account.closing_balance)}</th></tr></tfoot>
+        </table>
+      </div>`;
+  }).join("");
+  return `
+    <div class="preview-heading compact">
+      <div>
+        <h4>Bank / Cash Book</h4>
+        <p>${escapeHtml(payload.from_date || businessReportState.from_date)} to ${escapeHtml(payload.to_date || businessReportState.to_date)} · ${escapeHtml(String(s.account_count || 0))} cash/bank account(s)</p>
+      </div>
+      <span class="pill">${escapeHtml(payload.book_type || bankCashBookType)}</span>
+    </div>
+    <div class="metric-grid four">
+      ${renderStatCards([
+        ["Opening", formatCurrency(s.opening_balance || 0), "before period"],
+        ["Receipts", formatCurrency(s.total_receipts || 0), "cash/bank debits"],
+        ["Payments", formatCurrency(s.total_payments || 0), "cash/bank credits"],
+        ["Closing", formatCurrency(s.closing_balance || 0), "opening + receipts - payments"],
+      ])}
+    </div>
+    ${accountSections || `<p class="muted">No cash or bank accounts found for this tenant and book type.</p>`}
+  `;
 }
 
 async function postBankReconStatementVoucher(statementLineId) {
@@ -11385,11 +11455,21 @@ async function loadBusinessGeneralLedger(accountId) {
 function reportDateControls() {
   const tab = businessReportState.tab;
   const asOfTabs = ["trial-balance", "balance-sheet", "receivables-payables", "aging"];
-  if (tab === "pnl") {
+  if (tab === "pnl" || tab === "bank-cash-book") {
+    const bookTypeControl = tab === "bank-cash-book"
+      ? `<label>Book
+          <select name="book_type">
+            <option value="all" ${bankCashBookType === "all" ? "selected" : ""}>All cash/bank</option>
+            <option value="cash" ${bankCashBookType === "cash" ? "selected" : ""}>Cash book</option>
+            <option value="bank" ${bankCashBookType === "bank" ? "selected" : ""}>Bank book</option>
+          </select>
+        </label>`
+      : "";
     return `
       <div class="report-date-controls" data-business-report-filters>
         <label>From <input type="date" name="from_date" value="${escapeHtml(businessReportState.from_date)}"></label>
         <label>To <input type="date" name="to_date" value="${escapeHtml(businessReportState.to_date)}"></label>
+        ${bookTypeControl}
         <button class="secondary" type="button" data-business-action="apply-report-filter">Apply</button>
       </div>
     `;
@@ -11636,6 +11716,8 @@ function renderBusinessReportsWorkspace() {
     body = renderTdsRegisterPanel();
   } else if (businessReportState.tab === "bank-recon") {
     body = renderBankReconPanel();
+  } else if (businessReportState.tab === "bank-cash-book") {
+    body = renderBankCashBookPanel();
   } else if (businessReportState.tab === "statements") {
     body = renderStatementsPanel();
   } else if (businessReportState.tab === "opening-yearend") {
@@ -12175,9 +12257,11 @@ function applyBusinessReportFilter() {
     const asOf = panel.querySelector("input[name='as_of']");
     const fromDate = panel.querySelector("input[name='from_date']");
     const toDate = panel.querySelector("input[name='to_date']");
+    const bookType = panel.querySelector("select[name='book_type']");
     if (asOf && asOf.value) businessReportState.as_of = asOf.value;
     if (fromDate && fromDate.value) businessReportState.from_date = fromDate.value;
     if (toDate && toDate.value) businessReportState.to_date = toDate.value;
+    if (bookType && bookType.value) bankCashBookType = bookType.value;
   }
   refreshCurrentBusinessReport();
 }

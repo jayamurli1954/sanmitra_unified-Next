@@ -1832,6 +1832,94 @@ async function mockVerifiedMitraBooksSession(page) {
 
     return json(route, bankReconPayload());
   });
+  await page.route('**/api/v1/business/banking/books**', async route => {
+    const url = new URL(route.request().url());
+    const bookType = url.searchParams.get('book_type') || 'all';
+    const accounts = [
+      {
+        account_id: 101,
+        account_code: '11001',
+        account_name: 'Cash in Hand',
+        book_type: 'cash',
+        opening_balance: '1000.00',
+        total_receipts: '500.00',
+        total_payments: '100.00',
+        closing_balance: '1400.00',
+        lines: [
+          {
+            line_id: 8101,
+            journal_id: 8201,
+            entry_date: '2026-06-10',
+            reference: 'CR-100',
+            description: 'Cash receipt',
+            source_document_type: 'voucher',
+            receipt: '500.00',
+            payment: '0.00',
+            running_balance: '1500.00',
+          },
+          {
+            line_id: 8102,
+            journal_id: 8202,
+            entry_date: '2026-06-11',
+            reference: 'CP-100',
+            description: 'Cash payment',
+            source_document_type: 'voucher',
+            receipt: '0.00',
+            payment: '100.00',
+            running_balance: '1400.00',
+          },
+        ],
+      },
+      {
+        account_id: 102,
+        account_code: '11010',
+        account_name: 'Bank Account',
+        book_type: 'bank',
+        opening_balance: '2000.00',
+        total_receipts: '2360.00',
+        total_payments: '118.00',
+        closing_balance: '4242.00',
+        lines: [
+          {
+            line_id: 8201,
+            journal_id: 8301,
+            entry_date: '2026-06-14',
+            reference: 'UTR-2360',
+            description: 'Receipt from Bengaluru Retail Customer',
+            source_document_type: 'voucher',
+            receipt: '2360.00',
+            payment: '0.00',
+            running_balance: '4360.00',
+          },
+          {
+            line_id: 8202,
+            journal_id: 8302,
+            entry_date: '2026-06-15',
+            reference: 'CHG-118',
+            description: 'BANK CHARGES',
+            source_document_type: 'voucher',
+            receipt: '0.00',
+            payment: '118.00',
+            running_balance: '4242.00',
+          },
+        ],
+      },
+    ].filter(account => bookType === 'all' || account.book_type === bookType);
+    const total = (field) => accounts.reduce((sum, row) => sum + Number(row[field] || 0), 0).toFixed(2);
+    return json(route, {
+      book_type: bookType,
+      from_date: url.searchParams.get('from_date') || '2026-04-01',
+      to_date: url.searchParams.get('to_date') || '2026-06-30',
+      summary: {
+        opening_balance: total('opening_balance'),
+        total_receipts: total('total_receipts'),
+        total_payments: total('total_payments'),
+        closing_balance: total('closing_balance'),
+        account_count: accounts.length,
+      },
+      accounts,
+    });
+  });
   await page.route('**/api/v1/accounting/reports/drilldown**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -2153,6 +2241,16 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-business-action="bankrecon-unmatch"][data-match-id="match-1"]').click();
     await expect(page.locator('#login-status')).toContainText('Unmatched');
     await expect(page.locator('#business-report-printable')).toContainText('Suggested matches');
+
+    await page.locator('[data-business-action="report-tab"][data-report-tab="bank-cash-book"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('Bank / Cash Book');
+    await expect(page.locator('#business-report-printable')).toContainText('11001 - Cash in Hand');
+    await expect(page.locator('#business-report-printable')).toContainText('11010 - Bank Account');
+    await page.locator('[data-business-report-filters] select[name="book_type"]').selectOption('bank');
+    await page.locator('[data-business-action="apply-report-filter"]').click();
+    await expect(page.locator('#business-report-printable')).toContainText('bank');
+    await expect(page.locator('#business-report-printable')).toContainText('UTR-2360');
+    await expect(page.locator('#business-report-printable')).toContainText('CHG-118');
 
     await page.locator('[data-business-action="report-tab"][data-report-tab="gst-settlement"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('Set-off for');
