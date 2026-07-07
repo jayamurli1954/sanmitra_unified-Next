@@ -115,8 +115,10 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     await jsonRequest(page, token, 'POST', '/accounting/initialize-chart-of-accounts');
     const accounts = await jsonRequest(page, token, 'GET', '/accounting/accounts');
     const asset = accounts.find((account) => account.type === 'asset' || account.account_type === 'asset');
+    const income = accounts.find((account) => account.code === '41001' || ['income', 'revenue'].includes(account.type || account.account_type));
     const credit = accounts.find((account) => ['income', 'revenue', 'liability'].includes(account.type || account.account_type));
     expect(asset?.id, 'asset account missing').toBeTruthy();
+    expect(income?.id, 'income account missing').toBeTruthy();
     expect(credit?.id, 'credit account missing').toBeTruthy();
 
     const runId = Date.now().toString().slice(-8);
@@ -127,6 +129,10 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const e2eFinancialYear = '2098-99';
     const e2eReturnPeriod = '072098';
     const openingAsOf = '2098-06-30';
+    const yearEndBaseYear = 2200 + (Number.parseInt(runId.slice(-5), 10) % 7000);
+    const yearEndFinancialYear = `${yearEndBaseYear}-${String((yearEndBaseYear + 1) % 100).padStart(2, '0')}`;
+    const yearEndActivityDate = `${yearEndBaseYear}-07-05`;
+    const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
 
@@ -193,6 +199,26 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const voucher = await approveIfNeeded(page, token, 'voucher', voucherCreated.voucher_id, voucherCreated);
     expect(voucher.status).toBe('posted');
     expect(voucher.journal_entry_id).toBeTruthy();
+
+    const yearEndSeedCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/vouchers',
+      {
+        voucher_type: 'journal',
+        entry_date: yearEndActivityDate,
+        amount: '345.00',
+        debit_account_id: asset.id,
+        credit_account_id: income.id,
+        description: `Phase 3 E2E year-end seed ${runId}`,
+        accounting_entity_id: 'primary',
+      },
+      { 'X-Idempotency-Key': `phase3-demo-year-end-seed-${runId}` }
+    );
+    const yearEndSeed = await approveIfNeeded(page, token, 'voucher', yearEndSeedCreated.voucher_id, yearEndSeedCreated);
+    expect(yearEndSeed.status).toBe('posted');
+    expect(yearEndSeed.journal_entry_id).toBeTruthy();
 
     const invoiceCreated = await jsonRequest(
       page,
@@ -353,6 +379,53 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(openingReversed.original_journal_id).toBe(openingPost.journal_entry_id);
     expect(openingReversed.id).toBeTruthy();
 
+    const yearEndPreview = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/year-end/preview?financial_year=${yearEndFinancialYear}&accounting_entity_id=primary`
+    );
+    expect(yearEndPreview.financial_year).toBe(yearEndFinancialYear);
+    expect(yearEndPreview.can_post).toBe(true);
+    expect(yearEndPreview.already_closed || []).toHaveLength(0);
+    expect(decimalValue(yearEndPreview.net_profit)).toBeGreaterThan(0);
+    expect(yearEndPreview.closing_lines?.some((line) => line.account_id === income.id)).toBeTruthy();
+    expect(yearEndPreview.retained_earnings?.account_code).toBe('31003');
+
+    const yearEndClose = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/year-end/close?accounting_entity_id=primary',
+      { financial_year: yearEndFinancialYear },
+      { 'X-Idempotency-Key': `phase3-demo-year-end-close-${runId}` }
+    );
+    expect(yearEndClose.created).toBe(true);
+    expect(yearEndClose.financial_year).toBe(yearEndFinancialYear);
+    expect(yearEndClose.entry_date).toBe(yearEndCloseDate);
+    expect(yearEndClose.journal_entry_id).toBeTruthy();
+    expect(yearEndClose.line_count).toBeGreaterThanOrEqual(2);
+
+    const yearEndClosedPreview = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/year-end/preview?financial_year=${yearEndFinancialYear}&accounting_entity_id=primary`
+    );
+    expect(yearEndClosedPreview.can_post).toBe(false);
+    expect(yearEndClosedPreview.already_closed?.some((entry) => entry.journal_entry_id === yearEndClose.journal_entry_id)).toBeTruthy();
+
+    const yearEndCloseReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/accounting/journal/${yearEndClose.journal_entry_id}/reverse`,
+      { entry_date: yearEndCloseDate, reason: `Phase 3 E2E reverse year-end close ${runId}` },
+      { 'X-Idempotency-Key': `phase3-demo-year-end-close-reverse-${runId}` }
+    );
+    expect(yearEndCloseReversed.original_journal_id).toBe(yearEndClose.journal_entry_id);
+    expect(yearEndCloseReversed.id).toBeTruthy();
+
     const cmp08 = await jsonRequest(page, token, 'GET', `/business/returns/cmp-08?quarter=${e2eQuarter}`);
     expect(cmp08.return_type).toBe('CMP-08');
     expect(cmp08.gstn_json?.ret_period).toBe(e2eQuarter);
@@ -447,6 +520,17 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     );
     expect(String(voucherReversed.status).toLowerCase()).toBe('reversed');
     expect(voucherReversed.reversal_journal_entry_id).toBeTruthy();
+
+    const yearEndSeedReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/vouchers/${yearEndSeed.voucher_id}/reverse`,
+      { reason: 'Phase 3 E2E reverse year-end seed voucher', reversal_date: yearEndCloseDate, accounting_entity_id: 'primary' },
+      { 'X-Idempotency-Key': `phase3-demo-year-end-seed-reverse-${runId}` }
+    );
+    expect(String(yearEndSeedReversed.status).toLowerCase()).toBe('reversed');
+    expect(yearEndSeedReversed.reversal_journal_entry_id).toBeTruthy();
 
     await page.locator('nav#nav a[data-business-workspace="reports"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Financial Reports');
