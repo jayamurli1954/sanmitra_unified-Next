@@ -115,9 +115,13 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     await jsonRequest(page, token, 'POST', '/accounting/initialize-chart-of-accounts');
     const accounts = await jsonRequest(page, token, 'GET', '/accounting/accounts');
     const asset = accounts.find((account) => account.type === 'asset' || account.account_type === 'asset');
+    const bankAccount = accounts.find((account) => account.code === '11010')
+      || accounts.find((account) => account.is_cash_bank && /bank/i.test(account.name || ''))
+      || accounts.find((account) => account.is_cash_bank);
     const income = accounts.find((account) => account.code === '41001' || ['income', 'revenue'].includes(account.type || account.account_type));
     const credit = accounts.find((account) => ['income', 'revenue', 'liability'].includes(account.type || account.account_type));
     expect(asset?.id, 'asset account missing').toBeTruthy();
+    expect(bankAccount?.id, 'bank/cash account missing').toBeTruthy();
     expect(income?.id, 'income account missing').toBeTruthy();
     expect(credit?.id, 'credit account missing').toBeTruthy();
 
@@ -134,6 +138,8 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const yearEndActivityDate = `${yearEndBaseYear}-07-05`;
     const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
     const inventoryEntity = `inventory-e2e-${runId}`;
+    const bankReconRef = `BR-${runId}`;
+    const bankReconAmount = '222.37';
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
 
@@ -359,6 +365,100 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const voucher = await approveIfNeeded(page, token, 'voucher', voucherCreated.voucher_id, voucherCreated);
     expect(voucher.status).toBe('posted');
     expect(voucher.journal_entry_id).toBeTruthy();
+
+    const bankReconVoucherCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/vouchers',
+      {
+        voucher_type: 'journal',
+        entry_date: e2eDate,
+        amount: bankReconAmount,
+        debit_account_id: bankAccount.id,
+        credit_account_id: income.id,
+        description: `Phase 3 E2E bank recon ${bankReconRef}`,
+        accounting_entity_id: 'primary',
+      },
+      { 'X-Idempotency-Key': `phase3-demo-bank-recon-voucher-${runId}` }
+    );
+    const bankReconVoucher = await approveIfNeeded(page, token, 'voucher', bankReconVoucherCreated.voucher_id, bankReconVoucherCreated);
+    expect(bankReconVoucher.status).toBe('posted');
+    expect(bankReconVoucher.journal_entry_id).toBeTruthy();
+
+    const bankStatementCsv = [
+      'Txn Date,Narration,Ref No,Withdrawal,Deposit,Balance',
+      `${e2eDate},Phase 3 E2E bank recon ${bankReconRef},${bankReconRef},,${bankReconAmount},${bankReconAmount}`,
+      `${e2eDate},Phase 3 E2E bank charges ${runId},CHG-${runId},12.00,,210.37`,
+    ].join('\n');
+    const bankStatementUpload = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/bank-recon/statement?account_id=${bankAccount.id}&accounting_entity_id=primary`,
+      { csv: bankStatementCsv }
+    );
+    expect(bankStatementUpload.inserted).toBeGreaterThanOrEqual(1);
+    expect(bankStatementUpload.parsed).toBe(2);
+    expect(bankStatementUpload.batch_id).toBeTruthy();
+
+    const bankReconBeforeMatch = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/bank-recon?account_id=${bankAccount.id}&as_of=${e2eDate}&accounting_entity_id=primary`
+    );
+    const bankSuggestion = (bankReconBeforeMatch.suggestions || []).find((suggestion) =>
+      suggestion.statement?.ref === bankReconRef
+      || String(suggestion.book?.description || '').includes(bankReconRef)
+      || String(suggestion.book?.reference || '').includes(bankReconRef)
+    );
+    expect(bankSuggestion?.statement_line_id, 'bank reconciliation suggestion missing').toBeTruthy();
+    expect(bankSuggestion?.line_id, 'bank reconciliation book line missing').toBeTruthy();
+    expect(bankSuggestion.side).toBe('deposit');
+    expect(decimalValue(bankSuggestion.amount)).toBe(decimalValue(bankReconAmount));
+    expect((bankReconBeforeMatch.in_bank_not_in_books || []).some((line) => line.ref === `CHG-${runId}`)).toBeTruthy();
+
+    const bankMatch = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bank-recon/match?accounting_entity_id=primary',
+      {
+        account_id: bankAccount.id,
+        statement_line_id: bankSuggestion.statement_line_id,
+        line_id: bankSuggestion.line_id,
+      }
+    );
+    expect(bankMatch.status).toBe('active');
+    expect(bankMatch.side).toBe('deposit');
+    expect(decimalValue(bankMatch.amount)).toBe(decimalValue(bankReconAmount));
+
+    const bankReconAfterMatch = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/bank-recon?account_id=${bankAccount.id}&as_of=${e2eDate}&accounting_entity_id=primary`
+    );
+    expect((bankReconAfterMatch.matched || []).some((match) => match.match_id === bankMatch.match_id)).toBeTruthy();
+    expect(bankReconAfterMatch.summary?.matched_count).toBeGreaterThanOrEqual(1);
+
+    const bankMatchReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/bank-recon/match/${bankMatch.match_id}/reverse?accounting_entity_id=primary`
+    );
+    expect(bankMatchReversed.status).toBe('reversed');
+
+    const bankReconAfterUnmatch = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/bank-recon?account_id=${bankAccount.id}&as_of=${e2eDate}&accounting_entity_id=primary`
+    );
+    expect((bankReconAfterUnmatch.matched || []).some((match) => match.match_id === bankMatch.match_id)).toBeFalsy();
+    expect((bankReconAfterUnmatch.suggestions || []).some((suggestion) => suggestion.statement?.ref === bankReconRef)).toBeTruthy();
 
     const yearEndSeedCreated = await jsonRequest(
       page,
@@ -680,6 +780,17 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     );
     expect(String(voucherReversed.status).toLowerCase()).toBe('reversed');
     expect(voucherReversed.reversal_journal_entry_id).toBeTruthy();
+
+    const bankReconVoucherReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/vouchers/${bankReconVoucher.voucher_id}/reverse`,
+      { reason: 'Phase 3 E2E reverse bank reconciliation voucher', reversal_date: e2eDate, accounting_entity_id: 'primary' },
+      { 'X-Idempotency-Key': `phase3-demo-bank-recon-voucher-reverse-${runId}` }
+    );
+    expect(String(bankReconVoucherReversed.status).toLowerCase()).toBe('reversed');
+    expect(bankReconVoucherReversed.reversal_journal_entry_id).toBeTruthy();
 
     const yearEndSeedReversed = await jsonRequest(
       page,
