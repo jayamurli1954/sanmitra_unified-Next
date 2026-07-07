@@ -128,7 +128,7 @@ If the destructive run fails at `#login-status` with `Invalid credentials`, the 
 | Tenant-scoped document upload inbox local hardening | Backend and mocked-shell coverage for tenant/app/book-scoped CA document metadata, stable client id linkage, attachment count evidence, manual review timestamps, upload/download audit events, client-book shell selection, file upload, and review advancement | Passed on 2026-07-05 |
 | Print/export guards | Report export and invoice/bill PDF guard tests | Passed on 2026-07-02 |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
-| Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 against `http://127.0.0.1:3300/mitrabooks-erp/` |
+| Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 and reconfirmed on 2026-07-07 against `http://127.0.0.1:3300/mitrabooks-erp/` after GST settlement persistence hardening |
 | Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; current 2026-07-07 rerun failed at deployed login with `Invalid credentials`, so staging demo credential/seed realignment and fresh pass evidence are required before production signoff is current. |
 
 ## Latest Run
@@ -192,6 +192,21 @@ Result:
 - PASS: read-only hosted MitraBooks shell smoke against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`, 3 checks.
 - PASS: destructive demo policy for `demo-mitrabooks-business`.
 - PASS: destructive hosted staging real-stack browser/API mutation. The E2E signed in as the MitraBooks demo admin, created a customer and vendor party, posted a voucher, sales invoice, purchase bill, credit note, and debit note, verified accounting report availability, and reversed/cancelled the generated financial documents.
+
+2026-07-07:
+
+```powershell
+python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1:3300/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
+```
+
+Result:
+
+- PASS: backend business workflow pytest group.
+- PASS: frontend business contract pytest group.
+- PASS: local Playwright MitraBooks shell workflow smoke, 3 checks.
+- PASS: read-only MitraBooks shell smoke against `http://127.0.0.1:3300/mitrabooks-erp/`, 3 checks.
+- PASS: destructive demo policy and auth precheck for `demo-mitrabooks-business`.
+- PASS: destructive local real-stack browser/API mutation. This reconfirms voucher, sales invoice, purchase bill, credit note, debit note, GST/TDS return/report checks, GST settlement post/reverse, period lock/unlock, and cleanup reversal/cancellation after the GST settlement Mongo upsert fix.
 
 2026-07-03:
 

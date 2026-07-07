@@ -60,6 +60,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 
 - ~~[x] Run destructive local browser E2E only against `demo-mitrabooks-business`: party -> voucher -> sales invoice -> purchase bill -> credit note -> debit note -> report/drill-down -> reverse/cancel.~~
 - ~~[x] Record pass evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.~~
+- ~~[x] Reconfirmed local destructive real-stack mutation on 2026-07-07 after GST settlement persistence hardening: backend workflow pytest, frontend contract pytest, local shell smoke, local read-only shell smoke, demo policy, auth precheck, and destructive browser/API mutation all passed.~~
 - [ ] Reseed or discard local demo data after mutation if the local database must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
 ## Hosted Gate Evidence: Phase 3 Business Workflow Mutation
