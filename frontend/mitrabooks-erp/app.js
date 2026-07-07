@@ -10598,8 +10598,45 @@ async function reverseBankReconMatch(matchId) {
   renderJson(apiOutput, { bank_recon_unmatch: { ok: result.ok, status: result.status } });
 }
 
+async function postBankReconStatementVoucher(statementLineId) {
+  const offsetAccountId = document.querySelector(`[data-bankrecon-offset="${CSS.escape(statementLineId)}"]`)?.value || "";
+  if (!bankReconAccountId || !statementLineId) {
+    setLoginStatus("warn", "Pick a bank line", "Load bank reconciliation and choose a bank-only statement line.");
+    return;
+  }
+  if (!offsetAccountId) {
+    setLoginStatus("warn", "Pick an offset account", "Choose the expense, income, or clearing account for this bank-only line.");
+    return;
+  }
+  const line = (lastBankRecon?.in_bank_not_in_books || []).find((item) => item.statement_line_id === statementLineId) || {};
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bank-recon/statement-voucher", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": `bank-statement-voucher:${statementLineId}:${offsetAccountId}` },
+    body: JSON.stringify({
+      account_id: Number(bankReconAccountId),
+      statement_line_id: statementLineId,
+      offset_account_id: Number(offsetAccountId),
+      description: line.description || "Bank statement adjustment",
+      reference: line.ref || undefined,
+      approve: true,
+    }),
+  });
+  if (result.ok) {
+    const voucher = result.payload?.voucher || {};
+    setLoginStatus("ok", "Voucher posted", `${voucher.voucher_number || voucher.voucher_id || "Voucher"} posted from the bank statement line.`);
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Voucher posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(apiOutput, { bank_statement_voucher: { ok: result.ok, status: result.status, statement_line_id: statementLineId } });
+}
+
 function renderBankReconPanel() {
   const accounts = bankAccountOptions();
+  const offsetOptions = businessAccountsForSelection()
+    .filter((account) => String(account.id) !== String(bankReconAccountId))
+    .map((account) => `<option value="${escapeHtml(String(account.id))}">${escapeHtml(`${account.code} - ${account.name}`)}</option>`)
+    .join("");
   const options = `<option value="">Select bank account</option>` + accounts.map((a) =>
     `<option value="${escapeHtml(String(a.id))}" ${String(a.id) === String(bankReconAccountId) ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("");
   const controls = `
@@ -10648,6 +10685,13 @@ function renderBankReconPanel() {
       <td>${escapeHtml(l.ref || "")}</td>
       <td class="amount">${Number(l.deposit || 0) > 0 ? num(l.deposit) : ""}</td>
       <td class="amount">${Number(l.withdrawal || 0) > 0 ? num(l.withdrawal) : ""}</td>
+      <td>
+        <select data-bankrecon-offset="${escapeHtml(l.statement_line_id || "")}">
+          <option value="">Offset account</option>
+          ${offsetOptions}
+        </select>
+      </td>
+      <td><button class="secondary" type="button" data-business-action="bankrecon-post-voucher" data-stmt-id="${escapeHtml(l.statement_line_id || "")}">Post voucher</button></td>
     </tr>`).join("");
 
   const bookOnlyRows = (r.in_books_not_in_bank || []).map((l) => `
@@ -10687,8 +10731,8 @@ function renderBankReconPanel() {
     <div class="table-preview compact-table">
       <h4>In bank, not in books (${escapeHtml(String((r.in_bank_not_in_books || []).length))}) — post these (charges, interest, direct credits)</h4>
       <table>
-        <thead><tr><th>Date</th><th>Narration</th><th>Ref</th><th class="amount">Deposit</th><th class="amount">Withdrawal</th></tr></thead>
-        <tbody>${bankOnlyRows || `<tr><td colspan="5" class="muted">Every bank line is matched or suggested.</td></tr>`}</tbody>
+        <thead><tr><th>Date</th><th>Narration</th><th>Ref</th><th class="amount">Deposit</th><th class="amount">Withdrawal</th><th>Offset</th><th></th></tr></thead>
+        <tbody>${bankOnlyRows || `<tr><td colspan="7" class="muted">Every bank line is matched or suggested.</td></tr>`}</tbody>
       </table>
     </div>
 
@@ -18935,6 +18979,8 @@ dashboardPreview.addEventListener("click", async (event) => {
     confirmBankReconMatch(button.getAttribute("data-stmt-id") || "", button.getAttribute("data-line-id") || "");
   } else if (businessAction === "bankrecon-unmatch") {
     reverseBankReconMatch(button.getAttribute("data-match-id") || "");
+  } else if (businessAction === "bankrecon-post-voucher") {
+    postBankReconStatementVoucher(button.getAttribute("data-stmt-id") || "");
   } else if (businessAction === "stmt-load") {
     loadPartyStatement();
   } else if (businessAction === "dunning-record") {

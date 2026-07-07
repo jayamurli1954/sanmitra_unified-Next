@@ -29,6 +29,8 @@ from app.modules.business.schemas import (
     BusinessAdminSettingsUpdateRequest,
     ApprovalQueueResponse,
     ApprovalReviewRequest,
+    BankStatementVoucherRequest,
+    BankStatementVoucherResponse,
     BillPaymentUpdateRequest,
     BusinessDocumentAttachmentListResponse,
     BusinessDocumentAttachmentResponse,
@@ -3168,6 +3170,48 @@ async def business_bank_recon_unmatch(
             accounting_entity_id=accounting_entity_id,
             match_id=match_id,
             reversed_by=_created_by(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/bank-recon/statement-voucher", response_model=BankStatementVoucherResponse)
+async def business_bank_recon_statement_voucher(
+    payload: BankStatementVoucherRequest,
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Create a voucher for a bank-only statement line, such as bank charges,
+    interest, or direct credits. The accounting entry is posted only through
+    the normal typed-voucher review path."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation statement voucher",
+    )
+    try:
+        return await bank_recon.post_bank_statement_line_voucher(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=payload.accounting_entity_id,
+            account_id=payload.account_id,
+            statement_line_id=payload.statement_line_id,
+            offset_account_id=payload.offset_account_id,
+            offset_account_code=payload.offset_account_code,
+            description=payload.description,
+            reference=payload.reference,
+            approve=payload.approve,
+            created_by=_created_by(current_user),
+            idempotency_key=x_idempotency_key,
         )
     except AccountingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

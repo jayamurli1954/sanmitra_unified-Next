@@ -1775,6 +1775,36 @@ async function mockVerifiedMitraBooksSession(page) {
       return json(route, { inserted: 2, skipped_duplicates: 0, parsed: 2, batch_id: 'bank-batch-1' });
     }
 
+    if (request.method() === 'POST' && path.endsWith('/statement-voucher')) {
+      const payload = request.postDataJSON();
+      return json(route, {
+        statement_line_id: payload.statement_line_id,
+        posting_status: 'posted',
+        voucher: {
+          voucher_id: 'bank-voucher-1',
+          voucher_number: 'JV-2026-000045',
+          voucher_type: 'journal',
+          tenant_id: 'demo-mitrabooks-business',
+          app_key: 'mitrabooks',
+          accounting_entity_id: 'primary',
+          amount: '118.00',
+          entry_date: '2026-06-15',
+          debit_account_id: Number(payload.offset_account_id),
+          credit_account_id: Number(payload.account_id),
+          description: 'BANK CHARGES',
+          reference: 'CHG-118',
+          status: 'posted',
+          approval_required: true,
+          approval_status: 'approved',
+          journal_entry_id: 7201,
+          created: true,
+          created_by: 'tester',
+          created_at: '2026-06-15T00:00:00+00:00',
+          updated_at: '2026-06-15T00:00:00+00:00',
+        },
+      });
+    }
+
     if (request.method() === 'POST' && path.includes('/match/') && path.endsWith('/reverse')) {
       const matchId = path.split('/').at(-2);
       const match = bankReconMatches.find(item => item.match_id === matchId);
@@ -2113,6 +2143,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Suggested matches');
     await expect(page.locator('#business-report-printable')).toContainText('UTR-2360');
     await expect(page.locator('#business-report-printable')).toContainText('BANK CHARGES');
+    await page.locator('[data-bankrecon-offset="stmt-2"]').selectOption('301');
+    await page.locator('[data-business-action="bankrecon-post-voucher"][data-stmt-id="stmt-2"]').click();
+    await expect(page.locator('#login-status')).toContainText('Voucher posted');
     await page.locator('[data-business-action="bankrecon-match"][data-stmt-id="stmt-1"]').click();
     await expect(page.locator('#login-status')).toContainText('Matched');
     await expect(page.locator('#business-report-printable')).toContainText('Matched (1)');

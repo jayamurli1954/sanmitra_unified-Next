@@ -119,10 +119,14 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       || accounts.find((account) => account.is_cash_bank && /bank/i.test(account.name || ''))
       || accounts.find((account) => account.is_cash_bank);
     const income = accounts.find((account) => account.code === '41001' || ['income', 'revenue'].includes(account.type || account.account_type));
+    const expense = accounts.find((account) => account.code === '54001')
+      || accounts.find((account) => account.code === '51001')
+      || accounts.find((account) => (account.type || account.account_type) === 'expense');
     const credit = accounts.find((account) => ['income', 'revenue', 'liability'].includes(account.type || account.account_type));
     expect(asset?.id, 'asset account missing').toBeTruthy();
     expect(bankAccount?.id, 'bank/cash account missing').toBeTruthy();
     expect(income?.id, 'income account missing').toBeTruthy();
+    expect(expense?.id, 'expense account missing').toBeTruthy();
     expect(credit?.id, 'credit account missing').toBeTruthy();
 
     const runId = Date.now().toString().slice(-8);
@@ -417,7 +421,36 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(bankSuggestion?.line_id, 'bank reconciliation book line missing').toBeTruthy();
     expect(bankSuggestion.side).toBe('deposit');
     expect(decimalValue(bankSuggestion.amount)).toBe(decimalValue(bankReconAmount));
-    expect((bankReconBeforeMatch.in_bank_not_in_books || []).some((line) => line.ref === `CHG-${runId}`)).toBeTruthy();
+    const bankChargeLine = (bankReconBeforeMatch.in_bank_not_in_books || []).find((line) => line.ref === `CHG-${runId}`);
+    expect(bankChargeLine?.statement_line_id, 'bank-only charge line missing').toBeTruthy();
+
+    const bankChargeVoucherPost = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bank-recon/statement-voucher',
+      {
+        account_id: bankAccount.id,
+        statement_line_id: bankChargeLine.statement_line_id,
+        offset_account_id: expense.id,
+        description: `Phase 3 E2E bank charges ${runId}`,
+        reference: `CHG-${runId}`,
+        approve: true,
+        accounting_entity_id: 'primary',
+      },
+      { 'X-Idempotency-Key': `phase3-demo-bank-charge-voucher-${runId}` }
+    );
+    expect(bankChargeVoucherPost.posting_status).toBe('posted');
+    expect(bankChargeVoucherPost.voucher?.voucher_id).toBeTruthy();
+    expect(bankChargeVoucherPost.voucher?.journal_entry_id).toBeTruthy();
+
+    const bankReconAfterChargePost = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/bank-recon?account_id=${bankAccount.id}&as_of=${e2eDate}&accounting_entity_id=primary`
+    );
+    expect((bankReconAfterChargePost.suggestions || []).some((suggestion) => suggestion.statement?.ref === `CHG-${runId}`)).toBeTruthy();
 
     const bankMatch = await jsonRequest(
       page,
@@ -791,6 +824,17 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     );
     expect(String(bankReconVoucherReversed.status).toLowerCase()).toBe('reversed');
     expect(bankReconVoucherReversed.reversal_journal_entry_id).toBeTruthy();
+
+    const bankChargeVoucherReversed = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/vouchers/${bankChargeVoucherPost.voucher.voucher_id}/reverse`,
+      { reason: 'Phase 3 E2E reverse bank charge voucher', reversal_date: e2eDate, accounting_entity_id: 'primary' },
+      { 'X-Idempotency-Key': `phase3-demo-bank-charge-voucher-reverse-${runId}` }
+    );
+    expect(String(bankChargeVoucherReversed.status).toLowerCase()).toBe('reversed');
+    expect(bankChargeVoucherReversed.reversal_journal_entry_id).toBeTruthy();
 
     const yearEndSeedReversed = await jsonRequest(
       page,

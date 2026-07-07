@@ -559,3 +559,111 @@ async def reverse_bank_recon_match(
         {"$set": {"status": "reversed", "reversed_by": reversed_by, "reversed_at": _now()}},
     )
     return {"match_id": match_id, "status": "reversed"}
+
+
+async def post_bank_statement_line_voucher(
+    session,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    account_id: int,
+    statement_line_id: str,
+    offset_account_id: int | None,
+    offset_account_code: str | None,
+    description: str | None,
+    reference: str | None,
+    approve: bool,
+    created_by: str,
+    idempotency_key: str | None,
+) -> dict:
+    """Create a typed voucher for a bank-only statement line.
+
+    A statement withdrawal credits the bank account and debits the chosen
+    offset account. A statement deposit debits the bank account and credits
+    the chosen offset account. Posting is still routed through the normal
+    voucher approval path; this function never writes journal rows directly.
+    """
+    from app.accounting.service import AccountingValidationError
+    from app.db.mongo import get_collection
+    from app.modules.business.schemas import ApprovalReviewRequest, TypedVoucherCreateRequest
+    from app.modules.business.service import post_typed_voucher, review_typed_voucher
+
+    if not offset_account_id and not offset_account_code:
+        raise AccountingValidationError("Offset account is required")
+
+    scope = _scope(tenant_id, app_key, accounting_entity_id)
+    stmt_col = get_collection(BANK_STATEMENT_LINES_COLLECTION)
+    match_col = get_collection(BANK_RECON_MATCHES_COLLECTION)
+    stmt_line = await stmt_col.find_one({**scope, "account_id": account_id, "statement_line_id": statement_line_id})
+    if stmt_line is None:
+        raise AccountingValidationError("Statement line not found")
+    if await match_col.find_one({**scope, "statement_line_id": statement_line_id, "status": "active"}):
+        raise AccountingValidationError("Statement line is already matched")
+    if stmt_line.get("posted_voucher_id"):
+        raise AccountingValidationError("Statement line already has a voucher")
+
+    side, amount = _statement_side_amount(stmt_line)
+    if amount <= 0:
+        raise AccountingValidationError("Statement line has no amount to post")
+    if side == "deposit":
+        debit_account_id = account_id
+        credit_account_id = offset_account_id
+        credit_account_code = offset_account_code
+        debit_account_code = None
+    else:
+        debit_account_id = offset_account_id
+        credit_account_id = account_id
+        debit_account_code = offset_account_code
+        credit_account_code = None
+
+    txn_date = date.fromisoformat(str(stmt_line.get("txn_date") or "")[:10])
+    line_ref = str(reference or stmt_line.get("ref") or f"BANK-{statement_line_id}").strip()
+    narration = str(description or stmt_line.get("description") or "Bank statement line").strip()
+    voucher = await post_typed_voucher(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        created_by=created_by,
+        payload=TypedVoucherCreateRequest(
+            voucher_type="journal",
+            entry_date=txn_date,
+            amount=amount,
+            debit_account_id=debit_account_id,
+            credit_account_id=credit_account_id,
+            debit_account_code=debit_account_code,
+            credit_account_code=credit_account_code,
+            description=narration,
+            reference=line_ref,
+            accounting_entity_id=accounting_entity_id,
+        ),
+        idempotency_key=idempotency_key or f"bank-statement-voucher:{statement_line_id}",
+    )
+    if approve and str(voucher.get("status") or "").lower() != "posted":
+        voucher = await review_typed_voucher(
+            session=session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            voucher_id=voucher["voucher_id"],
+            reviewed_by=created_by,
+            payload=ApprovalReviewRequest(
+                approve=True,
+                notes=f"Posted from bank statement line {statement_line_id}",
+                accounting_entity_id=accounting_entity_id,
+            ),
+        )
+
+    posting_status = "posted" if str(voucher.get("status") or "").lower() == "posted" else "pending_approval"
+    await stmt_col.update_one(
+        {**scope, "account_id": account_id, "statement_line_id": statement_line_id, "posted_voucher_id": {"$exists": False}},
+        {
+            "$set": {
+                "posted_voucher_id": voucher.get("voucher_id"),
+                "posted_journal_entry_id": voucher.get("journal_entry_id"),
+                "posting_status": posting_status,
+                "posted_by": created_by,
+                "posted_at": _now(),
+            }
+        },
+    )
+    return {"statement_line_id": statement_line_id, "posting_status": posting_status, "voucher": voucher}

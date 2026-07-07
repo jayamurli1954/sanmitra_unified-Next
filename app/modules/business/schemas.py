@@ -145,6 +145,26 @@ class TypedVoucherListResponse(BaseModel):
     total: int
 
 
+class BankStatementVoucherRequest(BaseModel):
+    statement_line_id: str = Field(..., min_length=1, max_length=80)
+    account_id: int = Field(..., ge=1, description="Bank or cash account linked to the imported statement.")
+    offset_account_id: int | None = Field(default=None, ge=1)
+    offset_account_code: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=300)
+    reference: str | None = Field(default=None, max_length=120)
+    approve: bool = Field(
+        default=False,
+        description="When true, approve/post the generated voucher through the normal voucher review path.",
+    )
+    accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
+
+
+class BankStatementVoucherResponse(BaseModel):
+    statement_line_id: str
+    posting_status: str
+    voucher: TypedVoucherResponse
+
+
 class CaDocumentCreateRequest(BaseModel):
     client_id: str | None = Field(default=None, max_length=80)
     client_name: str = Field(..., min_length=1, max_length=160)

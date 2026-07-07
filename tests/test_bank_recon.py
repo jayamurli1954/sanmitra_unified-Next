@@ -407,3 +407,181 @@ async def test_reverse_bank_recon_match_is_soft_and_scoped(fake_bank_collections
             tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
             match_id="m2", reversed_by="tester",
         )
+
+
+@pytest.mark.asyncio
+async def test_post_bank_statement_line_voucher_posts_with_correct_direction_and_marks_line(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "stmt-charge",
+            "txn_date": "2026-04-02", "description": "BANK CHARGES", "ref": "CHG-118",
+            "withdrawal": "118.00", "deposit": "0.00",
+        }
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    calls = {}
+
+    async def fake_post_typed_voucher(session, *, tenant_id, app_key, created_by, payload, idempotency_key):
+        calls["post"] = {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "created_by": created_by,
+            "payload": payload,
+            "idempotency_key": idempotency_key,
+        }
+        return {
+            "voucher_id": "voucher-1",
+            "voucher_number": "JV-1",
+            "voucher_type": "journal",
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": payload.accounting_entity_id,
+            "amount": payload.amount,
+            "entry_date": payload.entry_date,
+            "debit_account_id": 51001,
+            "credit_account_id": 102,
+            "description": payload.description,
+            "reference": payload.reference,
+            "status": "pending_approval",
+            "created": True,
+            "created_by": created_by,
+            "created_at": "2026-04-02T00:00:00+00:00",
+            "updated_at": "2026-04-02T00:00:00+00:00",
+        }
+
+    async def fake_review_typed_voucher(session, *, tenant_id, app_key, voucher_id, reviewed_by, payload):
+        calls["review"] = {
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "voucher_id": voucher_id,
+            "reviewed_by": reviewed_by,
+            "payload": payload,
+        }
+        voucher = dict(calls["post_result"])
+        voucher.update({"status": "posted", "journal_entry_id": 9001})
+        return voucher
+
+    async def fake_post_and_store(*args, **kwargs):
+        result = await fake_post_typed_voucher(*args, **kwargs)
+        calls["post_result"] = result
+        return result
+
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", fake_post_and_store)
+    monkeypatch.setattr("app.modules.business.service.review_typed_voucher", fake_review_typed_voucher)
+
+    out = await bank_recon.post_bank_statement_line_voucher(
+        object(),
+        tenant_id="tenant-a",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        account_id=102,
+        statement_line_id="stmt-charge",
+        offset_account_id=51001,
+        offset_account_code=None,
+        description=None,
+        reference=None,
+        approve=True,
+        created_by="tester",
+        idempotency_key="bank-charge-key",
+    )
+
+    payload = calls["post"]["payload"]
+    assert payload.voucher_type == "journal"
+    assert payload.entry_date.isoformat() == "2026-04-02"
+    assert payload.amount == Decimal("118.00")
+    assert payload.debit_account_id == 51001
+    assert payload.credit_account_id == 102
+    assert payload.reference == "CHG-118"
+    assert calls["post"]["idempotency_key"] == "bank-charge-key"
+    assert calls["review"]["payload"].approve is True
+    assert out["posting_status"] == "posted"
+    assert out["voucher"]["journal_entry_id"] == 9001
+    stored = fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows[0]
+    assert stored["posted_voucher_id"] == "voucher-1"
+    assert stored["posted_journal_entry_id"] == 9001
+    assert stored["posting_status"] == "posted"
+
+
+@pytest.mark.asyncio
+async def test_post_bank_statement_line_voucher_deposit_credits_offset_and_rejects_duplicates(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "stmt-interest",
+            "txn_date": "2026-04-03", "description": "BANK INTEREST", "ref": "INT-1",
+            "withdrawal": "0.00", "deposit": "250.00",
+        },
+        {
+            **_scope(), "account_id": 102, "statement_line_id": "stmt-posted",
+            "txn_date": "2026-04-03", "withdrawal": "0.00", "deposit": "25.00",
+            "posted_voucher_id": "existing-voucher",
+        },
+        {
+            **_scope("tenant-b"), "account_id": 102, "statement_line_id": "stmt-other",
+            "txn_date": "2026-04-03", "withdrawal": "0.00", "deposit": "250.00",
+        },
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "stmt-matched", "status": "active"}
+    ])
+    calls = {}
+
+    async def fake_post_typed_voucher(session, *, tenant_id, app_key, created_by, payload, idempotency_key):
+        calls["payload"] = payload
+        return {
+            "voucher_id": "voucher-interest",
+            "voucher_number": "JV-2",
+            "voucher_type": "journal",
+            "tenant_id": tenant_id,
+            "app_key": app_key,
+            "accounting_entity_id": payload.accounting_entity_id,
+            "amount": payload.amount,
+            "entry_date": payload.entry_date,
+            "debit_account_id": 102,
+            "credit_account_id": 41001,
+            "description": payload.description,
+            "reference": payload.reference,
+            "status": "pending_approval",
+            "created": True,
+            "created_by": created_by,
+            "created_at": "2026-04-03T00:00:00+00:00",
+            "updated_at": "2026-04-03T00:00:00+00:00",
+        }
+
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", fake_post_typed_voucher)
+
+    out = await bank_recon.post_bank_statement_line_voucher(
+        object(),
+        tenant_id="tenant-a",
+        app_key="mitrabooks",
+        accounting_entity_id="primary",
+        account_id=102,
+        statement_line_id="stmt-interest",
+        offset_account_id=41001,
+        offset_account_code=None,
+        description="Interest income from bank statement",
+        reference=None,
+        approve=False,
+        created_by="tester",
+        idempotency_key=None,
+    )
+
+    assert calls["payload"].debit_account_id == 102
+    assert calls["payload"].credit_account_id == 41001
+    assert calls["payload"].description == "Interest income from bank statement"
+    assert out["posting_status"] == "pending_approval"
+
+    with pytest.raises(AccountingValidationError, match="already has a voucher"):
+        await bank_recon.post_bank_statement_line_voucher(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="stmt-posted", offset_account_id=41001,
+            offset_account_code=None, description=None, reference=None, approve=False,
+            created_by="tester", idempotency_key=None,
+        )
+
+    with pytest.raises(AccountingValidationError, match="Statement line not found"):
+        await bank_recon.post_bank_statement_line_voucher(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="stmt-other", offset_account_id=41001,
+            offset_account_code=None, description=None, reference=None, approve=False,
+            created_by="tester", idempotency_key=None,
+        )

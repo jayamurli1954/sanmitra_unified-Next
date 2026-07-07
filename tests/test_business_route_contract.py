@@ -63,6 +63,7 @@ def test_business_phase2_target_routes_are_registered() -> None:
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/inventory/closing-stock/entries", "phase3-inventory-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/inventory/closing-stock", "phase3-inventory-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/bank-recon/statement", "phase3-banking-contract", 1),
+        FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/bank-recon/statement-voucher", "phase3-banking-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "GET", "/api/v1/business/bank-recon", "phase3-banking-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/bank-recon/match", "phase3-banking-contract", 1),
         FrontendRouteUsage("MitraBooksERP", "POST", "/api/v1/business/bank-recon/match/{param}/reverse", "phase3-banking-contract", 1),
