@@ -5032,7 +5032,7 @@ async def create_gst_settlement(
     }
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "period": period}
     try:
-        await settlements.update_one(filters, {"$set": doc, "$setOnInsert": filters}, upsert=True)
+        await settlements.update_one(filters, {"$set": doc}, upsert=True)
     except Exception as exc:
         await _compensate_gst_settlement_failure(
             session,

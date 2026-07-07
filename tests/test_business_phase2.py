@@ -3025,6 +3025,8 @@ async def test_gst_settlement_posts_balanced_setoff_entry(monkeypatch):
     assert result["period_locked"] is True
     assert result["journal_entry_id"] == 1201
     assert audit_events and audit_events[-1]["action"] == "business_gst_settlement_posted"
+    for _filters, update in store.updated:
+        assert not (set(update.get("$set", {})) & set(update.get("$setOnInsert", {})))
     # The period lock doc was written.
     assert any(d.get("period") == "2026-06" and d.get("locked") for d in store.docs)
 
