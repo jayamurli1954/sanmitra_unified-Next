@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import json
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -77,6 +78,30 @@ def run_pytest_group(label: str, files: list[str]) -> bool:
     return run(label, [PY, "-m", "pytest", "-q", *files])
 
 
+def is_local_frontend_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    return host in {"127.0.0.1", "localhost"} and parsed.port == 3300
+
+
+@contextmanager
+def local_frontend_server(label: str):
+    print(f"\n=== {label} local browser server ===\n+ starting serve_frontends.py on 127.0.0.1:3300", flush=True)
+    server = subprocess.Popen(
+        [PY, "scripts/serve_frontends.py", "--host", "127.0.0.1", "--port", "3300"],
+        cwd=ROOT,
+    )
+    try:
+        time.sleep(4)
+        yield
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            server.kill()
+
+
 def run_local_browser_smoke() -> list[tuple[str, bool]]:
     npx = shutil.which("npx")
     if npx is None:
@@ -85,13 +110,7 @@ def run_local_browser_smoke() -> list[tuple[str, bool]]:
 
     env = dict(os.environ)
     env["PLAYWRIGHT_BASE_URL"] = "http://127.0.0.1:3300"
-    print("\n=== local browser server ===\n+ starting serve_frontends.py on 127.0.0.1:3300", flush=True)
-    server = subprocess.Popen(
-        [PY, "scripts/serve_frontends.py", "--host", "127.0.0.1", "--port", "3300"],
-        cwd=ROOT,
-    )
-    try:
-        time.sleep(4)
+    with local_frontend_server("local browser smoke"):
         return [
             (
                 f"local business browser smoke: {spec}",
@@ -104,12 +123,6 @@ def run_local_browser_smoke() -> list[tuple[str, bool]]:
             )
             for spec in LOCAL_BROWSER_SPECS
         ]
-    finally:
-        server.terminate()
-        try:
-            server.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            server.kill()
 
 
 def run_staging_read_only_smoke(staging_url: str) -> list[tuple[str, bool]]:
@@ -125,17 +138,19 @@ def run_staging_read_only_smoke(staging_url: str) -> list[tuple[str, bool]]:
 
     env = dict(os.environ)
     env["E2E_BASE_URL"] = staging_url.rstrip("/")
-    return [
-        (
-            "staging read-only MitraBooks shell smoke",
-            run(
+    server_context = local_frontend_server("local staging smoke") if is_local_frontend_url(staging_url) else nullcontext()
+    with server_context:
+        return [
+            (
                 "staging read-only MitraBooks shell smoke",
-                [npx, "playwright", "test", "e2e/mitrabooks-shell.spec.js", "--project=chromium", "--reporter=list"],
-                cwd=FRONTEND,
-                env=env,
-            ),
-        )
-    ]
+                run(
+                    "staging read-only MitraBooks shell smoke",
+                    [npx, "playwright", "test", "e2e/mitrabooks-shell.spec.js", "--project=chromium", "--reporter=list"],
+                    cwd=FRONTEND,
+                    env=env,
+                ),
+            )
+        ]
 
 
 def validate_destructive_demo_policy(tenant_id: str, env: dict[str, str] | None = None) -> tuple[bool, list[str]]:
@@ -217,7 +232,13 @@ def validate_destructive_demo_auth_context(staging_url: str, tenant_id: str, env
     try:
         status, payload = _read_json_response(login_request)
     except (OSError, URLError) as exc:
-        return False, [f"Auth precheck could not reach {login_url}: {exc}."]
+        hint = (
+            " Start the local backend with `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` "
+            "before running local destructive mutation."
+            if is_local_frontend_url(staging_url)
+            else ""
+        )
+        return False, [f"Auth precheck could not reach {login_url}: {exc}.{hint}"]
 
     if status < 200 or status >= 300:
         errors.append(
@@ -305,17 +326,19 @@ def run_destructive_demo_browser(staging_url: str, tenant_id: str) -> list[tuple
     env = dict(os.environ)
     env["E2E_BASE_URL"] = staging_url.rstrip("/")
     env[DEMO_RUN_ENV] = "true"
-    return [
-        (
-            "destructive deployed browser mutation",
-            run(
+    server_context = local_frontend_server("local destructive browser mutation") if is_local_frontend_url(staging_url) else nullcontext()
+    with server_context:
+        return [
+            (
                 "destructive deployed browser mutation",
-                [npx, "playwright", "test", DESTRUCTIVE_BROWSER_SPEC, "--project=chromium", "--reporter=list"],
-                cwd=FRONTEND,
-                env=env,
-            ),
-        )
-    ]
+                run(
+                    "destructive deployed browser mutation",
+                    [npx, "playwright", "test", DESTRUCTIVE_BROWSER_SPEC, "--project=chromium", "--reporter=list"],
+                    cwd=FRONTEND,
+                    env=env,
+                ),
+            )
+        ]
 
 
 def main() -> int:

@@ -1,6 +1,7 @@
 from scripts.mitrabooks_phase3_business_gate import DEMO_TENANT_ID
 from scripts.mitrabooks_phase3_business_gate import DEFAULT_DEPLOYED_API_BASE_URL
 from scripts.mitrabooks_phase3_business_gate import destructive_demo_api_base
+from scripts.mitrabooks_phase3_business_gate import is_local_frontend_url
 from scripts.mitrabooks_phase3_business_gate import main
 from scripts.mitrabooks_phase3_business_gate import validate_destructive_demo_auth_context
 from scripts.mitrabooks_phase3_business_gate import validate_destructive_demo_policy
@@ -68,6 +69,32 @@ def test_destructive_demo_api_base_maps_local_shell_to_local_backend() -> None:
         "http://127.0.0.1:3300/mitrabooks-erp/",
         {},
     ) == "http://127.0.0.1:8000"
+
+
+def test_local_frontend_url_detection_is_limited_to_local_shell_port() -> None:
+    assert is_local_frontend_url("http://127.0.0.1:3300/mitrabooks-erp/") is True
+    assert is_local_frontend_url("http://localhost:3300/mitrabooks-erp/") is True
+    assert is_local_frontend_url("http://127.0.0.1:8000/mitrabooks-erp/") is False
+    assert is_local_frontend_url("https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/") is False
+
+
+def test_destructive_demo_auth_precheck_explains_local_backend_requirement(monkeypatch) -> None:
+    def fake_read_json_response(request, timeout=20):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("scripts.mitrabooks_phase3_business_gate._read_json_response", fake_read_json_response)
+
+    ok, errors = validate_destructive_demo_auth_context(
+        "http://127.0.0.1:3300/mitrabooks-erp/",
+        DEMO_TENANT_ID,
+        {
+            "E2E_USER_EMAIL": "business.admin@sanmitra.local",
+            "E2E_USER_PASSWORD": "demo-password",
+        },
+    )
+
+    assert ok is False
+    assert any("python -m uvicorn app.main:app" in error for error in errors)
 
 
 def test_destructive_demo_auth_precheck_reports_invalid_credentials(monkeypatch) -> None:
