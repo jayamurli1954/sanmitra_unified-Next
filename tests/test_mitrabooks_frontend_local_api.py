@@ -214,7 +214,7 @@ def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
     assert ">Request Demo<" in landing_source
     assert ">Login<" in landing_source
     assert "GST-ready invoicing" in landing_source
-    assert "Document upload and OCR extraction" in landing_source
+    assert "Document upload with provider-gated OCR extraction" in landing_source
     assert "Single User - Multi Company" in landing_source
     assert "Multi User - Multi Company" in landing_source
     assert "Regular Business Account" in landing_source

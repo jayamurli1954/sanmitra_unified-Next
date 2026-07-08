@@ -65,21 +65,21 @@ Regular business account pricing and CA Practice / Bookkeeper pricing must stay 
 
 ### Regular Business Account
 
-| Plan | Monthly | Yearly | Business scope | Users | OCR documents |
+| Plan | Monthly | Yearly | Business scope | Users | Provider-gated OCR documents |
 | --- | ---: | ---: | --- | ---: | ---: |
 | Free | Rs. 0 | Rs. 0 | 1 company | 1 | 0 |
 | Basic | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25 |
 | Starter | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25 |
 | Growth | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100 |
-| Enterprise | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom documents / AI MIS by requirement |
+| Enterprise | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom document intake / AI MIS by requirement |
 
 ### CA Practice / Bookkeepers
 
-| Plan | Monthly | Yearly | Client companies | Practice users | OCR documents |
+| Plan | Monthly | Yearly | Client companies | Practice users | Provider-gated OCR documents |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Basic | Rs. 499 | Rs. 4,999 | 5 | 1 | 0 |
 | Starter | Rs. 999 | Rs. 9,999 | 25 | 5 | 500 |
-| Growth | Rs. 2,999 | Rs. 29,999 | 50 | 15 | Unlimited subject to fair-use |
+| Growth | Rs. 2,999 | Rs. 29,999 | 50 | 15 | Subject to fair-use and provider controls |
 
 ## Planned Settings Breakdown
 
@@ -110,7 +110,7 @@ Regular business account pricing and CA Practice / Bookkeeper pricing must stay 
 - Bank API settings
 - WhatsApp and email provider settings
 - Document storage
-- OCR extraction controls
+- Provider-gated OCR extraction controls
 - AI settings
 
 ## Non-Goals For This Sequence

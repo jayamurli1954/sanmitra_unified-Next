@@ -144,7 +144,7 @@ Enterprise is a custom quote path and should be assessed through requirement rev
 | Settings | Financial locks | Planned / configuration-dependent | Not included | Included | Included | Included | Phase 2B. Important before production GST/accounting claims. |
 | Settings | Templates and notifications | Planned / configuration-dependent | Not included | Included where enabled | Included | Included | Phase 2B/2D. |
 | OCR / AI | Document upload queue | Planned / configuration-dependent | Not included | Basic planned | Included planned | Included planned | Planned after deterministic document workflow. Do not promise as working. |
-| OCR / AI | OCR extraction | Planned / configuration-dependent | Not included | 25/month planned | 25/month planned | 100/month planned | Pricing docs mention limits, but implementation needs verification before publishing. |
+| OCR / AI | Provider-gated OCR extraction | Planned / configuration-dependent | Not included | 25/month planned | 25/month planned | 100/month planned | Pricing docs mention limits, but production enablement needs tenant authorization, provider configuration, and verification before publishing. |
 | OCR / AI | AI categorization suggestions | Planned / configuration-dependent | Not included | Not included | Planned | Planned | Human review required before posting. |
 | OCR / AI | AI auto-posting | Not included | Not included | Not included | Not included | Not included | Forbidden. AI/OCR must never post directly. |
 
@@ -160,7 +160,7 @@ Enterprise is a custom quote path and should be assessed through requirement rev
 | Practice workflow | Client document queue | Planned / configuration-dependent | Not included | Included target | Included target | Phase 2C/2D; do not promise until document workflow exists. |
 | Practice workflow | Work assignment | Planned / configuration-dependent | Not included | Included target | Included target | Phase 2C target. |
 | Compliance | Compliance tracking | Planned / configuration-dependent | Manual target | Included target | Included target | Phase 2C target for GST/TDS/income tax/audit due dates. |
-| OCR / AI | OCR documents | Planned / configuration-dependent | 0/month | 500/month target | Fair-use unlimited target | Pricing docs include limits, but implementation needs verification before public claims. |
+| OCR / AI | Provider-gated OCR documents | Planned / configuration-dependent | 0/month | 500/month target | Fair-use/provider-controlled target | Pricing docs include limits, but production enablement needs tenant authorization, provider configuration, and verification before public claims. |
 | OCR / AI | AI MIS / reconciliation assistance | Planned / configuration-dependent | Not included | Planned | Planned | Deterministic reports must come first. Human review required. |
 | Support | Priority support and onboarding review | Planned / configuration-dependent | Not included | Included where sold | Included | Define service levels before publishing. |
 
@@ -184,7 +184,7 @@ Do not publish Basic unless Free plus these are verified:
 
 - GST preparation reports clearly labeled as preparation, not filing.
 - TDS/TCS tracking.
-- Basic document upload/OCR queue only if implemented and verified; otherwise remove the 25/month OCR claim from public copy.
+- Basic document upload queue only if implemented and verified; OCR limits must be described as provider-gated until tenant authorization, provider configuration, and production verification are complete.
 - Email/support terms are defined.
 
 ### Starter

@@ -118,7 +118,7 @@ All prices are recommended launch prices in INR. Taxes extra where applicable.
 | Plan | Target user | Monthly | Yearly | Business scope | Users | OCR / AI documents | Included scope |
 | --- | --- | ---: | ---: | --- | ---: | ---: | --- |
 | Free | Trial, very small business | Rs. 0 | Rs. 0 | 1 company | 1 | 0/month | Basic parties, vouchers, invoices, and reports with manual entry |
-| Basic | Small business team | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25/month | GST prep, TDS/TCS tracking, basic OCR queue, email support |
+| Basic | Small business team | Rs. 499 | Rs. 4,999 | 1 company | 3 | 25/month provider-gated | GST prep, TDS/TCS tracking, basic document queue, email support |
 | Starter | Growing business with branches | Rs. 999 | Rs. 9,999 | 2 branches | 5 | 25/month | Bank reconciliation, ageing, statements, inventory basics, AI categorization suggestions |
 | Growth | Larger business with branch operations | Rs. 1,499 | Rs. 14,999 | 5 branches | 10 | 100/month | Higher business document limits, AI MIS, OCR, reconciliation assistance |
 | Enterprise | Larger business with custom controls | Get quote | Get quote | 1 company, multi-branch custom scope | Multi-user | Custom/month | AI MIS, custom document upload workflows, implementation review, and quote after requirement discussion |
@@ -155,7 +155,7 @@ Recommended add-ons:
 - One user.
 - GST preparation reports.
 - TDS/TCS tracking.
-- Basic document upload and OCR extraction queue.
+- Basic document upload queue; OCR extraction is provider-gated and requires tenant authorization before production use.
 - Email support.
 
 ### Starter
@@ -172,7 +172,7 @@ Recommended add-ons:
 - Regular business account: 5 branches and 10 users.
 - CA/bookkeeper practice account: up to 50 client companies and 15 practice users.
 - Client assignment and client access control belong to the CA/bookkeeper pricing track, not the regular business track.
-- AI MIS, OCR extraction, reconciliation assistance, and document queue.
+- AI MIS, provider-gated OCR extraction, reconciliation assistance, and document queue.
 - Human approval before any ledger posting.
 
 ### Enterprise
