@@ -59,6 +59,36 @@ async function textRequest(page, token, method, path, body = undefined, extraHea
   return payload;
 }
 
+async function expectJsonFailure(page, token, method, path, expectedStatus) {
+  const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
+    method,
+    headers: headers(token),
+  });
+  const payload = await response.json().catch(() => ({}));
+  expect(response.status(), `${method} ${path} expected ${expectedStatus}, got ${response.status()} ${JSON.stringify(payload)}`).toBe(expectedStatus);
+  return payload;
+}
+
+async function uploadAttachment(page, token, path, name, mimeType, body) {
+  const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-App-Key': 'mitrabooks',
+    },
+    multipart: {
+      file: {
+        name,
+        mimeType,
+        buffer: Buffer.from(body),
+      },
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  expect(response.ok(), `POST ${path} failed: ${response.status()} ${JSON.stringify(payload)}`).toBeTruthy();
+  return payload;
+}
+
 async function approveIfNeeded(page, token, kind, id, doc) {
   if (doc.status !== 'pending_approval' && doc.approval_status !== 'pending_approval') {
     return doc;
@@ -111,6 +141,146 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect((modules.enabled_modules || []).map((item) => item.module_key)).toEqual(
       expect.arrayContaining(['business', 'accounting', 'audit'])
     );
+
+    const adminSettings = await jsonRequest(page, token, 'GET', '/business/admin-settings?accounting_entity_id=primary');
+    expect(adminSettings.integrations?.document_storage_provider).toBeTruthy();
+    expect(adminSettings.ai_settings?.ocr_enabled).toBe(false);
+    expect(adminSettings.ai_settings?.document_review_required).toBe(true);
+    expect(adminSettings.ai_settings?.posting_review_required).toBe(true);
+    expect(adminSettings.ai_settings?.auto_post_to_ledger).toBe(false);
+
+    const caClient = await jsonRequest(page, token, 'POST', '/business/ca-clients', {
+      client_name: `E2E Document Client ${runId}`,
+      gstin: '29ABCDE1234F1Z5',
+      pan: 'ABCDE1234F',
+      contact_person: 'Demo Client Owner',
+      contact_email: `document-client-${runId}@example.test`,
+      engagement_type: 'monthly_bookkeeping',
+      assigned_to: 'Demo Reviewer',
+      client_owner: 'Demo Partner',
+      access_level: 'data_entry',
+      compliance_tracks: ['GST', 'Books'],
+      notes: 'Real-stack document upload gate client',
+      accounting_entity_id: 'primary',
+    });
+    expect(caClient.tenant_id).toBe(DEMO_TENANT_ID);
+    expect(caClient.app_key).toBe('mitrabooks');
+    expect(caClient.accounting_entity_id).toBe('primary');
+
+    const caDocument = await jsonRequest(page, token, 'POST', '/business/ca-documents', {
+      client_id: caClient.client_id,
+      client_name: caClient.client_name,
+      document_type: 'purchase_bill',
+      period: '2026-07',
+      assigned_to: 'Demo Reviewer',
+      client_owner: 'Demo Partner',
+      priority: 'high',
+      due_date: '2026-07-31',
+      compliance_area: 'GST',
+      client_access_enabled: true,
+      original_file_name: `phase3-demo-document-${runId}.pdf`,
+      notes: 'Real-stack document upload gate metadata',
+      accounting_entity_id: 'primary',
+    });
+    expect(caDocument.tenant_id).toBe(DEMO_TENANT_ID);
+    expect(caDocument.app_key).toBe('mitrabooks');
+    expect(caDocument.accounting_entity_id).toBe('primary');
+    expect(caDocument.book_id).toBe('primary');
+    expect(caDocument.client_id).toBe(caClient.client_id);
+    expect(caDocument.status).toBe('uploaded');
+    expect(caDocument.attachment_count).toBe(0);
+    expect(caDocument.posting_reference).toBeFalsy();
+
+    const attachment = await uploadAttachment(
+      page,
+      token,
+      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=primary`,
+      `phase3-demo-document-${runId}.pdf`,
+      'application/pdf',
+      `%PDF-1.4\n% Phase 3 demo document upload ${runId}\n`
+    );
+    expect(attachment.tenant_id).toBe(DEMO_TENANT_ID);
+    expect(attachment.app_key).toBe('mitrabooks');
+    expect(attachment.accounting_entity_id).toBe('primary');
+    expect(attachment.owner_type).toBe('ca_document');
+    expect(attachment.owner_id).toBe(caDocument.document_id);
+    expect(attachment.file_name).toBe(`phase3-demo-document-${runId}.pdf`);
+    expect(attachment.content_type).toBe('application/pdf');
+    expect(attachment.size_bytes).toBeGreaterThan(0);
+
+    const attachments = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=primary`
+    );
+    expect(attachments.total).toBeGreaterThanOrEqual(1);
+    expect(attachments.items.map((item) => item.attachment_id)).toContain(attachment.attachment_id);
+    await expectJsonFailure(
+      page,
+      token,
+      'GET',
+      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=other-demo-book`,
+      404
+    );
+
+    const downloadedAttachment = await textRequest(
+      page,
+      token,
+      'GET',
+      `/business/ca-documents/${caDocument.document_id}/attachments/${attachment.attachment_id}/download?accounting_entity_id=primary`
+    );
+    expect(downloadedAttachment).toContain(`Phase 3 demo document upload ${runId}`);
+
+    const underReviewDocument = await jsonRequest(page, token, 'PATCH', `/business/ca-documents/${caDocument.document_id}`, {
+      status: 'under_review',
+      notes: 'Demo reviewer opened the uploaded document',
+      accounting_entity_id: 'primary',
+    });
+    expect(underReviewDocument.status).toBe('under_review');
+    expect(underReviewDocument.review_started_at).toBeTruthy();
+    expect(underReviewDocument.posting_reference).toBeFalsy();
+
+    const reviewedDocument = await jsonRequest(page, token, 'PATCH', `/business/ca-documents/${caDocument.document_id}`, {
+      status: 'reviewed',
+      next_action: 'No OCR handoff or auto-posting in this demo gate',
+      notes: 'Manual review completed without ledger posting',
+      accounting_entity_id: 'primary',
+    });
+    expect(reviewedDocument.status).toBe('reviewed');
+    expect(reviewedDocument.reviewed_at).toBeTruthy();
+    expect(reviewedDocument.posting_reference).toBeFalsy();
+    expect(reviewedDocument.attachment_count).toBeGreaterThanOrEqual(1);
+    expect(reviewedDocument.next_action).toContain('No OCR');
+
+    const listedDocuments = await jsonRequest(page, token, 'GET', `/business/ca-documents?client_name=${encodeURIComponent(caClient.client_name)}&accounting_entity_id=primary`);
+    expect(listedDocuments.items.map((item) => item.document_id)).toContain(caDocument.document_id);
+
+    const uploadAudit = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/audit/events?action=business_document_attachment_uploaded&entity_type=business_document_attachment&entity_id=${attachment.attachment_id}&limit=10`
+    );
+    expect(uploadAudit.items.length).toBeGreaterThanOrEqual(1);
+    expect(uploadAudit.items[0].tenant_id).toBe(DEMO_TENANT_ID);
+    expect(uploadAudit.items[0].product).toBe('mitrabooks');
+
+    const downloadAudit = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/audit/events?action=business_document_attachment_downloaded&entity_type=business_document_attachment&entity_id=${attachment.attachment_id}&limit=10`
+    );
+    expect(downloadAudit.items.length).toBeGreaterThanOrEqual(1);
+
+    const reviewAudit = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/audit/events?action=business_ca_document_metadata_updated&entity_type=business_ca_document_metadata&entity_id=${caDocument.document_id}&limit=10`
+    );
+    expect(reviewAudit.items.length).toBeGreaterThanOrEqual(2);
 
     await jsonRequest(page, token, 'POST', '/accounting/initialize-chart-of-accounts');
     const accounts = await jsonRequest(page, token, 'GET', '/accounting/accounts');

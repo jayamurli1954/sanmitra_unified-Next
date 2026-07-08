@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.mitrabooks_phase3_business_gate import DEMO_TENANT_ID
 from scripts.mitrabooks_phase3_business_gate import DEFAULT_DEPLOYED_API_BASE_URL
 from scripts.mitrabooks_phase3_business_gate import destructive_demo_api_base
@@ -5,6 +7,9 @@ from scripts.mitrabooks_phase3_business_gate import is_local_frontend_url
 from scripts.mitrabooks_phase3_business_gate import main
 from scripts.mitrabooks_phase3_business_gate import validate_destructive_demo_auth_context
 from scripts.mitrabooks_phase3_business_gate import validate_destructive_demo_policy
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_destructive_demo_policy_accepts_only_confirmed_demo_tenant() -> None:
@@ -152,3 +157,17 @@ def test_destructive_demo_auth_precheck_confirms_tenant_context(monkeypatch) -> 
         f"{DEFAULT_DEPLOYED_API_BASE_URL}/api/v1/auth/login",
         f"{DEFAULT_DEPLOYED_API_BASE_URL}/api/v1/modules/me",
     ]
+
+
+def test_destructive_demo_spec_covers_document_upload_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "business/ca-clients" in spec
+    assert "business/ca-documents" in spec
+    assert "uploadAttachment(" in spec
+    assert "business_document_attachment_uploaded" in spec
+    assert "business_document_attachment_downloaded" in spec
+    assert "business_ca_document_metadata_updated" in spec
+    assert "other-demo-book" in spec
+    assert "auto_post_to_ledger).toBe(false)" in spec
+    assert "ocr_enabled).toBe(false)" in spec
