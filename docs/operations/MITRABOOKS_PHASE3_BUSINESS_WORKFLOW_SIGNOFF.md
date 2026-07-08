@@ -459,7 +459,7 @@ Result:
 - ADDED: source-backed MIS KPI contract for monthly sales/purchase trend, top customers/vendors, working capital, overdue AR/AP dashboards, and deterministic financial-health summaries.
 - ADDED: local Playwright shell rendering for MIS KPI contracts with working capital, top customer/vendor, and open-item aging evidence.
 - ADDED: source-backed Data Health Score rules for missing GSTIN, unposted drafts, stale bank reconciliation, duplicate invoice numbers, and overdue receivables exposure.
-- ADDED: local Playwright shell rendering for Data Health Score and failed-rule evidence inside the MitraBooks dashboard health panel.
+- ADDED: local Playwright shell rendering for Data Health Score and failed-rule evidence inside the MitraBooks Settings health panel.
 - ADDED: source-backed Data Health issue queue that normalizes failed-rule evidence into open remediation items with workspace/action labels.
 - ADDED: local Playwright shell remediation routing from the Data Health queue into the relevant MitraBooks workspace.
 - ADDED: shared MitraBooks export governance for report, dimension-report, opening-balance, and invoice-PDF downloads with role checks, audit events, and governed response headers.

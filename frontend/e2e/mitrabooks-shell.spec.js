@@ -2108,6 +2108,10 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.business-quick-actions-clean')).toContainText('Journal');
     await expect(page.locator('.business-recent-activity-clean')).toBeVisible();
     await expect(page.locator('.business-recent-activity-clean')).toContainText('Recent Activity');
+    await expect(page.locator('.business-dashboard-clean .erp-health-panel')).toHaveCount(0);
+
+    await page.locator('nav#nav a[data-business-workspace="settings"]').click();
+    await expect(page.locator('.mitrabooks-settings-workspace')).toContainText('MitraBooks Settings');
     await expect(page.locator('.erp-health-panel')).toContainText('Data Health Score');
     await expect(page.locator('.erp-health-panel')).toContainText('71/100');
     await expect(page.locator('.erp-health-panel')).toContainText('Duplicate invoice numbers');

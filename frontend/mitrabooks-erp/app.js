@@ -2109,7 +2109,7 @@ let businessMisLoadInFlight = false;
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: BUSINESS EXECUTIVE DASHBOARD
 // API   : GET /api/v1/business/dashboard/stats
-// NOTE  : renderBusinessExecutiveDashboard — KPI cards, quick actions, data-health panel
+// NOTE  : renderBusinessExecutiveDashboard — KPI cards, quick actions, MIS panel
 // ══════════════════════════════════════════════════════════════════════
 
 function renderMisPartyRows(rows = [], label) {
@@ -5367,8 +5367,6 @@ function renderDashboardPreview(config) {
           </div>
         </div>
 
-        ${renderBusinessDataHealthPanel()}
-
         <div class="business-recent-activity-clean">
           <h4>Recent Activity</h4>
           <ul class="activity-list">${renderActivity(dashboard.activity || [])}</ul>
@@ -5834,6 +5832,7 @@ function renderMitraBooksSettingsDetail() {
 
 function renderMitraBooksSettingsWorkspace() {
   const detail = activeSettingsDetailId ? renderMitraBooksSettingsDetail() : "";
+  const settingsHealthPanel = activeSettingsDetailId ? "" : renderBusinessDataHealthPanel();
   return `
     <div class="verification-panel erp-workspace-panel mitrabooks-settings-workspace">
       <div class="preview-heading compact">
@@ -5857,6 +5856,7 @@ function renderMitraBooksSettingsWorkspace() {
         <span><strong>Module</strong> shown by enabled workflow</span>
         <span><strong>Platform</strong> owner/admin controlled</span>
       </div>
+      ${settingsHealthPanel}
       ${detail}
       ${MITRABOOKS_SETTINGS_GROUPS.map((group) => `
         <section class="settings-menu-section">
@@ -8288,6 +8288,10 @@ function setBusinessWorkspace(workspace) {
     loadBusinessInvoices();
   } else if (workspace === "settings") {
     loadBusinessAdminSettings();
+    loadBusinessAccounts();
+    loadBusinessPartiesForHealth();
+    loadAccountingDrilldownResult();
+    loadBusinessDataHealth();
   } else if (workspace === "bills") {
     purchaseView = "list";
     loadBusinessParties();

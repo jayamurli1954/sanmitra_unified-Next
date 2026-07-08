@@ -468,8 +468,16 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     run_start = app_source.index("async function runChecks()")
     run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
     run_block = app_source[run_start:run_end]
+    settings_start = app_source.index("function renderMitraBooksSettingsWorkspace()")
+    settings_end = app_source.index("function renderCaStatusPill", settings_start)
+    settings_block = app_source[settings_start:settings_end]
+    dashboard_start = app_source.index('if (dashboard.type === "business"')
+    dashboard_end = app_source.index("// ========== Business Module: Party Master", dashboard_start)
+    business_dashboard_block = app_source[dashboard_start:dashboard_end]
 
     assert "function renderBusinessDataHealthPanel()" in app_source
+    assert "renderBusinessDataHealthPanel()" in settings_block
+    assert "renderBusinessDataHealthPanel()" not in business_dashboard_block
     assert "Tenant, module, chart, and drill-down readiness" in app_source
     assert "Business tenant context" in app_source
     assert "Chart of accounts loaded" in app_source
