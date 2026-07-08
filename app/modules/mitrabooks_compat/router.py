@@ -20,7 +20,12 @@ from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
-from app.accounting.service import AccountingNotFoundError, get_journal_voucher_detail, post_journal_entry
+from app.accounting.service import (
+    AccountingNotFoundError,
+    get_journal_voucher_detail,
+    post_journal_entry,
+    reverse_journal_entry,
+)
 from app.accounting.models.entities import Account
 from app.modules.housing_compat.pdf_branding import draw_society_pdf_header, get_housing_society_branding
 
@@ -57,6 +62,28 @@ _MITRABOOKS_ADMIN_ROUTE_DEPS = [
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def _compensate_posted_journal_for_mongo_failure(
+    *,
+    session: AsyncSession,
+    tenant_id: str,
+    app_key: str,
+    journal_entry_id: int,
+    created_by: str,
+    reason: str,
+    idempotency_key: str,
+) -> None:
+    await reverse_journal_entry(
+        session,
+        tenant_id=tenant_id,
+        journal_id=journal_entry_id,
+        app_key=app_key,
+        accounting_entity_id="primary",
+        created_by=created_by,
+        reason=reason,
+        idempotency_key=idempotency_key,
+    )
 
 
 def _is_financially_posted(doc: dict[str, Any] | None) -> bool:
@@ -758,6 +785,7 @@ async def create_transaction(
         total_debit = sum((ln.debit for ln in journal_lines), Decimal("0"))
         total_credit = sum((ln.credit for ln in journal_lines), Decimal("0"))
         if total_debit > 0 and total_debit == total_credit:
+            journal_entry_id: int | None = None
             try:
                 voucher_date_str = doc.get("voucher_date") or date.today().isoformat()
                 if isinstance(voucher_date_str, str):
@@ -779,19 +807,40 @@ async def create_transaction(
                     payload=journal_payload,
                     idempotency_key=f"txn_{str(doc['_id'])}_{app_key}",
                 )
-                je_id = int(journal_entry.id) if journal_entry else None
+                journal_entry_id = int(journal_entry.id) if journal_entry else None
                 # Mark transaction as posted and link to journal_entry
                 update_fields = {"status": "posted", "updated_at": _now_iso()}
-                if je_id:
-                    update_fields["journal_entry_id"] = je_id
-                await get_collection("mb_transactions").update_one(
+                if journal_entry_id:
+                    update_fields["journal_entry_id"] = journal_entry_id
+                update_result = await get_collection("mb_transactions").update_one(
                     {"_id": doc["_id"]},
                     {"$set": update_fields}
                 )
+                if getattr(update_result, "modified_count", 0) == 0:
+                    raise RuntimeError("transaction update not acknowledged")
                 doc["status"] = "posted"
-                if je_id:
-                    doc["journal_entry_id"] = je_id
+                if journal_entry_id:
+                    doc["journal_entry_id"] = journal_entry_id
             except Exception as exc:
+                if journal_entry_id:
+                    try:
+                        await _compensate_posted_journal_for_mongo_failure(
+                            session=session,
+                            tenant_id=tenant_id,
+                            app_key=app_key,
+                            journal_entry_id=journal_entry_id,
+                            created_by=str(current_user.get("user_id") or current_user.get("email") or "system"),
+                            reason=f"Compensation after compat transaction persistence failure ({doc.get('voucher_number')})",
+                            idempotency_key=f"compensate_txn_{str(doc['_id'])}_{app_key}_{journal_entry_id}",
+                        )
+                    except Exception as reversal_exc:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=(
+                                "Failed to persist transaction after posting to accounting, "
+                                "and automatic compensation reversal also failed"
+                            ),
+                        ) from reversal_exc
                 await get_collection("mb_transactions").delete_one({"_id": doc["_id"]})
                 raise HTTPException(
                     status_code=500,
@@ -896,12 +945,13 @@ async def post_transaction(
         lines=journal_lines,
     )
 
+    created_by = str(current_user.get("user_id") or current_user.get("email") or "system")
     try:
         journal_entry, _created = await post_journal_entry(
             session=session,
             app_key=app_key,
             tenant_id=tenant_id,
-            created_by=current_user.get("user_id", "system"),
+            created_by=created_by,
             payload=journal_payload,
             idempotency_key=f"txn_{txn_id}_{app_key}",
         )
@@ -911,13 +961,41 @@ async def post_transaction(
             detail=f"Failed to post transaction to accounting: {str(exc)}"
         ) from exc
 
+    journal_entry_id = int(journal_entry.id) if journal_entry is not None else None
     update_fields = {"status": "posted", "updated_at": _now_iso()}
-    if journal_entry is not None:
-        update_fields["journal_entry_id"] = int(journal_entry.id)
-    await get_collection("mb_transactions").update_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id},
-        {"$set": update_fields},
-    )
+    if journal_entry_id is not None:
+        update_fields["journal_entry_id"] = journal_entry_id
+    try:
+        update_result = await get_collection("mb_transactions").update_one(
+            {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id},
+            {"$set": update_fields},
+        )
+        if getattr(update_result, "modified_count", 0) == 0:
+            raise RuntimeError("transaction update not acknowledged")
+    except Exception as exc:
+        if journal_entry_id is not None:
+            try:
+                await _compensate_posted_journal_for_mongo_failure(
+                    session=session,
+                    tenant_id=tenant_id,
+                    app_key=app_key,
+                    journal_entry_id=journal_entry_id,
+                    created_by=created_by,
+                    reason=f"Compensation after compat transaction post update failure (TXN-{txn_id})",
+                    idempotency_key=f"compensate_txn_post_{txn_id}_{app_key}_{journal_entry_id}",
+                )
+            except Exception as reversal_exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Failed to persist posted transaction after journal creation, "
+                        "and automatic compensation reversal also failed"
+                    ),
+                ) from reversal_exc
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to persist posted transaction after accounting entry creation",
+        ) from exc
     return _json_safe(await get_collection("mb_transactions").find_one({
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -1054,10 +1132,41 @@ async def reverse_transaction(
     if reversing_je_id:
         update_fields["reversing_journal_entry_id"] = reversing_je_id
 
-    await coll.update_one(
-        {"_id": txn["_id"]},
-        {"$set": update_fields},
-    )
+    update_error: Exception | None = None
+    try:
+        update_result = await coll.update_one(
+            {"_id": txn["_id"]},
+            {"$set": update_fields},
+        )
+        if getattr(update_result, "modified_count", 0) == 0:
+            raise RuntimeError("reversal update not acknowledged")
+    except Exception as exc:
+        update_error = exc
+
+    if update_error:
+        if reversing_je_id:
+            try:
+                await _compensate_posted_journal_for_mongo_failure(
+                    session=session,
+                    tenant_id=tenant_id,
+                    app_key=app_key,
+                    journal_entry_id=reversing_je_id,
+                    created_by=str(current_user.get("user_id") or current_user.get("email") or "system"),
+                    reason=f"Compensation after compat transaction reversal update failure ({txn_id})",
+                    idempotency_key=f"compensate_txn_reversal_{txn_id}_{app_key}_{reversing_je_id}",
+                )
+            except Exception as reversal_exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Failed to persist reversal metadata after posting reversal entry, "
+                        "and automatic compensation reversal also failed"
+                    ),
+                ) from reversal_exc
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to persist reversal metadata after accounting entry creation",
+        ) from update_error
 
     # Also create a NEW MongoDB transaction for the reversal so it appears in Recent Receipts list
     if reversing_je_id and lines:

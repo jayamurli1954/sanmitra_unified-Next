@@ -115,6 +115,31 @@ _HOUSING_ADMIN_ROUTE_DEPS = [
     Depends(require_roles([Role.tenant_admin, Role.super_admin])),
 ]
 
+
+def _format_upload_size(limit_bytes: int) -> str:
+    if limit_bytes >= 1024 * 1024:
+        return f"{limit_bytes / (1024 * 1024):g} MB"
+    if limit_bytes >= 1024:
+        return f"{limit_bytes / 1024:g} KB"
+    return f"{limit_bytes} bytes"
+
+
+async def _read_housing_upload_with_size_limit(file: UploadFile, limit_bytes: int, feature_name: str) -> bytes:
+    data = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > limit_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"{feature_name} exceeds the upload limit of {_format_upload_size(limit_bytes)}.",
+            )
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    return bytes(data)
+
 GRUHA_LEGACY_ACCOUNT_CODE_MAP: dict[str, str] = {
     "1000": "11001",
     "1010": "11010",
@@ -3556,7 +3581,13 @@ async def attachment_upload(
 ):
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "gruhamitra").strip())
-    content = await file.read()
+    settings = get_settings()
+    limit_bytes = max(1, int(settings.HOUSING_JOURNAL_ATTACHMENT_MAX_UPLOAD_MB)) * 1024 * 1024
+    content = await _read_housing_upload_with_size_limit(
+        file=file,
+        limit_bytes=limit_bytes,
+        feature_name="Journal attachment",
+    )
     now = datetime.now(timezone.utc).isoformat()
     attachment_id = str(uuid4())
     stored_name = _safe_file_name(file.filename or "attachment", "attachment")

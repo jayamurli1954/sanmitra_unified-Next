@@ -3,6 +3,8 @@ import pytest
 
 from app.config import Settings
 from app.core.auth import registration_policy as policy
+from app.core.auth.password_policy import MIN_PASSWORD_LENGTH, validate_password_policy
+from app.main import _openapi_surface_enabled
 
 
 def test_normalize_public_self_service_role_rejects_elevated_role() -> None:
@@ -87,3 +89,37 @@ def test_settings_validate_blocks_open_registration_in_production() -> None:
 
     with pytest.raises(ValueError, match="ALLOW_OPEN_REGISTRATION"):
         settings.validate()
+
+
+@pytest.mark.parametrize(
+    "password,expected_error",
+    [
+        ("shortA1!", f"at least {MIN_PASSWORD_LENGTH}"),
+        ("alllowercase1!", "uppercase"),
+        ("ALLUPPERCASE1!", "lowercase"),
+        ("NoNumber!!", "number"),
+        ("NoSpecial123", "special"),
+    ],
+)
+def test_password_policy_rejects_weak_password_variants(password: str, expected_error: str) -> None:
+    with pytest.raises(HTTPException) as exc:
+        validate_password_policy(password)
+    assert exc.value.status_code == 400
+    assert expected_error in str(exc.value.detail)
+
+
+def test_password_policy_accepts_strong_password() -> None:
+    validate_password_policy("StrongerPass1!")
+
+
+@pytest.mark.parametrize(
+    "environment,expected",
+    [
+        ("development", True),
+        ("staging", True),
+        ("production", False),
+        ("prod", False),
+    ],
+)
+def test_openapi_surface_is_disabled_only_in_production(environment: str, expected: bool) -> None:
+    assert _openapi_surface_enabled(environment) is expected

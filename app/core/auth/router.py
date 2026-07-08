@@ -32,6 +32,7 @@ from app.core.auth.registration_policy import (
     normalize_public_self_service_role,
     resolve_self_service_tenant_id,
 )
+from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.service import (
     login_google_user,
     login_user,
@@ -332,8 +333,7 @@ async def register(payload: dict, request: Request):
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email is required")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    validate_password_policy(password)
 
     try:
         user = await create_user(email=email, password=password, full_name=full_name, tenant_id=tenant_id, role=role)
@@ -421,8 +421,7 @@ async def activate_account(payload: dict, request: Request):
 
     if not token:
         raise HTTPException(status_code=400, detail="Activation token is required")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    validate_password_policy(password)
     if confirm_password and password != confirm_password:
         raise HTTPException(status_code=400, detail="Password and confirm password do not match")
 
@@ -526,8 +525,7 @@ async def reset_password(payload: dict, request: Request):
 
     if not token:
         raise HTTPException(status_code=400, detail="Reset token is required")
-    if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    validate_password_policy(new_password)
     if confirm_password and new_password != confirm_password:
         raise HTTPException(status_code=400, detail="Password and confirm password do not match")
 
@@ -563,8 +561,7 @@ async def change_password(payload: dict, current_user: dict = Depends(get_curren
     old_password = str(payload.get("old_password") or payload.get("current_password") or "")
     new_password = str(payload.get("new_password") or "")
 
-    if len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    validate_password_policy(new_password, field_label="New password")
 
     user = await get_user_by_email(email)
     if not user or not user.get("hashed_password"):

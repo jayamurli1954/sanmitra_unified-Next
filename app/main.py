@@ -41,7 +41,20 @@ from app.modules.temple.service import ensure_donations_indexes
 
 settings = get_settings()
 
-app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
+
+def _openapi_surface_enabled(environment: str) -> bool:
+    return str(environment or "").strip().lower() not in {"production", "prod"}
+
+
+_OPENAPI_SURFACE_ENABLED = _openapi_surface_enabled(settings.ENVIRONMENT)
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    docs_url="/docs" if _OPENAPI_SURFACE_ENABLED else None,
+    redoc_url="/redoc" if _OPENAPI_SURFACE_ENABLED else None,
+    openapi_url="/openapi.json" if _OPENAPI_SURFACE_ENABLED else None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

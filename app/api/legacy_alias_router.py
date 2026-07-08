@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models.entities import Account, JournalEntry, JournalLine
 from app.core.auth.dependencies import get_current_user
+from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.schemas import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse
 from app.core.auth.service import login_user, logout_refresh_token, rotate_refresh_token
 from app.core.rate_limiting import limiter
@@ -284,8 +285,7 @@ async def legacy_auth_register(payload: dict, request: Request):
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email is required")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    validate_password_policy(password)
 
     try:
         user = await create_user(
