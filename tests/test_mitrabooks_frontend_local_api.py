@@ -425,6 +425,7 @@ def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    mitrabooks_css_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.css").read_text(encoding="utf-8")
     index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
 
     assert 'id="topbar-logout"' in index_source
@@ -435,6 +436,7 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert 'id="forgot-password-open"' in index_source
     assert 'id="forgot-password-form"' in index_source
     assert 'id="reset-password-form"' in index_source
+    assert "Your user ID is your registered email" in index_source
     assert "function signOutAndReturnToLogin()" in app_source
     assert "function updateCurrentPassword()" in app_source
     assert "async function requestPasswordReset()" in app_source
@@ -451,6 +453,7 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert ".app.signed-out .main" in css_source
     assert ".app.signed-out .topbar" in css_source
     assert ".app.signed-in .topbar-actions" in css_source
+    assert ".app.signed-out .access-panel .auth-reset-panel[hidden]" in mitrabooks_css_source
 
 
 def test_shared_pwa_shell_supports_mitrabooks_install_prompt() -> None:

@@ -3904,7 +3904,9 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
 #login-error-field[hidden],
 #forgot-error-field[hidden],
 #reset-error-field[hidden],
-.auth-reset-panel[hidden] {
+#login-form[hidden],
+.app.signed-out .access-panel #login-form[hidden],
+.app.signed-out .access-panel .auth-reset-panel[hidden] {
   display: none;
 }
 
@@ -3934,6 +3936,13 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   border-radius: 6px;
   font-size: 14px;
   padding: 10px 12px;
+}
+
+.auth-help-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .auth-reset-panel button {

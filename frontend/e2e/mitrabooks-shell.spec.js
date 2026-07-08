@@ -1986,7 +1986,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.goto('/mitrabooks-erp/index.html');
     await page.locator('#forgot-password-open').click();
     await expect(page.locator('#forgot-password-form')).toBeVisible();
+    await expect(page.locator('#reset-password-form')).toBeHidden();
     await expect(page.locator('#access-title')).toContainText('Reset password');
+    await expect(page.locator('#forgot-password-form')).toContainText('Your user ID is your registered email');
     await page.locator('#forgot-email').fill('owner@example.com');
     await page.locator('#forgot-password-submit').click();
     await expect(page.locator('#login-status')).toContainText('Reset link requested');
@@ -1994,6 +1996,7 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.goto('/mitrabooks-erp/index.html?action=reset&token=reset-token-123');
     await expect(page.locator('#reset-password-form')).toBeVisible();
+    await expect(page.locator('#forgot-password-form')).toBeHidden();
     await expect(page.locator('#access-title')).toContainText('Set new password');
     await page.locator('#reset-new-password').fill('newpass123');
     await page.locator('#reset-confirm-password').fill('newpass123');
