@@ -228,6 +228,53 @@
               <button id="login-submit" type="submit" class="primary">Sign in</button>
               <button class="secondary" id="run-checks" type="button">Refresh</button>
               <button class="danger" id="clear-token" type="button">Sign out</button>
+              <button class="link-button" id="forgot-password-open" type="button">Forgot password?</button>
+            </form>
+            <form class="toolbar auth-reset-panel" id="forgot-password-form" novalidate hidden>
+              <div class="field">
+                <label for="forgot-email">Account email</label>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  autocomplete="username"
+                  placeholder="business.admin@sanmitra.local"
+                  required
+                  aria-label="Account email">
+              </div>
+              <div class="field" id="forgot-error-field" hidden>
+                <p id="forgot-error-message"></p>
+              </div>
+              <button id="forgot-password-submit" type="submit" class="primary">Send reset link</button>
+              <button class="secondary" id="forgot-password-back" type="button">Back to sign in</button>
+            </form>
+            <form class="toolbar auth-reset-panel" id="reset-password-form" novalidate hidden>
+              <div class="field">
+                <label for="reset-new-password">New password</label>
+                <input
+                  id="reset-new-password"
+                  autocomplete="new-password"
+                  type="password"
+                  placeholder="New password"
+                  required
+                  minlength="6"
+                  aria-label="New password">
+              </div>
+              <div class="field">
+                <label for="reset-confirm-password">Confirm password</label>
+                <input
+                  id="reset-confirm-password"
+                  autocomplete="new-password"
+                  type="password"
+                  placeholder="Confirm password"
+                  required
+                  minlength="6"
+                  aria-label="Confirm password">
+              </div>
+              <div class="field" id="reset-error-field" hidden>
+                <p id="reset-error-message"></p>
+              </div>
+              <button id="reset-password-submit" type="submit" class="primary">Update password</button>
+              <button class="secondary" id="reset-password-back" type="button">Back to sign in</button>
             </form>
             <div class="mandir-login-links" hidden>
               <a href="../mandir-public/" id="mandir-public-link">Book a Seva / Make a Donation</a>

@@ -1,5 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
+const fulfillJson = (route, body, status = 200) => route.fulfill({
+  status,
+  contentType: 'application/json',
+  body: JSON.stringify(body),
+});
+
 async function mockVerifiedMitraBooksSession(page) {
   const accounts = [
     { id: 101, code: '1001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
@@ -1960,6 +1966,69 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('#toggle-password').click();
     await expect(page.locator('#login-password')).toHaveAttribute('type', 'text');
     await expect(page.locator('#toggle-password')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('supports forgot password and reset-link password update before sign in', async ({ page }) => {
+    let forgotPayload = null;
+    let resetPayload = null;
+    await page.route('**/api/v1/auth/forgot-password', async route => {
+      forgotPayload = JSON.parse(route.request().postData() || '{}');
+      return fulfillJson(route, {
+        status: 'ok',
+        message: 'If this account exists, password reset instructions have been sent.',
+      });
+    });
+    await page.route('**/api/v1/auth/reset-password', async route => {
+      resetPayload = JSON.parse(route.request().postData() || '{}');
+      return fulfillJson(route, { status: 'ok', message: 'Password updated successfully' });
+    });
+
+    await page.goto('/mitrabooks-erp/index.html');
+    await page.locator('#forgot-password-open').click();
+    await expect(page.locator('#forgot-password-form')).toBeVisible();
+    await expect(page.locator('#access-title')).toContainText('Reset password');
+    await page.locator('#forgot-email').fill('owner@example.com');
+    await page.locator('#forgot-password-submit').click();
+    await expect(page.locator('#login-status')).toContainText('Reset link requested');
+    expect(forgotPayload).toEqual({ email: 'owner@example.com' });
+
+    await page.goto('/mitrabooks-erp/index.html?action=reset&token=reset-token-123');
+    await expect(page.locator('#reset-password-form')).toBeVisible();
+    await expect(page.locator('#access-title')).toContainText('Set new password');
+    await page.locator('#reset-new-password').fill('newpass123');
+    await page.locator('#reset-confirm-password').fill('newpass123');
+    await page.locator('#reset-password-submit').click();
+    await expect(page.locator('#login-status')).toContainText('Password updated');
+    await expect(page.locator('#login-form')).toBeVisible();
+    expect(resetPayload).toEqual({
+      token: 'reset-token-123',
+      new_password: 'newpass123',
+      confirm_password: 'newpass123',
+    });
+  });
+
+  test('offers MitraBooks PWA install prompts for native and iOS devices', async ({ page }) => {
+    await page.goto('/mitrabooks-erp/index.html');
+    await page.evaluate(() => {
+      const event = new Event('beforeinstallprompt');
+      event.prompt = () => Promise.resolve();
+      event.userChoice = Promise.resolve({ outcome: 'accepted' });
+      window.dispatchEvent(event);
+    });
+    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Install MitraBooks');
+    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Android phone');
+  });
+
+  test('shows MitraBooks iPhone and iPad home-screen install instructions', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+        configurable: true,
+      });
+    });
+    await page.goto('/mitrabooks-erp/index.html');
+    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Add MitraBooks to Home Screen');
+    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('iPhone or iPad');
   });
 
   test('keeps login page visible when cached token has no tenant session', async ({ page }) => {

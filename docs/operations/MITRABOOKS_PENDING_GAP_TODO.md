@@ -88,6 +88,7 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [~] Year-end close production operator maker-checker review. Local mocked-shell browser coverage is closed for FY close preview, income/expense closing lines, retained earnings movement, admin post, already-closed/idempotency warning, and reopen-by-reversal guidance; guarded real-stack demo mutation now covers dynamic FY seed activity, preview, close, already-closed guard, and reversal cleanup. Hosted production operator signoff remains open.
 - [~] Keyboard-first voucher/business-entry polish after route/API contracts are stable. Local voucher-entry and business document-entry keyboard coverage is closed for focus, open, add-line, remove-line, and submit shortcuts across vouchers, sales invoices, purchase bills, credit notes, and debit notes; production operator UX signoff remains open.
 - ~~[x] Phase 3 Credit/Debit Note browser source-document and print/export local hardening passed on 2026-07-06: local shell enforces source invoice/bill selection, sends source ids plus numbers, and exposes printable detail plus JSON export actions.~~
+- ~~[x] MitraBooks forgot/reset password and installable PWA local hardening passed on 2026-07-08: the login shell exposes forgot-password request and reset-link completion, MitraBooks reset emails route to `/mitrabooks-erp/index.html`, and Android/iPhone/iPad install prompts are covered in the shared PWA shell.~~
 - [ ] Multi-client CA/bookkeeper accounting entity model and scoped client/book access rules.
 
 ## Phase 4 Open Gaps

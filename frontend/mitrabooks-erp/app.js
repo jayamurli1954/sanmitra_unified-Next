@@ -454,6 +454,10 @@ const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
 const LOGIN_EMAIL_STORAGE_KEY = "sanmitra_mitrabooks_login_email";
 const LOGIN_REQUEST_TIMEOUT_MS = 20000;
+const initialAuthParams = new URLSearchParams(window.location.search || "");
+let pendingPasswordResetToken = initialAuthParams.get("action") === "reset"
+  ? String(initialAuthParams.get("token") || "").trim()
+  : "";
 const EXPERIENCE_APP_KEYS = {
   mitrabooks: "mitrabooks",
   platform: "mitrabooks",
@@ -782,6 +786,11 @@ const sessionPill = document.getElementById("session-pill");
 const loginStatus = document.getElementById("login-status");
 const loginEmail = document.getElementById("login-email");
 const loginPassword = document.getElementById("login-password");
+const forgotPasswordForm = document.getElementById("forgot-password-form");
+const forgotPasswordEmail = document.getElementById("forgot-email");
+const resetPasswordForm = document.getElementById("reset-password-form");
+const resetNewPasswordInput = document.getElementById("reset-new-password");
+const resetConfirmPasswordInput = document.getElementById("reset-confirm-password");
 const topbarCurrent = document.getElementById("topbar-current");
 const topbarUser = document.getElementById("topbar-user");
 const topbarAvatar = document.getElementById("topbar-avatar");
@@ -2959,6 +2968,128 @@ function setLoginStatus(kind, title, detail = "") {
     : "";
 }
 
+function setAuthPanelMode(mode) {
+  const normalized = mode === "forgot" || mode === "reset" ? mode : "login";
+  const title = document.getElementById("access-title");
+  const copy = document.getElementById("access-copy");
+  const loginForm = document.getElementById("login-form");
+  loginForm?.toggleAttribute("hidden", normalized !== "login");
+  forgotPasswordForm?.toggleAttribute("hidden", normalized !== "forgot");
+  resetPasswordForm?.toggleAttribute("hidden", normalized !== "reset");
+  if (title) {
+    title.textContent = normalized === "forgot"
+      ? "Reset password"
+      : normalized === "reset"
+        ? "Set new password"
+        : "Sign in";
+  }
+  if (copy) {
+    copy.textContent = normalized === "forgot"
+      ? "Enter your MitraBooks account email. If it exists, a reset link will be sent."
+      : normalized === "reset"
+        ? "Choose a new password for your MitraBooks account."
+        : "Use your tenant admin credentials to open the workspace.";
+  }
+}
+
+function showAuthFieldMessage(fieldId, message) {
+  const field = document.getElementById(fieldId);
+  const messageNode = field?.querySelector("p");
+  if (field) field.hidden = false;
+  if (messageNode) messageNode.textContent = message;
+}
+
+function clearAuthFieldMessage(fieldId) {
+  const field = document.getElementById(fieldId);
+  const messageNode = field?.querySelector("p");
+  if (field) field.hidden = true;
+  if (messageNode) messageNode.textContent = "";
+}
+
+async function requestPasswordReset() {
+  const email = String(forgotPasswordEmail?.value || loginEmail?.value || "").trim().toLowerCase();
+  const submitButton = document.getElementById("forgot-password-submit");
+  clearAuthFieldMessage("forgot-error-field");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showAuthFieldMessage("forgot-error-field", "Enter a valid account email.");
+    setLoginStatus("warn", "Email required", "Enter the MitraBooks account email to request a reset link.");
+    return;
+  }
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Sending...";
+  }
+  const result = await apiRequest(APP_KEY, "/api/v1/auth/forgot-password", {
+    method: "POST",
+    timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
+    body: JSON.stringify({ email }),
+  });
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Send reset link";
+  }
+  if (result.ok) {
+    window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
+    if (loginEmail) loginEmail.value = email;
+    setLoginStatus("ok", "Reset link requested", result.payload?.message || "If this account exists, password reset instructions have been sent.");
+  } else {
+    const detail = statusDetailText(result.payload?.detail) || "Password reset email could not be sent. Please try again.";
+    showAuthFieldMessage("forgot-error-field", detail);
+    setLoginStatus("danger", "Reset request failed", detail);
+  }
+  renderJson(apiOutput, { forgot_password: { ok: result.ok, status: result.status } });
+}
+
+async function completePasswordReset() {
+  const newPassword = String(resetNewPasswordInput?.value || "");
+  const confirmPassword = String(resetConfirmPasswordInput?.value || "");
+  const submitButton = document.getElementById("reset-password-submit");
+  clearAuthFieldMessage("reset-error-field");
+  if (!pendingPasswordResetToken) {
+    showAuthFieldMessage("reset-error-field", "Reset token is missing or expired. Request a new reset link.");
+    return;
+  }
+  if (newPassword.length < 6) {
+    showAuthFieldMessage("reset-error-field", "Password must be at least 6 characters.");
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showAuthFieldMessage("reset-error-field", "Password and confirm password do not match.");
+    return;
+  }
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Updating...";
+  }
+  const result = await apiRequest(APP_KEY, "/api/v1/auth/reset-password", {
+    method: "POST",
+    timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
+    body: JSON.stringify({
+      token: pendingPasswordResetToken,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    }),
+  });
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Update password";
+  }
+  if (result.ok) {
+    pendingPasswordResetToken = "";
+    resetPasswordForm?.reset();
+    if (window.history?.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    setAuthPanelMode("login");
+    setLoginStatus("ok", "Password updated", "Use the new password to sign in.");
+  } else {
+    const detail = statusDetailText(result.payload?.detail) || "Password could not be updated. Request a new reset link.";
+    showAuthFieldMessage("reset-error-field", detail);
+    setLoginStatus("danger", "Password reset failed", detail);
+  }
+  renderJson(apiOutput, { reset_password: { ok: result.ok, status: result.status } });
+}
+
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -3116,6 +3247,7 @@ function signOutAndReturnToLogin() {
   if (loginPassword) {
     loginPassword.value = "";
   }
+  setAuthPanelMode("login");
   setLoginStatus("", "", "");
   dashboardPreview.innerHTML = "";
   renderJson(apiOutput, {});
@@ -18521,6 +18653,41 @@ document.getElementById("run-checks").addEventListener("click", runChecks);
 document.getElementById("clear-token").addEventListener("click", () => {
   signOutAndReturnToLogin();
 });
+
+document.getElementById("forgot-password-open")?.addEventListener("click", () => {
+  if (forgotPasswordEmail && loginEmail?.value) {
+    forgotPasswordEmail.value = loginEmail.value;
+  }
+  clearAuthFieldMessage("forgot-error-field");
+  setAuthPanelMode("forgot");
+  setLoginStatus("", "", "");
+});
+document.getElementById("forgot-password-back")?.addEventListener("click", () => {
+  setAuthPanelMode("login");
+  setLoginStatus("", "", "");
+});
+document.getElementById("reset-password-back")?.addEventListener("click", () => {
+  pendingPasswordResetToken = "";
+  if (window.history?.replaceState) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  setAuthPanelMode("login");
+  setLoginStatus("", "", "");
+});
+forgotPasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await requestPasswordReset();
+});
+resetPasswordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await completePasswordReset();
+});
+if (pendingPasswordResetToken) {
+  setAuthPanelMode("reset");
+  setLoginStatus("warn", "Reset link opened", "Enter a new password to complete the reset.");
+} else {
+  setAuthPanelMode("login");
+}
 
 // Fired by api-client when silent token refresh fails — show clean login screen
 window.addEventListener("auth-session-expired", () => {

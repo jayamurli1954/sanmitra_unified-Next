@@ -91,6 +91,13 @@ def _resolve_public_auth_base_url(request: Request) -> str:
     )
 
 
+def _auth_product_reset_target(app_key: str | None) -> dict[str, str]:
+    normalized = str(app_key or "").strip().lower()
+    if normalized == "mitrabooks":
+        return {"name": "MitraBooks", "reset_path": "/mitrabooks-erp/index.html"}
+    return {"name": "LegalMitra", "reset_path": "/login.html"}
+
+
 async def _ensure_email_action_indexes() -> None:
     global _EMAIL_ACTION_INDEXES_READY
     if _EMAIL_ACTION_INDEXES_READY:
@@ -407,7 +414,7 @@ async def activate_account(payload: dict):
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: dict, request: Request):
+async def forgot_password(payload: dict, request: Request, app_key: str = Depends(inject_app_key)):
     email = str(payload.get("email") or "").strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email is required")
@@ -438,11 +445,12 @@ async def forgot_password(payload: dict, request: Request):
     )
 
     public_base = _resolve_public_auth_base_url(request)
-    reset_link = f"{public_base}/login.html?action=reset&token={token}"
+    target = _auth_product_reset_target(app_key)
+    reset_link = f"{public_base}{target['reset_path']}?action=reset&token={token}"
 
     body = (
         "Hello,\n\n"
-        "We received a request to reset your LegalMitra password.\n"
+        f"We received a request to reset your {target['name']} password.\n"
         f"Use this link to set a new password:\n{reset_link}\n\n"
         f"This link expires in {settings.AUTH_RESET_TOKEN_TTL_MINUTES} minutes.\n"
         "If you did not request this, you can ignore this email.\n"
@@ -450,7 +458,7 @@ async def forgot_password(payload: dict, request: Request):
 
     sent, error = await _send_auth_email(
         to_email=email,
-        subject="Reset your LegalMitra password",
+        subject=f"Reset your {target['name']} password",
         body=body,
         action="password_reset",
         meta={"user_id": str(user.get("user_id") or "")},

@@ -1,6 +1,7 @@
 const installStateKey = "sanmitra_pwa_install_prompt_seen";
 const installDismissedKey = "sanmitra_pwa_install_prompt_dismissed";
 const legalMitraInstallDismissedKey = "legalmitra_pwa_install_prompt_dismissed";
+const mitraBooksInstallDismissedKey = "mitrabooks_pwa_install_prompt_dismissed";
 let installPromptRendered = false;
 
 function setAppHeight() {
@@ -52,6 +53,30 @@ function isLegalMitraPath() {
   return window.location.pathname.toLowerCase().includes("/legalmitra");
 }
 
+function isMitraBooksPath() {
+  return window.location.pathname.toLowerCase().includes("/mitrabooks-erp");
+}
+
+function activeInstallApp() {
+  if (isLegalMitraPath()) {
+    return {
+      id: "legalmitra",
+      name: "LegalMitra",
+      dismissedKey: legalMitraInstallDismissedKey,
+      label: "Install LegalMitra",
+    };
+  }
+  if (isMitraBooksPath()) {
+    return {
+      id: "mitrabooks",
+      name: "MitraBooks",
+      dismissedKey: mitraBooksInstallDismissedKey,
+      label: "Install MitraBooks",
+    };
+  }
+  return null;
+}
+
 function isIosLikeDevice() {
   const ua = window.navigator.userAgent || "";
   const iPadOSDesktopMode = window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1;
@@ -59,43 +84,48 @@ function isIosLikeDevice() {
 }
 
 function shouldShowInstallSuggestion() {
-  if (!isLegalMitraPath() || isStandaloneMode()) {
+  const app = activeInstallApp();
+  if (!app || isStandaloneMode()) {
     return false;
   }
-  return !localStorage.getItem(legalMitraInstallDismissedKey);
+  return !localStorage.getItem(app.dismissedKey);
 }
 
-function buildInstallCopy(hasNativePrompt) {
+function buildInstallCopy(hasNativePrompt, app) {
   if (hasNativePrompt) {
     return {
-      title: "Install LegalMitra",
-      body: "Use LegalMitra from your desktop, laptop, Android phone, or tablet with a standalone app window.",
+      title: app.label,
+      body: `Use ${app.name} from your desktop, Android phone, or tablet with a standalone app window.`,
       action: "Install",
     };
   }
   if (isIosLikeDevice()) {
     return {
-      title: "Add LegalMitra to Home Screen",
-      body: "On iPhone or iPad, tap Share in Safari, then choose Add to Home Screen.",
+      title: `Add ${app.name} to Home Screen`,
+      body: "On iPhone or iPad, open Safari, tap Share, then choose Add to Home Screen.",
       action: "Got it",
     };
   }
   return {
-    title: "Install LegalMitra",
+    title: app.label,
     body: "Use the browser install option from the address bar or menu when it appears.",
     action: "Got it",
   };
 }
 
 function closeInstallSuggestion(panel) {
+  const app = activeInstallApp();
   localStorage.setItem(installDismissedKey, new Date().toISOString());
-  localStorage.setItem(legalMitraInstallDismissedKey, new Date().toISOString());
+  if (app) {
+    localStorage.setItem(app.dismissedKey, new Date().toISOString());
+  }
   panel.remove();
   installPromptRendered = false;
 }
 
 function renderLegalMitraInstallSuggestion() {
-  if (!shouldShowInstallSuggestion() || installPromptRendered || document.getElementById("legalmitra-install-suggestion")) {
+  const app = activeInstallApp();
+  if (!app || !shouldShowInstallSuggestion() || installPromptRendered || document.getElementById("sanmitra-install-suggestion")) {
     return;
   }
 
@@ -103,11 +133,12 @@ function renderLegalMitraInstallSuggestion() {
   if (!hasNativePrompt && !isIosLikeDevice()) {
     return;
   }
-  const copy = buildInstallCopy(hasNativePrompt);
+  const copy = buildInstallCopy(hasNativePrompt, app);
   const panel = document.createElement("section");
-  panel.className = "legal-install-suggestion";
-  panel.id = "legalmitra-install-suggestion";
-  panel.setAttribute("aria-label", "Install LegalMitra");
+  panel.className = "legal-install-suggestion sanmitra-install-suggestion";
+  panel.id = "sanmitra-install-suggestion";
+  panel.dataset.installApp = app.id;
+  panel.setAttribute("aria-label", app.label);
   panel.innerHTML = `
     <div>
       <strong>${copy.title}</strong>

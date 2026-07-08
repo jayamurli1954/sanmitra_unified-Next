@@ -432,9 +432,16 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert 'id="account-menu-trigger"' in index_source
     assert 'id="topbar-update-password"' in index_source
     assert 'id="password-dialog"' in index_source
+    assert 'id="forgot-password-open"' in index_source
+    assert 'id="forgot-password-form"' in index_source
+    assert 'id="reset-password-form"' in index_source
     assert "function signOutAndReturnToLogin()" in app_source
     assert "function updateCurrentPassword()" in app_source
+    assert "async function requestPasswordReset()" in app_source
+    assert "async function completePasswordReset()" in app_source
     assert "/api/v1/auth/change-password" in app_source
+    assert "/api/v1/auth/forgot-password" in app_source
+    assert "/api/v1/auth/reset-password" in app_source
     assert 'document.getElementById("topbar-logout")?.addEventListener("click"' in app_source
     assert 'document.getElementById("sidebar-logout")?.addEventListener("click"' in app_source
     assert 'document.getElementById("topbar-update-password")?.addEventListener("click", openPasswordDialog)' in app_source
@@ -444,6 +451,15 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert ".app.signed-out .main" in css_source
     assert ".app.signed-out .topbar" in css_source
     assert ".app.signed-in .topbar-actions" in css_source
+
+
+def test_shared_pwa_shell_supports_mitrabooks_install_prompt() -> None:
+    pwa_source = (REPO_ROOT / "frontend" / "shared" / "pwa-shell.js").read_text(encoding="utf-8")
+
+    assert "function isMitraBooksPath()" in pwa_source
+    assert 'name: "MitraBooks"' in pwa_source
+    assert 'dismissedKey: mitraBooksInstallDismissedKey' in pwa_source
+    assert "Add ${app.name} to Home Screen" in pwa_source
 
 
 def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None:
