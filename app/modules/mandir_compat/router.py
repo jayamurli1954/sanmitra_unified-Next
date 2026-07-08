@@ -7960,6 +7960,8 @@ async def mandir_temples_onboard(
             )
             raise HTTPException(status_code=403, detail="Invalid or missing onboarding token")
     else:
+        if str(_settings.ENVIRONMENT or "").strip().lower() in {"production", "prod"}:
+            raise HTTPException(status_code=503, detail="Mandir onboarding is not configured")
         logger.info(
             "Onboarding endpoint called without secret enforcement (MANDIR_ONBOARDING_SECRET not set). "
             "Set this env var in production to protect this endpoint."
@@ -8412,8 +8414,6 @@ async def mandir_public_devotee_autofill(
         "found": True,
         "devotee": {
             "name": str(doc.get("name") or ""),
-            "email": str(doc.get("email") or ""),
-            "address": str(doc.get("address") or ""),
             "city": str(doc.get("city") or ""),
             "state": str(doc.get("state") or ""),
             "pincode": str(doc.get("pincode") or ""),
@@ -8669,16 +8669,23 @@ async def mandir_public_create_seva_payment(
 @router.get("/public/payments/{payment_id}/status")
 async def mandir_public_payment_status(
     payment_id: str,
+    temple_id: int = Query(..., ge=1),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
     app_key = resolve_app_key((x_app_key or "mandirmitra").strip())
+    tenant_id = await resolve_tenant_by_temple_id(temple_id, app_key=app_key)
+    if not tenant_id:
+        raise HTTPException(status_code=404, detail="Temple not found")
+
+    normalized_payment_id = str(payment_id or "").strip()
+    if not normalized_payment_id:
+        raise HTTPException(status_code=400, detail="Payment ID is required")
+
     col = get_collection("mandir_public_payments")
     doc = await col.find_one({
+        "tenant_id": tenant_id,
         "app_key": app_key,
-        "$or": [
-            {"id": payment_id},
-            {"id": {"$regex": f"^{payment_id[:8].lower()}"}},
-        ],
+        "id": normalized_payment_id,
     })
     if not doc:
         raise HTTPException(status_code=404, detail="Payment not found")

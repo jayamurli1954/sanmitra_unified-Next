@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,12 +9,16 @@ from app.accounting.models.entities import Account, JournalEntry, JournalLine
 from app.core.auth.dependencies import get_current_user
 from app.core.auth.schemas import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse
 from app.core.auth.service import login_user, logout_refresh_token, rotate_refresh_token
+from app.core.rate_limiting import limiter
 from app.core.users.service import create_user
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 
 router = APIRouter(prefix="/api", tags=["legacy-api-compat"])
+AUTH_LOGIN_RATE_LIMIT = "10/minute"
+AUTH_REGISTER_RATE_LIMIT = "5/minute"
+AUTH_REFRESH_RATE_LIMIT = "20/minute"
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -244,7 +248,9 @@ async def _gruhamitra_dashboard_summary(
 
 @router.post("/auth/login", response_model=TokenResponse)
 @router.post("/auth/legacy-login", response_model=TokenResponse)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def legacy_auth_login(
+    request: Request,
     payload: LoginRequest,
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
@@ -255,17 +261,48 @@ async def legacy_auth_login(
 
 
 @router.post("/auth/register")
-async def legacy_auth_register(payload: dict):
+@limiter.limit(AUTH_REGISTER_RATE_LIMIT)
+async def legacy_auth_register(payload: dict, request: Request):
+    from app.core.auth.registration_policy import (
+        assert_open_registration_allowed,
+        normalize_public_self_service_role,
+        resolve_self_service_tenant_id,
+    )
+
+    assert_open_registration_allowed()
+
     email = str(payload.get("email") or "").strip().lower()
     password = str(payload.get("password") or "")
     full_name = str(payload.get("full_name") or payload.get("name") or "User").strip()
-    tenant_id = str(payload.get("tenant_id") or "seed-tenant-1").strip()
-    role = str(payload.get("role") or "operator").strip()
+    onboarding_request_id = str(payload.get("onboarding_request_id") or "").strip() or None
+    role = normalize_public_self_service_role(payload.get("role"))
+    tenant_id = await resolve_self_service_tenant_id(
+        requested_tenant_id=payload.get("tenant_id"),
+        onboarding_request_id=onboarding_request_id,
+        email=email,
+    )
 
-    user = await create_user(email=email, password=password, full_name=full_name, tenant_id=tenant_id, role=role)
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Valid email is required")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    try:
+        user = await create_user(
+            email=email,
+            password=password,
+            full_name=full_name,
+            tenant_id=tenant_id,
+            role=role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
     return {"status": "created", "user": user}
 @router.post("/auth/local-login", response_model=TokenResponse)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def legacy_auth_local_login(
+    request: Request,
     payload: LoginRequest,
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
@@ -275,7 +312,9 @@ async def legacy_auth_local_login(
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)
+@limiter.limit(AUTH_REFRESH_RATE_LIMIT)
 async def legacy_auth_refresh(
+    request: Request,
     payload: RefreshRequest,
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):

@@ -412,6 +412,55 @@ class TestMaintenanceBillPaymentLinkage:
         assert collections.delete_one.call_args[0][0]["app_key"] == "gruhamitra"
         assert not bills.update_one.called
 
+    @pytest.mark.asyncio
+    async def test_bill_collection_update_failure_reverses_posted_journal_and_rolls_back_collection(self):
+        session = AsyncMock(spec=AsyncSession)
+        collections = AsyncMock()
+        collections.insert_one = AsyncMock()
+        collections.delete_one = AsyncMock()
+        bills = AsyncMock()
+        bills.find_one = AsyncMock(
+            return_value={
+                "id": "bill-1",
+                "tenant_id": "T123",
+                "app_key": "gruhamitra",
+                "flat_number": "A-101",
+                "amount": "3000.00",
+                "paid_amount": "0.00",
+                "status": "posted",
+            }
+        )
+        bills.update_one = AsyncMock(side_effect=RuntimeError("bill update failed"))
+        reverse_calls: list[dict] = []
+
+        async def fake_reverse_journal_entry(_session, **kwargs):
+            reverse_calls.append(kwargs)
+            return MagicMock(id=999), True
+
+        def fake_get_collection(name):
+            if name == "housing_maintenance_bills":
+                return bills
+            return collections
+
+        with patch("app.modules.housing.service.get_collection", side_effect=fake_get_collection), \
+             patch("app.modules.housing.service.post_journal_entry", return_value=(MagicMock(id=333), True)), \
+             patch("app.modules.housing.service.reverse_journal_entry", side_effect=fake_reverse_journal_entry):
+            with pytest.raises(HTTPException) as exc_info:
+                await record_maintenance_collection(
+                    session,
+                    tenant_id="T123",
+                    app_key="gruhamitra",
+                    created_by="user1",
+                    payload=_create_bill_payment_payload(),
+                )
+
+        assert exc_info.value.status_code == 500
+        assert "automatically reversed" in str(exc_info.value.detail)
+        assert collections.delete_one.called
+        assert reverse_calls[0]["tenant_id"] == "T123"
+        assert reverse_calls[0]["journal_id"] == 333
+        assert reverse_calls[0]["app_key"] == "gruhamitra"
+
 
 class TestIndexStructure:
     """Verify index structure enforces app_key boundary"""

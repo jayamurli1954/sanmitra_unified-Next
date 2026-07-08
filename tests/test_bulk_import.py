@@ -73,3 +73,55 @@ async def test_bulk_import_reverses_journal_when_voucher_persistence_fails(monke
     assert reversal_box["tenant_id"] == "t1"
     assert reversal_box["journal_id"] == 77
     assert reversal_box["app_key"] == "mitrabooks"
+
+
+@pytest.mark.asyncio
+async def test_bulk_import_posting_failure_does_not_persist_voucher(monkeypatch):
+    preview = {
+        "can_import": True,
+        "format_type": "double_entry",
+        "vouchers": [
+            {
+                "voucher_number": "JV-002",
+                "voucher_type": "journal",
+                "date": "2026-04-04",
+                "amount": "1000.00",
+                "description": "Failed posting",
+                "debit_account_id": 11,
+                "credit_account_id": 22,
+                "party_id": None,
+            }
+        ],
+    }
+    vouchers_collection = _Collection(fail_insert=False)
+
+    async def _fake_preview(*args, **kwargs):
+        return preview
+
+    async def _failing_post(*_args, **_kwargs):
+        raise RuntimeError("posting failed")
+
+    reversal_called = False
+
+    async def _fake_reverse(*_args, **_kwargs):
+        nonlocal reversal_called
+        reversal_called = True
+        return _Journal(), True
+
+    monkeypatch.setattr(bulk_import, "build_bulk_import_preview", _fake_preview)
+    monkeypatch.setattr(bulk_import, "post_journal_entry", _failing_post)
+    monkeypatch.setattr(bulk_import, "reverse_journal_entry", _fake_reverse)
+    monkeypatch.setattr(bulk_import, "get_collection", lambda _name: vouchers_collection)
+
+    with pytest.raises(RuntimeError, match="posting failed"):
+        await bulk_import.post_bulk_import_vouchers(
+            object(),
+            tenant_id="t1",
+            app_key="mitrabooks",
+            accounting_entity_id="primary",
+            csv_text="ignored",
+            created_by="admin",
+        )
+
+    assert vouchers_collection.docs == []
+    assert reversal_called is False

@@ -235,3 +235,24 @@ async def test_payroll_run_reverses_journal_when_mongo_persistence_fails(fake_db
     assert captured_reversal["tenant_id"] == "t1"
     assert captured_reversal["journal_id"] == 42
     assert captured_reversal["app_key"] == "mitrabooks"
+
+
+@pytest.mark.asyncio
+async def test_payroll_run_posting_failure_does_not_persist_run_or_slips(fake_db, captured_journal, monkeypatch):
+    _seed(fake_db)
+
+    async def _failing_post(*_args, **_kwargs):
+        raise RuntimeError("posting failed")
+
+    monkeypatch.setattr(pr, "post_journal_entry", _failing_post)
+
+    with pytest.raises(RuntimeError, match="posting failed"):
+        await pr.run_payroll(
+            object(), tenant_id="t1", app_key="mitrabooks", accounting_entity_id="primary",
+            created_by="admin", year=2026, month=2, total_days=28,
+        )
+
+    runs = fake_db.setdefault("hr_payroll_runs", FakeCollection())
+    slips = fake_db.setdefault("hr_salary_slips", FakeCollection())
+    assert runs.docs == []
+    assert slips.docs == []

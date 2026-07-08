@@ -246,6 +246,39 @@ async def test_platform_temple_listing_recovers_legacy_mandir_app_key(monkeypatc
     assert [row["tenant_id"] for row in gruha_rows] == ["gruhamitra-society"]
 
 
+def test_public_devotee_autofill_returns_minimal_pii(mandir_upi_client):
+    client, collections = mandir_upi_client
+    collections["mandir_devotees"].docs[:] = [
+        {
+            "tenant_id": "tenant-1",
+            "app_key": "mandirmitra",
+            "phone": "9876512999",
+            "name": "Raghavan Iyer",
+            "email": "secret@example.com",
+            "address": "123 Private Lane",
+            "city": "Bengaluru",
+            "state": "Karnataka",
+            "pincode": "560001",
+            "gothra": "Bharadwaja",
+            "nakshtra": "Ashwini",
+            "rashi": "Mesha",
+        }
+    ]
+
+    response = client.get(
+        "/api/v1/public/temples/1/devotee/autofill/9876512999",
+        headers={"X-App-Key": "mandirmitra"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["found"] is True
+    devotee = payload["devotee"]
+    assert devotee["name"] == "Raghavan Iyer"
+    assert "email" not in devotee
+    assert "address" not in devotee
+    assert devotee["city"] == "Bengaluru"
+
+
 @pytest.mark.asyncio
 async def test_public_donation_categories_are_temple_specific(monkeypatch):
     temples = FakeCollection(
@@ -1619,28 +1652,82 @@ def test_public_payments_listing_supports_filters_and_offset(mandir_upi_client):
     assert offset.json()[0]["id"] == "pay-beta"
 
 
-def test_public_payment_status_is_app_key_scoped(mandir_upi_client):
+def test_public_payment_status_requires_temple_id_and_is_tenant_scoped(mandir_upi_client):
     client, collections = mandir_upi_client
     collections["mandir_public_payments"].docs.append(
         {
             "id": "pay-mitra-only",
+            "temple_id": 1,
             "tenant_id": "tenant-1",
-            "app_key": "mitrabooks",
+            "app_key": "mandirmitra",
             "seva_name": "Sarva Seve",
             "amount": 501,
             "status": "pending",
         }
     )
 
-    blocked = client.get("/api/v1/public/payments/pay-mitra-only/status")
+    missing_temple = client.get("/api/v1/public/payments/pay-mitra-only/status")
+    assert missing_temple.status_code == 422
+
+    blocked = client.get(
+        "/api/v1/public/payments/pay-mitra-only/status",
+        headers={"X-App-Key": "mitrabooks"},
+        params={"temple_id": 1},
+    )
     assert blocked.status_code == 404
 
     ok = client.get(
         "/api/v1/public/payments/pay-mitra-only/status",
-        headers={"X-App-Key": "mitrabooks"},
+        headers={"X-App-Key": "mandirmitra"},
+        params={"temple_id": 1},
     )
     assert ok.status_code == 200
     assert ok.json()["status"] == "pending"
+
+
+def test_public_payment_status_rejects_cross_tenant_prefix_guessing(mandir_upi_client):
+    client, collections = mandir_upi_client
+    shared_prefix = "abcd1234"
+    collections["mandir_public_payments"].docs.extend(
+        [
+            {
+                "id": f"{shared_prefix}-tenant-1",
+                "temple_id": 1,
+                "tenant_id": "tenant-1",
+                "app_key": "mandirmitra",
+                "status": "pending",
+            },
+            {
+                "id": f"{shared_prefix}-tenant-2",
+                "temple_id": 2,
+                "tenant_id": "tenant-2",
+                "app_key": "mandirmitra",
+                "status": "verified",
+            },
+        ]
+    )
+
+    tenant_one = client.get(
+        f"/api/v1/public/payments/{shared_prefix}/status",
+        headers={"X-App-Key": "mandirmitra"},
+        params={"temple_id": 1},
+    )
+    assert tenant_one.status_code == 404
+
+    tenant_one_exact = client.get(
+        f"/api/v1/public/payments/{shared_prefix}-tenant-1/status",
+        headers={"X-App-Key": "mandirmitra"},
+        params={"temple_id": 1},
+    )
+    assert tenant_one_exact.status_code == 200
+    assert tenant_one_exact.json()["status"] == "pending"
+
+    cross_tenant = client.get(
+        f"/api/v1/public/payments/{shared_prefix}-tenant-2/status",
+        headers={"X-App-Key": "mandirmitra"},
+        params={"temple_id": 1},
+    )
+    assert cross_tenant.status_code == 404
 
 
 def test_public_payment_verify_is_app_key_scoped(mandir_upi_client):

@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from app.core.rate_limiting import limiter
 
 _auth_logger = logging.getLogger(__name__)
 from app.config import get_settings
@@ -26,6 +27,11 @@ from app.core.auth.schemas import (
     TokenResponse,
 )
 from app.core.auth.security import decode_token, hash_password, verify_password
+from app.core.auth.registration_policy import (
+    assert_open_registration_allowed,
+    normalize_public_self_service_role,
+    resolve_self_service_tenant_id,
+)
 from app.core.auth.service import (
     login_google_user,
     login_user,
@@ -39,6 +45,15 @@ from app.core.users.service import create_user, get_user_by_email
 from app.db.mongo import get_collection
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+AUTH_LOGIN_RATE_LIMIT = "10/minute"
+AUTH_REGISTER_RATE_LIMIT = "5/minute"
+AUTH_RECOVERY_RATE_LIMIT = "5/minute"
+AUTH_OTP_SEND_RATE_LIMIT = "5/minute"
+AUTH_OTP_VERIFY_RATE_LIMIT = "10/minute"
+AUTH_GOOGLE_RATE_LIMIT = "10/minute"
+AUTH_ACTIVATE_RATE_LIMIT = "5/minute"
+AUTH_REFRESH_RATE_LIMIT = "20/minute"
 
 
 LOGIN_ACTIVITY_COLLECTION = "core_auth_login_activity"
@@ -274,6 +289,7 @@ async def _log_login_activity(*, request: Request, access_token: str, auth_provi
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def login(payload: LoginRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await login_user(payload.email, payload.password, app_key=app_key)
     await _log_login_activity(
@@ -286,6 +302,7 @@ async def login(payload: LoginRequest, request: Request, app_key: str = Depends(
 
 
 @router.post("/local-login", response_model=TokenResponse)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def local_login(payload: LoginRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await login_user(payload.email, payload.password, app_key=app_key)
     await _log_login_activity(
@@ -298,12 +315,20 @@ async def local_login(payload: LoginRequest, request: Request, app_key: str = De
 
 
 @router.post("/register")
-async def register(payload: dict):
+@limiter.limit(AUTH_REGISTER_RATE_LIMIT)
+async def register(payload: dict, request: Request):
+    assert_open_registration_allowed()
+
     email = str(payload.get("email") or "").strip().lower()
     password = str(payload.get("password") or "")
     full_name = str(payload.get("full_name") or payload.get("name") or "User").strip()
-    tenant_id = str(payload.get("tenant_id") or "seed-tenant-1").strip()
-    role = str(payload.get("role") or "operator").strip()
+    onboarding_request_id = str(payload.get("onboarding_request_id") or "").strip() or None
+    role = normalize_public_self_service_role(payload.get("role"))
+    tenant_id = await resolve_self_service_tenant_id(
+        requested_tenant_id=payload.get("tenant_id"),
+        onboarding_request_id=onboarding_request_id,
+        email=email,
+    )
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email is required")
@@ -319,11 +344,17 @@ async def register(payload: dict):
 
 
 @router.post("/register-request")
+@limiter.limit(AUTH_REGISTER_RATE_LIMIT)
 async def register_request(payload: dict, request: Request):
     email = str(payload.get("email") or "").strip().lower()
     full_name = str(payload.get("full_name") or payload.get("name") or "").strip() or "User"
-    tenant_id = str(payload.get("tenant_id") or "seed-tenant-1").strip() or "seed-tenant-1"
-    role = str(payload.get("role") or "operator").strip() or "operator"
+    onboarding_request_id = str(payload.get("onboarding_request_id") or "").strip() or None
+    role = normalize_public_self_service_role(payload.get("role"))
+    tenant_id = await resolve_self_service_tenant_id(
+        requested_tenant_id=payload.get("tenant_id"),
+        onboarding_request_id=onboarding_request_id,
+        email=email,
+    )
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email is required")
@@ -334,11 +365,14 @@ async def register_request(payload: dict, request: Request):
         raise HTTPException(status_code=409, detail="User with this email already exists")
 
     settings = get_settings()
+    activation_meta = {"full_name": full_name, "tenant_id": tenant_id, "role": role}
+    if onboarding_request_id:
+        activation_meta["onboarding_request_id"] = onboarding_request_id
     token = await _create_email_action_token(
         action="activation",
         email=email,
         ttl_minutes=settings.AUTH_ACTIVATION_TOKEN_TTL_MINUTES,
-        meta={"full_name": full_name, "tenant_id": tenant_id, "role": role},
+        meta=activation_meta,
     )
 
     public_base = _resolve_public_auth_base_url(request)
@@ -379,7 +413,8 @@ async def register_request(payload: dict, request: Request):
 
 
 @router.post("/activate")
-async def activate_account(payload: dict):
+@limiter.limit(AUTH_ACTIVATE_RATE_LIMIT)
+async def activate_account(payload: dict, request: Request):
     token = str(payload.get("token") or "").strip()
     password = str(payload.get("password") or "")
     confirm_password = str(payload.get("confirm_password") or "")
@@ -401,8 +436,12 @@ async def activate_account(payload: dict):
         raise HTTPException(status_code=409, detail="User with this email already exists")
 
     full_name = str(meta.get("full_name") or "User").strip() or "User"
-    tenant_id = str(meta.get("tenant_id") or "seed-tenant-1").strip() or "seed-tenant-1"
-    role = str(meta.get("role") or "operator").strip() or "operator"
+    tenant_id = await resolve_self_service_tenant_id(
+        requested_tenant_id=meta.get("tenant_id"),
+        onboarding_request_id=meta.get("onboarding_request_id"),
+        email=email,
+    )
+    role = normalize_public_self_service_role(meta.get("role"))
 
     try:
         user = await create_user(email=email, password=password, full_name=full_name, tenant_id=tenant_id, role=role)
@@ -414,6 +453,7 @@ async def activate_account(payload: dict):
 
 
 @router.post("/forgot-password")
+@limiter.limit(AUTH_RECOVERY_RATE_LIMIT)
 async def forgot_password(payload: dict, request: Request, app_key: str = Depends(inject_app_key)):
     email = str(payload.get("email") or "").strip().lower()
     if not email or "@" not in email:
@@ -478,7 +518,8 @@ async def forgot_password(payload: dict, request: Request, app_key: str = Depend
 
 
 @router.post("/reset-password")
-async def reset_password(payload: dict):
+@limiter.limit(AUTH_RECOVERY_RATE_LIMIT)
+async def reset_password(payload: dict, request: Request):
     token = str(payload.get("token") or "").strip()
     new_password = str(payload.get("new_password") or payload.get("password") or "")
     confirm_password = str(payload.get("confirm_password") or "")
@@ -543,10 +584,12 @@ async def auth_me(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/google", response_model=TokenResponse)
+@limiter.limit(AUTH_GOOGLE_RATE_LIMIT)
 async def google_login(payload: GoogleLoginRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await login_google_user(
         payload.id_token,
         payload.tenant_id,
+        onboarding_request_id=payload.onboarding_request_id,
         app_key=app_key,
     )
     await _log_login_activity(
@@ -559,18 +602,21 @@ async def google_login(payload: GoogleLoginRequest, request: Request, app_key: s
 
 
 @router.post("/mobile-otp/send", response_model=MobileOtpSendResponse)
-async def mobile_otp_send(payload: MobileOtpSendRequest):
+@limiter.limit(AUTH_OTP_SEND_RATE_LIMIT)
+async def mobile_otp_send(payload: MobileOtpSendRequest, request: Request):
     result = await send_mobile_otp(payload.mobile)
     return MobileOtpSendResponse(**result)
 
 
 @router.post("/mobile-otp/verify", response_model=TokenResponse)
+@limiter.limit(AUTH_OTP_VERIFY_RATE_LIMIT)
 async def mobile_otp_verify(payload: MobileOtpVerifyRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await verify_mobile_otp(
         mobile=payload.mobile,
         otp=payload.otp,
         tenant_id=payload.tenant_id,
         full_name=payload.full_name,
+        onboarding_request_id=payload.onboarding_request_id,
         app_key=app_key,
     )
     await _log_login_activity(
@@ -583,7 +629,8 @@ async def mobile_otp_verify(payload: MobileOtpVerifyRequest, request: Request, a
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest, app_key: str = Depends(inject_app_key)):
+@limiter.limit(AUTH_REFRESH_RATE_LIMIT)
+async def refresh(payload: RefreshRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await rotate_refresh_token(payload.refresh_token, app_key=app_key)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 

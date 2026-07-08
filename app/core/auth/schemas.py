@@ -33,6 +33,7 @@ class LogoutRequest(BaseModel):
 class GoogleLoginRequest(BaseModel):
     id_token: str = Field(min_length=10)
     tenant_id: str | None = Field(default=None, min_length=2, max_length=64)
+    onboarding_request_id: str | None = Field(default=None, min_length=2, max_length=128)
 
 
 class MobileOtpSendRequest(BaseModel):
@@ -53,4 +54,5 @@ class MobileOtpVerifyRequest(BaseModel):
     otp: str = Field(min_length=4, max_length=8)
     tenant_id: str | None = Field(default=None, min_length=2, max_length=64)
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    onboarding_request_id: str | None = Field(default=None, min_length=2, max_length=128)
 

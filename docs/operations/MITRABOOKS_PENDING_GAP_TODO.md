@@ -75,6 +75,69 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url http://127.0.0.1
 - [ ] Reconfirm hosted staging destructive mutation after the 2026-07-07 credential drift: latest rerun reached deployed login and failed with `Invalid credentials`, so the demo admin password/seed must be realigned before production signoff can be treated as current.
 - [ ] Reseed or discard hosted staging demo data after mutation if the hosted demo tenant must return to a clean baseline; generated documents were reversed/cancelled by the E2E, but generated parties may remain as test data.
 
+## Security P0/P1/P2 (Code Review 2026-07-05)
+
+Living security tracker derived from:
+
+- [`docs/operations/Code_Review-Sanmitra_Unified-Next.docx`](Code_Review-Sanmitra_Unified-Next.docx)
+- [`docs/reviews/MITRABOOKS_REVIEW_2026-06-26.md`](../reviews/MITRABOOKS_REVIEW_2026-06-26.md)
+- [`docs/reviews/SECURITY_REMEDIATION_PR_PLAN.md`](../reviews/SECURITY_REMEDIATION_PR_PLAN.md)
+
+Remediation PR mapping: [`docs/reviews/SECURITY_REMEDIATION_PR_PLAN.md`](../reviews/SECURITY_REMEDIATION_PR_PLAN.md) (`PR1`–`PR13`). Full static review snapshot: [`docs/operations/Code_Review-Sanmitra_Unified-Next.docx`](Code_Review-Sanmitra_Unified-Next.docx). Mark items `~~[x]~~` only with test/PR evidence. Do not treat MitraBooks module completion as security signoff.
+
+### Security release gate (production-hardened)
+
+- [ ] All `[ ]` and unresolved `[~]` **P0** items below are closed.
+- [ ] Hosted staging destructive mutation reconfirmed after demo credential realignment (see Hosted Gate Evidence above).
+- [ ] `MANDIR_ONBOARDING_SECRET`, `JWT_SECRET`, and `OTP_PEPPER` set in production; all `*_BOOTSTRAP=false`.
+- [ ] `AUTH_EMAIL_DEBUG_RETURN_LINK=false` and `MOBILE_OTP_DEBUG_RETURN_CODE=false` in production.
+- [ ] `python scripts/preflight.py --all` passed on the release candidate.
+
+### P0 — before production signoff
+
+| ID | Item | PR | Status |
+| --- | --- | --- | --- |
+| SEC-P0-00 | `[CRITICAL-ACCOUNTING]` Cross-store posting boundary: PostgreSQL ledger commit before Mongo source write can orphan posted journals (`post_journal_entry`, payroll, bulk import, and similar Mongo+ledger flows). Compensation must be explicit per flow with failure tests. | — | [~] Payroll/bulk-import failure-boundary coverage added in `tests/test_hr_payroll_run.py` and `tests/test_bulk_import.py` (posting failure leaves Mongo untouched; Mongo write failure triggers reversal). Gruha maintenance now compensates bill-update-after-post failures with automatic reversal in `app/modules/housing/service.py`, covered by `tests/test_gruhamitra_security_isolation.py`. Additional `post_journal_entry` callers outside this track still require explicit flow-by-flow signoff. |
+| SEC-P0-01 | `[CRITICAL-SECURITY]` Strip `hashed_password` and other internal fields from `GET /api/v1/users/me`. | PR1 | ~~[x]~~ `app/core/users/router.py` allow-list serializer; `tests/test_users_me_context.py::test_me_excludes_hashed_password` |
+| SEC-P0-02 | `[CRITICAL-SECURITY]` Harden `POST /auth/register`, `/register-request`, and legacy register: no client-controlled `role`/`tenant_id` without invite/onboarding approval. | PR2 | ~~[x]~~ `app/core/auth/registration_policy.py` + hardened register paths; `tests/test_auth_registration_policy.py` |
+| SEC-P0-03 | `[CRITICAL-TENANCY]` Mobile OTP and Google first-login must not assign caller-supplied `tenant_id` without invite/join-request policy. | PR3 | ~~[x]~~ OTP/Google use `resolve_self_service_tenant_id`; `tests/test_auth_google.py`, `tests/test_auth_registration_policy.py` |
+| SEC-P0-04 | `[CRITICAL-TENANCY]` Mandir public payment status must scope by `tenant_id`, remove prefix-regex enumeration, and return minimal fields. | PR5 | ~~[x]~~ `mandir_public_payment_status` requires `temple_id` + exact `id` match; `tests/test_mandir_posting_guardrails.py` |
+| SEC-P0-05 | `[CRITICAL-SECURITY]` Require `MANDIR_ONBOARDING_SECRET` in production startup; reject onboard without `X-Onboarding-Token` when secret is configured. | PR6 | ~~[x]~~ `Settings.validate()` prod gate + endpoint 503 fallback; `tests/test_auth_registration_policy.py` |
+| SEC-P0-06 | Authenticate and rate-limit `/legal/news`, `/judgements`, `/web-search-rag` (Tavily proxy abuse). | PR7 | ~~[x]~~ `app/modules/legal/router.py` now enforces `get_current_user` + `require_enabled_module("legal")` and SlowAPI limits; `tests/test_legal_auth.py` unauth deny coverage + `tests/test_rate_limit_wiring.py` limiter wiring assertions. |
+| SEC-P0-07 | Rate-limit auth endpoints: login, register, forgot/reset password, OTP send/verify. | PR4 | ~~[x]~~ SlowAPI limits added for `/auth/*` and legacy `/api/auth/*` auth routes in `app/core/auth/router.py` and `app/api/legacy_alias_router.py`; verified by `tests/test_rate_limit_wiring.py`. |
+
+### P1 — high value, near-term
+
+| ID | Item | PR | Status |
+| --- | --- | --- | --- |
+| SEC-P1-01 | Add `require_enabled_module()` + RBAC to `mandir_compat` write/financial/admin routes. | PR8 | [ ] |
+| SEC-P1-02 | Add `require_enabled_module()` + RBAC to `housing_compat` write/financial/admin routes. | PR9 | [ ] |
+| SEC-P1-03 | Add `require_enabled_module()` + RBAC to `mitrabooks_compat` posting/import routes. | PR10 | [ ] |
+| SEC-P1-04 | Cap `housing_compat` journal attachment upload size; align with business/legal upload limits. | PR11 | [ ] |
+| SEC-P1-05 | Reject invalid `X-App-Key` values instead of coercing to default app (`resolve_app_key`). | — | [ ] |
+| SEC-P1-06 | Mandir public devotee autofill: minimize PII returned and tighten abuse controls. | PR5 | ~~[x]~~ Email/address removed from public autofill response; `tests/test_mandir_posting_guardrails.py::test_public_devotee_autofill_returns_minimal_pii` |
+| SEC-P1-07 | Strengthen password policy (length/complexity) on register, activate, reset, and change-password. | PR11 | [ ] |
+| SEC-P1-08 | Remove or env-gate `scripts/fix_superadmin.py`; replace `.env.example` literal demo passwords with placeholders. | PR13 | ~~[x]~~ `scripts/fix_superadmin.py` requires `SUPER_ADMIN_PASSWORD`; `.env.example` placeholders |
+| SEC-P1-09 | Add audit events for super-admin `X-Tenant-ID` / `X-App-Key` override usage. | — | [ ] |
+| SEC-P1-10 | Disable OpenAPI UI (`/docs`, `/redoc`) in production. | PR11 | [ ] |
+| SEC-P1-11 | CA invite preview/accept endpoints: add rate limits; keep response free of secrets. | — | [~] Token-based invite/password-on-accept is implemented; preview rate limits and response minimization remain open. |
+
+### P2 — hardening and maintainability
+
+- [ ] Frontend: move access tokens off `localStorage` or tighten CSP; systematic `innerHTML` audit (`PR12`).
+- [ ] Split compat router monoliths; add RBAC deny-matrix tests across roles × routes.
+- [ ] Add cross-tenant RAG citation isolation tests and auth-abuse regression tests.
+- [ ] Frontend monolith extraction per Code Review DOCX (`E0`–`E26`); track separately from security P0/P1.
+
+### Security test gaps to close with P0/P1
+
+- [ ] `register` rejects client `role=super_admin` / arbitrary `tenant_id`.
+- [ ] `/users/me` never returns `hashed_password`.
+- [ ] Public Mandir payment status is isolated by `tenant_id`.
+- [ ] Invalid `X-App-Key` returns 401/403 (not default-app coercion).
+- [ ] Mongo failure after ledger commit triggers documented compensation/reversal per flow.
+- [ ] Auth endpoints return `429` under abuse thresholds.
+
 ## Phase 3 Open Gaps
 
 - ~~[x] Sales invoice API/E2E depth against real backend service/accounting layers for create -> approve/post -> report/statement/PDF/export -> cancel/reverse.~~ Browser depth remains covered by the guarded real-stack demo mutation gate; further visual/template signoff stays under print/PDF production review.

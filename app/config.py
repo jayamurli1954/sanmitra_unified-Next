@@ -141,6 +141,13 @@ class Settings:
     # If left empty, the endpoint is open (dev/demo convenience); set in production.
     MANDIR_ONBOARDING_SECRET = os.getenv("MANDIR_ONBOARDING_SECRET", "").strip()
 
+    ALLOW_OPEN_REGISTRATION = os.getenv(
+        "ALLOW_OPEN_REGISTRATION",
+        "false"
+        if os.getenv("ENVIRONMENT", "development").strip().lower() in {"production", "prod"}
+        else "true",
+    ).lower() in {"1", "true", "yes", "on"}
+
     DEFAULT_APP_KEY = os.getenv("DEFAULT_APP_KEY", "mandirmitra").strip().lower()
     ALLOWED_APP_KEYS = [
         key.strip().lower()
@@ -285,7 +292,7 @@ class Settings:
 
     def validate(self) -> None:
         """Fail fast on dangerous mis-configuration before the app accepts traffic."""
-        is_prod = self._IS_PRODUCTION
+        is_prod = str(self.ENVIRONMENT or "").strip().lower() in {"production", "prod"}
 
         if not self.JWT_SECRET:
             if is_prod:
@@ -334,6 +341,16 @@ class Settings:
             raise ValueError(
                 "MOBILE_OTP_DEBUG_RETURN_CODE must be disabled in production "
                 "(it returns OTP codes in API responses)."
+            )
+
+        if is_prod and self.ALLOW_OPEN_REGISTRATION:
+            raise ValueError(
+                "ALLOW_OPEN_REGISTRATION must be disabled in production."
+            )
+
+        if is_prod and not self.MANDIR_ONBOARDING_SECRET:
+            raise ValueError(
+                "MANDIR_ONBOARDING_SECRET must be set in production."
             )
 
         if self.SUPER_ADMIN_BOOTSTRAP and not self.SUPER_ADMIN_PASSWORD:

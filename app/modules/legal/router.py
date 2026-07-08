@@ -1,13 +1,15 @@
-﻿from fastapi import APIRouter, Depends, Header, HTTPException, Query
+﻿from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
+from app.core.rate_limiting import limiter
 from app.core.tenants.context import resolve_tenant_id
 from app.modules.legal.schemas import LegalCaseCreateRequest, LegalCaseListResponse, LegalCaseResponse
 from app.modules.legal.service import create_legal_case, list_legal_cases
 from app.services.legal_web_search import legal_web_search
 
 router = APIRouter(prefix="/legal", tags=["legal"])
+LEGAL_PROXY_RATE_LIMIT = "20/minute"
 
 
 @router.post("/cases", response_model=LegalCaseResponse)
@@ -41,9 +43,13 @@ async def get_cases(
 # --- Web Search Endpoints (Tavily Integration) ---
 
 @router.get("/news")
+@limiter.limit(LEGAL_PROXY_RATE_LIMIT)
 async def get_legal_news(
+    request: Request,
     query: str = Query(..., description="Legal topic to search (e.g., 'GST amendment 2026')"),
     max_results: int = Query(5, ge=1, le=10, description="Number of results to return"),
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get latest Indian legal news for a given topic.
@@ -62,10 +68,14 @@ async def get_legal_news(
 
 
 @router.get("/judgements")
+@limiter.limit(LEGAL_PROXY_RATE_LIMIT)
 async def get_court_judgements(
+    request: Request,
     query: str = Query(..., description="Legal topic or case name"),
     court: str = Query("Supreme Court", description="Court level: 'Supreme Court', 'High Court', or 'All'"),
     max_results: int = Query(5, ge=1, le=10, description="Number of results to return"),
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Search for specific Indian court judgements.
@@ -87,8 +97,12 @@ async def get_court_judgements(
 
 
 @router.get("/web-search-rag")
+@limiter.limit("10/minute")
 async def get_web_search_context(
+    request: Request,
     query: str = Query(..., description="User's legal question"),
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get web search context formatted for RAG pipeline enrichment.

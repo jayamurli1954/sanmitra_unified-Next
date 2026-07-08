@@ -12,6 +12,7 @@ import httpx
 _service_logger = logging.getLogger(__name__)
 
 from app.config import get_settings
+from app.core.auth.registration_policy import resolve_self_service_tenant_id
 from app.core.auth.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.core.tenants.context import get_app_key, resolve_app_key
 from app.core.tenants.service import ensure_tenant_is_active
@@ -363,6 +364,7 @@ async def verify_mobile_otp(
     otp: str,
     tenant_id: str | None = None,
     full_name: str | None = None,
+    onboarding_request_id: str | None = None,
     app_key: str | None = None,
 ):
     settings = get_settings()
@@ -424,7 +426,10 @@ async def verify_mobile_otp(
             raise HTTPException(status_code=403, detail="Tenant mismatch for this account")
         return await _issue_tokens_with_context(user, app_key)
 
-    resolved_tenant = requested_tenant_id or "seed-tenant-1"
+    resolved_tenant = await resolve_self_service_tenant_id(
+        requested_tenant_id=requested_tenant_id or None,
+        onboarding_request_id=onboarding_request_id,
+    )
     await ensure_tenant_is_active(resolved_tenant)
 
     clean_name = str(full_name or "").strip() or f"Mobile User {normalized_mobile[-4:]}"
@@ -532,7 +537,12 @@ async def login_user(email: str, password: str, app_key: str | None = None):
     return await _issue_tokens_with_context(user, app_key)
 
 
-async def login_google_user(id_token: str, tenant_id: str | None = None, app_key: str | None = None):
+async def login_google_user(
+    id_token: str,
+    tenant_id: str | None = None,
+    onboarding_request_id: str | None = None,
+    app_key: str | None = None,
+):
     claims = _verify_google_id_token(id_token)
     email = str(claims.get("email") or "").strip().lower()
     provider_subject = str(claims.get("sub") or "").strip()
@@ -554,10 +564,12 @@ async def login_google_user(id_token: str, tenant_id: str | None = None, app_key
 
         return await _issue_tokens_with_context(user, app_key)
 
-    if not requested_tenant_id:
-        raise HTTPException(status_code=400, detail="tenant_id is required for first-time Google login")
-
-    await ensure_tenant_is_active(requested_tenant_id)
+    resolved_tenant = await resolve_self_service_tenant_id(
+        requested_tenant_id=requested_tenant_id or None,
+        onboarding_request_id=onboarding_request_id,
+        email=email,
+    )
+    await ensure_tenant_is_active(resolved_tenant)
 
     full_name = str(claims.get("name") or email.split("@")[0]).strip()
 
@@ -565,7 +577,7 @@ async def login_google_user(id_token: str, tenant_id: str | None = None, app_key
         user = await create_user_from_google(
             email=email,
             full_name=full_name,
-            tenant_id=requested_tenant_id,
+            tenant_id=resolved_tenant,
             role="operator",
             provider_subject=provider_subject,
             app_key=app_key,

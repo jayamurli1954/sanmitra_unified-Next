@@ -100,3 +100,24 @@ def test_legal_v2_official_forms_rejects_cross_tenant_header() -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Tenant override not allowed"
+
+
+def test_legal_news_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/news", params={"query": "tenant eviction"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_judgements_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/judgements", params={"query": "rera compliance"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_web_search_rag_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/web-search-rag", params={"query": "latest tenancy law"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"

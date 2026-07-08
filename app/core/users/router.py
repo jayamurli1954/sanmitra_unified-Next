@@ -11,6 +11,43 @@ from app.db.mongo import get_collection
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+_ME_PROFILE_FIELDS = frozenset({
+    "user_id",
+    "email",
+    "full_name",
+    "role",
+    "system_role",
+    "tenant_id",
+    "app_key",
+    "auth_provider",
+    "is_active",
+    "mobile",
+    "phone",
+    "avatar_url",
+    "permissions",
+    "created_at",
+    "updated_at",
+    "last_login_at",
+    "provider_subject",
+    "accepted_terms_at",
+})
+
+
+def _public_user_profile(current_user: dict, user_doc: dict | None) -> dict:
+    merged = {**current_user, **(user_doc or {})}
+    profile = {key: merged[key] for key in _ME_PROFILE_FIELDS if key in merged}
+    resolved_user_id = str(profile.get("user_id") or merged.get("sub") or "").strip()
+    if resolved_user_id:
+        profile["user_id"] = resolved_user_id
+        profile["id"] = resolved_user_id
+    role = str(profile.get("role") or merged.get("role") or "").strip()
+    if role:
+        profile["role"] = role
+        profile.setdefault("system_role", role)
+    profile["is_superuser"] = bool(merged.get("is_superuser")) or role == "super_admin"
+    profile["is_active"] = bool(merged.get("is_active", True))
+    return profile
+
 
 def _validate_profile_email(email: str) -> None:
     if (
@@ -39,16 +76,13 @@ async def me(current_user: dict = Depends(get_current_user)):
     except RuntimeError as exc:
         if "MongoDB is not initialized" not in str(exc):
             raise
-    merged_user = {**current_user, **(user_doc or {})}
+    merged_user = _public_user_profile(current_user, user_doc)
     resolved_user_id = str(merged_user.get("user_id") or user_id or "").strip()
     return {
         **merged_user,
         "_id": None,
         "id": resolved_user_id,
         "user_id": resolved_user_id,
-        "system_role": merged_user.get("system_role") or merged_user.get("role"),
-        "is_superuser": bool(merged_user.get("is_superuser")) or str(merged_user.get("role") or "").strip() == "super_admin",
-        "is_active": bool(merged_user.get("is_active", True)),
         "tenant": tenant,
         "organization_type": (tenant or {}).get("organization_type"),
         "enabled_modules": (tenant or {}).get("enabled_modules", []),

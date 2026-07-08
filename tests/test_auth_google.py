@@ -43,7 +43,7 @@ async def test_google_login_existing_user(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_google_login_requires_tenant_for_first_login(monkeypatch) -> None:
+async def test_google_login_blocks_unapproved_tenant_for_first_login(monkeypatch) -> None:
     def fake_verify(_token: str):
         return {
             "email": "newlawyer@example.com",
@@ -55,13 +55,17 @@ async def test_google_login_requires_tenant_for_first_login(monkeypatch) -> None
     async def fake_get_user_by_email(_email: str):
         return None
 
+    class FakeSettings:
+        ALLOW_OPEN_REGISTRATION = False
+
     monkeypatch.setattr(auth_service, "_verify_google_id_token", fake_verify)
     monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr("app.core.auth.registration_policy.get_settings", lambda: FakeSettings())
 
     with pytest.raises(HTTPException) as exc:
-        await auth_service.login_google_user("id-token", None)
+        await auth_service.login_google_user("id-token", "tenant-b")
 
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -95,16 +99,20 @@ async def test_google_login_creates_user_for_first_login(monkeypatch) -> None:
     async def fake_tenant_check(_tenant_id: str | None) -> None:
         return None
 
+    class FakeSettings:
+        ALLOW_OPEN_REGISTRATION = True
+
     monkeypatch.setattr(auth_service, "_verify_google_id_token", fake_verify)
     monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
     monkeypatch.setattr(auth_service, "create_user_from_google", fake_create_user_from_google)
     monkeypatch.setattr(auth_service, "_issue_tokens_for_user", fake_issue_tokens)
     monkeypatch.setattr(auth_service, "ensure_tenant_is_active", fake_tenant_check)
+    monkeypatch.setattr("app.core.auth.registration_policy.get_settings", lambda: FakeSettings())
 
-    access, refresh = await auth_service.login_google_user("id-token", "tenant-b")
+    access, refresh = await auth_service.login_google_user("id-token", "seed-tenant-1")
     assert access == "access-new"
     assert refresh == "refresh-new"
-    assert created["tenant_id"] == "tenant-b"
+    assert created["tenant_id"] == "seed-tenant-1"
     assert created["provider_subject"] == "google-sub-new"
 
 

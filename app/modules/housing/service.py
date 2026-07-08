@@ -1,5 +1,6 @@
 ﻿from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models import Account
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
-from app.accounting.service import post_journal_entry
+from app.accounting.service import post_journal_entry, reverse_journal_entry
 from app.db.mongo import get_collection
 from app.modules.housing.schemas import MaintenanceCollectionCreateRequest
 
@@ -17,6 +18,7 @@ MAINTENANCE_BILLS = "housing_maintenance_bills"
 MONEY_QUANT = Decimal("0.01")
 DEFAULT_BANK_ACCOUNT_CODES = ("11010", "11001")
 DEFAULT_MEMBER_DUES_ACCOUNT_CODE = "12001"
+_logger = logging.getLogger(__name__)
 
 
 def _money(value: Decimal | str | int) -> Decimal:
@@ -175,29 +177,66 @@ async def record_maintenance_collection(
         await collections.delete_one({"collection_id": collection_id, "tenant_id": tenant_id, "app_key": app_key})
         raise
 
-    if bill_id and new_paid_amount is not None and outstanding_amount is not None and bill_status is not None:
-        update_result = await bills.update_one(
-            {"tenant_id": tenant_id, "app_key": app_key, "id": bill_id},
-            {
-                "$set": {
-                    "paid_amount": str(new_paid_amount),
-                    "outstanding_amount": str(outstanding_amount),
-                    "status": bill_status,
-                    "payment_status": bill_status,
-                    "last_collection_id": collection_id,
-                    "last_collection_journal_entry_id": journal_entry.id,
-                    "last_paid_at": now,
-                    "updated_at": now,
-                },
-                "$push": {
-                    "collection_ids": collection_id,
-                    "collection_journal_entry_ids": journal_entry.id,
-                },
-            },
+    async def _compensate_after_posted_journal(failed_step: str) -> None:
+        await collections.delete_one(
+            {"collection_id": collection_id, "tenant_id": tenant_id, "app_key": app_key}
         )
-        if update_result.matched_count == 0:
-            await collections.delete_one({"collection_id": collection_id, "tenant_id": tenant_id, "app_key": app_key})
-            raise HTTPException(status_code=404, detail="Maintenance bill not found after accounting post")
+        try:
+            await reverse_journal_entry(
+                session,
+                tenant_id=tenant_id,
+                journal_id=int(journal_entry.id),
+                app_key=app_key,
+                accounting_entity_id="primary",
+                created_by=created_by,
+                reason=f"Compensation after maintenance {failed_step} failure for {collection_id}",
+                idempotency_key=f"maintenance-compensate:{collection_id}:{journal_entry.id}",
+            )
+        except Exception as reversal_exc:
+            _logger.exception(
+                "Maintenance compensation reversal failed for collection %s",
+                collection_id,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Maintenance persistence failed after journal posting, and automatic "
+                    "reversal also failed"
+                ),
+            ) from reversal_exc
+
+    if bill_id and new_paid_amount is not None and outstanding_amount is not None and bill_status is not None:
+        try:
+            update_result = await bills.update_one(
+                {"tenant_id": tenant_id, "app_key": app_key, "id": bill_id},
+                {
+                    "$set": {
+                        "paid_amount": str(new_paid_amount),
+                        "outstanding_amount": str(outstanding_amount),
+                        "status": bill_status,
+                        "payment_status": bill_status,
+                        "last_collection_id": collection_id,
+                        "last_collection_journal_entry_id": journal_entry.id,
+                        "last_paid_at": now,
+                        "updated_at": now,
+                    },
+                    "$push": {
+                        "collection_ids": collection_id,
+                        "collection_journal_entry_ids": journal_entry.id,
+                    },
+                },
+            )
+            if update_result.matched_count == 0:
+                raise HTTPException(status_code=404, detail="Maintenance bill not found after accounting post")
+        except Exception as exc:
+            await _compensate_after_posted_journal("bill update")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Maintenance bill update failed after journal posting; "
+                    "the accounting entry was automatically reversed"
+                ),
+            ) from exc
 
     return {
         "collection_id": collection_id,
