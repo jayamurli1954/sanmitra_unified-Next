@@ -142,6 +142,23 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       expect.arrayContaining(['business', 'accounting', 'audit'])
     );
 
+    const runId = Date.now().toString().slice(-8);
+    const e2eDate = '2098-07-02';
+    const e2eDueDate = '2098-07-20';
+    const e2ePeriod = '2098-07';
+    const e2eQuarter = '2098-Q2';
+    const e2eFinancialYear = '2098-99';
+    const e2eReturnPeriod = '072098';
+    const openingAsOf = '2098-06-30';
+    const yearEndBaseYear = 2200 + (Number.parseInt(runId.slice(-5), 10) % 7000);
+    const yearEndFinancialYear = `${yearEndBaseYear}-${String((yearEndBaseYear + 1) % 100).padStart(2, '0')}`;
+    const yearEndActivityDate = `${yearEndBaseYear}-07-05`;
+    const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
+    const inventoryEntity = `inventory-e2e-${runId}`;
+    const fixedAssetEntity = `fixed-asset-e2e-${runId}`;
+    const bankReconRef = `BR-${runId}`;
+    const bankReconAmount = '222.37';
+
     const adminSettings = await jsonRequest(page, token, 'GET', '/business/admin-settings?accounting_entity_id=primary');
     expect(adminSettings.integrations?.document_storage_provider).toBeTruthy();
     expect(adminSettings.ai_settings?.ocr_enabled).toBe(false);
@@ -299,21 +316,125 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(expense?.id, 'expense account missing').toBeTruthy();
     expect(credit?.id, 'credit account missing').toBeTruthy();
 
-    const runId = Date.now().toString().slice(-8);
-    const e2eDate = '2098-07-02';
-    const e2eDueDate = '2098-07-20';
-    const e2ePeriod = '2098-07';
-    const e2eQuarter = '2098-Q2';
-    const e2eFinancialYear = '2098-99';
-    const e2eReturnPeriod = '072098';
-    const openingAsOf = '2098-06-30';
-    const yearEndBaseYear = 2200 + (Number.parseInt(runId.slice(-5), 10) % 7000);
-    const yearEndFinancialYear = `${yearEndBaseYear}-${String((yearEndBaseYear + 1) % 100).padStart(2, '0')}`;
-    const yearEndActivityDate = `${yearEndBaseYear}-07-05`;
-    const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
-    const inventoryEntity = `inventory-e2e-${runId}`;
-    const bankReconRef = `BR-${runId}`;
-    const bankReconAmount = '222.37';
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/accounting/initialize-chart-of-accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': fixedAssetEntity }
+    );
+    const fixedAsset = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/fixed-assets?accounting_entity_id=${fixedAssetEntity}`,
+      {
+        asset_name: `Phase 3 E2E Laptop ${runId}`,
+        asset_account_code: '16003',
+        purchase_date: '2098-04-01',
+        cost: '120000.00',
+        salvage_value: '20000.00',
+        method: 'slm',
+        useful_life_years: '5',
+        opening_accumulated_depreciation: '0.00',
+        notes: 'Guarded real-stack fixed asset demo gate',
+      }
+    );
+    expect(fixedAsset.tenant_id).toBe(DEMO_TENANT_ID);
+    expect(fixedAsset.app_key).toBe('mitrabooks');
+    expect(fixedAsset.accounting_entity_id).toBe(fixedAssetEntity);
+    expect(fixedAsset.status).toBe('active');
+    expect(fixedAsset.asset_account_code).toBe('16003');
+
+    const fixedAssetPreview = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/depreciation/preview?financial_year=${e2eFinancialYear}&accounting_entity_id=${fixedAssetEntity}`
+    );
+    expect(fixedAssetPreview.can_post).toBe(true);
+    expect(fixedAssetPreview.rows?.some((row) => row.asset_id === fixedAsset.asset_id && decimalValue(row.depreciation) > 0)).toBeTruthy();
+    expect(decimalValue(fixedAssetPreview.total_depreciation)).toBeGreaterThan(0);
+
+    const depreciationRun = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/depreciation/run?accounting_entity_id=${fixedAssetEntity}`,
+      { financial_year: e2eFinancialYear },
+      { 'X-Idempotency-Key': `phase3-demo-depreciation-${runId}` }
+    );
+    expect(depreciationRun.created).toBe(true);
+    expect(depreciationRun.journal_entry_id).toBeTruthy();
+    expect(depreciationRun.financial_year).toBe(e2eFinancialYear);
+    expect(depreciationRun.entry_date).toBe('2099-03-31');
+    expect(decimalValue(depreciationRun.total_depreciation)).toBeGreaterThan(0);
+
+    const depreciationJournal = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/accounting/journal/${depreciationRun.journal_entry_id}`,
+      undefined,
+      { 'X-Accounting-Entity-ID': fixedAssetEntity }
+    );
+    expect(decimalValue(depreciationJournal.total_debit)).toBe(decimalValue(depreciationJournal.total_credit));
+    expect(depreciationJournal.source_document_type).toBe('depreciation');
+
+    const fixedAssetListAfterDepreciation = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/fixed-assets?accounting_entity_id=${fixedAssetEntity}`
+    );
+    const depreciatedAsset = fixedAssetListAfterDepreciation.items?.find((item) => item.asset_id === fixedAsset.asset_id);
+    expect(decimalValue(depreciatedAsset?.accumulated_depreciation)).toBeGreaterThan(0);
+    expect(decimalValue(depreciatedAsset?.book_value)).toBeLessThan(decimalValue(fixedAsset.cost));
+
+    const disposedAsset = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/fixed-assets/${fixedAsset.asset_id}/dispose?accounting_entity_id=${fixedAssetEntity}`,
+      {
+        disposal_date: '2099-03-31',
+        sale_value: '90000.00',
+        cash_bank_account_code: '11010',
+        reason: `Phase 3 E2E fixed asset disposal ${runId}`,
+      },
+      { 'X-Idempotency-Key': `phase3-demo-fixed-asset-disposal-${runId}` }
+    );
+    expect(disposedAsset.status).toBe('disposed');
+    expect(disposedAsset.journal_entry_id).toBeTruthy();
+    expect(disposedAsset.disposal_date).toBe('2099-03-31');
+    expect(decimalValue(disposedAsset.total_debit)).toBe(decimalValue(disposedAsset.total_credit));
+    expect(decimalValue(disposedAsset.loss)).toBeGreaterThan(0);
+
+    const disposalJournal = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/accounting/journal/${disposedAsset.journal_entry_id}`,
+      undefined,
+      { 'X-Accounting-Entity-ID': fixedAssetEntity }
+    );
+    expect(decimalValue(disposalJournal.total_debit)).toBe(decimalValue(disposalJournal.total_credit));
+    expect(disposalJournal.source_document_type).toBe('fixed_asset_disposal');
+
+    const fixedAssetListAfterDisposal = await jsonRequest(
+      page,
+      token,
+      'GET',
+      `/business/fixed-assets?accounting_entity_id=${fixedAssetEntity}`
+    );
+    const finalAsset = fixedAssetListAfterDisposal.items?.find((item) => item.asset_id === fixedAsset.asset_id);
+    expect(finalAsset?.status).toBe('disposed');
+    expect(finalAsset?.disposal_journal_entry_id).toBe(disposedAsset.journal_entry_id);
+
+    const primaryFixedAssets = await jsonRequest(page, token, 'GET', '/business/fixed-assets?accounting_entity_id=primary');
+    expect(primaryFixedAssets.items?.some((item) => item.asset_id === fixedAsset.asset_id)).toBeFalsy();
+
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');
 

@@ -171,3 +171,17 @@ def test_destructive_demo_spec_covers_document_upload_gate() -> None:
     assert "other-demo-book" in spec
     assert "auto_post_to_ledger).toBe(false)" in spec
     assert "ocr_enabled).toBe(false)" in spec
+
+
+def test_destructive_demo_spec_covers_fixed_asset_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "fixedAssetEntity" in spec
+    assert "business/fixed-assets" in spec
+    assert "business/depreciation/preview" in spec
+    assert "business/depreciation/run" in spec
+    assert "phase3-demo-depreciation" in spec
+    assert "phase3-demo-fixed-asset-disposal" in spec
+    assert "fixed_asset_disposal" in spec
+    assert "total_debit)).toBe(decimalValue" in spec
+    assert "accounting_entity_id=primary" in spec
