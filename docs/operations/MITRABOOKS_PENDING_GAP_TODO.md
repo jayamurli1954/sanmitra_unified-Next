@@ -110,9 +110,9 @@ Remediation PR mapping: [`docs/reviews/SECURITY_REMEDIATION_PR_PLAN.md`](../revi
 
 | ID | Item | PR | Status |
 | --- | --- | --- | --- |
-| SEC-P1-01 | Add `require_enabled_module()` + RBAC to `mandir_compat` write/financial/admin routes. | PR8 | [ ] |
-| SEC-P1-02 | Add `require_enabled_module()` + RBAC to `housing_compat` write/financial/admin routes. | PR9 | [ ] |
-| SEC-P1-03 | Add `require_enabled_module()` + RBAC to `mitrabooks_compat` posting/import routes. | PR10 | [ ] |
+| SEC-P1-01 | Add `require_enabled_module()` + RBAC to `mandir_compat` write/financial/admin routes. | PR8 | ~~[x]~~ `app/modules/mandir_compat/router.py` now enforces `require_enabled_module("temple")` + `require_roles(...)` on write/financial/admin route decorators; deny coverage added in `tests/test_mandir_posting_guardrails.py::test_viewer_cannot_create_mandir_donation`. |
+| SEC-P1-02 | Add `require_enabled_module()` + RBAC to `housing_compat` write/financial/admin routes. | PR9 | ~~[x]~~ `app/modules/housing_compat/router.py` now enforces `require_enabled_module("housing")` + admin RBAC on maintenance, financial close, move-governance, assets posting, imports, backup/restore, and admin document routes; deny coverage added in `tests/test_compat_route_rbac.py::test_housing_admin_route_rejects_viewer_role` and `::test_housing_admin_route_rejects_disabled_module`. |
+| SEC-P1-03 | Add `require_enabled_module()` + RBAC to `mitrabooks_compat` posting/import routes. | PR10 | ~~[x]~~ `app/modules/mitrabooks_compat/router.py` now enforces `require_enabled_module("business")` + RBAC on posting/import and mutating compat routes (`transactions*`, `invoices*`, `parties*`, account-template apply); deny coverage added in `tests/test_compat_route_rbac.py::test_mitrabooks_posting_route_rejects_viewer_role`. |
 | SEC-P1-04 | Cap `housing_compat` journal attachment upload size; align with business/legal upload limits. | PR11 | [ ] |
 | SEC-P1-05 | Reject invalid `X-App-Key` values instead of coercing to default app (`resolve_app_key`). | — | [ ] |
 | SEC-P1-06 | Mandir public devotee autofill: minimize PII returned and tighten abuse controls. | PR5 | ~~[x]~~ Email/address removed from public autofill response; `tests/test_mandir_posting_guardrails.py::test_public_devotee_autofill_returns_minimal_pii` |

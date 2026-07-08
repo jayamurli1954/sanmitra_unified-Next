@@ -56,6 +56,8 @@ except Exception:
 
 from app.core.auth.dependencies import get_current_user
 from app.core.audit.service import log_audit_event
+from app.core.modules.dependencies import require_enabled_module
+from app.core.permissions.rbac import Role, require_roles
 from app.core.rate_limiting import limiter
 from app.core.tenants.app_resolvers import resolve_mandir_tenant
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
@@ -115,6 +117,14 @@ from app.modules.mandir_compat.service import (
 from app.services.panchang import PanchangService
 
 router = APIRouter(tags=["mandir-compat"])
+_MANDIR_WRITE_ROUTE_DEPS = [
+    Depends(require_enabled_module("temple")),
+    Depends(require_roles([Role.operator, Role.accountant, Role.tenant_admin, Role.super_admin])),
+]
+_MANDIR_ADMIN_ROUTE_DEPS = [
+    Depends(require_enabled_module("temple")),
+    Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+]
 MANDIR_COMPAT_DATA_DIR = Path(__file__).resolve().parent / "data"
 MANDIR_LEGACY_COA_PATH = MANDIR_COMPAT_DATA_DIR / "legacy_mandir_coa.json"
 logger = logging.getLogger(__name__)
@@ -4568,8 +4578,8 @@ async def list_donations(
     return filtered[offset:offset + limit]
 
 
-@router.post("/donations")
-@router.post("/donations/")
+@router.post("/donations", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/donations/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def create_donation(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -4787,7 +4797,7 @@ async def get_donation_receipt_pdf(
     )
 
 
-@router.post("/donations/{donation_id}/cancel")
+@router.post("/donations/{donation_id}/cancel", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def cancel_donation_receipt(
     donation_id: str,
     payload: dict[str, Any] | None = None,
@@ -4810,7 +4820,7 @@ async def cancel_donation_receipt(
     )
 
 
-@router.post("/donations/reconcile-posting")
+@router.post("/donations/reconcile-posting", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def reconcile_donation_posting(
     limit: int = Query(default=500, ge=1, le=5000),
     session: AsyncSession = Depends(get_async_session),
@@ -4919,7 +4929,7 @@ async def reconcile_donation_posting(
     }
 
 
-@router.delete("/donations/cleanup")
+@router.delete("/donations/cleanup", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def cleanup_donation_entry(
     amount: float = Query(..., gt=0),
     devotee_phone: str = Query(..., min_length=6),
@@ -5052,8 +5062,8 @@ async def list_devotees(
         return []
 
 
-@router.post("/devotees")
-@router.post("/devotees/")
+@router.post("/devotees", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/devotees/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def create_devotee(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -5252,8 +5262,8 @@ async def seva_date_availability(
     }
 
 
-@router.post("/sevas/")
-@router.post("/sevas")
+@router.post("/sevas/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/sevas", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def create_seva(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -5278,7 +5288,7 @@ async def create_seva(
     return _serialize_seva_doc(item)
 
 
-@router.put("/sevas/{seva_id}")
+@router.put("/sevas/{seva_id}", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def update_seva(
     seva_id: str,
     payload: dict[str, Any],
@@ -5315,7 +5325,7 @@ async def update_seva(
     return _serialize_seva_doc(doc)
 
 
-@router.delete("/sevas/{seva_id}")
+@router.delete("/sevas/{seva_id}", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def delete_seva(
     seva_id: str,
     current_user: dict = Depends(get_current_user),
@@ -5354,7 +5364,7 @@ async def seva_import_template(
     )
 
 
-@router.post("/sevas/import")
+@router.post("/sevas/import", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def import_sevas(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -5518,7 +5528,7 @@ async def get_current_temple(
     return fallback
 
 
-@router.put("/temples/current")
+@router.put("/temples/current", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def update_current_temple(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -5586,7 +5596,7 @@ async def mandir_accounts_hierarchy(_current_user: dict = Depends(get_current_us
     return [_mandir_account_view(doc) for doc in unique_docs]
 
 
-@router.put("/accounts/{account_id}")
+@router.put("/accounts/{account_id}", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_accounts_update(
     account_id: str,
     payload: dict[str, Any],
@@ -5703,7 +5713,7 @@ async def mandir_accounts_update(
 
     return _mandir_account_view(updated_doc)
 
-@router.post("/accounts/import-legacy")
+@router.post("/accounts/import-legacy", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_accounts_import_legacy(
     payload: dict[str, Any] | None = None,
     session: AsyncSession = Depends(get_async_session),
@@ -5740,7 +5750,7 @@ async def mandir_accounts_import_legacy(
     )
 
 
-@router.post("/accounts/initialize-default")
+@router.post("/accounts/initialize-default", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_accounts_initialize_default(
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
@@ -5789,7 +5799,7 @@ async def mandir_assets_report_summary(_current_user: dict = Depends(get_current
     return {"summary": {}}
 
 
-@router.post("/assets/revaluation")
+@router.post("/assets/revaluation", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_assets_revaluation(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("assets/revaluation")
 
@@ -5799,7 +5809,7 @@ async def mandir_backup_status(_current_user: dict = Depends(get_current_user)):
     return {"backup_enabled": False, "last_backup_at": None, "status": "idle"}
 
 
-@router.post("/backup-restore/backup")
+@router.post("/backup-restore/backup", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_backup_now(_current_user: dict = Depends(get_current_user)):
     return _ok("backup-restore/backup")
 
@@ -5816,8 +5826,8 @@ async def mandir_bank_accounts(
     return [_sanitize_mongo_doc(doc) for doc in docs]
 
 
-@router.post("/bank-accounts")
-@router.post("/bank-accounts/")
+@router.post("/bank-accounts", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+@router.post("/bank-accounts/", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_create_bank_account(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -5886,12 +5896,12 @@ async def mandir_bank_rec_accounts(
     return bank_accounts or cash_bank_accounts
 
 
-@router.post("/bank-reconciliation/match")
+@router.post("/bank-reconciliation/match", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_bank_rec_match(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("bank-reconciliation/match")
 
 
-@router.post("/bank-reconciliation/reconcile")
+@router.post("/bank-reconciliation/reconcile", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_bank_rec_reconcile(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("bank-reconciliation/reconcile")
 
@@ -5901,7 +5911,7 @@ async def mandir_bank_rec_statements(_current_user: dict = Depends(get_current_u
     return []
 
 
-@router.post("/bank-reconciliation/statements/import")
+@router.post("/bank-reconciliation/statements/import", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_bank_rec_statements_import(
     file: UploadFile | None = File(default=None),
     account_id: str | None = Query(default=None),
@@ -6000,12 +6010,12 @@ async def mandir_nakshatra_dates(nakshatra: str, limit: int = Query(default=8, g
     return {"nakshatra": nakshatra, "next_occurrences": out}
 
 
-@router.post("/financial-closing/close-month")
+@router.post("/financial-closing/close-month", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_close_month(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("financial-closing/close-month")
 
 
-@router.post("/financial-closing/close-year")
+@router.post("/financial-closing/close-year", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_close_year(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("financial-closing/close-year")
 
@@ -6075,8 +6085,8 @@ async def mandir_inventory_items(
     return [_sanitize_mongo_doc(doc) for doc in docs]
 
 
-@router.post("/inventory/items")
-@router.post("/inventory/items/")
+@router.post("/inventory/items", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/inventory/items/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_create_inventory_item(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -6106,7 +6116,7 @@ async def mandir_create_inventory_item(
     return _sanitize_mongo_doc(item)
 
 
-@router.put("/inventory/items/{item_id}")
+@router.put("/inventory/items/{item_id}", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_update_inventory_item(
     item_id: str,
     payload: dict[str, Any],
@@ -6134,7 +6144,7 @@ async def mandir_update_inventory_item(
     return _sanitize_mongo_doc(row)
 
 
-@router.delete("/inventory/items/{item_id}")
+@router.delete("/inventory/items/{item_id}", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_delete_inventory_item(
     item_id: str,
     current_user: dict = Depends(get_current_user),
@@ -6464,8 +6474,8 @@ async def mandir_journal_entries(
     return fallback_rows
 
 
-@router.post("/journal-entries")
-@router.post("/journal-entries/")
+@router.post("/journal-entries", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/journal-entries/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_create_journal_entry(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -6524,7 +6534,7 @@ async def mandir_create_journal_entry(
     return _mandir_journal_entry_view(entry_doc)
 
 
-@router.put("/journal-entries/{entry_id}")
+@router.put("/journal-entries/{entry_id}", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_update_journal_entry(
     entry_id: str,
     payload: dict[str, Any],
@@ -6584,7 +6594,7 @@ async def mandir_update_journal_entry(
     return _mandir_journal_entry_view(updated)
 
 
-@router.post("/journal-entries/{entry_id}/post")
+@router.post("/journal-entries/{entry_id}/post", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_post_journal_entry(
     entry_id: str,
     session: AsyncSession = Depends(get_async_session),
@@ -6683,7 +6693,7 @@ async def mandir_post_journal_entry(
     return _mandir_journal_entry_view({**existing, **patch})
 
 
-@router.post("/journal-entries/{entry_id}/cancel")
+@router.post("/journal-entries/{entry_id}/cancel", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_cancel_journal_entry(
     entry_id: str,
     payload: dict[str, Any] | None = None,
@@ -7279,8 +7289,8 @@ async def mandir_panchang_display_settings(
     }
 
 
-@router.put("/panchang/display-settings")
-@router.put("/panchang/display-settings/")
+@router.put("/panchang/display-settings", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+@router.put("/panchang/display-settings/", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_panchang_display_settings_update(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -7682,7 +7692,7 @@ async def mandir_role_permissions(
     }
 
 
-@router.put("/role-permissions/{role_key}")
+@router.put("/role-permissions/{role_key}", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_role_permissions_update(
     role_key: str,
     payload: dict[str, Any],
@@ -7831,7 +7841,7 @@ async def _mandir_temple_collection_counts(tenant_id: str, app_key: str) -> dict
     return counts
 
 
-@router.post("/temples/{temple_id}/activate")
+@router.post("/temples/{temple_id}/activate", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_activate_temple(
     temple_id: int,
     current_user: dict = Depends(get_current_user),
@@ -7850,7 +7860,7 @@ async def mandir_activate_temple(
     return {"status": "activated", "temple_id": temple_id, "temple": _sanitize_mongo_doc(doc)}
 
 
-@router.post("/temples/{temple_id}/deactivate")
+@router.post("/temples/{temple_id}/deactivate", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_deactivate_temple(
     temple_id: int,
     current_user: dict = Depends(get_current_user),
@@ -7893,7 +7903,7 @@ async def mandir_remove_temple_preview(
     }
 
 
-@router.delete("/temples/{temple_id}/remove")
+@router.delete("/temples/{temple_id}/remove", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_remove_temple(
     temple_id: int,
     payload: dict[str, Any] | None = None,
@@ -7972,7 +7982,7 @@ async def mandir_temples_onboard(
     return await create_mandir_first_login_onboarding(payload, app_key=app_key)
 
 
-@router.post("/temples/upload")
+@router.post("/temples/upload", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_temples_upload(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("temples/upload")
 
@@ -7998,7 +8008,7 @@ async def mandir_temples_module_config(
     }
 
 
-@router.put("/temples/modules/config")
+@router.put("/temples/modules/config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_temples_module_config_update(
     payload: dict[str, Any],
     _current_user: dict = Depends(get_current_user),
@@ -8088,7 +8098,7 @@ async def mandir_upi_payments_config(
     return _mandir_upi_config_view(doc, assigned_temple_id)
 
 
-@router.put("/upi-payments/config")
+@router.put("/upi-payments/config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_upi_payments_config_update(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -8852,7 +8862,7 @@ async def mandir_public_payment_exceptions(
     }
 
 
-@router.patch("/public-payments/{payment_id}/reject")
+@router.patch("/public-payments/{payment_id}/reject", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_reject_public_payment(
     payment_id: str,
     payload: dict[str, Any],
@@ -8906,7 +8916,7 @@ async def mandir_reject_public_payment(
     }
 
 
-@router.patch("/public-payments/{payment_id}/correction")
+@router.patch("/public-payments/{payment_id}/correction", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_correct_public_payment(
     payment_id: str,
     payload: dict[str, Any],
@@ -8975,7 +8985,7 @@ async def mandir_correct_public_payment(
     return _sanitize_mongo_doc(updated)
 
 
-@router.patch("/public-payments/{payment_id}/verify")
+@router.patch("/public-payments/{payment_id}/verify", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_verify_public_payment(
     payment_id: str,
     payload: dict[str, Any],
@@ -9169,7 +9179,7 @@ async def mandir_upi_payments(
     return [_mandir_upi_payment_view(row) for row in filtered]
 
 
-@router.post("/upi-payments/quick-log")
+@router.post("/upi-payments/quick-log", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_upi_quick_log(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -9361,8 +9371,8 @@ async def mandir_update_user_profile(
 # ROUTES : POST /sevas/bookings  POST .../quick-ticket  GET .../bookings  GET .../receipt/pdf  POST .../cancel  PUT .../reschedule  POST .../approve-reschedule  GET .../pending
 # ════════════════════════════════════════════════════════════════════════
 
-@router.post("/sevas/bookings")
-@router.post("/sevas/bookings/")
+@router.post("/sevas/bookings", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+@router.post("/sevas/bookings/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def create_seva_booking(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -9539,7 +9549,7 @@ async def create_seva_booking(
 
     return _mandir_seva_booking_view(booking)
 
-@router.post("/sevas/bookings/quick-ticket")
+@router.post("/sevas/bookings/quick-ticket", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def create_quick_ticket(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -9798,7 +9808,7 @@ async def get_seva_receipt_pdf(
     )
 
 
-@router.post("/sevas/bookings/{booking_id}/cancel")
+@router.post("/sevas/bookings/{booking_id}/cancel", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def cancel_seva_receipt(
     booking_id: str,
     payload: dict[str, Any] | None = None,
@@ -9823,7 +9833,7 @@ async def cancel_seva_receipt(
 
 
 
-@router.put("/sevas/bookings/{booking_id}/reschedule")
+@router.put("/sevas/bookings/{booking_id}/reschedule", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_request_seva_reschedule(
     booking_id: str,
     new_date: str = Query(...),
@@ -9856,7 +9866,7 @@ async def mandir_request_seva_reschedule(
     return _mandir_seva_booking_view(doc)
 
 
-@router.post("/sevas/bookings/{booking_id}/approve-reschedule")
+@router.post("/sevas/bookings/{booking_id}/approve-reschedule", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
 async def mandir_approve_seva_reschedule(
     booking_id: str,
     approve: bool = Query(default=True),
@@ -9946,7 +9956,7 @@ async def mandir_seva_reminder_config(
     return result
 
 
-@router.patch("/sevas/{seva_id}/reminder-config")
+@router.patch("/sevas/{seva_id}/reminder-config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_update_seva_reminder_config(
     seva_id: str,
     payload: dict,
@@ -10070,7 +10080,7 @@ async def mandir_seva_reminders_upcoming(
     return result
 
 
-@router.post("/sevas/reminders/trigger")
+@router.post("/sevas/reminders/trigger", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 
 # ════════════════════════════════════════════════════════════════════════
 # SECTION: ROUTES: Seva reminders (trigger / upcoming / config)

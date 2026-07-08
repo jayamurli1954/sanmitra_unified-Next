@@ -24,6 +24,8 @@ from app.accounting.models import Account, JournalEntry, JournalLine
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import AccountingNotFoundError, AccountingValidationError, post_journal_entry
 from app.core.auth.dependencies import get_current_user
+from app.core.modules.dependencies import require_enabled_module
+from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.app_resolvers import resolve_gruha_tenant
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
@@ -107,6 +109,11 @@ from app.modules.housing_compat.service import (
 )
 
 router = APIRouter(tags=["housing-compat"])
+
+_HOUSING_ADMIN_ROUTE_DEPS = [
+    Depends(require_enabled_module("housing")),
+    Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+]
 
 GRUHA_LEGACY_ACCOUNT_CODE_MAP: dict[str, str] = {
     "1000": "11001",
@@ -2542,7 +2549,7 @@ async def _run_billing_job(
         )
 
 
-@router.post("/maintenance/generate-bills", status_code=202)
+@router.post("/maintenance/generate-bills", status_code=202, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def maintenance_generate_bills(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
@@ -2650,7 +2657,7 @@ async def get_billing_job_status(
     return _sanitize_mongo_doc(job)
 
 
-@router.post("/maintenance/post-bills")
+@router.post("/maintenance/post-bills", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def maintenance_post_bills(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -2733,7 +2740,7 @@ async def maintenance_post_bills(
     }
 
 
-@router.post("/maintenance/add-extra-charge")
+@router.post("/maintenance/add-extra-charge", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def maintenance_add_extra_charge(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -2794,7 +2801,7 @@ async def maintenance_add_extra_charge(
     return _sanitize_mongo_doc(updated or bill)
 
 
-@router.post("/maintenance/reverse-bill")
+@router.post("/maintenance/reverse-bill", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def maintenance_reverse_bill(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -2869,7 +2876,7 @@ async def maintenance_reverse_bill(
     }
 
 
-@router.post("/maintenance/regenerate-bill")
+@router.post("/maintenance/regenerate-bill", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def maintenance_regenerate_bill(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -3027,8 +3034,8 @@ async def assets_list(
     return [_asset_response(row) for row in rows]
 
 
-@router.post("/assets")
-@router.post("/assets/")
+@router.post("/assets", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
+@router.post("/assets/", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def assets_create(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_async_session),
@@ -3109,7 +3116,7 @@ async def assets_get(
     return _asset_response(row)
 
 
-@router.post("/assets/{asset_id}/post-accounting")
+@router.post("/assets/{asset_id}/post-accounting", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def assets_post_accounting(
     asset_id: str,
     session: AsyncSession = Depends(get_async_session),
@@ -3159,7 +3166,7 @@ async def assets_post_accounting(
     return _asset_response(row)
 
 
-@router.post("/assets/{asset_id}/scrap")
+@router.post("/assets/{asset_id}/scrap", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def assets_scrap(
     asset_id: str,
     scrapping_reason: str = Query(default=""),
@@ -3418,7 +3425,7 @@ async def messages_send_to_room_with_attachment(
     return _message_response(message_doc)
 
 
-@router.post("/society/upload-logo")
+@router.post("/society/upload-logo", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def society_upload_logo(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -3460,7 +3467,7 @@ async def society_upload_logo(
     return {"logo_url": logo_url, "file_name": stored_name, "content_type": content_type, "size_bytes": len(content)}
 
 
-@router.post("/society/upload-document")
+@router.post("/society/upload-document", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def society_upload_document(
     file: UploadFile = File(...),
     document_type: str = "other",
@@ -3522,7 +3529,7 @@ async def society_download_document(
     return StreamingResponse(BytesIO(bytes(content)), media_type=content_type, headers=headers)
 
 
-@router.delete("/society/documents/{file_name}")
+@router.delete("/society/documents/{file_name}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def society_delete_document(
     file_name: str,
     current_user: dict = Depends(get_current_user),
@@ -3539,7 +3546,7 @@ async def society_delete_document(
     return {"status": "deleted", "file_name": file_name}
 
 
-@router.post("/attachments/upload/{journal_entry_id}")
+@router.post("/attachments/upload/{journal_entry_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def attachment_upload(
     journal_entry_id: str,
     file: UploadFile = File(...),
@@ -3616,7 +3623,7 @@ async def attachment_download(
     return Response(content=bytes(doc.get("content") or b""), media_type=doc.get("content_type") or "application/octet-stream", headers=headers)
 
 
-@router.delete("/attachments/{attachment_id}")
+@router.delete("/attachments/{attachment_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def attachment_delete(
     attachment_id: str,
     current_user: dict = Depends(get_current_user),
@@ -3633,7 +3640,7 @@ async def attachment_delete(
     return {"status": "deleted"}
 
 
-@router.post("/resources/files/upload")
+@router.post("/resources/files/upload", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def resource_file_upload(
     file: UploadFile = File(...),
     category: str = Form(default="general"),
@@ -3714,7 +3721,7 @@ async def resource_file_download(
     return Response(content=bytes(doc.get("content") or b""), media_type=doc.get("content_type") or "application/octet-stream", headers=headers)
 
 
-@router.delete("/resources/files/{file_id}")
+@router.delete("/resources/files/{file_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def resource_file_delete(
     file_id: str,
     current_user: dict = Depends(get_current_user),
@@ -3756,7 +3763,7 @@ async def meetings_list(
     ]
 
 
-@router.post("/meetings")
+@router.post("/meetings", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def meetings_create(
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
@@ -3889,7 +3896,7 @@ async def meetings_details(
     }
 
 
-@router.patch("/meetings/{meeting_id}")
+@router.patch("/meetings/{meeting_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def meetings_update(
     meeting_id: str,
     payload: dict[str, Any],
@@ -3992,7 +3999,7 @@ async def meetings_update(
     return meeting
 
 
-@router.delete("/meetings/{meeting_id}")
+@router.delete("/meetings/{meeting_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def meetings_delete(
     meeting_id: str,
     current_user: dict = Depends(get_current_user),
@@ -4076,7 +4083,7 @@ async def meetings_minutes(
     return {"meeting": _sanitize_mongo_doc(row)}
 
 
-@router.post("/meetings/{meeting_id}/resolutions")
+@router.post("/meetings/{meeting_id}/resolutions", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def meetings_resolution_create(
     meeting_id: str,
     payload: dict[str, Any],
@@ -4115,7 +4122,7 @@ async def meetings_resolution_create(
     return _sanitize_mongo_doc(resolution)
 
 
-@router.post("/meetings/{meeting_id}/send-notice")
+@router.post("/meetings/{meeting_id}/send-notice", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def meetings_send_notice(
     meeting_id: str,
     payload: dict[str, Any],
@@ -4239,7 +4246,7 @@ async def member_onboarding_template_download():
     return StreamingResponse(BytesIO(csv_text.encode("utf-8")), media_type="text/csv", headers=headers)
 
 
-@router.post("/member-onboarding/bulk-import")
+@router.post("/member-onboarding/bulk-import", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def member_onboarding_bulk_import(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -4312,12 +4319,12 @@ async def onboarding_import_template(kind: str):
     return Response(content=csv_text, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{kind}.csv"'})
 
 
-@router.post("/onboarding-imports/demo/import")
+@router.post("/onboarding-imports/demo/import", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def onboarding_import_demo(current_user: dict = Depends(get_current_user)):
     return {"status": "ok", "message": "Demo import hook acknowledged", "tenant_id": current_user.get("tenant_id")}
 
 
-@router.post("/onboarding-imports/import/flats")
+@router.post("/onboarding-imports/import/flats", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def onboarding_import_flats(
     file: UploadFile = File(...),
     replace_existing: bool = Query(default=False),
@@ -4357,7 +4364,7 @@ async def onboarding_import_flats(
     return {"status": "ok", "imported": imported, "errors": errors, "total_rows": len(rows)}
 
 
-@router.post("/onboarding-imports/import/members")
+@router.post("/onboarding-imports/import/members", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def onboarding_import_members(
     file: UploadFile = File(...),
     update_existing: bool = Query(default=False),
@@ -4474,7 +4481,7 @@ async def society_settings_get(
     return SocietySettingsResponse(**row)
 
 
-@router.patch("/settings/society", response_model=SocietySettingsResponse)
+@router.patch("/settings/society", response_model=SocietySettingsResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def society_settings_patch(
     payload: SocietySettingsUpdate,
     current_user: dict = Depends(get_current_user),
@@ -4520,7 +4527,7 @@ async def flats_get(
     return FlatResponse(**row)
 
 
-@router.post("/flats/", response_model=FlatResponse)
+@router.post("/flats/", response_model=FlatResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def flats_create(
     payload: FlatCreateRequest,
     current_user: dict = Depends(get_current_user),
@@ -4532,7 +4539,7 @@ async def flats_create(
     return FlatResponse(**row)
 
 
-@router.put("/flats/{flat_id}", response_model=FlatResponse)
+@router.put("/flats/{flat_id}", response_model=FlatResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def flats_update(
     flat_id: str,
     payload: FlatUpdateRequest,
@@ -4568,7 +4575,7 @@ async def financial_year_active(
     return FinancialYearResponse(**row)
 
 
-@router.post("/financial-years/", response_model=FinancialYearResponse)
+@router.post("/financial-years/", response_model=FinancialYearResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def financial_year_create(
     payload: FinancialYearCreateRequest,
     current_user: dict = Depends(get_current_user),
@@ -4580,7 +4587,7 @@ async def financial_year_create(
     return FinancialYearResponse(**row)
 
 
-@router.post("/financial-years/{year_id}/provisional-close", response_model=FinancialYearResponse)
+@router.post("/financial-years/{year_id}/provisional-close", response_model=FinancialYearResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def financial_year_provisional_close(
     year_id: str,
     payload: FinancialYearCloseRequest,
@@ -4593,7 +4600,7 @@ async def financial_year_provisional_close(
     return FinancialYearResponse(**row)
 
 
-@router.post("/financial-years/{year_id}/final-close", response_model=FinancialYearResponse)
+@router.post("/financial-years/{year_id}/final-close", response_model=FinancialYearResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def financial_year_final_close(
     year_id: str,
     payload: FinancialYearCloseRequest,
@@ -4707,7 +4714,7 @@ async def join_request_reject(
     return MembershipResponse(**row)
 
 
-@router.post("/move-governance/transfer-to-arrears", response_model=ArrearsResponse)
+@router.post("/move-governance/transfer-to-arrears", response_model=ArrearsResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def move_transfer_to_arrears(
     payload: ArrearsTransferRequest,
     current_user: dict = Depends(get_current_user),
@@ -4719,7 +4726,7 @@ async def move_transfer_to_arrears(
     return ArrearsResponse(**row)
 
 
-@router.post("/move-governance/transfer-flat-to-flat")
+@router.post("/move-governance/transfer-flat-to-flat", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def move_transfer_flat_to_flat(
     payload: FlatTransferRequest,
     current_user: dict = Depends(get_current_user),
@@ -4899,7 +4906,7 @@ async def move_calculate_final_bill(
     return FinalBillResponse(**row)
 
 
-@router.post("/move-governance/damage-claim")
+@router.post("/move-governance/damage-claim", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def move_damage_claim(
     payload: DamageClaimCreate,
     current_user: dict = Depends(get_current_user),
@@ -4940,7 +4947,7 @@ async def database_backups_list(
     return backups
 
 
-@router.post("/database/backup")
+@router.post("/database/backup", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def database_backup_create(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -4972,7 +4979,7 @@ async def database_backup_create(
     return {"message": "Backup created successfully", "filename": filename, "created_at": created_at, "size_kb": size_kb}
 
 
-@router.post("/database/restore")
+@router.post("/database/restore", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def database_backup_restore(
     filename: str = Query(..., min_length=1),
     current_user: dict = Depends(get_current_user),
@@ -5137,7 +5144,7 @@ async def staff_list(
     return [_staff_response(row) for row in rows]
 
 
-@router.post("/staff", response_model=StaffResponse)
+@router.post("/staff", response_model=StaffResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def staff_create(
     payload: StaffCreateRequest,
     current_user: dict = Depends(get_current_user),
@@ -5180,7 +5187,7 @@ async def staff_create(
     return _staff_response(doc)
 
 
-@router.put("/staff/{staff_id}", response_model=StaffResponse)
+@router.put("/staff/{staff_id}", response_model=StaffResponse, dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def staff_update(
     staff_id: str,
     payload: StaffUpdateRequest,
@@ -5229,7 +5236,7 @@ async def staff_update(
     return _staff_response(updated or existing)
 
 
-@router.delete("/staff/{staff_id}")
+@router.delete("/staff/{staff_id}", dependencies=_HOUSING_ADMIN_ROUTE_DEPS)
 async def staff_delete(
     staff_id: str,
     current_user: dict = Depends(get_current_user),

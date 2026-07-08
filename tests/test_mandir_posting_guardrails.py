@@ -12,6 +12,7 @@ from pypdf import PdfReader
 
 import app.modules.mandir_compat.router as mandir_router
 import app.modules.mandir_compat.service as mandir_service
+import app.core.modules.dependencies as module_deps
 from app.core.auth.dependencies import get_current_user
 from app.core.users import router as users_router
 from app.db.postgres import get_async_session
@@ -518,8 +519,16 @@ def mandir_posting_client(monkeypatch):
     async def noop_ensure_sql_accounts(_session, _tenant_id):
         return None
 
+    async def fake_get_tenant(tenant_id: str):
+        return {
+            "tenant_id": tenant_id,
+            "organization_type": "TEMPLE",
+            "enabled_modules": ["temple", "audit", "business", "housing"],
+        }
+
     monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
     monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts", noop_ensure_sql_accounts)
+    monkeypatch.setattr(module_deps, "get_tenant", fake_get_tenant)
 
     app.dependency_overrides[get_current_user] = lambda: {
         "tenant_id": "tenant-1",
@@ -1198,9 +1207,17 @@ def mandir_compat_client(monkeypatch):
     async def fake_resolve_tenant_by_temple_id(value):
         return "tenant-1" if int(value or 0) == 1 else None
 
+    async def fake_get_tenant(tenant_id: str):
+        return {
+            "tenant_id": tenant_id,
+            "organization_type": "TEMPLE",
+            "enabled_modules": ["temple", "audit", "business", "housing"],
+        }
+
     monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
     monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts", noop_ensure_sql_accounts)
     monkeypatch.setattr(mandir_router, "resolve_tenant_by_temple_id", fake_resolve_tenant_by_temple_id)
+    monkeypatch.setattr(module_deps, "get_tenant", fake_get_tenant)
     monkeypatch.setattr(users_router, "get_collection", fake_get_collection)
 
     app.dependency_overrides[get_current_user] = lambda: {
@@ -1483,9 +1500,17 @@ def mandir_upi_client(monkeypatch):
             return None
         return mapping.get(int(value or 0))
 
+    async def fake_get_tenant(tenant_id: str):
+        return {
+            "tenant_id": tenant_id,
+            "organization_type": "TEMPLE",
+            "enabled_modules": ["temple", "audit", "business", "housing"],
+        }
+
     monkeypatch.setattr(mandir_router, "get_collection", fake_get_collection)
     monkeypatch.setattr(mandir_router, "_ensure_default_mandir_sql_accounts", noop_ensure_sql_accounts)
     monkeypatch.setattr(mandir_router, "resolve_tenant_by_temple_id", fake_resolve_tenant_by_temple_id)
+    monkeypatch.setattr(module_deps, "get_tenant", fake_get_tenant)
 
     app.dependency_overrides[get_current_user] = lambda: {
         "tenant_id": "tenant-1",
@@ -1502,6 +1527,32 @@ def mandir_upi_client(monkeypatch):
 
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(get_async_session, None)
+
+
+def test_viewer_cannot_create_mandir_donation(mandir_posting_client):
+    client, _donations, _seva_bookings = mandir_posting_client
+    app.dependency_overrides[get_current_user] = lambda: {
+        "tenant_id": "tenant-1",
+        "id": "viewer-1",
+        "user_id": "viewer-1",
+        "role": "viewer",
+        "app_key": "mandirmitra",
+        "is_superuser": False,
+    }
+
+    response = client.post(
+        "/api/v1/donations/",
+        json={
+            "devotee_name": "Read Only",
+            "devotee_phone": "9876500001",
+            "amount": 200,
+            "category": "General Donation",
+            "payment_mode": "Cash",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json().get("detail") == "Insufficient permissions"
 
 
 def test_upi_quick_log_persists_and_lists_rows(mandir_upi_client, monkeypatch):

@@ -14,6 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import get_current_user
+from app.core.modules.dependencies import require_enabled_module
+from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
@@ -42,6 +44,15 @@ async def _resolve_account_id_by_code(
     return int(row[0]) if row else None
 
 router = APIRouter(tags=["mitrabooks-compat"])
+
+_MITRABOOKS_WRITE_ROUTE_DEPS = [
+    Depends(require_enabled_module("business")),
+    Depends(require_roles([Role.operator, Role.accountant, Role.tenant_admin, Role.super_admin])),
+]
+_MITRABOOKS_ADMIN_ROUTE_DEPS = [
+    Depends(require_enabled_module("business")),
+    Depends(require_roles([Role.tenant_admin, Role.super_admin])),
+]
 
 
 def _now_iso() -> str:
@@ -266,7 +277,7 @@ async def account_statistics(company_id: int = Query(default=1), current_user: d
     return {"company_id": company_id, "total_accounts": len(rows), "active_accounts": sum(1 for r in rows if bool(r.get("is_active", True))), "accounts_by_type": by_type}
 
 
-@router.post("/parties")
+@router.post("/parties", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_party(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     company_id = int(payload.get("company_id") or 1)
@@ -291,12 +302,12 @@ async def create_party(payload: dict[str, Any], current_user: dict = Depends(get
     return party
 
 
-@router.post("/parties/quick/customer")
+@router.post("/parties/quick/customer", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_party_quick_customer(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     return await create_party({**payload, "party_type": "customer"}, current_user, x_tenant_id, x_app_key)
 
 
-@router.post("/parties/quick/vendor")
+@router.post("/parties/quick/vendor", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_party_quick_vendor(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     return await create_party({**payload, "party_type": "vendor"}, current_user, x_tenant_id, x_app_key)
 
@@ -337,7 +348,7 @@ async def lookup_party_by_code(party_code: str, company_id: int = Query(default=
     return await get_collection("mb_parties").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "party_code": party_code})
 
 
-@router.put("/parties/{party_id}")
+@router.put("/parties/{party_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def update_party(party_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
@@ -347,7 +358,7 @@ async def update_party(party_id: int, payload: dict[str, Any], company_id: int =
     return await col.find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id})
 
 
-@router.delete("/parties/{party_id}")
+@router.delete("/parties/{party_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def delete_party(party_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     await get_collection("mb_parties").delete_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": party_id})
@@ -398,9 +409,9 @@ def _invoice_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_
     }
 
 
-@router.post("/invoices")
-@router.post("/invoices/sales")
-@router.post("/invoices/purchase")
+@router.post("/invoices", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/invoices/sales", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/invoices/purchase", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_invoice(payload: dict[str, Any], current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     company_id = int(payload.get("company_id") or 1)
@@ -428,7 +439,7 @@ async def get_invoice(invoice_id: int, company_id: int = Query(default=1), curre
     return await get_collection("mb_invoices").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id})
 
 
-@router.put("/invoices/{invoice_id}")
+@router.put("/invoices/{invoice_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def update_invoice(invoice_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
@@ -441,7 +452,7 @@ async def update_invoice(invoice_id: int, payload: dict[str, Any], company_id: i
     return await col.find_one(filters)
 
 
-@router.delete("/invoices/{invoice_id}")
+@router.delete("/invoices/{invoice_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def delete_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": invoice_id}
@@ -452,7 +463,7 @@ async def delete_invoice(invoice_id: int, company_id: int = Query(default=1), cu
     return {"status": "deleted", "id": invoice_id}
 
 
-@router.post("/invoices/{invoice_id}/post")
+@router.post("/invoices/{invoice_id}/post", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def post_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     raise HTTPException(
         status_code=422,
@@ -460,12 +471,12 @@ async def post_invoice(invoice_id: int, company_id: int = Query(default=1), curr
     )
 
 
-@router.post("/invoices/{invoice_id}/cancel")
+@router.post("/invoices/{invoice_id}/cancel", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def cancel_invoice(invoice_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     return await update_invoice(invoice_id, {"status": "cancelled"}, company_id, current_user, x_tenant_id, x_app_key)
 
 
-@router.post("/invoices/payments")
+@router.post("/invoices/payments", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_invoice_payment(payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     payment_id = await _seq_id("mb_invoice_payments", tenant_id, app_key, company_id)
@@ -573,11 +584,11 @@ def _txn_doc(payload: dict[str, Any], tenant_id: str, app_key: str, company_id: 
     }
 
 
-@router.post("/transactions")
-@router.post("/transactions/payment")
-@router.post("/transactions/receipt")
-@router.post("/transactions/contra")
-@router.post("/transactions/journal")
+@router.post("/transactions", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/transactions/payment", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/transactions/receipt", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/transactions/contra", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
+@router.post("/transactions/journal", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def create_transaction(
     payload: dict[str, Any],
     request: Request,
@@ -808,7 +819,7 @@ async def get_transaction(txn_id: int, company_id: int = Query(default=1), curre
     return _json_safe(await get_collection("mb_transactions").find_one({"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}))
 
 
-@router.put("/transactions/{txn_id}")
+@router.put("/transactions/{txn_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def update_transaction(txn_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     patch = {k: v for k, v in payload.items() if k not in {"id", "tenant_id", "app_key", "company_id", "_id"}}
@@ -821,7 +832,7 @@ async def update_transaction(txn_id: int, payload: dict[str, Any], company_id: i
     return _json_safe(await col.find_one(filters))
 
 
-@router.delete("/transactions/{txn_id}")
+@router.delete("/transactions/{txn_id}", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def delete_transaction(txn_id: int, company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     tenant_id, app_key = _ctx(current_user, x_tenant_id, x_app_key)
     filters = {"tenant_id": tenant_id, "app_key": app_key, "company_id": company_id, "id": txn_id}
@@ -832,7 +843,7 @@ async def delete_transaction(txn_id: int, company_id: int = Query(default=1), cu
     return {"status": "deleted", "id": txn_id}
 
 
-@router.post("/transactions/{txn_id}/post")
+@router.post("/transactions/{txn_id}/post", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def post_transaction(
     txn_id: int,
     company_id: int = Query(default=1),
@@ -915,7 +926,7 @@ async def post_transaction(
     }))
 
 
-@router.post("/transactions/{txn_id}/cancel")
+@router.post("/transactions/{txn_id}/cancel", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def cancel_transaction(
     txn_id: int,
     payload: dict[str, Any] | None = None,
@@ -948,7 +959,7 @@ async def cancel_transaction(
     )
 
 
-@router.post("/transactions/{txn_id}/reverse")
+@router.post("/transactions/{txn_id}/reverse", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def reverse_transaction(
     txn_id: int,
     payload: dict[str, Any] | None = None,
@@ -1101,7 +1112,7 @@ async def reverse_transaction(
     return _json_safe(txn)
 
 
-@router.post("/transactions/{txn_id}/approve")
+@router.post("/transactions/{txn_id}/approve", dependencies=_MITRABOOKS_WRITE_ROUTE_DEPS)
 async def approve_transaction(txn_id: int, payload: dict[str, Any], company_id: int = Query(default=1), current_user: dict = Depends(get_current_user), x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"), x_app_key: str | None = Header(default=None, alias="X-App-Key")):
     next_status = "approved" if bool(payload.get("approved", True)) else "draft"
     return await update_transaction(txn_id, {"status": next_status, "approval_comments": payload.get("comments")}, company_id, current_user, x_tenant_id, x_app_key)
@@ -1266,6 +1277,6 @@ async def account_templates(_current_user: dict = Depends(get_current_user)):
     ]
 
 
-@router.post("/accounts/templates/apply")
+@router.post("/accounts/templates/apply", dependencies=_MITRABOOKS_ADMIN_ROUTE_DEPS)
 async def apply_account_template(payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return {"status": "ok", "applied_template": payload.get("template_id")}

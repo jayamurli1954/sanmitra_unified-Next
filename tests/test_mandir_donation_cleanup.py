@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 import pytest
 
+import app.core.modules.dependencies as module_deps
 from app.core.auth.dependencies import get_current_user
 from app.db.postgres import get_async_session
 from app.main import app
@@ -110,7 +111,15 @@ def cleanup_client(monkeypatch):
     async def fake_session():
         yield session
 
+    async def fake_get_tenant(tenant_id: str):
+        return {
+            'tenant_id': tenant_id,
+            'organization_type': 'TEMPLE',
+            'enabled_modules': ['temple', 'audit', 'business'],
+        }
+
     monkeypatch.setattr('app.modules.mandir_compat.router.get_collection', fake_get_collection)
+    monkeypatch.setattr(module_deps, 'get_tenant', fake_get_tenant)
     app.dependency_overrides[get_current_user] = lambda: {
         'tenant_id': 'tenant-1',
         'role': 'tenant_admin',
