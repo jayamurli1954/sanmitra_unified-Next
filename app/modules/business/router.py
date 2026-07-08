@@ -168,8 +168,11 @@ from app.modules.business.service import (
 )
 from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.core.permissions.rbac import Role, require_roles
+from app.core.rate_limiting import limiter
 
 router = APIRouter(prefix="/business", tags=["business"])
+CA_INVITE_PREVIEW_RATE_LIMIT = "20/minute"
+CA_INVITE_ACCEPT_RATE_LIMIT = "10/minute"
 
 
 def _created_by(current_user: dict) -> str:
@@ -4119,7 +4122,8 @@ async def invite_ca_user(
 
 
 @router.get("/ca/invite/{token}/preview")
-async def preview_ca_invite(token: str):
+@limiter.limit(CA_INVITE_PREVIEW_RATE_LIMIT)
+async def preview_ca_invite(request: Request, token: str):
     """Return public invite details (email, name) for pre-filling the accept form. No auth required."""
     try:
         return await ca_access_module.preview_ca_invite(token=token)
@@ -4128,6 +4132,7 @@ async def preview_ca_invite(token: str):
 
 
 @router.post("/ca/invite/{token}/accept")
+@limiter.limit(CA_INVITE_ACCEPT_RATE_LIMIT)
 async def accept_ca_invite(
     request: Request,
     token: str,
@@ -4145,7 +4150,11 @@ async def accept_ca_invite(
             password=payload.password,
             full_name=payload.full_name,
         )
-        return {"ok": True, **result}
+        return {
+            "ok": True,
+            "user_id": result["user_id"],
+            "role": result["role"],
+        }
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Invalid invite accept payload") from exc
     except ValueError as exc:

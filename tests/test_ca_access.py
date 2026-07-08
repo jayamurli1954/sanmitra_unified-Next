@@ -40,8 +40,6 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
         assert full_name == "CA Ravi"
         return {
             "user_id": "u-1",
-            "email": "ca@example.com",
-            "full_name": full_name,
             "role": "ca_viewer",
         }
 
@@ -58,6 +56,7 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
     payload = response.json()
     assert payload["ok"] is True
     assert payload["user_id"] == "u-1"
+    assert payload["role"] == "ca_viewer"
 
 @pytest.mark.asyncio
 async def test_invite_provisions_inactive_ca_user_and_sends_token_email():
@@ -181,7 +180,6 @@ async def test_accept_invite_creates_user():
         result = await ca_access.accept_ca_invite(token="tok123", password="Secret123!")
 
     assert result["role"] == "ca_viewer"
-    assert result["email"] == "ca@example.com"
     mock_users_col.insert_one.assert_awaited_once()
     inserted = mock_users_col.insert_one.call_args[0][0]
     assert inserted["role"] == "ca_viewer"

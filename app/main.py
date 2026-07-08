@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.rate_limiting import limiter
@@ -17,7 +18,7 @@ from app.accounting.report_alias_router import router as accounting_report_alias
 from app.config import get_settings
 from app.core.audit.service import ensure_audit_indexes
 from app.core.onboarding.service import ensure_onboarding_indexes
-from app.core.tenants.context import TenantContextMiddleware
+from app.core.tenants.context import InvalidAppKeyError, TenantContextMiddleware
 from app.core.tenants.service import ensure_seed_tenant, set_hr_addon_available
 from app.modules.business.service import set_hr_enabled
 from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
@@ -57,6 +58,11 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(InvalidAppKeyError)
+async def invalid_app_key_exception_handler(_request: Request, exc: InvalidAppKeyError) -> Response:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,

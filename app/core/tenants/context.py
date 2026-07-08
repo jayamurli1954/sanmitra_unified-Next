@@ -62,7 +62,7 @@ def resolve_app_key(value: Optional[str]) -> str:
 
     allowed = _allowed_app_keys()
     if raw not in allowed:
-        return default_key
+        raise InvalidAppKeyError("Invalid X-App-Key header")
     return raw
 
 

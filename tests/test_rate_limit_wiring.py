@@ -4,6 +4,7 @@ from app.core.rate_limiting import limiter
 import app.api.legacy_alias_router  # noqa: F401
 import app.core.auth.router  # noqa: F401
 import app.modules.legal.router  # noqa: F401
+import app.modules.business.router  # noqa: F401
 
 
 def _limits_by_endpoint() -> dict[str, list[str]]:
@@ -40,3 +41,10 @@ def test_legal_proxy_rate_limits_are_wired() -> None:
     assert limits["app.modules.legal.router.get_legal_news"] == ["20 per 1 minute"]
     assert limits["app.modules.legal.router.get_court_judgements"] == ["20 per 1 minute"]
     assert limits["app.modules.legal.router.get_web_search_context"] == ["10 per 1 minute"]
+
+
+def test_ca_invite_rate_limits_are_wired() -> None:
+    limits = _limits_by_endpoint()
+
+    assert limits["app.modules.business.router.preview_ca_invite"] == ["20 per 1 minute"]
+    assert limits["app.modules.business.router.accept_ca_invite"] == ["10 per 1 minute"]

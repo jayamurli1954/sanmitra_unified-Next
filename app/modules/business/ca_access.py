@@ -254,7 +254,7 @@ async def _send_invite_email(*, email: str, full_name: str, tenant_id: str, toke
 
 
 async def preview_ca_invite(*, token: str) -> dict:
-    """Return public invite details (email, name) without consuming the token."""
+    """Return minimal public invite details without consuming the token."""
     await _ensure_indexes()
     col = get_collection(_CA_INVITES)
     invite = await col.find_one({"token": token})
@@ -269,7 +269,6 @@ async def preview_ca_invite(*, token: str) -> dict:
     return {
         "email": invite["email"],
         "full_name": invite.get("full_name", ""),
-        "tenant_id": invite["tenant_id"],
     }
 
 
@@ -344,7 +343,7 @@ async def accept_ca_invite(*, token: str, password: str, full_name: str | None =
         {"_id": invite["_id"]},
         {"$set": {"status": "accepted", "accepted_at": now, "user_id": user_id, "token_consumed_at": now}},
     )
-    return {"user_id": user_id, "email": email, "full_name": resolved_name, "role": "ca_viewer"}
+    return {"user_id": user_id, "role": "ca_viewer"}
 
 
 async def revoke_ca_access(*, tenant_id: str, user_id: str) -> None:

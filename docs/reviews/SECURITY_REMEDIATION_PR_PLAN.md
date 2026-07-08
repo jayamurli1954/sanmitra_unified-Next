@@ -97,6 +97,7 @@ Each PR should be reviewable in one sitting, independently mergeable where noted
 - **Files:** `frontend/shared/api-client.js`, `frontend/vercel.json`, Playwright smoke
 - **Change:** httpOnly cookie strategy or CSP tightening + `innerHTML` audit.
 - **Accept:** Documented auth storage; no login regression across shells.
+- **2026-07-08 incremental update:** CA invite accept public flow response surface minimized and regression tests updated (`frontend/e2e/ca-invite-accept.spec.js`). Full token-storage migration and strict CSP per shell are still deferred to avoid cross-shell auth breakage without dedicated rollout/testing.
 
 ### PR13 — Ops credential cleanup
 

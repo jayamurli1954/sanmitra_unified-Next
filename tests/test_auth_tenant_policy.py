@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 import pytest
+from starlette.requests import Request
 
 from app.core.auth.dependencies import get_current_user
 from app.core.auth.security import create_access_token, create_refresh_token, decode_token
@@ -18,6 +19,10 @@ def _base_payload(*, role: str = "tenant_admin", tenant_id: str | None = "t1", a
     }
 
 
+def _request() -> Request:
+    return Request({"type": "http", "client": ("127.0.0.1", 1234), "headers": []})
+
+
 def test_refresh_token_contains_type_and_jti() -> None:
     token = create_refresh_token(_base_payload())
     payload = decode_token(token)
@@ -31,7 +36,7 @@ async def test_get_current_user_rejects_refresh_token() -> None:
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(creds)
+        await get_current_user(request=_request(), credentials=creds)
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "Access token required"
@@ -47,7 +52,7 @@ async def test_get_current_user_accepts_access_token(monkeypatch) -> None:
     token = create_access_token(_base_payload())
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
-    current_user = await get_current_user(creds)
+    current_user = await get_current_user(request=_request(), credentials=creds)
     assert current_user["sub"] == "u1"
     assert current_user["app_key"] == "mandirmitra"
 
@@ -63,10 +68,56 @@ async def test_get_current_user_blocks_app_key_override(monkeypatch) -> None:
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(creds, x_app_key="gruhamitra")
+        await get_current_user(request=_request(), credentials=creds, x_app_key="gruhamitra")
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "App key override not allowed"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_invalid_app_key_header(monkeypatch) -> None:
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    monkeypatch.setattr("app.core.auth.dependencies.ensure_tenant_is_active", fake_tenant_check)
+
+    token = create_access_token(_base_payload(app_key="mandirmitra"))
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(request=_request(), credentials=creds, x_app_key="not-a-real-app")
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invalid X-App-Key header"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_logs_super_admin_override_usage(monkeypatch) -> None:
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    audit_events = []
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr("app.core.auth.dependencies.ensure_tenant_is_active", fake_tenant_check)
+    monkeypatch.setattr("app.core.auth.dependencies.log_audit_event", fake_log_audit_event)
+
+    token = create_access_token(_base_payload(role="super_admin", tenant_id="platform", app_key="mitrabooks"))
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    current_user = await get_current_user(
+        request=_request(),
+        credentials=creds,
+        x_tenant_id="demo-mitrabooks-business",
+        x_app_key="gruhamitra",
+    )
+
+    assert current_user["app_key"] == "gruhamitra"
+    assert len(audit_events) == 1
+    assert audit_events[0]["action"] == "super_admin_context_override_used"
+    assert audit_events[0]["new_value"]["tenant_override_used"] is True
+    assert audit_events[0]["new_value"]["app_key_override_used"] is True
 
 
 @pytest.mark.asyncio
@@ -80,7 +131,7 @@ async def test_get_current_user_blocks_inactive_tenant(monkeypatch) -> None:
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(creds)
+        await get_current_user(request=_request(), credentials=creds)
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "Tenant is inactive"

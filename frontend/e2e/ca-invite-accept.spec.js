@@ -14,15 +14,12 @@ test.describe('MitraBooks CA invite acceptance', () => {
     await page.route('**/api/v1/business/ca/invite/good-token/preview', route => fulfillJson(route, {
       email: 'ca.ravi@example.com',
       full_name: 'CA Ravi',
-      tenant_id: 'demo-mitrabooks-business',
     }));
     await page.route('**/api/v1/business/ca/invite/good-token/accept', async route => {
       requests.push(route.request().postDataJSON());
       return fulfillJson(route, {
         ok: true,
         user_id: 'ca-user-1',
-        email: 'ca.ravi@example.com',
-        full_name: 'CA Ravi',
         role: 'ca_viewer',
       });
     });
@@ -32,7 +29,6 @@ test.describe('MitraBooks CA invite acceptance', () => {
     await expect(page.getByRole('heading', { name: 'Accept CA Invite' })).toBeVisible();
     await expect(page.locator('#invite-name')).toContainText('CA Ravi');
     await expect(page.locator('#invite-email')).toContainText('ca.ravi@example.com');
-    await expect(page.locator('#invite-tenant')).toContainText('demo-mitrabooks-business');
     await expect(page.locator('#invite-status')).toContainText('Create a password');
 
     await page.locator('#password').fill('Secret123!');
@@ -51,7 +47,6 @@ test.describe('MitraBooks CA invite acceptance', () => {
     await page.route('**/api/v1/business/ca/invite/good-token/preview', route => fulfillJson(route, {
       email: 'ca.ravi@example.com',
       full_name: 'CA Ravi',
-      tenant_id: 'demo-mitrabooks-business',
     }));
     await page.route('**/api/v1/business/ca/invite/good-token/accept', route => {
       acceptCalls += 1;
