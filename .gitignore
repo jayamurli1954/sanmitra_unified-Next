@@ -66,3 +66,8 @@ docs/ITC_REVERSAL_RULE37_PLAN.md
 
 .vercel
 .gitnexus
+
+# local-only planning/review docs
+docs/reviews/SECURITY_REMEDIATION_PR_PLAN.md
+docs/reviews/MITRABOOKS_REVIEW_2026-06-26.md
+docs/operations/MITRABOOKS_PENDING_GAP_TODO.md
