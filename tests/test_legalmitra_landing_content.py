@@ -35,3 +35,12 @@ def test_legalmitra_public_pages_show_visible_pricing_amounts() -> None:
         assert "https://rzp.io/rzp/GL2uoA7" in source
         assert "https://rzp.io/rzp/ffmtLtfK" in source
         assert "https://rzp.io/rzp/br2LmKM" in source
+
+
+def test_legalmitra_followups_do_not_use_unsafe_fir_substring_match() -> None:
+    app_source = (REPO_ROOT / "frontend" / "legalmitra" / "app.js").read_text(encoding="utf-8")
+
+    assert 'includes("fir")' not in app_source
+    assert "Check GST registration threshold for the society" in app_source
+    assert '"housing society"' in app_source
+    assert '"rwa"' in app_source

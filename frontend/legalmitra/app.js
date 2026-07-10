@@ -422,7 +422,20 @@ function renderLegalMarkdown(text) {
 
 function buildFollowUps(query, response) {
   const text = `${query || ""} ${response || ""}`.toLowerCase();
-  if (text.includes("section 138") || text.includes("cheque") || text.includes("dishonour")) {
+
+  const hasPhrase = (phrase) => text.includes(String(phrase || "").toLowerCase());
+  const hasWord = (word) => new RegExp(`\\b${String(word || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text);
+  const hasAny = (values) => values.some((value) => value.includes(" ") ? hasPhrase(value) : hasWord(value));
+
+  if (hasAny(["housing society", "housing societies", "rwa", "resident welfare association"]) && hasAny(["gst", "service tax", "registration"])) {
+    return [
+      "Check GST registration threshold for the society",
+      "Create a member-wise contribution and exemption checklist",
+      "Prepare questions for the CA before GST registration",
+      "Draft a note explaining GST impact to residents",
+    ];
+  }
+  if (hasAny(["section 138", "cheque", "dishonour", "dishonor", "ni act"])) {
     return [
       "Prepare a Section 138 legal notice draft",
       "Create a cheque bounce complaint format",
@@ -430,7 +443,7 @@ function buildFollowUps(query, response) {
       "Give a step-by-step filing guide",
     ];
   }
-  if (text.includes("quash") || text.includes("fir") || text.includes("section 528") || text.includes("section 482")) {
+  if (hasAny(["quash", "quashing", "fir", "section 528", "section 482"])) {
     return [
       "Create a quashing petition argument note",
       "List Bhajan Lal categories with examples",
@@ -438,7 +451,7 @@ function buildFollowUps(query, response) {
       "Draft a prayer clause for FIR quashing",
     ];
   }
-  if (text.includes("gst") || text.includes("notice")) {
+  if (hasAny(["gst", "cgst", "show cause notice", "tax notice"])) {
     return [
       "Draft a GST notice reply outline",
       "Create a document checklist",
