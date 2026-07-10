@@ -202,3 +202,22 @@ def test_destructive_demo_spec_covers_dimensions_gate() -> None:
     assert "business/dimensions/report?dimension_type=project" in spec
     assert "business/dimensions/report/export?dimension_type=cost_centre&format=json" in spec
     assert "accounting_entity_id=primary" in spec
+
+
+def test_destructive_demo_spec_covers_mis_data_health_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "misHealthEntity" in spec
+    assert "phase3-demo-mis-health-invoice" in spec
+    assert "phase3-demo-mis-health-bill" in spec
+    assert "phase3-demo-data-health-draft" in spec
+    assert "business/mis/kpis" in spec
+    assert "business/financial-health?narrate=false" in spec
+    assert "business/data-health" in spec
+    assert "missing_gstin" in spec
+    assert "unposted_drafts" in spec
+    assert "stale_reconciliation" in spec
+    assert "overdue_exposure" in spec
+    assert "receivables_open_item_aging" in spec
+    assert "phase3-demo-mis-health-invoice-cancel" in spec
+    assert "phase3-demo-mis-health-bill-cancel" in spec

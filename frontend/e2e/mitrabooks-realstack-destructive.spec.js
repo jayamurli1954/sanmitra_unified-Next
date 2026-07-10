@@ -108,18 +108,24 @@ async function approveIfNeeded(page, token, kind, id, doc, accountingEntityId = 
 }
 
 async function createParty(page, token, runId, partyType, accountingEntityId = 'primary') {
-  return jsonRequest(page, token, 'POST', '/business/parties', {
-    party_name: `E2E ${partyType} ${runId}`,
-    party_type: partyType,
-    party_code: `E2E-${partyType.toUpperCase()}-${accountingEntityId}-${runId}`.slice(0, 80),
-    gstin: partyType === 'customer' ? '29AAAAA0000A1Z5' : '29ABCDE1234F1Z5',
-    pan: partyType === 'customer' ? 'AAAAA0000A' : 'ABCDE1234F',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560001',
-    opening_balance: '0.00',
-    accounting_entity_id: accountingEntityId,
-  });
+  return jsonRequest(
+    page,
+    token,
+    'POST',
+    '/business/parties',
+    {
+      party_name: `E2E ${partyType} ${runId}`,
+      party_type: partyType,
+      party_code: `E2E-${partyType.toUpperCase()}-${accountingEntityId}-${runId}`.slice(0, 80),
+      gstin: partyType === 'customer' ? '29AAAAA0000A1Z5' : '29ABCDE1234F1Z5',
+      pan: partyType === 'customer' ? 'AAAAA0000A' : 'ABCDE1234F',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      pincode: '560001',
+      opening_balance: '0.00',
+    },
+    { 'X-Accounting-Entity-ID': accountingEntityId }
+  );
 }
 
 test.describe('MitraBooks destructive real-stack demo E2E', () => {
@@ -158,6 +164,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const inventoryEntity = `inventory-e2e-${runId}`;
     const fixedAssetEntity = `fixed-asset-e2e-${runId}`;
     const dimensionsEntity = `dimensions-e2e-${runId}`;
+    const misHealthEntity = `mis-health-e2e-${runId}`;
     const bankReconRef = `BR-${runId}`;
     const bankReconAmount = '222.37';
 
@@ -652,6 +659,186 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
         'POST',
         path,
         { reason: `Phase 3 E2E reverse ${kind}`, cancel_date: e2eDate, accounting_entity_id: dimensionsEntity },
+        { 'X-Idempotency-Key': idempotencyKey }
+      );
+      expect(reversed.status).toBe('cancelled');
+      expect(reversed.reversal_journal_entry_id).toBeTruthy();
+    }
+
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/accounting/initialize-chart-of-accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': misHealthEntity }
+    );
+    const misHealthAccounts = await jsonRequest(
+      page,
+      token,
+      'GET',
+      '/accounting/accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': misHealthEntity }
+    );
+    const misHealthBankAccount = misHealthAccounts.find((account) => account.code === '11010')
+      || misHealthAccounts.find((account) => account.type === 'asset' && /bank|cash/i.test(account.name || ''));
+    expect(misHealthBankAccount?.id, 'MIS/Data Health bank account missing').toBeTruthy();
+
+    const missingGstinCustomer = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/parties',
+      {
+        party_name: `E2E Data Health Customer ${runId}`,
+        party_type: 'customer',
+        party_code: `DH-CUST-${runId}`,
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        pincode: '560001',
+        opening_balance: '0.00',
+      },
+      { 'X-Accounting-Entity-ID': misHealthEntity }
+    );
+    const misHealthVendor = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/parties',
+      {
+        party_name: `E2E MIS Vendor ${runId}`,
+        party_type: 'vendor',
+        party_code: `MIS-VEND-${runId}`,
+        gstin: '29ABCDE1234F1Z5',
+        pan: 'ABCDE1234F',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        pincode: '560001',
+        opening_balance: '0.00',
+      },
+      { 'X-Accounting-Entity-ID': misHealthEntity }
+    );
+
+    const misHealthInvoiceCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/invoices',
+      {
+        customer_party_id: missingGstinCustomer.party_id,
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        reference: `MIS-INV-${runId}`,
+        accounting_entity_id: misHealthEntity,
+        line_items: [{ description: 'Phase 3 E2E MIS revenue', hsn_sac: '9983', quantity: '1', rate: '1200', gst_rate: '18' }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-mis-health-invoice-${runId}` }
+    );
+    const misHealthInvoice = await approveIfNeeded(page, token, 'invoice', misHealthInvoiceCreated.invoice_id, misHealthInvoiceCreated, misHealthEntity);
+    expect(misHealthInvoice.status).toBe('posted');
+
+    const misHealthBillCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bills',
+      {
+        vendor_party_id: misHealthVendor.party_id,
+        bill_number: `MIS-BILL-${runId}`,
+        bill_date: e2eDate,
+        due_date: e2eDueDate,
+        expense_account_code: '51001',
+        place_of_supply: 'Karnataka',
+        accounting_entity_id: misHealthEntity,
+        line_items: [{ description: 'Phase 3 E2E MIS expense', hsn_sac: '4820', quantity: '1', rate: '500', gst_rate: '18' }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-mis-health-bill-${runId}` }
+    );
+    const misHealthBill = await approveIfNeeded(page, token, 'bill', misHealthBillCreated.bill_id, misHealthBillCreated, misHealthEntity);
+    expect(misHealthBill.status).toBe('posted');
+
+    const draftHealthInvoice = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/invoices',
+      {
+        customer_party_id: missingGstinCustomer.party_id,
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        reference: `DH-DRAFT-${runId}`,
+        save_as_draft: true,
+        accounting_entity_id: misHealthEntity,
+        line_items: [{ description: 'Phase 3 E2E data-health draft', hsn_sac: '9983', quantity: '1', rate: '100', gst_rate: '18' }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-data-health-draft-${runId}` }
+    );
+    expect(draftHealthInvoice.status).toBe('draft');
+
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/bank-recon/statement?account_id=${misHealthBankAccount.id}&accounting_entity_id=${misHealthEntity}`,
+      [
+        ['date', 'description', 'ref', 'debit', 'credit', 'balance'],
+        [e2eDate, `Phase 3 E2E stale reconciliation ${runId}`, `DH-STMT-${runId}`, '', '25.00', '25.00'],
+      ].map((row) => row.join(',')).join('\n')
+    );
+
+    const misHealthAsOf = '2098-09-30';
+    const misHealthQuery = `as_of=${misHealthAsOf}&accounting_entity_id=${misHealthEntity}`;
+    const misKpis = await jsonRequest(page, token, 'GET', `/business/mis/kpis?${misHealthQuery}`);
+    expect(misKpis.accounting_entity_id).toBe(misHealthEntity);
+    expect(misKpis.source).toMatchObject({
+      sales_purchase_trend: 'posted_ledger',
+      top_parties: 'open_item_aging',
+      financial_health: 'deterministic_financial_health',
+    });
+    expect(decimalValue(misKpis.working_capital?.receivables)).toBeGreaterThan(0);
+    expect(decimalValue(misKpis.working_capital?.payables)).toBeGreaterThan(0);
+    expect((misKpis.top_customers || []).some((row) => row.party_id === missingGstinCustomer.party_id && decimalValue(row.outstanding) > 0)).toBeTruthy();
+    expect((misKpis.top_vendors || []).some((row) => row.party_id === misHealthVendor.party_id && decimalValue(row.outstanding) > 0)).toBeTruthy();
+    expect((misKpis.financial_health?.kpis || []).some((kpi) => kpi.key === 'working_capital')).toBeTruthy();
+
+    const financialHealth = await jsonRequest(page, token, 'GET', `/business/financial-health?narrate=false&${misHealthQuery}`);
+    expect((financialHealth.kpis || []).some((kpi) => kpi.key === 'revenue' && decimalValue(kpi.value) > 0)).toBeTruthy();
+    expect((financialHealth.kpis || []).some((kpi) => kpi.key === 'working_capital')).toBeTruthy();
+
+    const dataHealth = await jsonRequest(page, token, 'GET', `/business/data-health?${misHealthQuery}`);
+    expect(dataHealth.status).toBe('needs_attention');
+    expect(dataHealth.issue_count).toBeGreaterThan(0);
+    expect(dataHealth.source).toMatchObject({
+      overdue_exposure: 'receivables_open_item_aging',
+    });
+    const dataHealthRules = Object.fromEntries((dataHealth.rules || []).map((rule) => [rule.key, rule]));
+    expect(dataHealthRules.missing_gstin?.status).toBe('fail');
+    expect(dataHealthRules.unposted_drafts?.status).toBe('fail');
+    expect(dataHealthRules.stale_reconciliation?.status).toBe('fail');
+    expect(dataHealthRules.overdue_exposure?.status).toBe('fail');
+    expect((dataHealth.issues || []).some((issue) => issue.rule_key === 'missing_gstin' && issue.workspace === 'parties')).toBeTruthy();
+    expect((dataHealth.issues || []).some((issue) => issue.rule_key === 'unposted_drafts' && issue.workspace === 'sales')).toBeTruthy();
+    expect((dataHealth.issues || []).some((issue) => issue.rule_key === 'stale_reconciliation' && issue.workspace === 'bank-recon')).toBeTruthy();
+    expect((dataHealth.issues || []).some((issue) => issue.rule_key === 'overdue_exposure' && issue.workspace === 'financial-health')).toBeTruthy();
+
+    const primaryDataHealth = await jsonRequest(page, token, 'GET', `/business/data-health?as_of=${misHealthAsOf}&accounting_entity_id=primary`);
+    expect((primaryDataHealth.issues || []).some((issue) => JSON.stringify(issue).includes(missingGstinCustomer.party_id))).toBeFalsy();
+
+    for (const [kind, path, idempotencyKey] of [
+      ['MIS/Data Health invoice', `/business/invoices/${misHealthInvoice.invoice_id}/cancel`, `phase3-demo-mis-health-invoice-cancel-${runId}`],
+      ['MIS/Data Health bill', `/business/bills/${misHealthBill.bill_id}/cancel`, `phase3-demo-mis-health-bill-cancel-${runId}`],
+    ]) {
+      const reversed = await jsonRequest(
+        page,
+        token,
+        'POST',
+        path,
+        { reason: `Phase 3 E2E reverse ${kind}`, cancel_date: e2eDate, accounting_entity_id: misHealthEntity },
         { 'X-Idempotency-Key': idempotencyKey }
       );
       expect(reversed.status).toBe('cancelled');
