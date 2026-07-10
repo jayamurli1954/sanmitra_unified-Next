@@ -1,3 +1,6 @@
+import asyncio
+
+import app.modules.rag.service as rag_service
 from app.modules.rag.schemas import RagLegalFilter, RagQueryRequest
 from app.modules.rag.service import _build_filter, _chunk_text, _hybrid_score, _tokenize
 
@@ -74,4 +77,108 @@ def test_build_filter_includes_legal_filters() -> None:
     assert filters["legal_section"] == "138"
     assert filters["legal_matter_type"] == "criminal"
     assert filters["legal_citation"] == {"$regex": "scc", "$options": "i"}
+
+
+class _FakeCursor:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def sort(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
+    def __aiter__(self):
+        self._iter = iter(self._chunks)
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iter)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
+class _FakeChunksCollection:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.filters = []
+
+    def find(self, filters):
+        self.filters.append(filters)
+        return _FakeCursor(self.chunks)
+
+
+class _FakeEmbeddingProvider:
+    name = "fake"
+    model_name = "fake-v1"
+
+    async def embed_texts(self, texts):
+        return [[1.0, 0.0, 0.0] for _ in texts]
+
+
+def _chunk(text: str, *, act_name: str = "Bharatiya Nagarik Suraksha Sanhita, 2023"):
+    return {
+        "document_id": "doc-1",
+        "chunk_id": "chunk-1",
+        "chunk_index": 0,
+        "title": "BNSS procedure note",
+        "source_type": "statute",
+        "source_uri": "https://example.test/bnss",
+        "language": "en",
+        "tags": ["statute"],
+        "legal_metadata": {"act_name": act_name},
+        "text": text,
+        "token_set": sorted(set(_tokenize(text))),
+        "embedding": [1.0, 0.0, 0.0],
+    }
+
+
+def test_query_knowledge_auto_scopes_detected_act(monkeypatch) -> None:
+    text = "Section 173 BNSS explains FIR registration procedure under Bharatiya Nagarik Suraksha Sanhita."
+    collection = _FakeChunksCollection([_chunk(text)])
+
+    monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
+    monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
+    monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
+    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+
+    result = asyncio.run(
+        rag_service.query_knowledge(
+            tenant_id="tenant-1",
+            app_key="legalmitra",
+            payload=RagQueryRequest(query="Explain section 173 BNSS FIR procedure"),
+        )
+    )
+
+    assert result["strategy"] == "fake_hash_act_scoped_bnss"
+    assert collection.filters[0]["tenant_id"] == "tenant-1"
+    assert collection.filters[0]["app_key"] == "legalmitra"
+    assert collection.filters[0]["legal_act_name"]["$options"] == "i"
+    assert "Bharatiya\\ Nagarik\\ Suraksha\\ Sanhita" in collection.filters[0]["legal_act_name"]["$regex"]
+
+
+def test_query_knowledge_does_not_override_explicit_act_filter(monkeypatch) -> None:
+    text = "Custom Act section 1 filing procedure and documentary requirements for a specific legal workflow."
+    collection = _FakeChunksCollection([_chunk(text, act_name="custom act")])
+
+    monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
+    monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
+    monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
+    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+
+    result = asyncio.run(
+        rag_service.query_knowledge(
+            tenant_id="tenant-1",
+            app_key="legalmitra",
+            payload=RagQueryRequest(
+                query="Custom Act section 1 filing procedure BNSS",
+                legal_filters=RagLegalFilter(act_name="Custom Act"),
+            ),
+        )
+    )
+
+    assert result["strategy"] == "fake_hash"
+    assert collection.filters[0]["legal_act_name"] == "custom act"
 

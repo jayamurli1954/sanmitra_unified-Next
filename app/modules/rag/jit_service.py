@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import re
 import httpx
 import fitz  # PyMuPDF
 from datetime import date
 from typing import Optional
+from uuid import uuid4
 
+from app.modules.rag.legal_act_registry import detect_legal_act, legal_act_metadata_filter
 from app.services.legal_web_search import legal_web_search
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
 from app.modules.rag.service import ingest_document
@@ -17,22 +20,15 @@ async def trigger_jit_ingestion(query: str, tenant_id: str, app_key: str):
     Checks if the act is already present in the local RAG database first.
     """
     try:
-        # 0. Basic Act Detection Keywords
-        act_keywords = [
-            "BNS", "BNSS", "BSA", "IPC", "CPC", "CRPC", "Income Tax", "GST", 
-            "Contract Act", "Evidence Act", "Negotiable Instruments", "NI Act",
-            "Cheque Bounce", "PMLA", "NDPS", "UAPA"
-        ]
-        
-        detected_act = None
-        for kw in act_keywords:
-            if kw.lower() in query.lower():
-                detected_act = kw
-                break
-        
-        if not detected_act:
+        # 0. Detect canonical Act names through the shared LegalMitra registry.
+        match = detect_legal_act(query)
+        if match:
+            detected_act = match.canonical_name
+            act_metadata_filter = legal_act_metadata_filter(match)
+        else:
             # If no clear keyword, use the whole query to search later
             detected_act = query
+            act_metadata_filter = {"$regex": re.escape(detected_act), "$options": "i"}
 
         # 1. Check if we already have this act indexed for this tenant/app
         from app.db.mongo import get_collection
@@ -43,8 +39,8 @@ async def trigger_jit_ingestion(query: str, tenant_id: str, app_key: str):
             "tenant_id": tenant_id,
             "app_key": app_key,
             "$or": [
-                {"title": {"$regex": f".*{detected_act}.*", "$options": "i"}},
-                {"legal_act_name": {"$regex": f".*{detected_act}.*", "$options": "i"}}
+                {"title": act_metadata_filter},
+                {"legal_act_name": act_metadata_filter}
             ]
         })
         

@@ -5,11 +5,18 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from fastapi import HTTPException
+
 from app.core.audit.service import log_audit_event
+from app.core.decorators import limit_concurrency
 from app.db.mongo import get_collection
+from app.modules.rag.legal_act_registry import (
+    detect_legal_act,
+    legal_act_metadata_filter,
+    should_trigger_jit,
+)
 from app.modules.rag.providers import get_embedding_provider, get_embedding_strategy_name
 from app.modules.rag.schemas import RagIngestRequest, RagQueryRequest
-from app.core.decorators import limit_concurrency
 
 RAG_DOCUMENTS_COLLECTION = "rag_documents"
 RAG_CHUNKS_COLLECTION = "rag_chunks"
@@ -309,6 +316,42 @@ def _build_reference_label(index: int, item: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+async def _score_candidate_chunks(
+    *,
+    chunks_collection,
+    filters: dict[str, Any],
+    payload: RagQueryRequest,
+    query_embedding: list[float],
+    query_tokens: set[str],
+) -> list[dict[str, Any]]:
+    cursor = chunks_collection.find(filters).sort("created_at", -1).limit(payload.max_candidates)
+
+    scored: list[dict[str, Any]] = []
+    async for chunk in cursor:
+        score = _hybrid_score(query_embedding, query_tokens, chunk)
+        if score <= 0.01:
+            continue
+
+        scored.append(
+            {
+                "score": round(score, 6),
+                "document_id": chunk["document_id"],
+                "chunk_id": chunk["chunk_id"],
+                "chunk_index": int(chunk.get("chunk_index") or 0),
+                "title": chunk.get("title") or "Untitled",
+                "source_type": chunk.get("source_type") or "document",
+                "source_uri": chunk.get("source_uri"),
+                "language": chunk.get("language") or "en",
+                "tags": list(chunk.get("tags") or []),
+                "legal_metadata": dict(chunk.get("legal_metadata") or {}),
+                "text": str(chunk.get("text") or ""),
+            }
+        )
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored
+
+
 @limit_concurrency(limit=5)
 async def ingest_document(*, tenant_id: str, app_key: str, created_by: str, payload: RagIngestRequest):
     documents = get_collection(RAG_DOCUMENTS_COLLECTION)
@@ -488,43 +531,42 @@ async def query_knowledge(
 
     provider = get_embedding_provider()
     strategy = get_embedding_strategy_name()
+    effective_strategy = strategy
     query_embedding_batch = await provider.embed_texts([payload.query])
     query_embedding = query_embedding_batch[0] if query_embedding_batch else []
 
-    filters = _build_filter(tenant_id=tenant_id, app_key=app_key, payload=payload)
+    base_filters = _build_filter(tenant_id=tenant_id, app_key=app_key, payload=payload)
+    filters = dict(base_filters)
 
-    cursor = chunks_collection.find(filters).sort("created_at", -1).limit(payload.max_candidates)
+    user_supplied_act_filter = bool(payload.legal_filters and payload.legal_filters.act_name)
+    detected_act = None if user_supplied_act_filter else detect_legal_act(payload.query)
+    if detected_act:
+        filters["legal_act_name"] = legal_act_metadata_filter(detected_act)
+        effective_strategy = f"{strategy}_act_scoped_{detected_act.key}"
 
     # --- Proactive JIT Trigger ---
-    act_keywords = ["act", "section", "bns", "bnss", "bsa", "ipc", "cpc", "crpc", "statute", "rule", "regulation"]
-    if any(kw in payload.query.lower() for kw in act_keywords):
+    if should_trigger_jit(payload.query):
         from app.modules.rag.jit_service import trigger_jit_ingestion
         asyncio.create_task(trigger_jit_ingestion(payload.query, tenant_id, app_key))
     # --- End Proactive JIT ---
 
-    scored: list[dict[str, Any]] = []
-    async for chunk in cursor:
-        score = _hybrid_score(query_embedding, query_tokens, chunk)
-        if score <= 0.01:
-            continue
+    scored = await _score_candidate_chunks(
+        chunks_collection=chunks_collection,
+        filters=filters,
+        payload=payload,
+        query_embedding=query_embedding,
+        query_tokens=query_tokens,
+    )
 
-        scored.append(
-            {
-                "score": round(score, 6),
-                "document_id": chunk["document_id"],
-                "chunk_id": chunk["chunk_id"],
-                "chunk_index": int(chunk.get("chunk_index") or 0),
-                "title": chunk.get("title") or "Untitled",
-                "source_type": chunk.get("source_type") or "document",
-                "source_uri": chunk.get("source_uri"),
-                "language": chunk.get("language") or "en",
-                "tags": list(chunk.get("tags") or []),
-                "legal_metadata": dict(chunk.get("legal_metadata") or {}),
-                "text": str(chunk.get("text") or ""),
-            }
+    if detected_act and not scored:
+        effective_strategy = f"{effective_strategy}_relaxed"
+        scored = await _score_candidate_chunks(
+            chunks_collection=chunks_collection,
+            filters=base_filters,
+            payload=payload,
+            query_embedding=query_embedding,
+            query_tokens=query_tokens,
         )
-
-    scored.sort(key=lambda x: x["score"], reverse=True)
 
     if not scored:
         # --- Immediate Web Search Fallback ---
@@ -589,7 +631,7 @@ async def query_knowledge(
         return {
             "answer": "I do not have enough indexed content to answer this question yet. Please ingest relevant documents first.",
             "citations": [],
-            "strategy": strategy,
+            "strategy": effective_strategy,
             "candidate_count": 0,
             "context": [] if payload.include_context else None,
         }
@@ -685,7 +727,7 @@ async def query_knowledge(
         return {
             "answer": "I do not have enough indexed content to answer this question yet. Please ingest relevant documents first.",
             "citations": [],
-            "strategy": strategy,
+            "strategy": effective_strategy,
             "candidate_count": len(scored),
             "context": [] if payload.include_context else None,
         }
@@ -713,7 +755,7 @@ async def query_knowledge(
         return {
             "answer": "I do not have enough indexed content matching this question yet. Please ingest relevant documents for this topic.",
             "citations": [],
-            "strategy": strategy,
+            "strategy": effective_strategy,
             "candidate_count": len(scored),
             "context": [] if payload.include_context else None,
             "rejection_reason": (
@@ -787,7 +829,7 @@ async def query_knowledge(
             return {
                 "answer": "I do not have enough indexed content matching this question yet. Please ingest relevant documents for this topic.",
                 "citations": [],
-                "strategy": strategy,
+                "strategy": effective_strategy,
                 "candidate_count": len(scored),
                 "context": [] if payload.include_context else None,
                 "rejection_reason": "all_items_filtered_low_overlap",
@@ -828,7 +870,7 @@ async def query_knowledge(
     return {
         "answer": "\n".join(answer_lines),
         "citations": citations,
-        "strategy": strategy,
+        "strategy": effective_strategy,
         "candidate_count": len(scored),
         "context": context if payload.include_context else None,
     }
