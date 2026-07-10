@@ -16,32 +16,35 @@ const safeStorage = (storage) => {
 const session = () => safeStorage(window.sessionStorage);
 const local = () => safeStorage(window.localStorage);
 
-const getValueFromStores = (...keys) => {
-  const localStore = local();
+const readSessionFirst = (...keys) => {
   const sessionStore = session();
+  const localStore = local();
   for (const key of keys) {
-    const localValue = localStore?.getItem(key);
-    if (localValue) {
-      return localValue;
-    }
     const sessionValue = sessionStore?.getItem(key);
     if (sessionValue) {
       return sessionValue;
+    }
+    const localValue = localStore?.getItem(key);
+    if (localValue) {
+      // Legacy compatibility: migrate localStorage auth values into session storage.
+      sessionStore?.setItem(key, localValue);
+      localStore?.removeItem(key);
+      return localValue;
     }
   }
   return null;
 };
 
-const writeValueToStores = (key, value) => {
-  const localStore = local();
+const writeValueToSession = (key, value) => {
   const sessionStore = session();
+  const localStore = local();
   if (value === null || value === undefined || value === '') {
-    localStore?.removeItem(key);
     sessionStore?.removeItem(key);
+    localStore?.removeItem(key);
     return;
   }
-  localStore?.setItem(key, value);
   sessionStore?.setItem(key, value);
+  localStore?.removeItem(key);
 };
 
 const removeFromStores = (...keys) => {
@@ -54,21 +57,21 @@ const removeFromStores = (...keys) => {
 };
 
 export const getAccessToken = () => {
-  const current = getValueFromStores(ACCESS_TOKEN_KEY, LEGACY_TOKEN_KEY);
+  const current = readSessionFirst(ACCESS_TOKEN_KEY, LEGACY_TOKEN_KEY);
   if (!current) {
     return null;
   }
-  writeValueToStores(ACCESS_TOKEN_KEY, current);
+  writeValueToSession(ACCESS_TOKEN_KEY, current);
   removeFromStores(LEGACY_TOKEN_KEY);
   return current;
 };
 
 export const getRefreshToken = () => {
-  const current = getValueFromStores(REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY);
+  const current = readSessionFirst(REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY);
   if (!current) {
     return null;
   }
-  writeValueToStores(REFRESH_TOKEN_KEY, current);
+  writeValueToSession(REFRESH_TOKEN_KEY, current);
   removeFromStores(LEGACY_REFRESH_TOKEN_KEY);
   return current;
 };
@@ -92,21 +95,21 @@ export const decodeJwtPayload = (token) => {
 export const readAccessTokenClaims = () => decodeJwtPayload(getAccessToken());
 
 export const setAccessToken = (token) => {
-  writeValueToStores(ACCESS_TOKEN_KEY, token);
+  writeValueToSession(ACCESS_TOKEN_KEY, token);
   removeFromStores(LEGACY_TOKEN_KEY);
 };
 
 export const setRefreshToken = (token) => {
-  writeValueToStores(REFRESH_TOKEN_KEY, token || null);
+  writeValueToSession(REFRESH_TOKEN_KEY, token || null);
   removeFromStores(LEGACY_REFRESH_TOKEN_KEY);
 };
 
 export const readStoredUser = () => {
-  const current = getValueFromStores(USER_KEY, LEGACY_USER_KEY);
+  const current = readSessionFirst(USER_KEY, LEGACY_USER_KEY);
   if (current) {
     try {
       const parsed = JSON.parse(current) || {};
-      writeValueToStores(USER_KEY, JSON.stringify(parsed));
+      writeValueToSession(USER_KEY, JSON.stringify(parsed));
       removeFromStores(LEGACY_USER_KEY);
       return parsed;
     } catch (error) {
@@ -119,7 +122,7 @@ export const readStoredUser = () => {
 
 export const writeStoredUser = (user) => {
   const serialized = JSON.stringify(user || {});
-  writeValueToStores(USER_KEY, serialized);
+  writeValueToSession(USER_KEY, serialized);
   removeFromStores(LEGACY_USER_KEY);
 };
 

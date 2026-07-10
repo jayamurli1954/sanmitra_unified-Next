@@ -9467,6 +9467,16 @@ window.toggleObCustomMappingView = function() {
   }
 };
 
+document.addEventListener("change", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+  if (target.matches("[data-ob-preset]")) {
+    window.toggleObCustomMappingView();
+  }
+});
+
 async function previewYearEnd() {
   const fySel = document.querySelector("[data-ye-fy]");
   yeFy = fySel?.value || yeFy;
@@ -9506,7 +9516,7 @@ function renderOpeningBalancesSection() {
       <label>Opening date <input type="date" data-ob-asof value="${escapeHtml(lastObPreview?.as_of || "")}" placeholder="FY start"></label>
       <label>Balances CSV <input type="file" accept=".csv,text/csv" data-ob-file></label>
       <label>Format preset
-        <select data-ob-preset onchange="toggleObCustomMappingView()">
+        <select data-ob-preset>
           <option value="" ${presetVal === "" ? "selected" : ""}>Standard Template</option>
           <option value="tally" ${presetVal === "tally" ? "selected" : ""}>Tally Export</option>
           <option value="zoho" ${presetVal === "zoho" ? "selected" : ""}>Zoho Books Export</option>

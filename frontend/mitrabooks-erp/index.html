@@ -794,28 +794,6 @@
     </dialog>
     <script type="module" src="../shared/pwa-shell.js?v=mitrabooks-erp-v10"></script>
     <script type="module" src="./app.js?v=mitrabooks-erp-v32"></script>
-    <script>
-      (function removeStaleKpiSubtitle() {
-        var staleText = "Income, expenses, and cash movement";
-        function clean() {
-          var widget = document.getElementById("widget-kpi-strip");
-          if (!widget) {
-            return;
-          }
-          widget.querySelectorAll("h1, h2, h3, h4, p, span").forEach(function (node) {
-            if ((node.textContent || "").trim() === staleText) {
-              var block = node.closest(".kpi-widget-title-block") || node.parentElement;
-              if (block && !block.classList.contains("executive-kpi-strip")) {
-                block.remove();
-              } else {
-                node.remove();
-              }
-            }
-          });
-        }
-        clean();
-        new MutationObserver(clean).observe(document.body, { childList: true, subtree: true });
-      })();
-    </script>
+    <script src="./init-cleanup.js?v=mitrabooks-erp-v1"></script>
   </body>
 </html>

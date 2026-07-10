@@ -12,8 +12,8 @@ const demoUser = {
 
 async function seedAuthenticatedGruhaSession(page) {
   await page.addInitScript((user) => {
-    window.localStorage.setItem('access_token', 'playwright-gruhamitra-demo-token');
-    window.localStorage.setItem('backend_auth_active', 'true');
+    window.sessionStorage.setItem('access_token', 'playwright-gruhamitra-demo-token');
+    window.sessionStorage.setItem('backend_auth_active', 'true');
     window.localStorage.setItem('gruhamitra_tenant_id', user.society_id);
     window.localStorage.setItem('user', JSON.stringify(user));
   }, demoUser);

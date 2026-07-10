@@ -139,16 +139,29 @@ function renderLegalMitraInstallSuggestion() {
   panel.id = "sanmitra-install-suggestion";
   panel.dataset.installApp = app.id;
   panel.setAttribute("aria-label", app.label);
-  panel.innerHTML = `
-    <div>
-      <strong>${copy.title}</strong>
-      <span>${copy.body}</span>
-    </div>
-    <div class="legal-install-actions">
-      <button type="button" data-install-action>${copy.action}</button>
-      <button type="button" data-install-dismiss aria-label="Dismiss install suggestion">x</button>
-    </div>
-  `;
+  const copyWrap = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = copy.title;
+  const body = document.createElement("span");
+  body.textContent = copy.body;
+  copyWrap.append(title, body);
+
+  const actions = document.createElement("div");
+  actions.className = "legal-install-actions";
+
+  const installButton = document.createElement("button");
+  installButton.type = "button";
+  installButton.dataset.installAction = "";
+  installButton.textContent = copy.action;
+
+  const dismissButton = document.createElement("button");
+  dismissButton.type = "button";
+  dismissButton.dataset.installDismiss = "";
+  dismissButton.setAttribute("aria-label", "Dismiss install suggestion");
+  dismissButton.textContent = "x";
+
+  actions.append(installButton, dismissButton);
+  panel.append(copyWrap, actions);
   panel.querySelector("[data-install-dismiss]")?.addEventListener("click", () => closeInstallSuggestion(panel));
   panel.querySelector("[data-install-action]")?.addEventListener("click", async () => {
     const promptEvent = window.__SANMITRA_PWA_INSTALL_PROMPT__;

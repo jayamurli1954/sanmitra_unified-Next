@@ -4,6 +4,14 @@ const ACCESS_TOKEN_STORAGE_KEY = "sanmitra_frontend_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "sanmitra_frontend_refresh_token";
 const REQUEST_TIMEOUT_MS = 5000;
 
+function sessionStore() {
+  try {
+    return window.sessionStorage;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function normalizeApiBaseUrl(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
@@ -75,42 +83,75 @@ export function setConfiguredApiBaseUrl(value) {
 }
 
 export function getAccessToken() {
-  return String(localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "").trim();
+  const session = sessionStore();
+  const fromSession = String(session?.getItem(ACCESS_TOKEN_STORAGE_KEY) || "").trim();
+  if (fromSession) {
+    return fromSession;
+  }
+  const legacyValue = String(localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "").trim();
+  if (legacyValue) {
+    session?.setItem(ACCESS_TOKEN_STORAGE_KEY, legacyValue);
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  }
+  return legacyValue;
 }
 
 export function setAccessToken(value) {
+  const session = sessionStore();
   const token = String(value || "").trim();
   if (!token) {
+    session?.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     return "";
   }
-  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  session?.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   return token;
 }
 
 export function clearAccessToken() {
+  const session = sessionStore();
+  session?.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 
 export function getRefreshToken() {
-  return String(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "").trim();
+  const session = sessionStore();
+  const fromSession = String(session?.getItem(REFRESH_TOKEN_STORAGE_KEY) || "").trim();
+  if (fromSession) {
+    return fromSession;
+  }
+  const legacyValue = String(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "").trim();
+  if (legacyValue) {
+    session?.setItem(REFRESH_TOKEN_STORAGE_KEY, legacyValue);
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+  return legacyValue;
 }
 
 export function setRefreshToken(value) {
+  const session = sessionStore();
   const token = String(value || "").trim();
   if (!token) {
+    session?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     return "";
   }
-  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+  session?.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   return token;
 }
 
 export function clearRefreshToken() {
+  const session = sessionStore();
+  session?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 }
 
 export function clearAllTokens() {
+  const session = sessionStore();
+  session?.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  session?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 }

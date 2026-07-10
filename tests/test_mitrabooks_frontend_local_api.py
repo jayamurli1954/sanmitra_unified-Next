@@ -33,8 +33,10 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
 
 def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
     login_html = REPO_ROOT / "frontend" / "mitrabooks-erp" / "login.html"
+    redirect_js = REPO_ROOT / "frontend" / "mitrabooks-erp" / "login-redirect.js"
     source = login_html.read_text(encoding="utf-8")
-    script = source.split("<script>", 1)[1].split("</script>", 1)[0]
+    assert '<script src="./login-redirect.js?v=mitrabooks-erp-v1"></script>' in source
+    script = redirect_js.read_text(encoding="utf-8")
 
     result = subprocess.run(
         ["node", "-e", f"new Function({script!r});"],

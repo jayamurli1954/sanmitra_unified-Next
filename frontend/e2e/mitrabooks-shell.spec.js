@@ -2036,7 +2036,7 @@ test.describe('MitraBooks ERP static shell', () => {
 
   test('keeps login page visible when cached token has no tenant session', async ({ page }) => {
     await page.addInitScript(() => {
-      window.localStorage.setItem('sanmitra_frontend_access_token', 'stale-local-preview-token');
+      window.sessionStorage.setItem('sanmitra_frontend_access_token', 'stale-local-preview-token');
       window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
     });
     await page.route('**/health', route => route.fulfill({
@@ -2056,14 +2056,14 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.erp-sidebar')).toBeHidden();
     await expect(page.locator('#session-pill')).toContainText('Not signed in');
     await expect(page.locator('#login-status')).toContainText('Sign in required');
-    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('sanmitra_frontend_access_token'))).toBeNull();
+    await expect.poll(() => page.evaluate(() => window.sessionStorage.getItem('sanmitra_frontend_access_token'))).toBeNull();
   });
 
   test('loads dashboard and opens core workspaces', async ({ page }) => {
     test.setTimeout(120000);
     await mockVerifiedMitraBooksSession(page);
     await page.addInitScript(() => {
-      window.localStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
+      window.sessionStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
       window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
     });
     await page.goto('/mitrabooks-erp/index.html');

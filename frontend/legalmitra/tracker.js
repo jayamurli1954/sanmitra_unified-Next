@@ -144,21 +144,61 @@ function renderRows(rows = getRoleRows()) {
   const target = document.getElementById("tracker-rows");
   if (!target) return;
   const normalizedRows = rows.map(normalizeRow);
-  target.innerHTML = normalizedRows.map((row, index) => `
-    <tr>
-      <td>${escapeHtml(row.date)}</td>
-      <td>${escapeHtml(row.reference)}</td>
-      <td>${escapeHtml(row.authority)}</td>
-      <td>${escapeHtml(row.purpose)}</td>
-      <td><span class="status ${escapeHtml(row.status)}">${escapeHtml(row.status)}</span></td>
-      <td>
-        <div class="legal-diary-row-actions">
-          <button type="button" data-row-action="edit" data-row-index="${index}" aria-label="Edit work item">Edit</button>
-          <button type="button" data-row-action="delete" data-row-index="${index}" aria-label="Delete work item">Delete</button>
-        </div>
-      </td>
-    </tr>
-  `).join("");
+  target.textContent = "";
+  const fragment = document.createDocumentFragment();
+
+  normalizedRows.forEach((row, index) => {
+    const tr = document.createElement("tr");
+
+    const dateTd = document.createElement("td");
+    dateTd.textContent = row.date;
+    tr.appendChild(dateTd);
+
+    const referenceTd = document.createElement("td");
+    referenceTd.textContent = row.reference;
+    tr.appendChild(referenceTd);
+
+    const authorityTd = document.createElement("td");
+    authorityTd.textContent = row.authority;
+    tr.appendChild(authorityTd);
+
+    const purposeTd = document.createElement("td");
+    purposeTd.textContent = row.purpose;
+    tr.appendChild(purposeTd);
+
+    const statusTd = document.createElement("td");
+    const statusSpan = document.createElement("span");
+    statusSpan.className = `status ${String(row.status || "").replace(/[^a-z0-9_-]/gi, "")}`;
+    statusSpan.textContent = row.status;
+    statusTd.appendChild(statusSpan);
+    tr.appendChild(statusTd);
+
+    const actionsTd = document.createElement("td");
+    const actions = document.createElement("div");
+    actions.className = "legal-diary-row-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.dataset.rowAction = "edit";
+    editButton.dataset.rowIndex = String(index);
+    editButton.setAttribute("aria-label", "Edit work item");
+    editButton.textContent = "Edit";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.dataset.rowAction = "delete";
+    deleteButton.dataset.rowIndex = String(index);
+    deleteButton.setAttribute("aria-label", "Delete work item");
+    deleteButton.textContent = "Delete";
+
+    actions.append(editButton, deleteButton);
+    actionsTd.appendChild(actions);
+    tr.appendChild(actionsTd);
+
+    fragment.appendChild(tr);
+  });
+
+  target.appendChild(fragment);
 }
 
 function updateMetricsForRows() {
@@ -209,12 +249,26 @@ function renderDetail(card, options = {}) {
   document.getElementById("tracker-detail-kicker").textContent = document.querySelector(`[data-tracker-card="${currentCard}"] span`)?.textContent || "Register";
   document.getElementById("tracker-detail-title").textContent = title;
   document.getElementById("tracker-detail-copy").textContent = copy;
-  document.getElementById("tracker-detail-list").innerHTML = labels.map((label, index) => `
-    <label class="legal-diary-edit-field">
-      <span>${escapeHtml(label)}</span>
-      <input data-tracker-field="${index}" data-tracker-label="${escapeHtml(label)}" value="${escapeHtml(saved[label] || sampleValue(label))}">
-    </label>
-  `).join("");
+  const detailList = document.getElementById("tracker-detail-list");
+  detailList.textContent = "";
+  const detailFragment = document.createDocumentFragment();
+  labels.forEach((label, index) => {
+    const field = document.createElement("label");
+    field.className = "legal-diary-edit-field";
+
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = label;
+    field.appendChild(labelSpan);
+
+    const input = document.createElement("input");
+    input.dataset.trackerField = String(index);
+    input.dataset.trackerLabel = label;
+    input.value = saved[label] || sampleValue(label);
+    field.appendChild(input);
+
+    detailFragment.appendChild(field);
+  });
+  detailList.appendChild(detailFragment);
 
   document.querySelectorAll("[data-tracker-card]").forEach((item) => {
     item.classList.toggle("active", item.getAttribute("data-tracker-card") === currentCard);

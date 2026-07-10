@@ -71,16 +71,18 @@ function setMode(mode) {
 
 function persistSession(payload) {
   setAccessToken(payload?.access_token || "");
-  localStorage.setItem(SESSION_KEY, JSON.stringify({
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({
     access_token: payload?.access_token || "",
     refresh_token: payload?.refresh_token || "",
     token_type: payload?.token_type || "bearer",
     saved_at: new Date().toISOString(),
   }));
+  localStorage.removeItem(SESSION_KEY);
 }
 
 function clearSession() {
   clearAccessToken();
+  sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_KEY);
 }
 

@@ -132,7 +132,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     await expect(page.locator('#login-status')).toContainText(/Signed in|workspace is loading/i, { timeout: 30000 });
     await expect(page.locator('#menu-tenant-display')).toContainText(DEMO_TENANT_ID, { timeout: 30000 });
 
-    const token = await page.evaluate(() => window.localStorage.getItem('sanmitra_frontend_access_token') || '');
+    const token = await page.evaluate(() => window.sessionStorage.getItem('sanmitra_frontend_access_token') || '');
     expect(token, 'browser login did not store an access token').toBeTruthy();
 
     const modules = await jsonRequest(page, token, 'GET', '/modules/me');
