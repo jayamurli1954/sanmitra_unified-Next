@@ -185,3 +185,20 @@ def test_destructive_demo_spec_covers_fixed_asset_gate() -> None:
     assert "fixed_asset_disposal" in spec
     assert "total_debit)).toBe(decimalValue" in spec
     assert "accounting_entity_id=primary" in spec
+
+
+def test_destructive_demo_spec_covers_dimensions_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "dimensionsEntity" in spec
+    assert "business/dimensions?accounting_entity_id" in spec
+    assert "dimension_type: 'cost_centre'" in spec
+    assert "dimension_type: 'project'" in spec
+    assert "phase3-demo-dimension-invoice" in spec
+    assert "phase3-demo-dimension-bill" in spec
+    assert "phase3-demo-dimension-credit-note" in spec
+    assert "phase3-demo-dimension-debit-note" in spec
+    assert "business/dimensions/report?dimension_type=cost_centre" in spec
+    assert "business/dimensions/report?dimension_type=project" in spec
+    assert "business/dimensions/report/export?dimension_type=cost_centre&format=json" in spec
+    assert "accounting_entity_id=primary" in spec

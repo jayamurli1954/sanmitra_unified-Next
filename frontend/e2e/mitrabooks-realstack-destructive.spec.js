@@ -89,7 +89,7 @@ async function uploadAttachment(page, token, path, name, mimeType, body) {
   return payload;
 }
 
-async function approveIfNeeded(page, token, kind, id, doc) {
+async function approveIfNeeded(page, token, kind, id, doc, accountingEntityId = 'primary') {
   if (doc.status !== 'pending_approval' && doc.approval_status !== 'pending_approval') {
     return doc;
   }
@@ -103,21 +103,22 @@ async function approveIfNeeded(page, token, kind, id, doc) {
   return jsonRequest(page, token, 'POST', paths[kind], {
     approve: true,
     notes: 'Phase 3 destructive demo E2E approval',
-    accounting_entity_id: 'primary',
+    accounting_entity_id: accountingEntityId,
   });
 }
 
-async function createParty(page, token, runId, partyType) {
+async function createParty(page, token, runId, partyType, accountingEntityId = 'primary') {
   return jsonRequest(page, token, 'POST', '/business/parties', {
     party_name: `E2E ${partyType} ${runId}`,
     party_type: partyType,
-    party_code: `E2E-${partyType.toUpperCase()}-${runId}`,
+    party_code: `E2E-${partyType.toUpperCase()}-${accountingEntityId}-${runId}`.slice(0, 80),
     gstin: partyType === 'customer' ? '29AAAAA0000A1Z5' : '29ABCDE1234F1Z5',
     pan: partyType === 'customer' ? 'AAAAA0000A' : 'ABCDE1234F',
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560001',
     opening_balance: '0.00',
+    accounting_entity_id: accountingEntityId,
   });
 }
 
@@ -156,6 +157,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const yearEndCloseDate = `${yearEndBaseYear + 1}-03-31`;
     const inventoryEntity = `inventory-e2e-${runId}`;
     const fixedAssetEntity = `fixed-asset-e2e-${runId}`;
+    const dimensionsEntity = `dimensions-e2e-${runId}`;
     const bankReconRef = `BR-${runId}`;
     const bankReconAmount = '222.37';
 
@@ -434,6 +436,227 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
 
     const primaryFixedAssets = await jsonRequest(page, token, 'GET', '/business/fixed-assets?accounting_entity_id=primary');
     expect(primaryFixedAssets.items?.some((item) => item.asset_id === fixedAsset.asset_id)).toBeFalsy();
+
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/accounting/initialize-chart-of-accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': dimensionsEntity }
+    );
+    const dimensionCustomer = await createParty(page, token, runId, 'customer', dimensionsEntity);
+    const dimensionVendor = await createParty(page, token, runId, 'vendor', dimensionsEntity);
+    const dimensionCostCentre = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/dimensions?accounting_entity_id=${dimensionsEntity}`,
+      {
+        dimension_type: 'cost_centre',
+        code: `DCC${runId.slice(-5)}`,
+        name: `Phase 3 E2E Cost Centre ${runId}`,
+      }
+    );
+    const dimensionProject = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/dimensions?accounting_entity_id=${dimensionsEntity}`,
+      {
+        dimension_type: 'project',
+        code: `DPR${runId.slice(-5)}`,
+        name: `Phase 3 E2E Project ${runId}`,
+      }
+    );
+    expect(dimensionCostCentre.accounting_entity_id).toBe(dimensionsEntity);
+    expect(dimensionProject.accounting_entity_id).toBe(dimensionsEntity);
+
+    const dimensionMasters = await jsonRequest(page, token, 'GET', `/business/dimensions?accounting_entity_id=${dimensionsEntity}`);
+    expect((dimensionMasters.cost_centres || []).some((row) => row.dimension_id === dimensionCostCentre.dimension_id)).toBeTruthy();
+    expect((dimensionMasters.projects || []).some((row) => row.dimension_id === dimensionProject.dimension_id)).toBeTruthy();
+
+    const dimensionInvoiceCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/invoices',
+      {
+        customer_party_id: dimensionCustomer.party_id,
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        reference: `DIM-INV-${runId}`,
+        cost_centre_id: dimensionCostCentre.dimension_id,
+        project_id: dimensionProject.dimension_id,
+        accounting_entity_id: dimensionsEntity,
+        line_items: [
+          {
+            description: 'Phase 3 E2E dimension income',
+            hsn_sac: '9983',
+            quantity: '1',
+            rate: '800',
+            gst_rate: '18',
+            cost_centre_id: dimensionCostCentre.dimension_id,
+            project_id: dimensionProject.dimension_id,
+          },
+          {
+            description: 'Phase 3 E2E dimension fallback income',
+            hsn_sac: '9983',
+            quantity: '1',
+            rate: '200',
+            gst_rate: '18',
+          },
+        ],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-dimension-invoice-${runId}` }
+    );
+    const dimensionInvoice = await approveIfNeeded(page, token, 'invoice', dimensionInvoiceCreated.invoice_id, dimensionInvoiceCreated, dimensionsEntity);
+    expect(dimensionInvoice.status).toBe('posted');
+
+    const dimensionBillCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bills',
+      {
+        vendor_party_id: dimensionVendor.party_id,
+        bill_number: `DIM-BILL-${runId}`,
+        bill_date: e2eDate,
+        due_date: e2eDueDate,
+        expense_account_code: '51001',
+        place_of_supply: 'Karnataka',
+        cost_centre_id: dimensionCostCentre.dimension_id,
+        project_id: dimensionProject.dimension_id,
+        accounting_entity_id: dimensionsEntity,
+        line_items: [
+          {
+            description: 'Phase 3 E2E dimension expense',
+            hsn_sac: '4820',
+            quantity: '1',
+            rate: '300',
+            gst_rate: '18',
+            cost_centre_id: dimensionCostCentre.dimension_id,
+            project_id: dimensionProject.dimension_id,
+          },
+          {
+            description: 'Phase 3 E2E dimension fallback expense',
+            hsn_sac: '4820',
+            quantity: '1',
+            rate: '100',
+            gst_rate: '18',
+          },
+        ],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-dimension-bill-${runId}` }
+    );
+    const dimensionBill = await approveIfNeeded(page, token, 'bill', dimensionBillCreated.bill_id, dimensionBillCreated, dimensionsEntity);
+    expect(dimensionBill.status).toBe('posted');
+
+    const dimensionCreditNoteCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/credit-notes',
+      {
+        customer_party_id: dimensionCustomer.party_id,
+        note_date: e2eDate,
+        original_invoice_number: dimensionInvoice.invoice_number,
+        reason: 'sales_return',
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        cost_centre_id: dimensionCostCentre.dimension_id,
+        project_id: dimensionProject.dimension_id,
+        accounting_entity_id: dimensionsEntity,
+        line_items: [
+          {
+            description: 'Phase 3 E2E dimension credit note',
+            hsn_sac: '9983',
+            quantity: '1',
+            rate: '100',
+            gst_rate: '18',
+            cost_centre_id: dimensionCostCentre.dimension_id,
+            project_id: dimensionProject.dimension_id,
+          },
+        ],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-dimension-credit-note-${runId}` }
+    );
+    const dimensionCreditNote = await approveIfNeeded(page, token, 'creditNote', dimensionCreditNoteCreated.credit_note_id, dimensionCreditNoteCreated, dimensionsEntity);
+    expect(dimensionCreditNote.status).toBe('posted');
+
+    const dimensionDebitNoteCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/debit-notes',
+      {
+        vendor_party_id: dimensionVendor.party_id,
+        note_date: e2eDate,
+        original_bill_number: dimensionBill.bill_number,
+        reason: 'purchase_return',
+        expense_account_code: '51001',
+        place_of_supply: 'Karnataka',
+        cost_centre_id: dimensionCostCentre.dimension_id,
+        project_id: dimensionProject.dimension_id,
+        accounting_entity_id: dimensionsEntity,
+        line_items: [
+          {
+            description: 'Phase 3 E2E dimension debit note',
+            hsn_sac: '4820',
+            quantity: '1',
+            rate: '50',
+            gst_rate: '18',
+            cost_centre_id: dimensionCostCentre.dimension_id,
+            project_id: dimensionProject.dimension_id,
+          },
+        ],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-dimension-debit-note-${runId}` }
+    );
+    const dimensionDebitNote = await approveIfNeeded(page, token, 'debitNote', dimensionDebitNoteCreated.debit_note_id, dimensionDebitNoteCreated, dimensionsEntity);
+    expect(dimensionDebitNote.status).toBe('posted');
+
+    const dimensionReportQuery = `from_date=${e2eDate}&to_date=${e2eDate}&accounting_entity_id=${dimensionsEntity}`;
+    const costCentreReport = await jsonRequest(page, token, 'GET', `/business/dimensions/report?dimension_type=cost_centre&${dimensionReportQuery}`);
+    const costCentreRow = (costCentreReport.rows || []).find((row) => row.dimension_id === dimensionCostCentre.dimension_id);
+    expect(costCentreRow?.code).toBe(dimensionCostCentre.code);
+    expect(decimalValue(costCentreRow?.income)).toBe(900);
+    expect(decimalValue(costCentreRow?.expense)).toBe(350);
+    expect(decimalValue(costCentreRow?.net)).toBe(550);
+    expect(costCentreReport.document_counts).toMatchObject({ invoices: 1, bills: 1, credit_notes: 1, debit_notes: 1 });
+
+    const projectReport = await jsonRequest(page, token, 'GET', `/business/dimensions/report?dimension_type=project&${dimensionReportQuery}`);
+    const projectRow = (projectReport.rows || []).find((row) => row.dimension_id === dimensionProject.dimension_id);
+    expect(projectRow?.code).toBe(dimensionProject.code);
+    expect(decimalValue(projectRow?.income)).toBe(900);
+    expect(decimalValue(projectRow?.expense)).toBe(350);
+    expect(decimalValue(projectRow?.net)).toBe(550);
+
+    const primaryDimensionReport = await jsonRequest(page, token, 'GET', `/business/dimensions/report?dimension_type=cost_centre&from_date=${e2eDate}&to_date=${e2eDate}&accounting_entity_id=primary`);
+    expect((primaryDimensionReport.rows || []).some((row) => row.dimension_id === dimensionCostCentre.dimension_id)).toBeFalsy();
+
+    const dimensionExport = await jsonRequest(page, token, 'GET', `/business/dimensions/report/export?dimension_type=cost_centre&format=json&${dimensionReportQuery}`);
+    expect(JSON.stringify(dimensionExport)).toContain(dimensionCostCentre.code);
+
+    for (const [kind, path, idempotencyKey] of [
+      ['dimension invoice', `/business/invoices/${dimensionInvoice.invoice_id}/cancel`, `phase3-demo-dimension-invoice-cancel-${runId}`],
+      ['dimension bill', `/business/bills/${dimensionBill.bill_id}/cancel`, `phase3-demo-dimension-bill-cancel-${runId}`],
+      ['dimension credit note', `/business/credit-notes/${dimensionCreditNote.credit_note_id}/cancel`, `phase3-demo-dimension-credit-note-cancel-${runId}`],
+      ['dimension debit note', `/business/debit-notes/${dimensionDebitNote.debit_note_id}/cancel`, `phase3-demo-dimension-debit-note-cancel-${runId}`],
+    ]) {
+      const reversed = await jsonRequest(
+        page,
+        token,
+        'POST',
+        path,
+        { reason: `Phase 3 E2E reverse ${kind}`, cancel_date: e2eDate, accounting_entity_id: dimensionsEntity },
+        { 'X-Idempotency-Key': idempotencyKey }
+      );
+      expect(reversed.status).toBe('cancelled');
+      expect(reversed.reversal_journal_entry_id).toBeTruthy();
+    }
 
     const customer = await createParty(page, token, runId, 'customer');
     const vendor = await createParty(page, token, runId, 'vendor');

@@ -305,7 +305,8 @@ def assemble_dimension_report(
             "when their debit or credit account is income or expense.",
             "The 'untagged' bucket holds documents without this dimension, so the "
             "report always ties to the period's document totals.",
-            "Per-line dimensions are not yet tagged; voucher dimensions are header-level.",
+            "Invoice, bill, credit-note, and debit-note line dimensions override the "
+            "document header tag; voucher dimensions are header-level.",
         ],
     }
 
