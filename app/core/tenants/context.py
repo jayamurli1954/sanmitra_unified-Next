@@ -151,4 +151,6 @@ async def inject_tenant_id(x_tenant_id: Optional[str] = Header(default=None, ali
 
 
 async def inject_app_key(x_app_key: Optional[str] = Header(default=None, alias="X-App-Key")) -> str:
-    return resolve_app_key(get_app_key() or x_app_key)
+    if str(x_app_key or "").strip():
+        return resolve_app_key(x_app_key)
+    return resolve_app_key(get_app_key())
