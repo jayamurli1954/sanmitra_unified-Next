@@ -204,6 +204,26 @@ def test_destructive_demo_spec_covers_dimensions_gate() -> None:
     assert "accounting_entity_id=primary" in spec
 
 
+def test_destructive_demo_spec_covers_branch_reporting_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "branchEntity" in spec
+    assert "business/admin-settings?accounting_entity_id" in spec
+    assert "cost_centre_code: branchCostCentre.code" in spec
+    assert "phase3-demo-branch-invoice" in spec
+    assert "phase3-demo-branch-bill" in spec
+    assert "phase3-demo-branch-unmapped-invoice" in spec
+    assert "phase3-demo-branch-untagged-bill" in spec
+    assert "business/dimensions/branch-report" in spec
+    assert "branch_consolidated" in spec
+    assert "unmatched_cost_centres" in spec
+    assert "accounting_entity_id=primary" in spec
+    assert "phase3-demo-branch-invoice-cancel" in spec
+    assert "phase3-demo-branch-bill-cancel" in spec
+    assert "phase3-demo-branch-unmapped-invoice-cancel" in spec
+    assert "phase3-demo-branch-untagged-bill-cancel" in spec
+
+
 def test_destructive_demo_spec_covers_mis_data_health_gate() -> None:
     spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
 

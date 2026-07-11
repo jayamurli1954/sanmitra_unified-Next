@@ -164,6 +164,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const inventoryEntity = `inventory-e2e-${runId}`;
     const fixedAssetEntity = `fixed-asset-e2e-${runId}`;
     const dimensionsEntity = `dimensions-e2e-${runId}`;
+    const branchEntity = `branch-e2e-${runId}`;
     const misHealthEntity = `mis-health-e2e-${runId}`;
     const bankReconRef = `BR-${runId}`;
     const bankReconAmount = '222.37';
@@ -659,6 +660,224 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
         'POST',
         path,
         { reason: `Phase 3 E2E reverse ${kind}`, cancel_date: e2eDate, accounting_entity_id: dimensionsEntity },
+        { 'X-Idempotency-Key': idempotencyKey }
+      );
+      expect(reversed.status).toBe('cancelled');
+      expect(reversed.reversal_journal_entry_id).toBeTruthy();
+    }
+
+    await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/accounting/initialize-chart-of-accounts',
+      undefined,
+      { 'X-Accounting-Entity-ID': branchEntity }
+    );
+    const branchCustomer = await createParty(page, token, runId, 'customer', branchEntity);
+    const branchVendor = await createParty(page, token, runId, 'vendor', branchEntity);
+    const branchCostCentre = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/dimensions?accounting_entity_id=${branchEntity}`,
+      {
+        dimension_type: 'cost_centre',
+        code: `BCC${runId.slice(-5)}`,
+        name: `Phase 3 E2E Branch Cost Centre ${runId}`,
+      }
+    );
+    const unmappedCostCentre = await jsonRequest(
+      page,
+      token,
+      'POST',
+      `/business/dimensions?accounting_entity_id=${branchEntity}`,
+      {
+        dimension_type: 'cost_centre',
+        code: `BUC${runId.slice(-5)}`,
+        name: `Phase 3 E2E Unmapped Cost Centre ${runId}`,
+      }
+    );
+    const branchSettings = await jsonRequest(page, token, 'GET', `/business/admin-settings?accounting_entity_id=${branchEntity}`);
+    const branchSettingsSaved = await jsonRequest(page, token, 'PUT', '/business/admin-settings', {
+      organization: branchSettings.organization || {},
+      branches: [
+        {
+          branch_code: `BR${runId.slice(-5)}`,
+          branch_name: `Phase 3 E2E Branch ${runId}`,
+          cost_centre_code: branchCostCentre.code,
+          active: true,
+        },
+      ],
+      roles: branchSettings.roles || [],
+      permissions: branchSettings.permissions || {},
+      voucher_configuration: branchSettings.voucher_configuration || {},
+      financial_controls: branchSettings.financial_controls || {},
+      security: branchSettings.security || {},
+      templates: branchSettings.templates || {},
+      notifications: branchSettings.notifications || {},
+      subscription_billing: branchSettings.subscription_billing || {},
+      integrations: branchSettings.integrations || {},
+      ai_settings: branchSettings.ai_settings || {},
+      accounting_entity_id: branchEntity,
+    });
+    expect(branchSettingsSaved.branches?.[0]?.cost_centre_code).toBe(branchCostCentre.code);
+
+    const branchInvoiceCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/invoices',
+      {
+        customer_party_id: branchCustomer.party_id,
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        reference: `BR-INV-${runId}`,
+        cost_centre_id: branchCostCentre.dimension_id,
+        accounting_entity_id: branchEntity,
+        line_items: [{
+          description: 'Phase 3 E2E branch mapped income',
+          hsn_sac: '9983',
+          quantity: '1',
+          rate: '700',
+          gst_rate: '18',
+          cost_centre_id: branchCostCentre.dimension_id,
+        }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-branch-invoice-${runId}` }
+    );
+    const branchInvoice = await approveIfNeeded(page, token, 'invoice', branchInvoiceCreated.invoice_id, branchInvoiceCreated, branchEntity);
+    expect(branchInvoice.status).toBe('posted');
+
+    const branchBillCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bills',
+      {
+        vendor_party_id: branchVendor.party_id,
+        bill_number: `BR-BILL-${runId}`,
+        bill_date: e2eDate,
+        due_date: e2eDueDate,
+        expense_account_code: '51001',
+        place_of_supply: 'Karnataka',
+        cost_centre_id: branchCostCentre.dimension_id,
+        accounting_entity_id: branchEntity,
+        line_items: [{
+          description: 'Phase 3 E2E branch mapped expense',
+          hsn_sac: '4820',
+          quantity: '1',
+          rate: '200',
+          gst_rate: '18',
+          cost_centre_id: branchCostCentre.dimension_id,
+        }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-branch-bill-${runId}` }
+    );
+    const branchBill = await approveIfNeeded(page, token, 'bill', branchBillCreated.bill_id, branchBillCreated, branchEntity);
+    expect(branchBill.status).toBe('posted');
+
+    const unmappedBranchInvoiceCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/invoices',
+      {
+        customer_party_id: branchCustomer.party_id,
+        invoice_date: e2eDate,
+        due_date: e2eDueDate,
+        income_account_code: '41001',
+        place_of_supply: 'Karnataka',
+        reference: `BR-UNMAPPED-${runId}`,
+        cost_centre_id: unmappedCostCentre.dimension_id,
+        accounting_entity_id: branchEntity,
+        line_items: [{
+          description: 'Phase 3 E2E branch unmapped income',
+          hsn_sac: '9983',
+          quantity: '1',
+          rate: '150',
+          gst_rate: '18',
+          cost_centre_id: unmappedCostCentre.dimension_id,
+        }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-branch-unmapped-invoice-${runId}` }
+    );
+    const unmappedBranchInvoice = await approveIfNeeded(
+      page,
+      token,
+      'invoice',
+      unmappedBranchInvoiceCreated.invoice_id,
+      unmappedBranchInvoiceCreated,
+      branchEntity
+    );
+    expect(unmappedBranchInvoice.status).toBe('posted');
+
+    const untaggedBranchBillCreated = await jsonRequest(
+      page,
+      token,
+      'POST',
+      '/business/bills',
+      {
+        vendor_party_id: branchVendor.party_id,
+        bill_number: `BR-UNTAGGED-${runId}`,
+        bill_date: e2eDate,
+        due_date: e2eDueDate,
+        expense_account_code: '51001',
+        place_of_supply: 'Karnataka',
+        accounting_entity_id: branchEntity,
+        line_items: [{
+          description: 'Phase 3 E2E branch untagged expense',
+          hsn_sac: '4820',
+          quantity: '1',
+          rate: '75',
+          gst_rate: '18',
+        }],
+      },
+      { 'X-Idempotency-Key': `phase3-demo-branch-untagged-bill-${runId}` }
+    );
+    const untaggedBranchBill = await approveIfNeeded(
+      page,
+      token,
+      'bill',
+      untaggedBranchBillCreated.bill_id,
+      untaggedBranchBillCreated,
+      branchEntity
+    );
+    expect(untaggedBranchBill.status).toBe('posted');
+
+    const branchReportQuery = `from_date=${e2eDate}&to_date=${e2eDate}&accounting_entity_id=${branchEntity}`;
+    const branchReport = await jsonRequest(page, token, 'GET', `/business/dimensions/branch-report?${branchReportQuery}`);
+    expect(branchReport.report_type).toBe('branch_consolidated');
+    const branchRow = (branchReport.rows || []).find((row) => row.branch_code === `BR${runId.slice(-5)}`);
+    expect(branchRow?.cost_centre_code).toBe(branchCostCentre.code);
+    expect(decimalValue(branchRow?.income)).toBe(700);
+    expect(decimalValue(branchRow?.expense)).toBe(200);
+    expect(decimalValue(branchRow?.net)).toBe(500);
+    expect(decimalValue(branchReport.unassigned?.income)).toBe(150);
+    expect(decimalValue(branchReport.unassigned?.expense)).toBe(75);
+    expect((branchReport.unassigned?.unmatched_cost_centres || []).some((row) => row.code === unmappedCostCentre.code)).toBeTruthy();
+    expect(decimalValue(branchReport.totals?.income)).toBe(850);
+    expect(decimalValue(branchReport.totals?.expense)).toBe(275);
+    expect(decimalValue(branchReport.totals?.net)).toBe(575);
+
+    const primaryBranchReport = await jsonRequest(page, token, 'GET', `/business/dimensions/branch-report?from_date=${e2eDate}&to_date=${e2eDate}&accounting_entity_id=primary`);
+    expect((primaryBranchReport.rows || []).some((row) => row.branch_code === `BR${runId.slice(-5)}`)).toBeFalsy();
+    expect(JSON.stringify(primaryBranchReport)).not.toContain(unmappedCostCentre.code);
+
+    for (const [kind, path, idempotencyKey] of [
+      ['branch invoice', `/business/invoices/${branchInvoice.invoice_id}/cancel`, `phase3-demo-branch-invoice-cancel-${runId}`],
+      ['branch bill', `/business/bills/${branchBill.bill_id}/cancel`, `phase3-demo-branch-bill-cancel-${runId}`],
+      ['branch unmapped invoice', `/business/invoices/${unmappedBranchInvoice.invoice_id}/cancel`, `phase3-demo-branch-unmapped-invoice-cancel-${runId}`],
+      ['branch untagged bill', `/business/bills/${untaggedBranchBill.bill_id}/cancel`, `phase3-demo-branch-untagged-bill-cancel-${runId}`],
+    ]) {
+      const reversed = await jsonRequest(
+        page,
+        token,
+        'POST',
+        path,
+        { reason: `Phase 3 E2E reverse ${kind}`, cancel_date: e2eDate, accounting_entity_id: branchEntity },
         { 'X-Idempotency-Key': idempotencyKey }
       );
       expect(reversed.status).toBe('cancelled');
