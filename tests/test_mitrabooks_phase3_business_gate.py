@@ -241,3 +241,22 @@ def test_destructive_demo_spec_covers_mis_data_health_gate() -> None:
     assert "receivables_open_item_aging" in spec
     assert "phase3-demo-mis-health-invoice-cancel" in spec
     assert "phase3-demo-mis-health-bill-cancel" in spec
+
+
+def test_destructive_demo_spec_covers_export_governance_gate() -> None:
+    spec = (REPO_ROOT / "frontend" / "e2e" / "mitrabooks-realstack-destructive.spec.js").read_text(encoding="utf-8")
+
+    assert "fileRequest" in spec
+    assert "expectGovernedExport" in spec
+    assert "x-sanmitra-export-governed" in spec
+    assert "business/dimensions/report/export?dimension_type=cost_centre&format=json" in spec
+    assert "business/opening-balances/export?accounting_entity_id=primary" in spec
+    assert "business/reports/export?report=trial_balance&format=json" in spec
+    assert "business/invoices/${invoice.invoice_id}/pdf" in spec
+    assert "business/tally/xml-export" in spec
+    assert "business_export_downloaded" in spec
+    assert "dimension_report" in spec
+    assert "opening_balances" in spec
+    assert "business_report" in spec
+    assert "sales_invoice_pdf" in spec
+    assert "tally_xml" in spec

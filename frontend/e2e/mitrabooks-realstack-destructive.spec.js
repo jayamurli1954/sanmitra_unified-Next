@@ -59,6 +59,27 @@ async function textRequest(page, token, method, path, body = undefined, extraHea
   return payload;
 }
 
+async function fileRequest(page, token, method, path, body = undefined, extraHeaders = {}) {
+  const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
+    method,
+    headers: headers(token, extraHeaders),
+    data: body,
+  });
+  const payload = await response.text().catch(() => '');
+  expect(response.ok(), `${method} ${path} failed: ${response.status()} ${payload}`).toBeTruthy();
+  return {
+    headers: response.headers(),
+    text: payload,
+  };
+}
+
+function expectGovernedExport(download, exportType, exportFormat, accountingEntityId) {
+  expect(download.headers['x-sanmitra-export-governed']).toBe('true');
+  expect(download.headers['x-sanmitra-export-type']).toBe(exportType);
+  expect(download.headers['x-sanmitra-export-format']).toBe(exportFormat);
+  expect(download.headers['x-sanmitra-accounting-entity']).toBe(accountingEntityId);
+}
+
 async function expectJsonFailure(page, token, method, path, expectedStatus) {
   const response = await page.request.fetch(`${apiBaseFromPage(page)}${path}`, {
     method,
@@ -645,8 +666,10 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const primaryDimensionReport = await jsonRequest(page, token, 'GET', `/business/dimensions/report?dimension_type=cost_centre&from_date=${e2eDate}&to_date=${e2eDate}&accounting_entity_id=primary`);
     expect((primaryDimensionReport.rows || []).some((row) => row.dimension_id === dimensionCostCentre.dimension_id)).toBeFalsy();
 
-    const dimensionExport = await jsonRequest(page, token, 'GET', `/business/dimensions/report/export?dimension_type=cost_centre&format=json&${dimensionReportQuery}`);
-    expect(JSON.stringify(dimensionExport)).toContain(dimensionCostCentre.code);
+    const dimensionExport = await fileRequest(page, token, 'GET', `/business/dimensions/report/export?dimension_type=cost_centre&format=json&${dimensionReportQuery}`);
+    expectGovernedExport(dimensionExport, 'dimension_report', 'json', dimensionsEntity);
+    expect(dimensionExport.headers['content-disposition']).toContain('dimension_cost_centre');
+    expect(dimensionExport.text).toContain(dimensionCostCentre.code);
 
     for (const [kind, path, idempotencyKey] of [
       ['dimension invoice', `/business/invoices/${dimensionInvoice.invoice_id}/cancel`, `phase3-demo-dimension-invoice-cancel-${runId}`],
@@ -1099,16 +1122,18 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(openingPost.line_count).toBeGreaterThanOrEqual(4);
     expect(openingPost.balancing_line?.account_code).toBe('31004');
 
-    const openingExport = await textRequest(
+    const openingExport = await fileRequest(
       page,
       token,
       'GET',
       '/business/opening-balances/export?accounting_entity_id=primary'
     );
-    expect(openingExport).toContain('account_code');
-    expect(openingExport).toContain('11001');
-    expect(openingExport).toContain(customer.party_code);
-    expect(openingExport).not.toContain('Opening Balance Equity');
+    expectGovernedExport(openingExport, 'opening_balances', 'csv', 'primary');
+    expect(openingExport.headers['content-disposition']).toContain('opening_balances.csv');
+    expect(openingExport.text).toContain('account_code');
+    expect(openingExport.text).toContain('11001');
+    expect(openingExport.text).toContain(customer.party_code);
+    expect(openingExport.text).not.toContain('Opening Balance Equity');
 
     await jsonRequest(
       page,
@@ -1531,6 +1556,35 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
 
     const trialBalance = await jsonRequest(page, token, 'GET', `/accounting/reports/trial-balance?as_of=${e2eDate}`);
     expect(trialBalance).toBeTruthy();
+
+    const reportExport = await fileRequest(page, token, 'GET', `/business/reports/export?report=trial_balance&format=json&as_of=${e2eDate}&accounting_entity_id=primary`);
+    expectGovernedExport(reportExport, 'business_report', 'json', 'primary');
+    expect(reportExport.headers['content-disposition']).toContain('trial_balance');
+    expect(reportExport.text).toContain('Trial Balance');
+
+    const invoicePdf = await fileRequest(page, token, 'GET', `/business/invoices/${invoice.invoice_id}/pdf?accounting_entity_id=primary`);
+    expectGovernedExport(invoicePdf, 'sales_invoice_pdf', 'pdf', 'primary');
+    expect(invoicePdf.headers['content-disposition']).toContain('.pdf');
+    expect(invoicePdf.text).toContain('%PDF');
+
+    const tallyXml = await fileRequest(page, token, 'GET', `/business/tally/xml-export?as_of=${e2eDate}&accounting_entity_id=primary`);
+    expectGovernedExport(tallyXml, 'tally_xml', 'xml', 'primary');
+    expect(tallyXml.headers['content-disposition']).toContain('tally_trial_balance');
+    expect(tallyXml.text).toContain('<SANMITRAEXPORT>');
+    expect(tallyXml.text).toContain('<SOURCE>trial_balance</SOURCE>');
+
+    const exportAudit = await jsonRequest(
+      page,
+      token,
+      'GET',
+      '/audit/events?action=business_export_downloaded&entity_type=business_export&limit=20'
+    );
+    const exportAuditText = JSON.stringify(exportAudit);
+    expect(exportAuditText).toContain('business_report');
+    expect(exportAuditText).toContain('dimension_report');
+    expect(exportAuditText).toContain('opening_balances');
+    expect(exportAuditText).toContain('sales_invoice_pdf');
+    expect(exportAuditText).toContain('tally_xml');
 
     const tdsSections = await jsonRequest(page, token, 'GET', '/business/tds/sections');
     expect((tdsSections.tds || []).map((row) => row.section)).toEqual(expect.arrayContaining(['194C']));
