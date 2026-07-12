@@ -500,7 +500,9 @@ function AccountingReports() {
       }
     );
     const tbData = await response.json();
-    const tbRows = Array.isArray(tbData?.accounts) ? tbData.accounts : [];
+    const tbRows = Array.isArray(tbData?.lines)
+      ? tbData.lines
+      : (Array.isArray(tbData?.accounts) ? tbData.accounts : []);
     return tbRows
       .map((acc) => ({
         id: acc?.account_id ?? acc?.id ?? null,
@@ -615,9 +617,10 @@ function AccountingReports() {
 
           if (tbResponse.ok) {
             const tbData = await tbResponse.json();
-            const nonZeroCodes = new Set(
-              (Array.isArray(tbData?.accounts) ? tbData.accounts : []).map((acc) => String(acc.account_code))
-            );
+            const tbRows = Array.isArray(tbData?.lines)
+              ? tbData.lines
+              : (Array.isArray(tbData?.accounts) ? tbData.accounts : []);
+            const nonZeroCodes = new Set(tbRows.map((acc) => String(acc.account_code)));
             const matchedAccounts = accounts.filter((acc) => nonZeroCodes.has(String(acc.account_code)));
             if (matchedAccounts.length > 0) {
               candidateAccounts = matchedAccounts;
