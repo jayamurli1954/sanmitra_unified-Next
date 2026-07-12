@@ -2564,6 +2564,7 @@ button.danger {
   object-fit: contain;
   border-radius: 8px;
   background: #fff;
+  pointer-events: none;
 }
 
 .legal-page-nav {

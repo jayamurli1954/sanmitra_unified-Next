@@ -44,3 +44,12 @@ def test_legalmitra_followups_do_not_use_unsafe_fir_substring_match() -> None:
     assert "Check GST registration threshold for the society" in app_source
     assert '"housing society"' in app_source
     assert '"rwa"' in app_source
+
+
+def test_legalmitra_logo_image_does_not_show_browser_tooltip() -> None:
+    css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    chat_source = (REPO_ROOT / "frontend" / "legalmitra" / "chat.html").read_text(encoding="utf-8")
+
+    assert ".legal-wordmark img" in css_source
+    assert "pointer-events: none;" in css_source
+    assert "app-shell.css?v=legalmitra-ai-v43" in chat_source
