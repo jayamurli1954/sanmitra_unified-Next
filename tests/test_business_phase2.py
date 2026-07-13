@@ -3366,6 +3366,12 @@ async def test_business_admin_settings_save_and_get_round_trip(monkeypatch):
     assert saved["voucher_configuration"]["journal_prefix"] == "JV"
     assert saved["updated_by"] == "admin-1"
 
+    # Persist path must be BSON-safe (Decimal fields used to 500 on real Mongo).
+    from bson import encode as bson_encode
+
+    assert store.docs, "expected admin settings upsert to persist a document"
+    bson_encode({k: v for k, v in store.docs[0].items() if k != "_id"})
+
     fetched = await business_service.get_business_admin_settings(
         tenant_id="business-tenant", app_key="mitrabooks", accounting_entity_id="primary",
     )

@@ -2038,7 +2038,7 @@ async def save_business_admin_settings(
             }
         ),
     )
-    doc = settings.model_dump()
+    doc = settings.model_dump(mode="json")
     doc.update({"updated_by": updated_by, "updated_at": _now()})
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
     await get_collection(ADMIN_SETTINGS_COLLECTION).update_one(

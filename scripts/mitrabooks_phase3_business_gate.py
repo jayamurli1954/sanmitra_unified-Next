@@ -326,6 +326,8 @@ def run_destructive_demo_browser(staging_url: str, tenant_id: str) -> list[tuple
     env = dict(os.environ)
     env["E2E_BASE_URL"] = staging_url.rstrip("/")
     env[DEMO_RUN_ENV] = "true"
+    if not str(env.get(DEMO_API_BASE_ENV, "")).strip():
+        env[DEMO_API_BASE_ENV] = destructive_demo_api_base(staging_url, env)
     server_context = local_frontend_server("local destructive browser mutation") if is_local_frontend_url(staging_url) else nullcontext()
     with server_context:
         return [

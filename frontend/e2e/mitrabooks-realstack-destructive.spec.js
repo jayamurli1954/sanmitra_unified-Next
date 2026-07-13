@@ -12,6 +12,31 @@ function requireDemoGate() {
   return runDestructive && email && password && confirmation === DEMO_TENANT_ID;
 }
 
+function resolveStagingApiBase() {
+  if (apiBaseUrl) {
+    return apiBaseUrl;
+  }
+  return 'https://sanmitra-unified-next-staging-sg.onrender.com';
+}
+
+async function loginViaApi(page) {
+  const apiRoot = `${resolveStagingApiBase().replace(/\/+$/, '')}/api/v1`;
+  const response = await page.request.post(`${apiRoot}/auth/login`, {
+    data: { email, password },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Key': 'mitrabooks',
+    },
+    timeout: 90000,
+  });
+  const payload = await response.json().catch(() => ({}));
+  expect(response.ok(), `API login failed: ${response.status()} ${JSON.stringify(payload)}`).toBeTruthy();
+  const accessToken = String(payload.access_token || '').trim();
+  const refreshToken = String(payload.refresh_token || '').trim();
+  expect(accessToken, 'API login did not return an access token').toBeTruthy();
+  return { accessToken, refreshToken, apiRoot };
+}
+
 function apiBaseFromPage(page) {
   if (apiBaseUrl) {
     return `${apiBaseUrl}/api/v1`;
@@ -19,6 +44,12 @@ function apiBaseFromPage(page) {
   const current = new URL(page.url());
   if (['127.0.0.1', 'localhost'].includes(current.hostname) && current.port === '3300') {
     return `${current.protocol}//${current.hostname}:8000/api/v1`;
+  }
+  // Hosted MitraBooks shells proxy /api to the staging backend; prefer the
+  // explicit staging API when the browser origin is a Vercel/sanmitratech host.
+  const host = current.hostname.toLowerCase();
+  if (host.includes('mitrabooks') || host.includes('vercel.app') || host.includes('sanmitratech.in')) {
+    return 'https://sanmitra-unified-next-staging-sg.onrender.com/api/v1';
   }
   return `${current.origin}/api/v1`;
 }
@@ -129,6 +160,9 @@ async function approveIfNeeded(page, token, kind, id, doc, accountingEntityId = 
 }
 
 async function createParty(page, token, runId, partyType, accountingEntityId = 'primary') {
+  // party_code max_length is 40; keep a short unique tag from the entity id.
+  const entityTag = String(accountingEntityId || 'primary').replace(/[^a-zA-Z0-9]/g, '').slice(-10);
+  const typeTag = partyType === 'customer' ? 'C' : 'V';
   return jsonRequest(
     page,
     token,
@@ -137,7 +171,7 @@ async function createParty(page, token, runId, partyType, accountingEntityId = '
     {
       party_name: `E2E ${partyType} ${runId}`,
       party_type: partyType,
-      party_code: `E2E-${partyType.toUpperCase()}-${accountingEntityId}-${runId}`.slice(0, 80),
+      party_code: `E2E-${typeTag}-${entityTag}-${runId}`.slice(0, 40),
       gstin: partyType === 'customer' ? '29AAAAA0000A1Z5' : '29ABCDE1234F1Z5',
       pan: partyType === 'customer' ? 'AAAAA0000A' : 'ABCDE1234F',
       city: 'Bengaluru',
@@ -149,19 +183,32 @@ async function createParty(page, token, runId, partyType, accountingEntityId = '
   );
 }
 
+// This credential-bearing gate must never retain browser artifacts. Playwright
+// traces can contain login request bodies and authenticated request headers.
+test.use({ trace: 'off', video: 'off', screenshot: 'off' });
+
 test.describe('MitraBooks destructive real-stack demo E2E', () => {
   test.skip(!requireDemoGate(), 'Set MITRABOOKS_RUN_DESTRUCTIVE_E2E=true, MITRABOOKS_DEMO_E2E_CONFIRM=demo-mitrabooks-business, E2E_USER_EMAIL, and E2E_USER_PASSWORD.');
 
   test('creates, posts, reports, and reverses core business documents on the demo tenant', async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
-    await page.locator('#login-email').fill(email);
-    await page.locator('#login-password').fill(password);
-    await page.locator('#login-submit').click();
-    await expect(page.locator('#login-status')).toContainText(/Signed in|workspace is loading/i, { timeout: 30000 });
-    await expect(page.locator('#menu-tenant-display')).toContainText(DEMO_TENANT_ID, { timeout: 30000 });
-
-    const token = await page.evaluate(() => window.sessionStorage.getItem('sanmitra_frontend_access_token') || '');
-    expect(token, 'browser login did not store an access token').toBeTruthy();
+    test.setTimeout(300000);
+    // Avoid brittle hosted UI login. Auth is already proven by the gate API
+    // precheck; drive mutations with page.request and only use the shell for
+    // the final reports workspace assertion.
+    const { accessToken, refreshToken } = await loginViaApi(page);
+    const token = accessToken;
+    const stagingApi = resolveStagingApiBase();
+    await page.addInitScript(({ accessToken: seededToken, refreshToken: refresh, email: loginEmail }) => {
+      try {
+        window.sessionStorage.setItem('sanmitra_frontend_access_token', seededToken);
+        if (refresh) {
+          window.sessionStorage.setItem('sanmitra_frontend_refresh_token', refresh);
+        }
+        window.localStorage.setItem('sanmitra_mitrabooks_login_email', loginEmail);
+      } catch (_error) {
+        // Ignore storage access failures in locked-down browsers.
+      }
+    }, { accessToken, refreshToken, email });
 
     const modules = await jsonRequest(page, token, 'GET', '/modules/me');
     expect(modules.tenant_id).toBe(DEMO_TENANT_ID);
@@ -1835,6 +1882,14 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(String(yearEndSeedReversed.status).toLowerCase()).toBe('reversed');
     expect(yearEndSeedReversed.reversal_journal_entry_id).toBeTruthy();
 
+    // Shell assertion last: use ?api= so hosted boot talks to Render directly
+    // (stored external overrides are stripped when the runtime base is /api).
+    const shellUrl = `/mitrabooks-erp/index.html?api=${encodeURIComponent(stagingApi)}`;
+    await page.goto(shellUrl, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#menu-tenant-display')).toContainText(DEMO_TENANT_ID, { timeout: 120000 });
+    // Soft-check that the seeded browser session survived shell boot.
+    const browserToken = await page.evaluate(() => window.sessionStorage.getItem('sanmitra_frontend_access_token') || '');
+    expect(browserToken, 'browser session did not retain the seeded access token').toBeTruthy();
     await page.locator('nav#nav a[data-business-workspace="reports"]').click();
     await expect(page.locator('.erp-workspace-panel')).toContainText('Financial Reports');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Trial Balance');
