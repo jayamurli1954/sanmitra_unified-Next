@@ -23,10 +23,10 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v32" in index_source
-    assert "pwa-shell.js?v=mitrabooks-erp-v10" in index_source
+    assert "app.js?v=mitrabooks-erp-v36" in index_source
+    assert "pwa-shell.js?v=mitrabooks-erp-v11" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v17'" in worker_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v18'" in worker_source
     assert "'/mitrabooks-erp/index.html'" not in worker_source
     assert "'/mitrabooks-erp/login.html'" not in worker_source
 

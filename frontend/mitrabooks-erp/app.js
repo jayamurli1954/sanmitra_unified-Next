@@ -688,6 +688,7 @@ let lastMandirFinancialReports = {};
 let lastMandirPanchang = null;
 let lastMandirOperationalReports = {};
 let lastMandirModuleConfig = {};
+let lastMandirComplianceConfig = { enable_80g: false, enable_fcra: false };
 const MANDIR_LIST_PAGE_SIZE = 8;
 const mandirListState = {
   donations: {
@@ -973,8 +974,8 @@ function renderModules(modules = experienceConfig[currentExperience].modules, op
   modules.forEach((module) => {
     const item = document.createElement("li");
     item.innerHTML = `
-      <strong>${module.display_name}</strong>
-      <span class="muted">${module.module_key} -> ${module.frontend_path || "no frontend path yet"}</span>
+      <strong>${escapeHtml(module.display_name)}</strong>
+      <span class="muted">${escapeHtml(module.module_key)} -> ${escapeHtml(module.frontend_path || "no frontend path yet")}</span>
       <span class="pill ${module.enabled ? "ok" : "warn"}">${module.enabled ? "enabled" : preview ? "preview only" : "available or planned"}</span>
     `;
     moduleList.appendChild(item);
@@ -3303,7 +3304,19 @@ async function completeWorkspaceSignIn(appKey) {
 
   await showMandirSplash();
   try {
-    await Promise.all([runChecks(), delay(1400)]);
+    const checks = runChecks();
+    const loadingBudget = delay(8000).then(() => ({ timedOut: true }));
+    const result = await Promise.race([
+      checks.then(() => ({ timedOut: false })),
+      loadingBudget,
+    ]);
+    await delay(700);
+    if (result.timedOut) {
+      checks.catch((error) => {
+        console.error("[Login] Background workspace load failed:", error);
+      });
+      setLoginStatus("warn", "Workspace is still loading", "Dashboard checks are continuing in the background.");
+    }
   } finally {
     hideMandirSplash();
   }
@@ -4766,6 +4779,21 @@ function renderMandirOperationalReports(reports = lastMandirOperationalReports) 
   const scheduleRows = reportRows(sevaSchedule, "schedule");
   const totalDonation = donationDetail.total_amount ?? donationCategory.total_amount ?? 0;
   const totalSeva = sevaDetail.total_amount ?? 0;
+  const report80g = reportPayload(reports.compliance_80g);
+  const reportFcra = reportPayload(reports.compliance_fcra);
+  const rows80g = Array.isArray(report80g.items) ? report80g.items : [];
+  const rowsFcra = Array.isArray(reportFcra.items) ? reportFcra.items : [];
+  const fundSubledger = reportPayload(reports.fund_subledger);
+  const fundRows = Array.isArray(fundSubledger.items) ? fundSubledger.items : [];
+  const fundWise = reportPayload(reports.fund_wise);
+  const festivalWise = reportPayload(reports.festival_wise);
+  const fundDonationRows = Array.isArray(fundWise.items) ? fundWise.items : [];
+  const festivalDonationRows = Array.isArray(festivalWise.items) ? festivalWise.items : [];
+  const inventorySummary = reportPayload(reports.inventory_summary);
+  const inventoryRows = Array.isArray(reports.inventory_stock_balances) ? reports.inventory_stock_balances : [];
+  const inventoryMovements = Array.isArray(reports.inventory_movements) ? reports.inventory_movements : [];
+  const inventoryConsumptions = Array.isArray(reports.inventory_consumptions) ? reports.inventory_consumptions : [];
+  const pendingInventoryApprovals = inventoryConsumptions.filter((row) => row.status === "pending_approval").length;
 
   return `
     <div class="verification-panel">
@@ -4871,6 +4899,105 @@ function renderMandirOperationalReports(reports = lastMandirOperationalReports) 
             </table>
           </div>
         </article>
+        <article>
+          <h4>80G Readiness</h4>
+          <p class="muted">Readiness evidence only; this is not an official certificate or filing.</p>
+          <div class="table-preview compact-table">
+            <table>
+              <thead><tr><th>Receipt</th><th>Donor</th><th>PAN</th><th>Status</th></tr></thead>
+              <tbody>
+                ${rows80g.length ? rows80g.slice(0, 8).map((row) => `
+                  <tr><td>${escapeHtml(row.receipt_number || row.donation_id || "")}</td><td>${escapeHtml(row.devotee_name || "Devotee")}</td><td>${escapeHtml(row.donor_pan_masked || "Not provided")}</td><td>${escapeHtml(row["80g_eligibility_status"] || "not_requested")}</td></tr>
+                `).join("") : `<tr><td colspan="4">No 80G readiness records for this range.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article>
+          <h4>FCRA Readiness</h4>
+          <p class="muted">Foreign-contribution readiness evidence only; this is not an official filing.</p>
+          <div class="table-preview compact-table">
+            <table>
+              <thead><tr><th>Receipt</th><th>Donor</th><th>Country</th><th>Status</th></tr></thead>
+              <tbody>
+                ${rowsFcra.length ? rowsFcra.slice(0, 8).map((row) => `
+                  <tr><td>${escapeHtml(row.receipt_number || row.donation_id || "")}</td><td>${escapeHtml(row.devotee_name || "Devotee")}</td><td>${escapeHtml(row.donor_country || "Not provided")}</td><td>${escapeHtml(row.fcra_status || "not_applicable")}</td></tr>
+                `).join("") : `<tr><td colspan="4">No FCRA readiness records for this range.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+      <div class="verification-panel">
+        <div class="preview-heading compact">
+          <div>
+            <h4>Fund and Inventory Drill-down</h4>
+            <p>Read-only evidence derived from posted fund dimensions and append-only inventory movements.</p>
+          </div>
+          <span class="pill">Accounting-backed</span>
+        </div>
+        <div class="metric-grid four">${renderStatCards([
+          ["Fund Closing Balance", formatCurrency(fundSubledger.totals?.closing_balance || 0), `${fundRows.length} funds`],
+          ["Fund Donations", formatCurrency(fundWise.total_amount || 0), formatCountLabel(fundWise.total_count || 0, "receipt")],
+          ["Inventory Value", formatCurrency(inventorySummary.totalValue || 0), `${inventoryRows.length} active items`],
+          ["Inventory Approvals", pendingInventoryApprovals, "pending maker-checker review"],
+        ])}</div>
+        <div class="dashboard-main-grid platform-grid">
+          <article>
+            <h4>Fund Subledger</h4>
+            <div class="table-preview compact-table">
+              <table>
+                <thead><tr><th>Fund</th><th>Type</th><th class="amount">Opening</th><th class="amount">Income</th><th class="amount">Expense</th><th class="amount">Transfers In</th><th class="amount">Transfers Out</th><th class="amount">Closing</th></tr></thead>
+                <tbody>
+                  ${fundRows.length ? fundRows.slice(0, 12).map((row) => `
+                    <tr><td>${escapeHtml(row.fund_name || row.fund_id || "")}</td><td>${escapeHtml(row.fund_type || "")}</td><td class="amount">${escapeHtml(formatCurrency(row.opening_balance || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.income || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.expense || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.transfers_in || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.transfers_out || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.closing_balance || 0))}</td></tr>
+                  `).join("") : `<tr><td colspan="8">No accounting-backed fund activity for this range.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          <article>
+            <h4>Designated Collections</h4>
+            <div class="table-preview compact-table">
+              <table>
+                <thead><tr><th>Designation</th><th>Kind</th><th>Count</th><th class="amount">Amount</th></tr></thead>
+                <tbody>
+                  ${[
+                    ...fundDonationRows.map((row) => ({ ...row, kind: "Fund" })),
+                    ...festivalDonationRows.map((row) => ({ ...row, kind: "Festival" })),
+                  ].slice(0, 12).map((row) => `<tr><td>${escapeHtml(row.name || row.id || "")}</td><td>${escapeHtml(row.kind)}</td><td>${escapeHtml(row.count || 0)}</td><td class="amount">${escapeHtml(formatCurrency(row.amount || 0))}</td></tr>`).join("") || `<tr><td colspan="4">No designated collections for this range.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          <article>
+            <h4>Inventory Stock Valuation</h4>
+            <p class="muted">Weighted-average values are derived from posted receipts, issues, and reversals.</p>
+            <div class="table-preview compact-table">
+              <table>
+                <thead><tr><th>Item</th><th class="amount">On Hand</th><th class="amount">Average Value</th><th class="amount">Stock Value</th><th>Status</th></tr></thead>
+                <tbody>
+                  ${inventoryRows.length ? inventoryRows.slice(0, 12).map((row) => `
+                    <tr><td>${escapeHtml([row.item_code, row.item_name].filter(Boolean).join(" - "))}</td><td class="amount">${escapeHtml(`${row.on_hand_qty || "0.000"} ${row.unit || ""}`.trim())}</td><td class="amount">${escapeHtml(formatCurrency(row.weighted_average_unit_value || 0))}</td><td class="amount">${escapeHtml(formatCurrency(row.on_hand_value || 0))}</td><td>${row.reorder_required ? '<span class="status-badge danger">Reorder</span>' : '<span class="status-badge success">Available</span>'}</td></tr>
+                  `).join("") : `<tr><td colspan="5">${reports.inventory_enabled ? "No active inventory items." : "Inventory accounting is off for this tenant."}</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          <article>
+            <h4>Inventory Audit Trail</h4>
+            <div class="table-preview compact-table">
+              <table>
+                <thead><tr><th>Date</th><th>Item</th><th>Movement</th><th class="amount">Quantity</th><th class="amount">Value</th><th>Status</th></tr></thead>
+                <tbody>
+                  ${inventoryMovements.length ? inventoryMovements.slice(0, 12).map((row) => `
+                    <tr><td>${escapeHtml(String(row.movement_date || row.created_at || "").slice(0, 10))}</td><td>${escapeHtml(row.item_name || row.item_id || "")}</td><td>${escapeHtml(row.movement_type || "")}</td><td class="amount">${escapeHtml(row.quantity || "0.000")}</td><td class="amount">${escapeHtml(formatCurrency(row.total_value || 0))}</td><td>${escapeHtml(row.status || "")}</td></tr>
+                  `).join("") : `<tr><td colspan="6">No append-only inventory movements.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
       </div>
       <div class="verification-panel">
         <div class="preview-heading compact">
@@ -5078,6 +5205,8 @@ function renderMandirDashboard(payload = {}) {
         ${renderMandirCreateForms({
           payment_accounts: payload.payment_accounts,
           accounts: payload.accounts,
+          module_config: payload.module_config,
+          compliance_config: payload.compliance_config,
           form_result: null,
         })}
         <div class="dashboard-main-grid ${showOverview ? "platform-grid" : ""}">
@@ -5166,7 +5295,7 @@ function renderMandirDashboard(payload = {}) {
       ` : ""}
       ${showPanchang ? renderMandirPanchang(panchang) : ""}
       ${showReports ? renderMandirOperationalReports(operationalReports) : ""}
-      ${showSettings ? renderMandirSettings(payload.module_config || {}) : ""}
+      ${showSettings ? renderMandirSettings(payload.module_config || {}, payload.compliance_config || {}) : ""}
       ${showImplementation ? renderMandirImplementationChecks() : ""}
       ${showPlatformOwners ? renderMandirPlatformOwnerShortcut() : ""}
       ${showAccounting ? renderAccountingDrilldownPanel() : ""}
@@ -5177,8 +5306,8 @@ function renderMandirDashboard(payload = {}) {
   `;
 }
 
-function renderMandirSettings(moduleConfig = {}) {
-  const inventoryEnabled = Boolean(moduleConfig.inventory_enabled);
+function renderMandirSettings(moduleConfig = {}, complianceConfig = {}) {
+  const inventoryEnabled = Boolean(moduleConfig.module_inventory_enabled ?? moduleConfig.inventory_enabled);
   const flags = [
     ["Inventory accounting", inventoryEnabled ? "Enabled" : "Disabled", inventoryEnabled ? "In-kind consumables can debit inventory where configured." : "In-kind consumables debit expense unless the tenant enables inventory."],
     ["80G", moduleConfig.enable_80g ? "Enabled" : "Off", "Tenant-configured only; never default-on."],
@@ -5209,6 +5338,28 @@ function renderMandirSettings(moduleConfig = {}) {
             "Real trusts must not be used for destructive smoke tests.",
           ])}
         </ul>
+      </article>
+      <article class="verification-panel">
+        <h4>Donation Compliance</h4>
+        <p class="muted">Default-off tenant configuration. Save only after the trust's legal/compliance reviewer verifies the approval evidence.</p>
+        <form class="entry-form" data-mandir-compliance-form>
+          <label class="field"><span><input name="enable_80g" type="checkbox" ${complianceConfig.enable_80g ? "checked" : ""}> Enable 80G readiness</span></label>
+          <label class="field"><span>Institution PAN</span><input name="institution_pan" maxlength="10" value="${escapeHtml(complianceConfig.institution_pan || "")}" placeholder="ABCDE1234F"></label>
+          <label class="field"><span>Approval number</span><input name="approval_number" maxlength="120" value="${escapeHtml(complianceConfig.approval_number || "")}"></label>
+          <label class="field"><span>Approval valid from</span><input name="approval_valid_from" type="date" value="${escapeHtml(complianceConfig.approval_valid_from || "")}"></label>
+          <label class="field"><span>Approval valid to</span><input name="approval_valid_to" type="date" value="${escapeHtml(complianceConfig.approval_valid_to || "")}"></label>
+          <label class="field"><span>Certificate label</span><input name="certificate_label" maxlength="120" value="${escapeHtml(complianceConfig.certificate_label || "Donation certificate")}"></label>
+          <label class="field"><span>Cash eligibility limit</span><input name="cash_eligibility_limit" type="number" min="0.01" step="0.01" value="${escapeHtml(complianceConfig.cash_eligibility_limit || "")}"></label>
+          <label class="field"><span>Cash rule effective from</span><input name="cash_rule_effective_from" type="date" value="${escapeHtml(complianceConfig.cash_rule_effective_from || "")}"></label>
+          <label class="field"><span>Receipt disclaimer</span><textarea name="receipt_disclaimer" maxlength="500">${escapeHtml(complianceConfig.receipt_disclaimer || "")}</textarea></label>
+          <label class="field"><span><input name="enable_fcra" type="checkbox" ${complianceConfig.enable_fcra ? "checked" : ""}> Enable FCRA readiness</span></label>
+          <label class="field"><span>FCRA approval type</span><select name="fcra_registration_type"><option value="registration" ${complianceConfig.fcra_registration_type === "registration" ? "selected" : ""}>Registration</option><option value="prior_permission" ${complianceConfig.fcra_registration_type === "prior_permission" ? "selected" : ""}>Prior permission</option></select></label>
+          <label class="field"><span>FCRA reference</span><input name="fcra_registration_number" maxlength="120" value="${escapeHtml(complianceConfig.fcra_registration_number || "")}"></label>
+          <label class="field"><span>FCRA valid from</span><input name="fcra_valid_from" type="date" value="${escapeHtml(complianceConfig.fcra_valid_from || "")}"></label>
+          <label class="field"><span>FCRA valid to</span><input name="fcra_valid_to" type="date" value="${escapeHtml(complianceConfig.fcra_valid_to || "")}"></label>
+          <label class="field"><span>Designated account ID</span><input name="fcra_designated_account_id" maxlength="120" value="${escapeHtml(complianceConfig.fcra_designated_account_id || "")}" placeholder="Use this account during foreign donation entry"></label>
+          <button type="submit">Save Compliance Configuration</button>
+        </form>
       </article>
     </div>
   `;
@@ -17280,6 +17431,7 @@ function renderGruhaWorkspace(data) {
 
 async function runChecks() {
   const activeAppKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
+  const tokenAtStart = getAccessToken();
   const health = await loadHealth(activeAppKey);
   healthPill.textContent = statusLabel(health);
   healthPill.className = `pill ${health.ok ? "ok" : "danger"}`;
@@ -17294,6 +17446,10 @@ async function runChecks() {
   renderModuleState(moduleState, modules);
 
   if (!modules.ok && modules.status === 401) {
+    // Ignore stale unauthenticated 401s that finish after a concurrent login.
+    if (getAccessToken() && getAccessToken() !== tokenAtStart) {
+      return;
+    }
     lastModuleContext = null;
     clearAllTokens();
     renderModules();
@@ -17491,30 +17647,53 @@ async function loadGruhaDashboard() {
 }
 
 async function loadMandirDashboard() {
-  const stats = await apiRequest("mandirmitra", "/api/v1/dashboard/stats", { method: "GET" });
-  const pendingPayments = await apiRequest("mandirmitra", mandirPublicPaymentsPath(), { method: "GET" });
-  const paymentExceptions = await apiRequest("mandirmitra", mandirPublicPaymentExceptionsPath(), { method: "GET" });
-  const donations = await apiRequest("mandirmitra", mandirListPath("donations"), { method: "GET" });
-  const sevaBookings = await apiRequest("mandirmitra", mandirListPath("sevas"), { method: "GET" });
-  const paymentAccounts = await apiRequest("mandirmitra", "/api/v1/donations/payment-accounts", { method: "GET" });
-  const accounts = await apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" });
-  const expenses = await apiRequest("mandirmitra", "/api/v1/journal-entries?reference_type=expense&limit=25", { method: "GET" });
-  const trialBalance = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/trial-balance?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
   const reportRangeQuery = buildQueryString({
     from_date: accountingDrilldownState.from_date,
     to_date: accountingDrilldownState.to_date,
   });
-  const incomeExpenditure = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/income-expenditure?${reportRangeQuery}`, { method: "GET" });
-  const receiptsPayments = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" });
-  const balanceSheet = await apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${encodeURIComponent(todayIsoDate())}`, { method: "GET" });
-  const panchang = await apiRequest("mandirmitra", "/api/v1/panchang/today", { method: "GET" });
-  const moduleConfig = await apiRequest("mandirmitra", "/api/v1/temples/modules/config", { method: "GET" });
-  const donationCategoryReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/category-wise?${reportRangeQuery}`, { method: "GET" });
-  const donationDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/donations/detailed?${reportRangeQuery}`, { method: "GET" });
-  const sevaDetailReport = await apiRequest("mandirmitra", `/api/v1/reports/sevas/detailed?${reportRangeQuery}`, { method: "GET" });
-  const sevaScheduleReport = await apiRequest("mandirmitra", "/api/v1/reports/sevas/schedule?days=30", { method: "GET" });
-  const devoteesReport = await apiRequest("mandirmitra", "/api/v1/devotees?limit=50", { method: "GET" });
-  const accountingDrilldown = await loadAccountingDrilldownResult();
+  const asOf = encodeURIComponent(todayIsoDate());
+  const [
+    stats, pendingPayments, paymentExceptions, donations, sevaBookings, paymentAccounts, accounts, expenses,
+    trialBalance, incomeExpenditure, receiptsPayments, balanceSheet, panchang, moduleConfig, complianceConfig,
+    donationCategoryReport, donationDetailReport, sevaDetailReport, sevaScheduleReport, devoteesReport,
+    compliance80gReport, complianceFcraReport, fundWiseReport, festivalWiseReport, fundSubledgerReport,
+    fundsAsOfReport, fundTransfers, fundOpeningBalances, inventorySummary, inventoryStockBalances,
+    inventoryMovements, inventoryConsumptions, accountingDrilldown,
+  ] = await Promise.all([
+    apiRequest("mandirmitra", "/api/v1/dashboard/stats", { method: "GET" }),
+    apiRequest("mandirmitra", mandirPublicPaymentsPath(), { method: "GET" }),
+    apiRequest("mandirmitra", mandirPublicPaymentExceptionsPath(), { method: "GET" }),
+    apiRequest("mandirmitra", mandirListPath("donations"), { method: "GET" }),
+    apiRequest("mandirmitra", mandirListPath("sevas"), { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/donations/payment-accounts", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/accounts", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/journal-entries?reference_type=expense&limit=25", { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/journal-entries/reports/trial-balance?as_of=${asOf}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/journal-entries/reports/income-expenditure?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/journal-entries/reports/receipts-payments?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/journal-entries/reports/balance-sheet?as_of=${asOf}`, { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/panchang/today", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/temples/modules/config", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/compliance/donations/config", { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/donations/category-wise?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/donations/detailed?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/sevas/detailed?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/reports/sevas/schedule?days=30", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/devotees?limit=50", { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/compliance/80g?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/compliance/fcra?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/donations/fund-wise?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/donations/festival-wise?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/funds/subledger?${reportRangeQuery}`, { method: "GET" }),
+    apiRequest("mandirmitra", `/api/v1/reports/funds/as-of?as_of=${asOf}`, { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/fund-transfers", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/fund-opening-balances", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/inventory/summary", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/inventory/stock-balances", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/inventory/movements", { method: "GET" }),
+    apiRequest("mandirmitra", "/api/v1/inventory/consumptions", { method: "GET" }),
+    loadAccountingDrilldownResult(),
+  ]);
   if (paymentAccounts.ok) {
     lastMandirPaymentAccounts = paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] };
   }
@@ -17532,12 +17711,26 @@ async function loadMandirDashboard() {
   };
   lastMandirPanchang = panchang.ok ? panchang.payload : panchang;
   lastMandirModuleConfig = moduleConfig.ok ? moduleConfig.payload : lastMandirModuleConfig;
+  lastMandirComplianceConfig = complianceConfig.ok ? complianceConfig.payload : lastMandirComplianceConfig;
   lastMandirOperationalReports = {
     donation_category: donationCategoryReport.ok ? donationCategoryReport.payload : donationCategoryReport,
     donation_detail: donationDetailReport.ok ? donationDetailReport.payload : donationDetailReport,
     seva_detail: sevaDetailReport.ok ? sevaDetailReport.payload : sevaDetailReport,
     seva_schedule: sevaScheduleReport.ok ? sevaScheduleReport.payload : sevaScheduleReport,
     devotees: devoteesReport.ok && Array.isArray(devoteesReport.payload) ? devoteesReport.payload : [],
+    compliance_80g: compliance80gReport.ok ? compliance80gReport.payload : compliance80gReport,
+    compliance_fcra: complianceFcraReport.ok ? complianceFcraReport.payload : complianceFcraReport,
+    fund_wise: fundWiseReport.ok ? fundWiseReport.payload : fundWiseReport,
+    festival_wise: festivalWiseReport.ok ? festivalWiseReport.payload : festivalWiseReport,
+    fund_subledger: fundSubledgerReport.ok ? fundSubledgerReport.payload : fundSubledgerReport,
+    funds_as_of: fundsAsOfReport.ok ? fundsAsOfReport.payload : fundsAsOfReport,
+    fund_transfers: fundTransfers.ok && Array.isArray(fundTransfers.payload) ? fundTransfers.payload : [],
+    fund_opening_balances: fundOpeningBalances.ok && Array.isArray(fundOpeningBalances.payload) ? fundOpeningBalances.payload : [],
+    inventory_summary: inventorySummary.ok ? inventorySummary.payload : inventorySummary,
+    inventory_stock_balances: inventoryStockBalances.ok && Array.isArray(inventoryStockBalances.payload) ? inventoryStockBalances.payload : [],
+    inventory_movements: inventoryMovements.ok && Array.isArray(inventoryMovements.payload) ? inventoryMovements.payload : [],
+    inventory_consumptions: inventoryConsumptions.ok && Array.isArray(inventoryConsumptions.payload) ? inventoryConsumptions.payload : [],
+    inventory_enabled: Boolean((moduleConfig.ok ? moduleConfig.payload : lastMandirModuleConfig)?.module_inventory_enabled),
   };
   renderJson(apiOutput, {
     mandir_dashboard_stats: stats,
@@ -17554,11 +17747,18 @@ async function loadMandirDashboard() {
     mandir_balance_sheet: balanceSheet,
     mandir_panchang: panchang,
     mandir_module_config: moduleConfig,
+    mandir_compliance_config: complianceConfig,
     mandir_donation_category_report: donationCategoryReport,
     mandir_donation_detail_report: donationDetailReport,
     mandir_seva_detail_report: sevaDetailReport,
     mandir_seva_schedule_report: sevaScheduleReport,
     mandir_devotees_report: devoteesReport,
+    mandir_80g_readiness_report: compliance80gReport,
+    mandir_fcra_readiness_report: complianceFcraReport,
+    mandir_fund_subledger_report: fundSubledgerReport,
+    mandir_funds_as_of_report: fundsAsOfReport,
+    mandir_inventory_summary: inventorySummary,
+    mandir_inventory_stock_balances: inventoryStockBalances,
     accounting_drilldown: accountingDrilldown,
   });
   const hasLiveData = stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok;
@@ -17579,6 +17779,7 @@ async function loadMandirDashboard() {
     panchang: lastMandirPanchang,
     operational_reports: lastMandirOperationalReports,
     module_config: lastMandirModuleConfig,
+    compliance_config: lastMandirComplianceConfig,
     payment_accounts: paymentAccounts.ok ? paymentAccounts.payload : lastMandirPaymentAccounts,
     accounts: accounts.ok && Array.isArray(accounts.payload) ? accounts.payload : lastMandirAccounts,
     receipt: lastMandirReceipt,
@@ -17659,6 +17860,7 @@ function renderMandirCreateForms(payload = {}) {
   const today = todayIsoDate();
   const result = payload.form_result || lastMandirFormResult;
   const inventoryEnabled = Boolean(payload.module_config?.module_inventory_enabled);
+  const complianceConfig = payload.compliance_config || {};
   const inKindAccountingLabel = inventoryEnabled
     ? "In-kind consumables debit inventory"
     : "In-kind consumables debit expense";
@@ -17755,6 +17957,25 @@ function renderMandirCreateForms(payload = {}) {
           <label class="field">
             <span>Cash/bank account</span>
             <select name="payment_account_id">${paymentOptions}</select>
+          </label>
+          <label class="field">
+            <span><input name="request_80g" type="checkbox" ${complianceConfig.enable_80g ? "" : "disabled"}> Request 80G eligibility review</span>
+            <small>${complianceConfig.enable_80g ? "Requires donor PAN and tenant approval validity." : "80G is off for this tenant."}</small>
+          </label>
+          <label class="field">
+            <span>Donor PAN</span>
+            <input name="donor_pan" maxlength="10" pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]" placeholder="Required when 80G is requested" ${complianceConfig.enable_80g ? "" : "disabled"}>
+          </label>
+          <label class="field">
+            <span><input name="is_foreign_contribution" type="checkbox" ${complianceConfig.enable_fcra ? "" : "disabled"}> Foreign contribution</span>
+            <small>${complianceConfig.enable_fcra ? `Must use designated account ${escapeHtml(complianceConfig.fcra_designated_account_id || "configured by admin")}.` : "FCRA is off for this tenant."}</small>
+          </label>
+          <label class="field">
+            <span>Donor country</span>
+            <input name="donor_country" maxlength="100" placeholder="Required for foreign contribution" ${complianceConfig.enable_fcra ? "" : "disabled"}>
+          </label>
+          <label class="field">
+            <span><input name="foreign_source_declaration" type="checkbox" ${complianceConfig.enable_fcra ? "" : "disabled"}> Foreign-source declaration confirmed</span>
           </label>
           <button type="submit">Create Donation</button>
         </form>
@@ -18115,6 +18336,15 @@ async function submitMandirDonationForm(form) {
   if (paymentAccountId) {
     payload.payment_account_id = paymentAccountId;
   }
+  payload.request_80g = formData.has("request_80g");
+  payload.is_foreign_contribution = formData.has("is_foreign_contribution");
+  payload.foreign_source_declaration = formData.has("foreign_source_declaration");
+  ["donor_pan", "donor_country"].forEach((key) => {
+    const value = formText(formData, key);
+    if (value) {
+      payload[key] = value;
+    }
+  });
 
   const result = await apiRequest("mandirmitra", "/api/v1/donations", {
     method: "POST",
@@ -18127,6 +18357,39 @@ async function submitMandirDonationForm(form) {
     form.reset();
   } else {
     setMandirFormResult(false, "Donation failed", result.payload?.detail || "Unable to create donation");
+  }
+  await loadMandirDashboard();
+}
+
+async function submitMandirComplianceForm(form) {
+  const formData = new FormData(form);
+  const payload = {
+    enable_80g: formData.has("enable_80g"),
+    institution_pan: formText(formData, "institution_pan").toUpperCase(),
+    approval_number: formText(formData, "approval_number"),
+    approval_valid_from: formText(formData, "approval_valid_from"),
+    approval_valid_to: formText(formData, "approval_valid_to"),
+    certificate_label: formText(formData, "certificate_label") || "Donation certificate",
+    cash_eligibility_limit: formText(formData, "cash_eligibility_limit"),
+    cash_rule_effective_from: formText(formData, "cash_rule_effective_from"),
+    receipt_disclaimer: formText(formData, "receipt_disclaimer"),
+    enable_fcra: formData.has("enable_fcra"),
+    fcra_registration_type: formText(formData, "fcra_registration_type") || "registration",
+    fcra_registration_number: formText(formData, "fcra_registration_number"),
+    fcra_valid_from: formText(formData, "fcra_valid_from"),
+    fcra_valid_to: formText(formData, "fcra_valid_to"),
+    fcra_designated_account_id: formText(formData, "fcra_designated_account_id"),
+  };
+  const result = await apiRequest("mandirmitra", "/api/v1/compliance/donations/config", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  renderJson(apiOutput, { save_mandir_compliance_config: result });
+  if (result.ok) {
+    lastMandirComplianceConfig = result.payload || { enable_80g: false, enable_fcra: false };
+    setMandirFormResult(true, "Compliance configuration saved", "80G/FCRA controls remain governed by tenant approval evidence.");
+  } else {
+    setMandirFormResult(false, "Compliance configuration failed", result.payload?.detail || "Unable to save compliance settings");
   }
   await loadMandirDashboard();
 }
@@ -19557,15 +19820,18 @@ dashboardPreview.addEventListener("input", (event) => {
 });
 dashboardPreview.addEventListener("submit", (event) => {
   const mandirForm = event.target.closest("[data-mandir-create-form]");
+  const mandirComplianceForm = event.target.closest("[data-mandir-compliance-form]");
   const caClientForm = event.target.closest("[data-ca-client-form]");
   const caDocumentForm = event.target.closest("[data-ca-document-form]");
   const caFilterForm = event.target.closest("[data-ca-filter-form]");
-  if (!mandirForm && !caClientForm && !caDocumentForm && !caFilterForm) {
+  if (!mandirForm && !mandirComplianceForm && !caClientForm && !caDocumentForm && !caFilterForm) {
     return;
   }
   event.preventDefault();
   if (mandirForm) {
     submitMandirCreateForm(mandirForm);
+  } else if (mandirComplianceForm) {
+    submitMandirComplianceForm(mandirComplianceForm);
   } else if (caClientForm) {
     createCaClient(caClientForm);
   } else if (caDocumentForm) {
@@ -20075,5 +20341,12 @@ if (currentExperience === "mitrabooks" && getAccessToken()) {
 }
 
 renderModuleState(moduleState);
-runChecks();
+document.documentElement.dataset.mitrabooksShellHandlersReady = "1";
+void (async () => {
+  try {
+    await runChecks();
+  } finally {
+    document.documentElement.dataset.mitrabooksShellReady = "1";
+  }
+})();
 

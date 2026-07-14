@@ -1984,10 +1984,23 @@ test.describe('MitraBooks ERP static shell', () => {
     });
 
     await page.goto('/mitrabooks-erp/index.html');
+    await page.waitForFunction(
+      () => {
+        const root = document.documentElement;
+        return root.dataset.mitrabooksShellHandlersReady === '1'
+          || root.dataset.mitrabooksShellReady === '1';
+      },
+      null,
+      { timeout: 90000 }
+    );
+    await expect(page.locator('#access-panel')).toBeVisible();
+    await expect(page.locator('#forgot-password-open')).toBeVisible();
+    await expect(page.locator('#forgot-password-form')).toBeHidden();
     await page.locator('#forgot-password-open').click();
+    await expect(page.locator('#access-title')).toHaveText('Reset password');
     await expect(page.locator('#forgot-password-form')).toBeVisible();
+    await expect(page.locator('#login-form')).toBeHidden();
     await expect(page.locator('#reset-password-form')).toBeHidden();
-    await expect(page.locator('#access-title')).toContainText('Reset password');
     await expect(page.locator('#forgot-password-form')).toContainText('Your user ID is your registered email');
     await page.locator('#forgot-email').fill('owner@example.com');
     await page.locator('#forgot-password-submit').click();
@@ -1995,9 +2008,18 @@ test.describe('MitraBooks ERP static shell', () => {
     expect(forgotPayload).toEqual({ email: 'owner@example.com' });
 
     await page.goto('/mitrabooks-erp/index.html?action=reset&token=reset-token-123');
+    await page.waitForFunction(
+      () => {
+        const root = document.documentElement;
+        return root.dataset.mitrabooksShellHandlersReady === '1'
+          || root.dataset.mitrabooksShellReady === '1';
+      },
+      null,
+      { timeout: 90000 }
+    );
+    await expect(page.locator('#access-title')).toHaveText('Set new password');
     await expect(page.locator('#reset-password-form')).toBeVisible();
     await expect(page.locator('#forgot-password-form')).toBeHidden();
-    await expect(page.locator('#access-title')).toContainText('Set new password');
     await page.locator('#reset-new-password').fill('newpass123');
     await page.locator('#reset-confirm-password').fill('newpass123');
     await page.locator('#reset-password-submit').click();
@@ -2011,14 +2033,14 @@ test.describe('MitraBooks ERP static shell', () => {
   });
 
   test('offers MitraBooks PWA install prompts for native and iOS devices', async ({ page }) => {
-    await page.goto('/mitrabooks-erp/index.html');
-    await page.evaluate(() => {
-      const event = new Event('beforeinstallprompt');
-      event.prompt = () => Promise.resolve();
-      event.userChoice = Promise.resolve({ outcome: 'accepted' });
-      window.dispatchEvent(event);
+    await page.addInitScript(() => {
+      window.__SANMITRA_PWA_INSTALL_PROMPT__ = {
+        prompt: () => Promise.resolve(),
+        userChoice: Promise.resolve({ outcome: 'accepted' }),
+      };
     });
-    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Install MitraBooks');
+    await page.goto('/mitrabooks-erp/index.html');
+    await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Install MitraBooks', { timeout: 10000 });
     await expect(page.locator('#sanmitra-install-suggestion')).toContainText('Android phone');
   });
 
@@ -2766,5 +2788,127 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.getByRole('button', { name: 'Confirm reverse' }).click();
     await expect(page.locator('#login-status')).toContainText('Debit note reversed');
     await expect(page.locator('.erp-workspace-panel')).toContainText('Reversed');
+  });
+
+  test('MandirMitra compliance controls stay governed and mask report evidence', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('sanmitra_frontend_access_token', 'mandir-admin-token');
+      window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'templeadmin@sanmitra.local');
+    });
+    const complianceConfig = {
+      enable_80g: true,
+      institution_pan: 'ABCDE1234F',
+      approval_number: 'APPROVAL-2026-1',
+      approval_valid_from: '2026-01-01',
+      approval_valid_to: '2027-12-31',
+      certificate_label: 'Donation certificate',
+      cash_eligibility_limit: '2000.00',
+      cash_rule_effective_from: '2026-04-01',
+      receipt_disclaimer: 'Subject to official filing.',
+      enable_fcra: true,
+      fcra_registration_type: 'registration',
+      fcra_registration_number: 'FCRA-DEMO-1',
+      fcra_valid_from: '2026-01-01',
+      fcra_valid_to: '2027-12-31',
+      fcra_designated_account_id: '12001',
+    };
+    await page.route('**/health', route => fulfillJson(route, { status: 'ok' }));
+    await page.route('**/api/v1/**', async route => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname;
+      if (path === '/api/v1/modules/me') {
+        return fulfillJson(route, {
+          tenant_id: 'demo-mandir-tenant', tenant_name: 'Demo Temple', organization_type: 'TEMPLE', role: 'tenant_admin',
+          enabled_modules: [
+            { module_key: 'temple', display_name: 'MandirMitra', frontend_path: '/temple', enabled: true },
+            { module_key: 'accounting', display_name: 'Accounting', frontend_path: '/accounting', enabled: true },
+            { module_key: 'audit', display_name: 'Reports', frontend_path: '/temple/reports', enabled: true },
+          ], available_modules: [],
+        });
+      }
+      if (path === '/api/v1/compliance/donations/config') {
+        return fulfillJson(route, complianceConfig);
+      }
+      if (path === '/api/v1/reports/compliance/80g') {
+        return fulfillJson(route, {
+          filing_artifact: false,
+          items: [{ receipt_number: 'DON-0000001', devotee_name: 'Demo Donor', donor_pan_masked: '*****6789L', '80g_eligibility_status': 'eligible' }],
+        });
+      }
+      if (path === '/api/v1/reports/compliance/fcra') {
+        return fulfillJson(route, {
+          filing_artifact: false,
+          items: [{ receipt_number: 'DON-0000002', devotee_name: 'Foreign Donor', donor_country: 'Singapore', fcra_status: 'accepted' }],
+        });
+      }
+      if (path === '/api/v1/reports/donations/fund-wise') {
+        return fulfillJson(route, { total_count: 2, total_amount: 1500, items: [{ id: 'fund-1', name: 'Annadanam', count: 2, amount: 1500 }] });
+      }
+      if (path === '/api/v1/reports/donations/festival-wise') {
+        return fulfillJson(route, { total_count: 1, total_amount: 500, items: [{ id: 'festival-1', name: 'Deepavali', count: 1, amount: 500 }] });
+      }
+      if (path === '/api/v1/reports/funds/subledger') {
+        return fulfillJson(route, {
+          totals: { closing_balance: 1250 },
+          items: [{ fund_id: 'fund-1', fund_name: 'Annadanam', fund_type: 'restricted', opening_balance: 100, income: 1500, expense: 250, transfers_in: 0, transfers_out: 100, closing_balance: 1250 }],
+        });
+      }
+      if (path === '/api/v1/reports/funds/as-of') return fulfillJson(route, { total_balance: 1250, items: [] });
+      if (path === '/api/v1/inventory/summary') return fulfillJson(route, { totalItems: 1, lowStockItems: 0, totalValue: '666.65' });
+      if (path === '/api/v1/inventory/stock-balances') {
+        return fulfillJson(route, [{ item_id: 'rice-1', item_code: 'RICE', item_name: 'Rice', unit: 'KG', on_hand_qty: '10.000', on_hand_value: '666.65', weighted_average_unit_value: '66.67', reorder_required: false }]);
+      }
+      if (path === '/api/v1/inventory/movements') {
+        return fulfillJson(route, [{ id: 'movement-1', item_name: 'Rice', movement_date: '2026-07-13', movement_type: 'receipt', quantity: '10.000', total_value: '666.65', status: 'posted' }]);
+      }
+      if (path === '/api/v1/inventory/consumptions') return fulfillJson(route, []);
+      if (['/api/v1/fund-transfers', '/api/v1/fund-opening-balances'].includes(path)) return fulfillJson(route, []);
+      if (path === '/api/v1/temples/modules/config') {
+        return fulfillJson(route, { module_inventory_enabled: true, enable_80g: true, enable_fcra: true });
+      }
+      if (path === '/api/v1/donations/payment-accounts') {
+        return fulfillJson(route, { cash_accounts: [{ id: '11001', account_name: 'Cash' }], bank_accounts: [{ id: '12001', account_name: 'FCRA Bank' }] });
+      }
+      if (path === '/api/v1/public-payments/exceptions') return fulfillJson(route, { items: [], summary: { total: 0 } });
+      if (['/api/v1/donations', '/api/v1/sevas/bookings', '/api/v1/accounts', '/api/v1/journal-entries', '/api/v1/devotees'].includes(path)) return fulfillJson(route, []);
+      return fulfillJson(route, {});
+    });
+
+    await page.goto('/mitrabooks-erp/index.html');
+    await page.waitForFunction(
+      () => {
+        const root = document.documentElement;
+        return root.dataset.mitrabooksShellHandlersReady === '1'
+          || root.dataset.mitrabooksShellReady === '1';
+      },
+      null,
+      { timeout: 90000 }
+    );
+    // Experience switcher stays hidden in the production shell; drive Mandir mode directly.
+    await page.locator('#mode-mandir').dispatchEvent('click');
+    await expect(page.locator('.mandir-dashboard')).toBeVisible({ timeout: 30000 });
+
+    await page.locator('nav#nav a[data-mandir-workspace="settings"]').click();
+    await expect(page.getByRole('heading', { name: 'Donation Compliance' })).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('[data-mandir-compliance-form] input[name="enable_80g"]')).toBeChecked();
+    await expect(page.locator('[data-mandir-compliance-form] input[name="fcra_designated_account_id"]')).toHaveValue('12001');
+
+    await page.locator('nav#nav a[data-mandir-workspace="donations"]').click();
+    await expect(page.locator('[data-mandir-create-form="donation"] input[name="request_80g"]')).toBeEnabled();
+    await expect(page.locator('[data-mandir-create-form="donation"] input[name="is_foreign_contribution"]')).toBeEnabled();
+
+    await page.locator('nav#nav a[data-mandir-workspace="reports"]').click();
+    await expect(page.getByRole('heading', { name: '80G Readiness' })).toBeVisible();
+    await expect(page.locator('.mandir-dashboard')).toContainText('*****6789L');
+    await expect(page.locator('.mandir-dashboard')).not.toContainText('PQRST6789L');
+    await expect(page.locator('.mandir-dashboard')).toContainText('not an official certificate or filing');
+    await expect(page.getByRole('heading', { name: 'FCRA Readiness' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Fund and Inventory Drill-down' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Fund Subledger' })).toBeVisible();
+    await expect(page.locator('.mandir-dashboard')).toContainText('Annadanam');
+    await expect(page.getByRole('heading', { name: 'Inventory Stock Valuation' })).toBeVisible();
+    await expect(page.locator('.mandir-dashboard')).toContainText('RICE - Rice');
+    await expect(page.locator('.mandir-dashboard')).toContainText('Rs. 666.65');
+    await expect(page.getByRole('heading', { name: 'Inventory Audit Trail' })).toBeVisible();
   });
 });
