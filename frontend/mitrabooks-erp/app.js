@@ -2969,6 +2969,12 @@ function setLoginStatus(kind, title, detail = "") {
     : "";
 }
 
+function isPasswordRecoveryPanelOpen() {
+  const forgotOpen = Boolean(forgotPasswordForm && !forgotPasswordForm.hasAttribute("hidden"));
+  const resetOpen = Boolean(resetPasswordForm && !resetPasswordForm.hasAttribute("hidden"));
+  return forgotOpen || resetOpen;
+}
+
 function setAuthPanelMode(mode) {
   const normalized = mode === "forgot" || mode === "reset" ? mode : "login";
   const title = document.getElementById("access-title");
@@ -17453,15 +17459,30 @@ async function runChecks() {
     lastModuleContext = null;
     clearAllTokens();
     renderModules();
-    setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
+    if (!isPasswordRecoveryPanelOpen()) {
+      setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
+    }
     updateSessionUi();
     return;
   }
 
   if (!modules.ok && currentExperience === "mitrabooks") {
     lastModuleContext = null;
+    // Treat network/timeout failures the same as 401 when a cached token cannot
+    // establish tenant context, so hosted smoke does not keep a dead session.
+    if (tokenAtStart && getAccessToken() === tokenAtStart) {
+      clearAllTokens();
+      renderModules();
+      if (!isPasswordRecoveryPanelOpen()) {
+        setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
+      }
+      updateSessionUi();
+      return;
+    }
     renderModules();
-    setLoginStatus("warn", "Tenant session required", "Sign in to load your MitraBooks dashboard.");
+    if (!isPasswordRecoveryPanelOpen()) {
+      setLoginStatus("warn", "Tenant session required", "Sign in to load your MitraBooks dashboard.");
+    }
     updateSessionUi();
     return;
   }

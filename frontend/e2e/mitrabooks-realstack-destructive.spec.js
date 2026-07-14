@@ -237,6 +237,15 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const bankReconRef = `BR-${runId}`;
     const bankReconAmount = '222.37';
 
+    // Prior partial runs may leave 2098-07 locked on primary; credit/debit notes
+    // refuse posting into a finalised GST period (invoices/bills do not).
+    await jsonRequest(page, token, 'PUT', '/business/gst-period-locks', {
+      period: e2ePeriod,
+      locked: false,
+      note: `Phase 3 E2E ensure open period before mutation ${runId}`,
+      accounting_entity_id: 'primary',
+    });
+
     const adminSettings = await jsonRequest(page, token, 'GET', '/business/admin-settings?accounting_entity_id=primary');
     expect(adminSettings.integrations?.document_storage_provider).toBeTruthy();
     expect(adminSettings.ai_settings?.ocr_enabled).toBe(false);
@@ -1074,10 +1083,12 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       token,
       'POST',
       `/business/bank-recon/statement?account_id=${misHealthBankAccount.id}&accounting_entity_id=${misHealthEntity}`,
-      [
-        ['date', 'description', 'ref', 'debit', 'credit', 'balance'],
-        [e2eDate, `Phase 3 E2E stale reconciliation ${runId}`, `DH-STMT-${runId}`, '', '25.00', '25.00'],
-      ].map((row) => row.join(',')).join('\n')
+      {
+        csv: [
+          ['date', 'description', 'ref', 'debit', 'credit', 'balance'],
+          [e2eDate, `Phase 3 E2E stale reconciliation ${runId}`, `DH-STMT-${runId}`, '', '25.00', '25.00'],
+        ].map((row) => row.join(',')).join('\n'),
+      }
     );
 
     const misHealthAsOf = '2098-09-30';

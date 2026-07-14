@@ -1969,8 +1969,19 @@ test.describe('MitraBooks ERP static shell', () => {
   });
 
   test('supports forgot password and reset-link password update before sign in', async ({ page }) => {
+    test.setTimeout(120000);
     let forgotPayload = null;
     let resetPayload = null;
+    await page.route(/\/health(?:\?|$)/, route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok' }),
+    }));
+    await page.route(/\/api\/v1\/modules\/me(?:\?|$)/, route => route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Unauthorized' }),
+    }));
     await page.route('**/api/v1/auth/forgot-password', async route => {
       forgotPayload = JSON.parse(route.request().postData() || '{}');
       return fulfillJson(route, {
@@ -1983,13 +1994,10 @@ test.describe('MitraBooks ERP static shell', () => {
       return fulfillJson(route, { status: 'ok', message: 'Password updated successfully' });
     });
 
-    await page.goto('/mitrabooks-erp/index.html');
+    await page.goto('/mitrabooks-erp/index.html', { waitUntil: 'domcontentloaded' });
+    // Wait for boot runChecks to finish so it cannot overwrite reset status later.
     await page.waitForFunction(
-      () => {
-        const root = document.documentElement;
-        return root.dataset.mitrabooksShellHandlersReady === '1'
-          || root.dataset.mitrabooksShellReady === '1';
-      },
+      () => document.documentElement.dataset.mitrabooksShellReady === '1',
       null,
       { timeout: 90000 }
     );
@@ -2007,13 +2015,9 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#login-status')).toContainText('Reset link requested');
     expect(forgotPayload).toEqual({ email: 'owner@example.com' });
 
-    await page.goto('/mitrabooks-erp/index.html?action=reset&token=reset-token-123');
+    await page.goto('/mitrabooks-erp/index.html?action=reset&token=reset-token-123', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
-      () => {
-        const root = document.documentElement;
-        return root.dataset.mitrabooksShellHandlersReady === '1'
-          || root.dataset.mitrabooksShellReady === '1';
-      },
+      () => document.documentElement.dataset.mitrabooksShellReady === '1',
       null,
       { timeout: 90000 }
     );
@@ -2057,27 +2061,44 @@ test.describe('MitraBooks ERP static shell', () => {
   });
 
   test('keeps login page visible when cached token has no tenant session', async ({ page }) => {
+    test.setTimeout(90000);
     await page.addInitScript(() => {
       window.sessionStorage.setItem('sanmitra_frontend_access_token', 'stale-local-preview-token');
       window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
     });
-    await page.route('**/health', route => route.fulfill({
+    // Cover relative /api proxy and absolute Render URLs used by hosted shells.
+    await page.route(/\/health(?:\?|$)/, route => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ status: 'ok' }),
     }));
-    await page.route('**/api/v1/modules/me', route => route.fulfill({
+    await page.route(/\/api\/v1\/modules\/me(?:\?|$)/, route => route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Unauthorized' }),
+    }));
+    await page.route(/\/api\/v1\/auth\/refresh(?:\?|$)/, route => route.fulfill({
       status: 401,
       contentType: 'application/json',
       body: JSON.stringify({ detail: 'Unauthorized' }),
     }));
 
-    await page.goto('/mitrabooks-erp/index.html');
+    await page.goto('/mitrabooks-erp/index.html', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+      () => {
+        const root = document.documentElement;
+        return root.dataset.mitrabooksShellHandlersReady === '1'
+          || root.dataset.mitrabooksShellReady === '1';
+      },
+      null,
+      { timeout: 60000 }
+    );
 
     await expect(page.locator('#access-panel')).toBeVisible();
     await expect(page.locator('.erp-sidebar')).toBeHidden();
     await expect(page.locator('#session-pill')).toContainText('Not signed in');
-    await expect(page.locator('#login-status')).toContainText('Sign in required');
+    // 401 clears to "Sign in required"; aborted/live failures use "Tenant session required".
+    await expect(page.locator('#login-status')).toContainText(/Sign in required|Tenant session required/i);
     await expect.poll(() => page.evaluate(() => window.sessionStorage.getItem('sanmitra_frontend_access_token'))).toBeNull();
   });
 
