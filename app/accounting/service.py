@@ -420,6 +420,7 @@ def validate_journal_lines(lines: list[JournalLineIn]) -> tuple[Decimal, Decimal
     debit_lines = 0
     credit_lines = 0
     account_ids: set[int] = set()
+    account_line_keys: set[tuple[int, str]] = set()
     normalized_lines: list[tuple[int, Decimal, Decimal]] = []
 
     for line in lines:
@@ -439,6 +440,7 @@ def validate_journal_lines(lines: list[JournalLineIn]) -> tuple[Decimal, Decimal
         total_debit += debit
         total_credit += credit
         account_ids.add(line.account_id)
+        account_line_keys.add((line.account_id, str(getattr(line, "cost_center_id", None) or "")))
         normalized_lines.append((line.account_id, debit, credit))
 
     total_debit = _q(total_debit)
@@ -447,7 +449,7 @@ def validate_journal_lines(lines: list[JournalLineIn]) -> tuple[Decimal, Decimal
     if debit_lines == 0 or credit_lines == 0:
         raise AccountingValidationError("Journal entry must include at least one debit line and one credit line")
 
-    if len(account_ids) < 2:
+    if len(account_line_keys) < 2:
         raise AccountingValidationError("Journal entry must impact at least two distinct accounts")
 
     if total_debit <= 0 or total_credit <= 0:

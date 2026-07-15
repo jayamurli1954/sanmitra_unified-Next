@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, A5
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -70,6 +70,7 @@ from app.accounting.service import (
     get_accounts_payable,
     get_accounts_receivable,
     get_balance_sheet,
+    get_cost_centre_ledger_pl,
     get_journal_drilldown,
     get_ledger_lines,
     get_profit_loss,
@@ -81,6 +82,7 @@ from app.accounting.service import (
     validate_cash_balance_for_journal_lines,
 )
 from app.accounting.schemas import JournalPostRequest, JournalLineIn
+from app.modules.business.dimensions import create_dimension, deactivate_dimension
 from app.modules.mandir_compat.report_helpers import (
     accounts_payable_report,
     accounts_receivable_report,
@@ -108,6 +110,8 @@ from app.modules.mandir_compat.donation_compliance import (
     classify_donation_compliance,
     compliance_public_fields,
     donation_compliance_config_view,
+    donation_compliance_receipt_note,
+    mask_pan,
     validate_donation_compliance_config,
 )
 from app.modules.mandir_compat.schemas import (
@@ -185,6 +189,7 @@ _MANDIR_CANONICAL_INCOME_CODES: dict[str, tuple[str, str]] = {
     'general donation': ('44001', 'General Donations'),
     'donation income': ('44001', 'General Donations'),
     'general donations': ('44001', 'General Donations'),
+    'hundi collections': ('44002', 'Hundi Collections'),
     'specific purpose donation': ('44003', 'Specific Purpose Donations'),
     'specific purpose donations': ('44003', 'Specific Purpose Donations'),
     'in-kind donation income': ('44004', 'In-Kind Donation Income'),
@@ -474,9 +479,7 @@ async def _resolve_or_create_mandir_account(
 
 async def _mandir_inventory_accounting_enabled(tenant_id: str, app_key: str) -> bool:
     query = {"tenant_id": tenant_id, "app_key": app_key}
-    doc = await get_collection("mandir_temples").find_one(query)
-    if doc is None:
-        doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id}) or {}
+    doc = await get_collection("mandir_temples").find_one(query) or {}
     return bool(doc.get("module_inventory_enabled", False))
 
 
@@ -687,6 +690,47 @@ async def _cancel_mandir_receipt_source(
         return view
 
     patch = _mandir_receipt_cancellation_metadata(payload, current_user)
+    if source_kind == "donation" and current_status == "pending_valuation":
+        patch["valuation_status"] = "cancelled"
+        await collection.update_one(
+            {id_field: str(source_id), "tenant_id": tenant_id, "app_key": app_key},
+            {"$set": patch}, upsert=False,
+        )
+        return _mandir_donation_view({**existing, **patch})
+
+    inventory_reversal = None
+    movement_collection = None
+    if source_kind == "donation" and existing.get("inventory_movement_id"):
+        movement_collection = get_collection("mandir_inventory_movements")
+        receipt_movement = await movement_collection.find_one(
+            {"id": str(existing["inventory_movement_id"]), "tenant_id": tenant_id, "app_key": app_key, "status": "posted"}
+        )
+        item = await get_collection("mandir_inventory_items").find_one(
+            {"id": str(existing.get("inventory_item_id") or ""), "tenant_id": tenant_id, "app_key": app_key, "is_active": True}
+        )
+        if receipt_movement is None or item is None:
+            raise HTTPException(status_code=409, detail="Inventory receipt evidence is unavailable for donation reversal")
+        available = await _mandir_inventory_item_balance(tenant_id=tenant_id, app_key=app_key, item=item)
+        receipt_quantity = Decimal(str(receipt_movement.get("quantity") or "0"))
+        if available < receipt_quantity:
+            raise HTTPException(status_code=409, detail="Cannot reverse donation after its inventory has been consumed")
+        reversal_movement_id = f"donation-reversal-{source_id}"
+        inventory_reversal = await movement_collection.find_one(
+            {"id": reversal_movement_id, "tenant_id": tenant_id, "app_key": app_key}
+        )
+        if inventory_reversal is None:
+            inventory_reversal = {
+                "id": reversal_movement_id, "tenant_id": tenant_id, "app_key": app_key,
+                "item_id": receipt_movement.get("item_id"), "item_name": receipt_movement.get("item_name"),
+                "movement_type": "receipt_reversal", "quantity": str(receipt_quantity),
+                "unit_value": str(receipt_movement.get("unit_value") or "0"),
+                "total_value": str(receipt_movement.get("total_value") or "0"),
+                "movement_date": datetime.now(timezone.utc).date().isoformat(),
+                "source_type": "in_kind_donation_reversal", "source_id": str(source_id),
+                "status": "pending_accounting", "created_by": _mandir_actor_id(current_user),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await movement_collection.insert_one(inventory_reversal)
     reversal_entry, _created = await _reverse_mandir_source_journal(
         session,
         tenant_id=tenant_id,
@@ -697,6 +741,16 @@ async def _cancel_mandir_receipt_source(
     )
     patch["reversal_journal_id"] = int(reversal_entry.id)
     patch["reversal_idempotency_key"] = f"{idempotency_prefix}{source_id}_receipt_reversal"
+    if inventory_reversal is not None and movement_collection is not None:
+        await movement_collection.update_one(
+            {"id": inventory_reversal["id"], "tenant_id": tenant_id, "app_key": app_key},
+            {"$set": {
+                "status": "posted", "journal_entry_id": int(reversal_entry.id),
+                "posted_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=False,
+        )
+        patch["inventory_reversal_movement_id"] = inventory_reversal["id"]
 
     await collection.update_one(
         {id_field: str(source_id), "tenant_id": tenant_id, "app_key": app_key},
@@ -725,6 +779,366 @@ async def _cancel_mandir_receipt_source(
 
     updated = {**existing, **patch}
     return _mandir_donation_view(updated) if source_kind == "donation" else _mandir_seva_booking_view(updated)
+
+
+def _mandir_refund_source_spec(source_kind: str) -> tuple[str, str, str, str]:
+    normalized = str(source_kind or "").strip().lower()
+    if normalized == "donation":
+        return "mandir_donations", "donation_id", "don_", "amount"
+    if normalized == "seva":
+        return "mandir_seva_bookings", "id", "sev_", "amount_paid"
+    raise HTTPException(status_code=400, detail="source_kind must be donation or seva")
+
+
+async def _mandir_refund_source(
+    *, tenant_id: str, app_key: str, source_kind: str, source_id: str,
+    allow_reversed: bool = False,
+) -> tuple[dict[str, Any], str, str, str, str]:
+    collection_name, id_field, idempotency_prefix, amount_field = _mandir_refund_source_spec(source_kind)
+    source = await get_collection(collection_name).find_one({
+        id_field: source_id, "tenant_id": tenant_id, "app_key": app_key,
+    })
+    if source is None:
+        raise HTTPException(status_code=404, detail="Refund source receipt not found")
+    if not allow_reversed and str(source.get("status") or "").lower() in {"cancelled", "reversed"}:
+        raise HTTPException(status_code=409, detail="Receipt is already reversed")
+    if source_kind == "donation":
+        if str(source.get("donation_type") or "cash").lower() != "cash":
+            raise HTTPException(status_code=409, detail="In-kind donations cannot enter the cash refund workflow")
+        if not allow_reversed and str(source.get("status") or "").lower() != "posted":
+            raise HTTPException(status_code=409, detail="Only posted cash donations can enter the refund workflow")
+    elif str(source.get("payment_status") or "").lower() != "paid":
+        raise HTTPException(status_code=409, detail="Only paid seva receipts can enter the refund workflow")
+    return source, collection_name, id_field, idempotency_prefix, amount_field
+
+
+async def _audit_mandir_refund_event(
+    *, tenant_id: str, app_key: str, actor: str, action: str,
+    request_id: str, old_status: str | None, new_status: str,
+) -> None:
+    try:
+        await log_audit_event(
+            tenant_id=tenant_id, user_id=actor, product=app_key, action=action,
+            entity_type="mandir_refund_request", entity_id=request_id,
+            old_value={"status": old_status}, new_value={"status": new_status},
+        )
+    except Exception:
+        logger.warning("Failed to write refund audit event action=%s request=%s", action, request_id, exc_info=True)
+
+
+@router.get("/refund-requests", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def list_mandir_refund_requests(
+    status: str | None = Query(default=None),
+    source_kind: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund request listing",
+    )
+    query: dict[str, Any] = {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    if status:
+        query["status"] = str(status).strip().lower()
+    if source_kind:
+        normalized_kind = str(source_kind).strip().lower()
+        _mandir_refund_source_spec(normalized_kind)
+        query["source_kind"] = normalized_kind
+    rows = await get_collection("mandir_refund_requests").find(query).sort("created_at", -1).to_list(
+        length=offset + limit
+    )
+    return [_sanitize_mongo_doc(row) for row in rows[offset:offset + limit]]
+
+
+@router.post("/refund-requests", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+async def create_mandir_refund_request(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund request submission",
+    )
+    source_kind = str(payload.get("source_kind") or "").strip().lower()
+    source_id = str(payload.get("source_id") or "").strip()
+    if not source_id:
+        raise HTTPException(status_code=400, detail="source_id is required")
+    source, _collection_name, _id_field, _prefix, amount_field = await _mandir_refund_source(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        source_kind=source_kind, source_id=source_id,
+    )
+    source_amount = Decimal(str(source.get(amount_field) or "0")).quantize(Decimal("0.01"))
+    try:
+        requested_amount = Decimal(str(payload.get("amount") or source_amount)).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid refund amount is required") from exc
+    if not requested_amount.is_finite() or requested_amount <= 0:
+        raise HTTPException(status_code=400, detail="Refund amount must be greater than zero")
+    if requested_amount != source_amount:
+        raise HTTPException(status_code=409, detail="Only a full receipt refund is supported")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Refund reason is required")
+    collection = get_collection("mandir_refund_requests")
+    existing_rows = await collection.find({
+        "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "source_kind": source_kind, "source_id": source_id,
+    }).to_list(length=100)
+    active_statuses = {"pending_approval", "approved_pending_settlement", "settled"}
+    if any(str(row.get("status") or "") in active_statuses for row in existing_rows):
+        raise HTTPException(status_code=409, detail="This receipt already has an active refund request")
+    request_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": request_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "source_kind": source_kind, "source_id": source_id,
+        "receipt_number": str(source.get("receipt_number") or source.get("booking_number") or ""),
+        "amount": str(requested_amount), "currency": str(source.get("currency") or "INR"),
+        "reason": reason, "requested_refund_mode": _safe_optional_str(payload.get("refund_mode")),
+        "reference": f"RFD-{request_id[:8].upper()}", "status": "pending_approval",
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await collection.insert_one(doc)
+    await _audit_mandir_refund_event(
+        tenant_id=context.tenant_id, app_key=context.app_key, actor=str(doc["created_by"]),
+        action="refund_requested", request_id=request_id, old_status=None, new_status="pending_approval",
+    )
+    return _sanitize_mongo_doc(doc)
+
+
+@router.post("/refund-requests/{request_id}/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_refund_request(
+    request_id: str,
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund request approval",
+    )
+    collection = get_collection("mandir_refund_requests")
+    query = {"id": request_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+    if existing.get("status") == "approved_pending_settlement":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending refund requests can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Refund maker and approver must be different users")
+    await _mandir_refund_source(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        source_kind=str(existing["source_kind"]), source_id=str(existing["source_id"]),
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "approved_pending_settlement", "approved_by": actor,
+        "approved_at": now, "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    await _audit_mandir_refund_event(
+        tenant_id=context.tenant_id, app_key=context.app_key, actor=actor,
+        action="refund_approved", request_id=request_id,
+        old_status=str(existing.get("status") or ""), new_status=str(patch["status"]),
+    )
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/refund-requests/{request_id}/reject", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def reject_mandir_refund_request(
+    request_id: str,
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund request rejection",
+    )
+    collection = get_collection("mandir_refund_requests")
+    query = {"id": request_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+    if existing.get("status") == "rejected":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending refund requests can be rejected")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Refund maker and reviewer must be different users")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "rejected", "rejected_by": actor, "rejected_at": now,
+        "rejection_reason": reason, "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    await _audit_mandir_refund_event(
+        tenant_id=context.tenant_id, app_key=context.app_key, actor=actor,
+        action="refund_rejected", request_id=request_id,
+        old_status=str(existing.get("status") or ""), new_status=str(patch["status"]),
+    )
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/refund-requests/{request_id}/settle", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def settle_mandir_refund_request(
+    request_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund settlement",
+    )
+    collection = get_collection("mandir_refund_requests")
+    query = {"id": request_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+    if existing.get("status") == "settled":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "approved_pending_settlement":
+        raise HTTPException(status_code=409, detail="Only approved refund requests can be settled")
+    refund_mode = str(payload.get("refund_mode") or existing.get("requested_refund_mode") or "").strip()
+    refund_reference = str(payload.get("refund_reference") or "").strip()
+    if len(refund_mode) < 2:
+        raise HTTPException(status_code=400, detail="Refund payment mode is required")
+    if len(refund_reference) < 3:
+        raise HTTPException(status_code=400, detail="Refund settlement reference is required")
+    settlement_date = str(payload.get("settlement_date") or datetime.now(timezone.utc).date().isoformat()).strip()
+    try:
+        parsed_settlement_date = date.fromisoformat(settlement_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid settlement_date is required") from exc
+    if parsed_settlement_date > datetime.now(timezone.utc).date():
+        raise HTTPException(status_code=400, detail="Settlement date cannot be in the future")
+    source_kind = str(existing["source_kind"])
+    source_id = str(existing["source_id"])
+    source, collection_name, id_field, prefix, _amount_field = await _mandir_refund_source(
+        tenant_id=context.tenant_id, app_key=context.app_key,
+        source_kind=source_kind, source_id=source_id, allow_reversed=True,
+    )
+    if str(source.get("status") or "").lower() in {"cancelled", "reversed"}:
+        if str(source.get("refund_reference") or "") != refund_reference:
+            raise HTTPException(status_code=409, detail="Receipt was reversed outside this refund settlement")
+    cancelled = await _cancel_mandir_receipt_source(
+        source_kind=source_kind, source_id=source_id, collection_name=collection_name,
+        id_field=id_field, idempotency_prefix=prefix,
+        payload={
+            "reason": str(existing["reason"]), "refund_mode": refund_mode,
+            "refund_reference": refund_reference, "refund_date": settlement_date,
+        },
+        session=session, current_user=current_user,
+        x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "settled", "settled_by": _mandir_actor_id(current_user), "settled_at": now,
+        "settlement_date": settlement_date, "refund_mode": refund_mode,
+        "refund_reference": refund_reference,
+        "reversal_journal_id": cancelled.get("reversal_journal_id"), "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    await _audit_mandir_refund_event(
+        tenant_id=context.tenant_id, app_key=context.app_key, actor=str(patch["settled_by"]),
+        action="refund_settled", request_id=request_id,
+        old_status=str(existing.get("status") or ""), new_status=str(patch["status"]),
+    )
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+async def _mandir_refund_report_rows(
+    *, tenant_id: str, app_key: str, from_date: date, to_date: date,
+) -> list[dict[str, Any]]:
+    rows = await get_collection("mandir_refund_requests").find({
+        "tenant_id": tenant_id, "app_key": app_key,
+    }).to_list(length=5000)
+    result = []
+    for row in rows:
+        created_at = _parse_iso_datetime(row.get("created_at"))
+        if created_at is None or not (from_date <= created_at.date() <= to_date):
+            continue
+        result.append(_sanitize_mongo_doc(row))
+    result.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+    return result
+
+
+@router.get("/reports/refunds", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def mandir_report_refunds(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund reporting",
+    )
+    rows = await _mandir_refund_report_rows(
+        tenant_id=context.tenant_id, app_key=context.app_key, from_date=from_date, to_date=to_date,
+    )
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        totals[status] = totals.get(status, Decimal("0")) + Decimal(str(row.get("amount") or "0"))
+    return {
+        "from_date": from_date.isoformat(), "to_date": to_date.isoformat(), "items": rows,
+        "count": len(rows), "amount_by_status": {key: float(value) for key, value in sorted(totals.items())},
+    }
+
+
+@router.get("/reports/refunds/export.csv", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def mandir_export_refunds_csv(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="refund report export",
+    )
+    rows = await _mandir_refund_report_rows(
+        tenant_id=context.tenant_id, app_key=context.app_key, from_date=from_date, to_date=to_date,
+    )
+    output = StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow([
+        "refund_reference", "receipt_number", "source_kind", "amount", "currency", "status",
+        "reason", "refund_mode", "settlement_reference", "settlement_date", "reversal_journal_id",
+    ])
+    for row in rows:
+        writer.writerow([
+            row.get("reference"), row.get("receipt_number"), row.get("source_kind"), row.get("amount"),
+            row.get("currency"), row.get("status"), row.get("reason"), row.get("refund_mode"),
+            row.get("refund_reference"), row.get("settlement_date"), row.get("reversal_journal_id"),
+        ])
+    return Response(
+        content=output.getvalue(), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="mandir_refunds_{from_date}_{to_date}.csv"'},
+    )
 
 
 MANDIR_DEFAULT_ACCOUNTS: list[dict[str, Any]] = [
@@ -1603,6 +2017,7 @@ def _generate_donation_receipt_pdf_bytes(
     if str(donation.get("donation_type") or "").strip().lower() == "in_kind" and item_text:
         line_description = f"{category} ({item_text})"
     devotee_address = _compose_receipt_address_line(address_source, devotee, fallback="--")
+    compliance_note = donation_compliance_receipt_note(donation)
     payload = {
         **temple_profile,
         "receipt_title": "Donation Receipt",
@@ -1624,9 +2039,9 @@ def _generate_donation_receipt_pdf_bytes(
         "total_amount": amount,
         "include_astro_row": False,
         "include_service_row": False,
-        "include_note_row": False,
+        "include_note_row": bool(compliance_note),
         "service_date": donation_date,
-        "note_english": "",
+        "note_english": compliance_note,
         "system_generated_line": "",
         "powered_by_line": "Powered by Sanmitra Tech Solutions.",
         "local_language": temple_profile.get("local_language"),
@@ -4546,6 +4961,486 @@ async def donations_categories(_current_user: dict = Depends(get_current_user)):
     ]
 
 
+@router.get("/funds")
+async def list_mandir_funds(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund listing"
+    )
+    rows = await get_collection("mandir_funds").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("name", 1).to_list(length=500)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.post("/funds", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def create_mandir_fund(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund creation"
+    )
+    name = str(payload.get("name") or "").strip()
+    fund_type = str(payload.get("fund_type") or "restricted").strip().lower()
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Fund name is required")
+    if fund_type not in {"general", "restricted", "corpus"}:
+        raise HTTPException(status_code=400, detail="fund_type must be general, restricted, or corpus")
+    now = datetime.now(timezone.utc).isoformat()
+    fund_id = str(uuid4())
+    actor = _mandir_actor_id(current_user)
+    try:
+        dimension = await create_dimension(
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id="primary",
+            payload={
+                "dimension_type": "cost_centre",
+                "code": f"MF-{fund_id[:8].upper()}",
+                "name": f"Mandir fund - {name}",
+            },
+            created_by=actor,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to provision fund accounting dimension") from exc
+    doc = {
+        "id": fund_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "name": name, "fund_type": fund_type, "active": True,
+        "accounting_dimension_id": str(dimension["dimension_id"]),
+        "created_by": actor, "created_at": now, "updated_at": now,
+    }
+    try:
+        await get_collection("mandir_funds").insert_one(doc)
+    except Exception as exc:
+        try:
+            await deactivate_dimension(
+                tenant_id=context.tenant_id, app_key=context.app_key, accounting_entity_id="primary",
+                dimension_id=str(dimension["dimension_id"]), updated_by=actor,
+            )
+        except Exception:
+            logger.exception("Failed to deactivate orphaned Mandir fund dimension tenant=%s", context.tenant_id)
+        raise HTTPException(status_code=500, detail="Failed to save fund master") from exc
+    return _sanitize_mongo_doc(doc)
+
+
+@router.get("/fund-transfers")
+async def list_mandir_fund_transfers(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund transfer listing"
+    )
+    rows = await get_collection("mandir_fund_transfers").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("created_at", -1).to_list(length=500)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.get("/fund-opening-balances")
+async def list_mandir_fund_opening_balances(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund opening balance listing",
+    )
+    rows = await get_collection("mandir_fund_opening_balances").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("opening_date", -1).to_list(length=500)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.post("/fund-opening-balances", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+async def create_mandir_fund_opening_balance(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund opening balance submission",
+    )
+    fund_id = str(payload.get("fund_id") or "").strip()
+    fund = await get_collection("mandir_funds").find_one({
+        "id": fund_id, "tenant_id": context.tenant_id, "app_key": context.app_key, "active": True,
+    })
+    if fund is None or not fund.get("accounting_dimension_id"):
+        raise HTTPException(status_code=404, detail="Active accounting-enabled fund not found")
+    try:
+        amount = Decimal(str(payload.get("amount") or "0")).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid opening balance amount is required") from exc
+    if not amount.is_finite() or amount <= 0:
+        raise HTTPException(status_code=400, detail="Opening balance amount must be greater than zero")
+    opening_date = str(payload.get("opening_date") or "").strip()
+    try:
+        parsed_opening_date = date.fromisoformat(opening_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid opening_date is required") from exc
+    if parsed_opening_date > datetime.now(timezone.utc).date():
+        raise HTTPException(status_code=400, detail="Opening balance date cannot be in the future")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Opening balance reason is required")
+    existing_rows = await get_collection("mandir_fund_opening_balances").find({
+        "tenant_id": context.tenant_id, "app_key": context.app_key, "fund_id": fund_id,
+    }).to_list(length=100)
+    if any(str(row.get("status") or "") in {"pending_approval", "posted"} for row in existing_rows):
+        raise HTTPException(status_code=409, detail="This fund already has an active opening balance")
+    opening_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "fund_id": fund_id, "fund_name": fund.get("name"),
+        "fund_dimension_id": str(fund["accounting_dimension_id"]),
+        "amount": str(amount), "opening_date": opening_date, "reason": reason,
+        "reference": f"FOB-{opening_id[:8].upper()}", "status": "pending_approval",
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_fund_opening_balances").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
+
+
+@router.post("/fund-opening-balances/{opening_id}/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_fund_opening_balance(
+    opening_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund opening balance approval",
+    )
+    collection = get_collection("mandir_fund_opening_balances")
+    query = {"id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Fund opening balance not found")
+    if existing.get("status") == "posted":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending opening balances can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Opening balance maker and approver must be different users")
+    fund = await get_collection("mandir_funds").find_one({
+        "id": str(existing.get("fund_id") or ""), "tenant_id": context.tenant_id,
+        "app_key": context.app_key, "active": True,
+    })
+    if fund is None or str(fund.get("accounting_dimension_id") or "") != str(existing.get("fund_dimension_id") or ""):
+        raise HTTPException(status_code=409, detail="Fund accounting dimension is no longer active")
+    await _ensure_default_mandir_sql_accounts_safe(session, context.tenant_id, raise_on_failure=True)
+    opening_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code="33001", name="Opening Balance",
+        account_type="equity", classification="real",
+    )
+    reserve_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code="32001", name="General Reserve",
+        account_type="equity", classification="real",
+    )
+    amount = Decimal(str(existing["amount"]))
+    journal, _created = await post_journal_entry(
+        session=session, app_key=context.app_key, tenant_id=context.tenant_id, created_by=actor,
+        payload=JournalPostRequest(
+            entry_date=date.fromisoformat(str(existing["opening_date"])),
+            description=f"Fund opening balance: {existing.get('fund_name')}",
+            reference=str(existing["reference"]), source_module="mandirmitra",
+            source_document_type="fund_opening_balance", source_document_id=opening_id,
+            lines=[
+                JournalLineIn(account_id=opening_account_id, debit=amount, credit=Decimal("0")),
+                JournalLineIn(
+                    account_id=reserve_account_id, debit=Decimal("0"), credit=amount,
+                    cost_center_id=str(existing["fund_dimension_id"]),
+                ),
+            ],
+        ),
+        idempotency_key=f"fund_opening_balance_{opening_id}",
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "posted", "approved_by": actor, "approved_at": now,
+        "journal_entry_id": int(journal.id), "updated_at": now,
+    }
+    try:
+        await collection.update_one(query, {"$set": patch}, upsert=False)
+    except Exception as exc:
+        await reverse_journal_entry(
+            session=session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id="primary", journal_id=int(journal.id), created_by=actor,
+            reason="Compensate failed fund opening balance persistence",
+            idempotency_key=f"fund_opening_balance_{opening_id}_approval_compensation",
+        )
+        raise HTTPException(status_code=500, detail="Opening balance persistence failed; accounting was reversed") from exc
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/fund-opening-balances/{opening_id}/cancel", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def cancel_mandir_fund_opening_balance(
+    opening_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund opening balance reversal",
+    )
+    collection = get_collection("mandir_fund_opening_balances")
+    query = {"id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Fund opening balance not found")
+    if existing.get("status") == "reversed":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "posted":
+        raise HTTPException(status_code=409, detail="Only posted opening balances can be reversed")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Reversal reason is required")
+    reversal, _created = await _reverse_mandir_source_journal(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        source_key=f"fund_opening_balance_{opening_id}", reason=reason, current_user=current_user,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "reversed", "reversal_journal_id": int(reversal.id), "reversal_reason": reason,
+        "reversed_by": _mandir_actor_id(current_user), "reversed_at": now, "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/fund-transfers", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+async def create_mandir_fund_transfer(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund transfer submission"
+    )
+    from_fund_id = str(payload.get("from_fund_id") or "").strip()
+    to_fund_id = str(payload.get("to_fund_id") or "").strip()
+    if not from_fund_id or not to_fund_id or from_fund_id == to_fund_id:
+        raise HTTPException(status_code=400, detail="Distinct source and destination funds are required")
+    fund_collection = get_collection("mandir_funds")
+    scope = {"tenant_id": context.tenant_id, "app_key": context.app_key, "active": True}
+    from_fund = await fund_collection.find_one({**scope, "id": from_fund_id})
+    to_fund = await fund_collection.find_one({**scope, "id": to_fund_id})
+    if from_fund is None or to_fund is None:
+        raise HTTPException(status_code=404, detail="Active source or destination fund not found")
+    if not from_fund.get("accounting_dimension_id") or not to_fund.get("accounting_dimension_id"):
+        raise HTTPException(status_code=409, detail="Both funds must have accounting dimensions before transfer")
+    try:
+        amount = Decimal(str(payload.get("amount") or "0")).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid transfer amount is required") from exc
+    if not amount.is_finite() or amount <= 0:
+        raise HTTPException(status_code=400, detail="Transfer amount must be greater than zero")
+    transfer_date = str(payload.get("transfer_date") or datetime.now(timezone.utc).date().isoformat()).strip()
+    try:
+        date.fromisoformat(transfer_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid transfer_date is required") from exc
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Transfer reason is required")
+    transfer_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": transfer_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "from_fund_id": from_fund_id, "from_fund_name": from_fund.get("name"),
+        "from_dimension_id": from_fund.get("accounting_dimension_id"),
+        "to_fund_id": to_fund_id, "to_fund_name": to_fund.get("name"),
+        "to_dimension_id": to_fund.get("accounting_dimension_id"),
+        "amount": str(amount), "transfer_date": transfer_date, "reason": reason,
+        "reference": f"FTR-{transfer_id[:8].upper()}", "status": "pending_approval",
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_fund_transfers").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
+
+
+@router.post("/fund-transfers/{transfer_id}/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_fund_transfer(
+    transfer_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund transfer approval"
+    )
+    collection = get_collection("mandir_fund_transfers")
+    query = {"id": transfer_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Fund transfer not found")
+    if existing.get("status") == "posted":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending fund transfers can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Maker and approver must be different users")
+    transfer_day = date.fromisoformat(str(existing["transfer_date"]))
+    balance_report = await _mandir_fund_subledger_data(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        from_date=date(1900, 1, 1), to_date=transfer_day,
+    )
+    source_row = next(
+        (row for row in balance_report["items"] if row["fund_id"] == str(existing.get("from_fund_id") or "")),
+        None,
+    )
+    available = Decimal(str(source_row.get("closing_balance") if source_row else "0"))
+    amount = Decimal(str(existing["amount"]))
+    if available < amount:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Insufficient source fund balance; available amount is {available.quantize(Decimal('0.01'))}",
+        )
+    await _ensure_default_mandir_sql_accounts_safe(session, context.tenant_id, raise_on_failure=True)
+    control_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code="32001", name="General Reserve", account_type="equity", classification="real"
+    )
+    journal, _created = await post_journal_entry(
+        session=session, app_key=context.app_key, tenant_id=context.tenant_id, created_by=actor,
+        payload=JournalPostRequest(
+            entry_date=date.fromisoformat(str(existing["transfer_date"])),
+            description=f"Fund transfer: {existing.get('from_fund_name')} to {existing.get('to_fund_name')}",
+            reference=str(existing["reference"]), source_module="mandirmitra",
+            source_document_type="fund_transfer", source_document_id=transfer_id,
+            lines=[
+                JournalLineIn(
+                    account_id=control_account_id, debit=amount, credit=Decimal("0"),
+                    cost_center_id=str(existing["from_dimension_id"]),
+                ),
+                JournalLineIn(
+                    account_id=control_account_id, debit=Decimal("0"), credit=amount,
+                    cost_center_id=str(existing["to_dimension_id"]),
+                ),
+            ],
+        ),
+        idempotency_key=f"fund_transfer_{transfer_id}",
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "posted", "approved_by": actor, "approved_at": now,
+        "journal_entry_id": int(journal.id), "updated_at": now,
+    }
+    try:
+        await collection.update_one(query, {"$set": patch}, upsert=False)
+    except Exception as exc:
+        await reverse_journal_entry(
+            session=session, tenant_id=context.tenant_id, app_key=context.app_key, accounting_entity_id="primary",
+            journal_id=int(journal.id), created_by=actor, reason="Compensate failed fund transfer persistence",
+            idempotency_key=f"fund_transfer_{transfer_id}_approval_compensation",
+        )
+        raise HTTPException(status_code=500, detail="Fund transfer persistence failed; accounting was reversed") from exc
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/fund-transfers/{transfer_id}/cancel", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def cancel_mandir_fund_transfer(
+    transfer_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund transfer reversal"
+    )
+    collection = get_collection("mandir_fund_transfers")
+    query = {"id": transfer_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Fund transfer not found")
+    if existing.get("status") == "reversed":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "posted":
+        raise HTTPException(status_code=409, detail="Only posted fund transfers can be reversed")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Reversal reason is required")
+    reversal, _created = await _reverse_mandir_source_journal(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        source_key=f"fund_transfer_{transfer_id}", reason=reason, current_user=current_user,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "reversed", "reversal_journal_id": int(reversal.id), "reversal_reason": reason,
+        "reversed_by": _mandir_actor_id(current_user), "reversed_at": now, "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.get("/festivals")
+async def list_mandir_festivals(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="festival listing"
+    )
+    rows = await get_collection("mandir_festivals").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("start_date", -1).to_list(length=500)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.post("/festivals", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def create_mandir_festival(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="festival creation"
+    )
+    name = str(payload.get("name") or "").strip()
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Festival name is required")
+    start_date = str(payload.get("start_date") or "").strip()
+    end_date = str(payload.get("end_date") or start_date).strip()
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid festival start_date and end_date are required") from exc
+    if start > end:
+        raise HTTPException(status_code=400, detail="Festival start_date cannot be after end_date")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid4()), "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "name": name, "start_date": start.isoformat(), "end_date": end.isoformat(), "active": True,
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_festivals").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
+
+
 @router.get("/donations")
 async def list_donations(
     limit: int = Query(default=200, ge=1, le=2000),
@@ -4614,6 +5509,39 @@ async def create_donation(
     amount = _safe_float(payload.get("amount"), 0.0)
     category = str(payload.get("category") or "General Donation")
     payment_mode = str(payload.get("payment_mode") or "Cash").lower()
+    donation_type = str(payload.get("donation_type") or "cash").strip().lower() or "cash"
+    if donation_type == "in_kind":
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Declared in-kind value must be greater than zero")
+        if not _safe_optional_str(payload.get("in_kind_item_name") or payload.get("item_name")):
+            raise HTTPException(status_code=400, detail="In-kind item name is required")
+        if not _safe_optional_str(payload.get("in_kind_valuation_basis") or payload.get("valuation_basis")):
+            raise HTTPException(status_code=400, detail="In-kind valuation basis is required")
+    fund = None
+    fund_id = str(payload.get("fund_id") or "").strip()
+    if fund_id:
+        fund = await get_collection("mandir_funds").find_one(
+            {"id": fund_id, "tenant_id": tenant_id, "app_key": app_key, "active": True}
+        )
+        if fund is None:
+            raise HTTPException(status_code=404, detail="Active fund not found")
+        if not fund.get("accounting_dimension_id"):
+            raise HTTPException(status_code=409, detail="Fund accounting dimension is not provisioned")
+    festival = None
+    festival_id = str(payload.get("festival_id") or "").strip()
+    if festival_id:
+        festival = await get_collection("mandir_festivals").find_one(
+            {"id": festival_id, "tenant_id": tenant_id, "app_key": app_key, "active": True}
+        )
+        if festival is None:
+            raise HTTPException(status_code=404, detail="Active festival not found")
+    sponsorship_value = payload.get("is_sponsorship", False)
+    is_sponsorship = sponsorship_value is True or str(sponsorship_value).strip().lower() in {"1", "true", "yes"}
+    cash_income_category = _mandir_cash_income_category(category)
+    if fund and str(fund.get("fund_type") or "").lower() in {"restricted", "corpus"}:
+        cash_income_category = "Specific Purpose Donations"
+    if is_sponsorship:
+        cash_income_category = "Sponsorship Income"
     devotee_prefix = _safe_optional_str(
         payload.get("name_prefix")
         or payload.get("devotee_prefix")
@@ -4626,6 +5554,19 @@ async def create_donation(
     devotee_city = _safe_optional_str(payload.get("devotee_city") or payload.get("city"))
     devotee_state = _safe_optional_str(payload.get("devotee_state") or payload.get("state"))
     devotee_pincode = _safe_optional_str(payload.get("devotee_pincode") or payload.get("pincode"))
+    raw_payment_account_id = _safe_optional_str(payload.get("bank_account_id") or payload.get("payment_account_id"))
+    compliance_config = await get_collection("mandir_donation_compliance_config").find_one(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    )
+    compliance = classify_donation_compliance(
+        payload,
+        compliance_config,
+        amount=Decimal(str(amount)),
+        donation_type=donation_type,
+        payment_mode=payment_mode,
+        donation_date=datetime.now(timezone.utc).date(),
+        payment_account_id=raw_payment_account_id,
+    )
 
     donation = {
         "donation_id": donation_id,
@@ -4634,12 +5575,24 @@ async def create_donation(
         "temple_id": temple_id,
         "amount": amount,
         "category": category,
-        "donation_type": str(payload.get("donation_type") or "cash").strip().lower() or "cash",
+        "donation_type": donation_type,
         "in_kind_item_name": _safe_optional_str(payload.get("in_kind_item_name") or payload.get("item_name")),
         "in_kind_item_type": _safe_optional_str(payload.get("in_kind_item_type") or payload.get("item_type") or payload.get("asset_type")),
         "in_kind_quantity": _safe_optional_str(payload.get("in_kind_quantity") or payload.get("quantity")),
         "in_kind_valuation_basis": _safe_optional_str(payload.get("in_kind_valuation_basis") or payload.get("valuation_basis")),
         "event_name": _safe_optional_str(payload.get("event_name") or payload.get("festival_name")),
+        "fund_id": fund_id or None,
+        "fund_name": str(fund.get("name")) if fund else None,
+        "fund_type": str(fund.get("fund_type")) if fund else None,
+        "fund_dimension_id": str(fund.get("accounting_dimension_id")) if fund else None,
+        "festival_id": festival_id or None,
+        "festival_name": str(festival.get("name")) if festival else None,
+        "is_sponsorship": is_sponsorship,
+        "income_category": cash_income_category,
+        "status": "pending_valuation" if donation_type == "in_kind" else "posted",
+        "valuation_status": "pending_approval" if donation_type == "in_kind" else None,
+        "inventory_item_id": _safe_optional_str(payload.get("inventory_item_id")),
+        "inventory_quantity": _safe_optional_str(payload.get("inventory_quantity")),
         "payment_mode": payload.get("payment_mode") or "Cash",
         "devotee_name": devotee_name,
         "devotee_phone": devotee_phone,
@@ -4658,7 +5611,9 @@ async def create_donation(
             "state": devotee_state,
             "pincode": devotee_pincode,
         },
+        "created_by": _mandir_actor_id(current_user),
         "created_at": now,
+        **compliance,
     }
 
     donation["id"] = donation_id
@@ -4670,62 +5625,41 @@ async def create_donation(
     )
     donation["receipt_pdf_url"] = f"/api/v1/donations/{donation_id}/receipt/pdf"
 
-    raw_payment_account_id = _safe_optional_str(payload.get("bank_account_id") or payload.get("payment_account_id"))
-    compliance_config = await get_collection("mandir_donation_compliance_config").find_one(
-        {"tenant_id": tenant_id, "app_key": app_key}
-    )
-    compliance = classify_donation_compliance(
-        payload,
-        compliance_config,
-        amount=Decimal(str(amount)),
-        donation_type=str(donation.get("donation_type") or "cash"),
-        payment_mode=payment_mode,
-        donation_date=datetime.now(timezone.utc).date(),
-        payment_account_id=raw_payment_account_id,
-    )
-    donation.update(compliance)
-
     col = get_collection("mandir_donations")
     try:
         await col.insert_one(donation)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save donation: {exc}") from exc
 
-    donation_type = str(payload.get("donation_type") or "").strip().lower()
-
     # Valued donations and sponsorships must post into accounting; otherwise reports and TB diverge.
-    if amount > 0:
+    if amount > 0 and donation_type != "in_kind":
         try:
-            if donation_type == "in_kind":
-                debit_account_id = await _resolve_mandir_in_kind_debit_account(
-                    session,
-                    tenant_id,
-                    payload,
-                    category,
-                    app_key=app_key,
-                )
-                income_category = _mandir_in_kind_income_category(category)
-            else:
-                raw_account_id = payload.get("bank_account_id") or payload.get("payment_account_id")
-                debit_account_id = await _resolve_mandir_payment_account_id(
-                    session,
-                    tenant_id,
-                    raw_account_id,
-                    payment_mode,
-                )
-                if not debit_account_id:
-                    await col.delete_one({"donation_id": donation_id, "tenant_id": tenant_id, "app_key": app_key})
-                    raise HTTPException(status_code=400, detail="No valid cash/bank account is configured for donation posting")
-                income_category = _mandir_cash_income_category(category)
+            raw_account_id = raw_payment_account_id
+            debit_account_id = await _resolve_mandir_payment_account_id(
+                session,
+                tenant_id,
+                raw_account_id,
+                payment_mode,
+            )
+            if not debit_account_id:
+                await col.delete_one({"donation_id": donation_id, "tenant_id": tenant_id, "app_key": app_key})
+                raise HTTPException(status_code=400, detail="No valid cash/bank account is configured for donation posting")
+            income_category = cash_income_category
 
             income_acc_id = await _resolve_mandir_income_account(session, tenant_id, income_category)
             journal_payload = JournalPostRequest(
                 entry_date=datetime.now(timezone.utc).date(),
                 description=f"{category} from {donation['devotee']['name']}",
                 reference=donation["receipt_number"],
+                source_module="mandirmitra",
+                source_document_type="donation",
+                source_document_id=donation_id,
                 lines=[
                     JournalLineIn(account_id=debit_account_id, debit=Decimal(str(amount)), credit=Decimal("0")),
-                    JournalLineIn(account_id=income_acc_id, debit=Decimal("0"), credit=Decimal(str(amount))),
+                    JournalLineIn(
+                        account_id=income_acc_id, debit=Decimal("0"), credit=Decimal(str(amount)),
+                        cost_center_id=str(fund.get("accounting_dimension_id")) if fund else None,
+                    ),
                 ],
             )
             await post_journal_entry(
@@ -4760,6 +5694,155 @@ async def create_donation(
         logger.warning("Donation saved but devotee upsert failed for tenant=%s phone=%s: %s", tenant_id, devotee_phone, exc)
 
     return _mandir_donation_view(donation)
+
+
+@router.post("/donations/{donation_id}/valuation/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_in_kind_valuation(
+    donation_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="in-kind valuation approval",
+    )
+    collection = get_collection("mandir_donations")
+    query = {"donation_id": donation_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    donation = await collection.find_one(query)
+    if donation is None:
+        raise HTTPException(status_code=404, detail="Donation not found")
+    if str(donation.get("donation_type") or "").lower() != "in_kind":
+        raise HTTPException(status_code=409, detail="Only in-kind donations require valuation approval")
+    if donation.get("status") == "posted" and donation.get("valuation_status") == "approved":
+        return {**_mandir_donation_view(donation), "_idempotent": True}
+    if donation.get("valuation_status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending valuations can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(donation.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Valuation maker and approver must be different users")
+    try:
+        approved_amount = Decimal(str(payload.get("approved_amount") or donation.get("amount") or "0")).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid approved_amount is required") from exc
+    if not approved_amount.is_finite() or approved_amount <= 0:
+        raise HTTPException(status_code=400, detail="Approved value must be greater than zero")
+    approval_basis = str(payload.get("approval_basis") or "").strip()
+    if len(approval_basis) < 3:
+        raise HTTPException(status_code=400, detail="Valuation approval basis is required")
+
+    await _ensure_default_mandir_sql_accounts_safe(session, context.tenant_id, raise_on_failure=True)
+    inventory_enabled = await _mandir_inventory_accounting_enabled(context.tenant_id, context.app_key)
+    account_code, account_name, account_type = _mandir_in_kind_debit_account_target(
+        donation, donation.get("category"), inventory_accounting_enabled=inventory_enabled,
+    )
+    debit_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code=account_code, name=account_name, account_type=account_type,
+        classification="nominal" if account_type == "expense" else "real",
+    )
+    income_category = (
+        "In-Kind Sponsorship Income"
+        if donation.get("is_sponsorship")
+        else _mandir_in_kind_income_category(donation.get("category"))
+    )
+    income_account_id = await _resolve_mandir_income_account(session, context.tenant_id, income_category)
+    dimension_id = str(donation.get("fund_dimension_id") or "") or None
+
+    movement = None
+    movement_collection = get_collection("mandir_inventory_movements")
+    if account_code in {"14003", "14004"}:
+        item_id = str(payload.get("inventory_item_id") or donation.get("inventory_item_id") or "").strip()
+        item = await get_collection("mandir_inventory_items").find_one(
+            {"id": item_id, "tenant_id": context.tenant_id, "app_key": context.app_key, "is_active": True}
+        )
+        if item is None:
+            raise HTTPException(status_code=404, detail="Active inventory item is required for inventory-valued donation")
+        try:
+            quantity = Decimal(str(payload.get("approved_quantity") or donation.get("inventory_quantity") or "0")).quantize(Decimal("0.001"))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Valid approved_quantity is required") from exc
+        if not quantity.is_finite() or quantity <= 0:
+            raise HTTPException(status_code=400, detail="Approved inventory quantity must be greater than zero")
+        movement = {
+            "id": str(uuid4()), "tenant_id": context.tenant_id, "app_key": context.app_key,
+            "item_id": item_id, "item_name": item.get("name"), "movement_type": "receipt",
+            "quantity": str(quantity), "unit_value": str((approved_amount / quantity).quantize(Decimal("0.01"))),
+            "total_value": str(approved_amount), "movement_date": datetime.now(timezone.utc).date().isoformat(),
+            "source_type": "in_kind_donation", "source_id": donation_id,
+            "status": "pending_accounting", "created_by": actor, "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await movement_collection.insert_one(movement)
+
+    try:
+        journal, _created = await post_journal_entry(
+            session=session, app_key=context.app_key, tenant_id=context.tenant_id, created_by=actor,
+            payload=JournalPostRequest(
+                entry_date=datetime.now(timezone.utc).date(),
+                description=f"Approved in-kind valuation: {donation.get('in_kind_item_name') or donation.get('category')}",
+                reference=str(donation.get("receipt_number")), source_module="mandirmitra",
+                source_document_type="in_kind_donation", source_document_id=donation_id,
+                lines=[
+                    JournalLineIn(
+                        account_id=debit_account_id, debit=approved_amount, credit=Decimal("0"),
+                        cost_center_id=dimension_id,
+                    ),
+                    JournalLineIn(
+                        account_id=income_account_id, debit=Decimal("0"), credit=approved_amount,
+                        cost_center_id=dimension_id,
+                    ),
+                ],
+            ),
+            idempotency_key=f"don_{donation_id}",
+        )
+    except Exception:
+        if movement:
+            await movement_collection.update_one(
+                {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+                {"$set": {"status": "accounting_failed"}}, upsert=False,
+            )
+        raise
+
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "amount": float(approved_amount), "status": "posted", "valuation_status": "approved",
+        "approved_value": str(approved_amount), "valuation_approval_basis": approval_basis,
+        "valuation_approved_by": actor, "valuation_approved_at": now,
+        "journal_entry_id": int(journal.id), "updated_at": now,
+    }
+    if movement:
+        patch.update({"inventory_item_id": movement["item_id"], "inventory_quantity": movement["quantity"], "inventory_movement_id": movement["id"]})
+    try:
+        await collection.update_one(query, {"$set": patch}, upsert=False)
+        if movement:
+            await movement_collection.update_one(
+                {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+                {"$set": {"status": "posted", "journal_entry_id": int(journal.id), "posted_at": now}}, upsert=False,
+            )
+    except Exception as exc:
+        await reverse_journal_entry(
+            session=session, tenant_id=context.tenant_id, app_key=context.app_key, accounting_entity_id="primary",
+            journal_id=int(journal.id), created_by=actor, reason="Compensate failed in-kind valuation persistence",
+            idempotency_key=f"don_{donation_id}_valuation_compensation",
+        )
+        if movement:
+            try:
+                await movement_collection.update_one(
+                    {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+                    {"$set": {"status": "compensated", "updated_at": now}}, upsert=False,
+                )
+            except Exception:
+                logger.exception("Failed to mark compensated inventory receipt donation=%s", donation_id)
+        try:
+            await collection.update_one(
+                query, {"$set": {"status": "pending_valuation", "valuation_status": "pending_approval", "updated_at": now}},
+                upsert=False,
+            )
+        except Exception:
+            logger.exception("Failed to restore pending valuation state donation=%s", donation_id)
+        raise HTTPException(status_code=500, detail="Valuation persistence failed; accounting was reversed") from exc
+    return _mandir_donation_view({**donation, **patch})
 
 
 @router.get("/donations/{donation_id}/receipt/pdf")
@@ -6080,13 +7163,189 @@ async def mandir_hr_attendance_monthly(_current_user: dict = Depends(get_current
 
 
 @router.get("/hundi/masters")
-async def mandir_hundi_masters(_current_user: dict = Depends(get_current_user)):
-    return []
+async def mandir_hundi_masters(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi master listing"
+    )
+    return await get_collection("mandir_hundi_masters").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key, "active": True}
+    ).sort("name", 1).to_list(length=500)
+
+
+@router.post("/hundi/masters", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def create_mandir_hundi_master(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi master creation"
+    )
+    name = str(payload.get("name") or "").strip()
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Hundi name is required")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid4()), "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "name": name, "location": _safe_optional_str(payload.get("location")), "active": True,
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_hundi_masters").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
 
 
 @router.get("/hundi/openings")
-async def mandir_hundi_openings(_current_user: dict = Depends(get_current_user)):
-    return []
+async def mandir_hundi_openings(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi opening listing"
+    )
+    rows = await get_collection("mandir_hundi_openings").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("created_at", -1).to_list(length=500)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.post("/hundi/openings", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+async def create_mandir_hundi_opening(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi counting submission"
+    )
+    hundi_id = str(payload.get("hundi_id") or "").strip()
+    master = await get_collection("mandir_hundi_masters").find_one(
+        {"id": hundi_id, "tenant_id": context.tenant_id, "app_key": context.app_key, "active": True}
+    )
+    if master is None:
+        raise HTTPException(status_code=404, detail="Active hundi master not found")
+    try:
+        amount = Decimal(str(payload.get("amount") or "0")).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid hundi amount is required") from exc
+    if not amount.is_finite() or amount <= 0:
+        raise HTTPException(status_code=400, detail="Hundi amount must be greater than zero")
+    witness = str(payload.get("witness") or "").strip()
+    if len(witness) < 2:
+        raise HTTPException(status_code=400, detail="Counting witness is required")
+    counted_on = str(payload.get("counted_on") or datetime.now(timezone.utc).date().isoformat()).strip()
+    try:
+        date.fromisoformat(counted_on)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid hundi counting date is required") from exc
+    opening_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "hundi_id": hundi_id, "hundi_name": master.get("name"), "amount": str(amount),
+        "counted_on": counted_on, "witness": witness,
+        "fund": _safe_optional_str(payload.get("fund")), "festival": _safe_optional_str(payload.get("festival")),
+        "reference": f"HUN-{opening_id[:8].upper()}", "status": "pending_approval",
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_hundi_openings").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
+
+
+@router.post("/hundi/openings/{opening_id}/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_hundi_opening(
+    opening_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi counting approval"
+    )
+    collection = get_collection("mandir_hundi_openings")
+    query = {"id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Hundi opening not found")
+    if existing.get("status") == "posted":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending hundi openings can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Maker and approver must be different users")
+    await _ensure_default_mandir_sql_accounts_safe(session, context.tenant_id, raise_on_failure=True)
+    cash_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code="11002", name="Cash in Hand - Hundi", account_type="asset", classification="real"
+    )
+    income_account_id = await _resolve_mandir_income_account(session, context.tenant_id, "Hundi Collections")
+    amount = Decimal(str(existing["amount"]))
+    journal, _created = await post_journal_entry(
+        session=session, app_key=context.app_key, tenant_id=context.tenant_id, created_by=actor,
+        payload=JournalPostRequest(
+            entry_date=date.fromisoformat(str(existing.get("counted_on"))),
+            description=f"Hundi collection - {existing.get('hundi_name')}", reference=str(existing.get("reference")),
+            lines=[
+                JournalLineIn(account_id=cash_account_id, debit=amount, credit=Decimal("0")),
+                JournalLineIn(account_id=income_account_id, debit=Decimal("0"), credit=amount),
+            ],
+        ),
+        idempotency_key=f"hundi_{opening_id}",
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {"status": "posted", "approved_by": actor, "approved_at": now, "journal_entry_id": int(journal.id), "updated_at": now}
+    try:
+        await collection.update_one(query, {"$set": patch}, upsert=False)
+    except Exception as exc:
+        await reverse_journal_entry(
+            session=session, tenant_id=context.tenant_id, app_key=context.app_key, accounting_entity_id="primary",
+            journal_id=int(journal.id), created_by=actor, reason="Compensate failed hundi approval persistence",
+            idempotency_key=f"hundi_{opening_id}_approval_compensation",
+        )
+        raise HTTPException(status_code=500, detail="Hundi approval persistence failed; accounting was reversed") from exc
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/hundi/openings/{opening_id}/cancel", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def cancel_mandir_hundi_opening(
+    opening_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="hundi posting reversal"
+    )
+    collection = get_collection("mandir_hundi_openings")
+    query = {"id": opening_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Hundi opening not found")
+    if existing.get("status") == "reversed":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "posted":
+        raise HTTPException(status_code=409, detail="Only posted hundi openings can be reversed")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Reversal reason is required")
+    reversal, _created = await _reverse_mandir_source_journal(
+        session, tenant_id=context.tenant_id, app_key=context.app_key, source_key=f"hundi_{opening_id}",
+        reason=reason, current_user=current_user,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {"status": "reversed", "reversal_journal_id": int(reversal.id), "reversal_reason": reason,
+             "reversed_by": _mandir_actor_id(current_user), "reversed_at": now, "updated_at": now}
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    return _sanitize_mongo_doc({**existing, **patch})
 
 
 
@@ -6118,6 +7377,13 @@ async def mandir_create_inventory_item(
 ):
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
+    try:
+        opening_quantity = Decimal(str(payload.get("opening_quantity") or "0")).quantize(Decimal("0.001"))
+        opening_unit_value = Decimal(str(payload.get("opening_unit_value") or "0")).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid opening quantity and unit value are required") from exc
+    if not opening_quantity.is_finite() or opening_quantity < 0 or not opening_unit_value.is_finite() or opening_unit_value < 0:
+        raise HTTPException(status_code=400, detail="Opening quantity and unit value cannot be negative")
     now = datetime.now(timezone.utc).isoformat()
     item_id = str(uuid4())
     item = {
@@ -6131,6 +7397,8 @@ async def mandir_create_inventory_item(
         "reorder_level": int(payload.get("reorder_level") or 0),
         "reorder_quantity": int(payload.get("reorder_quantity") or 0),
         "description": str(payload.get("description") or "").strip(),
+        "opening_quantity": str(opening_quantity),
+        "opening_unit_value": str(opening_unit_value),
         "is_active": bool(payload.get("is_active", True)),
         "created_at": now,
         "updated_at": now,
@@ -6185,6 +7453,332 @@ async def mandir_delete_inventory_item(
     return {"status": "deactivated", "id": item_id}
 
 
+async def _mandir_inventory_item_position(
+    *, tenant_id: str, app_key: str, item: dict[str, Any]
+) -> tuple[Decimal, Decimal]:
+    quantity_balance = Decimal(str(item.get("opening_quantity") or "0"))
+    value_balance = (
+        quantity_balance * Decimal(str(item.get("opening_unit_value") or "0"))
+    ).quantize(Decimal("0.01"))
+    movements = await get_collection("mandir_inventory_movements").find(
+        {"tenant_id": tenant_id, "app_key": app_key, "item_id": str(item.get("id")), "status": "posted"}
+    ).to_list(length=5000)
+    positive_types = {"receipt", "issue_reversal", "adjustment_in"}
+    negative_types = {"issue", "receipt_reversal", "adjustment_out"}
+    for movement in movements:
+        quantity = Decimal(str(movement.get("quantity") or "0"))
+        movement_value = Decimal(str(movement.get("total_value") or "0"))
+        movement_type = str(movement.get("movement_type") or "")
+        if movement_type in positive_types:
+            quantity_balance += quantity
+            value_balance += movement_value
+        elif movement_type in negative_types:
+            quantity_balance -= quantity
+            value_balance -= movement_value
+    return (
+        quantity_balance.quantize(Decimal("0.001")),
+        value_balance.quantize(Decimal("0.01")),
+    )
+
+
+async def _mandir_inventory_item_balance(*, tenant_id: str, app_key: str, item: dict[str, Any]) -> Decimal:
+    quantity_balance, _value_balance = await _mandir_inventory_item_position(
+        tenant_id=tenant_id, app_key=app_key, item=item
+    )
+    return quantity_balance
+
+
+@router.get("/inventory/movements")
+async def list_mandir_inventory_movements(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="inventory movement listing"
+    )
+    rows = await get_collection("mandir_inventory_movements").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("created_at", -1).to_list(length=2000)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.get("/inventory/consumptions")
+async def list_mandir_inventory_consumptions(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="inventory consumption listing"
+    )
+    rows = await get_collection("mandir_inventory_consumptions").find(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    ).sort("created_at", -1).to_list(length=1000)
+    return [_sanitize_mongo_doc(row) for row in rows]
+
+
+@router.post("/inventory/consumptions", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
+async def create_mandir_inventory_consumption(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="inventory consumption submission"
+    )
+    if not await _mandir_inventory_accounting_enabled(context.tenant_id, context.app_key):
+        raise HTTPException(status_code=409, detail="Inventory accounting is not enabled for this temple")
+    item_id = str(payload.get("item_id") or "").strip()
+    item = await get_collection("mandir_inventory_items").find_one(
+        {"id": item_id, "tenant_id": context.tenant_id, "app_key": context.app_key, "is_active": True}
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Active inventory item not found")
+    try:
+        quantity = Decimal(str(payload.get("quantity") or "0")).quantize(Decimal("0.001"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Valid quantity is required") from exc
+    if not quantity.is_finite() or quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
+    available_quantity, available_value = await _mandir_inventory_item_position(
+        tenant_id=context.tenant_id, app_key=context.app_key, item=item
+    )
+    if available_quantity <= 0 or available_value <= 0:
+        raise HTTPException(status_code=409, detail="Valued inventory stock is unavailable for this item")
+    unit_value = (available_value / available_quantity).quantize(Decimal("0.01"))
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Consumption reason is required")
+    consumed_on = str(payload.get("consumed_on") or datetime.now(timezone.utc).date().isoformat()).strip()
+    try:
+        date.fromisoformat(consumed_on)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Valid consumed_on date is required") from exc
+    fund_id = str(payload.get("fund_id") or "").strip()
+    dimension_id = None
+    fund_name = None
+    if fund_id:
+        fund = await get_collection("mandir_funds").find_one(
+            {"id": fund_id, "tenant_id": context.tenant_id, "app_key": context.app_key, "active": True}
+        )
+        if fund is None or not fund.get("accounting_dimension_id"):
+            raise HTTPException(status_code=404, detail="Active accounting-enabled fund not found")
+        dimension_id = str(fund["accounting_dimension_id"])
+        fund_name = fund.get("name")
+    consumption_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": consumption_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "item_id": item_id, "item_name": item.get("name"), "item_category": item.get("category"),
+        "quantity": str(quantity), "unit_value": str(unit_value),
+        "total_value": str((quantity * unit_value).quantize(Decimal("0.01"))),
+        "consumed_on": consumed_on, "reason": reason, "fund_id": fund_id or None,
+        "fund_name": fund_name, "fund_dimension_id": dimension_id,
+        "reference": f"CON-{consumption_id[:8].upper()}", "status": "pending_approval",
+        "created_by": _mandir_actor_id(current_user), "created_at": now, "updated_at": now,
+    }
+    await get_collection("mandir_inventory_consumptions").insert_one(doc)
+    return _sanitize_mongo_doc(doc)
+
+
+@router.post("/inventory/consumptions/{consumption_id}/approve", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def approve_mandir_inventory_consumption(
+    consumption_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="inventory consumption approval"
+    )
+    collection = get_collection("mandir_inventory_consumptions")
+    query = {"id": consumption_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Inventory consumption not found")
+    if existing.get("status") == "posted":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "pending_approval":
+        raise HTTPException(status_code=409, detail="Only pending consumptions can be approved")
+    actor = _mandir_actor_id(current_user)
+    if actor == str(existing.get("created_by") or ""):
+        raise HTTPException(status_code=409, detail="Consumption maker and approver must be different users")
+    item = await get_collection("mandir_inventory_items").find_one(
+        {"id": existing.get("item_id"), "tenant_id": context.tenant_id, "app_key": context.app_key, "is_active": True}
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Active inventory item not found")
+    quantity = Decimal(str(existing["quantity"]))
+    available, available_value = await _mandir_inventory_item_position(
+        tenant_id=context.tenant_id, app_key=context.app_key, item=item
+    )
+    if available < quantity:
+        raise HTTPException(status_code=409, detail=f"Insufficient stock; available quantity is {available}")
+    if available <= 0 or available_value <= 0:
+        raise HTTPException(status_code=409, detail="Valued inventory stock is unavailable for this item")
+    unit_value = (available_value / available).quantize(Decimal("0.01"))
+    amount = (quantity * unit_value).quantize(Decimal("0.01"))
+    category = _normalize_income_category(item.get("category"))
+    if any(marker in category for marker in ("food", "rice", "prasadam", "annadan")):
+        inventory_code, inventory_name, expense_code, expense_name = "14004", "Prasadam Inventory", "54007", "Prasadam Expenses"
+    elif any(marker in category for marker in ("flower", "decoration", "festival")):
+        inventory_code, inventory_name, expense_code, expense_name = "14003", "Pooja Materials Inventory", "54006", "Decoration Expenses"
+    else:
+        inventory_code, inventory_name, expense_code, expense_name = "14003", "Pooja Materials Inventory", "51004", "Pooja Materials Expenses"
+    await _ensure_default_mandir_sql_accounts_safe(session, context.tenant_id, raise_on_failure=True)
+    inventory_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code=inventory_code, name=inventory_name, account_type="asset", classification="real"
+    )
+    expense_account_id = await _resolve_or_create_mandir_account(
+        session, context.tenant_id, code=expense_code, name=expense_name, account_type="expense", classification="nominal"
+    )
+    movement_collection = get_collection("mandir_inventory_movements")
+    movement = {
+        "id": str(uuid4()), "tenant_id": context.tenant_id, "app_key": context.app_key,
+        "item_id": existing["item_id"], "item_name": existing.get("item_name"), "movement_type": "issue",
+        "quantity": str(quantity), "unit_value": str(unit_value), "total_value": str(amount),
+        "movement_date": str(existing["consumed_on"]), "source_type": "inventory_consumption",
+        "source_id": consumption_id, "status": "pending_accounting", "created_by": actor,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await movement_collection.insert_one(movement)
+    try:
+        journal, _created = await post_journal_entry(
+            session=session, app_key=context.app_key, tenant_id=context.tenant_id, created_by=actor,
+            payload=JournalPostRequest(
+                entry_date=date.fromisoformat(str(existing["consumed_on"])),
+                description=f"Inventory consumption: {existing.get('item_name')} - {existing.get('reason')}",
+                reference=str(existing["reference"]), source_module="mandirmitra",
+                source_document_type="inventory_consumption", source_document_id=consumption_id,
+                lines=[
+                    JournalLineIn(
+                        account_id=expense_account_id, debit=amount, credit=Decimal("0"),
+                        cost_center_id=existing.get("fund_dimension_id"),
+                    ),
+                    JournalLineIn(
+                        account_id=inventory_account_id, debit=Decimal("0"), credit=amount,
+                        cost_center_id=existing.get("fund_dimension_id"),
+                    ),
+                ],
+            ),
+            idempotency_key=f"inventory_consumption_{consumption_id}",
+        )
+    except Exception:
+        await movement_collection.update_one(
+            {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+            {"$set": {"status": "accounting_failed"}}, upsert=False,
+        )
+        raise
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "posted", "approved_by": actor, "approved_at": now,
+        "unit_value": str(unit_value), "total_value": str(amount),
+        "journal_entry_id": int(journal.id), "inventory_movement_id": movement["id"], "updated_at": now,
+    }
+    try:
+        await collection.update_one(query, {"$set": patch}, upsert=False)
+        await movement_collection.update_one(
+            {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+            {"$set": {"status": "posted", "journal_entry_id": int(journal.id), "posted_at": now}}, upsert=False,
+        )
+    except Exception as exc:
+        await reverse_journal_entry(
+            session=session, tenant_id=context.tenant_id, app_key=context.app_key, accounting_entity_id="primary",
+            journal_id=int(journal.id), created_by=actor, reason="Compensate failed inventory consumption persistence",
+            idempotency_key=f"inventory_consumption_{consumption_id}_approval_compensation",
+        )
+        try:
+            await movement_collection.update_one(
+                {"id": movement["id"], "tenant_id": context.tenant_id, "app_key": context.app_key},
+                {"$set": {"status": "compensated", "updated_at": now}}, upsert=False,
+            )
+        except Exception:
+            logger.exception("Failed to mark compensated inventory issue consumption=%s", consumption_id)
+        try:
+            await collection.update_one(
+                query,
+                {"$set": {
+                    "status": "pending_approval", "journal_entry_id": None,
+                    "inventory_movement_id": None, "approved_by": None,
+                    "approved_at": None, "updated_at": now,
+                }},
+                upsert=False,
+            )
+        except Exception:
+            logger.exception("Failed to restore pending inventory consumption=%s", consumption_id)
+        raise HTTPException(status_code=500, detail="Consumption persistence failed; accounting was reversed") from exc
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
+@router.post("/inventory/consumptions/{consumption_id}/cancel", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def cancel_mandir_inventory_consumption(
+    consumption_id: str,
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="inventory consumption reversal"
+    )
+    collection = get_collection("mandir_inventory_consumptions")
+    query = {"id": consumption_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    existing = await collection.find_one(query)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Inventory consumption not found")
+    if existing.get("status") == "reversed":
+        return {**_sanitize_mongo_doc(existing), "_idempotent": True}
+    if existing.get("status") != "posted":
+        raise HTTPException(status_code=409, detail="Only posted consumptions can be reversed")
+    reason = str(payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Reversal reason is required")
+    movement_collection = get_collection("mandir_inventory_movements")
+    reversal_movement_id = f"consumption-reversal-{consumption_id}"
+    reversal_movement = await movement_collection.find_one(
+        {"id": reversal_movement_id, "tenant_id": context.tenant_id, "app_key": context.app_key}
+    )
+    if reversal_movement is None:
+        reversal_movement = {
+            "id": reversal_movement_id, "tenant_id": context.tenant_id, "app_key": context.app_key,
+            "item_id": existing["item_id"], "item_name": existing.get("item_name"),
+            "movement_type": "issue_reversal", "quantity": str(existing["quantity"]),
+            "unit_value": str(existing["unit_value"]), "total_value": str(existing["total_value"]),
+            "movement_date": datetime.now(timezone.utc).date().isoformat(),
+            "source_type": "inventory_consumption_reversal", "source_id": consumption_id,
+            "status": "pending_accounting", "created_by": _mandir_actor_id(current_user),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await movement_collection.insert_one(reversal_movement)
+    try:
+        reversal, _created = await _reverse_mandir_source_journal(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            source_key=f"inventory_consumption_{consumption_id}", reason=reason, current_user=current_user,
+        )
+    except Exception:
+        await movement_collection.update_one(
+            {"id": reversal_movement_id, "tenant_id": context.tenant_id, "app_key": context.app_key},
+            {"$set": {"status": "accounting_failed"}}, upsert=False,
+        )
+        raise
+    now = datetime.now(timezone.utc).isoformat()
+    await movement_collection.update_one(
+        {"id": reversal_movement_id, "tenant_id": context.tenant_id, "app_key": context.app_key},
+        {"$set": {"status": "posted", "journal_entry_id": int(reversal.id), "posted_at": now}}, upsert=False,
+    )
+    patch = {
+        "status": "reversed", "reversal_journal_id": int(reversal.id), "reversal_reason": reason,
+        "reversed_by": _mandir_actor_id(current_user), "reversed_at": now,
+        "reversal_inventory_movement_id": reversal_movement_id, "updated_at": now,
+    }
+    await collection.update_one(query, {"$set": patch}, upsert=False)
+    return _sanitize_mongo_doc({**existing, **patch})
+
+
 @router.get("/inventory/stock-balances")
 @router.get("/inventory/stock-balances/")
 async def mandir_inventory_stock_balances(
@@ -6192,22 +7786,35 @@ async def mandir_inventory_stock_balances(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
-    items = await get_collection("mandir_inventory_items").find({"tenant_id": tenant_id, "app_key": app_key, "is_active": True}).to_list(length=1000)
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="inventory stock balance reporting",
+    )
+    items = await get_collection("mandir_inventory_items").find({
+        "tenant_id": context.tenant_id, "app_key": context.app_key, "is_active": True,
+    }).to_list(length=1000)
     rows = []
     for item in items:
         reorder_level = int(item.get("reorder_level") or 0)
-        on_hand_qty = float(item.get("on_hand_qty") or 0.0)
+        on_hand_qty, on_hand_value = await _mandir_inventory_item_position(
+            tenant_id=context.tenant_id, app_key=context.app_key, item=item,
+        )
+        weighted_average_unit_value = (
+            (on_hand_value / on_hand_qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if on_hand_qty > 0
+            else Decimal("0.00")
+        )
         rows.append(
             {
                 "item_id": str(item.get("id") or ""),
                 "item_code": str(item.get("code") or ""),
                 "item_name": str(item.get("name") or ""),
                 "unit": str(item.get("unit") or "PIECE"),
-                "on_hand_qty": on_hand_qty,
+                "on_hand_qty": str(on_hand_qty),
+                "on_hand_value": str(on_hand_value),
+                "weighted_average_unit_value": str(weighted_average_unit_value),
                 "reorder_level": reorder_level,
-                "reorder_required": bool(reorder_level > 0 and on_hand_qty <= reorder_level),
+                "reorder_required": bool(reorder_level > 0 and on_hand_qty <= Decimal(str(reorder_level))),
             }
         )
     return rows
@@ -6220,22 +7827,31 @@ async def mandir_inventory_summary(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
 ):
-    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-    app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
-    items = await get_collection("mandir_inventory_items").find({"tenant_id": tenant_id, "app_key": app_key, "is_active": True}).to_list(length=1000)
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="inventory summary reporting",
+    )
+    items = await get_collection("mandir_inventory_items").find({
+        "tenant_id": context.tenant_id, "app_key": context.app_key, "is_active": True,
+    }).to_list(length=1000)
     low_stock = 0
+    total_value = Decimal("0.00")
     for item in items:
         reorder_level = int(item.get("reorder_level") or 0)
-        on_hand_qty = float(item.get("on_hand_qty") or 0.0)
-        if reorder_level > 0 and on_hand_qty <= reorder_level:
+        on_hand_qty, on_hand_value = await _mandir_inventory_item_position(
+            tenant_id=context.tenant_id, app_key=context.app_key, item=item,
+        )
+        total_value += on_hand_value
+        if reorder_level > 0 and on_hand_qty <= Decimal(str(reorder_level)):
             low_stock += 1
     return {
         "totalItems": len(items),
         "lowStockItems": low_stock,
-        "totalValue": 0.0,
+        "totalValue": str(total_value.quantize(Decimal("0.01"))),
         "summary": {
             "total_items": len(items),
             "low_stock_items": low_stock,
+            "total_value": str(total_value.quantize(Decimal("0.01"))),
         },
     }
 
@@ -7547,6 +9163,242 @@ async def mandir_report_donations_detailed(
     )
 
 
+async def _mandir_donation_designation_report(
+    session: AsyncSession,
+    *,
+    tenant_id: str,
+    app_key: str,
+    from_date: date,
+    to_date: date,
+    id_field: str,
+    name_field: str,
+) -> dict[str, Any]:
+    donations = await posted_donations(
+        session, tenant_id=tenant_id, app_key=app_key, from_date=from_date, to_date=to_date
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    for donation in donations:
+        designation_id = str(donation.get(id_field) or "").strip()
+        designation_name = str(donation.get(name_field) or "").strip()
+        if not designation_id or not designation_name:
+            continue
+        bucket = grouped.setdefault(
+            designation_id,
+            {"id": designation_id, "name": designation_name, "count": 0, "amount": Decimal("0")},
+        )
+        bucket["count"] += 1
+        bucket["amount"] += Decimal(str(donation.get("amount") or "0"))
+    items = [
+        {**bucket, "amount": float(bucket["amount"])}
+        for bucket in sorted(grouped.values(), key=lambda row: (str(row["name"]).lower(), str(row["id"])))
+    ]
+    return {
+        "from_date": from_date.isoformat(), "to_date": to_date.isoformat(), "items": items,
+        "total_count": sum(int(item["count"]) for item in items),
+        "total_amount": float(sum((Decimal(str(item["amount"])) for item in items), Decimal("0"))),
+    }
+
+
+@router.get("/reports/donations/fund-wise")
+async def mandir_report_donations_fund_wise(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="fund donation reporting"
+    )
+    return await _mandir_donation_designation_report(
+        session, tenant_id=context.tenant_id, app_key=context.app_key, from_date=from_date, to_date=to_date,
+        id_field="fund_id", name_field="fund_name",
+    )
+
+
+@router.get("/reports/donations/festival-wise")
+async def mandir_report_donations_festival_wise(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key, operation="festival donation reporting"
+    )
+    return await _mandir_donation_designation_report(
+        session, tenant_id=context.tenant_id, app_key=context.app_key, from_date=from_date, to_date=to_date,
+        id_field="festival_id", name_field="festival_name",
+    )
+
+
+async def _mandir_fund_subledger_data(
+    session: AsyncSession, *, tenant_id: str, app_key: str, from_date: date, to_date: date,
+) -> dict[str, Any]:
+    ledger = await get_cost_centre_ledger_pl(
+        session, tenant_id=tenant_id, app_key=app_key,
+        accounting_entity_id="primary", from_date=from_date, to_date=to_date,
+    )
+    prior_to = from_date - timedelta(days=1)
+    prior_ledger = {"buckets": {}}
+    if from_date > date(1900, 1, 1):
+        prior_ledger = await get_cost_centre_ledger_pl(
+            session, tenant_id=tenant_id, app_key=app_key,
+            accounting_entity_id="primary", from_date=date(1900, 1, 1), to_date=prior_to,
+        )
+    funds = await get_collection("mandir_funds").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).sort("name", 1).to_list(length=500)
+    transfers = await get_collection("mandir_fund_transfers").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=2000)
+    openings = await get_collection("mandir_fund_opening_balances").find(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    ).to_list(length=1000)
+    transfer_buckets: dict[str, dict[str, Decimal]] = {}
+    prior_transfer_buckets: dict[str, dict[str, Decimal]] = {}
+    opening_buckets: dict[str, Decimal] = {}
+    prior_opening_buckets: dict[str, Decimal] = {}
+
+    def transfer_bucket(target: dict[str, dict[str, Decimal]], fund_id: str) -> dict[str, Decimal]:
+        return target.setdefault(fund_id, {"transfers_in": Decimal("0"), "transfers_out": Decimal("0")})
+
+    def apply_transfer_event(transfer: dict[str, Any], event_day: date, *, reverse: bool = False) -> None:
+        if event_day < date(1900, 1, 1) or event_day > to_date:
+            return
+        target = prior_transfer_buckets if event_day < from_date else transfer_buckets
+        amount = Decimal(str(transfer.get("amount") or "0"))
+        from_key = "transfers_in" if reverse else "transfers_out"
+        to_key = "transfers_out" if reverse else "transfers_in"
+        transfer_bucket(target, str(transfer.get("from_fund_id")))[from_key] += amount
+        transfer_bucket(target, str(transfer.get("to_fund_id")))[to_key] += amount
+
+    for transfer in transfers:
+        if not transfer.get("journal_entry_id"):
+            continue
+        apply_transfer_event(transfer, date.fromisoformat(str(transfer.get("transfer_date"))))
+        reversed_at = _parse_iso_datetime(transfer.get("reversed_at")) if transfer.get("status") == "reversed" else None
+        if reversed_at:
+            apply_transfer_event(transfer, reversed_at.date(), reverse=True)
+
+    def apply_opening_event(fund_id: str, amount: Decimal, event_day: date) -> None:
+        if event_day < date(1900, 1, 1) or event_day > to_date:
+            return
+        target = prior_opening_buckets if event_day < from_date else opening_buckets
+        target[fund_id] = target.get(fund_id, Decimal("0")) + amount
+
+    for opening in openings:
+        if not opening.get("journal_entry_id"):
+            continue
+        fund_id = str(opening.get("fund_id") or "")
+        amount = Decimal(str(opening.get("amount") or "0"))
+        apply_opening_event(fund_id, amount, date.fromisoformat(str(opening.get("opening_date"))))
+        reversed_at = _parse_iso_datetime(opening.get("reversed_at")) if opening.get("status") == "reversed" else None
+        if reversed_at:
+            apply_opening_event(fund_id, -amount, reversed_at.date())
+
+    rows = []
+    ledger_buckets = ledger.get("buckets") or {}
+    prior_ledger_buckets = prior_ledger.get("buckets") or {}
+    for fund in funds:
+        fund_id = str(fund.get("id") or "")
+        dimension_id = str(fund.get("accounting_dimension_id") or "")
+        pnl = ledger_buckets.get(dimension_id) or {}
+        prior_pnl = prior_ledger_buckets.get(dimension_id) or {}
+        movement = transfer_buckets.get(fund_id) or {}
+        prior_movement = prior_transfer_buckets.get(fund_id) or {}
+        income = Decimal(str(pnl.get("income") or "0"))
+        expense = Decimal(str(pnl.get("expense") or "0"))
+        transfers_in = Decimal(str(movement.get("transfers_in") or "0"))
+        transfers_out = Decimal(str(movement.get("transfers_out") or "0"))
+        opening_entries = opening_buckets.get(fund_id, Decimal("0"))
+        opening_balance = (
+            prior_opening_buckets.get(fund_id, Decimal("0"))
+            + Decimal(str(prior_pnl.get("income") or "0"))
+            - Decimal(str(prior_pnl.get("expense") or "0"))
+            + Decimal(str(prior_movement.get("transfers_in") or "0"))
+            - Decimal(str(prior_movement.get("transfers_out") or "0"))
+        )
+        net_activity = income - expense + transfers_in - transfers_out
+        closing_balance = opening_balance + opening_entries + net_activity
+        rows.append({
+            "fund_id": fund_id, "fund_name": str(fund.get("name") or ""),
+            "fund_type": str(fund.get("fund_type") or ""), "accounting_dimension_id": dimension_id,
+            "opening_balance": float(opening_balance), "opening_entries": float(opening_entries),
+            "income": float(income), "expense": float(expense),
+            "transfers_in": float(transfers_in), "transfers_out": float(transfers_out),
+            "net_activity": float(net_activity), "closing_balance": float(closing_balance),
+        })
+    return {
+        "from_date": from_date.isoformat(), "to_date": to_date.isoformat(), "items": rows,
+        "totals": {
+            key: float(sum((Decimal(str(row[key])) for row in rows), Decimal("0")))
+            for key in (
+                "opening_balance", "opening_entries", "income", "expense",
+                "transfers_in", "transfers_out", "net_activity", "closing_balance",
+            )
+        },
+    }
+
+
+@router.get("/reports/funds/subledger")
+async def mandir_report_fund_subledger(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund subledger reporting",
+    )
+    return await _mandir_fund_subledger_data(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        from_date=from_date, to_date=to_date,
+    )
+
+
+@router.get("/reports/funds/as-of")
+async def mandir_report_funds_as_of(
+    as_of: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="fund as-of reporting",
+    )
+    report = await _mandir_fund_subledger_data(
+        session, tenant_id=context.tenant_id, app_key=context.app_key,
+        from_date=date(1900, 1, 1), to_date=as_of,
+    )
+    return {
+        "as_of": as_of.isoformat(),
+        "items": [
+            {
+                "fund_id": row["fund_id"], "fund_name": row["fund_name"],
+                "fund_type": row["fund_type"], "accounting_dimension_id": row["accounting_dimension_id"],
+                "balance": row["closing_balance"],
+            }
+            for row in report["items"]
+        ],
+        "total_balance": report["totals"]["closing_balance"],
+    }
+
+
 @router.get("/reports/sevas/detailed")
 async def mandir_report_sevas_detailed(
     from_date: date = Query(...),
@@ -8008,8 +9860,6 @@ async def mandir_temples_onboard(
 @router.post("/temples/upload", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
 async def mandir_temples_upload(_payload: dict[str, Any], _current_user: dict = Depends(get_current_user)):
     return _ok("temples/upload")
-
-
 
 
 @router.get("/compliance/donations/config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)

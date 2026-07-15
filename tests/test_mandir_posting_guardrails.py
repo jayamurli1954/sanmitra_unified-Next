@@ -487,6 +487,7 @@ def mandir_posting_client(monkeypatch):
     seva_bookings = FakeCollection()
     devotees = FakeCollection()
     counters = FakeCollection()
+    compliance_config = FakeCollection()
     sevas = FakeCollection(
         [
             {
@@ -507,12 +508,12 @@ def mandir_posting_client(monkeypatch):
             return seva_bookings
         if name == "mandir_devotees":
             return devotees
+        if name == "mandir_donation_compliance_config":
+            return compliance_config
         if name == "mandir_counters":
             return counters
         if name == "mandir_sevas":
             return sevas
-        if name == "mandir_donation_compliance_config":
-            return FakeCollection()
         raise AssertionError(f"Unexpected collection: {name}")
 
     async def fake_session():
@@ -714,7 +715,7 @@ def test_cash_sponsorship_posts_to_sponsorship_income(mandir_posting_client, mon
     assert journal_payload.lines[1].credit == Decimal("10000")
 
 
-def test_valued_in_kind_annadanam_posts_inventory_and_income(mandir_posting_client, monkeypatch):
+def test_valued_in_kind_annadanam_waits_for_valuation_approval(mandir_posting_client, monkeypatch):
     client, donations, _seva_bookings = mandir_posting_client
     seen: dict[str, object] = {"income_categories": [], "debit_payload": None, "payload": None}
 
@@ -752,13 +753,11 @@ def test_valued_in_kind_annadanam_posts_inventory_and_income(mandir_posting_clie
     assert response.status_code == 200
     assert donations.docs[0]["donation_type"] == "in_kind"
     assert donations.docs[0]["in_kind_item_name"] == "Rice bags"
-    assert seen["income_categories"] == ["In-Kind Sponsorship Income"]
-    assert seen["debit_payload"]["category_name"] == "Annadanam"
-    journal_payload = seen["payload"]
-    assert journal_payload.lines[0].account_id == 14004
-    assert journal_payload.lines[0].debit == Decimal("2500")
-    assert journal_payload.lines[1].account_id == 45002
-    assert journal_payload.lines[1].credit == Decimal("2500")
+    assert donations.docs[0]["status"] == "pending_valuation"
+    assert donations.docs[0]["valuation_status"] == "pending_approval"
+    assert seen["income_categories"] == []
+    assert seen["debit_payload"] is None
+    assert seen["payload"] is None
 
 
 def test_in_kind_account_target_classifies_precious_articles():
