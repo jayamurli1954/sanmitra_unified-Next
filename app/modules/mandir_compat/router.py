@@ -104,6 +104,12 @@ from app.modules.mandir_compat.report_helpers import (
     top_donors_report,
     trial_balance_report,
 )
+from app.modules.mandir_compat.donation_compliance import (
+    classify_donation_compliance,
+    compliance_public_fields,
+    donation_compliance_config_view,
+    validate_donation_compliance_config,
+)
 from app.modules.mandir_compat.schemas import (
     MandirFirstLoginOnboardingRequest,
     MandirFirstLoginOnboardingResponse,
@@ -1501,6 +1507,8 @@ def _receipt_number_for_donation(doc: dict[str, Any]) -> str:
 
 def _mandir_donation_view(doc: dict[str, Any]) -> dict[str, Any]:
     row = _sanitize_mongo_doc(doc)
+    row.pop("donor_pan", None)
+    row.update(compliance_public_fields(doc))
     donation_id = str(row.get("donation_id") or row.get("id") or "").strip()
     if donation_id and not str(row.get("id") or "").strip():
         row["id"] = donation_id
@@ -4661,6 +4669,21 @@ async def create_donation(
         receipt_date=now,
     )
     donation["receipt_pdf_url"] = f"/api/v1/donations/{donation_id}/receipt/pdf"
+
+    raw_payment_account_id = _safe_optional_str(payload.get("bank_account_id") or payload.get("payment_account_id"))
+    compliance_config = await get_collection("mandir_donation_compliance_config").find_one(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    )
+    compliance = classify_donation_compliance(
+        payload,
+        compliance_config,
+        amount=Decimal(str(amount)),
+        donation_type=str(donation.get("donation_type") or "cash"),
+        payment_mode=payment_mode,
+        donation_date=datetime.now(timezone.utc).date(),
+        payment_account_id=raw_payment_account_id,
+    )
+    donation.update(compliance)
 
     col = get_collection("mandir_donations")
     try:
@@ -7987,15 +8010,180 @@ async def mandir_temples_upload(_payload: dict[str, Any], _current_user: dict = 
     return _ok("temples/upload")
 
 
+
+
+@router.get("/compliance/donations/config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def get_mandir_donation_compliance_config(
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="donation compliance configuration read",
+    )
+    doc = await get_collection("mandir_donation_compliance_config").find_one(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key}
+    )
+    return donation_compliance_config_view(doc)
+
+
+@router.put("/compliance/donations/config", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def update_mandir_donation_compliance_config(
+    payload: dict[str, Any],
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    context = resolve_mandir_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        operation="donation compliance configuration update",
+    )
+    await _assert_platform_can_write_tenant(
+        current_user, tenant_id=context.tenant_id, app_key=context.app_key
+    )
+    config = validate_donation_compliance_config(payload)
+    now = datetime.now(timezone.utc).isoformat()
+    stored = {**config, "updated_at": now, "updated_by": _mandir_actor_id(current_user)}
+    collection = get_collection("mandir_donation_compliance_config")
+    await collection.update_one(
+        {"tenant_id": context.tenant_id, "app_key": context.app_key},
+        {
+            "$set": stored,
+            "$setOnInsert": {
+                "tenant_id": context.tenant_id,
+                "app_key": context.app_key,
+                "created_at": now,
+            },
+        },
+        upsert=True,
+    )
+    try:
+        await log_audit_event(
+            tenant_id=context.tenant_id,
+            user_id=_mandir_actor_id(current_user),
+            product=context.app_key,
+            action="donation_compliance_config_updated",
+            entity_type="mandir_donation_compliance_config",
+            entity_id=f"{context.tenant_id}:{context.app_key}",
+            old_value=None,
+            new_value={
+                "enable_80g": config["enable_80g"],
+                "enable_fcra": config["enable_fcra"],
+                "approval_valid_from": config.get("approval_valid_from"),
+                "approval_valid_to": config.get("approval_valid_to"),
+                "fcra_valid_from": config.get("fcra_valid_from"),
+                "fcra_valid_to": config.get("fcra_valid_to"),
+            },
+        )
+    except Exception:
+        logger.warning("Failed to audit donation compliance configuration update", exc_info=True)
+    return donation_compliance_config_view(stored)
+
+
+async def _mandir_compliance_report(
+    *, kind: str, tenant_id: str, app_key: str, from_date: date, to_date: date, session: AsyncSession
+) -> dict[str, Any]:
+    rows = await posted_donations(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    items: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        if kind == "80g" and not bool(row.get("request_80g")):
+            continue
+        if kind == "fcra" and not bool(row.get("is_foreign_contribution")):
+            continue
+        public = compliance_public_fields(row)
+        status_field = "80g_eligibility_status" if kind == "80g" else "fcra_status"
+        status = str(public[status_field])
+        status_counts[status] = status_counts.get(status, 0) + 1
+        items.append({
+            "donation_id": row.get("donation_id"),
+            "receipt_number": row.get("receipt_number"),
+            "date": row.get("date"),
+            "amount": row.get("amount"),
+            "payment_mode": row.get("payment_mode"),
+            "devotee_name": row.get("devotee_name"),
+            **public,
+        })
+    return {
+        "report_kind": kind,
+        "filing_artifact": False,
+        "filing_notice": "Readiness report only; this is not an official government filing or certificate.",
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "count": len(items),
+        "status_counts": status_counts,
+        "items": items,
+    }
+
+
+@router.get("/reports/compliance/80g", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def mandir_report_80g_readiness(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="80G readiness reporting",
+    )
+    return await _mandir_compliance_report(
+        kind="80g", tenant_id=context.tenant_id, app_key=context.app_key,
+        from_date=from_date, to_date=to_date, session=session,
+    )
+
+
+@router.get("/reports/compliance/fcra", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
+async def mandir_report_fcra_readiness(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date cannot be greater than to_date")
+    context = resolve_mandir_tenant(
+        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
+        operation="FCRA readiness reporting",
+    )
+    return await _mandir_compliance_report(
+        kind="fcra", tenant_id=context.tenant_id, app_key=context.app_key,
+        from_date=from_date, to_date=to_date, session=session,
+    )
+
+
 @router.get("/temples/modules/config")
 async def mandir_temples_module_config(
     _current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     temple_id: int | None = Query(default=None),
 ):
-    tenant_id = await _resolve_tenant_for_mandir_request(_current_user, x_tenant_id, temple_id)
+    app_key = resolve_app_key((x_app_key or _current_user.get("app_key") or "mandirmitra").strip())
+    tenant_id = await _resolve_tenant_for_mandir_request(_current_user, x_tenant_id, temple_id, app_key)
     col = get_collection("mandir_temples")
-    doc = await col.find_one({"tenant_id": tenant_id}) or {}
+    doc = await col.find_one({"tenant_id": tenant_id, "app_key": app_key}) or {}
+    compliance_doc = await get_collection("mandir_donation_compliance_config").find_one(
+        {"tenant_id": tenant_id, "app_key": app_key}
+    )
+    compliance = donation_compliance_config_view(compliance_doc)
     return {
         "module_donations_enabled": bool(doc.get("module_donations_enabled", True)),
         "module_sevas_enabled": bool(doc.get("module_sevas_enabled", True)),
@@ -8005,6 +8193,8 @@ async def mandir_temples_module_config(
         "module_hundi_enabled": bool(doc.get("module_hundi_enabled", False)),
         "module_accounting_enabled": bool(doc.get("module_accounting_enabled", True)),
         "module_panchang_enabled": bool(doc.get("module_panchang_enabled", True)),
+        "enable_80g": compliance["enable_80g"],
+        "enable_fcra": compliance["enable_fcra"],
     }
 
 

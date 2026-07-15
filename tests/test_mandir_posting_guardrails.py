@@ -511,6 +511,8 @@ def mandir_posting_client(monkeypatch):
             return counters
         if name == "mandir_sevas":
             return sevas
+        if name == "mandir_donation_compliance_config":
+            return FakeCollection()
         raise AssertionError(f"Unexpected collection: {name}")
 
     async def fake_session():
