@@ -29,7 +29,8 @@ Before go-live, record:
 - Backup retention.
 - Restore owner.
 - Where restore actions are performed.
-- Last restore drill date, once available.
+- Last successful restore drill date and result.
+- The isolated non-production target used for the restore drill.
 
 ## Restore Policy
 
@@ -69,9 +70,15 @@ For financial incidents, prefer restoring both stores to compatible restore poin
 
 ## First-Live Status
 
-As of 2026-05-22:
+As of 2026-07-17:
 
 - Backup policy is defined.
-- Provider backup setup still needs confirmation in production.
-- Restore owner still needs to be named.
-- A restore drill is not required before first live cut, but should be scheduled after go-live.
+- Live single-stack inventory and click-path drills are documented in
+  [`MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md`](./MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md)
+  (Atlas `Cluster0`, Render `sanmitra-postgres-staging`).
+- Atlas backups were **not yet enabled** on Cluster0 (upgrade/daily backup required).
+- Render Postgres Recovery/export restore drill into an isolated instance is still required.
+- Restore owner: platform-owner (named in live-stack drill checklist).
+- A successful restore drill for both stores is required for machine ops signoff. Each drill must restore into an isolated non-production target, run the post-restore smoke above, and be no more than 90 days old at signoff.
+- `scripts/verify_mandirmitra_stage3_signoff.py` enforces recent backup success, minimum retention, successful isolated restore evidence, and the cross-store restore-policy confirmation.
+- Path B security waiver does **not** waive these backup/restore drills.
