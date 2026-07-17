@@ -17,6 +17,8 @@ description: SanMitra database migration, schema, index, seed, and data transfor
 - Use backfill scripts for new required fields on existing data.
 - Do not copy secrets, dumps, or live credentials into migrations/seeds.
 - Financial data rollback must use reversals/adjustments, not ledger row edits.
+- Before shell commands that drop data, truncate, or mass-delete, follow `AGENTS.md` §5
+  Agent Shell Command Guardrails and stop for explicit user approval when blocked.
 
 ## Two-Phase Rename Pattern
 

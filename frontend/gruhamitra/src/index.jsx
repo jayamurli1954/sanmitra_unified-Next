@@ -3,6 +3,18 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
 
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const bindReloadButton = (container) => {
+  const reloadButton = container?.querySelector('[data-reload-page]');
+  reloadButton?.addEventListener('click', () => window.location.reload());
+};
+
 console.log('GruhaMitra: Starting initialization...');
 console.log('React imported:', typeof React !== 'undefined');
 
@@ -43,8 +55,8 @@ try {
   
   // Show error message on screen with full details
   const container = document.getElementById('root') || document.body;
-  const errorMessage = error.message || 'Unknown error';
-  const errorStack = error.stack || error.toString();
+  const errorMessage = escapeHtml(error.message || 'Unknown error');
+  const errorStack = escapeHtml(error.stack || error.toString());
   
   container.innerHTML = `
     <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; padding: 20px; text-align: center; background: #fff;">
@@ -67,9 +79,10 @@ try {
           <li> Menu (3 dots)  More Tools  Developer Tools</li>
         </ul>
       </div>
-      <button onclick="window.location.reload()" style="margin-top: 20px; padding: 12px 24px; background: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">Reload Page</button>
+      <button type="button" data-reload-page style="margin-top: 20px; padding: 12px 24px; background: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">Reload Page</button>
     </div>
   `;
+  bindReloadButton(container);
 }
 
 

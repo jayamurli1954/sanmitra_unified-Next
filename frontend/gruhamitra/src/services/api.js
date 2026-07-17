@@ -200,7 +200,7 @@ api.interceptors.request.use(
         /\/accounting(\/|$)/.test(normalizedUrl) ||
         /\/journal(\/|$|\?)/.test(normalizedUrl) ||
         /\/transactions(\/|$)/.test(normalizedUrl) ||
-        /\/reports\/trial-balance(\/|$|\?)/.test(normalizedUrl);
+        /\/reports\/(trial-balance|ledger|general-ledger|balance-sheet|income-and-expenditure|receipts-and-payments|member-dues)(\/|$|\?)/.test(normalizedUrl);
       if (isRelativeApiPath && !isAlreadyVersioned) {
         config.url = normalizedUrl;
       }

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 
 import app.modules.rag.service as rag_service
 from app.modules.rag.schemas import RagLegalFilter, RagQueryRequest
@@ -118,10 +119,19 @@ class _FakeEmbeddingProvider:
         return [[1.0, 0.0, 0.0] for _ in texts]
 
 
-def _chunk(text: str, *, act_name: str = "Bharatiya Nagarik Suraksha Sanhita, 2023"):
+def _chunk(
+    text: str,
+    *,
+    act_name: str = "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    tenant_id: str = "tenant-1",
+    app_key: str = "legalmitra",
+    document_id: str = "doc-1",
+):
     return {
-        "document_id": "doc-1",
-        "chunk_id": "chunk-1",
+        "document_id": document_id,
+        "chunk_id": f"chunk-{document_id}",
+        "tenant_id": tenant_id,
+        "app_key": app_key,
         "chunk_index": 0,
         "title": "BNSS procedure note",
         "source_type": "statute",
@@ -181,4 +191,68 @@ def test_query_knowledge_does_not_override_explicit_act_filter(monkeypatch) -> N
 
     assert result["strategy"] == "fake_hash"
     assert collection.filters[0]["legal_act_name"] == "custom act"
+
+
+def test_query_knowledge_never_returns_cross_tenant_or_cross_app_citations(monkeypatch) -> None:
+    owned_text = "Section 173 BNSS explains FIR registration procedure and documentary requirements."
+    collection = _FakeChunksCollection(
+        [
+            _chunk(
+                "FOREIGN_TENANT_SECRET Section 173 BNSS FIR registration procedure.",
+                tenant_id="tenant-b",
+                document_id="foreign-tenant",
+            ),
+            _chunk(
+                "FOREIGN_APP_SECRET Section 173 BNSS FIR registration procedure.",
+                app_key="mandirmitra",
+                document_id="foreign-app",
+            ),
+            _chunk(owned_text, document_id="owned"),
+        ]
+    )
+
+    monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
+    monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
+    monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
+    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+
+    result = asyncio.run(
+        rag_service.query_knowledge(
+            tenant_id="tenant-1",
+            app_key="legalmitra",
+            payload=RagQueryRequest(
+                query="Explain section 173 BNSS FIR procedure",
+                include_context=True,
+            ),
+        )
+    )
+
+    assert collection.filters[0]["tenant_id"] == "tenant-1"
+    assert collection.filters[0]["app_key"] == "legalmitra"
+    assert [citation["document_id"] for citation in result["citations"]] == ["owned"]
+    rendered = f"{result['answer']}\n{result['context']}"
+    assert "FOREIGN_TENANT_SECRET" not in rendered
+    assert "FOREIGN_APP_SECRET" not in rendered
+
+
+def test_list_documents_never_serializes_cross_tenant_or_cross_app_records(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    owned = {
+        **_chunk("Owned legal document content with sufficient detail for indexing."),
+        "created_at": now,
+        "embedding_provider": "fake",
+        "embedding_model": "fake-v1",
+        "chunk_count": 1,
+    }
+    foreign_tenant = {**owned, "document_id": "foreign-tenant", "tenant_id": "tenant-b"}
+    foreign_app = {**owned, "document_id": "foreign-app", "app_key": "mandirmitra"}
+    collection = _FakeChunksCollection([foreign_tenant, foreign_app, owned])
+    monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
+
+    items = asyncio.run(
+        rag_service.list_documents(tenant_id="tenant-1", app_key="legalmitra", limit=50)
+    )
+
+    assert collection.filters == [{"tenant_id": "tenant-1", "app_key": "legalmitra"}]
+    assert [item["document_id"] for item in items] == ["doc-1"]
 

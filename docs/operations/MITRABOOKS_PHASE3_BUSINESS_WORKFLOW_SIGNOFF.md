@@ -141,9 +141,24 @@ If the destructive run fails at `#login-status` with `Invalid credentials`, the 
 | Export governance real-stack demo validation | Guarded destructive demo-tenant browser/API path for governed dimension JSON, opening-balance CSV, trial-balance JSON, sales-invoice PDF, Tally XML response headers, file-body evidence, and `business_export_downloaded` audit evidence | Added on 2026-07-11; execution remains opt-in through the destructive demo gate |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 and reconfirmed on 2026-07-07 against `http://127.0.0.1:3300/mitrabooks-erp/` after GST settlement persistence hardening |
-| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; current 2026-07-07 rerun failed at deployed login with `Invalid credentials`, so staging demo credential/seed realignment and fresh pass evidence are required before production signoff is current. |
+| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; failed at deployed login with `Invalid credentials` on 2026-07-07; superseded and passed on 2026-07-14 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` after v37 shell, BSON Decimal persistence fix, bank CSV body hardening, and GST unlock corrections. |
 
 ## Latest Run
+
+2026-07-14:
+
+```powershell
+python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
+```
+
+Result:
+
+- PASS: backend business workflow pytest group.
+- PASS: frontend business contract pytest group.
+- PASS: local Playwright MitraBooks shell workflow smoke, 7/7 checks.
+- PASS: read-only hosted MitraBooks shell smoke against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`, 7/7 checks.
+- PASS: destructive demo policy and auth precheck for `demo-mitrabooks-business`.
+- PASS: destructive hosted staging real-stack browser/API mutation (~1.4m). Supersedes the 2026-07-07 hosted login failure after v37 shell, BSON Decimal persistence fix, bank CSV body hardening, and GST unlock corrections.
 
 2026-07-02:
 

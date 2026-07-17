@@ -824,16 +824,7 @@ body {
 }
 
 .dashboard-watermark {
-  position: fixed;
-  right: 18px;
-  bottom: 16px;
-  font-size: 42px;
-  font-weight: 700;
-  color: rgba(122, 62, 12, 0.06);
-  pointer-events: none;
-  user-select: none;
-  letter-spacing: 1px;
-  z-index: 1;
+  display: none;
 }
 
 /* Header with Gradient */

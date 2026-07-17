@@ -1262,8 +1262,8 @@ function renderModules(modules, options = {}) {
 
     const item = document.createElement("li");
     item.innerHTML = `
-      <strong>${module.display_name}</strong>
-      <span class="muted">${module.module_key} -> ${module.frontend_path || "no frontend path yet"}</span>
+      <strong>${escapeHtml(module.display_name)}</strong>
+      <span class="muted">${escapeHtml(module.module_key)} -> ${escapeHtml(module.frontend_path || "no frontend path yet")}</span>
       <span class="pill ${module.enabled ? "ok" : "warn"}">${module.enabled ? "enabled" : preview ? "preview only" : "locked"}</span>
     `;
     moduleList.appendChild(item);

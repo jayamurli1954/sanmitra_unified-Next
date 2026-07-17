@@ -28,6 +28,54 @@ const getErrorMessage = (error) => {
   return 'An error occurred. Please try again.';
 };
 
+const normalizeTrialBalanceReport = (data) => {
+  const existingItems = Array.isArray(data?.items) ? data.items : [];
+  const lines = Array.isArray(data?.lines) ? data.lines : [];
+  const totalDebit = Number(data?.total_debit || 0);
+  const totalCredit = Number(data?.total_credit || 0);
+
+  if (existingItems.length > 0) {
+    return {
+      ...data,
+      as_on_date: data?.as_on_date || data?.as_of,
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+    };
+  }
+
+  return {
+    ...data,
+    as_on_date: data?.as_on_date || data?.as_of,
+    total_debit: totalDebit,
+    total_credit: totalCredit,
+    items: lines.map((line) => {
+      const debitTotal = Number(line.debit_total || line.debit_balance || 0);
+      const creditTotal = Number(line.credit_total || line.credit_balance || 0);
+      const netBalance = debitTotal - creditTotal;
+      return {
+        ...line,
+        debit_balance: netBalance > 0 ? netBalance : 0,
+        credit_balance: netBalance < 0 ? Math.abs(netBalance) : 0,
+      };
+    }),
+  };
+};
+
+const normalizeLedgerReport = (data) => {
+  if (Array.isArray(data?.ledger_entries)) {
+    return data;
+  }
+
+  const ledgers = Array.isArray(data?.ledgers) ? data.ledgers : [data].filter(Boolean);
+  return {
+    ...data,
+    ledger_entries: ledgers.map((ledger) => ({
+      ...ledger,
+      transactions: Array.isArray(ledger.entries) ? ledger.entries : (ledger.transactions || []),
+    })),
+  };
+};
+
 const ReportsScreen = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -97,7 +145,7 @@ const ReportsScreen = () => {
       icon: '',
       color: '#34C759',
       needsDate: 'date_range',
-      endpoint: '/reports/general-ledger'
+      endpoint: '/reports/ledger'
     },
     {
       id: 'receipts_payments',
@@ -282,7 +330,8 @@ const ReportsScreen = () => {
         url = '/reports/general-ledger/export/pdf';
         exportParams = { 
           from_date: fromDate, 
-          to_date: toDate 
+          to_date: toDate,
+          account_code: 'all',
         };
       } else if (selectedReport.id === 'income_expenditure') {
         if (!fromDate || !toDate) {
@@ -386,6 +435,9 @@ const ReportsScreen = () => {
         if (report.id === 'my_ledger' && currentUser?.flat_id) {
           requestParams.flat_id = currentUser.flat_id;
         }
+        if (report.id === 'general_ledger') {
+          requestParams.account_code = 'all';
+        }
         console.log('Generating report:', endpoint, 'with params:', requestParams);
         console.log('As On Date value:', asOnDate);
         response = await api.get(endpoint, { params: requestParams });
@@ -405,12 +457,20 @@ const ReportsScreen = () => {
         if (report.id === 'my_ledger' && currentUser?.flat_id) {
           requestParams.flat_id = currentUser.flat_id;
         }
+        if (report.id === 'general_ledger') {
+          requestParams.account_code = 'all';
+        }
         console.log('Generating report:', endpoint, 'with params:', requestParams);
         response = await api.get(endpoint, { params: requestParams });
       }
 
       console.log('Report response:', response.data);
-      setReportData(response.data);
+      const normalizedData = report.id === 'trial_balance'
+        ? normalizeTrialBalanceReport(response.data)
+        : report.id === 'general_ledger'
+          ? normalizeLedgerReport(response.data)
+          : response.data;
+      setReportData(normalizedData);
       setMessage({ type: 'success', text: `${report.title} generated successfully!` });
 
       // Scroll to result after a short delay to allow DOM update

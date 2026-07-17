@@ -326,8 +326,26 @@ async def _score_candidate_chunks(
 ) -> list[dict[str, Any]]:
     cursor = chunks_collection.find(filters).sort("created_at", -1).limit(payload.max_candidates)
 
+    # The Mongo query is the primary isolation boundary.  Keep a second,
+    # fail-closed ownership check here because the values below become legal
+    # citations and (optionally) raw context in the API response.  This guards
+    # against an incorrectly implemented collection adapter or a future query
+    # refactor returning a record outside the requested tenant/app scope.
+    expected_tenant_id = str(filters.get("tenant_id") or "").strip()
+    expected_app_key = str(filters.get("app_key") or "").strip()
+
     scored: list[dict[str, Any]] = []
     async for chunk in cursor:
+        chunk_tenant_id = str(chunk.get("tenant_id") or "").strip()
+        chunk_app_key = str(chunk.get("app_key") or "").strip()
+        if (
+            not expected_tenant_id
+            or not expected_app_key
+            or chunk_tenant_id != expected_tenant_id
+            or chunk_app_key != expected_app_key
+        ):
+            continue
+
         score = _hybrid_score(query_embedding, query_tokens, chunk)
         if score <= 0.01:
             continue
@@ -482,6 +500,12 @@ async def list_documents(*, tenant_id: str, app_key: str, limit: int = 50):
 
     items: list[dict[str, Any]] = []
     async for doc in cursor:
+        # Do not serialize a document unless its stored ownership agrees with
+        # the trusted request context, even if the collection cursor is faulty.
+        if str(doc.get("tenant_id") or "").strip() != tenant_id:
+            continue
+        if str(doc.get("app_key") or "").strip() != app_key:
+            continue
         items.append(
             {
                 "document_id": doc["document_id"],

@@ -2,5 +2,7 @@ node_modules
 coverage
 test-results
 e2e
+playwright-report
 .env*
 debug.log
+.tmp.driveupload/

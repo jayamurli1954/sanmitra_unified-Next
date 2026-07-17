@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.modules.dependencies import require_enabled_module
 from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.context import inject_app_key, resolve_tenant_id
 from app.modules.rag.schemas import (
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/rag", tags=["rag"])
 @router.post("/documents", response_model=RagDocumentResponse)
 async def ingest_rag_document(
     payload: RagIngestRequest,
+    _module_context: dict = Depends(require_enabled_module("rag")),
     current_user: dict = Depends(
         require_roles([Role.super_admin, Role.tenant_admin, Role.operator])
     ),
@@ -97,6 +99,7 @@ async def get_ingested_acts_public(
 @router.get("/documents", response_model=RagDocumentListResponse)
 async def get_rag_documents(
     limit: int = Query(default=50, ge=1, le=200),
+    _module_context: dict = Depends(require_enabled_module("rag")),
     current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin, Role.operator, Role.viewer])),
     app_key: str = Depends(inject_app_key),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -109,6 +112,7 @@ async def get_rag_documents(
 @router.post("/query", response_model=RagQueryResponse)
 async def query_rag(
     payload: RagQueryRequest,
+    _module_context: dict = Depends(require_enabled_module("rag")),
     current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin, Role.operator, Role.viewer])),
     app_key: str = Depends(inject_app_key),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
