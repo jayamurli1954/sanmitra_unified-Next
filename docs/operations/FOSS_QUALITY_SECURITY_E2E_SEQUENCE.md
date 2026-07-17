@@ -183,6 +183,9 @@ Rules:
 - Do not run destructive tests on real tenants.
 - Do not edit/delete posted accounting entries; test reversals only.
 - Store Playwright traces/screenshots as artifacts.
+- Agents must follow [AGENTS.md](../../AGENTS.md) §5 Agent Shell Command Guardrails for
+  git, filesystem, database, deploy, and destructive-E2E commands (policy-first; no
+  external dcg install required).
 
 Gate:
 

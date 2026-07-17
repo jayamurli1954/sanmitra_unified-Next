@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import getpass
 import os
 import sys
 from urllib.error import HTTPError, URLError
@@ -13,6 +14,7 @@ from urllib.request import Request, urlopen
 DEFAULT_API_BASE = "https://sanmitra-unified-next-staging-sg.onrender.com"
 DEFAULT_APP_KEY = "mitrabooks"
 DEFAULT_TENANT_ID = "demo-mitrabooks-business"
+DEFAULT_EMAIL = "business.admin@sanmitra.local"
 REQUIRED_MODULES = {"business", "accounting", "audit"}
 
 
@@ -45,8 +47,18 @@ def main() -> int:
   email = str(os.getenv("E2E_USER_EMAIL", "")).strip()
   password = str(os.getenv("E2E_USER_PASSWORD", "")).strip()
 
+  if sys.stdin.isatty():
+    if not email:
+      entered_email = input(f"Staging email [{DEFAULT_EMAIL}]: ").strip()
+      email = entered_email or DEFAULT_EMAIL
+    if not password:
+      password = getpass.getpass("Staging password: ").strip()
+
   if not email or not password:
-    print("FAIL: E2E_USER_EMAIL and E2E_USER_PASSWORD must be set in the current shell.")
+    print(
+      "FAIL: staging email/password are required. Run interactively for secure prompts "
+      "or set E2E_USER_EMAIL and E2E_USER_PASSWORD in the current process."
+    )
     return 2
 
   login_body = json.dumps({"email": email, "password": password}).encode("utf-8")

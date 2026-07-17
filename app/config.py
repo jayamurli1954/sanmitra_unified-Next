@@ -390,10 +390,10 @@ class Settings:
             or self.DEMO_MITRABOOKS_BOOTSTRAP
             or self.DEMO_MITRABOOKS_E2E_SEED_ENABLED
         ):
-            _config_logger.warning(
+            raise ValueError(
                 "Bootstrap flags (SUPER_ADMIN_BOOTSTRAP / DEMO_MANDIR_BOOTSTRAP / "
                 "DEMO_MITRABOOKS_BOOTSTRAP / DEMO_MITRABOOKS_E2E_SEED_ENABLED) are enabled "
-                "in a production environment. Ensure this is intentional."
+                "in production. All bootstrap and demo seed flags must be disabled."
             )
 
         if not self.OTP_PEPPER:

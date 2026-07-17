@@ -133,6 +133,93 @@ If this workspace becomes a git repository:
 - Never rewrite history on shared branches.
 - Never revert user changes unless explicitly requested.
 
+### Agent Shell Command Guardrails (Policy-First; No External DCG Required)
+
+This repository does **not** require installing the external
+[`destructive_command_guard`](https://github.com/Dicklesworthstone/destructive_command_guard)
+(dcg) hook. Agents and operators must treat the rules below as mandatory preflight
+**before** proposing or running shell commands — same intent as dcg, expressed as repo
+policy rather than a local binary.
+
+**Default rule:** If a command matches a blocked pattern below, **stop**, label the risk
+with the appropriate `[CRITICAL-*]` tag from §22, name a safe alternative, and **wait
+for explicit user approval** before running it. Do not bypass guards with `--force`,
+`-f`, `--no-verify`, or quiet flags unless the user explicitly requested that exact
+command.
+
+#### Git — blocked without explicit user request
+
+- `git add .`, `git add -A`, or other repo-root bulk staging.
+- `git reset --hard` or any hard reset that would discard uncommitted work.
+- `git clean -fd`, `git clean -fdx`, or `git clean -x` (dry-run with `git clean -nd` /
+  `git clean -nx` is allowed for inspection only).
+- `git push --force`, `git push -f`, or `git push --force-with-lease` to shared branches.
+- `git checkout -- .`, `git restore .`, or broad discard of tracked files that would
+  revert user changes.
+- `git rebase`, history rewrite, or `git branch -D` on branches the user did not name
+  for deletion.
+- `git commit --amend` unless all amend conditions in the operator/agent commit policy
+  are satisfied.
+
+#### Git — allowed when scoped
+
+- Read-only: `git status`, `git diff`, `git log`, `git show`.
+- Explicit-path staging: `git add path/to/file`.
+- `git stash` / `git stash pop` when work must be preserved (prefer over hard reset).
+- Normal `git commit` and non-force `git push` only when the user explicitly asked.
+
+#### Filesystem — blocked
+
+- Recursive delete on project paths: `rm -rf`, `del /s`, `rd /s`,
+  `Remove-Item -Recurse -Force`, or equivalent on repo trees, `.pgdata`, `.venv`, local
+  database directories, or reference paths such as `D:\sanmitra-backend`.
+- Mass delete outside known disposable artifact dirs (`tmp/`, `htmlcov/`, pytest/playwright
+  cache dirs) unless the user explicitly scoped the paths.
+
+#### Database and data — blocked
+
+- PostgreSQL: `DROP DATABASE`, `DROP TABLE`, `TRUNCATE`, or broad unscoped `DELETE`.
+- MongoDB: `dropDatabase`, unscoped `deleteMany({})`, or tenant-unscoped `updateMany`.
+- Direct SQL/ORM edits to posted journal or ledger rows.
+- Restoring production dumps into dev/staging without explicit sanitized-data approval.
+- Destructive migrations (`DROP COLUMN`, irreversible rewrite) without explicit approval;
+  follow the `migration-safety` skill.
+
+#### Accounting, tenant, and E2E — blocked
+
+- Direct account balance mutation outside the accounting service.
+- Deleting posted entries instead of posting proper reversals/adjustments.
+- Destructive browser/API E2E against non-demo tenants, production URLs, or real trust/
+  society/production business data.
+- Running destructive demo gates (`--run-destructive-demo`, destructive Playwright specs,
+  guarded destructive runners) without:
+  - explicit demo tenant id (for example `demo-mitrabooks-business`),
+  - required confirm env vars documented in the relevant runbook,
+  - prior policy/precheck when the gate provides one.
+
+#### Deployment and secrets — blocked without explicit approval
+
+- Production deploy, production tag creation/push, or production `render-deploy`.
+- Logging or echoing tokens, passwords, API keys, bearer headers, OTP/debug codes, broker
+  credentials, or payment payloads.
+- Committing `.env`, credentials, database dumps, or PII exports.
+
+#### Safe pattern when unsure
+
+1. Prefer read-only inspection commands first.
+2. Prefer targeted file edits over shell mass-delete.
+3. Prefer accounting reversals over deletes or in-place ledger edits.
+4. Prefer demo-tenant reseed/reset over broad database wipe.
+5. Document rollback path before any approved destructive action.
+
+Cross-references:
+
+- §22 Emergency Procedures
+- `docs/operations/TRACK0_STAGING_CREDENTIALS_RUNBOOK.md`
+- `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`
+- `docs/operations/FOSS_QUALITY_SECURITY_E2E_SEQUENCE.md`
+- `docs/LOCAL_CI_AND_SECURITY_SOP.md`
+
 ## 6. Data Layer Ownership
 
 The target is one unified backend platform with a split database strategy, not one physical database.
@@ -606,6 +693,9 @@ If a change risks accounting, tenant isolation, payment receipts, legal data, or
 4. Do not proceed with broad refactor.
 5. Ask the user before risky or destructive actions.
 
+Also apply §5 Agent Shell Command Guardrails: do not run blocked git, filesystem,
+database, deployment, or destructive-E2E commands while investigating.
+
 Critical labels to use in notes/issues:
 
 - `[CRITICAL-ACCOUNTING]`
@@ -662,6 +752,9 @@ Required checklist:
 - Release and rollback: schema, migration, accounting, or tenant-risk changes include rollback/reversal notes or an explicit reason they are not needed.
 - Tests: CI-relevant tests are added or updated for the changed risk area, or the PR states why tests are not applicable.
 - Local preflight: `python scripts/preflight.py` (plus `--frontend`/`--security` when relevant) was run and passed before the push, per §28.
+- Destructive command guardrails: no blocked git, filesystem, database, deployment, or
+  destructive-E2E commands were run unless explicitly requested, tenant-scoped, and
+  documented with rollback notes where applicable (§5).
 
 The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains present and wired into repository validation. It is a policy-presence gate, not a substitute for code review or domain-specific tests.
 
@@ -675,6 +768,7 @@ The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains
 | 1.3 | 2026-05-26 | Added PR acceptance checklist and AGENTS compliance gate |
 | 1.4 | 2026-06-23 | Marked master planning references as non-negotiable and reinforced InvestMitra unified-scope exclusion |
 | 1.5 | 2026-06-24 | Added §28 mandatory local preflight (`scripts/preflight.py`) + local CI/security SOP, wired into validation and PR checklist |
+| 1.6 | 2026-07-14 | Added §5 Agent Shell Command Guardrails (policy-first substitute for external dcg) and PR checklist item |
 
 ## 27. CI/CD and Release Discipline
 

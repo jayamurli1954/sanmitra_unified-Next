@@ -8,6 +8,7 @@ class UserCreateRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     tenant_id: str = Field(min_length=2, max_length=64)
     role: str = Field(default="operator", min_length=3, max_length=40)
+    accounting_entity_ids: list[str] = Field(default_factory=lambda: ["primary"], max_length=100)
 
 
 class UserResponse(BaseModel):
@@ -16,6 +17,7 @@ class UserResponse(BaseModel):
     full_name: str
     tenant_id: str
     role: str
+    accounting_entity_ids: list[str] = Field(default_factory=lambda: ["primary"])
     is_active: bool
     subscription_tier: str = "free"
     subscription_status: str = "active"

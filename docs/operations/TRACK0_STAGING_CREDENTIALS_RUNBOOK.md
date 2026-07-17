@@ -57,9 +57,7 @@ $env:STAGING_API_BASE_URL="https://sanmitra-unified-next-staging-sg.onrender.com
 
 ## Read-Only Auth Verification Before Destructive E2E
 
-Use either the script or curl-style calls.
-
-### Option A: Scripted verification (preferred)
+Use the scripted verification. It does not print the access token or password.
 
 ```powershell
 python scripts/verify_staging_auth.py
@@ -71,43 +69,62 @@ Script checks:
 - `/api/v1/modules/me` resolves expected tenant/app context
 - required module set includes `business`, `accounting`, `audit`
 
-### Option B: Manual curl verification
-
-```bash
-curl -sS -X POST "$STAGING_API_BASE_URL/api/v1/auth/login" \
-  -H "Content-Type: application/json" \
-  -H "X-App-Key: mitrabooks" \
-  -d '{"email":"'"$E2E_USER_EMAIL"'","password":"'"$E2E_USER_PASSWORD"'"}'
-```
-
-Then call:
-
-```bash
-curl -sS "$STAGING_API_BASE_URL/api/v1/modules/me" \
-  -H "Authorization: Bearer <access_token_from_login>" \
-  -H "X-App-Key: mitrabooks"
-```
-
 Expected:
 - `tenant_id=demo-mitrabooks-business`
 - `organization_type=BUSINESS`
 - enabled modules include `business`, `accounting`, `audit`
 
+Do not use a raw `curl` login response as signoff evidence because it prints the
+access token to the terminal and may place credentials in shell history. The scripted
+precheck intentionally emits only sanitized context.
+
+## Credential-Free Hosted Checks
+
+These checks are read-only and may run before Ops supplies the demo password:
+
+```powershell
+Invoke-RestMethod -Uri "https://sanmitra-unified-next-staging-sg.onrender.com/health" -Method Get
+Invoke-WebRequest -Uri "https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/" -Method Get -UseBasicParsing
+```
+
+They prove only that the staging API dependencies and frontend shell are reachable.
+They do not prove demo-user login, tenant context, enabled modules, or mutation safety.
+
 ## Guarded Destructive E2E Sequence
 
-1. Run policy/auth precheck first:
+1. Run the read-only credential and tenant-context verification:
+
+```powershell
+python scripts/verify_staging_auth.py
+```
+
+2. Run the non-mutating local policy check. This confirms the explicit tenant target,
+confirmation marker, and required operator variables are present; it does not replace
+the read-only hosted authentication verification above:
 
 ```powershell
 python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --destructive-demo-policy-check --demo-tenant-id demo-mitrabooks-business
 ```
 
-2. Only if precheck is green, run destructive gate:
+3. Only after Ops confirms a fresh reset/reseed and both checks are green, run the
+destructive gate. This command repeats authentication and tenant/module validation
+immediately before Playwright starts any mutation:
 
 ```powershell
 python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/ --run-destructive-demo --demo-tenant-id demo-mitrabooks-business
 ```
 
-3. Record evidence in `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`.
+The destructive spec explicitly disables Playwright trace, video, and screenshots.
+Do not remove that override: credential-bearing browser artifacts can capture login
+request bodies or authenticated request headers.
+
+4. Confirm reversals/cancellations completed, then have Ops reseed or discard generated
+demo data if a clean baseline is required. A failed partial run must be treated as
+requiring reset/reseed before retry.
+
+5. Record sanitized evidence in
+`docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md`. Never paste the
+password, bearer token, or raw login response.
 
 ## Failure Handling
 
@@ -120,3 +137,6 @@ python scripts/mitrabooks_phase3_business_gate.py --staging-url https://www.mitr
 - No plaintext secrets in repo, chat transcripts, test artifacts, or screenshots.
 - No `.env` commits.
 - No destructive E2E on non-demo tenants.
+- Agents and operators must follow [AGENTS.md](../../AGENTS.md) §5 Agent Shell Command
+  Guardrails before git, filesystem, database, deploy, or destructive-E2E shell commands.
+  This repo uses policy-first guardrails instead of requiring external `destructive_command_guard`.

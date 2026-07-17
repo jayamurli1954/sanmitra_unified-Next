@@ -12,8 +12,7 @@ test.describe('MitraBooks CA invite acceptance', () => {
   test('loads public invite details and accepts with matching password', async ({ page }) => {
     const requests = [];
     await page.route('**/api/v1/business/ca/invite/good-token/preview', route => fulfillJson(route, {
-      email: 'ca.ravi@example.com',
-      full_name: 'CA Ravi',
+      masked_email: 'c******@example.com',
     }));
     await page.route('**/api/v1/business/ca/invite/good-token/accept', async route => {
       requests.push(route.request().postDataJSON());
@@ -27,10 +26,12 @@ test.describe('MitraBooks CA invite acceptance', () => {
     await page.goto('/mitrabooks-erp/ca-invite-accept.html?token=good-token');
 
     await expect(page.getByRole('heading', { name: 'Accept CA Invite' })).toBeVisible();
-    await expect(page.locator('#invite-name')).toContainText('CA Ravi');
-    await expect(page.locator('#invite-email')).toContainText('ca.ravi@example.com');
+    await expect(page.locator('#invite-name')).toContainText('Chartered Accountant invitation');
+    await expect(page.locator('#invite-email')).toContainText('c******@example.com');
+    await expect(page.locator('#invite-tenant')).toBeEmpty();
     await expect(page.locator('#invite-status')).toContainText('Create a password');
 
+    await page.locator('#full-name').fill('CA Ravi');
     await page.locator('#password').fill('Secret123!');
     await page.locator('#confirm-password').fill('Secret123!');
     await page.locator('#accept-submit').click();
@@ -45,8 +46,7 @@ test.describe('MitraBooks CA invite acceptance', () => {
   test('blocks mismatched passwords before calling accept endpoint', async ({ page }) => {
     let acceptCalls = 0;
     await page.route('**/api/v1/business/ca/invite/good-token/preview', route => fulfillJson(route, {
-      email: 'ca.ravi@example.com',
-      full_name: 'CA Ravi',
+      masked_email: 'c******@example.com',
     }));
     await page.route('**/api/v1/business/ca/invite/good-token/accept', route => {
       acceptCalls += 1;
@@ -68,11 +68,11 @@ test.describe('MitraBooks CA invite acceptance', () => {
     await expect(page.locator('#ca-invite-form')).toBeHidden();
 
     await page.route('**/api/v1/business/ca/invite/expired-token/preview', route => fulfillJson(route, {
-      detail: 'This invite link has expired. Ask the business to send a new invite.',
+      detail: 'Invite is invalid, expired, or unavailable',
     }, 400));
     await page.goto('/mitrabooks-erp/ca-invite-accept.html?token=expired-token');
     await expect(page.locator('#invite-name')).toContainText('Invite unavailable');
-    await expect(page.locator('#invite-status')).toContainText('This invite link has expired');
+    await expect(page.locator('#invite-status')).toContainText('Invite is invalid, expired, or unavailable');
     await expect(page.locator('#ca-invite-form')).toBeHidden();
   });
 });

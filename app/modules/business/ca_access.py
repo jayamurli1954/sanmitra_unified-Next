@@ -266,10 +266,14 @@ async def preview_ca_invite(*, token: str) -> dict:
         raise ValueError("This invite has been revoked")
     if _as_utc(invite.get("expires_at")) < datetime.now(timezone.utc):
         raise ValueError("This invite link has expired. Ask the business to send a new invite.")
-    return {
-        "email": invite["email"],
-        "full_name": invite.get("full_name", ""),
-    }
+    email = str(invite.get("email") or "").strip()
+    local_part, separator, domain = email.partition("@")
+    if separator and local_part and domain:
+        visible = local_part[:1]
+        masked_email = f"{visible}{'*' * max(3, len(local_part) - 1)}@{domain}"
+    else:
+        masked_email = ""
+    return {"masked_email": masked_email}
 
 
 async def accept_ca_invite(*, token: str, password: str, full_name: str | None = None) -> dict:

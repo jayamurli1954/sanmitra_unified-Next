@@ -7,6 +7,7 @@ from app.core.tenants.context import InvalidAppKeyError, get_tenant_id, resolve_
 
 UNSAFE_BUSINESS_TENANTS = {"default", ""}
 DEFAULT_ACCOUNTING_ENTITY_ID = "primary"
+ACCOUNTING_ENTITY_ADMIN_ROLES = frozenset({"super_admin", "tenant_admin", "owner", "admin"})
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,15 @@ def resolve_business_app_tenant(
         )
 
     accounting_entity_id = str(x_accounting_entity_id or DEFAULT_ACCOUNTING_ENTITY_ID).strip() or DEFAULT_ACCOUNTING_ENTITY_ID
+    role = str(current_user.get("role") or "").strip().lower()
+    if role not in ACCOUNTING_ENTITY_ADMIN_ROLES:
+        assigned_entities = {
+            str(entity_id).strip()
+            for entity_id in (current_user.get("accounting_entity_ids") or [DEFAULT_ACCOUNTING_ENTITY_ID])
+            if str(entity_id).strip()
+        }
+        if accounting_entity_id not in assigned_entities:
+            raise HTTPException(status_code=403, detail="Accounting entity access denied")
 
     return AppTenantContext(
         app_key=app_key,

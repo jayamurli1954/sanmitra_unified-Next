@@ -33,6 +33,8 @@ frontend/test-results/
 logs/
 tmp/
 .tmp.driveupload/
+.deploy-staging/
+.deploy-staging-v35/
 data/
 .pgdata/
 *.log

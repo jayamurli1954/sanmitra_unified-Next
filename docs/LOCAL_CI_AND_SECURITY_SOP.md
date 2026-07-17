@@ -10,6 +10,21 @@ they are green.** A green local run = a green push, and fewer wasted Actions run
 
 ---
 
+## Agent destructive command guardrails
+
+Before running shell commands (especially git, filesystem delete, database admin, deploy,
+or destructive E2E), follow [AGENTS.md](../AGENTS.md) **§5 Agent Shell Command Guardrails**.
+
+This repo does **not** require the external `destructive_command_guard` (dcg) tool; the
+AGENTS policy is the source of truth. Blocked patterns include force-push to shared
+branches, hard reset/clean, unscoped DB drops/truncates, posted-ledger edits, production
+deploys without approval, and destructive demo runs against non-demo tenants.
+
+If a command is blocked: stop, explain risk, propose a safe alternative, and wait for
+explicit user approval.
+
+---
+
 ## The three tiers
 
 ### Tier 1 — Backend gate (ALWAYS, zero install)

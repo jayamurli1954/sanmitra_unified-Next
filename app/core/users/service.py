@@ -315,6 +315,7 @@ async def create_user(
     tenant_id: str,
     role: str,
     app_key: str | None = None,
+    accounting_entity_ids: list[str] | None = None,
 ):
     await ensure_users_indexes()
 
@@ -329,6 +330,11 @@ async def create_user(
 
     users = get_collection(USERS_COLLECTION)
     now = datetime.now(timezone.utc)
+    normalized_entity_ids = list(dict.fromkeys(
+        str(entity_id).strip()
+        for entity_id in (accounting_entity_ids or ["primary"])
+        if str(entity_id).strip()
+    )) or ["primary"]
     doc = {
         "user_id": str(uuid4()),
         "email": normalized_email,
@@ -336,6 +342,7 @@ async def create_user(
         "tenant_id": normalized_tenant_id,
         "app_key": normalized_app_key,
         "role": role.strip(),
+        "accounting_entity_ids": normalized_entity_ids,
         "hashed_password": hash_password(password),
         "auth_provider": "password",
         "provider_subject": _password_provider_subject(normalized_email),
@@ -361,6 +368,7 @@ async def create_user(
         "tenant_id": doc["tenant_id"],
         "app_key": doc["app_key"],
         "role": doc["role"],
+        "accounting_entity_ids": doc["accounting_entity_ids"],
         "is_active": doc["is_active"],
         "subscription_tier": doc.get("subscription_tier", "free"),
         "subscription_status": doc.get("subscription_status", "active"),

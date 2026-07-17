@@ -53,8 +53,12 @@ async def _audit_super_admin_override_usage(
             },
             ip_address=request.client.host if request and request.client else None,
         )
-    except Exception as exc:  # pragma: no cover - best-effort security telemetry
-        _auth_dependency_logger.warning("Failed to log super-admin override audit event: %s", exc)
+    except Exception as exc:
+        _auth_dependency_logger.error("Blocking super-admin override because audit persistence failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Privileged context override is unavailable because its audit event could not be recorded",
+        ) from exc
 
 
 async def get_current_user(
@@ -77,6 +81,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
     header_value = None if isinstance(x_app_key, HeaderParam) else x_app_key
+    tenant_header_value = None if isinstance(x_tenant_id, HeaderParam) else x_tenant_id
     try:
         token_app_key = resolve_app_key(payload.get("app_key") or get_app_key())
     except InvalidAppKeyError as exc:
@@ -94,7 +99,7 @@ async def get_current_user(
         payload=payload,
         token_app_key=token_app_key,
         header_app_key=header_app_key,
-        x_tenant_id=x_tenant_id,
+        x_tenant_id=tenant_header_value,
         request=request,
     )
 

@@ -25,6 +25,7 @@ _ME_PROFILE_FIELDS = frozenset({
     "phone",
     "avatar_url",
     "permissions",
+    "accounting_entity_ids",
     "created_at",
     "updated_at",
     "last_login_at",
@@ -215,6 +216,7 @@ async def register_user(payload: UserCreateRequest, current_user: dict = Depends
             full_name=payload.full_name,
             tenant_id=payload.tenant_id,
             role=payload.role,
+            accounting_entity_ids=payload.accounting_entity_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

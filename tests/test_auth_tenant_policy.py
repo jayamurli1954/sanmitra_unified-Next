@@ -121,6 +121,54 @@ async def test_get_current_user_logs_super_admin_override_usage(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_blocks_super_admin_override_when_audit_fails(monkeypatch) -> None:
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    async def failed_log_audit_event(**_kwargs):
+        raise RuntimeError("audit store unavailable")
+
+    monkeypatch.setattr("app.core.auth.dependencies.ensure_tenant_is_active", fake_tenant_check)
+    monkeypatch.setattr("app.core.auth.dependencies.log_audit_event", failed_log_audit_event)
+
+    token = create_access_token(_base_payload(role="super_admin", tenant_id="platform", app_key="mitrabooks"))
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(
+            request=_request(),
+            credentials=creds,
+            x_tenant_id="demo-mitrabooks-business",
+            x_app_key="gruhamitra",
+        )
+
+    assert exc.value.status_code == 503
+    assert "audit event could not be recorded" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_does_not_audit_super_admin_without_override(monkeypatch) -> None:
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    audit_events = []
+
+    async def fake_log_audit_event(**kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr("app.core.auth.dependencies.ensure_tenant_is_active", fake_tenant_check)
+    monkeypatch.setattr("app.core.auth.dependencies.log_audit_event", fake_log_audit_event)
+
+    token = create_access_token(_base_payload(role="super_admin", tenant_id="platform", app_key="mitrabooks"))
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    current_user = await get_current_user(request=_request(), credentials=creds)
+
+    assert current_user["tenant_id"] == "platform"
+    assert current_user["app_key"] == "mitrabooks"
+    assert audit_events == []
+
+
+@pytest.mark.asyncio
 async def test_get_current_user_blocks_inactive_tenant(monkeypatch) -> None:
     async def fake_tenant_check(_tenant_id: str | None) -> None:
         raise HTTPException(status_code=403, detail="Tenant is inactive")

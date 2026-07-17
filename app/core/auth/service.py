@@ -91,6 +91,7 @@ def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
         "role": user["role"],
         "tenant_id": user["tenant_id"],
         "app_key": resolved_app_key,
+        "accounting_entity_ids": user.get("accounting_entity_ids") or ["primary"],
     }
     if user.get("must_change_password"):
         payload["must_change_password"] = True
@@ -217,6 +218,7 @@ async def _store_refresh_token(refresh_token: str, payload: dict[str, Any]) -> N
             "role": payload.get("role"),
             "email": payload.get("email"),
             "app_key": payload.get("app_key"),
+            "accounting_entity_ids": payload.get("accounting_entity_ids") or ["primary"],
             "issued_at": now,
             "expires_at": _exp_from_payload(payload),
             "revoked": False,
@@ -621,6 +623,7 @@ async def rotate_refresh_token(refresh_token: str, app_key: str | None = None):
         "role": record.get("role") or payload.get("role"),
         "tenant_id": record.get("tenant_id") or payload.get("tenant_id"),
         "app_key": resolved_app_key,
+        "accounting_entity_ids": record.get("accounting_entity_ids") or payload.get("accounting_entity_ids") or ["primary"],
     }
 
     if str(user_payload.get("role") or "").strip() != "super_admin":

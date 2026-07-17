@@ -49,13 +49,10 @@ async function loadInvite() {
   }
 
   const payload = result.payload || {};
-  const fullName = String(payload.full_name || "").trim();
-  const email = String(payload.email || "").trim();
-  const tenantId = String(payload.tenant_id || "").trim();
-  nameEl.textContent = fullName || "Chartered Accountant";
-  emailEl.textContent = email ? `Email: ${email}` : "";
-  tenantEl.textContent = tenantId ? `Tenant: ${tenantId}` : "";
-  fullNameInput.value = fullName;
+  const maskedEmail = String(payload.masked_email || "").trim();
+  nameEl.textContent = "Chartered Accountant invitation";
+  emailEl.textContent = maskedEmail ? `Email: ${maskedEmail}` : "";
+  tenantEl.textContent = "";
   form.hidden = false;
   setStatus("warn", "Create a password to activate read-only CA access.");
 }

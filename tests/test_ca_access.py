@@ -54,9 +54,48 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ok"] is True
-    assert payload["user_id"] == "u-1"
-    assert payload["role"] == "ca_viewer"
+    assert payload == {"ok": True}
+
+
+def test_preview_route_returns_only_masked_email(monkeypatch):
+    from app.main import app
+    from app.modules.business import router as business_router
+
+    async def fake_preview_ca_invite(*, token: str):
+        assert token == "tok123"
+        return {"masked_email": "c***@example.com"}
+
+    monkeypatch.setattr(business_router.ca_access_module, "preview_ca_invite", fake_preview_ca_invite)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/business/ca/invite/tok123/preview")
+
+    assert response.status_code == 200
+    assert response.json() == {"masked_email": "c***@example.com"}
+
+
+def test_public_invite_routes_use_generic_unavailable_error(monkeypatch):
+    from app.main import app
+    from app.modules.business import router as business_router
+
+    async def unavailable(**_kwargs):
+        raise ValueError("A user with this email already exists in a different tenant")
+
+    monkeypatch.setattr(business_router.ca_access_module, "preview_ca_invite", unavailable)
+    monkeypatch.setattr(business_router.ca_access_module, "accept_ca_invite", unavailable)
+
+    with TestClient(app) as client:
+        preview = client.get("/api/v1/business/ca/invite/tok123/preview")
+        accept = client.post(
+            "/api/v1/business/ca/invite/tok123/accept",
+            json={"password": "Secret123!", "full_name": "CA Ravi"},
+        )
+
+    expected = {"detail": "Invite is invalid, expired, or unavailable"}
+    assert preview.status_code == 400
+    assert preview.json() == expected
+    assert accept.status_code == 400
+    assert accept.json() == expected
 
 @pytest.mark.asyncio
 async def test_invite_provisions_inactive_ca_user_and_sends_token_email():
@@ -187,6 +226,22 @@ async def test_accept_invite_creates_user():
     assert inserted["invite_pending"] is False
     assert inserted["must_change_password"] is False
     assert inserted["auth_provider"] == "password"
+
+
+@pytest.mark.asyncio
+async def test_preview_invite_masks_identity_and_exposes_no_tenant_metadata():
+    from app.modules.business import ca_access
+
+    invite = _make_invite("pending")
+    mock_inv_col = AsyncMock()
+    mock_inv_col.find_one = AsyncMock(return_value=invite)
+    mock_inv_col.create_index = AsyncMock()
+
+    with patch("app.modules.business.ca_access.get_collection", return_value=mock_inv_col):
+        result = await ca_access.preview_ca_invite(token="tok123")
+
+    assert result == {"masked_email": "c***@example.com"}
+    assert not ({"email", "full_name", "tenant_id", "app_key", "token"} & result.keys())
 
 
 @pytest.mark.asyncio

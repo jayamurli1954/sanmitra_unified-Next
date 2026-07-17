@@ -1117,11 +1117,12 @@ async def list_ca_client_records(
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA client listing",
+        x_accounting_entity_id=accounting_entity_id,
     )
     return await list_ca_clients(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
+        accounting_entity_id=context.accounting_entity_id,
         q=q,
         active_only=active_only,
         limit=limit,
@@ -1143,11 +1144,12 @@ async def update_ca_client_record(
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA client update",
+        x_accounting_entity_id=payload.accounting_entity_id,
     )
     result = await update_ca_client(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
-        accounting_entity_id=payload.accounting_entity_id,
+        accounting_entity_id=context.accounting_entity_id,
         client_id=client_id,
         updated_by=_created_by(current_user),
         payload=payload,
@@ -4124,11 +4126,11 @@ async def invite_ca_user(
 @router.get("/ca/invite/{token}/preview")
 @limiter.limit(CA_INVITE_PREVIEW_RATE_LIMIT)
 async def preview_ca_invite(request: Request, token: str):
-    """Return public invite details (email, name) for pre-filling the accept form. No auth required."""
+    """Return a masked invite hint. No authentication is required."""
     try:
         return await ca_access_module.preview_ca_invite(token=token)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Invite is invalid, expired, or unavailable") from exc
 
 
 @router.post("/ca/invite/{token}/accept")
@@ -4145,20 +4147,16 @@ async def accept_ca_invite(
             payload = CaInviteAcceptRequest.model_validate(json.loads(raw_body or "{}"))
         else:
             payload = CaInviteAcceptRequest.model_validate(await request.json())
-        result = await ca_access_module.accept_ca_invite(
+        await ca_access_module.accept_ca_invite(
             token=token,
             password=payload.password,
             full_name=payload.full_name,
         )
-        return {
-            "ok": True,
-            "user_id": result["user_id"],
-            "role": result["role"],
-        }
+        return {"ok": True}
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Invalid invite accept payload") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Invite is invalid, expired, or unavailable") from exc
 
 
 @router.get("/ca/users", response_model=CaAccessListResponse)
