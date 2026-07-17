@@ -125,11 +125,11 @@ Latest evidence:
 - 2026-05-22 production signoff checklist was added at `docs/operations/MANDIRMITRA_PRODUCTION_SIGNOFF.md`; final go-live remains pending environment, backup/restore, rollback, and tenant seed policy confirmation.
 - 2026-05-22 final local MandirMitra browser smoke passed against `http://127.0.0.1:8001` with `organization_type=TEMPLE` and `accounting`, `audit`, and `temple` enabled.
 
-Remaining Stage 3 gaps:
+Remaining Stage 3 gaps (hosted credentialed Stage 3 closed 2026-07-17; production still open):
 
-- Complete deployment-readiness review.
-- Complete a production-readiness review for environment configuration, seed/demo tenant assumptions, audit retention, backup/restore expectations, and deployment rollback notes.
-- Keep Hundi/fund/festival, cancellation/refund UI, and 80G/FCRA issuance out of the first live cut unless their documented gates are implemented and tested.
+- Complete production-readiness review for environment configuration, seed/demo tenant assumptions, audit retention, backup/restore expectations, and deployment rollback notes.
+- Fill `tmp/mandir-stage3-production-operations.json` and pass `scripts/verify_mandirmitra_stage3_signoff.py`.
+- Keep 80G/FCRA official issuance default-off until tenant legal/compliance approval; partial refunds and external payout-provider execution remain deferred.
 
 ### Stage 4: GruhaMitra in MitraBooks ERP
 
@@ -168,6 +168,22 @@ The repo now has a focused MitraBooks Phase 2E local gate at `scripts/mitrabooks
 The first Phase 3 business-workflow signoff gate is tracked at `docs/operations/MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md` and can be run with `python scripts/mitrabooks_phase3_business_gate.py`.
 
 The living pending/gap tracker is `docs/operations/MITRABOOKS_PENDING_GAP_TODO.md`. Update that checklist after each gate by striking through completed items and leaving remaining gaps open.
+
+### 2026-07-13 Stage 3 gate update
+
+Hundi, festival, fund, in-kind inventory, full-refund, and 80G/FCRA readiness operations are implemented and locally tested. The fund gate includes accounting dimensions, designated activity, maker-checker transfers and opening balances, negative-balance transfer denial, period brought-forward/closing balances, as-of reporting, compensation, and reversal. The in-kind gate requires distinct valuation maker/approver actors, posts fixed-precision journals only after approval, creates append-only valued stock receipts/issues/reversals, derives issue cost server-side, denies negative stock, and compensates cross-store persistence failures. Refund operations require maker-checker approval, separate settlement evidence, settlement-time accounting reversal, audit, reporting, CSV evidence, and retry-safe persistence. The compliance gate remains default-off, requires tenant-specific dated 80G/FCRA evidence, fail-closes foreign contributions to the configured designated account, snapshots receipt decisions, masks donor PAN in operational views/reports, and labels reports as readiness evidence rather than official filings. Partial refunds and external payout-provider execution remain deferred.
+
+### 2026-07-17 Stage 3 hosted credentialed gate
+
+Hosted MandirMitra Stage 3 credentialed gates closed on Demo Temple (`tenant_id=demo-mandir-tenant`, temple id 1, `platform_can_write=true`):
+
+- 2026-07-15: browser smoke PASS (`tmp/mandir-stage3-browser-smoke.json`).
+- 2026-07-17: guarded destructive 8/8 PASS (`tmp/mandir-stage3-destructive-evidence.json`).
+- Actors: `temple.demo.admin@sanmitratech.in` (approver), `temple.demo.maker@sanmitratech.in` (maker).
+- Staging API: `https://sanmitra-unified-next-staging-sg.onrender.com`; ERP: `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.
+- Track 0: `docs/operations/TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`.
+
+Stage 3 live-readiness / production signoff remains blocked on production ops evidence (backup/restore, production frontend/API, security config) and a reviewed `backend-v*` release/rollback tag chain. GruhaMitra Stage 4 starts only after that production-ready gate (or an explicit platform-owner waiver). 80G/FCRA production enablement additionally requires tenant legal/compliance review.
 
 ## Non-Goals
 

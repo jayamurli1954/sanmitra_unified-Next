@@ -28,12 +28,8 @@ COMPILE_TARGETS = [
     "scripts",
 ]
 
-FOCUSED_TESTS = [
-    "tests/test_mandir_posting_guardrails.py",
+SHARED_FOCUSED_TESTS = [
     "tests/test_accounting_report_drilldown.py",
-    "tests/test_mandir_reports.py",
-    "tests/test_mandir_report_routes.py",
-    "tests/test_mandir_app_key_isolation.py",
     "tests/test_accounting_app_key_isolation.py",
     "tests/test_tenants_lifecycle.py",
     "tests/test_modules_me_endpoint.py",
@@ -66,6 +62,8 @@ def print_manual_gate() -> None:
     print("8. Verify public devotee no-login payment flow: temple/trust selection, donation/seva choice, amount, and configured UPI/payment instructions.")
     print("9. Verify exception handling: pending payment verify, reject, correction, receipt preview/download, and audit trace.")
     print("10. Verify tenant/app isolation with mandirmitra, gruhamitra, and mitrabooks app contexts.")
+    print("11. Verify 80G/FCRA tenant configuration is default-off or backed by complete dated approval evidence.")
+    print("12. Verify compliance donation controls fail closed and readiness reports mask PAN and remain non-filing artifacts.")
     print()
     print("Checklist source: docs/operations/MANDIRMITRA_STAGE3_SMOKE_CHECKLIST.md")
 
@@ -88,7 +86,11 @@ def main() -> int:
             run([sys.executable, "-m", "compileall", *compile_targets])
 
     if not args.skip_tests:
-        test_paths = existing(FOCUSED_TESTS)
+        mandir_tests = sorted(
+            str(path.relative_to(ROOT))
+            for path in (ROOT / "tests").glob("test_mandir*.py")
+        )
+        test_paths = [*mandir_tests, *existing(SHARED_FOCUSED_TESTS)]
         if not test_paths:
             print("No focused MandirMitra Stage 3 tests found.")
             raise SystemExit(1)

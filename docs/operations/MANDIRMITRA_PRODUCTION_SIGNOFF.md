@@ -2,6 +2,8 @@
 
 Date: 2026-05-22
 
+Last gate review: 2026-07-17
+
 ## Decision
 
 MandirMitra is ready for first-live production signoff after the final production environment, backup/restore, rollback, and tenant seed policy checks are confirmed.
@@ -40,15 +42,15 @@ This signoff covers MandirMitra inside the MitraBooks ERP shell. It does not exp
 
 ## Deferred Scope
 
-These areas are not blockers for the first live cut, but must remain disabled, hidden, or clearly marked not-live until their gates are implemented and tested.
+These areas completed hosted Stage 3 demo mutation on 2026-07-17. They remain disabled, hidden, or clearly marked not-live for production tenants until production ops evidence and (where noted) tenant legal/compliance approval are confirmed.
 
 | Area | Deferred reason |
 | --- | --- |
-| Hundi depth | Counting, deposit, receipt/accounting rules, and audit tests are not complete enough for production use. |
-| Festival/fund depth | Full event/fund subledger reporting, restricted/corpus fund handling, and fund transfer approvals are not complete. |
-| 80G/FCRA issuance | Must be tenant-configured and compliance-reviewed; eligibility must not default to true. |
-| Refund payout queue | Basic reversal metadata is ready, but approval queue, payout settlement status, and refund exports are deferred. |
-| Sponsorship approval/report depth | Posting is covered; valuation approval, inventory consumption, and event/fund subledger reports remain later work. |
+| Hundi depth | Hosted demo maker-checker, accounting, reporting, and reversal passed on 2026-07-17 for `demo-mandir-tenant`. Production use remains disabled until production ops evidence and tenant policy review. |
+| Festival/fund depth | Hosted designated-fund, sponsorship, transfer, opening-balance/as-of, approval, and reversal demo mutations passed on 2026-07-17. Production use remains pending production ops evidence. |
+| 80G/FCRA issuance | Readiness controls and masked non-filing reports exist and were exercised default-off on hosted staging. Official certificate/filing use requires tenant legal/compliance approval; features remain default-off. |
+| Refund payout queue | Hosted approval, settlement, reporting, and retry-safe demo mutations passed on 2026-07-17. Production payout execution remains pending production ops evidence. |
+| Sponsorship and inventory depth | Hosted valuation approval, inventory consumption, accounting, and reversal demo mutations passed on 2026-07-17. Production use remains pending production ops evidence. |
 | Advanced exports | Report export packs can follow after first live cut. |
 | GruhaMitra | Starts only after MandirMitra first-live signoff is accepted. |
 
@@ -72,21 +74,23 @@ These areas are not blockers for the first live cut, but must remain disabled, h
 
 | Gate | Status |
 | --- | --- |
-| Local MandirMitra Stage 3 smoke | Passed |
+| Local MandirMitra Stage 3 smoke | Passed on 2026-07-13 across every discovered `test_mandir*.py` suite plus shared accounting, tenancy, module-access, and platform-owner gates. |
 | Demo public payment E2E | Passed |
 | Receipt PDF smoke | Passed |
 | Accounting reports and drill-down | Passed |
-| Final local browser smoke | Passed on 2026-05-22 with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`; context returned `organization_type=TEMPLE` with `accounting`, `audit`, and `temple` modules. |
+| Final local browser smoke | Baseline passed on 2026-05-22. Hardened runners remove embedded passwords, bind destructive confirmation to the exact API origin and explicit demo tenant, reject platform-owner/tenant/app mismatches, require persisted `platform_can_write=true` demo state and distinct maker/approver actors, disable credential-bearing traces/videos, validate 80G/FCRA and fund/inventory drill-down, and emit sanitized JSON evidence. Credentialed local execution passed on 2026-07-14 for `seed-tenant-1`. |
+| Hosted staging credentialed Stage 3 | Passed. Browser smoke PASS on 2026-07-15 and guarded destructive 8/8 PASS on 2026-07-17 against Demo Temple (`tenant_id=demo-mandir-tenant`, temple id 1, `platform_can_write=true`) on staging API `https://sanmitra-unified-next-staging-sg.onrender.com` and MitraBooks ERP `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`. Distinct actors: `temple.demo.admin@sanmitratech.in` (approver) and `temple.demo.maker@sanmitratech.in` (maker). Sanitized evidence: `tmp/mandir-stage3-browser-smoke.json`, `tmp/mandir-stage3-destructive-evidence.json`. Track 0: `docs/operations/TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`. |
 | CI for latest docs/evidence commit | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
 | Render deployment | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
 | Production env checklist | Partially confirmed. MongoDB, Mongo DB name, PostgreSQL, JWT, allowed app keys, `mandirmitra` app-key behavior, demo bootstrap off, super-admin bootstrap off, and receipt PDF fallback are confirmed. MitraBooks ERP production frontend URL remains pending. |
 | Production access policy | Confirmed. No shared/default production password; no `.local` production admin accounts; platform-owner access must use a real email with activation/reset or one-time bootstrap followed by bootstrap disabled. |
-| Backup/restore confirmation | Policy documented in `docs/operations/BACKUP_RESTORE_RUNBOOK.md`; provider backup schedule, retention, storage location, and restore owner still need production confirmation before live financial use. |
+| Backup/restore confirmation | Policy documented in `docs/operations/BACKUP_RESTORE_RUNBOOK.md`; provider backup schedule, retention, storage location, restore owner, and successful isolated non-production restore drills for MongoDB and PostgreSQL still need production confirmation before live financial use. |
 | Rollback tag/process | Pending execution. Policy is confirmed: production deploy should use a `backend-v*` tag, rollback redeploys the previous known-good tag, and financial corrections use reversal/adjustment entries rather than ledger edits. |
+| Machine-enforced production signoff | Implemented fail-closed in `scripts/verify_mandirmitra_stage3_signoff.py`. It requires fresh matching browser/destructive demo evidence, confirmed backup/restore and production operations evidence bound to the exact deployed release tag and commit, a clean worktree, and a valid release/rollback tag chain before it runs full and release preflight. The evidence contract is documented in `docs/operations/MANDIRMITRA_PRODUCTION_EVIDENCE_SCHEMA.md`; current external confirmations remain pending. |
 | Tenant seed/demo policy | Confirmed. Production must not depend on `seed-tenant-1`; demo/test tenants must be clearly named; real trusts are not used for destructive smoke; 80G/FCRA is not default-on; demo UPI IDs are not used for real tenants. |
 
 ## Recommendation
 
-MandirMitra is ready for production signoff review, but not yet production-approved. Production approval remains blocked by the pending MitraBooks ERP production frontend URL, production backup confirmation, and release tag/rollback execution.
+Hosted MandirMitra Stage 3 credentialed smoke and destructive demo are complete for `demo-mandir-tenant`. MandirMitra is still not production-approved: production approval remains blocked until `scripts/verify_mandirmitra_stage3_signoff.py` accepts production operations evidence (backup/restore, production frontend/API, security config) plus a reviewed `backend-v*` release/rollback tag chain on a clean HEAD.
 
-Do not start GruhaMitra production migration until the pending production checks above are marked confirmed or explicitly waived by the platform owner.
+Do not start GruhaMitra Stage 4 / production migration until the pending production checks above are marked confirmed or explicitly waived by the platform owner.

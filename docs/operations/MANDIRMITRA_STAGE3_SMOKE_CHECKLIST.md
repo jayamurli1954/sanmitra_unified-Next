@@ -31,8 +31,12 @@ python -m playwright install chromium
 With the backend and frontend running, run from `D:\sanmitra_unified-Next`:
 
 ```powershell
+$env:MANDIRMITRA_SMOKE_EMAIL = "admin@sanmitra.local"
+$env:MANDIRMITRA_SMOKE_PASSWORD = "<local-or-staging-secret>"
 python scripts\mandirmitra_stage3_browser_smoke.py
 ```
+
+Do not store the password in this file, shell history, screenshots, or evidence output. The runner has no embedded password default and fails closed when `MANDIRMITRA_SMOKE_PASSWORD` is absent.
 
 Expected result:
 
@@ -44,13 +48,31 @@ Expected result:
 - The Receipts workspace shows cancellation/reversal action for active receipts and opens the cancellation dialog without mutating data during smoke.
 - The Panchang workspace opens and renders Today Panchang with Tithi data from `/api/v1/panchang/today`.
 - The Reports workspace opens and renders donation category, detailed donation, detailed seva, seva schedule, and recent devotee data.
+- Donation compliance configuration loads through the protected MandirMitra app context; enabled 80G/FCRA settings must have complete dated evidence.
+- Donation-entry 80G/FCRA controls fail closed when their tenant feature is off.
+- 80G/FCRA readiness reports declare that they are not filing artifacts and expose only masked donor PAN evidence.
 - The UI does not show access denied or MandirMitra live-data-unavailable state.
 - A screenshot is saved under `tmp\mandir-stage3-browser-smoke.png`.
+- Sanitized machine-readable evidence is saved under `tmp\mandir-stage3-browser-smoke.json`; it excludes credentials, tokens, approval references, PAN values, and donor PII.
+
+Latest hosted staging evidence (2026-07-15 / 2026-07-17):
+
+- PASS: credentialed browser smoke on Demo Temple (`tenant_id=demo-mandir-tenant`, temple id 1, `platform_can_write=true`) via staging API `https://sanmitra-unified-next-staging-sg.onrender.com` and frontend `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.
+- PASS: guarded destructive demo 8/8 on the same tenant with distinct actors `temple.demo.admin@sanmitratech.in` (approver) and `temple.demo.maker@sanmitratech.in` (maker) across donation, refund, seva, fund/festival designation, hundi, fund transfer, in-kind inventory, and 80G/FCRA readiness scenarios.
+- Evidence: `tmp\mandir-stage3-browser-smoke.json` (2026-07-15), `tmp\mandir-stage3-destructive-evidence.json` (2026-07-17; `status=passed`, exit 0). Sanitized; no credentials/tokens/PII.
+- Track 0: `docs/operations/TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`. Actor provisioning: `scripts/provision_mandir_demo_tenant_admin.py` (use `@sanmitratech.in` emails; staging rejects `.local` on create-user).
+- Production ops evidence template: `docs/operations/MANDIRMITRA_OPS_EVIDENCE_TEMPLATE.md` (hosted Stage 3 credentialed gate is complete; production ops items remain).
+
+Latest local evidence on 2026-07-14:
+
+- PASS: credentialed browser smoke on `seed-tenant-1` via `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8000 --frontend-url http://127.0.0.1:3300/mitrabooks-erp/#`.
+- PASS: guarded destructive demo on the same demo tenant with distinct approver/maker actors (`admin@sanmitra.local`, `mandir.maker@sanmitra.local`) across donation, refund, seva, fund/festival designation, hundi, fund transfer, in-kind inventory, and 80G/FCRA guard scenarios.
+- Evidence: `tmp\mandir-stage3-browser-smoke.json`, `tmp\mandir-stage3-destructive-evidence.json` (sanitized; no credentials/tokens/PII).
+- Prerequisite helper: `python scripts\ensure_mandir_demo_actors.py` creates the local maker actor when missing (requires `MANDIRMITRA_E2E_MAKER_PASSWORD` env; do not commit passwords).
 
 Latest local evidence on 2026-05-22:
 
 - GitHub CI was green for the latest MandirMitra commits.
-- Render workflow deployed and was green.
 - Local browser/backend smoke passed with `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001`.
 - Local cancellation/reversal was verified on seed/demo local data only: `DON-0000004` was marked `reversed`, `REV-112-DON-0000004` appeared in drill-down, Trial Balance remained balanced at `Rs. 1,715.00`, and I&E, R&P, and Balance Sheet remained consistent.
 
@@ -87,15 +109,33 @@ Open:
 http://127.0.0.1:3300/mitrabooks-erp/#
 ```
 
-Known local login:
+Local smoke identity:
 
 ```text
-admin@sanmitra.local / admin123
+MANDIRMITRA_SMOKE_EMAIL=admin@sanmitra.local
+MANDIRMITRA_SMOKE_PASSWORD=<obtain from the authorized local/staging operator>
 ```
 
 ## Stage 3 Live Checks
 
 Record pass/fail evidence for each item.
+
+### Guarded destructive demo mutation
+
+Use only a persisted demo/test tenant whose `/temples/current` record has `platform_can_write=true`. The launcher prompts passwords without echo, requires two distinct authenticated actors, binds confirmation to the exact tenant and API origin, disables Playwright traces/videos, and writes sanitized evidence under `tmp`.
+
+First validate inputs without contacting services or changing data:
+
+```powershell
+python scripts\run_mandirmitra_stage3_destructive.py `
+  --frontend-url "https://<authorized-demo-frontend>" `
+  --api-base-url "https://<authorized-demo-api>" `
+  --tenant-id "<demo-test-or-seed-tenant-id>" `
+  --approver-email "<authorized-approver>" `
+  --maker-email "<authorized-maker>"
+```
+
+After the operator independently verifies the target and tenant, repeat with `--execute`. Never pass passwords on the command line or store them in docs, shell history, screenshots, traces, or evidence files. The suite blocks super-admin/platform-owner identities, tenant mismatches, placeholder temples, non-demo-writable tenants, wrong app context, identical actors, HTTP non-loopback targets, and incomplete confirmation.
 
 | Area | Check | Expected result | Evidence |
 | --- | --- | --- | --- |
@@ -119,6 +159,11 @@ Record pass/fail evidence for each item.
 | Receipt cancellation/reversal | Cancel a demo/test donation or seva receipt | Original receipt remains immutable; receipt status becomes `reversed`; linked `REV-*` journal appears in drill-down; repeated cancellation is idempotent or disabled in UI; Trial Balance remains balanced |  |
 | Exceptions | Verify, reject, and correct pending public payments where test data exists | Verification posts only after UTR/reference capture; rejection/correction retains audit trail | Verification passed on demo pending payment; receipt/accounting posted. |
 | Receipt history | Open donation/seva receipt history | Recent receipts list with preview/download actions |  |
+| 80G/FCRA configuration | Open Settings as tenant admin | Compliance controls load default-off; enabling requires dated approval evidence; validation errors are visible; saving never silently enables incomplete configuration |  |
+| Compliance donation entry | Open Donations with 80G/FCRA off and then on in a demo tenant | Eligibility/foreign-contribution inputs are disabled while off; enabled inputs require donor evidence; foreign contribution fails closed unless the designated account is selected |  |
+| Compliance reports | Open Reports after demo compliance donations | 80G/FCRA readiness rows are tenant-scoped, PAN is masked, and the UI states that readiness output is not an official certificate or filing |  |
+| Fund drill-down | Open Reports after designated donations, opening balances, and transfers | Fund subledger shows accounting-backed opening, income, expense, transfers, and closing balances; designated fund/festival collections reconcile to posted donations |  |
+| Inventory drill-down | Open Reports after valued receipt, approved consumption, and reversal | Quantity, fixed-precision stock value, weighted-average unit value, reorder state, and append-only movement history reconcile; pending maker-checker count is visible |  |
 | Tenant isolation | Try MandirMitra data from GruhaMitra/MitraBooks app context | Cross-app access fails closed or returns only allowed scoped data |  |
 | Accounting guardrail | Review posting path for created records | No direct ledger/balance mutation; posting goes through shared accounting service |  |
 | Audit | Review audit trail where implemented | Verification, rejection, correction, tenant/module changes, and financial actions are traceable |  |
@@ -134,13 +179,24 @@ MandirMitra is not live-ready until:
 - Receipt PDF terminology and layout are visually confirmed.
 - Public no-login payment flow is verified for at least one configured temple/trust.
 - Tenant/app isolation and accounting guardrails have no open blocker.
+- The machine-enforced production gate passes using the evidence contract in `docs/operations/MANDIRMITRA_PRODUCTION_EVIDENCE_SCHEMA.md`:
+
+```powershell
+python scripts\verify_mandirmitra_stage3_signoff.py `
+  --browser-evidence tmp\mandir-stage3-browser-smoke.json `
+  --destructive-evidence tmp\mandir-stage3-destructive-evidence.json `
+  --operations-evidence tmp\mandir-stage3-production-operations.json `
+  --rollback-tag backend-v<previous-version>
+```
+
+The evidence files must remain inside the workspace, contain no secrets or tenant PII, be fresh (seven days by default), and refer to the same explicit demo tenant and frontend/API origins where applicable. Operations evidence must attest the exact deployed `backend-v*` tag and full commit SHA, recent successful backups, and successful isolated non-production restore drills for MongoDB and PostgreSQL. A blocked verifier result is a no-go, not a waivable pass.
 
 ## Staging Rule
 
 - Use non-destructive staging checks unless a clearly marked demo/test temple tenant is available.
 - Do not create, cancel, refund, reverse, or otherwise mutate receipts for real temple/trust tenants such as Parlathya Prathishtana.
 - If no staging demo tenant exists, mark mutation checks as blocked by seed/demo policy and complete only login, module context, navigation, report, PDF preview, and public no-login read/config checks.
-- As of 2026-05-22, the staging smoke is passed for non-destructive checks; destructive mutation checks remain blocked until a clearly marked demo/test temple tenant is available.
-- Demo mutation checks require `DEMO_MANDIR_BOOTSTRAP=true` and a staging-only `DEMO_MANDIR_ADMIN_PASSWORD`. The demo tenant public page should show demo payee/UPI values, not a real trust account.
+- As of 2026-07-17, hosted staging credentialed browser smoke and guarded destructive Stage 3 mutation passed on Demo Temple (`demo-mandir-tenant`). Earlier 2026-05-22 staging smoke covered non-destructive checks only (Parlathya remains read-only).
+- Demo mutation checks require an explicit demo/test/seed tenant with `platform_can_write=true` and dual distinct `tenant_admin` actors. Optional `DEMO_MANDIR_BOOTSTRAP=true` can reseed a known demo tenant on staging deploy; Platform Owners Demo Editable temples are also valid once credentials and `tenant_id` are confirmed. The demo tenant public page should show demo payee/UPI values, not a real trust account.
 - The public page must block submission for live trust records. Use live trust records only for read/config visibility.
 - Protected ERP verification is tenant-scoped. For the default local smoke login (`admin@sanmitra.local / admin123`), select `Demo/Test - Local ERP Demo Temple` so the pending payment belongs to `seed-tenant-1` and appears in ERP Public Payments.
