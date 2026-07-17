@@ -15,6 +15,19 @@ InvestMitra is excluded from the SanMitra unified backend and deployment scope. 
 
 The target platform keeps the four active unified brands and reduces accounting frontend duplication.
 
+## Live Domain And App Context Map
+
+The four live product domains share the unified backend and the same MongoDB/PostgreSQL
+data stores. `X-App-Key` identifies the product context for authorization and module
+routing; it does not select a separate database.
+
+| Live domain | Product context | `X-App-Key` | Accounting model |
+| --- | --- | --- | --- |
+| `www.legalmitra.sanmitratech.in` | LegalMitra legal workflows | `legalmitra` | Legal data is tenant/app isolated; billing can integrate with accounting where enabled. |
+| `www.gruhamitra.sanmitratech.in` | GruhaMitra housing workflows | `gruhamitra` | Housing financial workflows post through the shared MitraBooks double-entry engine. |
+| `www.mandirmitra.sanmitratech.in` | MandirMitra temple/trust workflows | `mandirmitra` | Temple financial workflows post through the shared MitraBooks double-entry engine. |
+| `www.mitrabooks.sanmitratech.in` | MitraBooks unified ERP shell | `mitrabooks` by default; switches to `mandirmitra`/`gruhamitra` for those experiences | Shared double-entry accounting engine. |
+
 ## Current State
 
 The existing backend in `D:\sanmitra-backend` is the reference implementation. It already contains:
@@ -68,6 +81,8 @@ Before frontend merging starts, the platform needs a small foundation PR:
 
 ## Documentation Map
 
+- [AGENTS.md](AGENTS.md) — mandatory guardrails for agents, accounting, tenancy, and destructive shell commands (§5)
+- [Local CI & Security SOP](docs/LOCAL_CI_AND_SECURITY_SOP.md)
 - [Unified Platform PRD](docs/prd/SANMITRA_UNIFIED_PLATFORM_PRD.md)
 - [MitraBooks ERP Gap Matrix](docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md)
 - [Architecture](docs/architecture/ARCHITECTURE.md)
