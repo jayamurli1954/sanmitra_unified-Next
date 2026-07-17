@@ -1,11 +1,13 @@
 # GruhaMitra Stage 4 Smoke Checklist
 
-Date: 2026-05-25  
+Date: 2026-05-25 (updated 2026-07-17)  
 Scope: GruhaMitra workflows inside MitraBooks Unified ERP shell  
 Environment: Production URLs (`gruhamitra.sanmitratech.in` / `www.gruhamitra.sanmitratech.in`)
 
 ## Current State
 
+- **Stage 4 started 2026-07-17** after MandirMitra Stage 3 machine signoff PASS (`backend-v1.3.0`).
+- Hosted Track 0 auth PASS for demo tenant `gruhamitra-demo-society` (`HOUSING`, modules `housing`/`accounting`/`audit`). See `TRACK0_GRUHA_STAGING_CREDENTIALS_RUNBOOK.md`.
 - GruhaMitra login and dashboard load through the deployed frontend.
 - Core settings save flows are working:
   - Society Profile
@@ -45,7 +47,7 @@ GruhaMitra should be usable in production for housing operations while preservin
 
 | Area | Step | Expected Result | Status |
 | --- | --- | --- | --- |
-| Auth + Module Context | Login from `https://www.gruhamitra.sanmitratech.in` | Lands in GruhaMitra app; no redirect loop to MandirMitra | PASS |
+| Auth + Module Context | Login from `https://www.gruhamitra.sanmitratech.in` | Lands in GruhaMitra app; no redirect loop to MandirMitra | PASS (Track 0 hosted auth 2026-07-17: `gruhamitra-demo-society` / HOUSING / housing+accounting+audit) |
 | Dashboard | Open dashboard widgets/cards | Tenant-scoped counts and cards render | PASS |
 | Society Profile | Edit + save profile fields | Changes persist after refresh | PASS |
 | Flats/Blocks | Create/edit block and flat | Records save and reload correctly | PASS |
@@ -56,6 +58,7 @@ GruhaMitra should be usable in production for housing operations while preservin
 | Meetings | Create/list a meeting | Record appears and can be viewed | PASS |
 | Messages | Send message in room/thread | Message appears with correct tenant scope | PASS |
 | Complaints | Create/update complaint | Complaint lifecycle works in same tenant | PASS |
+| Local PWA shell smoke | `npx playwright test e2e/gruhamitra-smoke.spec.js` against built PWA | Landing, login/onboarding, mocked dashboard + core routes | PASS (2026-07-17, 4/4) |
 | Generate Bills | Run bill generation for a month | Bills generated; no validation/runtime errors | TODO |
 | Post Bills to Accounting | Post generated bills | Posting succeeds via shared accounting service | TODO |
 | Accounting Evidence | Verify journal/ledger impact | Debit=Credit; tenant-scoped entries; no direct balance mutation | TODO |

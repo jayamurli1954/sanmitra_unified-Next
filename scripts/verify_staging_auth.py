@@ -15,7 +15,8 @@ DEFAULT_API_BASE = "https://sanmitra-unified-next-staging-sg.onrender.com"
 DEFAULT_APP_KEY = "mitrabooks"
 DEFAULT_TENANT_ID = "demo-mitrabooks-business"
 DEFAULT_EMAIL = "business.admin@sanmitra.local"
-REQUIRED_MODULES = {"business", "accounting", "audit"}
+DEFAULT_ORGANIZATION_TYPE = "BUSINESS"
+DEFAULT_REQUIRED_MODULES = "business,accounting,audit"
 
 
 def _request_json(request: Request, timeout: int = 20) -> tuple[int, dict]:
@@ -44,6 +45,15 @@ def main() -> int:
   api_base = str(os.getenv("STAGING_API_BASE_URL", DEFAULT_API_BASE)).strip().rstrip("/")
   app_key = str(os.getenv("STAGING_APP_KEY", DEFAULT_APP_KEY)).strip() or DEFAULT_APP_KEY
   expected_tenant = str(os.getenv("EXPECTED_TENANT_ID", DEFAULT_TENANT_ID)).strip() or DEFAULT_TENANT_ID
+  expected_org = (
+    str(os.getenv("EXPECTED_ORGANIZATION_TYPE", DEFAULT_ORGANIZATION_TYPE)).strip().upper()
+    or DEFAULT_ORGANIZATION_TYPE
+  )
+  required_modules = {
+    part.strip()
+    for part in str(os.getenv("REQUIRED_MODULES", DEFAULT_REQUIRED_MODULES)).split(",")
+    if part.strip()
+  } or set(DEFAULT_REQUIRED_MODULES.split(","))
   email = str(os.getenv("E2E_USER_EMAIL", "")).strip()
   password = str(os.getenv("E2E_USER_PASSWORD", "")).strip()
 
@@ -111,13 +121,15 @@ def main() -> int:
     for item in (modules_payload.get("enabled_modules") or [])
     if isinstance(item, dict)
   }
-  missing = sorted(REQUIRED_MODULES - module_keys)
+  missing = sorted(required_modules - module_keys)
 
   errors: list[str] = []
   if actual_tenant != expected_tenant:
     errors.append(f"tenant mismatch: expected {expected_tenant!r}, got {actual_tenant!r}")
-  if organization_type != "BUSINESS":
-    errors.append(f"organization_type mismatch: expected 'BUSINESS', got {organization_type!r}")
+  if organization_type != expected_org:
+    errors.append(
+      f"organization_type mismatch: expected {expected_org!r}, got {organization_type!r}"
+    )
   if missing:
     errors.append(f"missing required modules: {', '.join(missing)}")
 
@@ -129,9 +141,10 @@ def main() -> int:
 
   print("PASS: staging auth credentials and tenant context verified.")
   print(f" - api_base: {api_base}")
+  print(f" - app_key: {app_key}")
   print(f" - tenant_id: {actual_tenant}")
   print(f" - organization_type: {organization_type}")
-  print(f" - required modules present: {', '.join(sorted(REQUIRED_MODULES))}")
+  print(f" - required modules present: {', '.join(sorted(required_modules))}")
   return 0
 
 

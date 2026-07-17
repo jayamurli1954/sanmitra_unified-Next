@@ -168,7 +168,8 @@ test.describe('GruhaMitra public PWA smoke', () => {
 
     await expect(page.getByRole('heading', { name: /run your rwa or apartment society/i })).toBeVisible();
     await expect(page.getByLabel('GruhaMitra entry actions').getByRole('link', { name: /^Login$/i })).toBeVisible();
-    await expect(page.getByLabel('GruhaMitra entry actions').getByRole('link', { name: /register society/i })).toBeVisible();
+    await expect(page.getByLabel('GruhaMitra entry actions').getByRole('link', { name: /^Register$/i })).toBeVisible();
+    await expect(page.getByLabel('GruhaMitra entry actions').getByRole('link', { name: /request demo/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Maintenance Billing/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /MitraBooks Accounting/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /^Starter$/i })).toBeVisible();
@@ -188,8 +189,8 @@ test.describe('GruhaMitra public PWA smoke', () => {
     await expect(page.locator('body')).toContainText(/society|register|onboard/i);
 
     await page.goto('/gruhamitra/');
-    await page.getByRole('link', { name: /join society/i }).click();
-    await expect(page.locator('body')).toContainText(/resident|society|join/i);
+    await page.getByLabel('GruhaMitra entry actions').getByRole('link', { name: /^Register$/i }).click();
+    await expect(page.locator('body')).toContainText(/society|register|onboard|demo/i);
   });
 });
 

@@ -183,7 +183,15 @@ Hosted MandirMitra Stage 3 credentialed gates closed on Demo Temple (`tenant_id=
 - Staging API: `https://sanmitra-unified-next-staging-sg.onrender.com`; ERP: `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`.
 - Track 0: `docs/operations/TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`.
 
-Stage 3 live-readiness / production signoff remains blocked on production ops evidence (backup/restore, production frontend/API, security config) and a reviewed `backend-v*` release/rollback tag chain. GruhaMitra Stage 4 starts only after that production-ready gate (or an explicit platform-owner waiver). 80G/FCRA production enablement additionally requires tenant legal/compliance review.
+Stage 3 machine signoff PASSED on 2026-07-17 (`backend-v1.3.0` / rollback `backend-v1.2.0`; Path B `ENVIRONMENT=staging` waiver; local operator logical-export backup drill). 80G/FCRA production enablement additionally requires tenant legal/compliance review.
+
+### 2026-07-17 Stage 4 start (GruhaMitra)
+
+GruhaMitra Stage 4 started after Mandir Stage 3 machine signoff PASS:
+
+- Hosted Track 0 auth PASS for `gruhamitra-demo-society` (`organization_type=HOUSING`, modules `housing`/`accounting`/`audit`) via `scripts/verify_staging_auth.py`.
+- Track 0 runbook: `docs/operations/TRACK0_GRUHA_STAGING_CREDENTIALS_RUNBOOK.md`.
+- Remaining Stage 4 gate work: maintenance bill generate → post → accounting evidence → collections/receipts → reversal (see `GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md`).
 
 ## Non-Goals
 

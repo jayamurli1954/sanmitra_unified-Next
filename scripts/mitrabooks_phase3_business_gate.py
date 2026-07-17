@@ -155,7 +155,7 @@ def run_staging_read_only_smoke(staging_url: str) -> list[tuple[str, bool]]:
 
 def validate_destructive_demo_policy(tenant_id: str, env: dict[str, str] | None = None) -> tuple[bool, list[str]]:
     """Fail closed unless destructive staging checks are scoped to the demo tenant."""
-    runtime_env = env or os.environ
+    runtime_env = os.environ if env is None else env
     errors: list[str] = []
     normalized_tenant = str(tenant_id or "").strip()
     confirmation = str(runtime_env.get(DEMO_CONFIRM_ENV, "")).strip()
@@ -175,7 +175,7 @@ def validate_destructive_demo_policy(tenant_id: str, env: dict[str, str] | None 
 
 def destructive_demo_api_base(staging_url: str, env: dict[str, str] | None = None) -> str:
     """Resolve the API base used for the destructive deployed demo precheck."""
-    runtime_env = env or os.environ
+    runtime_env = os.environ if env is None else env
     explicit_api_base = str(runtime_env.get(DEMO_API_BASE_ENV, "")).strip().rstrip("/")
     if explicit_api_base:
         return explicit_api_base
@@ -215,7 +215,7 @@ def _payload_detail(payload: dict) -> str:
 
 def validate_destructive_demo_auth_context(staging_url: str, tenant_id: str, env: dict[str, str] | None = None) -> tuple[bool, list[str]]:
     """Verify deployed credentials before running destructive browser mutations."""
-    runtime_env = env or os.environ
+    runtime_env = os.environ if env is None else env
     api_base = destructive_demo_api_base(staging_url, runtime_env)
     login_url = f"{api_base}/api/v1/auth/login"
     email = str(runtime_env.get(DEMO_USER_ENV, "")).strip()
