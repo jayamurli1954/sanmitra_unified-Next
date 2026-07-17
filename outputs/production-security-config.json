@@ -1,0 +1,30 @@
+{
+  "status": "blocked",
+  "checked_at": "2026-07-17T12:00:08.609719+00:00",
+  "environment": "invalid",
+  "secret_policy_checks": {
+    "JWT_SECRET": true,
+    "MANDIR_ONBOARDING_SECRET": true,
+    "OTP_PEPPER": true
+  },
+  "secrets_distinct": true,
+  "disabled_control_checks": {
+    "ALLOW_OPEN_REGISTRATION": true,
+    "AUTH_EMAIL_DEBUG_RETURN_LINK": true,
+    "DEMO_MANDIR_BOOTSTRAP": true,
+    "DEMO_MITRABOOKS_BOOTSTRAP": true,
+    "DEMO_MITRABOOKS_E2E_SEED_ENABLED": true,
+    "MOBILE_OTP_DEBUG_RETURN_CODE": true,
+    "SUPER_ADMIN_BOOTSTRAP": true
+  },
+  "platform_waiver": {
+    "decision": "Path B — keep ENVIRONMENT=staging for now",
+    "decided_at": "2026-07-17",
+    "decided_by_role": "platform-owner",
+    "service_name": "sanmitra-unified-next-staging-sg",
+    "api_origin": "https://sanmitra-unified-next-staging-sg.onrender.com",
+    "reason": "Live clients already onboarded on this single-stack service. Formal verifier remains blocked only on ENVIRONMENT until a dedicated production profile or ENVIRONMENT=production flip is authorized.",
+    "remaining_blocker": "ENVIRONMENT must be explicitly set to production or prod",
+    "controls_hardened": "All bootstrap, demo seed, open-registration, and auth debug-return flags explicitly false; secrets present and distinct."
+  }
+}

@@ -40,6 +40,28 @@ that the hosted production service has the intended values. Production readiness
 open until an authorized operator runs the command in the actual service environment and
 records fresh passing evidence.
 
+## Platform waiver (2026-07-17) — Path B
+
+**Decision (platform owner):** Keep `ENVIRONMENT=staging` on the live single-stack
+service `sanmitra-unified-next-staging-sg` for the time being. Live clients on
+LegalMitra, MandirMitra, GruhaMitra, and MitraBooks continue on this service.
+
+**Verified on 2026-07-17 (Render shell):**
+`scripts/verify_production_security_config.py` returned `status=blocked` with **only**
+`ENVIRONMENT must be explicitly set to production or prod`. All required secrets
+passed; all bootstrap, demo seed, open-registration, and auth debug-return controls
+were explicitly `false`.
+
+**Sanitized evidence:** `outputs/production-security-config.json` (no secret values).
+
+**What this waiver does not cover:**
+- MongoDB Atlas and PostgreSQL backup + isolated restore drills
+- `backend-v*` release/rollback tags and clean-worktree machine signoff
+- Flipping `ENVIRONMENT` to `production`/`prod` (still required for a full verifier PASS)
+
+**Lift the waiver** by setting `ENVIRONMENT=production` (or `prod`) after a planned
+redeploy, confirming `/health`, then re-running the verifier to `status=passed`.
+
 ## Implementation sequence
 
 1. Configure secrets through the hosting provider's protected environment controls.

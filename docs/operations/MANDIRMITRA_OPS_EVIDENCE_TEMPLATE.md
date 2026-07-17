@@ -18,9 +18,9 @@ ops items below; confirm each separately and do not invent a PASS.
 | Item | Status | Notes |
 | --- | --- | --- |
 | Hosted staging credentialed MandirMitra demo (browser + guarded destructive) | PASS (2026-07-15 / 2026-07-17) | Demo Temple `demo-mandir-tenant`; evidence `tmp/mandir-stage3-browser-smoke.json`, `tmp/mandir-stage3-destructive-evidence.json`. Track 0: [`TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`](./TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md). |
-| MongoDB + PostgreSQL provider backup + isolated restore confirmation | PENDING | Schedule, retention (≥7 days), restore owner, and successful restore to isolated non-production. Policy: [`BACKUP_RESTORE_RUNBOOK.md`](./BACKUP_RESTORE_RUNBOOK.md). |
+| MongoDB + PostgreSQL provider backup + isolated restore confirmation | PENDING | Schedule, retention (≥7 days), restore owner, and successful restore to isolated non-production. Policy: [`BACKUP_RESTORE_RUNBOOK.md`](./BACKUP_RESTORE_RUNBOOK.md). Atlas backups not yet enabled on Cluster0; Render Postgres Recovery needs export/restore drill. |
 | Release tag + prior rollback tag (`backend-v*`) on clean HEAD | PENDING | Exact tag/SHA must match operations evidence. |
-| Production security config on Render | PENDING | Run `scripts/verify_production_security_config.py` **only in the authorized Render production service shell**; retain sanitized JSON only. See [`PRODUCTION_SECURITY_CONFIG_GATE.md`](./PRODUCTION_SECURITY_CONFIG_GATE.md). |
+| Production security config on Render | HARDENED + Path B waiver (2026-07-17) | Secrets and all disable-controls PASS on `sanmitra-unified-next-staging-sg`. Formal verifier remains BLOCKED only on `ENVIRONMENT=staging` by platform-owner Path B waiver. Evidence: `outputs/production-security-config.json`. See [`PRODUCTION_SECURITY_CONFIG_GATE.md`](./PRODUCTION_SECURITY_CONFIG_GATE.md). |
 
 ## Hard rules for the JSON
 

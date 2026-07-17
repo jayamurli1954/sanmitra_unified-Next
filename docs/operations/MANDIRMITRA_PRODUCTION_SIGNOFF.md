@@ -2,7 +2,7 @@
 
 Date: 2026-05-22
 
-Last gate review: 2026-07-17
+Last gate review: 2026-07-17 (Path B security waiver recorded)
 
 ## Decision
 
@@ -82,15 +82,26 @@ These areas completed hosted Stage 3 demo mutation on 2026-07-17. They remain di
 | Hosted staging credentialed Stage 3 | Passed. Browser smoke PASS on 2026-07-15 and guarded destructive 8/8 PASS on 2026-07-17 against Demo Temple (`tenant_id=demo-mandir-tenant`, temple id 1, `platform_can_write=true`) on staging API `https://sanmitra-unified-next-staging-sg.onrender.com` and MitraBooks ERP `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/`. Distinct actors: `temple.demo.admin@sanmitratech.in` (approver) and `temple.demo.maker@sanmitratech.in` (maker). Sanitized evidence: `tmp/mandir-stage3-browser-smoke.json`, `tmp/mandir-stage3-destructive-evidence.json`. Track 0: `docs/operations/TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`. |
 | CI for latest docs/evidence commit | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
 | Render deployment | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
-| Production env checklist | Partially confirmed. MongoDB, Mongo DB name, PostgreSQL, JWT, allowed app keys, `mandirmitra` app-key behavior, demo bootstrap off, super-admin bootstrap off, and receipt PDF fallback are confirmed. MitraBooks ERP production frontend URL remains pending. |
+| Production env checklist | Partially confirmed. Live stack uses Render service `sanmitra-unified-next-staging-sg` (`ENVIRONMENT=staging` by Path B waiver), MongoDB Atlas `Cluster0`, Postgres `sanmitra-postgres-staging`, frontends `www.mitrabooks.sanmitratech.in` / `www.mandirmitra.sanmitratech.in`. Secrets + bootstrap/demo/open-registration controls hardened 2026-07-17; formal `ENVIRONMENT=production` deferred. |
 | Production access policy | Confirmed. No shared/default production password; no `.local` production admin accounts; platform-owner access must use a real email with activation/reset or one-time bootstrap followed by bootstrap disabled. |
 | Backup/restore confirmation | Policy documented in `docs/operations/BACKUP_RESTORE_RUNBOOK.md`; provider backup schedule, retention, storage location, restore owner, and successful isolated non-production restore drills for MongoDB and PostgreSQL still need production confirmation before live financial use. |
 | Rollback tag/process | Pending execution. Policy is confirmed: production deploy should use a `backend-v*` tag, rollback redeploys the previous known-good tag, and financial corrections use reversal/adjustment entries rather than ledger edits. |
 | Machine-enforced production signoff | Implemented fail-closed in `scripts/verify_mandirmitra_stage3_signoff.py`. It requires fresh matching browser/destructive demo evidence, confirmed backup/restore and production operations evidence bound to the exact deployed release tag and commit, a clean worktree, and a valid release/rollback tag chain before it runs full and release preflight. The evidence contract is documented in `docs/operations/MANDIRMITRA_PRODUCTION_EVIDENCE_SCHEMA.md`; current external confirmations remain pending. |
 | Tenant seed/demo policy | Confirmed. Production must not depend on `seed-tenant-1`; demo/test tenants must be clearly named; real trusts are not used for destructive smoke; 80G/FCRA is not default-on; demo UPI IDs are not used for real tenants. |
 
+## Platform waiver — Path B (2026-07-17)
+
+Platform owner decision: keep `ENVIRONMENT=staging` on the live single-stack Render
+service for now. Clients remain on current domains and API.
+
+- Security verifier: secrets and disable-controls PASS; **only** ENVIRONMENT blocks full PASS.
+- Evidence: `outputs/production-security-config.json` and
+  `docs/operations/PRODUCTION_SECURITY_CONFIG_GATE.md` (Platform waiver section).
+- This waiver does **not** waive backup/restore drills, release tags, or clean-worktree
+  machine signoff.
+
 ## Recommendation
 
-Hosted MandirMitra Stage 3 credentialed smoke and destructive demo are complete for `demo-mandir-tenant`. MandirMitra is still not production-approved: production approval remains blocked until `scripts/verify_mandirmitra_stage3_signoff.py` accepts production operations evidence (backup/restore, production frontend/API, security config) plus a reviewed `backend-v*` release/rollback tag chain on a clean HEAD.
+Hosted MandirMitra Stage 3 credentialed smoke and destructive demo are complete for `demo-mandir-tenant`. MandirMitra remains **ops-incomplete** for machine production signoff: backup/restore evidence, `backend-v*` tags, and clean worktree are still required. Full `verify_production_security_config.py` PASS is deferred under Path B until `ENVIRONMENT=production` (or `prod`) is authorized.
 
-Do not start GruhaMitra Stage 4 / production migration until the pending production checks above are marked confirmed or explicitly waived by the platform owner.
+GruhaMitra Stage 4 may start only after backup/restore + release-tag discipline are confirmed, or after an **additional** explicit platform-owner waiver for Stage 4 start.
