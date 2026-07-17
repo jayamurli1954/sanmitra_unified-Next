@@ -97,10 +97,22 @@ DESTROY_DEMO_ONLY:gruhamitra-demo-society@https://sanmitra-unified-next-staging-
 
 ## Stage 4 Remaining Gaps (billing)
 
-These remain open until credentialed hosted evidence is captured:
+Hosted billing cycle on `gruhamitra-demo-society` **PASSED** on 2026-07-17
+(`scripts/gruhamitra_stage4_billing_gate.py`, evidence
+`tmp/gruhamitra-stage4-billing-evidence.json`):
 
-- Generate maintenance bills for a month
-- Post bills through MitraBooks accounting
-- Verify debit=credit / tenant-scoped journals
-- Collections/receipts against generated bills
-- Reversal/adjustment where enabled
+- Generate maintenance bills (Jul 2026, 9 bills)
+- Initialize housing COA when missing, then post through MitraBooks accounting
+- Verify debit=credit on voucher drilldown
+- Collections/receipts via `/api/v1/housing/maintenance-collections`
+- Reversal/adjustment via `/api/v1/maintenance/reverse-bill`
+
+Guarded command (operator shell only; no secrets in git):
+
+```powershell
+$env:GRUHA_DEMO_E2E_CONFIRM = "gruhamitra-demo-society"
+$env:GRUHA_RUN_DESTRUCTIVE_E2E = "true"
+$env:E2E_USER_EMAIL = "<staging demo admin email>"
+$env:E2E_USER_PASSWORD = "<staging-only password from secret manager>"
+python scripts/gruhamitra_stage4_billing_gate.py --month 7 --year 2026
+```

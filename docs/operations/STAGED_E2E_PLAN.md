@@ -191,7 +191,8 @@ GruhaMitra Stage 4 started after Mandir Stage 3 machine signoff PASS:
 
 - Hosted Track 0 auth PASS for `gruhamitra-demo-society` (`organization_type=HOUSING`, modules `housing`/`accounting`/`audit`) via `scripts/verify_staging_auth.py`.
 - Track 0 runbook: `docs/operations/TRACK0_GRUHA_STAGING_CREDENTIALS_RUNBOOK.md`.
-- Remaining Stage 4 gate work: maintenance bill generate → post → accounting evidence → collections/receipts → reversal (see `GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md`).
+- Hosted billing gate PASS (`scripts/gruhamitra_stage4_billing_gate.py`): generate → COA init → post 9 journals → balanced voucher evidence → collection → reversal for Jul 2026 on `gruhamitra-demo-society` (evidence `tmp/gruhamitra-stage4-billing-evidence.json`).
+- Checklist: `docs/operations/GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md` billing rows marked PASS.
 
 ## Non-Goals
 

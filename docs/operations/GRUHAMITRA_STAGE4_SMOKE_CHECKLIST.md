@@ -8,6 +8,7 @@ Environment: Production URLs (`gruhamitra.sanmitratech.in` / `www.gruhamitra.san
 
 - **Stage 4 started 2026-07-17** after MandirMitra Stage 3 machine signoff PASS (`backend-v1.3.0`).
 - Hosted Track 0 auth PASS for demo tenant `gruhamitra-demo-society` (`HOUSING`, modules `housing`/`accounting`/`audit`). See `TRACK0_GRUHA_STAGING_CREDENTIALS_RUNBOOK.md`.
+- Hosted billing gate PASS on 2026-07-17 (generate → COA init → post → balanced voucher → collection → reversal). Gate: `scripts/gruhamitra_stage4_billing_gate.py`.
 - GruhaMitra login and dashboard load through the deployed frontend.
 - Core settings save flows are working:
   - Society Profile
@@ -59,11 +60,11 @@ GruhaMitra should be usable in production for housing operations while preservin
 | Messages | Send message in room/thread | Message appears with correct tenant scope | PASS |
 | Complaints | Create/update complaint | Complaint lifecycle works in same tenant | PASS |
 | Local PWA shell smoke | `npx playwright test e2e/gruhamitra-smoke.spec.js` against built PWA | Landing, login/onboarding, mocked dashboard + core routes | PASS (2026-07-17, 4/4) |
-| Generate Bills | Run bill generation for a month | Bills generated; no validation/runtime errors | TODO |
-| Post Bills to Accounting | Post generated bills | Posting succeeds via shared accounting service | TODO |
-| Accounting Evidence | Verify journal/ledger impact | Debit=Credit; tenant-scoped entries; no direct balance mutation | TODO |
-| Collections/Receipts | Record collection for bill | Receipt/collection updates pending dues correctly | TODO |
-| Reversal/Adjustment | Reverse one test bill/payment (if enabled) | Reversal entry created; original posted entry immutable | TODO |
+| Generate Bills | Run bill generation for a month | Bills generated; no validation/runtime errors | PASS (2026-07-17 hosted: Jul 2026, 9 bills / Rs. 13,500; evidence `tmp/gruhamitra-stage4-billing-evidence.json`) |
+| Post Bills to Accounting | Post generated bills | Posting succeeds via shared accounting service | PASS (2026-07-17: COA initialized then 9 journals posted) |
+| Accounting Evidence | Verify journal/ledger impact | Debit=Credit; tenant-scoped entries; no direct balance mutation | PASS (voucher drilldown balanced for first posted journal) |
+| Collections/Receipts | Record collection for bill | Receipt/collection updates pending dues correctly | PASS (2026-07-17: `/housing/maintenance-collections` on sample posted bill) |
+| Reversal/Adjustment | Reverse one test bill/payment (if enabled) | Reversal entry created; original posted entry immutable | PASS (2026-07-17: reverse-bill with reversal journal on second posted bill) |
 
 ## Accounting Guardrail Checks (Mandatory)
 
