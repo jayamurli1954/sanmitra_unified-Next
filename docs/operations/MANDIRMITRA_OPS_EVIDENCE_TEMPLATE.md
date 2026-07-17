@@ -18,7 +18,7 @@ ops items below; confirm each separately and do not invent a PASS.
 | Item | Status | Notes |
 | --- | --- | --- |
 | Hosted staging credentialed MandirMitra demo (browser + guarded destructive) | PASS (2026-07-15 / 2026-07-17) | Demo Temple `demo-mandir-tenant`; evidence `tmp/mandir-stage3-browser-smoke.json`, `tmp/mandir-stage3-destructive-evidence.json`. Track 0: [`TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md`](./TRACK0_MANDIR_STAGING_CREDENTIALS_RUNBOOK.md). |
-| MongoDB + PostgreSQL provider backup + isolated restore confirmation | PENDING | Live-stack click path: [`MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md`](./MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md). Policy: [`BACKUP_RESTORE_RUNBOOK.md`](./BACKUP_RESTORE_RUNBOOK.md). Atlas backups not yet enabled on Cluster0; Render Postgres Recovery needs export/restore drill. |
+| MongoDB + PostgreSQL backup/export + isolated restore confirmation | DEFERRED / PENDING | **Mongo paid Atlas backup deferred** by platform owner (2026-07-17) until client/tenant onboarding justifies cost. Optional free `operator_managed_logical_export` path remains available. Postgres Render export/restore still open if pursued. Checklist: [`MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md`](./MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md). |
 | Release tag + prior rollback tag (`backend-v*`) on clean HEAD | PENDING | Exact tag/SHA must match operations evidence. |
 | Production security config on Render | HARDENED + Path B waiver (2026-07-17) | Secrets and all disable-controls PASS on `sanmitra-unified-next-staging-sg`. Formal verifier remains BLOCKED only on `ENVIRONMENT=staging` by platform-owner Path B waiver. Evidence: `outputs/production-security-config.json`. See [`PRODUCTION_SECURITY_CONFIG_GATE.md`](./PRODUCTION_SECURITY_CONFIG_GATE.md). |
 
@@ -48,6 +48,7 @@ all required fields are real.
   "mongodb_backup": {
     "provider": "REPLACE_PROVIDER_NAME",
     "service_name": "REPLACE_MONGODB_SERVICE_NAME",
+    "backup_mode": "REPLACE_WITH_provider_managed_snapshot_OR_operator_managed_logical_export",
     "provider_backup_enabled": false,
     "schedule": "REPLACE_SCHEDULE_e.g._daily",
     "retention_days": 0,
@@ -61,6 +62,7 @@ all required fields are real.
   "postgresql_backup": {
     "provider": "REPLACE_PROVIDER_NAME",
     "service_name": "REPLACE_POSTGRESQL_SERVICE_NAME",
+    "backup_mode": "REPLACE_WITH_provider_managed_snapshot_OR_operator_managed_logical_export",
     "provider_backup_enabled": false,
     "schedule": "REPLACE_SCHEDULE_e.g._daily",
     "retention_days": 0,

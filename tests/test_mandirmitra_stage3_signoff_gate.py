@@ -47,6 +47,7 @@ def backup(service_name: str) -> dict[str, object]:
     return {
         "provider": "managed-provider",
         "service_name": service_name,
+        "backup_mode": "provider_managed_snapshot",
         "provider_backup_enabled": True,
         "schedule": "daily",
         "retention_days": 14,
@@ -139,6 +140,35 @@ def test_operations_evidence_binds_exact_release_and_restore_result() -> None:
     failed_restore["postgresql_backup"]["last_restore_test_status"] = "failed"  # type: ignore[index]
     with pytest.raises(ValueError, match="last restore test status must be passed"):
         gate.validate_operations(failed_restore, 7)
+
+
+def test_operations_evidence_allows_operator_managed_logical_exports() -> None:
+    payload = operations_evidence()
+    payload["mongodb_backup"].update({  # type: ignore[union-attr]
+        "provider": "MongoDB tools",
+        "backup_mode": "operator_managed_logical_export",
+        "provider_backup_enabled": False,
+        "schedule": "daily mongodump",
+        "restore_location": "encrypted-offsite-backup-vault / Cluster0-restore-drill",
+    })
+
+    gate.validate_operations(payload, 7)
+
+
+def test_operations_evidence_rejects_unknown_backup_mode() -> None:
+    payload = operations_evidence()
+    payload["mongodb_backup"]["backup_mode"] = "manual_note_only"  # type: ignore[index]
+
+    with pytest.raises(ValueError, match="backup_mode must be"):
+        gate.validate_operations(payload, 7)
+
+
+def test_operations_evidence_rejects_disabled_provider_snapshot() -> None:
+    payload = operations_evidence()
+    payload["mongodb_backup"]["provider_backup_enabled"] = False  # type: ignore[index]
+
+    with pytest.raises(ValueError, match="provider backup must be confirmed enabled"):
+        gate.validate_operations(payload, 7)
 
 
 def test_malformed_numeric_evidence_fails_closed() -> None:

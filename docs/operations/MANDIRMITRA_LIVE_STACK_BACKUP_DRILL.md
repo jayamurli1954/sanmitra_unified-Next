@@ -22,54 +22,71 @@ Ops template: [`MANDIRMITRA_OPS_EVIDENCE_TEMPLATE.md`](./MANDIRMITRA_OPS_EVIDENC
 | PostgreSQL | Render **`sanmitra-postgres-staging`** |
 | Security Path B | Hardened controls; `ENVIRONMENT=staging` waived — see `PRODUCTION_SECURITY_CONFIG_GATE.md` |
 
-## Non-negotiable rules
+## Platform decision — Mongo paid backup deferred (2026-07-17)
+
+**Platform owner decision:** Do **not** enable MongoDB Atlas Continuous Cloud Backup / paid
+snapshot plans at this time. Cost is not justified for the current early stage.
+
+- Revisit paid Atlas backup when onboarding clients/tenants with meaningful live data,
+  or when the platform owner explicitly authorizes a budgeted backup plan.
+- Until then, machine Mandir production signoff remains **incomplete** on Mongo backup
+  evidence unless an optional free **operator-managed logical export** (`mongodump`)
+  path is completed later.
+- This waiver covers **paid Atlas provider backup only**. It does not invent a PASS.
+
+## Non-negotiable rules (when any backup path is used)
 
 - Restore drills must target an **isolated non-production** database/cluster copy — never overwrite live client data as the drill.
 - Do not paste connection strings, passwords, or dumps into git, chat, or evidence JSON.
 - Prefer restoring **Mongo + Postgres** to compatible points for financial consistency.
 - Posted ledger rows are never edited; use reversal/adjustment only.
+- `backup_mode` must be `provider_managed_snapshot` or `operator_managed_logical_export`.
 
 ---
 
-## Part A — MongoDB Atlas (`Cluster0`)
+## Part A — MongoDB (`Cluster0`)
 
-### Current gap (2026-07-17)
+### Current status (2026-07-17)
 
-Atlas **Backup** page showed upgrade prompts for daily/continuous backups — backups were **not yet enabled**.
+- Atlas paid Continuous / cloud backups: **declined / deferred** (see platform decision above).
+- Optional later path: free **operator-managed logical export** (`mongodump` or Atlas Data Export)
+  with encrypted private storage **outside** the repository, then restore into an isolated target.
 
-### Enable backups
+### Path A1 — Paid Atlas snapshots (deferred; do not enable now)
 
-1. Open [MongoDB Atlas](https://cloud.mongodb.com/) → **Project 0** → **Cluster0**.
-2. Left menu → **Backup** (or cluster **…** → Edit configuration / Backup).
-3. Choose an affordable plan that enables **daily backups** (or continuous PITR if budget allows).
-4. Confirm backup is **Active** and note:
-   - Schedule (e.g. daily)
-   - Retention days (**must be ≥ 7** for signoff)
-5. Wait until at least one successful snapshot exists (may take hours after enablement).
+Skip for now. When budget and live data justify it:
 
-### Isolated restore drill
+1. Atlas → Project 0 → Cluster0 → Backup → enable daily or continuous backups.
+2. Retention ≥ 7 days; wait for a successful snapshot.
+3. Restore snapshot to a **new** drill cluster (e.g. `Cluster0-restore-drill`).
+4. Evidence: `backup_mode=provider_managed_snapshot`, `provider_backup_enabled=true`.
 
-1. Atlas → **Backup** → select a completed snapshot.
-2. **Restore** → restore to a **new cluster** or temporary target (e.g. `Cluster0-restore-drill`), **not** in-place overwrite of `Cluster0`.
-3. Confirm restore job **Succeeded**.
-4. Optional smoke (read-only against restore target if reachable): list a known demo/test collection count; do not point live Render at the drill cluster.
-5. Record ISO timestamps for last successful backup and restore drill.
-6. Delete or pause the drill cluster when done (cost control).
+### Path A2 — Operator-managed logical export (optional, $0 Atlas add-on)
 
-### Evidence fields to fill
+Use only when you want Mongo restore evidence without paid Atlas backup:
+
+1. From an authorized machine with Atlas network access, run `mongodump` against Cluster0
+   (connection string stays in secret manager / local env only — never in git).
+2. Store the dump in a private encrypted location outside this repository; keep ≥ 7 days of exports.
+3. Restore into an isolated Mongo target (local Docker Mongo or a temporary free/shared test DB) —
+   **never** overwrite Cluster0 as the drill.
+4. Record ISO timestamps for export and restore success.
+
+Evidence fields when Path A2 is used:
 
 ```text
-mongodb_backup.provider = MongoDB Atlas
+mongodb_backup.provider = MongoDB tools
 mongodb_backup.service_name = Cluster0 (Project 0)
-mongodb_backup.provider_backup_enabled = true   # only after Active
-mongodb_backup.schedule = daily | continuous
-mongodb_backup.retention_days = <>=7>
+mongodb_backup.backup_mode = operator_managed_logical_export
+mongodb_backup.provider_backup_enabled = false
+mongodb_backup.schedule = daily mongodump
+mongodb_backup.retention_days = >=7
 mongodb_backup.last_successful_backup_at = <ISO8601>
 mongodb_backup.last_restore_test_at = <ISO8601>
 mongodb_backup.last_restore_test_status = passed
 mongodb_backup.last_restore_test_target = isolated_nonproduction
 mongodb_backup.restore_owner = platform-owner
-mongodb_backup.restore_location = Atlas Project 0 / Cluster0-restore-drill (name only)
+mongodb_backup.restore_location = vault-or-folder-name / restore-target-name only
 ```
 
 ---
@@ -78,40 +95,31 @@ mongodb_backup.restore_location = Atlas Project 0 / Cluster0-restore-drill (name
 
 ### Current gap (2026-07-17)
 
-Service **Recovery** tab is available. Basic-256mb plans may limit PITR; **logical Export** is the minimum path for a restore drill.
+Service **Recovery** tab is available. Basic-256mb plans may limit PITR; **logical Export**
+is the preferred low-cost path (`backup_mode=operator_managed_logical_export`).
 
-### Confirm backup / export
+### Confirm export
 
 1. Render → **PostgreSQL** → `sanmitra-postgres-staging` → **Recovery**.
-2. Note whether **Point-in-Time Recovery** is available on this plan.
-3. Under **Export**, click **Create export** (logical backup).
-4. Wait until export status is complete; record time.
+2. Under **Export**, click **Create export**.
+3. Wait until export status is complete; record time.
 
 ### Isolated restore drill
 
-Pick one:
-
-**Option 1 — New Render Postgres (preferred):**
-
 1. Create a temporary Postgres instance (e.g. `sanmitra-postgres-restore-drill`) in the same region.
 2. Restore/import from the export into that **new** instance only.
-3. Confirm instance Available.
-4. Optional: run `SELECT 1` / count journals via temporary connection (do not switch live `POSTGRES_URI`).
-5. Delete the drill instance when finished.
+3. Confirm instance Available; do not switch live `POSTGRES_URI`.
+4. Delete the drill instance when finished.
 
-**Option 2 — PITR recreate (if plan allows):**
-
-1. Recovery → recreate from backup into a **new** database name/instance.
-2. Do **not** replace the live instance until a real disaster and platform-owner approval.
-
-### Evidence fields to fill
+Evidence fields:
 
 ```text
 postgresql_backup.provider = Render
 postgresql_backup.service_name = sanmitra-postgres-staging
-postgresql_backup.provider_backup_enabled = true   # after export/PITR confirmed
-postgresql_backup.schedule = daily | on-demand-export
-postgresql_backup.retention_days = <>=7 or Render plan retention>
+postgresql_backup.backup_mode = operator_managed_logical_export
+postgresql_backup.provider_backup_enabled = false
+postgresql_backup.schedule = on-demand-export | daily
+postgresql_backup.retention_days = >=7 or Render plan retention
 postgresql_backup.last_successful_backup_at = <ISO8601>
 postgresql_backup.last_restore_test_at = <ISO8601>
 postgresql_backup.last_restore_test_status = passed
@@ -122,24 +130,25 @@ postgresql_backup.restore_location = Render / sanmitra-postgres-restore-drill (n
 
 ---
 
-## Part C — After both drills pass
+## Part C — After drills pass (when you choose to complete them)
 
-1. Set `cross_store_restore_strategy_confirmed = true` only if you confirm both stores restore to compatible points.
+1. Set `cross_store_restore_strategy_confirmed = true` only if both stores restore to compatible points.
 2. Fill `tmp/mandir-stage3-production-operations.json` with real ISO timestamps (no secrets).
 3. Keep Path B notes: formal `ENVIRONMENT=production` still deferred.
-4. Continue release tags + clean worktree for machine signoff.
+4. Keep Mongo paid Atlas backup deferred until the onboarding/budget decision.
 
 ## Operator reply checklist (paste into chat)
 
 ```text
-Mongo backups enabled: yes/no
+Mongo paid Atlas backup: deferred (platform decision 2026-07-17)
+Mongo logical export done: yes/no/skipped
 Mongo schedule / retention days:
-Mongo last backup at (ISO):
-Mongo restore drill: passed/failed at (ISO); target name:
-Postgres export or PITR: yes/no
+Mongo last export at (ISO):
+Mongo restore drill: passed/failed/skipped at (ISO); target name:
+Postgres export done: yes/no/skipped
 Postgres last backup/export at (ISO):
-Postgres restore drill: passed/failed at (ISO); target name:
-Cross-store strategy confirmed: yes/no
+Postgres restore drill: passed/failed/skipped at (ISO); target name:
+Cross-store strategy confirmed: yes/no/n/a
 ```
 
 Do not include connection strings or credentials.

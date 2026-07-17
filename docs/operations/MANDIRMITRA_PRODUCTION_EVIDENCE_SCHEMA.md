@@ -34,6 +34,7 @@ Use operational identifiers only. `restore_location` should name a provider vaul
   "mongodb_backup": {
     "provider": "provider-name",
     "service_name": "production-mongodb-service",
+    "backup_mode": "provider_managed_snapshot",
     "provider_backup_enabled": true,
     "schedule": "daily",
     "retention_days": 14,
@@ -47,6 +48,7 @@ Use operational identifiers only. `restore_location` should name a provider vaul
   "postgresql_backup": {
     "provider": "provider-name",
     "service_name": "production-postgresql-service",
+    "backup_mode": "provider_managed_snapshot",
     "provider_backup_enabled": true,
     "schedule": "daily",
     "retention_days": 14,
@@ -84,7 +86,9 @@ python scripts\verify_mandirmitra_stage3_signoff.py `
 
 The current `VERSION` determines the required release tag. Both release and rollback tags must exist, be distinct, and form an ancestor chain; the release tag must point at the clean current `HEAD`. Operations evidence must name that exact deployed release tag and its full 40-character commit SHA. The verifier rejects evidence for a different deployment.
 
-Each backup must have succeeded within the previous two days, retain at least seven days of recovery points, and have a successful restore test from the previous 90 days. Restore tests must target an isolated non-production database. A configured backup without a successful isolated restore test is not sufficient production evidence.
+Each backup/export must have succeeded within the previous two days, retain at least seven days of recovery points, and have a successful restore test from the previous 90 days. Restore tests must target an isolated non-production database. A configured backup without a successful isolated restore test is not sufficient production evidence.
+
+`backup_mode` must be either `provider_managed_snapshot` or `operator_managed_logical_export`. The logical-export mode is allowed for early-stage cost control, but it still requires a scheduled export, documented retention, encrypted/private storage outside the repository, and a successful isolated restore drill. As of 2026-07-17, paid Atlas continuous backup is **deferred by platform-owner decision** until client/tenant onboarding justifies the cost.
 
 ## Gap and Implementation Sequence
 

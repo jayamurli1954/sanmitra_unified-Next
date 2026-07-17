@@ -84,7 +84,7 @@ These areas completed hosted Stage 3 demo mutation on 2026-07-17. They remain di
 | Render deployment | Confirmed green through `4ea3c52`; confirm again for final signoff commit before production. |
 | Production env checklist | Partially confirmed. Live stack uses Render service `sanmitra-unified-next-staging-sg` (`ENVIRONMENT=staging` by Path B waiver), MongoDB Atlas `Cluster0`, Postgres `sanmitra-postgres-staging`, frontends `www.mitrabooks.sanmitratech.in` / `www.mandirmitra.sanmitratech.in`. Secrets + bootstrap/demo/open-registration controls hardened 2026-07-17; formal `ENVIRONMENT=production` deferred. |
 | Production access policy | Confirmed. No shared/default production password; no `.local` production admin accounts; platform-owner access must use a real email with activation/reset or one-time bootstrap followed by bootstrap disabled. |
-| Backup/restore confirmation | Policy documented in `docs/operations/BACKUP_RESTORE_RUNBOOK.md`; provider backup schedule, retention, storage location, restore owner, and successful isolated non-production restore drills for MongoDB and PostgreSQL still need production confirmation before live financial use. |
+| Backup/restore confirmation | **Mongo paid Atlas backup deferred** (platform owner, 2026-07-17) until client/tenant onboarding justifies cost. Optional free logical-export path documented. Provider-managed or operator-managed export + isolated restore still required to close machine signoff later. See `MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md`. |
 | Rollback tag/process | Pending execution. Policy is confirmed: production deploy should use a `backend-v*` tag, rollback redeploys the previous known-good tag, and financial corrections use reversal/adjustment entries rather than ledger edits. |
 | Machine-enforced production signoff | Implemented fail-closed in `scripts/verify_mandirmitra_stage3_signoff.py`. It requires fresh matching browser/destructive demo evidence, confirmed backup/restore and production operations evidence bound to the exact deployed release tag and commit, a clean worktree, and a valid release/rollback tag chain before it runs full and release preflight. The evidence contract is documented in `docs/operations/MANDIRMITRA_PRODUCTION_EVIDENCE_SCHEMA.md`; current external confirmations remain pending. |
 | Tenant seed/demo policy | Confirmed. Production must not depend on `seed-tenant-1`; demo/test tenants must be clearly named; real trusts are not used for destructive smoke; 80G/FCRA is not default-on; demo UPI IDs are not used for real tenants. |
@@ -97,8 +97,19 @@ service for now. Clients remain on current domains and API.
 - Security verifier: secrets and disable-controls PASS; **only** ENVIRONMENT blocks full PASS.
 - Evidence: `outputs/production-security-config.json` and
   `docs/operations/PRODUCTION_SECURITY_CONFIG_GATE.md` (Platform waiver section).
-- This waiver does **not** waive backup/restore drills, release tags, or clean-worktree
-  machine signoff.
+- This waiver does **not** invent backup PASS or release-tag PASS.
+
+## Platform waiver — Mongo paid Atlas backup deferred (2026-07-17)
+
+Platform owner decision: do **not** purchase MongoDB Atlas Continuous Cloud Backup /
+paid snapshot plans at this time.
+
+- Revisit when onboarding clients/tenants with meaningful live data, or when a budgeted
+  backup plan is explicitly authorized.
+- Optional later evidence path: free `operator_managed_logical_export` (`mongodump`) with
+  isolated restore drill — see `MANDIRMITRA_LIVE_STACK_BACKUP_DRILL.md`.
+- Machine Mandir Stage 3 ops signoff remains incomplete on backup evidence until that
+  optional path is completed or a further waiver is recorded.
 
 ## Recommendation
 

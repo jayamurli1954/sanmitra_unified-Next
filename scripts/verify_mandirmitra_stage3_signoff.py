@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 TAG_RE = re.compile(r"^backend-v\d+\.\d+\.\d+$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+BACKUP_MODES = {"provider_managed_snapshot", "operator_managed_logical_export"}
 SENSITIVE_KEYS = {
     "password", "access_token", "refresh_token", "authorization", "jwt_secret",
     "api_key", "donor_pan", "email", "payment_reference", "upi_id",
@@ -167,12 +168,17 @@ def validate_destructive(payload: dict[str, Any], max_age_days: int) -> dict[str
 def validate_backup_store(payload: Any, label: str) -> None:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} backup confirmation is required")
-    for field in ("provider", "service_name", "schedule", "restore_owner", "restore_location"):
+    for field in ("provider", "service_name", "backup_mode", "schedule", "restore_owner", "restore_location"):
         if not str(payload.get(field) or "").strip():
             raise ValueError(f"{label} backup is missing {field}")
+    backup_mode = str(payload.get("backup_mode") or "").strip()
+    if backup_mode not in BACKUP_MODES:
+        raise ValueError(
+            f"{label} backup_mode must be provider_managed_snapshot or operator_managed_logical_export",
+        )
     if positive_int(payload.get("retention_days"), f"{label} backup retention_days") < 7:
         raise ValueError(f"{label} backup retention must be at least 7 days")
-    if payload.get("provider_backup_enabled") is not True:
+    if backup_mode == "provider_managed_snapshot" and payload.get("provider_backup_enabled") is not True:
         raise ValueError(f"{label} provider backup must be confirmed enabled")
     last_backup = utc_timestamp(payload.get("last_successful_backup_at"), f"{label} last_successful_backup_at")
     require_fresh(last_backup, max_age_days=2, label=f"{label} successful backup")
