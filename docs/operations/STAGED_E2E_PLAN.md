@@ -194,6 +194,10 @@ GruhaMitra Stage 4 started after Mandir Stage 3 machine signoff PASS:
 - Hosted billing gate PASS (`scripts/gruhamitra_stage4_billing_gate.py`): generate → COA init → post 9 journals → balanced voucher evidence → collection → reversal for Jul 2026 on `gruhamitra-demo-society` (evidence `tmp/gruhamitra-stage4-billing-evidence.json`).
 - Checklist: `docs/operations/GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md` billing rows marked PASS.
 
+### 2026-07-17 Stage 4 result (GruhaMitra): PASSED
+
+GruhaMitra Stage 4 is CLOSED. All smoke checklist rows are PASS (payment gateway/notification deferred by design), the billing-to-accounting path is verified end to end with hosted evidence, no `[CRITICAL-ACCOUNTING]`/`[CRITICAL-TENANCY]` issue remains, and the result is recorded in `docs/operations/E2E_VERIFICATION_REPORT.md` (section 4C) and `GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md` ("Stage 4 Result: PASSED"). Next stage is Stage 5 combined MitraBooks ERP regression. Optional live-frontend browser smoke against `https://www.gruhamitra.sanmitratech.in/gruhamitra/` remains available but is not required for the gate.
+
 ## Non-Goals
 
 - Do not merge all frontends before staged E2E passes.

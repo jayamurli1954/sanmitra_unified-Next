@@ -113,6 +113,45 @@ Limitations:
 
 ---
 
+## 4C. GruhaMitra Stage 4 Hosted Billing-to-Accounting Verification
+
+Date: 2026-07-17
+Environment: hosted staging stack `https://sanmitra-unified-next-staging-sg.onrender.com` (Path B `ENVIRONMENT=staging` waiver)
+App context: `X-App-Key: gruhamitra`
+Demo tenant: `gruhamitra-demo-society` (`organization_type=HOUSING`, modules `housing`/`accounting`/`audit`)
+Gate: `scripts/gruhamitra_stage4_billing_gate.py --month 7 --year 2026`
+Evidence: `tmp/gruhamitra-stage4-billing-evidence.json` (gitignored)
+
+Result:
+
+```text
+gruhamitra_stage4_billing: PASSED
+```
+
+Verified (July 2026 period):
+
+- Auth + tenant/module context resolved for `gruhamitra-demo-society` (HOUSING).
+- 9 flats present; 9 maintenance bills for Rs. 13,500 total.
+- Chart of Accounts initialized (+48 accounts created; 98 total).
+- Bills posted through the shared accounting service (journal entries 427-435).
+- Accounting evidence: journal 427 balanced with debit total 1500.00 == credit total 1500.00.
+- Collection recorded (journal 436); sample bill transitioned to `paid`.
+- Reversal path (journal 437) on a second bill; original posted entry remained immutable.
+
+Accounting guardrails confirmed:
+
+- Every posting balanced (`sum(debits) == sum(credits)`).
+- No direct account balance mutation; corrections via reversal only.
+- Posted entries append-only/immutable.
+- Entries tenant-scoped to `gruhamitra-demo-society` and traceable to GruhaMitra source actions.
+
+Stage 4 exit criteria are met; see `docs/operations/GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md`
+("Stage 4 Result: PASSED"). Optional live-frontend browser smoke against
+`https://www.gruhamitra.sanmitratech.in/gruhamitra/` remains available for extra visual
+evidence but is not required for the gate.
+
+---
+
 ## 4B. MitraBooks Local Playwright Smoke Verification
 
 Date: 2026-06-13
@@ -179,6 +218,7 @@ As an agentic developer, active penetration testing or vulnerability scanning on
 | **LegalMitra** | `www.legalmitra.sanmitratech.in` | **PASS** | Homepage, Admin Login, Chat History, Template Form Fields, Document Preview Renderer |
 | **MandirMitra** | `www.mandirmitra.sanmitratech.in` | **PASS** | Redirect, Admin Login, Dashboard Cards, Today's Panchang, Trial Balance Generation |
 | **GruhaMitra** | Local built PWA at `127.0.0.1:3200/gruhamitra/` | **PASS - frontend shell smoke** | Landing, Manifest, Login, Society Onboarding, Resident Signup, Authenticated Dashboard Shell, Core Route Availability with mocked backend |
+| **GruhaMitra (Stage 4 hosted)** | `sanmitra-unified-next-staging-sg.onrender.com` (`X-App-Key: gruhamitra`) | **PASS - billing-to-accounting** | Auth/module context, generate/post 9 bills, balanced journals 427-435, collection (436), reversal (437) on `gruhamitra-demo-society` |
 | **MitraBooks** | Local built PWA at `127.0.0.1:3200/mitrabooks-erp/` | **PASS - frontend shell smoke** | Login Guards, Business Dashboard Shell, Party/Voucher Workspace, Voucher Dialog Guard, Enabled Business/Tax/Report/Settings Route Availability with mocked backend |
 | **Local Code** | `D:\sanmitra_unified-Next` | **PASS** | Repository Safety, Compile Checks, Pytest suite (119 checks) |
 

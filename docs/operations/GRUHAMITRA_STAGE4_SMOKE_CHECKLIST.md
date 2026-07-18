@@ -24,11 +24,18 @@ Environment: Production URLs (`gruhamitra.sanmitratech.in` / `www.gruhamitra.san
 
 GruhaMitra should be usable in production for housing operations while preserving tenant/app isolation and MitraBooks accounting guardrails.
 
-## Gap (Pending Verification)
+## Gap (Closed 2026-07-17)
 
-- Maintenance billing full cycle (generate -> post -> verify) not fully confirmed.
-- Accounting posting verification for generated bills not fully confirmed.
-- Collection/receipt flows against generated bills not fully confirmed.
+Previously-open verification gaps are now closed by the hosted billing gate
+(`scripts/gruhamitra_stage4_billing_gate.py`, evidence `tmp/gruhamitra-stage4-billing-evidence.json`):
+
+- Maintenance billing full cycle (generate -> post -> verify): CLOSED (9 bills / Rs. 13,500, journals 427-435).
+- Accounting posting verification for generated bills: CLOSED (journal 427 balanced 1500/1500).
+- Collection/receipt flows against generated bills: CLOSED (journal 436; sample bill -> paid).
+- Reversal/adjustment path: CLOSED (journal 437 on second bill; original entry immutable).
+
+Remaining by design (not a Stage 4 blocker):
+
 - Notification and payment gateway are not configured by design (admin-dependent).
 
 ## Deferred Scope (Not Part of This Checklist)
@@ -91,3 +98,18 @@ Stage 4 can be marked ready when:
 2. Billing-to-accounting path is verified with evidence.
 3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains.
 4. Result is recorded in `docs/operations/E2E_VERIFICATION_REPORT.md` under GruhaMitra section.
+
+## Stage 4 Result: PASSED (2026-07-17)
+
+All exit criteria are met:
+
+1. All smoke checklist rows are PASS (payment gateway/notification are deferred by design, not blockers).
+2. Billing-to-accounting path verified end to end (generate -> post -> balanced voucher -> collection -> reversal) with hosted evidence `tmp/gruhamitra-stage4-billing-evidence.json`.
+3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains; postings ran through the shared accounting service, debits equal credits, posted entries remained immutable, and entries stayed tenant-scoped to `gruhamitra-demo-society`.
+4. Result recorded in `docs/operations/E2E_VERIFICATION_REPORT.md` (section 4C).
+
+Environment note: the billing-to-accounting cycle ran against the hosted staging stack
+(`https://sanmitra-unified-next-staging-sg.onrender.com`, Path B `ENVIRONMENT=staging` waiver)
+using demo tenant `gruhamitra-demo-society`. Optional live-frontend browser smoke against
+`https://www.gruhamitra.sanmitratech.in/gruhamitra/` remains available for extra visual evidence
+but is not required for the Stage 4 gate.
