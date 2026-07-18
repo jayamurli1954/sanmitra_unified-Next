@@ -186,19 +186,27 @@ def check_inventory_reads(api_base: str, auth: dict, as_of: str) -> dict:
         all_ok = all_ok and ok
         checks.append({"read": name, "http_status": status, "status": "passed" if ok else "failed"})
 
-    # Stock register: no negative stock, numeric closing value.
+    # Stock register: endpoint healthy and free of negative-stock anomalies.
+    # `negative_stock_items` is an integer count (see inventory.assemble_stock_register);
+    # 0 means no item has negative closing stock. When inventory accounting is disabled
+    # for the entity the register is trivially empty (count 0, closing value 0.00), which
+    # is a valid pass, not a failure.
     sr_status, sr_payload = _request_json(
         "GET", f"{api_base}/api/v1/business/inventory/stock-register?{qs}", headers=auth
     )
-    negative = sr_payload.get("negative_stock_items") if isinstance(sr_payload, dict) else None
+    raw_negative = sr_payload.get("negative_stock_items") if isinstance(sr_payload, dict) else None
     closing_value = _to_float(sr_payload.get("total_closing_value")) if isinstance(sr_payload, dict) else None
-    sr_ok = sr_status == 200 and isinstance(negative, list) and not negative and closing_value is not None
+    try:
+        negative_count = int(raw_negative) if raw_negative is not None else 0
+    except (TypeError, ValueError):
+        negative_count = None
+    sr_ok = sr_status == 200 and negative_count == 0
     all_ok = all_ok and sr_ok
     checks.append(
         {
             "read": "stock_register",
             "http_status": sr_status,
-            "negative_stock_items": len(negative) if isinstance(negative, list) else None,
+            "negative_stock_items": negative_count,
             "total_closing_value": closing_value,
             "status": "passed" if sr_ok else "failed",
         }

@@ -61,13 +61,13 @@ Authoritative, deterministic signals:
 
 | Area | Step | Expected Result | Status |
 | --- | --- | --- | --- |
-| Context | `GET /api/v1/modules/me` | tenant `demo-mitrabooks-business`, org BUSINESS, modules superset business/accounting/inventory | TODO |
-| Inventory policy | `GET /api/v1/business/inventory/policy` | 200; `valuation_policy == weighted_average_periodic`; `policy_locked == true` | TODO |
-| Inventory reads | items / movements / closing-stock entries | 200 with expected shape | TODO |
-| Stock register | `GET /api/v1/business/inventory/stock-register` | 200; no negative-stock items; numeric `total_closing_value` | TODO |
-| Bank/cash book | `GET /api/v1/business/banking/books?from_date=..&to_date=..&book_type=all` | 200; `opening + receipts - payments == closing` | TODO |
-| Bank recon BRS (optional) | `GET /api/v1/business/bank-recon?account_id=..` | 200 with `summary` (or SKIPPED if no account id) | TODO |
-| Fail-closed (optional) | inventory + banking routes as a HOUSING tenant | 401/403/404 fail closed (or SKIPPED if no creds) | TODO |
+| Context | `GET /api/v1/modules/me` | tenant `demo-mitrabooks-business`, org BUSINESS, modules superset business/accounting/inventory | PASS (2026-07-18: BUSINESS; modules accounting/audit/business/gst/inventory) |
+| Inventory policy | `GET /api/v1/business/inventory/policy` | 200; `valuation_policy == weighted_average_periodic`; `policy_locked == true` | PASS (2026-07-18: locked weighted-average periodic; `inventory_enabled=false` for the demo entity) |
+| Inventory reads | items / movements / closing-stock entries | 200 with expected shape | PASS (2026-07-18: all HTTP 200) |
+| Stock register | `GET /api/v1/business/inventory/stock-register` | 200; no negative-stock items; numeric `total_closing_value` | PASS (2026-07-18: HTTP 200; negative_stock_items=0; closing value 0.00 - inventory accounting off) |
+| Bank/cash book | `GET /api/v1/business/banking/books?from_date=..&to_date=..&book_type=all` | 200; `opening + receipts - payments == closing` | PASS (2026-07-18: 0.00 + 741200.00 - 153430.00 == 587770.00) |
+| Bank recon BRS (optional) | `GET /api/v1/business/bank-recon?account_id=..` | 200 with `summary` (or SKIPPED if no account id) | SKIPPED (2026-07-18: no --bank-account-id supplied) |
+| Fail-closed (optional) | inventory + banking routes as a HOUSING tenant | 401/403/404 fail closed (or SKIPPED if no creds) | PASS (2026-07-18: gruhamitra HTTP 403 on stock-register + banking/books) |
 
 ## Accounting / Governance Guardrail Checks (Mandatory)
 
@@ -114,6 +114,28 @@ Inventory + banking reporting can be marked ready when:
 2. The gate exits PASS with evidence in `tmp/`.
 3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains for this surface.
 4. Result is recorded in `docs/operations/E2E_VERIFICATION_REPORT.md`.
+
+## Result: PASSED (2026-07-18)
+
+Exit criteria met for the read-only reporting surface:
+
+1. All required smoke checklist rows are PASS; the BRS row is SKIPPED (no bank account id
+   supplied) and the fail-closed row is PASS.
+2. `scripts/mitrabooks_inventory_banking_gate.py --as-of 2026-07-31` exited PASS; evidence in
+   `tmp/mitrabooks-inventory-banking-evidence.json`.
+3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue for this surface: the gate is
+   read-only, the valuation policy is locked weighted-average periodic, the stock register reports
+   0 negative-stock items, the bank/cash book satisfies the running-balance identity, and the
+   inventory/banking routes fail closed (HTTP 403) for the non-business HOUSING tenant.
+4. Result recorded in `docs/operations/E2E_VERIFICATION_REPORT.md`.
+
+Scope note: the demo business entity has inventory **accounting** disabled
+(`inventory_enabled=false`), so the stock register is a trivially empty (0-value, 0-negative)
+position. This gate verifies endpoint health, policy lock, no-negative-stock, bank/cash book
+correctness, and fail-closed behaviour. A populated inventory valuation signoff (enable inventory
+-> post purchases/sales -> closing-stock journal) requires the guarded mutation cycle, which is
+already covered by `frontend/e2e/mitrabooks-realstack-destructive.spec.js` and remains deferred as
+a scripted variant. Human production/operator signoff also remains a separate manual step.
 
 ## Deferred / Non-Goals
 
