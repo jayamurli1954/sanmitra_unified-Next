@@ -399,7 +399,35 @@ async def upload_bank_statement(
         })
     if docs:
         await col.insert_many(docs)
-    return {"inserted": len(docs), "skipped_duplicates": skipped, "parsed": len(parsed), "batch_id": batch_id}
+
+    result = {"inserted": len(docs), "skipped_duplicates": skipped, "parsed": len(parsed), "batch_id": batch_id}
+
+    # Bank-feed policy (MITRABOOKS_BANK_FEED_POLICY.md): every import must record an
+    # audit event with actor, account, provider, and inserted/duplicate counts.
+    # Best-effort so an audit-store hiccup never drops already-stored statement lines.
+    try:
+        from app.core.audit.service import log_audit_event
+
+        await log_audit_event(
+            tenant_id=tenant_id,
+            user_id=created_by,
+            product=app_key,
+            action="business_bank_statement_imported",
+            entity_type="business_bank_statement_import",
+            entity_id=f"{accounting_entity_id}:{account_id}:{batch_id}",
+            new_value={
+                "account_id": account_id,
+                "provider": "csv",
+                "parsed": len(parsed),
+                "inserted": len(docs),
+                "skipped_duplicates": skipped,
+                "batch_id": batch_id,
+            },
+        )
+    except Exception:
+        pass
+
+    return result
 
 
 async def _load_recon_state(scope: dict, account_id: int) -> tuple[list[dict], list[dict]]:

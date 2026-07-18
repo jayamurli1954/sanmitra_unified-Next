@@ -225,6 +225,7 @@ def fake_bank_collections(monkeypatch):
         return collections.setdefault(name, _FakeCollection())
 
     monkeypatch.setattr("app.db.mongo.get_collection", _get_collection)
+    monkeypatch.setattr("app.core.audit.service.get_collection", _get_collection)
     return collections
 
 
@@ -274,6 +275,43 @@ async def test_upload_bank_statement_is_scoped_and_dedupes(fake_bank_collections
     stored = fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows
     assert sum(1 for row in stored if row["tenant_id"] == "tenant-a") == 2
     assert sum(1 for row in stored if row["tenant_id"] == "tenant-b") == 2
+
+
+@pytest.mark.asyncio
+async def test_upload_bank_statement_writes_import_audit_event(fake_bank_collections):
+    csv_text = (
+        "Txn Date,Narration,Ref No,Withdrawal,Deposit,Balance\n"
+        "01/04/2026,NEFT FROM ACME,UTR123,,50000,150000\n"
+        "03/04/2026,BANK CHARGES,CHG001,118,,149882\n"
+    )
+
+    await bank_recon.upload_bank_statement(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, csv_text=csv_text, created_by="tester",
+    )
+    # Re-upload the same rows: import is a dedupe no-op but still audited.
+    await bank_recon.upload_bank_statement(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, csv_text=csv_text, created_by="tester",
+    )
+
+    audit_rows = fake_bank_collections["core_audit_logs"].rows
+    imported = [r for r in audit_rows if r.get("action") == "business_bank_statement_imported"]
+    assert len(imported) == 2
+
+    first_event = imported[0]
+    assert first_event["tenant_id"] == "tenant-a"
+    assert first_event["user_id"] == "tester"
+    assert first_event["product"] == "mitrabooks"
+    assert first_event["entity_type"] == "business_bank_statement_import"
+    assert first_event["new_value"]["provider"] == "csv"
+    assert first_event["new_value"]["account_id"] == 102
+    assert first_event["new_value"]["inserted"] == 2
+    assert first_event["new_value"]["skipped_duplicates"] == 0
+
+    # Second import recorded the dedupe outcome (nothing inserted, both skipped).
+    assert imported[1]["new_value"]["inserted"] == 0
+    assert imported[1]["new_value"]["skipped_duplicates"] == 2
 
 
 @pytest.mark.asyncio
