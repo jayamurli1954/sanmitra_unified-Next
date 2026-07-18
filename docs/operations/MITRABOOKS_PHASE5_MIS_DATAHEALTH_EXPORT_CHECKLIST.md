@@ -64,16 +64,16 @@ Authoritative, deterministic signals (aligned with the module contracts and
 
 | Area | Step | Expected Result | Status |
 | --- | --- | --- | --- |
-| Context | `GET /api/v1/modules/me` | tenant `demo-mitrabooks-business`, org BUSINESS, modules superset business/accounting/audit | TODO |
-| MIS KPIs | `GET /api/v1/business/mis/kpis` | 200; `source` map + trend/top_customers/working_capital/overdue present | TODO |
-| Financial Health | `GET /api/v1/business/financial-health?narrate=false` | 200; summary/kpis/charts/alerts present; `narrative == null` | TODO |
-| Data Health | `GET /api/v1/business/data-health` | 200; numeric score, grade, status in {ready,needs_attention}, rules non-empty, issues carry issue_id/workspace/action_label | TODO |
-| Export governance (JSON) | `GET .../reports/export?report=trial_balance&format=json` | 200; `X-SanMitra-Export-Governed: true` + type/format headers | TODO |
-| Export governance (CSV) | `...&format=csv` | 200; governed headers, format=csv | TODO |
-| Export governance (XLSX) | `...&format=xlsx` | 200; governed headers, format=xlsx | TODO |
-| Export governance (PDF) | `...&format=pdf` | 200; governed headers, format=pdf | TODO |
-| Tally XML | `GET /api/v1/business/tally/xml-export` | 200; application/xml; governed; contains `All Masters` + `SANMITRAEXPORT` | TODO |
-| Fail-closed (optional) | Phase 5 routes as a HOUSING tenant | 401/403/404 fail closed (or SKIPPED if no creds) | TODO |
+| Context | `GET /api/v1/modules/me` | tenant `demo-mitrabooks-business`, org BUSINESS, modules superset business/accounting/audit | PASS (2026-07-18: BUSINESS; modules accounting/audit/business/gst/inventory) |
+| MIS KPIs | `GET /api/v1/business/mis/kpis` | 200; `source` map + trend/top_customers/working_capital/overdue present | PASS (2026-07-18: HTTP 200, source-backed, current_ratio present) |
+| Financial Health | `GET /api/v1/business/financial-health?narrate=false` | 200; summary/kpis/charts/alerts present; `narrative == null` | PASS (2026-07-18: HTTP 200, narrative off) |
+| Data Health | `GET /api/v1/business/data-health` | 200; numeric score, grade, status in {ready,needs_attention}, rules non-empty, issues carry issue_id/workspace/action_label | PASS (2026-07-18: HTTP 200, score 100, grade A, status ready, 5 rules, 0 issues) |
+| Export governance (JSON) | `GET .../reports/export?report=trial_balance&format=json` | 200; `X-SanMitra-Export-Governed: true` + type/format headers | PASS (2026-07-18: HTTP 200, governed) |
+| Export governance (CSV) | `...&format=csv` | 200; governed headers, format=csv | PASS (2026-07-18: HTTP 200, governed) |
+| Export governance (XLSX) | `...&format=xlsx` | 200; governed headers, format=xlsx | PASS (2026-07-18: HTTP 200, governed) |
+| Export governance (PDF) | `...&format=pdf` | 200; governed headers, format=pdf | PASS (2026-07-18: HTTP 200, governed) |
+| Tally XML | `GET /api/v1/business/tally/xml-export` | 200; application/xml; governed; contains `All Masters` + `SANMITRAEXPORT` | PASS (2026-07-18: HTTP 200, application/xml, governed, masters + source metadata) |
+| Fail-closed (optional) | Phase 5 routes as a HOUSING tenant | 401/403/404 fail closed (or SKIPPED if no creds) | PASS (2026-07-18: gruhamitra HTTP 403 on mis/kpis + data-health) |
 
 ## Accounting / Governance Guardrail Checks (Mandatory)
 
@@ -116,6 +116,29 @@ Phase 5 reporting can be marked ready when:
 2. The gate exits PASS with evidence in `tmp/`.
 3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains for this surface.
 4. Result is recorded in `docs/operations/E2E_VERIFICATION_REPORT.md`.
+
+## Phase 5 Result: PASSED (2026-07-18)
+
+All exit criteria are met:
+
+1. All smoke checklist rows are PASS (fail-closed row PASS - not skipped).
+2. `scripts/mitrabooks_phase5_mis_datahealth_export_gate.py --as-of 2026-07-31` exited PASS for
+   all seven steps; evidence in `tmp/mitrabooks-phase5-mis-datahealth-export-evidence.json`.
+3. No open `[CRITICAL-ACCOUNTING]` or `[CRITICAL-TENANCY]` issue remains for this surface: the
+   gate is read-only (no mutation), every KPI/health/export figure is source-backed and
+   deterministic (financial-health `narrative == null` with AI off; data-health score 100/grade A),
+   all four export formats returned governed headers, Tally XML returned the governed
+   `All Masters` envelope with `SANMITRAEXPORT` metadata, and the Phase 5 routes failed closed
+   (HTTP 403) for the non-business HOUSING tenant.
+4. Result recorded in `docs/operations/E2E_VERIFICATION_REPORT.md`.
+
+Environment note: the gate ran read-only against the hosted staging stack
+(`https://sanmitra-unified-next-staging-sg.onrender.com`, Path B `ENVIRONMENT=staging` waiver).
+
+Automated-scope note: this gate closes the machine-verifiable Phase 5 reporting signals. Human
+production/compliance report signoff, voucher-level Tally XML, AI MIS narration, wider GST-JSON
+export governance, persisted data-health assignee/status workflow, and duplicate-invoice guarded
+real-stack evidence remain open and are tracked separately (see Deferred / Non-Goals).
 
 ## Deferred / Non-Goals
 

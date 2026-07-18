@@ -113,6 +113,46 @@ Limitations:
 
 ---
 
+## 4E. MitraBooks Phase 5 MIS / Data-Health / Export Signoff Verification
+
+Date: 2026-07-18
+Environment: hosted staging stack `https://sanmitra-unified-next-staging-sg.onrender.com` (Path B `ENVIRONMENT=staging` waiver)
+App context: `X-App-Key: mitrabooks`; demo tenant `demo-mitrabooks-business` (`organization_type=BUSINESS`)
+Gate: `scripts/mitrabooks_phase5_mis_datahealth_export_gate.py --as-of 2026-07-31` (read-only: login + GET only)
+Evidence: `tmp/mitrabooks-phase5-mis-datahealth-export-evidence.json` (gitignored)
+
+Result:
+
+```text
+mitrabooks_phase5_mis_datahealth_export: PASSED
+```
+
+Verified (as of 2026-07-31):
+
+| Step | Endpoint | Result |
+| --- | --- | --- |
+| Context | `GET /api/v1/modules/me` | BUSINESS; modules accounting/audit/business/gst/inventory |
+| MIS KPIs | `GET /api/v1/business/mis/kpis` | HTTP 200; source-backed; working-capital current ratio present |
+| Financial health | `GET /api/v1/business/financial-health?narrate=false` | HTTP 200; summary/kpis/charts/alerts; `narrative == null` (AI off) |
+| Data health | `GET /api/v1/business/data-health` | HTTP 200; score 100, grade A, status ready, 5 rules, 0 issues |
+| Export governance | `GET /api/v1/business/reports/export?report=trial_balance&format=...` | HTTP 200 + governed headers for json, csv, xlsx, pdf |
+| Tally XML | `GET /api/v1/business/tally/xml-export` | HTTP 200; `application/xml`; governed; `All Masters` + `SANMITRAEXPORT` present |
+| Fail-closed | Phase 5 routes as HOUSING tenant (`gruhamitra`) | HTTP 403 on `mis/kpis` and `data-health` |
+
+Governance guardrails confirmed:
+
+- Read-only: no account balance or record mutated (GET requests only).
+- Every KPI/health/export figure is deterministic and source-backed (financial-health narrative off; data-health rule-driven score).
+- Every export download stamps governed headers (`X-SanMitra-Export-Governed/-Type/-Format`) and routes through the audited `business_export_downloaded` path.
+- Phase 5 routes fail closed for tenants without the business module.
+
+Phase 5 reporting exit criteria are met; see
+`docs/operations/MITRABOOKS_PHASE5_MIS_DATAHEALTH_EXPORT_CHECKLIST.md` ("Phase 5 Result: PASSED").
+Human production/compliance report signoff and the deferred feature items (voucher-level Tally XML,
+AI MIS narration, wider GST-JSON governance, persisted data-health workflow) remain separately tracked.
+
+---
+
 ## 4D. Stage 5 Combined MitraBooks ERP Regression Verification
 
 Date: 2026-07-18
@@ -253,6 +293,7 @@ As an agentic developer, active penetration testing or vulnerability scanning on
 | **GruhaMitra** | Local built PWA at `127.0.0.1:3200/gruhamitra/` | **PASS - frontend shell smoke** | Landing, Manifest, Login, Society Onboarding, Resident Signup, Authenticated Dashboard Shell, Core Route Availability with mocked backend |
 | **GruhaMitra (Stage 4 hosted)** | `sanmitra-unified-next-staging-sg.onrender.com` (`X-App-Key: gruhamitra`) | **PASS - billing-to-accounting** | Auth/module context, generate/post 9 bills, balanced journals 427-435, collection (436), reversal (437) on `gruhamitra-demo-society` |
 | **Combined ERP (Stage 5)** | `sanmitra-unified-next-staging-sg.onrender.com` (all three demo tenants) | **PASS - combined regression** | Module-driven access, distinct-tenant isolation, balanced tenant-scoped trial balances after mixed postings, business-module fail-closed matrix (200/403/403) |
+| **MitraBooks Phase 5 (MIS/Data-Health/Export)** | `sanmitra-unified-next-staging-sg.onrender.com` (`X-App-Key: mitrabooks`) | **PASS - reporting signoff (read-only)** | MIS KPI contract, financial-health (AI off), data-health (score 100/A), governed exports (json/csv/xlsx/pdf), Tally XML masters+source, HOUSING fail-closed (403) |
 | **MitraBooks** | Local built PWA at `127.0.0.1:3200/mitrabooks-erp/` | **PASS - frontend shell smoke** | Login Guards, Business Dashboard Shell, Party/Voucher Workspace, Voucher Dialog Guard, Enabled Business/Tax/Report/Settings Route Availability with mocked backend |
 | **Local Code** | `D:\sanmitra_unified-Next` | **PASS** | Repository Safety, Compile Checks, Pytest suite (119 checks) |
 
