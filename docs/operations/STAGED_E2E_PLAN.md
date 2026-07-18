@@ -161,6 +161,24 @@ Validate:
 
 Gate: the unified ERP can be maintained as one product surface.
 
+Stage 5 tooling (added 2026-07-18):
+
+- Checklist: `docs/operations/MITRABOOKS_STAGE5_COMBINED_REGRESSION_CHECKLIST.md`.
+- Read-only combined-regression gate: `scripts/mitrabooks_stage5_combined_regression_gate.py`
+  (login + GET only; no posting, no destructive-confirm env). It checks all three demo tenants
+  (`demo-mitrabooks-business`, `demo-mandir-tenant`, `gruhamitra-demo-society`) for enabled-module
+  context, tenant-scoped balanced trial balances after the prior Stage 3/4 mixed postings, the
+  `require_enabled_module("business")` fail-closed matrix on `/api/v1/business/parties`, and
+  distinct-tenant isolation. Evidence: `tmp/mitrabooks-stage5-combined-regression-evidence.json`.
+- Status: PASSED (2026-07-18). Hosted read-only combined regression PASSED for all three demo
+  tenants plus cross-tenant isolation via `scripts/mitrabooks_stage5_combined_regression_gate.py`
+  (`--as-of 2026-07-31`): module-driven access, distinct-tenant isolation, balanced tenant-scoped
+  trial balances after the prior Stage 3/4 mixed postings, and the business-module fail-closed
+  matrix (BUSINESS 200 / TEMPLE 403 / HOUSING 403). Recorded in
+  `docs/operations/E2E_VERIFICATION_REPORT.md` (section 4D) and
+  `MITRABOOKS_STAGE5_COMBINED_REGRESSION_CHECKLIST.md` ("Stage 5 Result: PASSED"). Evidence:
+  `tmp/mitrabooks-stage5-combined-regression-evidence.json`.
+
 ## Gap
 
 The repo now has a focused MitraBooks Phase 2E local gate at `scripts/mitrabooks_phase2e_gate.py` and a checklist at `docs/operations/MITRABOOKS_PHASE2E_VALIDATION.md`. Later stages still need the same level of stage-specific checklist and script discipline before they are treated as closed.

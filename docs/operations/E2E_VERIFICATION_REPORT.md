@@ -113,6 +113,39 @@ Limitations:
 
 ---
 
+## 4D. Stage 5 Combined MitraBooks ERP Regression Verification
+
+Date: 2026-07-18
+Environment: hosted staging stack `https://sanmitra-unified-next-staging-sg.onrender.com` (Path B `ENVIRONMENT=staging` waiver)
+Gate: `scripts/mitrabooks_stage5_combined_regression_gate.py --as-of 2026-07-31` (read-only: login + GET only)
+Evidence: `tmp/mitrabooks-stage5-combined-regression-evidence.json` (gitignored)
+
+Result:
+
+```text
+mitrabooks_stage5_combined_regression: PASSED
+```
+
+Verified that MitraBooks, MandirMitra, and GruhaMitra coexist in the unified ERP shell:
+
+| Tenant | Org type | Enabled modules | Trial balance (as of 2026-07-31) | `/api/v1/business/parties` |
+| --- | --- | --- | --- | --- |
+| `demo-mitrabooks-business` | BUSINESS | accounting, audit, business, gst, inventory | 1,636,082.00 == 1,636,082.00 (balanced) | HTTP 200 (enabled) |
+| `demo-mandir-tenant` | TEMPLE | accounting, audit, temple | 1,149,320.91 == 1,149,320.91 (balanced) | HTTP 403 (fail closed) |
+| `gruhamitra-demo-society` | HOUSING | accounting, audit, housing | 439,927.01 == 439,927.01 (balanced) | HTTP 403 (fail closed) |
+
+- Enabled modules and permissions drive access (compared by module key, not product name).
+- App context does not leak: the three demo tenants resolved distinct `tenant_id` values.
+- Accounting reports remain correct and tenant-scoped after the prior Stage 3/4 mixed postings
+  (each tenant's trial balance is internally balanced).
+- Module-specific routes fail closed when the module is disabled: the
+  `require_enabled_module("business")` route returned 403 for TEMPLE/HOUSING and 200 for BUSINESS.
+
+Stage 5 exit criteria are met; see
+`docs/operations/MITRABOOKS_STAGE5_COMBINED_REGRESSION_CHECKLIST.md` ("Stage 5 Result: PASSED").
+
+---
+
 ## 4C. GruhaMitra Stage 4 Hosted Billing-to-Accounting Verification
 
 Date: 2026-07-17
@@ -219,6 +252,7 @@ As an agentic developer, active penetration testing or vulnerability scanning on
 | **MandirMitra** | `www.mandirmitra.sanmitratech.in` | **PASS** | Redirect, Admin Login, Dashboard Cards, Today's Panchang, Trial Balance Generation |
 | **GruhaMitra** | Local built PWA at `127.0.0.1:3200/gruhamitra/` | **PASS - frontend shell smoke** | Landing, Manifest, Login, Society Onboarding, Resident Signup, Authenticated Dashboard Shell, Core Route Availability with mocked backend |
 | **GruhaMitra (Stage 4 hosted)** | `sanmitra-unified-next-staging-sg.onrender.com` (`X-App-Key: gruhamitra`) | **PASS - billing-to-accounting** | Auth/module context, generate/post 9 bills, balanced journals 427-435, collection (436), reversal (437) on `gruhamitra-demo-society` |
+| **Combined ERP (Stage 5)** | `sanmitra-unified-next-staging-sg.onrender.com` (all three demo tenants) | **PASS - combined regression** | Module-driven access, distinct-tenant isolation, balanced tenant-scoped trial balances after mixed postings, business-module fail-closed matrix (200/403/403) |
 | **MitraBooks** | Local built PWA at `127.0.0.1:3200/mitrabooks-erp/` | **PASS - frontend shell smoke** | Login Guards, Business Dashboard Shell, Party/Voucher Workspace, Voucher Dialog Guard, Enabled Business/Tax/Report/Settings Route Availability with mocked backend |
 | **Local Code** | `D:\sanmitra_unified-Next` | **PASS** | Repository Safety, Compile Checks, Pytest suite (119 checks) |
 
