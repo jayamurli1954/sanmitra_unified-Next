@@ -81,6 +81,34 @@ Use this as the first MandirMitra production candidate only after:
 - Staging is deployed and smoke-tested with non-destructive checks or a demo/test tenant.
 - Production deploy is manually triggered with `version_tag=backend-v1.3.0`.
 
+## Release Notes - backend-v1.3.1 (candidate, 2026-07-18)
+
+Type: PATCH (guardrails, gate scripts, and documentation; no API, schema, or migration breaks).
+
+Scope since `backend-v1.3.0`:
+
+- Staged E2E completion: GruhaMitra Stage 4 hosted billing-to-accounting cycle CLOSED (PASSED), and
+  Stage 5 combined MitraBooks ERP regression CLOSED (PASSED) across MitraBooks, MandirMitra, and
+  GruhaMitra with tenant/app isolation and balanced trial balances.
+- New read-only gate scripts and checklists:
+  - `scripts/mitrabooks_stage5_combined_regression_gate.py`
+  - `docs/operations/MITRABOOKS_STAGE5_COMBINED_REGRESSION_CHECKLIST.md`
+  - `docs/operations/GRUHAMITRA_STAGE4_SMOKE_CHECKLIST.md` (Stage 4 result recorded)
+- Verification records updated in `docs/operations/E2E_VERIFICATION_REPORT.md`
+  (sections 4C GruhaMitra hosted, 4D Stage 5 combined) and `docs/operations/STAGED_E2E_PLAN.md`.
+- Security hardening: Atlas admin credential rotated (2026-07-18) after accidental exposure; new
+  `docs/operations/ATLAS_LEAST_PRIVILEGE_DB_USER_RUNBOOK.md` to move the app off atlas-admin auth.
+
+Not included (still pending, out of this tag):
+
+- Hosted MitraBooks **destructive** mutation reconfirm (read-path realigned in Stage 5; guarded
+  destructive reseed/post still pending).
+- Atlas least-privilege DB user cutover (runbook drafted; operator action not yet executed).
+- Production-signoff workstreams (GST/TDS, inventory+banking, MIS/data-health/export) remain open.
+
+Release gating for this tag is unchanged: create `backend-v1.3.1` only after GitHub CI, CodeQL,
+Trivy, and release preflight are green, per the Release Flow above.
+
 ## Rollback Rule
 
 Rollback means returning production to the last known good `backend-v*` tag. Do not roll back by guessing a branch head.
