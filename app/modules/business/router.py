@@ -1,4 +1,3 @@
-import re
 from datetime import date
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
@@ -18,28 +17,17 @@ from app.modules.business.schemas import (
     ApprovalQueueResponse,
     BankStatementVoucherRequest,
     BankStatementVoucherResponse,
-    GstPeriodLockListResponse,
-    GstPeriodLockResponse,
-    GstPeriodLockUpdateRequest,
-    GstSettlementCreateRequest,
-    GstSettlementReverseRequest,
-    GstSettlementResponse,
     InvoiceSettingsResponse,
     InvoiceSettingsUpdateRequest,
 )
 from app.modules.business import banking_books
 from app.modules.business import bank_recon
 from app.modules.business.service import (
-    create_gst_settlement,
     get_business_admin_settings,
     get_invoice_settings,
     list_documents_for_approval_queue,
-    preview_gst_settlement,
-    reverse_gst_settlement,
-    list_gst_period_locks,
     save_business_admin_settings,
     save_invoice_settings,
-    set_gst_period_lock,
 )
 from app.core.permissions.rbac import Role, require_roles
 
@@ -209,147 +197,8 @@ async def update_business_invoice_settings(
 # GST input-tax-credit (ITC) routes moved to routes/itc.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
-@router.get("/gst-period-locks", response_model=GstPeriodLockListResponse)
-async def list_business_gst_period_locks(
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="GST period lock listing",
-    )
-    return await list_gst_period_locks(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-    )
-
-
-@router.put("/gst-period-locks", response_model=GstPeriodLockResponse)
-async def update_business_gst_period_lock(
-    payload: GstPeriodLockUpdateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="GST period lock update",
-    )
-    return await set_gst_period_lock(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        updated_by=_created_by(current_user),
-        payload=payload,
-    )
-
-
-# Credit-note / debit-note routes moved to routes/credit_debit_notes.py
+# GST settlement / period-lock routes moved to routes/gst_settlement.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-@router.get("/gst-settlement/preview", response_model=GstSettlementResponse)
-async def preview_business_gst_settlement(
-    period: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="GST settlement preview",
-    )
-    return await preview_gst_settlement(
-        session,
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        period=period,
-    )
-
-
-@router.post("/gst-settlement", response_model=GstSettlementResponse)
-async def create_business_gst_settlement(
-    payload: GstSettlementCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="GST settlement",
-    )
-    try:
-        return await create_gst_settlement(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            created_by=_created_by(current_user),
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.post("/gst-settlement/{period}/reverse", response_model=GstSettlementResponse)
-async def reverse_business_gst_settlement(
-    period: str,
-    payload: GstSettlementReverseRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
-        raise HTTPException(status_code=422, detail="period must be 'YYYY-MM'")
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="GST settlement reversal",
-    )
-    try:
-        return await reverse_gst_settlement(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            created_by=_created_by(current_user),
-            period=period,
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
 
 # GST return routes moved to routes/gst_returns.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
@@ -608,3 +457,4 @@ from app.modules.business.routes import sales_invoices as _sales_invoices_routes
 from app.modules.business.routes import purchase_bills as _purchase_bills_routes  # noqa: E402,F401
 from app.modules.business.routes import itc as _itc_routes  # noqa: E402,F401
 from app.modules.business.routes import credit_debit_notes as _credit_debit_notes_routes  # noqa: E402,F401
+from app.modules.business.routes import gst_settlement as _gst_settlement_routes  # noqa: E402,F401
