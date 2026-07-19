@@ -42,12 +42,6 @@ from app.modules.business.schemas import (
     ItcReversalPreviewResponse,
     InvoiceSettingsResponse,
     InvoiceSettingsUpdateRequest,
-    PartyCreateRequest,
-    PartyLedgerResponse,
-    PartyListResponse,
-    PartyOutstandingResponse,
-    PartyResponse,
-    PartyUpdateRequest,
     PurchaseBillCancelRequest,
     PurchaseBillCreateRequest,
     PurchaseBillListResponse,
@@ -70,10 +64,8 @@ from app.modules.business.service import (
     create_debit_note,
     download_business_document_attachment,
     create_gst_settlement,
-    create_party,
     create_purchase_bill,
     create_sales_invoice,
-    deactivate_party,
     get_credit_note,
     get_business_admin_settings,
     get_debit_note,
@@ -86,14 +78,10 @@ from app.modules.business.service import (
     list_documents_for_approval_queue,
     preview_gst_settlement,
     reverse_gst_settlement,
-    get_party,
     list_gst_period_locks,
-    list_parties,
     list_purchase_bills,
     list_sales_invoices,
     mark_bill_payment,
-    party_outstanding_summary,
-    party_wise_ledger,
     preview_itc_reversals,
     reclaim_itc_for_bill,
     review_credit_note,
@@ -104,7 +92,6 @@ from app.modules.business.service import (
     save_business_admin_settings,
     save_invoice_settings,
     set_gst_period_lock,
-    update_party,
 )
 from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.core.permissions.rbac import Role, require_roles
@@ -176,147 +163,8 @@ async def business_approval_queue(
     )
 
 
-@router.post("/parties", response_model=PartyResponse)
-async def create_business_party(
-    payload: PartyCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party creation",
-        x_accounting_entity_id=x_accounting_entity_id,
-    )
-    return await create_party(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id,
-        created_by=_created_by(current_user),
-        payload=payload,
-    )
-
-
-@router.get("/parties", response_model=PartyListResponse)
-async def list_business_parties(
-    party_type: str | None = Query(default=None, pattern="^(customer|vendor|both)$"),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party listing",
-        x_accounting_entity_id=x_accounting_entity_id,
-    )
-    return await list_parties(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id,
-        party_type=party_type,
-        limit=limit,
-    )
-
-
-@router.get("/parties/{party_id}", response_model=PartyResponse)
-async def get_business_party(
-    party_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party lookup",
-    )
-    party = await get_party(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-    )
-    if party is None:
-        raise HTTPException(status_code=404, detail="Business party not found")
-    return party
-
-
-@router.get("/parties/{party_id}/outstanding", response_model=PartyOutstandingResponse)
-async def get_business_party_outstanding(
-    party_id: str,
-    as_of: date | None = Query(default=None),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party outstanding",
-    )
-    try:
-        return await party_outstanding_summary(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            party_id=party_id,
-            as_of=as_of,
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/party-ledger", response_model=PartyLedgerResponse)
-async def get_business_party_ledger(
-    kind: str = Query(default="receivable", pattern="^(receivable|payable)$"),
-    as_of: date | None = Query(default=None),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party-wise ledger",
-    )
-    try:
-        return await party_wise_ledger(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            kind=kind,
-            as_of=as_of,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+# Business party routes moved to routes/parties.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 # ===================== Payment allocation (open-item AR/AP) =====================
 
@@ -333,64 +181,6 @@ def _alloc_context(current_user, x_tenant_id, x_app_key, operation):
 
 # Dashboard / analytics / report-export routes moved to routes/reports.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-@router.patch("/parties/{party_id}", response_model=PartyResponse)
-async def update_business_party(
-    party_id: str,
-    payload: PartyUpdateRequest,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party update",
-    )
-    party = await update_party(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-        updated_by=_created_by(current_user),
-        payload=payload,
-    )
-    if party is None:
-        raise HTTPException(status_code=404, detail="Business party not found")
-    return party
-
-
-@router.post("/parties/{party_id}/deactivate", response_model=PartyResponse)
-async def deactivate_business_party(
-    party_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="party deactivation",
-    )
-    party = await deactivate_party(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-        deactivated_by=_created_by(current_user),
-    )
-    if party is None:
-        raise HTTPException(status_code=404, detail="Business party not found")
-    return party
-
 
 # CA client / document metadata routes moved to routes/ca_clients.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
@@ -1976,3 +1766,4 @@ from app.modules.business.routes import reports as _reports_routes  # noqa: E402
 # Backward-compatible re-export: _build_business_report moved to routes/reports.py
 # but existing callers/tests import it from this module.
 from app.modules.business.routes.reports import _build_business_report  # noqa: E402,F401
+from app.modules.business.routes import parties as _parties_routes  # noqa: E402,F401
