@@ -1,8 +1,7 @@
 import re
 from datetime import date
-from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -44,30 +43,22 @@ from app.modules.business.schemas import (
     PurchaseBillCreateRequest,
     PurchaseBillListResponse,
     PurchaseBillResponse,
-    SalesInvoiceCancelRequest,
-    SalesInvoiceCreateRequest,
-    SalesInvoiceListResponse,
-    SalesInvoiceResponse,
 )
 from app.modules.business import banking_books
-from app.modules.business import export_governance
 from app.modules.business import bank_recon
 from app.modules.business.service import (
     cancel_credit_note,
     cancel_debit_note,
     cancel_purchase_bill,
-    cancel_sales_invoice,
     create_credit_note,
     create_debit_note,
     create_gst_settlement,
     create_purchase_bill,
-    create_sales_invoice,
     get_credit_note,
     get_business_admin_settings,
     get_debit_note,
     get_invoice_settings,
     get_purchase_bill,
-    get_sales_invoice,
     list_credit_notes,
     list_debit_notes,
     list_documents_for_approval_queue,
@@ -75,20 +66,17 @@ from app.modules.business.service import (
     reverse_gst_settlement,
     list_gst_period_locks,
     list_purchase_bills,
-    list_sales_invoices,
     mark_bill_payment,
     preview_itc_reversals,
     reclaim_itc_for_bill,
     review_credit_note,
     review_debit_note,
     review_purchase_bill,
-    review_sales_invoice,
     reverse_itc_for_bill,
     save_business_admin_settings,
     save_invoice_settings,
     set_gst_period_lock,
 )
-from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.core.permissions.rbac import Role, require_roles
 
 router = APIRouter(prefix="/business", tags=["business"])
@@ -96,14 +84,6 @@ router = APIRouter(prefix="/business", tags=["business"])
 
 def _created_by(current_user: dict) -> str:
     return str(current_user.get("sub") or current_user.get("user_id") or current_user.get("email") or "system")
-
-
-def _require_posted_document_for_output(document: dict | None, *, not_found_detail: str, label: str) -> dict:
-    if document is None:
-        raise HTTPException(status_code=404, detail=not_found_detail)
-    if str(document.get("status") or "").strip().lower() != "posted":
-        raise HTTPException(status_code=409, detail=f"Only posted {label} can be rendered or exported")
-    return document
 
 
 @router.get("/approval-queue", response_model=ApprovalQueueResponse)
@@ -166,219 +146,8 @@ def _alloc_context(current_user, x_tenant_id, x_app_key, operation):
 # Voucher routes moved to routes/vouchers.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
-@router.post("/invoices", response_model=SalesInvoiceResponse)
-async def create_business_sales_invoice(
-    payload: SalesInvoiceCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice posting",
-    )
-    try:
-        return await create_sales_invoice(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            created_by=_created_by(current_user),
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/invoices", response_model=SalesInvoiceListResponse)
-async def list_business_sales_invoices(
-    status: str | None = Query(default=None, pattern="^(draft|pending_approval|posted|rejected|cancelled)$"),
-    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice listing",
-    )
-    return await list_sales_invoices(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        status=status,
-        approval_status=approval_status,
-        limit=limit,
-    )
-
-
-@router.get("/invoices/{invoice_id}", response_model=SalesInvoiceResponse)
-async def get_business_sales_invoice(
-    invoice_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice lookup",
-    )
-    invoice = await get_sales_invoice(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        invoice_id=invoice_id,
-    )
-    if invoice is None:
-        raise HTTPException(status_code=404, detail="Sales invoice not found")
-    return invoice
-
-
-@router.post("/invoices/{invoice_id}/review", response_model=SalesInvoiceResponse)
-async def review_business_sales_invoice(
-    invoice_id: str,
-    payload: ApprovalReviewRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice approval review",
-    )
-    try:
-        return await review_sales_invoice(
-            session=session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            invoice_id=invoice_id,
-            reviewed_by=_created_by(current_user),
-            payload=payload,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/invoices/{invoice_id}/pdf")
-async def get_business_sales_invoice_pdf(
-    invoice_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Render a posted sales invoice (or Bill of Supply) to PDF via the shared
-    document renderer (app/core/documents)."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice PDF",
-    )
-    export_governance.require_export_permission(current_user, export_type="sales_invoice_pdf")
-    invoice = await get_sales_invoice(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        invoice_id=invoice_id,
-    )
-    invoice = _require_posted_document_for_output(
-        invoice,
-        not_found_detail="Sales invoice not found",
-        label="sales invoices",
-    )
-    settings = await get_invoice_settings(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-    )
-    pdf_bytes = build_sales_invoice_pdf(invoice, settings.get("branding") or {})
-    raw_name = f"{invoice.get('invoice_number') or invoice_id}.pdf".replace('"', "").replace("/", "-")
-    # A non-ASCII invoice number (e.g. a local-language prefix) cannot be encoded
-    # in a Latin-1 header value, which would make Starlette raise. Emit an ASCII
-    # fallback plus an RFC 5987 filename* for the UTF-8 form.
-    ascii_name = raw_name.encode("ascii", "ignore").decode("ascii").strip() or "invoice.pdf"
-    encoded = quote(raw_name)
-    response = Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"},
-    )
-    return await export_governance.govern_export_response(
-        response,
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        current_user=current_user,
-        export_type="sales_invoice_pdf",
-        export_format="pdf",
-        report_key="sales_invoice",
-        entity_id=invoice_id,
-        filters={"invoice_id": invoice_id},
-    )
-
-
-@router.post("/invoices/{invoice_id}/cancel", response_model=SalesInvoiceResponse)
-async def cancel_business_sales_invoice(
-    invoice_id: str,
-    payload: SalesInvoiceCancelRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice cancellation",
-    )
-    try:
-        return await cancel_sales_invoice(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            invoice_id=invoice_id,
-            created_by=_created_by(current_user),
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+# Sales invoice routes moved to routes/sales_invoices.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 @router.get("/invoice-settings", response_model=InvoiceSettingsResponse)
 async def get_business_invoice_settings(
@@ -1443,3 +1212,4 @@ from app.modules.business.routes import reports as _reports_routes  # noqa: E402
 from app.modules.business.routes.reports import _build_business_report  # noqa: E402,F401
 from app.modules.business.routes import parties as _parties_routes  # noqa: E402,F401
 from app.modules.business.routes import attachments as _attachments_routes  # noqa: E402,F401
+from app.modules.business.routes import sales_invoices as _sales_invoices_routes  # noqa: E402,F401
