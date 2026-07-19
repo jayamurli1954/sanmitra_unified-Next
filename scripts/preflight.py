@@ -46,6 +46,7 @@ PY = sys.executable
 TIER1 = [
     ("repo safety", [PY, "scripts/check_repository_safety.py"]),
     ("AGENTS compliance", [PY, "scripts/check_agents_compliance.py"]),
+    ("file-size guard", [PY, "scripts/check_file_size.py"]),
     ("compile sources", [PY, "-m", "compileall", "app", "scripts", "tests"]),
     ("text integrity", [PY, "scripts/check_text_integrity.py", "app", "scripts", ".github/workflows"]),
     ("route contract", [PY, "scripts/check_frontend_backend_route_contract.py", "--fail-on-missing"]),
