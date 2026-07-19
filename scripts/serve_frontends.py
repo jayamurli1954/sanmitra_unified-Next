@@ -31,7 +31,6 @@ def main() -> None:
     print(f"Index: http://{args.host}:{args.port}/")
     print(f"MitraBooks ERP: http://{args.host}:{args.port}/mitrabooks-erp/")
     print(f"LegalMitra: http://{args.host}:{args.port}/legalmitra/")
-    print(f"InvestMitra: http://{args.host}:{args.port}/investmitra/")
     print("Press Ctrl+C to stop.")
 
     try:
