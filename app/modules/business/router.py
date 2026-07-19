@@ -1,10 +1,9 @@
-import json
 import re
 from datetime import date
 from decimal import Decimal
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -31,19 +30,6 @@ from app.modules.business.schemas import (
     BillPaymentUpdateRequest,
     BusinessDocumentAttachmentListResponse,
     BusinessDocumentAttachmentResponse,
-    CaAccessListResponse,
-    CaAccessRecord,
-    CaClientCreateRequest,
-    CaClientListResponse,
-    CaClientResponse,
-    CaClientUpdateRequest,
-    CaDocumentCreateRequest,
-    CaDocumentListResponse,
-    CaDocumentResponse,
-    CaDocumentUpdateRequest,
-    CaInviteAcceptRequest,
-    CaInviteRequest,
-    CaRevokeResponse,
     CreditNoteCancelRequest,
     CreditNoteCreateRequest,
     CreditNoteListResponse,
@@ -77,10 +63,6 @@ from app.modules.business.schemas import (
     SalesInvoiceCreateRequest,
     SalesInvoiceListResponse,
     SalesInvoiceResponse,
-    TypedVoucherCreateRequest,
-    TypedVoucherListResponse,
-    TypedVoucherReversalRequest,
-    TypedVoucherResponse,
 )
 from app.modules.business import allocation_service
 from app.modules.business import banking_books
@@ -91,9 +73,7 @@ from app.modules.business import mis as mis_module
 from app.modules.business import report_export
 from app.modules.business import tally_xml
 from app.modules.business import bank_recon
-from app.modules.business import bulk_import
 from app.modules.business import statements
-from app.modules.business import ca_access as ca_access_module
 from app.core.tenants.service import get_tenant
 from app.modules.business.service import (
     cancel_credit_note,
@@ -101,8 +81,6 @@ from app.modules.business.service import (
     cancel_purchase_bill,
     cancel_sales_invoice,
     create_business_document_attachment,
-    create_ca_client,
-    create_ca_document_metadata,
     create_credit_note,
     create_debit_note,
     download_business_document_attachment,
@@ -120,45 +98,33 @@ from app.modules.business.service import (
     list_credit_notes,
     list_debit_notes,
     list_business_document_attachments,
-    list_ca_clients,
     list_documents_for_approval_queue,
     preview_gst_settlement,
     reverse_gst_settlement,
-    list_ca_document_metadata,
     get_party,
-    get_voucher,
     list_gst_period_locks,
     list_parties,
     list_purchase_bills,
     list_sales_invoices,
-    list_vouchers,
     mark_bill_payment,
     party_outstanding_summary,
     party_wise_ledger,
-    post_typed_voucher,
     preview_itc_reversals,
     reclaim_itc_for_bill,
     review_credit_note,
     review_debit_note,
     review_purchase_bill,
     review_sales_invoice,
-    review_typed_voucher,
     reverse_itc_for_bill,
-    reverse_typed_voucher,
     save_business_admin_settings,
     save_invoice_settings,
     set_gst_period_lock,
-    update_ca_client,
-    update_ca_document_metadata,
     update_party,
 )
 from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.core.permissions.rbac import Role, require_roles
-from app.core.rate_limiting import limiter
 
 router = APIRouter(prefix="/business", tags=["business"])
-CA_INVITE_PREVIEW_RATE_LIMIT = "20/minute"
-CA_INVITE_ACCEPT_RATE_LIMIT = "10/minute"
 
 
 def _created_by(current_user: dict) -> str:
@@ -904,177 +870,8 @@ async def deactivate_business_party(
     return party
 
 
-@router.post("/ca-clients", response_model=CaClientResponse)
-async def create_ca_client_record(
-    payload: CaClientCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA client creation",
-        x_accounting_entity_id=x_accounting_entity_id,
-    )
-    return await create_ca_client(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
-        created_by=_created_by(current_user),
-        payload=payload,
-    )
-
-
-@router.get("/ca-clients", response_model=CaClientListResponse)
-async def list_ca_client_records(
-    q: str | None = Query(default=None, min_length=1, max_length=160),
-    active_only: bool = Query(default=True),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA client listing",
-        x_accounting_entity_id=accounting_entity_id,
-    )
-    return await list_ca_clients(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id,
-        q=q,
-        active_only=active_only,
-        limit=limit,
-    )
-
-
-@router.patch("/ca-clients/{client_id}", response_model=CaClientResponse)
-async def update_ca_client_record(
-    client_id: str,
-    payload: CaClientUpdateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA client update",
-        x_accounting_entity_id=payload.accounting_entity_id,
-    )
-    result = await update_ca_client(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id,
-        client_id=client_id,
-        updated_by=_created_by(current_user),
-        payload=payload,
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="CA client not found")
-    return result
-
-
-@router.post("/ca-documents", response_model=CaDocumentResponse)
-async def create_ca_document(
-    payload: CaDocumentCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document metadata creation",
-        x_accounting_entity_id=x_accounting_entity_id,
-    )
-    return await create_ca_document_metadata(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
-        created_by=_created_by(current_user),
-        payload=payload,
-    )
-
-
-@router.get("/ca-documents", response_model=CaDocumentListResponse)
-async def list_ca_documents(
-    status: str | None = Query(default=None, pattern="^(uploaded|under_review|query_raised|reviewed|posted)$"),
-    client_name: str | None = Query(default=None, min_length=1, max_length=160),
-    assigned_to: str | None = Query(default=None, min_length=1, max_length=120),
-    priority: str | None = Query(default=None, pattern="^(low|normal|high|urgent)$"),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document metadata listing",
-    )
-    return await list_ca_document_metadata(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        status=status,
-        client_name=client_name,
-        assigned_to=assigned_to,
-        priority=priority,
-        limit=limit,
-    )
-
-
-@router.patch("/ca-documents/{document_id}", response_model=CaDocumentResponse)
-async def update_ca_document(
-    document_id: str,
-    payload: CaDocumentUpdateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document metadata update",
-    )
-    result = await update_ca_document_metadata(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=payload.accounting_entity_id,
-        document_id=document_id,
-        updated_by=_created_by(current_user),
-        payload=payload,
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="CA document metadata not found")
-    return result
-
+# CA client / document metadata routes moved to routes/ca_clients.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 @router.post("/invoices/{invoice_id}/attachments", response_model=BusinessDocumentAttachmentResponse)
 async def upload_sales_invoice_attachment(
@@ -1379,242 +1176,8 @@ async def download_ca_document_attachment(
     )
 
 
-@router.post("/vouchers", response_model=TypedVoucherResponse)
-async def create_typed_voucher(
-    payload: TypedVoucherCreateRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="voucher creation",
-    )
-    try:
-        return await post_typed_voucher(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            created_by=_created_by(current_user),
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/vouchers", response_model=TypedVoucherListResponse)
-async def list_business_vouchers(
-    voucher_type: str | None = Query(default=None, pattern="^(payment|receipt|contra|journal)$"),
-    status: str | None = Query(default=None, pattern="^(pending_approval|posted|rejected|reversed|posting)$"),
-    approval_status: str | None = Query(default=None, pattern="^(auto_posted|not_submitted|pending_approval|approved|rejected)$"),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    session: AsyncSession = Depends(get_async_session),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="voucher listing",
-    )
-    return await list_vouchers(
-        session=session,
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        voucher_type=voucher_type,
-        status=status,
-        approval_status=approval_status,
-        limit=limit,
-    )
-
-
-@router.get("/vouchers/{voucher_id}", response_model=TypedVoucherResponse)
-async def get_business_voucher(
-    voucher_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="voucher lookup",
-    )
-    voucher = await get_voucher(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
-        voucher_id=voucher_id,
-    )
-    if voucher is None:
-        raise HTTPException(status_code=404, detail="Voucher not found")
-    voucher["created"] = False
-    return voucher
-
-
-@router.post("/vouchers/{voucher_id}/review", response_model=TypedVoucherResponse)
-async def review_business_voucher(
-    voucher_id: str,
-    payload: ApprovalReviewRequest,
-    session: AsyncSession = Depends(get_async_session),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="voucher approval review",
-    )
-    try:
-        return await review_typed_voucher(
-            session=session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            voucher_id=voucher_id,
-            reviewed_by=_created_by(current_user),
-            payload=payload,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.post("/vouchers/{voucher_id}/reverse", response_model=TypedVoucherResponse)
-async def reverse_business_voucher(
-    voucher_id: str,
-    payload: TypedVoucherReversalRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="voucher reversal",
-    )
-    try:
-        return await reverse_typed_voucher(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            voucher_id=voucher_id,
-            created_by=_created_by(current_user),
-            payload=payload,
-            idempotency_key=x_idempotency_key,
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/vouchers/bulk-import/template")
-async def business_voucher_bulk_import_template(
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Sample CSV template for the bulk voucher import."""
-    resolve_business_app_tenant(
-        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
-        expected_app_key="mitrabooks", operation="voucher bulk import template",
-    )
-    from fastapi.responses import Response
-    return Response(
-        content=bulk_import.voucher_csv_template(),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="vouchers_bulk_import_template.csv"'},
-    )
-
-
-@router.post("/vouchers/bulk-import/preview")
-async def business_voucher_bulk_import_preview(
-    payload: dict = Body(..., description='{"csv": "<vouchers CSV>"}'),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Parse + resolve the uploaded voucher CSV without posting."""
-    context = resolve_business_app_tenant(
-        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
-        expected_app_key="mitrabooks", operation="voucher bulk import preview",
-    )
-    try:
-        return await bulk_import.build_bulk_import_preview(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            csv_text=str(payload.get("csv") or ""),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-
-@router.post("/vouchers/bulk-import")
-async def business_voucher_bulk_import(
-    payload: dict = Body(..., description='{"csv": "<vouchers CSV>"}'),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Post bulk vouchers atomically."""
-    context = resolve_business_app_tenant(
-        current_user=current_user, x_tenant_id=x_tenant_id, x_app_key=x_app_key,
-        expected_app_key="mitrabooks", operation="voucher bulk import posting",
-    )
-    try:
-        return await bulk_import.post_bulk_import_vouchers(
-            session,
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            csv_text=str(payload.get("csv") or ""),
-            created_by=_created_by(current_user),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-
-
+# Voucher routes moved to routes/vouchers.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 @router.post("/invoices", response_model=SalesInvoiceResponse)
 async def create_business_sales_invoice(
@@ -2870,172 +2433,8 @@ async def business_bank_cash_book(
 # Fixed-asset / depreciation routes moved to routes/fixed_assets.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
-# ── CA Access Management ──────────────────────────────────────────────────────
-
-@router.post("/ca/invite")
-async def invite_ca_user(
-    payload: CaInviteRequest,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Send a CA invite email. tenant_admin only."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA invite",
-    )
-    try:
-        doc = await ca_access_module.invite_ca(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            email=payload.email,
-            full_name=payload.full_name,
-            invited_by=_created_by(current_user),
-        )
-        delivery = doc.get("email_delivery") or {}
-        return {
-            "ok": bool(delivery.get("sent", False)),
-            "invite_id": doc["invite_id"],
-            "email": doc["email"],
-            "expires_at": str(doc["expires_at"]),
-            "resent": bool(doc.get("resent")),
-            "email_sent": bool(delivery.get("sent", False)),
-            "email_error": delivery.get("error"),
-        }
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@router.get("/ca/invite/{token}/preview")
-@limiter.limit(CA_INVITE_PREVIEW_RATE_LIMIT)
-async def preview_ca_invite(request: Request, token: str):
-    """Return a masked invite hint. No authentication is required."""
-    try:
-        return await ca_access_module.preview_ca_invite(token=token)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invite is invalid, expired, or unavailable") from exc
-
-
-@router.post("/ca/invite/{token}/accept")
-@limiter.limit(CA_INVITE_ACCEPT_RATE_LIMIT)
-async def accept_ca_invite(
-    request: Request,
-    token: str,
-):
-    """Accept a CA invite — creates the ca_viewer account. No auth required."""
-    try:
-        content_type = str(request.headers.get("content-type") or "").lower()
-        if content_type.startswith("text/plain"):
-            raw_body = (await request.body()).decode("utf-8").strip()
-            payload = CaInviteAcceptRequest.model_validate(json.loads(raw_body or "{}"))
-        else:
-            payload = CaInviteAcceptRequest.model_validate(await request.json())
-        await ca_access_module.accept_ca_invite(
-            token=token,
-            password=payload.password,
-            full_name=payload.full_name,
-        )
-        return {"ok": True}
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Invalid invite accept payload") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invite is invalid, expired, or unavailable") from exc
-
-
-@router.get("/ca/users", response_model=CaAccessListResponse)
-async def list_ca_users(
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """List all CA invites and users for this tenant. tenant_admin only."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA user listing",
-    )
-    data = await ca_access_module.list_ca_access(tenant_id=context.tenant_id)
-    return CaAccessListResponse(
-        ca_users=[CaAccessRecord(**r) for r in data["ca_users"]],
-        total=data["total"],
-    )
-
-
-@router.post("/ca/invite/{invite_id}/cancel")
-async def cancel_ca_invite(
-    invite_id: str,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Cancel a pending CA invite. tenant_admin only."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA invite cancel",
-    )
-    try:
-        await ca_access_module.delete_ca_record(tenant_id=context.tenant_id, invite_id=invite_id)
-        return {"ok": True, "message": "CA record deleted"}
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.post("/ca/{user_id}/reinstate")
-async def reinstate_ca_user(
-    user_id: str,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Reinstate a previously revoked CA user. tenant_admin only."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA access reinstate",
-    )
-    try:
-        await ca_access_module.reinstate_ca_access(tenant_id=context.tenant_id, user_id=user_id)
-        return {"ok": True, "message": f"CA access reinstated for user {user_id}"}
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.post("/ca/{user_id}/revoke", response_model=CaRevokeResponse)
-async def revoke_ca_user(
-    user_id: str,
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(require_roles([Role.tenant_admin, Role.super_admin])),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Revoke a CA user account. tenant_admin only."""
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA access revoke",
-    )
-    try:
-        await ca_access_module.revoke_ca_access(tenant_id=context.tenant_id, user_id=user_id)
-        return CaRevokeResponse(ok=True, message=f"CA access revoked for user {user_id}")
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+# CA access routes moved to routes/ca_access.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 # Sub-routers registered on the shared ``router`` above (imported for side effects).
 from app.modules.business.routes import allocations as _allocations_routes  # noqa: E402,F401
@@ -3047,3 +2446,6 @@ from app.modules.business.routes import tds as _tds_routes  # noqa: E402,F401
 from app.modules.business.routes import statements as _statements_routes  # noqa: E402,F401
 from app.modules.business.routes import opening_close as _opening_close_routes  # noqa: E402,F401
 from app.modules.business.routes import einvoice as _einvoice_routes  # noqa: E402,F401
+from app.modules.business.routes import ca_clients as _ca_clients_routes  # noqa: E402,F401
+from app.modules.business.routes import vouchers as _vouchers_routes  # noqa: E402,F401
+from app.modules.business.routes import ca_access as _ca_access_routes  # noqa: E402,F401
