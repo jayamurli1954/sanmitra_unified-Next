@@ -2,7 +2,7 @@ import re
 from datetime import date
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.service import (
@@ -21,8 +21,6 @@ from app.modules.business.schemas import (
     BankStatementVoucherRequest,
     BankStatementVoucherResponse,
     BillPaymentUpdateRequest,
-    BusinessDocumentAttachmentListResponse,
-    BusinessDocumentAttachmentResponse,
     CreditNoteCancelRequest,
     CreditNoteCreateRequest,
     CreditNoteListResponse,
@@ -59,10 +57,8 @@ from app.modules.business.service import (
     cancel_debit_note,
     cancel_purchase_bill,
     cancel_sales_invoice,
-    create_business_document_attachment,
     create_credit_note,
     create_debit_note,
-    download_business_document_attachment,
     create_gst_settlement,
     create_purchase_bill,
     create_sales_invoice,
@@ -74,7 +70,6 @@ from app.modules.business.service import (
     get_sales_invoice,
     list_credit_notes,
     list_debit_notes,
-    list_business_document_attachments,
     list_documents_for_approval_queue,
     preview_gst_settlement,
     reverse_gst_settlement,
@@ -109,26 +104,6 @@ def _require_posted_document_for_output(document: dict | None, *, not_found_deta
     if str(document.get("status") or "").strip().lower() != "posted":
         raise HTTPException(status_code=409, detail=f"Only posted {label} can be rendered or exported")
     return document
-
-
-def _safe_content_disposition(filename: str) -> str:
-    safe_name = re.sub(r"[\x00-\x1f\x7f]", "", filename)
-    encoded = quote(safe_name, safe="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.")
-    return f"attachment; filename*=UTF-8''{encoded}"
-
-
-async def _read_business_upload(file: UploadFile) -> bytes:
-    data = bytearray()
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        data.extend(chunk)
-        if len(data) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Attachment file exceeds the 10 MB limit")
-    if not data:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    return bytes(data)
 
 
 @router.get("/approval-queue", response_model=ApprovalQueueResponse)
@@ -185,308 +160,8 @@ def _alloc_context(current_user, x_tenant_id, x_app_key, operation):
 # CA client / document metadata routes moved to routes/ca_clients.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
-@router.post("/invoices/{invoice_id}/attachments", response_model=BusinessDocumentAttachmentResponse)
-async def upload_sales_invoice_attachment(
-    invoice_id: str,
-    file: UploadFile = File(...),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice attachment upload",
-    )
-    try:
-        return await create_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="sales_invoice",
-            owner_id=invoice_id,
-            uploaded_by=_created_by(current_user),
-            file_name=file.filename or "attachment",
-            content_type=file.content_type,
-            payload=await _read_business_upload(file),
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/invoices/{invoice_id}/attachments", response_model=BusinessDocumentAttachmentListResponse)
-async def list_sales_invoice_attachments(
-    invoice_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice attachment listing",
-    )
-    try:
-        return await list_business_document_attachments(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="sales_invoice",
-            owner_id=invoice_id,
-            limit=limit,
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/invoices/{invoice_id}/attachments/{attachment_id}/download")
-async def download_sales_invoice_attachment(
-    invoice_id: str,
-    attachment_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="sales invoice attachment download",
-    )
-    try:
-        result = await download_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="sales_invoice",
-            owner_id=invoice_id,
-            attachment_id=attachment_id,
-            downloaded_by=_created_by(current_user),
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(
-        content=bytes(result["payload"]),
-        media_type=result.get("content_type") or "application/octet-stream",
-        headers={"Content-Disposition": _safe_content_disposition(result.get("file_name") or "attachment")},
-    )
-
-
-@router.post("/bills/{bill_id}/attachments", response_model=BusinessDocumentAttachmentResponse)
-async def upload_purchase_bill_attachment(
-    bill_id: str,
-    file: UploadFile = File(...),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="purchase bill attachment upload",
-    )
-    try:
-        return await create_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="purchase_bill",
-            owner_id=bill_id,
-            uploaded_by=_created_by(current_user),
-            file_name=file.filename or "attachment",
-            content_type=file.content_type,
-            payload=await _read_business_upload(file),
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/bills/{bill_id}/attachments", response_model=BusinessDocumentAttachmentListResponse)
-async def list_purchase_bill_attachments(
-    bill_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="purchase bill attachment listing",
-    )
-    try:
-        return await list_business_document_attachments(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="purchase_bill",
-            owner_id=bill_id,
-            limit=limit,
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/bills/{bill_id}/attachments/{attachment_id}/download")
-async def download_purchase_bill_attachment(
-    bill_id: str,
-    attachment_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="purchase bill attachment download",
-    )
-    try:
-        result = await download_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="purchase_bill",
-            owner_id=bill_id,
-            attachment_id=attachment_id,
-            downloaded_by=_created_by(current_user),
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(
-        content=bytes(result["payload"]),
-        media_type=result.get("content_type") or "application/octet-stream",
-        headers={"Content-Disposition": _safe_content_disposition(result.get("file_name") or "attachment")},
-    )
-
-
-@router.post("/ca-documents/{document_id}/attachments", response_model=BusinessDocumentAttachmentResponse)
-async def upload_ca_document_attachment(
-    document_id: str,
-    file: UploadFile = File(...),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document attachment upload",
-    )
-    try:
-        return await create_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="ca_document",
-            owner_id=document_id,
-            uploaded_by=_created_by(current_user),
-            file_name=file.filename or "attachment",
-            content_type=file.content_type,
-            payload=await _read_business_upload(file),
-        )
-    except AccountingValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/ca-documents/{document_id}/attachments", response_model=BusinessDocumentAttachmentListResponse)
-async def list_ca_document_attachments(
-    document_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=500),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document attachment listing",
-    )
-    try:
-        return await list_business_document_attachments(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="ca_document",
-            owner_id=document_id,
-            limit=limit,
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-@router.get("/ca-documents/{document_id}/attachments/{attachment_id}/download")
-async def download_ca_document_attachment(
-    document_id: str,
-    attachment_id: str,
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
-    _module_context: dict = Depends(require_enabled_module("business")),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    context = resolve_business_app_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        expected_app_key="mitrabooks",
-        operation="CA document attachment download",
-    )
-    try:
-        result = await download_business_document_attachment(
-            tenant_id=context.tenant_id,
-            app_key=context.app_key,
-            accounting_entity_id=accounting_entity_id,
-            owner_type="ca_document",
-            owner_id=document_id,
-            attachment_id=attachment_id,
-            downloaded_by=_created_by(current_user),
-        )
-    except AccountingNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(
-        content=bytes(result["payload"]),
-        media_type=result.get("content_type") or "application/octet-stream",
-        headers={"Content-Disposition": _safe_content_disposition(result.get("file_name") or "attachment")},
-    )
-
+# Business document attachment routes moved to routes/attachments.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 # Voucher routes moved to routes/vouchers.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
@@ -1767,3 +1442,4 @@ from app.modules.business.routes import reports as _reports_routes  # noqa: E402
 # but existing callers/tests import it from this module.
 from app.modules.business.routes.reports import _build_business_report  # noqa: E402,F401
 from app.modules.business.routes import parties as _parties_routes  # noqa: E402,F401
+from app.modules.business.routes import attachments as _attachments_routes  # noqa: E402,F401
