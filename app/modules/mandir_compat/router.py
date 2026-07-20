@@ -1,129 +1,22 @@
+"""MandirMitra compat router.
 
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: MODULE HEADER + IMPORTS
-# NOTE   : 9K-line MandirMitra FastAPI router. Use Ctrl+F '# SECTION:' to navigate.
-# Split trigger: when a second developer joins or file exceeds 12K lines.
-# ════════════════════════════════════════════════════════════════════════
-
+Panchang display-settings and on-date routes live here. All other MandirMitra
+handlers are registered via side-effect imports in the facade block at the end
+of this module (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md).
+"""
 from __future__ import annotations
 
-import calendar
-import json
 import logging
-import os
-import re
-from urllib.parse import urlencode
-from datetime import date, datetime, timedelta, timezone
-from io import BytesIO, StringIO
-import csv
-import httpx
-from functools import lru_cache
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
-from xml.sax.saxutils import escape
-from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy import and_, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, A5
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas as pdf_canvas
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.lib.utils import ImageReader
-
-try:
-    from PIL import Image as PILImage
-    from PIL import ImageDraw, ImageFont, features as pil_features
-except Exception:
-    PILImage = None
-    ImageDraw = None
-    ImageFont = None
-    pil_features = None
-
-try:
-    from weasyprint import HTML
-except Exception:
-    HTML = None
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.auth.dependencies import get_current_user
-from app.core.audit.service import log_audit_event
 from app.core.modules.dependencies import require_enabled_module
 from app.core.permissions.rbac import Role, require_roles
-from app.core.rate_limiting import limiter
-from app.core.tenants.app_resolvers import resolve_mandir_tenant
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
-from app.db.postgres import get_async_session
-from app.accounting.models.entities import Account, JournalEntry, JournalLine
-from app.accounting.service import (
-    AccountingValidationError,
-    create_account,
-    get_accounts_payable,
-    get_accounts_receivable,
-    get_balance_sheet,
-    get_cost_centre_ledger_pl,
-    get_journal_drilldown,
-    get_ledger_lines,
-    get_profit_loss,
-    get_receipts_payments,
-    get_trial_balance,
-    list_accounts,
-    post_journal_entry,
-    reverse_journal_entry,
-    validate_cash_balance_for_journal_lines,
-)
-from app.accounting.schemas import JournalPostRequest, JournalLineIn
-from app.modules.business.dimensions import create_dimension, deactivate_dimension
-from app.modules.mandir_compat.report_helpers import (
-    accounts_payable_report,
-    accounts_receivable_report,
-    balance_sheet_report,
-    bank_book_report,
-    cash_book_report,
-    category_income_report,
-    day_book_report,
-    detailed_donation_report,
-    detailed_seva_report,
-    donation_category_wise_report,
-    donation_daily_report,
-    donation_monthly_report,
-    journal_entries_report,
-    ledger_report,
-    posted_donations,
-    posted_sevas,
-    profit_loss_report,
-    receipts_payments_report,
-    seva_schedule_report,
-    top_donors_report,
-    trial_balance_report,
-)
-from app.modules.mandir_compat.donation_compliance import (
-    classify_donation_compliance,
-    compliance_public_fields,
-    donation_compliance_config_view,
-    donation_compliance_receipt_note,
-    mask_pan,
-    validate_donation_compliance_config,
-)
-from app.modules.mandir_compat.schemas import (
-    MandirFirstLoginOnboardingRequest,
-    MandirFirstLoginOnboardingResponse,
-)
-from app.modules.mandir_compat.service import (
-    create_mandir_first_login_onboarding,
-    ensure_temple_numeric_id,
-    list_mandir_temples,
-    resolve_tenant_by_temple_id,
-)
 from app.services.panchang import PanchangService
 
 router = APIRouter(tags=["mandir-compat"])
@@ -135,25 +28,10 @@ _MANDIR_ADMIN_ROUTE_DEPS = [
     Depends(require_enabled_module("temple")),
     Depends(require_roles([Role.tenant_admin, Role.super_admin])),
 ]
-MANDIR_COMPAT_DATA_DIR = Path(__file__).resolve().parent / "data"
-MANDIR_LEGACY_COA_PATH = MANDIR_COMPAT_DATA_DIR / "legacy_mandir_coa.json"
 logger = logging.getLogger(__name__)
 
-_MANDIR_COUNTERS_COLLECTION = "mandir_counters"
-_MANDIR_RECEIPT_WIDTH = 7
-_MANDIR_RECEIPT_PREFIX_BY_KIND = {
-    "donation": "DON",
-    "seva": "SEV",
-}
-_MANDIR_JOURNAL_ENTRY_PREFIX = "JE"
-_DEFAULT_PUBLIC_DONATION_CATEGORIES = [
-    {"id": "general", "name": "General Donation", "description": "General donation to the temple"},
-    {"id": "annadanam", "name": "Annadanam", "description": "Sponsoring food/meals for devotees"},
-    {"id": "construction", "name": "Construction Fund", "description": "Temple construction and renovation"},
-    {"id": "corpus", "name": "Corpus Fund", "description": "Temple corpus fund"},
-    {"id": "vastra_seva", "name": "Vastra Seva", "description": "Clothing and decoration for deity"},
-    {"id": "nitya_puja", "name": "Nitya Puja", "description": "Daily worship sponsorship"},
-]
+
+# Panchang constants, helpers, and display/on-date routes (quarantined in router.py).
 
 _PANCHANG_DEFAULT_LOCATION = {
     "name": "Bengaluru",
@@ -182,90 +60,6 @@ _PANCHANG_CITY_OPTIONS: tuple[dict[str, Any], ...] = (
     {"name": "Ahmedabad", "state": "Gujarat", "country": "India", "lat": 23.0225, "lon": 72.5714, "timezone": "Asia/Kolkata", "display": "Ahmedabad, Gujarat"},
     {"name": "Varanasi", "state": "Uttar Pradesh", "country": "India", "lat": 25.3176, "lon": 82.9739, "timezone": "Asia/Kolkata", "display": "Varanasi, Uttar Pradesh"},
 )
-
-
-_MANDIR_CANONICAL_INCOME_CODES: dict[str, tuple[str, str]] = {
-    'general donation': ('44001', 'General Donations'),
-    'donation income': ('44001', 'General Donations'),
-    'general donations': ('44001', 'General Donations'),
-    'hundi collections': ('44002', 'Hundi Collections'),
-    'specific purpose donation': ('44003', 'Specific Purpose Donations'),
-    'specific purpose donations': ('44003', 'Specific Purpose Donations'),
-    'in-kind donation income': ('44004', 'In-Kind Donation Income'),
-    'in kind donation income': ('44004', 'In-Kind Donation Income'),
-    'sponsorship': ('45001', 'Sponsorship Income'),
-    'sponsorship income': ('45001', 'Sponsorship Income'),
-    'in-kind sponsorship income': ('45002', 'In-Kind Sponsorship Income'),
-    'in kind sponsorship income': ('45002', 'In-Kind Sponsorship Income'),
-    'seva booking revenue': ('42002', 'Seva Income - General'),
-    'pooja revenue': ('42002', 'Seva Income - General'),
-    'seva income': ('42002', 'Seva Income - General'),
-    'seva income - general': ('42002', 'Seva Income - General'),
-}
-
-
-from app.modules.mandir_compat.helpers.account_categories import (
-    _MANDIR_INCOME_BUCKET_ALIASES,
-    _MANDIR_INCOME_LEGACY_CODES,
-    _MANDIR_LEGACY_ACCOUNT_CODE_MAP,
-    _MANDIR_SPONSORSHIP_CATEGORY_MARKERS,
-    _MANDIR_UTR_REFERENCE_PATTERN,
-    _is_mandir_sponsorship_category,
-    _mandir_cash_income_category,
-    _mandir_in_kind_debit_account_target,
-    _mandir_in_kind_income_category,
-    _mandir_income_bucket_for_account,
-    _normalize_income_category,
-    _normalize_mandir_account_code,
-    _normalize_public_payment_utr_reference,
-)
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ACCOUNT CODE + CATEGORY HELPERS
-# NOTE   : moved to helpers/account_categories.py; imported above.
-# ════════════════════════════════════════════════════════════════════════
-
-# SECTION: ASYNC ACCOUNT RESOLVERS
-# NOTE   : _normalize_mandir_income_accounts, _resolve_mandir_income_account, _resolve_or_create_mandir_account, _mandir_inventory_accounting_enabled, _resolve_mandir_in_kind_debit_account, _resolve_mandir_payment_account_id
-# ════════════════════════════════════════════════════════════════════════
-
-def _mandir_actor_id(current_user: dict[str, Any]) -> str:
-    return str(
-        current_user.get("sub")
-        or current_user.get("user_id")
-        or current_user.get("email")
-        or "mandir_compat_system"
-    )
-
-
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: RECEIPT CANCELLATION HELPERS
-# NOTE   : _mandir_actor_id, _mandir_receipt_cancellation_metadata, _reverse_mandir_source_journal, _cancel_mandir_receipt_source
-# ════════════════════════════════════════════════════════════════════════
-
-# Receipt cancellation helpers moved to helpers/receipt_cancellation.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported at end of module.
-
-# Refund-request routes moved to routes/refunds.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-
-# Default COA seed + legacy import helpers moved to helpers/*.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported at end of module.
-
-# Safe coercions, opening balance, mongo, views, pincode, seva, devotee/UPI, and
-# tenant helpers moved to helpers/*.py; re-exported at end of module.
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: SEQUENCE NUMBERS
-# NOTE   : _format_mandir_receipt_number, _format_mandir_sequence_number, _next_receipt_number, _next_journal_entry_number, _receipt_number_for_donation, _sanitize_mongo_doc
-# ════════════════════════════════════════════════════════════════════════
-
-# Receipt sequencing helpers moved to helpers/receipt_sequencing.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported at end of module.
-
-# Donation/seva view helpers moved to helpers/views.py
 
 def _panchang_city_options() -> list[dict[str, Any]]:
     return [dict(city) for city in _PANCHANG_CITY_OPTIONS]
@@ -310,56 +104,6 @@ def _resolve_panchang_location(
         float(_PANCHANG_DEFAULT_LOCATION["lon"]),
         str(_PANCHANG_DEFAULT_LOCATION["name"]),
     )
-# Panchang (today) route moved to routes/panchang.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Donations (GET list / POST / cancel / receipt PDF / reconcile / cleanup / export / daily|monthly reports)
-# ROUTES : GET /donations/payment-accounts|categories  GET|POST /donations  GET .../receipt/pdf  POST .../cancel|reconcile-posting  DELETE .../cleanup  GET .../report/daily|monthly  GET .../export/excel|pdf
-# ════════════════════════════════════════════════════════════════════════
-
-# Donation read routes moved to routes/donations_read.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-# Donation posting routes moved to routes/donations_posting.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-# Devotee routes moved to routes/devotees.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Sevas (GET / POST / PUT / DELETE / import / lists / dropdown-options / payment-accounts)
-# ROUTES : GET /sevas  POST .../sevas  PUT|DELETE .../sevas/{seva_id}  GET|POST .../import  GET .../priests|dropdown-options|payment-accounts
-# ════════════════════════════════════════════════════════════════════════
-
-# Seva routes moved to routes/sevas.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-# Temple routes moved to routes/temples.py
-
-# Accounts / COA routes moved to routes/accounts.py
-
-# Misc compat routes moved to routes/misc_compat.py
-
-# Hundi routes moved to routes/hundi.py
-
-# Inventory routes moved to routes/inventory.py
-
-# Journal routes moved to routes/journal_entries.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-# Login and opening balance routes moved to routes/login_opening.py
-
-
-
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Panchang display settings + panchang on-date
-# ROUTES : GET|PUT /panchang/display-settings  GET .../cities  GET /panchang/on-date  GET /panchang/on-date-full
-# ════════════════════════════════════════════════════════════════════════
-
 @router.get("/panchang/display-settings")
 @router.get("/panchang/display-settings/")
 async def mandir_panchang_display_settings(
@@ -564,37 +308,99 @@ async def mandir_panchang_on_date_full(
 
 
 
-# Pincode route moved to routes/pincode.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 # ════════════════════════════════════════════════════════════════════════
-# Reports routes moved to routes/reports.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Role permissions (GET list / PUT / GET assignable)
-# ROUTES : GET /role-permissions  PUT .../role-permissions/{role_key}  GET .../assignable
-# ════════════════════════════════════════════════════════════════════════
-# Role permission routes moved to routes/role_permissions.py
-
-# Setup wizard and temple admin routes moved to routes/temples_mgmt.py
-
-# UPI routes moved to routes/upi.py
-
-# Public portal routes moved to routes/public.py
-
-# User routes moved to routes/users.py
-
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Seva bookings (POST / quick-ticket / GET / receipt PDF / cancel / reschedule / approve)
-# ROUTES : POST /sevas/bookings  POST .../quick-ticket  GET .../bookings  GET .../receipt/pdf  POST .../cancel  PUT .../reschedule  POST .../approve-reschedule  GET .../pending
+# FACADE: infrastructure + helper re-exports for routes/*.py and tests
 # ════════════════════════════════════════════════════════════════════════
 
-# Seva booking routes moved to routes/seva_bookings.py
+from app.accounting.service import (
+    AccountingValidationError as AccountingValidationError,
+    create_account as create_account,
+    get_accounts_payable as get_accounts_payable,
+    get_accounts_receivable as get_accounts_receivable,
+    get_balance_sheet as get_balance_sheet,
+    get_cost_centre_ledger_pl as get_cost_centre_ledger_pl,
+    get_journal_drilldown as get_journal_drilldown,
+    get_ledger_lines as get_ledger_lines,
+    get_profit_loss as get_profit_loss,
+    get_receipts_payments as get_receipts_payments,
+    get_trial_balance as get_trial_balance,
+    list_accounts as list_accounts,
+    post_journal_entry as post_journal_entry,
+    reverse_journal_entry as reverse_journal_entry,
+    validate_cash_balance_for_journal_lines as validate_cash_balance_for_journal_lines,
+)
+from app.accounting.schemas import JournalLineIn as JournalLineIn, JournalPostRequest as JournalPostRequest
+from app.core.audit.service import log_audit_event as log_audit_event
+from app.core.rate_limiting import limiter as limiter
+from app.core.tenants.app_resolvers import resolve_mandir_tenant as resolve_mandir_tenant
+from app.core.tenants.context import resolve_app_key as resolve_app_key, resolve_tenant_id as resolve_tenant_id
+from app.db.postgres import get_async_session as get_async_session
+from app.modules.business.dimensions import create_dimension as create_dimension, deactivate_dimension as deactivate_dimension
+from app.modules.mandir_compat.donation_compliance import (
+    classify_donation_compliance as classify_donation_compliance,
+    compliance_public_fields as compliance_public_fields,
+    donation_compliance_config_view as donation_compliance_config_view,
+    donation_compliance_receipt_note as donation_compliance_receipt_note,
+    mask_pan as mask_pan,
+    validate_donation_compliance_config as validate_donation_compliance_config,
+)
+from app.modules.mandir_compat.report_helpers import (
+    accounts_payable_report as accounts_payable_report,
+    accounts_receivable_report as accounts_receivable_report,
+    balance_sheet_report as balance_sheet_report,
+    bank_book_report as bank_book_report,
+    cash_book_report as cash_book_report,
+    category_income_report as category_income_report,
+    day_book_report as day_book_report,
+    detailed_donation_report as detailed_donation_report,
+    detailed_seva_report as detailed_seva_report,
+    donation_category_wise_report as donation_category_wise_report,
+    donation_daily_report as donation_daily_report,
+    donation_monthly_report as donation_monthly_report,
+    journal_entries_report as journal_entries_report,
+    ledger_report as ledger_report,
+    posted_donations as posted_donations,
+    posted_sevas as posted_sevas,
+    profit_loss_report as profit_loss_report,
+    receipts_payments_report as receipts_payments_report,
+    seva_schedule_report as seva_schedule_report,
+    top_donors_report as top_donors_report,
+    trial_balance_report as trial_balance_report,
+)
+from app.modules.mandir_compat.service import (
+    create_mandir_first_login_onboarding as create_mandir_first_login_onboarding,
+    ensure_temple_numeric_id as ensure_temple_numeric_id,
+    list_mandir_temples as list_mandir_temples,
+    resolve_tenant_by_temple_id as resolve_tenant_by_temple_id,
+)
 
-# Seva reminder routes moved to routes/seva_reminders.py
-
-# GET /users/me moved to routes/users.py
+from app.modules.mandir_compat.helpers.account_categories import (
+    _MANDIR_CANONICAL_INCOME_CODES as _MANDIR_CANONICAL_INCOME_CODES,
+    _MANDIR_INCOME_BUCKET_ALIASES as _MANDIR_INCOME_BUCKET_ALIASES,
+    _MANDIR_INCOME_LEGACY_CODES as _MANDIR_INCOME_LEGACY_CODES,
+    _MANDIR_LEGACY_ACCOUNT_CODE_MAP as _MANDIR_LEGACY_ACCOUNT_CODE_MAP,
+    _MANDIR_SPONSORSHIP_CATEGORY_MARKERS as _MANDIR_SPONSORSHIP_CATEGORY_MARKERS,
+    _MANDIR_UTR_REFERENCE_PATTERN as _MANDIR_UTR_REFERENCE_PATTERN,
+    _is_mandir_sponsorship_category as _is_mandir_sponsorship_category,
+    _mandir_cash_income_category as _mandir_cash_income_category,
+    _mandir_in_kind_debit_account_target as _mandir_in_kind_debit_account_target,
+    _mandir_in_kind_income_category as _mandir_in_kind_income_category,
+    _mandir_income_bucket_for_account as _mandir_income_bucket_for_account,
+    _normalize_income_category as _normalize_income_category,
+    _normalize_mandir_account_code as _normalize_mandir_account_code,
+    _normalize_public_payment_utr_reference as _normalize_public_payment_utr_reference,
+)
+from app.modules.mandir_compat.helpers.mandir_actor import _mandir_actor_id as _mandir_actor_id
+from app.modules.mandir_compat.helpers.public_defaults import (
+    _DEFAULT_PUBLIC_DONATION_CATEGORIES as _DEFAULT_PUBLIC_DONATION_CATEGORIES,
+)
+from app.modules.mandir_compat.helpers.receipt_sequencing import (
+    _MANDIR_COUNTERS_COLLECTION as _MANDIR_COUNTERS_COLLECTION,
+    _MANDIR_JOURNAL_ENTRY_PREFIX as _MANDIR_JOURNAL_ENTRY_PREFIX,
+    _MANDIR_RECEIPT_PREFIX_BY_KIND as _MANDIR_RECEIPT_PREFIX_BY_KIND,
+    _MANDIR_RECEIPT_WIDTH as _MANDIR_RECEIPT_WIDTH,
+)
 
 # Refund-request routes moved to routes/refunds.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for route

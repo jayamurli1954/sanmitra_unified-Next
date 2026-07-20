@@ -21,6 +21,7 @@ from app.modules.mandir_compat import router as mandir_router
 from app.modules.mandir_compat.helpers.account_categories import (
     _mandir_in_kind_debit_account_target,
     _mandir_income_bucket_for_account,
+    _MANDIR_CANONICAL_INCOME_CODES,
     _normalize_income_category,
 )
 
@@ -107,7 +108,7 @@ async def _normalize_mandir_income_accounts(session: AsyncSession, tenant_id: st
 
 async def _resolve_mandir_income_account(session: AsyncSession, tenant_id: str, category_name: str) -> int:
     normalized_category = _normalize_income_category(category_name)
-    preferred_code, preferred_name = mandir_router._MANDIR_CANONICAL_INCOME_CODES.get(
+    preferred_code, preferred_name = _MANDIR_CANONICAL_INCOME_CODES.get(
         normalized_category,
         ("42002", "Seva Income - General")
         if any(token in normalized_category for token in ("seva", "pooja"))

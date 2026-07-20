@@ -4,8 +4,8 @@ Extracted verbatim from app/modules/mandir_compat/router.py per
 docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
 
 Important for tests:
-- Constants and get_collection are resolved via `mandir_router.<name>` so
-  monkeypatching `app.modules.mandir_compat.router.<name>` continues to work.
+- get_collection is resolved via `mandir_router.get_collection` so monkeypatching
+  `app.modules.mandir_compat.router.get_collection` continues to work.
 """
 from __future__ import annotations
 
@@ -14,13 +14,22 @@ from typing import Any
 
 from app.modules.mandir_compat import router as mandir_router
 
+_MANDIR_COUNTERS_COLLECTION = "mandir_counters"
+_MANDIR_RECEIPT_WIDTH = 7
+_MANDIR_RECEIPT_PREFIX_BY_KIND = {
+    "donation": "DON",
+    "seva": "SEV",
+}
+_MANDIR_JOURNAL_ENTRY_PREFIX = "JE"
+
+
 def _format_mandir_receipt_number(prefix: str, sequence: int) -> str:
     normalized_prefix = str(prefix or "").strip().upper()
     if normalized_prefix not in {"DON", "SEV"}:
         raise ValueError(f"Unsupported MandirMitra receipt prefix: {prefix!r}")
     if int(sequence) < 1:
         raise ValueError("Receipt sequence must be positive")
-    return f"{normalized_prefix}-{int(sequence):0{mandir_router._MANDIR_RECEIPT_WIDTH}d}"
+    return f"{normalized_prefix}-{int(sequence):0{_MANDIR_RECEIPT_WIDTH}d}"
 
 
 def _format_mandir_sequence_number(prefix: str, sequence: int) -> str:
@@ -29,7 +38,7 @@ def _format_mandir_sequence_number(prefix: str, sequence: int) -> str:
         raise ValueError("Sequence prefix is required")
     if int(sequence) < 1:
         raise ValueError("Sequence must be positive")
-    return f"{normalized_prefix}-{int(sequence):0{mandir_router._MANDIR_RECEIPT_WIDTH}d}"
+    return f"{normalized_prefix}-{int(sequence):0{_MANDIR_RECEIPT_WIDTH}d}"
 
 
 async def _next_receipt_number(
@@ -39,13 +48,13 @@ async def _next_receipt_number(
     receipt_kind: str,
     receipt_date: Any = None,
 ) -> str:
-    prefix = mandir_router._MANDIR_RECEIPT_PREFIX_BY_KIND.get(str(receipt_kind or "").strip().lower())
+    prefix = _MANDIR_RECEIPT_PREFIX_BY_KIND.get(str(receipt_kind or "").strip().lower())
     if not prefix:
         raise ValueError(f"Unsupported MandirMitra receipt kind: {receipt_kind!r}")
 
     now = datetime.now(timezone.utc).isoformat()
     counter_id = f"{app_key}:{tenant_id}:receipt:{prefix}"
-    counters = mandir_router.get_collection(mandir_router._MANDIR_COUNTERS_COLLECTION)
+    counters = mandir_router.get_collection(_MANDIR_COUNTERS_COLLECTION)
     result = await counters.find_one_and_update(
         {"_id": counter_id},
         {
@@ -68,8 +77,8 @@ async def _next_receipt_number(
 
 async def _next_journal_entry_number(*, tenant_id: str, app_key: str) -> str:
     now = datetime.now(timezone.utc).isoformat()
-    counter_id = f"{app_key}:{tenant_id}:journal-entry:{mandir_router._MANDIR_JOURNAL_ENTRY_PREFIX}"
-    counters = mandir_router.get_collection(mandir_router._MANDIR_COUNTERS_COLLECTION)
+    counter_id = f"{app_key}:{tenant_id}:journal-entry:{_MANDIR_JOURNAL_ENTRY_PREFIX}"
+    counters = mandir_router.get_collection(_MANDIR_COUNTERS_COLLECTION)
     result = await counters.find_one_and_update(
         {"_id": counter_id},
         {
@@ -78,7 +87,7 @@ async def _next_journal_entry_number(*, tenant_id: str, app_key: str) -> str:
             "$setOnInsert": {
                 "app_key": app_key,
                 "tenant_id": tenant_id,
-                "prefix": mandir_router._MANDIR_JOURNAL_ENTRY_PREFIX,
+                "prefix": _MANDIR_JOURNAL_ENTRY_PREFIX,
                 "kind": "journal_entry",
                 "created_at": now,
             },
@@ -87,8 +96,4 @@ async def _next_journal_entry_number(*, tenant_id: str, app_key: str) -> str:
         return_document=True,
     )
     sequence = int((result or {}).get("seq") or 1)
-    return _format_mandir_sequence_number(mandir_router._MANDIR_JOURNAL_ENTRY_PREFIX, sequence)
-
-
-
-
+    return _format_mandir_sequence_number(_MANDIR_JOURNAL_ENTRY_PREFIX, sequence)

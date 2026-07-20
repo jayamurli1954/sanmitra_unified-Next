@@ -41,6 +41,25 @@ _MANDIR_LEGACY_ACCOUNT_CODE_MAP: dict[str, str] = {
     "4100": "42002",
 }
 
+_MANDIR_CANONICAL_INCOME_CODES: dict[str, tuple[str, str]] = {
+    "general donation": ("44001", "General Donations"),
+    "donation income": ("44001", "General Donations"),
+    "general donations": ("44001", "General Donations"),
+    "hundi collections": ("44002", "Hundi Collections"),
+    "specific purpose donation": ("44003", "Specific Purpose Donations"),
+    "specific purpose donations": ("44003", "Specific Purpose Donations"),
+    "in-kind donation income": ("44004", "In-Kind Donation Income"),
+    "in kind donation income": ("44004", "In-Kind Donation Income"),
+    "sponsorship": ("45001", "Sponsorship Income"),
+    "sponsorship income": ("45001", "Sponsorship Income"),
+    "in-kind sponsorship income": ("45002", "In-Kind Sponsorship Income"),
+    "in kind sponsorship income": ("45002", "In-Kind Sponsorship Income"),
+    "seva booking revenue": ("42002", "Seva Income - General"),
+    "pooja revenue": ("42002", "Seva Income - General"),
+    "seva income": ("42002", "Seva Income - General"),
+    "seva income - general": ("42002", "Seva Income - General"),
+}
+
 
 
 # ════════════════════════════════════════════════════════════════════════
