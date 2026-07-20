@@ -71,3 +71,6 @@ async def mandir_update_user_profile(
         "must_change_password": bool(doc.get("must_change_password", False)),
     }
 
+@router.get("/users/me")
+async def mandir_users_me(current_user: dict = Depends(get_current_user)):
+    return current_user
