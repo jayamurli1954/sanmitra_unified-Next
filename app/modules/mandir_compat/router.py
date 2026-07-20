@@ -4425,55 +4425,8 @@ async def _payment_accounts(tenant_id: str, app_key: str) -> dict[str, list[dict
 
 
 
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Dashboard stats
-# ROUTES : GET /dashboard/stats
-# ════════════════════════════════════════════════════════════════════════
-
-@router.get("/dashboard/stats")
-async def dashboard_stats(
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    tenant_context = resolve_mandir_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        operation="seva booking",
-    )
-    tenant_id = tenant_context.tenant_id
-    app_key = tenant_context.app_key
-
-    now = datetime.now(timezone.utc)
-    today = now.date().isoformat()
-    month = now.strftime("%Y-%m")
-    year = now.year
-
-    donations, sevas = await _dashboard_posted_stats(session=session, tenant_id=tenant_id, app_key=app_key)
-
-    def summarize(rows: list[dict[str, Any]]) -> dict[str, dict[str, float | int]]:
-        out = {
-            "today": {"amount": 0.0, "count": 0},
-            "month": {"amount": 0.0, "count": 0},
-            "year": {"amount": 0.0, "count": 0},
-        }
-        for row in rows:
-            created = str(row.get("created_at") or row.get("date") or row.get("booking_date") or "")
-            amount = _safe_float(row.get("amount"), 0.0)
-            if created[:10] == today:
-                out["today"]["amount"] += amount
-                out["today"]["count"] += 1
-            if created[:7] == month:
-                out["month"]["amount"] += amount
-                out["month"]["count"] += 1
-            if created[:4] == str(year):
-                out["year"]["amount"] += amount
-                out["year"]["count"] += 1
-        return out
-
-    return {"donations": summarize(donations), "sevas": summarize(sevas)}
+# Dashboard stats route moved to routes/dashboard.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 
 def _panchang_city_options() -> list[dict[str, Any]]:
@@ -4522,60 +4475,8 @@ def _resolve_panchang_location(
 
 
 
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Panchang (today)
-# ROUTES : GET /panchang/today
-# ════════════════════════════════════════════════════════════════════════
-
-@router.get("/panchang/today")
-async def panchang_today(
-    city_name: str | None = Query(default=None),
-    latitude: float | None = Query(default=None),
-    longitude: float | None = Query(default=None),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-):
-    """Calculate today's panchang using Swiss Ephemeris with temple location."""
-    try:
-        tenant_id = resolve_tenant_id(current_user, x_tenant_id)
-        app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
-
-        # Get temple location from MongoDB
-        temple_doc = await get_collection("mandir_temples").find_one(
-            {"tenant_id": tenant_id, "app_key": app_key}
-        )
-        if not temple_doc:
-            temple_doc = await get_collection("mandir_temples").find_one({"tenant_id": tenant_id})
-        if not temple_doc:
-            temple_doc = {}
-
-        # Get panchang display settings for overrides
-        settings_doc = await get_collection("mandir_panchang_settings").find_one(
-            {"tenant_id": tenant_id, "app_key": app_key}
-        ) or {}
-
-        latitude, longitude, city = _resolve_panchang_location(
-            settings_doc,
-            temple_doc,
-            city_name=city_name,
-            latitude=latitude,
-            longitude=longitude,
-        )
-
-        # Calculate panchang using Swiss Ephemeris
-        panchang_service = PanchangService()
-        now = datetime.now()
-        panchang_data = panchang_service.calculate_panchang(now, latitude, longitude, city)
-
-        return panchang_data
-    except Exception as e:
-        logger.error(f"Error calculating panchang: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to calculate panchang: {str(e)}"
-        )
-
+# Panchang (today) route moved to routes/panchang.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -5769,161 +5670,8 @@ async def cleanup_donation_entry(
     }
 
 
-# ════════════════════════════════════════════════════════════════════════
-# SECTION: ROUTES: Devotees (GET / POST / search by mobile / autofill)
-# ROUTES : GET /devotees  POST .../devotees  GET .../search/by-mobile/{phone}  GET .../autofill/by-mobile/{phone}
-# ════════════════════════════════════════════════════════════════════════
-
-@router.get("/devotees")
-@router.get("/devotees/")
-async def list_devotees(
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
-):
-    tenant_context = resolve_mandir_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        operation="devotee list",
-    )
-    tenant_id = tenant_context.tenant_id
-    app_key = tenant_context.app_key
-    temple_id = _to_positive_int(x_temple_id)
-
-    try:
-        col = get_collection("mandir_devotees")
-        query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key}
-        if temple_id is not None:
-            query["temple_id"] = temple_id
-        rows = await (
-            col.find(query)
-            .sort("created_at", -1)
-            .skip(skip)
-            .limit(limit)
-            .to_list(length=limit)
-        )
-        return [_sanitize_mongo_doc(row) for row in rows]
-    except Exception as exc:
-        logger.error("Failed to list devotees for tenant=%s: %s", tenant_id, exc, exc_info=True)
-        return []
-
-
-@router.post("/devotees", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
-@router.post("/devotees/", dependencies=_MANDIR_WRITE_ROUTE_DEPS)
-async def create_devotee(
-    payload: dict[str, Any],
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
-):
-    tenant_context = resolve_mandir_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        operation="devotee create",
-    )
-    tenant_id = tenant_context.tenant_id
-    app_key = tenant_context.app_key
-    temple_id = _to_positive_int(x_temple_id)
-
-    devotee = {
-        "id": str(uuid4()),
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "temple_id": temple_id,
-        "name": str(payload.get("name") or payload.get("first_name") or "Unnamed Devotee"),
-        "first_name": str(payload.get("first_name") or ""),
-        "last_name": str(payload.get("last_name") or ""),
-        "phone": _normalize_phone(payload.get("phone") or payload.get("mobile") or payload.get("devotee_phone")),
-        "email": str(payload.get("email") or "") or None,
-        "address": str(payload.get("address") or "") or None,
-        "city": str(payload.get("city") or "") or None,
-        "state": str(payload.get("state") or "") or None,
-        "pincode": str(payload.get("pincode") or "") or None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    try:
-        col = get_collection("mandir_devotees")
-        await col.insert_one(devotee)
-    except Exception as exc:
-        logger.error("Failed to insert devotee for tenant=%s: %s", tenant_id, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save devotee") from exc
-
-    return _sanitize_mongo_doc(devotee)
-
-
-@router.get("/devotees/search/by-mobile/{phone}")
-async def search_devotee_by_mobile(
-    phone: str,
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
-):
-    tenant_context = resolve_mandir_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        operation="devotee mobile search",
-    )
-    tenant_id = tenant_context.tenant_id
-    app_key = tenant_context.app_key
-    temple_id = _to_positive_int(x_temple_id)
-    normalized = _normalize_phone(phone)
-
-    if not normalized:
-        return []
-
-    try:
-        col = get_collection("mandir_devotees")
-        query: dict[str, Any] = {"tenant_id": tenant_id, "app_key": app_key, "phone": normalized}
-        if temple_id is not None:
-            query["temple_id"] = temple_id
-        docs = await col.find(query).limit(5).to_list(length=5)
-        if docs:
-            return [_sanitize_mongo_doc(doc) for doc in docs]
-        fallback = await _find_devotee_by_phone(tenant_id, app_key, normalized, temple_id=temple_id)
-        return [fallback] if fallback else []
-    except Exception as exc:
-        logger.error("Failed to search devotees by mobile for tenant=%s: %s", tenant_id, exc, exc_info=True)
-        return []
-
-@router.get("/devotees/autofill/by-mobile/{phone}")
-async def autofill_devotee_by_mobile(
-    phone: str,
-    current_user: dict = Depends(get_current_user),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    x_temple_id: str | None = Header(default=None, alias="X-Temple-Id"),
-):
-    tenant_context = resolve_mandir_tenant(
-        current_user=current_user,
-        x_tenant_id=x_tenant_id,
-        x_app_key=x_app_key,
-        operation="devotee mobile autofill",
-    )
-    tenant_id = tenant_context.tenant_id
-    app_key = tenant_context.app_key
-    temple_id = _to_positive_int(x_temple_id)
-    normalized = _normalize_phone(phone)
-    if not normalized:
-        return {"found": False, "phone": normalized, "devotee": None}
-
-    try:
-        devotee = await _find_devotee_by_phone(tenant_id, app_key, normalized, temple_id=temple_id)
-        if devotee is None:
-            return {"found": False, "phone": normalized, "devotee": None}
-        return {"found": True, "phone": normalized, "devotee": devotee}
-    except Exception as exc:
-        logger.error("Failed to autofill devotee by mobile for tenant=%s: %s", tenant_id, exc, exc_info=True)
-        return {"found": False, "phone": normalized, "devotee": None}
-
+# Devotee routes moved to routes/devotees.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); registered via import at end of module.
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -11809,6 +11557,12 @@ from app.modules.mandir_compat.routes.refunds import (  # noqa: E402
     reject_mandir_refund_request as reject_mandir_refund_request,
     settle_mandir_refund_request as settle_mandir_refund_request,
 )
+
+# Dashboard, panchang, and devotee routes moved to routes/*.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); side-effect import registers handlers.
+import app.modules.mandir_compat.routes.dashboard  # noqa: E402, F401
+import app.modules.mandir_compat.routes.panchang  # noqa: E402, F401
+import app.modules.mandir_compat.routes.devotees  # noqa: E402, F401
 
 
 
