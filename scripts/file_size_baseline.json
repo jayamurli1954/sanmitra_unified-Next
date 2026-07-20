@@ -1,6 +1,6 @@
 {
   "frontend/mitrabooks-erp/app.js": 20373,
-  "app/modules/mandir_compat/router.py": 11587,
+  "app/modules/mandir_compat/router.py": 9205,
   "frontend/shared/app-shell.css": 6275,
   "app/modules/housing_compat/router.py": 5476,
   "frontend/mitrabooks-erp/index.css": 4992,
@@ -13,6 +13,7 @@
   "frontend/gruhamitra/src/styles.css": 2125,
   "app/modules/legal_compat/router.py": 2087,
   "frontend/src/pages/Sevas.js": 1991,
+  "app/modules/mandir_compat/receipt_pdf.py": 1911,
   "frontend/e2e/mitrabooks-realstack-destructive.spec.js": 1908,
   "frontend/src/pages/accounting/AccountingReports.js": 1857,
   "frontend/gruhamitra/src/screens/MaintenanceScreen.jsx": 1823,
