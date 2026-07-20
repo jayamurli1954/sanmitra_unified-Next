@@ -1,6 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,7 +22,6 @@ from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     GstPeriodLockUpdateRequest,
-    SalesInvoiceCreateRequest,
     TypedVoucherCreateRequest,
     TypedVoucherReversalRequest,
 )
@@ -911,156 +910,16 @@ async def post_typed_voucher(
 # ===================== Sales Invoices (GST) =====================
 
 
-def _q2(value) -> Decimal:
-    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
-def _invoice_response_doc(doc: dict, *, created: bool = False) -> dict:
-    result = _json_safe_doc(doc)
-    _apply_approval_defaults(result)
-    result.setdefault("created", created)
-    return result
-
-
-def _compute_invoice_lines(payload: SalesInvoiceCreateRequest, *, composition: bool = False):
-    """Compute per-line taxable + GST split and roll up invoice totals.
-
-    Each monetary value is quantized to 2dp; totals are sums of rounded line
-    values so debits and credits stay balanced. For intra-state supply GST is
-    split CGST/SGST (with the remainder assigned to SGST to avoid rounding
-    drift); for inter-state it posts fully to IGST.
-    """
-    lines: list[dict] = []
-    taxable_total = Decimal("0.00")
-    cgst_total = Decimal("0.00")
-    sgst_total = Decimal("0.00")
-    igst_total = Decimal("0.00")
-    for item in payload.line_items:
-        taxable = _q2(Decimal(item.quantity) * Decimal(item.rate))
-        # Composition dealers issue a Bill of Supply — no GST is charged or split,
-        # whatever rate is on the line. gst_amount of 0 zeroes every head below.
-        # Zero-rated (export/SEZ under LUT) lines likewise carry no tax.
-        is_zero_rated = getattr(item, "supply_type", "taxable") == "zero_rated"
-        gst_amount = Decimal("0.00") if (composition or is_zero_rated) else _q2(taxable * Decimal(item.gst_rate) / Decimal("100"))
-        if payload.is_inter_state:
-            cgst = Decimal("0.00")
-            sgst = Decimal("0.00")
-            igst = gst_amount
-        else:
-            cgst = _q2(gst_amount / Decimal("2"))
-            sgst = _q2(gst_amount - cgst)
-            igst = Decimal("0.00")
-        line_total = _q2(taxable + cgst + sgst + igst)
-        lines.append({
-            "description": item.description.strip(),
-            "hsn_sac": item.hsn_sac,
-            "uqc": getattr(item, "uqc", None),
-            "supply_type": getattr(item, "supply_type", "taxable"),
-            "item_id": getattr(item, "item_id", None),
-            "quantity": str(Decimal(item.quantity)),
-            "rate": _money(item.rate),
-            "gst_rate": str(Decimal(item.gst_rate)),
-            "cost_centre_id": getattr(item, "cost_centre_id", None),
-            "project_id": getattr(item, "project_id", None),
-            "taxable_amount": str(taxable),
-            "cgst": str(cgst),
-            "sgst": str(sgst),
-            "igst": str(igst),
-            "line_total": str(line_total),
-        })
-        taxable_total += taxable
-        cgst_total += cgst
-        sgst_total += sgst
-        igst_total += igst
-    gst_total = cgst_total + sgst_total + igst_total
-    invoice_total = taxable_total + gst_total
-    return lines, taxable_total, cgst_total, sgst_total, igst_total, gst_total, invoice_total
-
-
-def _financial_year_strings(invoice_date):
-    if invoice_date.month >= 4:
-        start, end = invoice_date.year, invoice_date.year + 1
-    else:
-        start, end = invoice_date.year - 1, invoice_date.year
-    full = f"{start}-{end}"
-    short = f"{start}-{str(end)[-2:]}"
-    return full, short
-
-
-def _format_invoice_number(numbering, *, financial_year: str, fy_short: str, seq: int) -> str:
-    padded = str(seq).zfill(int(getattr(numbering, "seq_padding", 6) or 6))
-    return (
-        str(getattr(numbering, "number_format", "{PREFIX}-{FY}-{SEQ}") or "{PREFIX}-{FY}-{SEQ}")
-        .replace("{PREFIX}", str(getattr(numbering, "prefix", "INV") or "INV"))
-        .replace("{FYSHORT}", fy_short)
-        .replace("{FY}", financial_year)
-        .replace("{SEQ}", padded)
-    )
-
-
-def _validate_required_invoice_fields(payload: SalesInvoiceCreateRequest, settings: dict) -> None:
-    """Enforce 'required' rules an admin set on standard optional fields."""
-    field_config = settings.get("field_config") or {}
-    labels = {
-        "due_date": "Due date",
-        "place_of_supply": "Place of supply",
-        "reference": "Reference / PO",
-        "notes": "Notes",
-    }
-    for key in ("due_date", "place_of_supply", "reference", "notes"):
-        rule = field_config.get(key) or {}
-        if rule.get("required") and not getattr(payload, key, None):
-            raise AccountingValidationError(f"{labels[key]} is required by this business's invoice settings")
-    hsn_rule = field_config.get("hsn_sac") or {}
-    if hsn_rule.get("required"):
-        for item in payload.line_items:
-            if not (item.hsn_sac and str(item.hsn_sac).strip()):
-                raise AccountingValidationError("HSN/SAC is required on every line by this business's invoice settings")
-
-
-async def _reserve_invoice_number(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    invoice_date,
-    numbering,
-) -> str:
-    financial_year, fy_short = _financial_year_strings(invoice_date)
-    reset_yearly = bool(getattr(numbering, "reset_yearly", True))
-    scope = financial_year if reset_yearly else "all"
-    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:sales_invoice:{scope}"
-    counters = get_collection(VOUCHER_COUNTERS_COLLECTION)
-    try:
-        from pymongo import ReturnDocument
-
-        counter = await counters.find_one_and_update(
-            {"_id": counter_id},
-            {
-                "$inc": {"seq": 1},
-                "$setOnInsert": {
-                    "tenant_id": tenant_id,
-                    "app_key": app_key,
-                    "accounting_entity_id": accounting_entity_id,
-                    "voucher_type": "sales_invoice",
-                    "financial_year": financial_year,
-                    "created_at": _now(),
-                },
-                "$set": {"updated_at": _now()},
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
-        raw_seq = int((counter or {}).get("seq") or 1)
-    except Exception:
-        existing = await get_collection(SALES_INVOICES_COLLECTION).count_documents(
-            {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-        )
-        raw_seq = int(existing) + 1
-    # Honor a custom starting number: first invoice == start_number.
-    seq = int(getattr(numbering, "start_number", 1) or 1) + raw_seq - 1
-    return _format_invoice_number(numbering, financial_year=financial_year, fy_short=fy_short, seq=seq)
-
+# Invoice line computation / numbering moved to services/invoice_computation.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported here so later
+# facades (sales/purchase invoices, credit/debit notes) can import shared helpers.
+from app.modules.business.services.invoice_computation import (  # noqa: E402
+    _compute_invoice_lines as _compute_invoice_lines,
+    _invoice_response_doc as _invoice_response_doc,
+    _q2 as _q2,
+    _reserve_invoice_number as _reserve_invoice_number,
+    _validate_required_invoice_fields as _validate_required_invoice_fields,
+)
 
 # Invoice / admin settings moved to services/invoice_settings.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported here so later
@@ -1097,20 +956,6 @@ from app.modules.business.services.gst_period_locks import (  # noqa: E402
 # ===================== Purchase Bills (Input GST / ITC) =====================
 
 
-def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
-    result = _json_safe_doc(doc)
-    _apply_approval_defaults(result)
-    result.setdefault("created", created)
-    # Defaults so bills created before payment / ITC-reversal tracking render cleanly.
-    result.setdefault("payment_status", "unpaid")
-    result.setdefault("paid_amount", "0")
-    result.setdefault("paid_date", None)
-    result.setdefault("itc_reversed", False)
-    result.setdefault("itc_interest_amount", "0")
-    result.setdefault("itc_reclaimed", False)
-    return result
-
-
 # Purchase Bill documents moved to services/purchase_bills.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md). The facade re-export lives at the
 # end of this module: purchase_bills imports GST-period helpers defined further below.
@@ -1127,47 +972,10 @@ def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
 # ===================== Credit Notes (sales-side GST adjustment) =====================
 
 
-async def _reserve_sequence_number(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    doc_type: str,
-    prefix: str,
-    on_date,
-    fallback_collection: str,
-) -> str:
-    financial_year = f"{on_date.year}-{on_date.year + 1}" if on_date.month >= 4 else f"{on_date.year - 1}-{on_date.year}"
-    counter_id = f"{tenant_id}:{app_key}:{accounting_entity_id}:{doc_type}:{financial_year}"
-    counters = get_collection(VOUCHER_COUNTERS_COLLECTION)
-    try:
-        from pymongo import ReturnDocument
-
-        counter = await counters.find_one_and_update(
-            {"_id": counter_id},
-            {
-                "$inc": {"seq": 1},
-                "$setOnInsert": {
-                    "tenant_id": tenant_id,
-                    "app_key": app_key,
-                    "accounting_entity_id": accounting_entity_id,
-                    "voucher_type": doc_type,
-                    "financial_year": financial_year,
-                    "created_at": _now(),
-                },
-                "$set": {"updated_at": _now()},
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
-        seq = int((counter or {}).get("seq") or 1)
-    except Exception:
-        existing = await get_collection(fallback_collection).count_documents(
-            {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-        )
-        seq = int(existing) + 1
-    return f"{prefix}-{financial_year}-{seq:06d}"
-
+# Credit/debit note sequence numbers moved to services/document_numbering.py
+from app.modules.business.services.document_numbering import (  # noqa: E402
+    _reserve_sequence_number as _reserve_sequence_number,
+)
 
 # Credit Notes moved to services/credit_notes.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
@@ -1197,51 +1005,11 @@ from app.modules.business.services.debit_notes import (  # noqa: E402
 # ===================== GST Settlement (period-end set-off) =====================
 
 
-def _period_bounds(period: str):
-    """Return (first_day, last_day) date objects for a 'YYYY-MM' period."""
-    year, month = (int(x) for x in period.split("-"))
-    first = date(year, month, 1)
-    if month == 12:
-        last = date(year, 12, 31)
-    else:
-        last = date(year, month + 1, 1) - timedelta(days=1)
-    return first, last
-
-
-def _compute_gst_setoff(output: dict, credit: dict):
-    """Apply the statutory ITC set-off order (Section 49 / Rule 88A).
-
-    IGST credit -> IGST, then CGST, then SGST.
-    CGST credit -> CGST, then IGST (never SGST).
-    SGST credit -> SGST, then IGST (never CGST).
-    Returns (utilized_by_credit_head, cash_payable_by_liab_head, itc_carry_by_credit_head).
-    """
-    liab = {h: Decimal(output.get(h, 0)) for h in ("igst", "cgst", "sgst")}
-    cr = {h: Decimal(credit.get(h, 0)) for h in ("igst", "cgst", "sgst")}
-    utilized = {h: Decimal("0") for h in ("igst", "cgst", "sgst")}
-
-    def apply(credit_head, order):
-        for liab_head in order:
-            if cr[credit_head] <= 0:
-                break
-            amt = min(cr[credit_head], liab[liab_head])
-            if amt > 0:
-                cr[credit_head] -= amt
-                liab[liab_head] -= amt
-                utilized[credit_head] += amt
-
-    apply("igst", ["igst", "cgst", "sgst"])
-    apply("cgst", ["cgst", "igst"])
-    apply("sgst", ["sgst", "igst"])
-
-    cash_payable = {h: liab[h] for h in ("igst", "cgst", "sgst")}
-    itc_carry = {h: cr[h] for h in ("igst", "cgst", "sgst")}
-    return utilized, cash_payable, itc_carry
-
-
 # GST Settlement moved to services/gst_settlement.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
 from app.modules.business.services.gst_settlement import (  # noqa: E402
+    _compute_gst_setoff as _compute_gst_setoff,
+    _period_bounds as _period_bounds,
     create_gst_settlement as create_gst_settlement,
     preview_gst_settlement as preview_gst_settlement,
     reverse_gst_settlement as reverse_gst_settlement,
@@ -1256,26 +1024,25 @@ from app.modules.business.services.party_ledger import (  # noqa: E402
 )
 
 
-# Rule 37 ITC reversal/reclaim moved to services/itc_reversal.py
-# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
-# Placed last: itc_reversal imports GST-period helpers defined above in this module.
-from app.modules.business.services.itc_reversal import (  # noqa: E402
-    mark_bill_payment as mark_bill_payment,
-    preview_itc_reversals as preview_itc_reversals,
-    reclaim_itc_for_bill as reclaim_itc_for_bill,
-    reverse_itc_for_bill as reverse_itc_for_bill,
-)
-
-
 # Purchase Bill documents moved to services/purchase_bills.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
-# Placed last: purchase_bills imports GST-period helpers defined above in this module.
+# Placed before itc_reversal: itc_reversal imports _bill_response_doc from purchase_bills.
 from app.modules.business.services.purchase_bills import (  # noqa: E402
     cancel_purchase_bill as cancel_purchase_bill,
     create_purchase_bill as create_purchase_bill,
     get_purchase_bill as get_purchase_bill,
     list_purchase_bills as list_purchase_bills,
     review_purchase_bill as review_purchase_bill,
+)
+
+
+# Rule 37 ITC reversal/reclaim moved to services/itc_reversal.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
+from app.modules.business.services.itc_reversal import (  # noqa: E402
+    mark_bill_payment as mark_bill_payment,
+    preview_itc_reversals as preview_itc_reversals,
+    reclaim_itc_for_bill as reclaim_itc_for_bill,
+    reverse_itc_for_bill as reverse_itc_for_bill,
 )
 
 

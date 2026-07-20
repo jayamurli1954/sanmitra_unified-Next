@@ -23,6 +23,7 @@ from app.modules.business.schemas import (
     ItcReclaimActionRequest,
     ItcReversalActionRequest,
 )
+from app.modules.business.services.purchase_bills import _bill_response_doc
 from app.modules.business.service import (
     GST_INTEREST_EXPENSE_CODE,
     GST_INTEREST_PAYABLE_CODE,
@@ -34,7 +35,6 @@ from app.modules.business.service import (
     ITC_REVERSAL_RECOVERABLE_CODE,
     PURCHASE_BILLS_COLLECTION,
     _audit_business_event,
-    _bill_response_doc,
     _now,
     _period_key,
     _period_label,

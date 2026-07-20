@@ -5,6 +5,7 @@ docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
 Imported via the service.py facade (which re-exports the public functions), so
 the shared symbols below resolve from the fully-initialised service module.
 """
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -36,15 +37,55 @@ from app.modules.business.service import (
     OUTPUT_SGST_CODE,
     _audit_business_event,
     _compensate_gst_settlement_failure,
-    _compute_gst_setoff,
     _now,
-    _period_bounds,
     _period_key,
     _period_label,
     _resolve_voucher_account_id,
     is_gst_period_locked,
     set_gst_period_lock,
 )
+
+
+def _period_bounds(period: str):
+    """Return (first_day, last_day) date objects for a 'YYYY-MM' period."""
+    year, month = (int(x) for x in period.split("-"))
+    first = date(year, month, 1)
+    if month == 12:
+        last = date(year, 12, 31)
+    else:
+        last = date(year, month + 1, 1) - timedelta(days=1)
+    return first, last
+
+
+def _compute_gst_setoff(output: dict, credit: dict):
+    """Apply the statutory ITC set-off order (Section 49 / Rule 88A).
+
+    IGST credit -> IGST, then CGST, then SGST.
+    CGST credit -> CGST, then IGST (never SGST).
+    SGST credit -> SGST, then IGST (never CGST).
+    Returns (utilized_by_credit_head, cash_payable_by_liab_head, itc_carry_by_credit_head).
+    """
+    liab = {h: Decimal(output.get(h, 0)) for h in ("igst", "cgst", "sgst")}
+    cr = {h: Decimal(credit.get(h, 0)) for h in ("igst", "cgst", "sgst")}
+    utilized = {h: Decimal("0") for h in ("igst", "cgst", "sgst")}
+
+    def apply(credit_head, order):
+        for liab_head in order:
+            if cr[credit_head] <= 0:
+                break
+            amt = min(cr[credit_head], liab[liab_head])
+            if amt > 0:
+                cr[credit_head] -= amt
+                liab[liab_head] -= amt
+                utilized[credit_head] += amt
+
+    apply("igst", ["igst", "cgst", "sgst"])
+    apply("cgst", ["cgst", "igst"])
+    apply("sgst", ["sgst", "igst"])
+
+    cash_payable = {h: liab[h] for h in ("igst", "cgst", "sgst")}
+    itc_carry = {h: cr[h] for h in ("igst", "cgst", "sgst")}
+    return utilized, cash_payable, itc_carry
 
 
 async def _gst_period_balances(

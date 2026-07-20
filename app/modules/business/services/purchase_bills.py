@@ -37,7 +37,6 @@ from app.modules.business.service import (
     RCM_PAYABLE_CODE,
     TDS_PAYABLE_CODE,
     _audit_business_event,
-    _bill_response_doc,
     _compute_invoice_lines,
     _now,
     _resolve_voucher_account_id,
@@ -46,6 +45,22 @@ from app.modules.business.service import (
     get_gst_profile,
     get_party,
 )
+
+
+def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
+    from app.modules.business import service as business_service
+
+    result = business_service._json_safe_doc(doc)
+    business_service._apply_approval_defaults(result)
+    result.setdefault("created", created)
+    # Defaults so bills created before payment / ITC-reversal tracking render cleanly.
+    result.setdefault("payment_status", "unpaid")
+    result.setdefault("paid_amount", "0")
+    result.setdefault("paid_date", None)
+    result.setdefault("itc_reversed", False)
+    result.setdefault("itc_interest_amount", "0")
+    result.setdefault("itc_reclaimed", False)
+    return result
 
 
 async def list_purchase_bills(
