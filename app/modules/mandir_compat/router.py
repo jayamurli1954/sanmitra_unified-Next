@@ -262,83 +262,8 @@ def _mandir_actor_id(current_user: dict[str, Any]) -> str:
 # NOTE   : _format_mandir_receipt_number, _format_mandir_sequence_number, _next_receipt_number, _next_journal_entry_number, _receipt_number_for_donation, _sanitize_mongo_doc
 # ════════════════════════════════════════════════════════════════════════
 
-def _format_mandir_receipt_number(prefix: str, sequence: int) -> str:
-    normalized_prefix = str(prefix or "").strip().upper()
-    if normalized_prefix not in {"DON", "SEV"}:
-        raise ValueError(f"Unsupported MandirMitra receipt prefix: {prefix!r}")
-    if int(sequence) < 1:
-        raise ValueError("Receipt sequence must be positive")
-    return f"{normalized_prefix}-{int(sequence):0{_MANDIR_RECEIPT_WIDTH}d}"
-
-
-def _format_mandir_sequence_number(prefix: str, sequence: int) -> str:
-    normalized_prefix = str(prefix or "").strip().upper()
-    if not normalized_prefix:
-        raise ValueError("Sequence prefix is required")
-    if int(sequence) < 1:
-        raise ValueError("Sequence must be positive")
-    return f"{normalized_prefix}-{int(sequence):0{_MANDIR_RECEIPT_WIDTH}d}"
-
-
-async def _next_receipt_number(
-    *,
-    tenant_id: str,
-    app_key: str,
-    receipt_kind: str,
-    receipt_date: Any = None,
-) -> str:
-    prefix = _MANDIR_RECEIPT_PREFIX_BY_KIND.get(str(receipt_kind or "").strip().lower())
-    if not prefix:
-        raise ValueError(f"Unsupported MandirMitra receipt kind: {receipt_kind!r}")
-
-    now = datetime.now(timezone.utc).isoformat()
-    counter_id = f"{app_key}:{tenant_id}:receipt:{prefix}"
-    counters = get_collection(_MANDIR_COUNTERS_COLLECTION)
-    result = await counters.find_one_and_update(
-        {"_id": counter_id},
-        {
-            "$inc": {"seq": 1},
-            "$set": {"updated_at": now},
-            "$setOnInsert": {
-                "app_key": app_key,
-                "tenant_id": tenant_id,
-                "prefix": prefix,
-                "kind": receipt_kind,
-                "created_at": now,
-            },
-        },
-        upsert=True,
-        return_document=True,
-    )
-    sequence = int((result or {}).get("seq") or 1)
-    return _format_mandir_receipt_number(prefix, sequence)
-
-
-async def _next_journal_entry_number(*, tenant_id: str, app_key: str) -> str:
-    now = datetime.now(timezone.utc).isoformat()
-    counter_id = f"{app_key}:{tenant_id}:journal-entry:{_MANDIR_JOURNAL_ENTRY_PREFIX}"
-    counters = get_collection(_MANDIR_COUNTERS_COLLECTION)
-    result = await counters.find_one_and_update(
-        {"_id": counter_id},
-        {
-            "$inc": {"seq": 1},
-            "$set": {"updated_at": now},
-            "$setOnInsert": {
-                "app_key": app_key,
-                "tenant_id": tenant_id,
-                "prefix": _MANDIR_JOURNAL_ENTRY_PREFIX,
-                "kind": "journal_entry",
-                "created_at": now,
-            },
-        },
-        upsert=True,
-        return_document=True,
-    )
-    sequence = int((result or {}).get("seq") or 1)
-    return _format_mandir_sequence_number(_MANDIR_JOURNAL_ENTRY_PREFIX, sequence)
-
-
-
+# Receipt sequencing helpers moved to helpers/receipt_sequencing.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported at end of module.
 
 # Donation/seva view helpers moved to helpers/views.py
 
@@ -815,6 +740,14 @@ from app.modules.mandir_compat.helpers.tenant_platform import (
 # Account resolver helpers moved to helpers/account_resolvers.py; re-exported for tests.
 
 # Receipt cancellation helpers moved to helpers/receipt_cancellation.py; re-exported for tests.
+
+# Receipt sequencing helpers moved to helpers/receipt_sequencing.py; re-exported for tests.
+from app.modules.mandir_compat.helpers.receipt_sequencing import (
+    _format_mandir_receipt_number as _format_mandir_receipt_number,
+    _format_mandir_sequence_number as _format_mandir_sequence_number,
+    _next_journal_entry_number as _next_journal_entry_number,
+    _next_receipt_number as _next_receipt_number,
+)
 from app.modules.mandir_compat.helpers.receipt_cancellation import (
     _cancel_mandir_receipt_source as _cancel_mandir_receipt_source,
     _mandir_receipt_cancellation_metadata as _mandir_receipt_cancellation_metadata,
