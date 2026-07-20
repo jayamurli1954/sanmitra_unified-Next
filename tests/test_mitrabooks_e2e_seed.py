@@ -11,6 +11,8 @@ from app.accounting.service import (
 )
 from app.modules.business import seed as business_seed
 from app.modules.business import service as business_service
+import app.modules.business.services.parties as parties_service
+import app.modules.business.services.ca_clients as ca_clients_service
 
 TENANT_ID = "tenant-mitrabooks-e2e-seed"
 APP_KEY = "mitrabooks"
@@ -105,6 +107,8 @@ async def test_mitrabooks_e2e_seed_creates_report_ready_business_tenant(async_se
     # period locks, ...) that grow over time — back any unlisted name with an
     # empty FakeCollection instead of KeyError-ing on each new feature.
     monkeypatch.setattr(business_service, "get_collection", lambda name: collections.setdefault(name, FakeCollection()))
+    monkeypatch.setattr(parties_service, "get_collection", lambda name: collections.setdefault(name, FakeCollection()))
+    monkeypatch.setattr(ca_clients_service, "get_collection", lambda name: collections.setdefault(name, FakeCollection()))
     monkeypatch.setattr(business_service, "log_audit_event", noop_audit_event)
 
     first = await business_seed.ensure_mitrabooks_e2e_seed(

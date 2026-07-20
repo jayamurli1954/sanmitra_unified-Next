@@ -29,8 +29,6 @@ from app.modules.business.schemas import (
     INVOICE_STANDARD_FIELDS,
     InvoiceSettings,
     InvoiceSettingsUpdateRequest,
-    PartyCreateRequest,
-    PartyUpdateRequest,
     SalesInvoiceCreateRequest,
     TypedVoucherCreateRequest,
     TypedVoucherReversalRequest,
@@ -155,19 +153,6 @@ def _voucher_response_doc(doc: dict, *, created: bool = False) -> dict:
     result.setdefault("reversal_reason", None)
     result.setdefault("reversed_at", None)
     result.setdefault("created", created)
-    return result
-
-
-def _party_response_doc(doc: dict | None) -> dict | None:
-    if doc is None:
-        return None
-    result = _json_safe_doc(doc)
-    # Party master data is not the accounting source of truth. Real receivable
-    # and payable balances come from posted journal lines via party-ledger and
-    # outstanding endpoints.
-    result["opening_balance"] = "0.00"
-    result["current_balance"] = "0.00"
-    result["balance_source"] = "ledger_reports"
     return result
 
 
@@ -442,200 +427,16 @@ async def ensure_business_indexes() -> None:
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md). The facade re-export lives at the
 # bottom of this module (after shared helpers are defined).
 
-async def create_party(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    created_by: str,
-    payload: PartyCreateRequest,
-) -> dict:
-    party_id = str(uuid4())
-    now = _now()
-    code = str(payload.party_code or f"P-{party_id[:8].upper()}").strip()
-    opening_balance = _money(payload.opening_balance)
-    doc = {
-        "party_id": party_id,
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "party_name": payload.party_name.strip(),
-        "party_type": payload.party_type,
-        "party_code": code,
-        "gstin": payload.gstin,
-        "pan": payload.pan,
-        "email": payload.email,
-        "phone": payload.phone,
-        "billing_address": payload.billing_address,
-        "city": payload.city,
-        "state": payload.state,
-        "pincode": payload.pincode,
-        "legacy_opening_balance_input": opening_balance,
-        "balance_source": "ledger_reports",
-        "is_active": True,
-        "created_by": created_by,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await get_collection(PARTIES_COLLECTION).insert_one(doc)
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=created_by,
-        action="business_party_created",
-        entity_type="business_party",
-        entity_id=party_id,
-        new_value=_party_response_doc(doc),
-    )
-    return _party_response_doc(doc)
-
-
-async def list_parties(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    party_type: str | None = None,
-    limit: int = 100,
-) -> dict:
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "is_active": True,
-    }
-    if party_type:
-        filters["party_type"] = party_type
-
-    safe_limit = max(1, min(int(limit or 100), 500))
-    rows = (
-        await get_collection(PARTIES_COLLECTION)
-        .find(filters)
-        .sort("party_name", 1)
-        .limit(safe_limit)
-        .to_list(length=safe_limit)
-    )
-    return {"items": [_party_response_doc(row) for row in rows], "total": len(rows)}
-
-
-async def get_party(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    party_id: str,
-) -> dict | None:
-    row = await get_collection(PARTIES_COLLECTION).find_one(
-        {
-            "tenant_id": tenant_id,
-            "app_key": app_key,
-            "accounting_entity_id": accounting_entity_id,
-            "party_id": party_id,
-        }
-    )
-    return _party_response_doc(row) if row else None
-
-
-async def update_party(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    party_id: str,
-    updated_by: str,
-    payload: PartyUpdateRequest,
-) -> dict | None:
-    existing = await get_party(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-    )
-    if existing is None:
-        return None
-
-    patch = payload.model_dump(exclude_unset=True)
-    if "party_name" in patch and patch["party_name"] is not None:
-        patch["party_name"] = str(patch["party_name"]).strip()
-    patch = {key: value for key, value in patch.items() if value is not None}
-    patch["updated_by"] = updated_by
-    patch["updated_at"] = _now()
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "party_id": party_id,
-    }
-    parties = get_collection(PARTIES_COLLECTION)
-    await parties.update_one(filters, {"$set": patch})
-    updated = await get_party(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=updated_by,
-        action="business_party_updated",
-        entity_type="business_party",
-        entity_id=party_id,
-        old_value=existing,
-        new_value=updated,
-    )
-    return updated
-
-
-async def deactivate_party(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    party_id: str,
-    deactivated_by: str,
-) -> dict | None:
-    existing = await get_party(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-    )
-    if existing is None:
-        return None
-
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "party_id": party_id,
-    }
-    patch = {
-        "is_active": False,
-        "deactivated_by": deactivated_by,
-        "deactivated_at": _now(),
-        "updated_by": deactivated_by,
-        "updated_at": _now(),
-    }
-    parties = get_collection(PARTIES_COLLECTION)
-    await parties.update_one(filters, {"$set": patch})
-    updated = await get_party(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-        party_id=party_id,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=deactivated_by,
-        action="business_party_deactivated",
-        entity_type="business_party",
-        entity_id=party_id,
-        old_value=existing,
-        new_value=updated,
-    )
-    return updated
+# Party master CRUD moved to services/parties.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported here so later
+# facades (credit/debit notes, sales invoices, purchase bills) can import get_party.
+from app.modules.business.services.parties import (  # noqa: E402
+    create_party as create_party,
+    deactivate_party as deactivate_party,
+    get_party as get_party,
+    list_parties as list_parties,
+    update_party as update_party,
+)
 
 
 async def _reserve_voucher_number(

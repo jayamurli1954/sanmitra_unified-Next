@@ -17,6 +17,7 @@ from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.modules.business.statements import build_party_statement
 import app.modules.business.service as business_service
 import app.modules.business.services.ca_clients as ca_clients_service
+import app.modules.business.services.parties as parties_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.modules.business.schemas import (
     CaClientCreateRequest,
@@ -151,6 +152,7 @@ async def test_business_party_is_tenant_and_app_scoped(monkeypatch):
     parties = FakeCollection()
     audit_events = []
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
+    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -206,6 +208,7 @@ async def test_update_business_party_does_not_mutate_balances(monkeypatch):
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
+    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -259,6 +262,7 @@ async def test_deactivate_business_party_is_soft_and_hidden_from_active_list(mon
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
+    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)

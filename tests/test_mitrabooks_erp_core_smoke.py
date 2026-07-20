@@ -10,6 +10,7 @@ import app.core.auth.router as auth_router
 import app.core.modules.dependencies as module_dependencies
 import app.core.modules.router as modules_router
 import app.modules.business.service as business_service
+import app.modules.business.services.parties as parties_service
 from app.main import app
 from app.modules.business import router as business_router
 
@@ -151,6 +152,7 @@ def _install_smoke_context(
     monkeypatch.setattr(auth_router, "login_user", fake_login_user)
     monkeypatch.setattr(auth_router, "_log_login_activity", noop_login_activity)
     monkeypatch.setattr(business_service, "get_collection", lambda name: active_collections[name])
+    monkeypatch.setattr(parties_service, "get_collection", lambda name: active_collections[name])
     monkeypatch.setattr(business_service, "log_audit_event", noop_audit_event)
 
     app.dependency_overrides[auth_dependencies.get_current_user] = fake_get_current_user
