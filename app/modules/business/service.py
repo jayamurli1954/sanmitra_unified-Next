@@ -21,14 +21,7 @@ from app.db.mongo import get_collection
 from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
-    BusinessAdminSettings,
-    BusinessAdminSettingsUpdateRequest,
-    BusinessAiSettings,
-    BusinessIntegrationSettings,
     GstPeriodLockUpdateRequest,
-    INVOICE_STANDARD_FIELDS,
-    InvoiceSettings,
-    InvoiceSettingsUpdateRequest,
     SalesInvoiceCreateRequest,
     TypedVoucherCreateRequest,
     TypedVoucherReversalRequest,
@@ -1069,255 +1062,31 @@ async def _reserve_invoice_number(
     return _format_invoice_number(numbering, financial_year=financial_year, fy_short=fy_short, seq=seq)
 
 
-async def get_invoice_settings(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-) -> dict:
-    row = await get_collection(INVOICE_SETTINGS_COLLECTION).find_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    )
-    if row is None:
-        settings = InvoiceSettings()
-        result = settings.model_dump()
-    else:
-        # Re-validate stored doc through the model so missing/new keys get defaults.
-        stored = {
-            k: v for k, v in row.items()
-            if k in {"field_config", "numbering", "custom_fields", "branding", "inventory_enabled",
-                     "inventory_valuation_policy", "hr_enabled", "cost_centre_enabled", "manufacturing_enabled"}
-        }
-        result = InvoiceSettings(**stored).model_dump()
-    # Backfill any standard field missing from a partially-saved config so the
-    # form and required-field validation always have a complete rule set.
-    field_config = result.get("field_config") or {}
-    for key in INVOICE_STANDARD_FIELDS:
-        field_config.setdefault(key, {"visible": True, "required": False})
-    result["field_config"] = field_config
-    result.update({
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "updated_by": (row or {}).get("updated_by"),
-        "updated_at": (row or {}).get("updated_at"),
-    })
-    return result
+# Invoice / admin settings moved to services/invoice_settings.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported here so later
+# facades (sales/purchase invoices, GST returns) can import get_invoice_settings.
+from app.modules.business.services.invoice_settings import (  # noqa: E402
+    get_business_admin_settings as get_business_admin_settings,
+    get_gst_profile as get_gst_profile,
+    get_invoice_settings as get_invoice_settings,
+    save_business_admin_settings as save_business_admin_settings,
+    save_invoice_settings as save_invoice_settings,
+    set_hr_enabled as set_hr_enabled,
+    set_module_enabled as set_module_enabled,
+)
 
-
-async def get_gst_profile(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-) -> dict:
-    """The entity's GST regime, read from invoice-settings branding.
-
-    Returns registration_type ("regular"|"composition"), the composition
-    category, and the derived composition tax rate (None for regular dealers).
-    """
-    settings = await get_invoice_settings(
-        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
-    )
-    branding = (settings or {}).get("branding") or {}
-    reg_type = str(branding.get("gst_registration_type") or "regular")
-    category = branding.get("composition_category")
-    rate = COMPOSITION_RATES.get(category) if reg_type == "composition" else None
-    return {
-        "registration_type": reg_type,
-        "composition_category": category,
-        "composition_rate": rate,
-        "is_composition": reg_type == "composition",
-    }
-
-
-async def save_invoice_settings(
-    *,
-    tenant_id: str,
-    app_key: str,
-    updated_by: str,
-    payload: InvoiceSettingsUpdateRequest,
-) -> dict:
-    accounting_entity_id = payload.accounting_entity_id
-    settings = InvoiceSettings(
-        field_config=payload.field_config,
-        numbering=payload.numbering,
-        custom_fields=payload.custom_fields,
-        branding=payload.branding,
-        inventory_enabled=payload.inventory_enabled,
-        inventory_valuation_policy=payload.inventory_valuation_policy,
-        hr_enabled=payload.hr_enabled,
-        cost_centre_enabled=payload.cost_centre_enabled,
-        manufacturing_enabled=payload.manufacturing_enabled,
-    )
-    doc = settings.model_dump()
-    doc.update({"updated_by": updated_by, "updated_at": _now()})
-    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
-        filters,
-        {"$set": doc, "$setOnInsert": {**filters, "created_at": _now()}},
-        upsert=True,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=updated_by,
-        action="business_invoice_settings_updated",
-        entity_type="business_invoice_settings",
-        entity_id=accounting_entity_id,
-        new_value=doc,
-    )
-    return await get_invoice_settings(tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id)
-
-
-async def get_business_admin_settings(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-) -> dict:
-    row = await get_collection(ADMIN_SETTINGS_COLLECTION).find_one(
-        {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    )
-    if row is None:
-        result = BusinessAdminSettings().model_dump()
-    else:
-        stored = {
-            k: v for k, v in row.items()
-            if k in {
-                "organization",
-                "branches",
-                "roles",
-                "permissions",
-                "voucher_configuration",
-                "financial_controls",
-                "security",
-                "templates",
-                "notifications",
-                "subscription_billing",
-                "integrations",
-                "ai_settings",
-            }
-        }
-        result = BusinessAdminSettings(**stored).model_dump()
-    result.update(
-        {
-            "tenant_id": tenant_id,
-            "app_key": app_key,
-            "accounting_entity_id": accounting_entity_id,
-            "updated_by": (row or {}).get("updated_by"),
-            "updated_at": (row or {}).get("updated_at"),
-        }
-    )
-    return result
-
-
-async def save_business_admin_settings(
-    *,
-    tenant_id: str,
-    app_key: str,
-    updated_by: str,
-    payload: BusinessAdminSettingsUpdateRequest,
-) -> dict:
-    accounting_entity_id = payload.accounting_entity_id
-    settings = BusinessAdminSettings(
-        organization=payload.organization,
-        branches=payload.branches,
-        roles=payload.roles,
-        permissions=payload.permissions,
-        voucher_configuration=payload.voucher_configuration,
-        financial_controls=payload.financial_controls,
-        security=payload.security,
-        templates=payload.templates,
-        notifications=payload.notifications,
-        subscription_billing=payload.subscription_billing,
-        integrations=BusinessIntegrationSettings(**payload.integrations.model_dump()),
-        ai_settings=BusinessAiSettings(
-            **{
-                **payload.ai_settings.model_dump(),
-                "auto_post_to_ledger": False,
-                "document_review_required": True,
-                "posting_review_required": True,
-            }
-        ),
-    )
-    doc = settings.model_dump(mode="json")
-    doc.update({"updated_by": updated_by, "updated_at": _now()})
-    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    await get_collection(ADMIN_SETTINGS_COLLECTION).update_one(
-        filters,
-        {"$set": doc, "$setOnInsert": {**filters, "created_at": _now()}},
-        upsert=True,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=updated_by,
-        action="business_admin_settings_updated",
-        entity_type="business_admin_settings",
-        entity_id=accounting_entity_id,
-        new_value=doc,
-    )
-    return await get_business_admin_settings(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-    )
-
-
-async def set_hr_enabled(
-    *, tenant_id: str, app_key: str, accounting_entity_id: str, enabled: bool, updated_by: str
-) -> bool:
-    """Tenant-admin toggle for the HR add-on — flips just InvoiceSettings.hr_enabled
-    (upserting the settings doc) without needing the full settings payload."""
-    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
-        filters,
-        {"$set": {"hr_enabled": bool(enabled), "updated_by": updated_by, "updated_at": _now()},
-         "$setOnInsert": {**filters, "created_at": _now()}},
-        upsert=True,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id, app_key=app_key, user_id=updated_by,
-        action="business_hr_enabled_toggled", entity_type="business_invoice_settings",
-        entity_id=accounting_entity_id, new_value={"hr_enabled": bool(enabled)},
-    )
-    return bool(enabled)
-
-
-_MODULE_ENABLE_FLAGS = {"cost_centre_enabled", "manufacturing_enabled"}
-
-
-async def set_module_enabled(
-    *, tenant_id: str, app_key: str, accounting_entity_id: str, flag: str, enabled: bool, updated_by: str,
-) -> dict:
-    """Tenant-admin toggle for an enterprise module flag on InvoiceSettings
-    (cost_centre_enabled / manufacturing_enabled), upserting the settings doc.
-
-    Manufacturing depends on cost centres, so enabling manufacturing implies
-    cost centres ON, and disabling cost centres also disables manufacturing —
-    the two flags can never end up in a contradictory state."""
-    if flag not in _MODULE_ENABLE_FLAGS:
-        raise ValueError(f"Unknown module flag '{flag}'")
-    updates = {flag: bool(enabled)}
-    if flag == "manufacturing_enabled" and enabled:
-        updates["cost_centre_enabled"] = True
-    if flag == "cost_centre_enabled" and not enabled:
-        updates["manufacturing_enabled"] = False
-
-    filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id}
-    await get_collection(INVOICE_SETTINGS_COLLECTION).update_one(
-        filters,
-        {"$set": {**updates, "updated_by": updated_by, "updated_at": _now()},
-         "$setOnInsert": {**filters, "created_at": _now()}},
-        upsert=True,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id, app_key=app_key, user_id=updated_by,
-        action="business_module_enabled_toggled", entity_type="business_invoice_settings",
-        entity_id=accounting_entity_id, new_value=updates,
-    )
-    return updates
+# GST period locks moved to services/gst_period_locks.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported here so later
+# facades (credit/debit notes, sales/purchase invoices, ITC, GST settlement) can
+# import _validate_reversal_period / is_gst_period_locked.
+from app.modules.business.services.gst_period_locks import (  # noqa: E402
+    _period_key as _period_key,
+    _period_label as _period_label,
+    _validate_reversal_period as _validate_reversal_period,
+    is_gst_period_locked as is_gst_period_locked,
+    list_gst_period_locks as list_gst_period_locks,
+    set_gst_period_lock as set_gst_period_lock,
+)
 
 
 # Sales Invoice documents moved to services/sales_invoices.py
@@ -1352,138 +1121,7 @@ def _bill_response_doc(doc: dict, *, created: bool = False) -> dict:
 
 # Rule 37 ITC reversal/reclaim moved to services/itc_reversal.py
 # (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md). The facade re-export lives at the
-# end of this module: itc_reversal imports the GST-period helpers defined further below.
-
-
-# ===================== GST Period Locks (finalised months) =====================
-
-
-def _period_key(value) -> str:
-    """Return the GST tax period 'YYYY-MM' for a date or ISO date string."""
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value[:7]
-    return f"{value.year:04d}-{value.month:02d}"
-
-
-def _period_label(period: str) -> str:
-    try:
-        year, month = period.split("-")
-        return f"{_MONTH_NAMES[int(month)]} {year}"
-    except Exception:
-        return period
-
-
-async def is_gst_period_locked(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    period: str,
-) -> bool:
-    if not period:
-        return False
-    row = await get_collection(GST_PERIOD_LOCKS_COLLECTION).find_one(
-        {
-            "tenant_id": tenant_id,
-            "app_key": app_key,
-            "accounting_entity_id": accounting_entity_id,
-            "period": period,
-        }
-    )
-    return bool(row and row.get("locked"))
-
-
-async def _validate_reversal_period(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    original_date,
-    reversal_date,
-    document_label: str,
-) -> None:
-    """Enforce that a reversal stays in the original document's GST tax period and
-    that the period has not been finalised (locked)."""
-    original_period = _period_key(original_date)
-    reversal_period = _period_key(reversal_date)
-    if original_period and reversal_period and reversal_period != original_period:
-        raise AccountingValidationError(
-            f"Reversal must be dated within {_period_label(original_period)} "
-            f"(the {document_label}'s GST period). Cross-period reversals are not allowed."
-        )
-    if await is_gst_period_locked(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        accounting_entity_id=accounting_entity_id,
-        period=original_period,
-    ):
-        raise AccountingValidationError(
-            f"The {_period_label(original_period)} GST period is finalised and locked. "
-            f"Reversals into a filed period are not allowed; raise a credit/debit note in the open period instead."
-        )
-
-
-def _period_lock_response_doc(doc: dict) -> dict:
-    return {
-        "period": doc.get("period"),
-        "locked": bool(doc.get("locked")),
-        "note": doc.get("note"),
-        "updated_by": doc.get("updated_by"),
-        "updated_at": doc.get("updated_at"),
-    }
-
-
-async def list_gst_period_locks(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-) -> dict:
-    rows = (
-        await get_collection(GST_PERIOD_LOCKS_COLLECTION)
-        .find({"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id})
-        .sort("period", -1)
-        .to_list(length=500)
-    )
-    return {"items": [_period_lock_response_doc(row) for row in rows], "total": len(rows)}
-
-
-async def set_gst_period_lock(
-    *,
-    tenant_id: str,
-    app_key: str,
-    updated_by: str,
-    payload: GstPeriodLockUpdateRequest,
-) -> dict:
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": payload.accounting_entity_id,
-        "period": payload.period,
-    }
-    update_doc = {
-        "locked": bool(payload.locked),
-        "note": payload.note,
-        "updated_by": updated_by,
-        "updated_at": _now(),
-    }
-    await get_collection(GST_PERIOD_LOCKS_COLLECTION).update_one(
-        filters,
-        {"$set": update_doc, "$setOnInsert": {**filters, "created_at": _now()}},
-        upsert=True,
-    )
-    await _audit_business_event(
-        tenant_id=tenant_id,
-        app_key=app_key,
-        user_id=updated_by,
-        action="business_gst_period_lock_updated",
-        entity_type="business_gst_period_lock",
-        entity_id=payload.period,
-        new_value={**filters, **update_doc},
-    )
-    return _period_lock_response_doc({**filters, **update_doc})
+# end of this module: itc_reversal imports the GST-period helpers re-exported above.
 
 
 # ===================== Credit Notes (sales-side GST adjustment) =====================
@@ -1543,209 +1181,6 @@ from app.modules.business.services.credit_notes import (  # noqa: E402
 
 
 # ===================== Debit Notes (purchase-side GST adjustment) =====================
-
-
-def _approval_queue_item(
-    *,
-    document_type: str,
-    document_id: str,
-    document_number: str,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    party_name: str | None,
-    document_date,
-    amount,
-    status: str,
-    approval_status: str | None,
-    approval_required: bool | None,
-    journal_entry_id,
-    created_by,
-    created_at,
-    updated_at,
-) -> dict:
-    return {
-        "document_type": document_type,
-        "document_id": document_id,
-        "document_number": document_number,
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "party_name": party_name,
-        "document_date": document_date,
-        "amount": amount,
-        "status": status,
-        "approval_status": approval_status or "auto_posted",
-        "approval_required": bool(approval_required),
-        "journal_entry_id": journal_entry_id,
-        "created_by": created_by,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
-
-
-async def list_documents_for_approval_queue(
-    *,
-    tenant_id: str,
-    app_key: str,
-    accounting_entity_id: str,
-    document_type: str | None = None,
-    status: str | None = None,
-    approval_status: str | None = None,
-    include_reviewed: bool = False,
-    limit: int = 100,
-) -> dict:
-    filters = {
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-    }
-    safe_limit = max(1, min(int(limit or 100), 500))
-
-    collections = [
-        (VOUCHERS_COLLECTION, "voucher"),
-        (SALES_INVOICES_COLLECTION, "sales_invoice"),
-        (PURCHASE_BILLS_COLLECTION, "purchase_bill"),
-        (CREDIT_NOTES_COLLECTION, "credit_note"),
-        (DEBIT_NOTES_COLLECTION, "debit_note"),
-    ]
-    if document_type:
-        collections = [item for item in collections if item[1] == document_type]
-    rows_by_type: dict[str, list[dict]] = {}
-    for collection_name, doc_type in collections:
-        rows = (
-            await get_collection(collection_name)
-            .find(filters)
-            .sort("updated_at", -1)
-            .limit(safe_limit)
-            .to_list(length=safe_limit)
-        )
-        rows = [
-            row for row in rows
-            if str(row.get("status") or "").strip().lower() in {"posted", "pending_approval"}
-        ]
-        rows = [
-            row for row in rows
-            if bool(row.get("approval_required")) or str(row.get("approval_status") or "").strip().lower() in {"pending_approval", "approved", "rejected"}
-        ]
-        if status:
-            rows = [row for row in rows if str(row.get("status") or "").strip().lower() == status]
-        if approval_status:
-            rows = [row for row in rows if str(row.get("approval_status") or "auto_posted").strip().lower() == approval_status]
-        if not include_reviewed:
-            rows = [row for row in rows if str(row.get("approval_status") or "auto_posted") != "approved"]
-        rows_by_type[doc_type] = rows
-
-    items: list[dict] = []
-    for row in rows_by_type.get("voucher", []):
-        items.append(
-            _approval_queue_item(
-                document_type="voucher",
-                document_id=str(row.get("voucher_id") or ""),
-                document_number=str(row.get("voucher_number") or ""),
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=accounting_entity_id,
-                party_name=None,
-                document_date=row.get("entry_date"),
-                amount=row.get("amount"),
-                status=str(row.get("status") or ""),
-                approval_status=row.get("approval_status"),
-                approval_required=row.get("approval_required"),
-                journal_entry_id=row.get("journal_entry_id"),
-                created_by=row.get("created_by"),
-                created_at=row.get("created_at"),
-                updated_at=row.get("updated_at"),
-            )
-        )
-    for row in rows_by_type.get("sales_invoice", []):
-        items.append(
-            _approval_queue_item(
-                document_type="sales_invoice",
-                document_id=str(row.get("invoice_id") or ""),
-                document_number=str(row.get("invoice_number") or ""),
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=accounting_entity_id,
-                party_name=row.get("customer_name"),
-                document_date=row.get("invoice_date"),
-                amount=row.get("invoice_total"),
-                status=str(row.get("status") or ""),
-                approval_status=row.get("approval_status"),
-                approval_required=row.get("approval_required"),
-                journal_entry_id=row.get("journal_entry_id"),
-                created_by=row.get("created_by"),
-                created_at=row.get("created_at"),
-                updated_at=row.get("updated_at"),
-            )
-        )
-    for row in rows_by_type.get("purchase_bill", []):
-        items.append(
-            _approval_queue_item(
-                document_type="purchase_bill",
-                document_id=str(row.get("bill_id") or ""),
-                document_number=str(row.get("bill_number") or ""),
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=accounting_entity_id,
-                party_name=row.get("vendor_name"),
-                document_date=row.get("bill_date"),
-                amount=row.get("bill_total"),
-                status=str(row.get("status") or ""),
-                approval_status=row.get("approval_status"),
-                approval_required=row.get("approval_required"),
-                journal_entry_id=row.get("journal_entry_id"),
-                created_by=row.get("created_by"),
-                created_at=row.get("created_at"),
-                updated_at=row.get("updated_at"),
-            )
-        )
-    for row in rows_by_type.get("credit_note", []):
-        items.append(
-            _approval_queue_item(
-                document_type="credit_note",
-                document_id=str(row.get("credit_note_id") or ""),
-                document_number=str(row.get("credit_note_number") or ""),
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=accounting_entity_id,
-                party_name=row.get("customer_name"),
-                document_date=row.get("note_date"),
-                amount=row.get("note_total"),
-                status=str(row.get("status") or ""),
-                approval_status=row.get("approval_status"),
-                approval_required=row.get("approval_required"),
-                journal_entry_id=row.get("journal_entry_id"),
-                created_by=row.get("created_by"),
-                created_at=row.get("created_at"),
-                updated_at=row.get("updated_at"),
-            )
-        )
-    for row in rows_by_type.get("debit_note", []):
-        items.append(
-            _approval_queue_item(
-                document_type="debit_note",
-                document_id=str(row.get("debit_note_id") or ""),
-                document_number=str(row.get("debit_note_number") or ""),
-                tenant_id=tenant_id,
-                app_key=app_key,
-                accounting_entity_id=accounting_entity_id,
-                party_name=row.get("vendor_name"),
-                document_date=row.get("note_date"),
-                amount=row.get("note_total"),
-                status=str(row.get("status") or ""),
-                approval_status=row.get("approval_status"),
-                approval_required=row.get("approval_required"),
-                journal_entry_id=row.get("journal_entry_id"),
-                created_by=row.get("created_by"),
-                created_at=row.get("created_at"),
-                updated_at=row.get("updated_at"),
-            )
-        )
-
-    items.sort(key=lambda row: row.get("updated_at") or "", reverse=True)
-    items = items[:safe_limit]
-    return {"items": items, "total": len(items)}
 
 
 # Debit Notes moved to services/debit_notes.py
@@ -1872,4 +1307,10 @@ from app.modules.business.services.document_attachments import (  # noqa: E402
     create_business_document_attachment as create_business_document_attachment,
     download_business_document_attachment as download_business_document_attachment,
     list_business_document_attachments as list_business_document_attachments,
+)
+
+# Approval queue listing moved to services/approval_queue.py
+# (docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md); re-exported for compatibility.
+from app.modules.business.services.approval_queue import (  # noqa: E402
+    list_documents_for_approval_queue as list_documents_for_approval_queue,
 )
