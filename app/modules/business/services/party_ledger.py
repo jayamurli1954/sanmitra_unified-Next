@@ -14,7 +14,6 @@ from app.accounting.service import (
     get_party_outstanding,
     get_party_wise_balances,
 )
-from app.db.mongo import get_collection
 
 
 async def party_wise_ledger(
@@ -28,7 +27,9 @@ async def party_wise_ledger(
 ) -> dict:
     """Party-wise Sundry Debtors (receivable) / Creditors (payable), enriched with
     party names from Mongo. Ties to the matching Trial Balance account total."""
+    from app.modules.business import service as business_service
     from app.modules.business.service import PARTIES_COLLECTION
+
     as_of = as_of or date.today()
     lines, total = await get_party_wise_balances(
         session, tenant_id=tenant_id, as_of=as_of, kind=kind, app_key=app_key, accounting_entity_id=accounting_entity_id,
@@ -37,7 +38,7 @@ async def party_wise_ledger(
     names: dict[str, str | None] = {}
     if party_ids:
         rows = await (
-            get_collection(PARTIES_COLLECTION)
+            business_service.get_collection(PARTIES_COLLECTION)
             .find({
                 "tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id,
                 "party_id": {"$in": party_ids},

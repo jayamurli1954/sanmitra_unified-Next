@@ -19,8 +19,6 @@ from app.core.modules.dependencies import require_enabled_module
 from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.db.postgres import get_async_session
-from app.modules.business import export_governance
-from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     SalesInvoiceCancelRequest,
@@ -36,6 +34,7 @@ from app.modules.business.service import (
     list_sales_invoices,
     review_sales_invoice,
 )
+from app.modules.business import router as business_router
 from app.modules.business.router import _created_by, router
 
 
@@ -184,24 +183,25 @@ async def get_business_sales_invoice_pdf(
         expected_app_key="mitrabooks",
         operation="sales invoice PDF",
     )
-    export_governance.require_export_permission(current_user, export_type="sales_invoice_pdf")
-    invoice = await get_sales_invoice(
+    business_router.export_governance.require_export_permission(current_user, export_type="sales_invoice_pdf")
+    # Resolve via router facade so tests can monkeypatch business_router.get_sales_invoice.
+    invoice = await business_router.get_sales_invoice(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
         invoice_id=invoice_id,
     )
-    invoice = _require_posted_document_for_output(
+    invoice = business_router._require_posted_document_for_output(
         invoice,
         not_found_detail="Sales invoice not found",
         label="sales invoices",
     )
-    settings = await get_invoice_settings(
+    settings = await business_router.get_invoice_settings(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
         accounting_entity_id=accounting_entity_id,
     )
-    pdf_bytes = build_sales_invoice_pdf(invoice, settings.get("branding") or {})
+    pdf_bytes = business_router.build_sales_invoice_pdf(invoice, settings.get("branding") or {})
     raw_name = f"{invoice.get('invoice_number') or invoice_id}.pdf".replace('"', "").replace("/", "-")
     # A non-ASCII invoice number (e.g. a local-language prefix) cannot be encoded
     # in a Latin-1 header value, which would make Starlette raise. Emit an ASCII
@@ -213,7 +213,7 @@ async def get_business_sales_invoice_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"},
     )
-    return await export_governance.govern_export_response(
+    return await business_router.export_governance.govern_export_response(
         response,
         tenant_id=context.tenant_id,
         app_key=context.app_key,

@@ -7,7 +7,8 @@ Party balances are NOT stored here — ledger reports remain the source of truth
 """
 from uuid import uuid4
 
-from app.db.mongo import get_collection
+from app.db.mongo import get_collection  # noqa: F401 - test monkeypatch surface
+from app.modules.business import service as business_service
 from app.modules.business.schemas import PartyCreateRequest, PartyUpdateRequest
 from app.modules.business.service import (
     PARTIES_COLLECTION,
@@ -66,7 +67,7 @@ async def create_party(
         "created_at": now,
         "updated_at": now,
     }
-    await get_collection(PARTIES_COLLECTION).insert_one(doc)
+    await business_service.get_collection(PARTIES_COLLECTION).insert_one(doc)
     await _audit_business_event(
         tenant_id=tenant_id,
         app_key=app_key,
@@ -98,7 +99,7 @@ async def list_parties(
 
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(PARTIES_COLLECTION)
+        await business_service.get_collection(PARTIES_COLLECTION)
         .find(filters)
         .sort("party_name", 1)
         .limit(safe_limit)
@@ -114,7 +115,7 @@ async def get_party(
     accounting_entity_id: str,
     party_id: str,
 ) -> dict | None:
-    row = await get_collection(PARTIES_COLLECTION).find_one(
+    row = await business_service.get_collection(PARTIES_COLLECTION).find_one(
         {
             "tenant_id": tenant_id,
             "app_key": app_key,
@@ -155,7 +156,7 @@ async def update_party(
         "accounting_entity_id": accounting_entity_id,
         "party_id": party_id,
     }
-    parties = get_collection(PARTIES_COLLECTION)
+    parties = business_service.get_collection(PARTIES_COLLECTION)
     await parties.update_one(filters, {"$set": patch})
     updated = await get_party(
         tenant_id=tenant_id,
@@ -206,7 +207,7 @@ async def deactivate_party(
         "updated_by": deactivated_by,
         "updated_at": _now(),
     }
-    parties = get_collection(PARTIES_COLLECTION)
+    parties = business_service.get_collection(PARTIES_COLLECTION)
     await parties.update_one(filters, {"$set": patch})
     updated = await get_party(
         tenant_id=tenant_id,

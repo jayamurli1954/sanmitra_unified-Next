@@ -245,3 +245,13 @@ from app.modules.business.routes import itc as _itc_routes  # noqa: E402,F401
 from app.modules.business.routes import credit_debit_notes as _credit_debit_notes_routes  # noqa: E402,F401
 from app.modules.business.routes import gst_settlement as _gst_settlement_routes  # noqa: E402,F401
 from app.modules.business.routes import bank_recon_routes as _bank_recon_routes  # noqa: E402,F401
+
+# Test / monkeypatch surface: handlers live in routes/*, but phase2 patches these
+# names on the router facade (same pattern as service.py domain re-exports).
+from app.modules.business import export_governance as export_governance  # noqa: E402,F401
+from app.modules.business.invoice_pdf import build_sales_invoice_pdf as build_sales_invoice_pdf  # noqa: E402,F401
+from app.modules.business.service import get_sales_invoice as get_sales_invoice  # noqa: E402,F401
+from app.modules.business.routes.sales_invoices import (  # noqa: E402,F401
+    _require_posted_document_for_output as _require_posted_document_for_output,
+    get_business_sales_invoice_pdf as get_business_sales_invoice_pdf,
+)

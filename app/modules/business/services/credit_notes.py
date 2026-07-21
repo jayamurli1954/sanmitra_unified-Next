@@ -15,12 +15,8 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
-    initialize_default_chart_of_accounts,
-    post_journal_entry,
-    reverse_journal_entry,
 )
-from app.db.mongo import get_collection
-from app.modules.business.dimensions import validate_dimension_refs
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     CreditNoteCancelRequest,
@@ -39,12 +35,8 @@ from app.modules.business.service import (
     _now,
     _period_key,
     _period_label,
-    _reserve_sequence_number,
-    _resolve_voucher_account_id,
-    _reverse_after_domain_persistence_failure,
     _validate_reversal_period,
     get_party,
-    is_gst_period_locked,
 )
 
 
@@ -71,7 +63,7 @@ async def list_credit_notes(
         filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(CREDIT_NOTES_COLLECTION)
+        await business_service.get_collection(CREDIT_NOTES_COLLECTION)
         .find(filters)
         .sort("note_date", -1)
         .limit(safe_limit)
@@ -87,7 +79,7 @@ async def get_credit_note(
     accounting_entity_id: str,
     credit_note_id: str,
 ) -> dict | None:
-    row = await get_collection(CREDIT_NOTES_COLLECTION).find_one(
+    row = await business_service.get_collection(CREDIT_NOTES_COLLECTION).find_one(
         {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id, "credit_note_id": credit_note_id}
     )
     return _credit_note_response_doc(row) if row else None
@@ -102,7 +94,7 @@ async def review_credit_note(
     reviewed_by: str,
     payload: ApprovalReviewRequest,
 ) -> dict:
-    notes = get_collection(CREDIT_NOTES_COLLECTION)
+    notes = business_service.get_collection(CREDIT_NOTES_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -211,18 +203,18 @@ async def _approve_credit_note_document(
     note_total = Decimal(str(note.get("note_total") or "0"))
     income_account_code = str(note.get("income_account_code") or "41001")
 
-    receivable_id = await _resolve_voucher_account_id(
+    receivable_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=SALES_RECEIVABLE_CODE, side="receivable",
     )
-    income_id = await _resolve_voucher_account_id(
+    income_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=income_account_code, side="income",
     )
     journal_lines = [JournalLineIn(account_id=income_id, debit=taxable_total, credit=Decimal("0"))]
     for gst_amount, code in ((cgst_total, OUTPUT_CGST_CODE), (sgst_total, OUTPUT_SGST_CODE), (igst_total, OUTPUT_IGST_CODE)):
         if gst_amount > Decimal("0"):
-            gst_account_id = await _resolve_voucher_account_id(
+            gst_account_id = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
                 account_id=None, account_code=code, side="output GST",
             )
@@ -231,9 +223,9 @@ async def _approve_credit_note_document(
 
     ref_suffix = f" against {note.get('original_invoice_number')}" if note.get("original_invoice_number") else ""
     description = f"Credit Note {credit_note_number} - {note.get('customer_name') or customer_party_id}{ref_suffix}"
-    notes = get_collection(CREDIT_NOTES_COLLECTION)
+    notes = business_service.get_collection(CREDIT_NOTES_COLLECTION)
     try:
-        journal_entry, created = await post_journal_entry(
+        journal_entry, created = await business_service.post_journal_entry(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -269,7 +261,7 @@ async def _approve_credit_note_document(
     try:
         await notes.update_one({"tenant_id": tenant_id, "app_key": app_key, "credit_note_id": credit_note_id}, {"$set": patch})
     except Exception as exc:
-        await _reverse_after_domain_persistence_failure(
+        await business_service._reverse_after_domain_persistence_failure(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -304,7 +296,7 @@ async def create_credit_note(
     idempotency_key: str | None,
 ) -> dict:
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -313,7 +305,7 @@ async def create_credit_note(
         )
 
     if idempotency_key:
-        existing = await get_collection(CREDIT_NOTES_COLLECTION).find_one(
+        existing = await business_service.get_collection(CREDIT_NOTES_COLLECTION).find_one(
             {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "idempotency_key": idempotency_key}
         )
         if existing is not None:
@@ -326,13 +318,13 @@ async def create_credit_note(
         raise AccountingValidationError("Customer party not found for this tenant")
 
     # A credit note is posted in an open period; block if that month is finalised.
-    if await is_gst_period_locked(
+    if await business_service.is_gst_period_locked(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id, period=_period_key(payload.note_date),
     ):
         raise AccountingValidationError(
             f"The {_period_label(_period_key(payload.note_date))} GST period is finalised and locked. Choose a date in an open period."
         )
-    await validate_dimension_refs(
+    await business_service.validate_dimension_refs(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
@@ -340,7 +332,7 @@ async def create_credit_note(
         project_id=payload.project_id,
     )
     for item in payload.line_items:
-        await validate_dimension_refs(
+        await business_service.validate_dimension_refs(
             tenant_id=tenant_id,
             app_key=app_key,
             accounting_entity_id=payload.accounting_entity_id,
@@ -353,7 +345,7 @@ async def create_credit_note(
         raise AccountingValidationError("Credit note total must be greater than zero")
 
     credit_note_id = str(uuid4())
-    credit_note_number = await _reserve_sequence_number(
+    credit_note_number = await business_service._reserve_sequence_number(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         doc_type="credit_note", prefix="CN", on_date=payload.note_date, fallback_collection=CREDIT_NOTES_COLLECTION,
     )
@@ -395,7 +387,7 @@ async def create_credit_note(
     }
     if idempotency_key:
         doc["idempotency_key"] = idempotency_key
-    credit_notes = get_collection(CREDIT_NOTES_COLLECTION)
+    credit_notes = business_service.get_collection(CREDIT_NOTES_COLLECTION)
     await credit_notes.insert_one(doc)
     result = _credit_note_response_doc(doc, created=True)
     await _audit_business_event(
@@ -415,7 +407,7 @@ async def cancel_credit_note(
     payload: CreditNoteCancelRequest,
     idempotency_key: str | None,
 ) -> dict:
-    credit_notes = get_collection(CREDIT_NOTES_COLLECTION)
+    credit_notes = business_service.get_collection(CREDIT_NOTES_COLLECTION)
     filters = {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "credit_note_id": credit_note_id}
     note = await credit_notes.find_one(filters)
     if note is None:
@@ -435,7 +427,7 @@ async def cancel_credit_note(
     )
 
     old_note = _credit_note_response_doc(note)
-    reversal, created = await reverse_journal_entry(
+    reversal, created = await business_service.reverse_journal_entry(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by, journal_id=int(journal_entry_id), reversal_date=reversal_date,
         reason=payload.reason, idempotency_key=idempotency_key or f"credit-note-cancel:{credit_note_id}",

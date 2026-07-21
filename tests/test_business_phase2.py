@@ -16,8 +16,6 @@ from app.modules.business import report_export
 from app.modules.business.invoice_pdf import build_sales_invoice_pdf
 from app.modules.business.statements import build_party_statement
 import app.modules.business.service as business_service
-import app.modules.business.services.ca_clients as ca_clients_service
-import app.modules.business.services.parties as parties_service
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.modules.business.schemas import (
     CaClientCreateRequest,
@@ -152,7 +150,6 @@ async def test_business_party_is_tenant_and_app_scoped(monkeypatch):
     parties = FakeCollection()
     audit_events = []
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
-    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -208,7 +205,6 @@ async def test_update_business_party_does_not_mutate_balances(monkeypatch):
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
-    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -262,7 +258,6 @@ async def test_deactivate_business_party_is_soft_and_hidden_from_active_list(mon
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: parties)
-    monkeypatch.setattr(parties_service, "get_collection", lambda _name: parties)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -3398,7 +3393,6 @@ async def test_ca_client_records_are_tenant_scoped_and_updatable(monkeypatch):
         audit_events.append(kwargs)
 
     monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
-    monkeypatch.setattr(ca_clients_service, "get_collection", fake_get_collection)
     monkeypatch.setattr(business_service, "log_audit_event", fake_log_audit_event)
 
     created = await business_service.create_ca_client(
@@ -3849,7 +3843,6 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
         }[name]
 
     monkeypatch.setattr(business_service, "get_collection", fake_get_collection)
-    monkeypatch.setattr(ca_clients_service, "get_collection", fake_get_collection)
 
     async def fake_log_audit_event(**kwargs):
         audit_events.append(kwargs)
@@ -3953,7 +3946,6 @@ async def test_update_ca_document_metadata_advances_status_with_tenant_scope(mon
         }
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
-    monkeypatch.setattr(ca_clients_service, "get_collection", lambda _name: documents)
     monkeypatch.setattr(business_service, "log_audit_event", lambda **_kwargs: _async_none())
 
     result = await business_service.update_ca_document_metadata(
@@ -4053,7 +4045,6 @@ async def test_list_ca_document_metadata_filters_inside_tenant_scope(monkeypatch
         },
     ]
     monkeypatch.setattr(business_service, "get_collection", lambda _name: documents)
-    monkeypatch.setattr(ca_clients_service, "get_collection", lambda _name: documents)
 
     result = await business_service.list_ca_document_metadata(
         tenant_id="business-tenant",

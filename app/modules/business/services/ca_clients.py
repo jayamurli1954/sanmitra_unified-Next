@@ -7,7 +7,8 @@ Imported via the service.py facade (which re-exports the public functions).
 from uuid import uuid4
 
 from app.accounting.service import AccountingValidationError
-from app.db.mongo import get_collection
+from app.db.mongo import get_collection  # noqa: F401 - test monkeypatch surface
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     CaClientCreateRequest,
     CaClientUpdateRequest,
@@ -31,7 +32,7 @@ async def _get_ca_client_in_scope(
     accounting_entity_id: str,
     client_id: str,
 ) -> dict:
-    client = await get_collection(CA_CLIENTS_COLLECTION).find_one(
+    client = await business_service.get_collection(CA_CLIENTS_COLLECTION).find_one(
         {
             "tenant_id": tenant_id,
             "app_key": app_key,
@@ -116,7 +117,7 @@ async def create_ca_client(
         "created_at": now,
         "updated_at": now,
     }
-    await get_collection(CA_CLIENTS_COLLECTION).insert_one(doc)
+    await business_service.get_collection(CA_CLIENTS_COLLECTION).insert_one(doc)
     result = _ca_client_response_doc(doc)
     await _audit_business_event(
         tenant_id=tenant_id,
@@ -148,7 +149,7 @@ async def list_ca_clients(
         filters["active"] = True
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(CA_CLIENTS_COLLECTION)
+        await business_service.get_collection(CA_CLIENTS_COLLECTION)
         .find(filters)
         .sort("client_name", 1)
         .limit(safe_limit)
@@ -180,7 +181,7 @@ async def update_ca_client(
         "accounting_entity_id": accounting_entity_id,
         "client_id": client_id,
     }
-    collection = get_collection(CA_CLIENTS_COLLECTION)
+    collection = business_service.get_collection(CA_CLIENTS_COLLECTION)
     existing = await collection.find_one(filters)
     if existing is None:
         return None
@@ -264,7 +265,7 @@ async def create_ca_document_metadata(
         "created_at": now,
         "updated_at": now,
     }
-    await get_collection(CA_DOCUMENTS_COLLECTION).insert_one(doc)
+    await business_service.get_collection(CA_DOCUMENTS_COLLECTION).insert_one(doc)
     result = _ca_document_response_doc(doc)
     await _audit_business_event(
         tenant_id=tenant_id,
@@ -303,7 +304,7 @@ async def list_ca_document_metadata(
 
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(CA_DOCUMENTS_COLLECTION)
+        await business_service.get_collection(CA_DOCUMENTS_COLLECTION)
         .find(filters)
         .sort("updated_at", -1)
         .limit(safe_limit)
@@ -334,7 +335,7 @@ async def update_ca_document_metadata(
         "accounting_entity_id": accounting_entity_id,
         "document_id": document_id,
     }
-    collection = get_collection(CA_DOCUMENTS_COLLECTION)
+    collection = business_service.get_collection(CA_DOCUMENTS_COLLECTION)
     existing = await collection.find_one(filters)
     if existing is None:
         return None

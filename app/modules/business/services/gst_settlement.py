@@ -16,11 +16,8 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
-    initialize_default_chart_of_accounts,
-    post_journal_entry,
-    reverse_journal_entry,
 )
-from app.db.mongo import get_collection
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     GstPeriodLockUpdateRequest,
     GstSettlementCreateRequest,
@@ -36,13 +33,9 @@ from app.modules.business.service import (
     OUTPUT_IGST_CODE,
     OUTPUT_SGST_CODE,
     _audit_business_event,
-    _compensate_gst_settlement_failure,
     _now,
     _period_key,
     _period_label,
-    _resolve_voucher_account_id,
-    is_gst_period_locked,
-    set_gst_period_lock,
 )
 
 
@@ -176,7 +169,7 @@ async def _build_gst_settlement(
     accounting_entity_id: str,
     period: str,
 ) -> dict:
-    balances = await _gst_period_balances(
+    balances = await business_service._gst_period_balances(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id, period=period,
     )
     output, credit = balances["output"], balances["credit"]
@@ -211,7 +204,7 @@ async def preview_gst_settlement(
     accounting_entity_id: str,
     period: str,
 ) -> dict:
-    existing = await get_collection(GST_SETTLEMENTS_COLLECTION).find_one(
+    existing = await business_service.get_collection(GST_SETTLEMENTS_COLLECTION).find_one(
         {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": accounting_entity_id, "period": period}
     )
     if existing is not None and existing.get("status") == "posted":
@@ -222,7 +215,7 @@ async def preview_gst_settlement(
     built.pop("_raw", None)
     built["status"] = "preview"
     built["posted"] = False
-    built["period_locked"] = await is_gst_period_locked(
+    built["period_locked"] = await business_service.is_gst_period_locked(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id, period=period,
     )
     return _settlement_doc_to_response(built)
@@ -238,7 +231,7 @@ async def create_gst_settlement(
     idempotency_key: str | None,
 ) -> dict:
     period = payload.period
-    settlements = get_collection(GST_SETTLEMENTS_COLLECTION)
+    settlements = business_service.get_collection(GST_SETTLEMENTS_COLLECTION)
     existing = await settlements.find_one(
         {"tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id, "period": period}
     )
@@ -246,7 +239,7 @@ async def create_gst_settlement(
         return _settlement_doc_to_response(existing)
 
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session, tenant_id=tenant_id, app_key=app_key,
             accounting_entity_id=payload.accounting_entity_id, organization_type="BUSINESS",
         )
@@ -263,27 +256,27 @@ async def create_gst_settlement(
     journal_lines = []
     for head, code in (("cgst", OUTPUT_CGST_CODE), ("sgst", OUTPUT_SGST_CODE), ("igst", OUTPUT_IGST_CODE)):
         if output[head] > 0:
-            acc = await _resolve_voucher_account_id(
+            acc = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
                 account_id=None, account_code=code, side="output GST",
             )
             journal_lines.append(JournalLineIn(account_id=acc, debit=output[head], credit=Decimal("0")))
     for head, code in (("cgst", INPUT_CGST_CODE), ("sgst", INPUT_SGST_CODE), ("igst", INPUT_IGST_CODE)):
         if utilized[head] > 0:
-            acc = await _resolve_voucher_account_id(
+            acc = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
                 account_id=None, account_code=code, side="input GST",
             )
             journal_lines.append(JournalLineIn(account_id=acc, debit=Decimal("0"), credit=utilized[head]))
     if net_cash > 0:
-        payable_acc = await _resolve_voucher_account_id(
+        payable_acc = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
             account_id=None, account_code=GST_PAYABLE_CODE, side="GST payable",
         )
         journal_lines.append(JournalLineIn(account_id=payable_acc, debit=Decimal("0"), credit=net_cash))
 
     _, last = _period_bounds(period)
-    journal_entry, _created = await post_journal_entry(
+    journal_entry, _created = await business_service.post_journal_entry(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by,
         payload=JournalPostRequest(
@@ -299,13 +292,13 @@ async def create_gst_settlement(
     period_locked = False
     if payload.lock_period:
         try:
-            await set_gst_period_lock(
+            await business_service.set_gst_period_lock(
                 tenant_id=tenant_id, app_key=app_key, updated_by=created_by,
                 payload=GstPeriodLockUpdateRequest(period=period, locked=True, note=f"Auto-locked on GST settlement", accounting_entity_id=payload.accounting_entity_id),
             )
             period_locked = True
         except Exception as exc:
-            await _compensate_gst_settlement_failure(
+            await business_service._compensate_gst_settlement_failure(
                 session,
                 tenant_id=tenant_id,
                 app_key=app_key,
@@ -337,7 +330,7 @@ async def create_gst_settlement(
     try:
         await settlements.update_one(filters, {"$set": doc}, upsert=True)
     except Exception as exc:
-        await _compensate_gst_settlement_failure(
+        await business_service._compensate_gst_settlement_failure(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -373,7 +366,7 @@ async def reverse_gst_settlement(
     payload: GstSettlementReverseRequest,
     idempotency_key: str | None,
 ) -> dict:
-    settlements = get_collection(GST_SETTLEMENTS_COLLECTION)
+    settlements = business_service.get_collection(GST_SETTLEMENTS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -399,7 +392,7 @@ async def reverse_gst_settlement(
             f"GST settlement reversal must be dated within {_period_label(period)}"
         )
 
-    period_was_locked = await is_gst_period_locked(
+    period_was_locked = await business_service.is_gst_period_locked(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
@@ -410,7 +403,7 @@ async def reverse_gst_settlement(
             f"The {_period_label(period)} GST period is locked. Set unlock_period=true to reverse the settlement."
         )
     if period_was_locked:
-        await set_gst_period_lock(
+        await business_service.set_gst_period_lock(
             tenant_id=tenant_id,
             app_key=app_key,
             updated_by=created_by,
@@ -422,7 +415,7 @@ async def reverse_gst_settlement(
             ),
         )
 
-    reversal, created = await reverse_journal_entry(
+    reversal, created = await business_service.reverse_journal_entry(
         session,
         tenant_id=tenant_id,
         app_key=app_key,

@@ -15,14 +15,10 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
-    initialize_default_chart_of_accounts,
-    post_journal_entry,
-    reverse_journal_entry,
 )
-from app.db.mongo import get_collection
-from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.inventory import validate_item_refs
 from app.modules.business.tds import compute_tcs
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     InvoiceSettings,
@@ -40,9 +36,6 @@ from app.modules.business.service import (
     _compute_invoice_lines,
     _invoice_response_doc,
     _now,
-    _reserve_invoice_number,
-    _resolve_voucher_account_id,
-    _reverse_after_domain_persistence_failure,
     _validate_required_invoice_fields,
     _validate_reversal_period,
     get_gst_profile,
@@ -71,7 +64,7 @@ async def list_sales_invoices(
         filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(SALES_INVOICES_COLLECTION)
+        await business_service.get_collection(SALES_INVOICES_COLLECTION)
         .find(filters)
         .sort("invoice_date", -1)
         .limit(safe_limit)
@@ -87,7 +80,7 @@ async def get_sales_invoice(
     accounting_entity_id: str,
     invoice_id: str,
 ) -> dict | None:
-    row = await get_collection(SALES_INVOICES_COLLECTION).find_one(
+    row = await business_service.get_collection(SALES_INVOICES_COLLECTION).find_one(
         {
             "tenant_id": tenant_id,
             "app_key": app_key,
@@ -107,7 +100,7 @@ async def review_sales_invoice(
     reviewed_by: str,
     payload: ApprovalReviewRequest,
 ) -> dict:
-    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    invoices = business_service.get_collection(SALES_INVOICES_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -217,11 +210,11 @@ async def _approve_sales_invoice_document(
     tcs_amount = Decimal(str(invoice.get("tcs_amount") or "0"))
     income_account_code = str(invoice.get("income_account_code") or "41001")
 
-    receivable_id = await _resolve_voucher_account_id(
+    receivable_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=SALES_RECEIVABLE_CODE, side="receivable",
     )
-    income_id = await _resolve_voucher_account_id(
+    income_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=income_account_code, side="income",
     )
@@ -230,23 +223,23 @@ async def _approve_sales_invoice_document(
         JournalLineIn(account_id=income_id, debit=Decimal("0"), credit=taxable_total),
     ]
     if tcs_amount > Decimal("0"):
-        tcs_payable_id = await _resolve_voucher_account_id(
+        tcs_payable_id = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
             account_id=None, account_code=TCS_PAYABLE_CODE, side="TCS payable",
         )
         journal_lines.append(JournalLineIn(account_id=tcs_payable_id, debit=Decimal("0"), credit=tcs_amount))
     for gst_amount, code in ((cgst_total, OUTPUT_CGST_CODE), (sgst_total, OUTPUT_SGST_CODE), (igst_total, OUTPUT_IGST_CODE)):
         if gst_amount > Decimal("0"):
-            gst_account_id = await _resolve_voucher_account_id(
+            gst_account_id = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
                 account_id=None, account_code=code, side="output GST",
             )
             journal_lines.append(JournalLineIn(account_id=gst_account_id, debit=Decimal("0"), credit=gst_amount))
 
     description = f"Sales Invoice {invoice_number} - {invoice.get('customer_name') or customer_party_id}"
-    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    invoices = business_service.get_collection(SALES_INVOICES_COLLECTION)
     try:
-        journal_entry, created = await post_journal_entry(
+        journal_entry, created = await business_service.post_journal_entry(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -285,7 +278,7 @@ async def _approve_sales_invoice_document(
             {"$set": patch},
         )
     except Exception as exc:
-        await _reverse_after_domain_persistence_failure(
+        await business_service._reverse_after_domain_persistence_failure(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -325,7 +318,7 @@ async def create_sales_invoice(
     idempotency_key: str | None,
 ) -> dict:
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -334,7 +327,7 @@ async def create_sales_invoice(
         )
 
     if idempotency_key:
-        existing = await get_collection(SALES_INVOICES_COLLECTION).find_one(
+        existing = await business_service.get_collection(SALES_INVOICES_COLLECTION).find_one(
             {
                 "tenant_id": tenant_id,
                 "app_key": app_key,
@@ -361,12 +354,12 @@ async def create_sales_invoice(
     )
     _validate_required_invoice_fields(payload, settings)
 
-    await validate_dimension_refs(
+    await business_service.validate_dimension_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
     )
     for item in payload.line_items:
-        await validate_dimension_refs(
+        await business_service.validate_dimension_refs(
             tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
             cost_centre_id=getattr(item, "cost_centre_id", None),
             project_id=getattr(item, "project_id", None),
@@ -404,7 +397,7 @@ async def create_sales_invoice(
 
     invoice_id = str(uuid4())
     numbering = InvoiceSettings(**{k: settings[k] for k in ("field_config", "numbering", "custom_fields", "branding") if k in settings}).numbering
-    invoice_number = await _reserve_invoice_number(
+    invoice_number = await business_service._reserve_invoice_number(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
@@ -457,7 +450,7 @@ async def create_sales_invoice(
     }
     if idempotency_key:
         doc["idempotency_key"] = idempotency_key
-    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    invoices = business_service.get_collection(SALES_INVOICES_COLLECTION)
     await invoices.insert_one(doc)
     result = _invoice_response_doc(doc, created=True)
     await _audit_business_event(
@@ -482,7 +475,7 @@ async def cancel_sales_invoice(
     payload: SalesInvoiceCancelRequest,
     idempotency_key: str | None,
 ) -> dict:
-    invoices = get_collection(SALES_INVOICES_COLLECTION)
+    invoices = business_service.get_collection(SALES_INVOICES_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -514,7 +507,7 @@ async def cancel_sales_invoice(
 
     old_invoice = _invoice_response_doc(invoice)
     reversal_key = idempotency_key or f"sales-invoice-cancel:{invoice_id}"
-    reversal, created = await reverse_journal_entry(
+    reversal, created = await business_service.reverse_journal_entry(
         session,
         tenant_id=tenant_id,
         app_key=app_key,

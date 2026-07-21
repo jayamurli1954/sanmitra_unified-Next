@@ -14,10 +14,8 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
-    initialize_default_chart_of_accounts,
-    post_journal_entry,
 )
-from app.db.mongo import get_collection
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     BillPaymentUpdateRequest,
     ItcReclaimActionRequest,
@@ -38,8 +36,6 @@ from app.modules.business.service import (
     _now,
     _period_key,
     _period_label,
-    _resolve_voucher_account_id,
-    is_gst_period_locked,
 )
 
 
@@ -87,7 +83,7 @@ async def mark_bill_payment(
 ) -> dict:
     """Record how much of a posted bill has been paid. Drives the Rule 37
     180-day non-payment test; the cash/bank movement itself is a separate voucher."""
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -157,7 +153,7 @@ async def preview_itc_reversals(
     """Scan posted bills and flag those whose ITC must be reversed under Rule 37:
     unpaid (or partial) beyond 180 days from the bill date, not already reversed."""
     as_of = as_of or date.today()
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     rows = await (
         bills.find(
             {
@@ -236,7 +232,7 @@ async def reverse_itc_for_bill(
 ) -> dict:
     """Post the Rule 37 ITC reversal for a bill: park the credit as recoverable and
     add 18% interest. Crediting Input GST raises the reversal period's net payable."""
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -263,7 +259,7 @@ async def reverse_itc_for_bill(
         raise AccountingValidationError("Reversal date cannot precede the bill date")
 
     reversal_period = _period_key(reversal_date)
-    if await is_gst_period_locked(
+    if await business_service.is_gst_period_locked(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
@@ -275,7 +271,7 @@ async def reverse_itc_for_bill(
         )
 
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -286,25 +282,25 @@ async def reverse_itc_for_bill(
     interest = _compute_itc_interest(itc_total, bill_date, reversal_date)
 
     # Dr ITC Reversed (Recoverable); Cr Input CGST/SGST/IGST (reduce ITC -> raises net payable).
-    recoverable_id = await _resolve_voucher_account_id(
+    recoverable_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         account_id=None, account_code=ITC_REVERSAL_RECOVERABLE_CODE, side="ITC reversal",
     )
     journal_lines = [JournalLineIn(account_id=recoverable_id, debit=itc_total, credit=Decimal("0"))]
     for head, code in (("cgst", INPUT_CGST_CODE), ("sgst", INPUT_SGST_CODE), ("igst", INPUT_IGST_CODE)):
         if split[head] > 0:
-            acc = await _resolve_voucher_account_id(
+            acc = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
                 account_id=None, account_code=code, side="input GST",
             )
             journal_lines.append(JournalLineIn(account_id=acc, debit=Decimal("0"), credit=split[head]))
     # Interest (non-reclaimable): Dr Interest on GST (expense); Cr Interest Payable on GST.
     if interest > 0:
-        interest_exp = await _resolve_voucher_account_id(
+        interest_exp = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
             account_id=None, account_code=GST_INTEREST_EXPENSE_CODE, side="interest expense",
         )
-        interest_pay = await _resolve_voucher_account_id(
+        interest_pay = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
             account_id=None, account_code=GST_INTEREST_PAYABLE_CODE, side="interest payable",
         )
@@ -312,7 +308,7 @@ async def reverse_itc_for_bill(
         journal_lines.append(JournalLineIn(account_id=interest_pay, debit=Decimal("0"), credit=interest))
 
     bill_number = bill.get("bill_number")
-    journal_entry, created = await post_journal_entry(
+    journal_entry, created = await business_service.post_journal_entry(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by,
         payload=JournalPostRequest(
@@ -356,7 +352,7 @@ async def reclaim_itc_for_bill(
 ) -> dict:
     """Re-avail ITC previously reversed under Rule 37, once the bill is paid.
     Interest already charged is not reclaimable. GSTR-3B reference: 4(D)(1)."""
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -381,7 +377,7 @@ async def reclaim_itc_for_bill(
 
     reclaim_date = payload.reclaim_date or date.today()
     reclaim_period = _period_key(reclaim_date)
-    if await is_gst_period_locked(
+    if await business_service.is_gst_period_locked(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=payload.accounting_entity_id,
@@ -393,7 +389,7 @@ async def reclaim_itc_for_bill(
         )
 
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -405,19 +401,19 @@ async def reclaim_itc_for_bill(
     journal_lines = []
     for head, code in (("cgst", INPUT_CGST_CODE), ("sgst", INPUT_SGST_CODE), ("igst", INPUT_IGST_CODE)):
         if split[head] > 0:
-            acc = await _resolve_voucher_account_id(
+            acc = await business_service._resolve_voucher_account_id(
                 session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
                 account_id=None, account_code=code, side="input GST",
             )
             journal_lines.append(JournalLineIn(account_id=acc, debit=split[head], credit=Decimal("0")))
-    recoverable_id = await _resolve_voucher_account_id(
+    recoverable_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         account_id=None, account_code=ITC_REVERSAL_RECOVERABLE_CODE, side="ITC reversal",
     )
     journal_lines.append(JournalLineIn(account_id=recoverable_id, debit=Decimal("0"), credit=itc_total))
 
     bill_number = bill.get("bill_number")
-    journal_entry, created = await post_journal_entry(
+    journal_entry, created = await business_service.post_journal_entry(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         created_by=created_by,
         payload=JournalPostRequest(

@@ -15,14 +15,10 @@ from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
-    initialize_default_chart_of_accounts,
-    post_journal_entry,
-    reverse_journal_entry,
 )
-from app.db.mongo import get_collection
-from app.modules.business.dimensions import validate_dimension_refs
 from app.modules.business.inventory import validate_item_refs
 from app.modules.business.tds import compute_tds
+from app.modules.business import service as business_service
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
     PurchaseBillCancelRequest,
@@ -39,8 +35,6 @@ from app.modules.business.service import (
     _audit_business_event,
     _compute_invoice_lines,
     _now,
-    _resolve_voucher_account_id,
-    _reverse_after_domain_persistence_failure,
     _validate_reversal_period,
     get_gst_profile,
     get_party,
@@ -83,7 +77,7 @@ async def list_purchase_bills(
         filters["approval_status"] = approval_status
     safe_limit = max(1, min(int(limit or 100), 500))
     rows = (
-        await get_collection(PURCHASE_BILLS_COLLECTION)
+        await business_service.get_collection(PURCHASE_BILLS_COLLECTION)
         .find(filters)
         .sort("bill_date", -1)
         .limit(safe_limit)
@@ -99,7 +93,7 @@ async def get_purchase_bill(
     accounting_entity_id: str,
     bill_id: str,
 ) -> dict | None:
-    row = await get_collection(PURCHASE_BILLS_COLLECTION).find_one(
+    row = await business_service.get_collection(PURCHASE_BILLS_COLLECTION).find_one(
         {
             "tenant_id": tenant_id,
             "app_key": app_key,
@@ -119,7 +113,7 @@ async def review_purchase_bill(
     reviewed_by: str,
     payload: ApprovalReviewRequest,
 ) -> dict:
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -233,11 +227,11 @@ async def _approve_purchase_bill_document(
     expense_account_code = str(bill.get("expense_account_code") or "51001")
     vendor_party_id = str(bill.get("vendor_party_id") or "")
 
-    payable_id = await _resolve_voucher_account_id(
+    payable_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=PURCHASE_PAYABLE_CODE, side="payable",
     )
-    expense_id = await _resolve_voucher_account_id(
+    expense_id = await business_service._resolve_voucher_account_id(
         session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
         account_id=None, account_code=expense_account_code, side="expense",
     )
@@ -247,29 +241,29 @@ async def _approve_purchase_bill_document(
         journal_lines = [JournalLineIn(account_id=expense_id, debit=taxable_total, credit=Decimal("0"))]
         for gst_amount, code in ((cgst_total, INPUT_CGST_CODE), (sgst_total, INPUT_SGST_CODE), (igst_total, INPUT_IGST_CODE)):
             if gst_amount > Decimal("0"):
-                input_gst_id = await _resolve_voucher_account_id(
+                input_gst_id = await business_service._resolve_voucher_account_id(
                     session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
                     account_id=None, account_code=code, side="input GST",
                 )
                 journal_lines.append(JournalLineIn(account_id=input_gst_id, debit=gst_amount, credit=Decimal("0")))
     if is_rcm and gst_total > Decimal("0"):
-        rcm_payable_id = await _resolve_voucher_account_id(
+        rcm_payable_id = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
             account_id=None, account_code=RCM_PAYABLE_CODE, side="RCM payable",
         )
         journal_lines.append(JournalLineIn(account_id=rcm_payable_id, debit=Decimal("0"), credit=gst_total))
     if tds_amount > Decimal("0"):
-        tds_payable_id = await _resolve_voucher_account_id(
+        tds_payable_id = await business_service._resolve_voucher_account_id(
             session, tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id,
             account_id=None, account_code=TDS_PAYABLE_CODE, side="TDS payable",
         )
         journal_lines.append(JournalLineIn(account_id=tds_payable_id, debit=Decimal("0"), credit=tds_amount))
     journal_lines.append(JournalLineIn(account_id=payable_id, debit=Decimal("0"), credit=net_payable, party_id=vendor_party_id))
 
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     description = f"Purchase Bill {bill_number} - {bill.get('vendor_name') or vendor_party_id}"
     try:
-        journal_entry, created = await post_journal_entry(
+        journal_entry, created = await business_service.post_journal_entry(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -308,7 +302,7 @@ async def _approve_purchase_bill_document(
             {"$set": patch},
         )
     except Exception as exc:
-        await _reverse_after_domain_persistence_failure(
+        await business_service._reverse_after_domain_persistence_failure(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -348,7 +342,7 @@ async def create_purchase_bill(
     idempotency_key: str | None,
 ) -> dict:
     if app_key == "mitrabooks":
-        await initialize_default_chart_of_accounts(
+        await business_service.initialize_default_chart_of_accounts(
             session,
             tenant_id=tenant_id,
             app_key=app_key,
@@ -357,7 +351,7 @@ async def create_purchase_bill(
         )
 
     if idempotency_key:
-        existing = await get_collection(PURCHASE_BILLS_COLLECTION).find_one(
+        existing = await business_service.get_collection(PURCHASE_BILLS_COLLECTION).find_one(
             {
                 "tenant_id": tenant_id,
                 "app_key": app_key,
@@ -377,12 +371,12 @@ async def create_purchase_bill(
     if vendor is None:
         raise AccountingValidationError("Vendor party not found for this tenant")
 
-    await validate_dimension_refs(
+    await business_service.validate_dimension_refs(
         tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
         cost_centre_id=payload.cost_centre_id, project_id=payload.project_id,
     )
     for item in payload.line_items:
-        await validate_dimension_refs(
+        await business_service.validate_dimension_refs(
             tenant_id=tenant_id, app_key=app_key, accounting_entity_id=payload.accounting_entity_id,
             cost_centre_id=getattr(item, "cost_centre_id", None),
             project_id=getattr(item, "project_id", None),
@@ -467,7 +461,7 @@ async def create_purchase_bill(
     }
     if idempotency_key:
         doc["idempotency_key"] = idempotency_key
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     await bills.insert_one(doc)
     result = _bill_response_doc(doc, created=True)
     await _audit_business_event(
@@ -492,7 +486,7 @@ async def cancel_purchase_bill(
     payload: PurchaseBillCancelRequest,
     idempotency_key: str | None,
 ) -> dict:
-    bills = get_collection(PURCHASE_BILLS_COLLECTION)
+    bills = business_service.get_collection(PURCHASE_BILLS_COLLECTION)
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
@@ -524,7 +518,7 @@ async def cancel_purchase_bill(
 
     old_bill = _bill_response_doc(bill)
     reversal_key = idempotency_key or f"purchase-bill-cancel:{bill_id}"
-    reversal, created = await reverse_journal_entry(
+    reversal, created = await business_service.reverse_journal_entry(
         session,
         tenant_id=tenant_id,
         app_key=app_key,
