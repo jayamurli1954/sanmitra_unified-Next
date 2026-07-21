@@ -1,14 +1,11 @@
 {
   "frontend/mitrabooks-erp/app.js": 20373,
-  "app/modules/mandir_compat/router.py": 823,
   "frontend/shared/app-shell.css": 6275,
-  "app/modules/housing_compat/router.py": 488,
   "frontend/mitrabooks-erp/index.css": 4992,
   "tests/test_business_phase2.py": 4428,
   "frontend/gruhamitra/src/screens/AccountingScreen.jsx": 3738,
   "frontend/e2e/mitrabooks-shell.spec.js": 2935,
   "tests/test_mandir_posting_guardrails.py": 2571,
-  "app/accounting/service.py": 2538,
   "frontend/gruhamitra/src/screens/MembersScreen.jsx": 2162,
   "frontend/gruhamitra/src/styles.css": 2125,
   "app/modules/legal_compat/router.py": 2087,
@@ -30,8 +27,8 @@
   "frontend/src/components/PanchangDisplay.js": 1254,
   "frontend/gruhamitra/src/screens/settings/FlatsBlocksTab.jsx": 1191,
   "app/modules/mandir_compat/report_helpers.py": 1182,
+  "app/accounting/reports/__init__.py": 1161,
   "app/modules/business/gst_returns.py": 1093,
-  "app/modules/business/service.py": 416,
   "app/modules/legal_compat/template_drafting.py": 1032,
   "frontend/gruhamitra/src/screens/VisitorsScreen.jsx": 1032,
   "frontend/src/pages/SevaManagement.js": 972,
@@ -41,7 +38,11 @@
   "app/modules/rag/service.py": 901,
   "frontend/src/pages/accounting/JournalEntries.js": 859,
   "frontend/src/pages/accounting/QuickExpense.js": 840,
+  "app/modules/mandir_compat/router.py": 823,
   "frontend/src/pages/accounting/ChartOfAccounts.js": 812,
   "tests/test_mandir_app_key_isolation.py": 808,
-  "app/core/onboarding/service.py": 801
+  "app/core/onboarding/service.py": 801,
+  "app/accounting/service.py": 588,
+  "app/modules/housing_compat/router.py": 488,
+  "app/modules/business/service.py": 416
 }
