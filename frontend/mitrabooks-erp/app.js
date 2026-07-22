@@ -138,6 +138,26 @@ import {
   rerenderSalesIfActive,
 } from "./modules/documents/sales-invoices.js";
 
+import {
+  initPurchaseBills,
+  purchaseUi,
+  loadBusinessBills,
+  syncBillFormFromDom,
+  updateBillTotalsDisplay,
+  setBusinessPurchaseView,
+  openBillCreate,
+  addBillLine,
+  removeBillLine,
+  submitBill,
+  openBillDetail,
+  loadBillAttachments,
+  cancelBill,
+  renderBusinessPurchaseWorkspace,
+  rerenderPurchaseIfActive,
+  vendorPartyOptions,
+  expenseAccountOptions,
+} from "./modules/documents/purchase-bills.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -1085,8 +1105,6 @@ function caPracticeClientBreakdown(rows) {
     .map(([client, count]) => ({ client, count }));
 }
 
-let lastBillAttachments = [];
-let billAttachmentsLoading = false;
 let caDocumentAttachmentState = {
   document_id: "",
   client_name: "",
@@ -6379,7 +6397,7 @@ function setBusinessWorkspace(workspace) {
     loadAccountingDrilldownResult();
     loadBusinessDataHealth();
   } else if (workspace === "bills") {
-    purchaseView = "list";
+    purchaseUi.view = "list";
     loadBusinessParties();
     loadBusinessAccounts();
     loadBusinessBills();
@@ -9924,8 +9942,6 @@ function round2(value) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-let billReverseOpen = false;
-
 // Reversal must stay within the document's GST month. Returns the date input
 // bounds + a sensible default (today if in-month, else month end).
 function reversalDateBounds(isoDate) {
@@ -10109,565 +10125,6 @@ function renderVoucherApprovalQueuePanel(items) {
 
 
 
-
-// ========== Business Module: Purchase Bills (Input GST / ITC) ==========
-
-let purchaseView = "list"; // list | create | detail
-let lastBusinessBills = [];
-let lastBillDetail = null;
-let billLineSeq = 0;
-let billFormLines = [];
-const billFormHeader = {
-  vendor_party_id: "",
-  bill_number: "",
-  bill_date: todayIsoDate(),
-  due_date: "",
-  is_inter_state: false,
-  is_reverse_charge: false,
-  expense_account_code: "51001",
-  place_of_supply: "",
-  notes: "",
-  tds_section: "",
-  cost_centre_id: "",
-  project_id: "",
-};
-
-function rerenderPurchaseIfActive() {
-  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "bills") {
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    if (purchaseView === "create") {
-      focusBusinessEntryField("[data-bill-form] select[name='vendor_party_id']");
-    }
-  }
-}
-
-async function loadBusinessBills() {
-  const result = await apiRequest("mitrabooks", "/api/v1/business/bills?limit=100", { method: "GET" });
-  if (result.ok) {
-    lastBusinessBills = Array.isArray(result.payload?.items) ? result.payload.items : [];
-  } else {
-    lastBusinessBills = [];
-    setLoginStatus("danger", "Unable to load bills", statusDetailText(result.payload?.detail) || `Bill list request failed with HTTP ${result.status}.`);
-  }
-  rerenderPurchaseIfActive();
-  renderJson(apiOutput, { bills: { ok: result.ok, status: result.status, count: lastBusinessBills.length } });
-}
-
-function vendorPartyOptions() {
-  return (Array.isArray(lastBusinessParties) ? lastBusinessParties : [])
-    .filter((p) => ["vendor", "both"].includes(String(p.party_type || "").toLowerCase()));
-}
-
-function expenseAccountOptions() {
-  return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("5"));
-}
-
-function syncBillFormFromDom() {
-  const form = document.querySelector("[data-bill-form]");
-  if (!form) return;
-  const val = (sel) => form.querySelector(sel)?.value ?? "";
-  billFormHeader.vendor_party_id = val("select[name='vendor_party_id']");
-  billFormHeader.bill_number = val("input[name='bill_number']");
-  billFormHeader.bill_date = val("input[name='bill_date']") || todayIsoDate();
-  billFormHeader.due_date = val("input[name='due_date']");
-  billFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
-  billFormHeader.is_reverse_charge = !!form.querySelector("input[name='is_reverse_charge']")?.checked;
-  billFormHeader.expense_account_code = val("select[name='expense_account_code']") || "51001";
-  billFormHeader.place_of_supply = val("input[name='place_of_supply']");
-  billFormHeader.notes = val("textarea[name='notes']");
-  billFormHeader.tds_section = val("select[name='tds_section']");
-  billFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
-  billFormHeader.project_id = val("select[name='project_id']");
-  billFormLines = Array.from(form.querySelectorAll("[data-bill-line]")).map((row) => ({
-    id: row.getAttribute("data-bill-line"),
-    description: row.querySelector("input[name='description']")?.value || "",
-    item_id: row.querySelector("select[name='item_id']")?.value || "",
-    hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
-    quantity: row.querySelector("input[name='quantity']")?.value || "",
-    rate: row.querySelector("input[name='rate']")?.value || "",
-    gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
-    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
-    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
-  }));
-}
-
-function updateBillTotalsDisplay() {
-  const form = document.querySelector("[data-bill-form]");
-  if (!form) return;
-  const inter = !!form.querySelector("input[name='is_inter_state']")?.checked;
-  let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
-  form.querySelectorAll("[data-bill-line]").forEach((row) => {
-    const c = computeInvoiceLine(
-      row.querySelector("input[name='quantity']")?.value,
-      row.querySelector("input[name='rate']")?.value,
-      row.querySelector("input[name='gst_rate']")?.value,
-      inter,
-    );
-    row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
-    row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
-    row.querySelector("[data-line-total]").textContent = formatCurrency(c.total);
-    taxableTotal += c.taxable; cgstTotal += c.cgst; sgstTotal += c.sgst; igstTotal += c.igst;
-  });
-  const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
-  const billTotal = round2(taxableTotal + gstTotal);
-  // TDS is deducted on the GST-exclusive taxable value (Circular 23/2017).
-  const tdsSection = form.querySelector("select[name='tds_section']")?.value || "";
-  const tdsAmount = tdsSection ? round2(taxableTotal * tdsSectionRate("tds", tdsSection) / 100) : 0;
-  // Under RCM the vendor is owed the taxable value only; the GST is our own
-  // (cash-only) liability shown on its own row.
-  const isRcm = !!form.querySelector("input[name='is_reverse_charge']")?.checked;
-  const vendorOwed = isRcm ? taxableTotal : billTotal;
-  const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
-  set("[data-total-taxable]", taxableTotal);
-  set("[data-total-cgst]", cgstTotal);
-  set("[data-total-sgst]", sgstTotal);
-  set("[data-total-igst]", igstTotal);
-  set("[data-total-bill]", billTotal);
-  set("[data-total-rcm]", gstTotal);
-  set("[data-total-tds]", tdsAmount);
-  set("[data-total-net-payable]", round2(vendorOwed - tdsAmount));
-  const rcmRow = form.querySelector("[data-row-rcm]");
-  const tdsRow = form.querySelector("[data-row-tds]");
-  const netRow = form.querySelector("[data-row-net-payable]");
-  if (rcmRow) rcmRow.hidden = !isRcm;
-  if (tdsRow) tdsRow.hidden = !tdsSection;
-  if (netRow) netRow.hidden = !(tdsSection || isRcm);
-  const cgstRow = form.querySelector("[data-row-cgst]");
-  const sgstRow = form.querySelector("[data-row-sgst]");
-  const igstRow = form.querySelector("[data-row-igst]");
-  if (cgstRow && sgstRow && igstRow) {
-    cgstRow.hidden = inter;
-    sgstRow.hidden = inter;
-    igstRow.hidden = !inter;
-  }
-}
-
-function setBusinessPurchaseView(view) {
-  purchaseView = view;
-  billReverseOpen = false;
-  rerenderPurchaseIfActive();
-  if (view === "create") {
-    updateBillTotalsDisplay();
-    focusBusinessEntryField("[data-bill-form] select[name='vendor_party_id']");
-  }
-}
-
-function openBillCreate() {
-  billFormLines = [{ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
-  billFormHeader.vendor_party_id = "";
-  billFormHeader.bill_number = "";
-  billFormHeader.bill_date = todayIsoDate();
-  billFormHeader.due_date = "";
-  billFormHeader.is_inter_state = false;
-  billFormHeader.is_reverse_charge = false;
-  billFormHeader.expense_account_code = "51001";
-  billFormHeader.place_of_supply = "";
-  billFormHeader.notes = "";
-  billFormHeader.tds_section = "";
-  billFormHeader.cost_centre_id = "";
-  billFormHeader.project_id = "";
-  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
-  if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
-  if (!tdsSectionsCache) loadTdsSections().then(() => rerenderPurchaseIfActive());
-  if (!lastDimensions) loadDimensions().then(() => rerenderPurchaseIfActive());
-  if (!lastInventoryItems) loadInventoryItems().then(() => rerenderPurchaseIfActive());
-  setBusinessPurchaseView("create");
-}
-
-function addBillLine() {
-  syncBillFormFromDom();
-  billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
-  rerenderPurchaseIfActive();
-  updateBillTotalsDisplay();
-}
-
-function removeBillLine(lineId) {
-  syncBillFormFromDom();
-  billFormLines = billFormLines.filter((l) => l.id !== lineId);
-  if (billFormLines.length === 0) {
-    billFormLines.push({ id: `bl-${++billLineSeq}`, description: "", hsn_sac: "", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
-  }
-  rerenderPurchaseIfActive();
-  updateBillTotalsDisplay();
-}
-
-async function submitBill() {
-  syncBillFormFromDom();
-  if (!billFormHeader.vendor_party_id) {
-    setLoginStatus("warn", "Vendor required", "Select a vendor for this bill.");
-    return;
-  }
-  if (!String(billFormHeader.bill_number || "").trim()) {
-    setLoginStatus("warn", "Bill number required", "Enter the supplier's bill/invoice number.");
-    return;
-  }
-  const lineItems = billFormLines
-    .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
-    .map((l) => ({
-      description: String(l.description).trim(),
-      item_id: String(l.item_id || "").trim() || null,
-      hsn_sac: String(l.hsn_sac || "").trim() || null,
-      quantity: String(Number(l.quantity)),
-      rate: String(Number(l.rate || 0)),
-      gst_rate: String(Number(l.gst_rate || 0)),
-      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
-      project_id: String(l.project_id || "").trim() || null,
-    }));
-  if (lineItems.length === 0) {
-    setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
-    return;
-  }
-  const body = {
-    vendor_party_id: billFormHeader.vendor_party_id,
-    bill_number: String(billFormHeader.bill_number).trim(),
-    bill_date: billFormHeader.bill_date || todayIsoDate(),
-    due_date: billFormHeader.due_date || null,
-    is_inter_state: !!billFormHeader.is_inter_state,
-    is_reverse_charge: !!billFormHeader.is_reverse_charge,
-    expense_account_code: billFormHeader.expense_account_code || "51001",
-    place_of_supply: String(billFormHeader.place_of_supply || "").trim() || null,
-    notes: String(billFormHeader.notes || "").trim() || null,
-    line_items: lineItems,
-    tds_section: billFormHeader.tds_section || null,
-    cost_centre_id: billFormHeader.cost_centre_id || null,
-    project_id: billFormHeader.project_id || null,
-  };
-  const result = await apiRequest("mitrabooks", "/api/v1/business/bills", {
-    method: "POST",
-    headers: { "X-Idempotency-Key": `purchase-bill-${Date.now()}` },
-    body: JSON.stringify(body),
-  });
-  if (result.ok) {
-    setLoginStatus("ok", "Bill posted", `${result.payload?.bill_number || "Bill"} posted to the ledger.`);
-    await loadBusinessBills();
-    setBusinessPurchaseView("list");
-  } else {
-    setLoginStatus("danger", "Bill posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { create_bill: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
-}
-
-async function openBillDetail(billId) {
-  billAttachmentsLoading = true;
-  lastBillAttachments = [];
-  const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}`, { method: "GET" });
-  if (result.ok) {
-    lastBillDetail = result.payload;
-    setBusinessPurchaseView("detail");
-    await loadBillAttachments(billId);
-  } else {
-    billAttachmentsLoading = false;
-    setLoginStatus("danger", "Unable to load bill", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { bill_detail: { ok: result.ok, status: result.status } });
-}
-
-async function loadBillAttachments(billId) {
-  if (!billId) {
-    lastBillAttachments = [];
-    billAttachmentsLoading = false;
-    rerenderPurchaseIfActive();
-    return { ok: false, status: 0, payload: { detail: "Missing bill id." } };
-  }
-  billAttachmentsLoading = true;
-  rerenderPurchaseIfActive();
-  const result = await listBusinessAttachments("purchase_bill", billId);
-  lastBillAttachments = result.ok ? (Array.isArray(result.payload?.items) ? result.payload.items : []) : [];
-  billAttachmentsLoading = false;
-  if (!result.ok) {
-    setLoginStatus("warn", "Unable to load bill files", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  rerenderPurchaseIfActive();
-  renderJson(apiOutput, { bill_attachments: { ok: result.ok, status: result.status, count: lastBillAttachments.length } });
-  return result;
-}
-
-async function cancelBill(billId, reversalDate) {
-  const body = { reason: "Reversal" };
-  if (reversalDate) body.cancel_date = reversalDate;
-  const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/cancel`, {
-    method: "POST",
-    headers: { "X-Idempotency-Key": `purchase-bill-cancel-${billId}-${reversalDate || "today"}` },
-    body: JSON.stringify(body),
-  });
-  if (result.ok) {
-    billReverseOpen = false;
-    setLoginStatus("ok", "Bill reversed", "A reversing journal entry was posted.");
-    await loadBusinessBills();
-    if (lastBillDetail && lastBillDetail.bill_id === billId) {
-      lastBillDetail = result.payload;
-    }
-    rerenderPurchaseIfActive();
-  } else {
-    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { cancel_bill: { ok: result.ok, status: result.status } });
-}
-
-function renderBillListTable() {
-  const rows = lastBusinessBills;
-  return `
-    <div class="table-preview compact-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Bill #</th>
-            <th>Date</th>
-            <th>Vendor</th>
-            <th class="amount">Taxable</th>
-            <th class="amount">ITC</th>
-            <th class="amount">Total</th>
-            <th>Status</th>
-            <th>Open</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.length ? rows.map((b) => `
-            <tr>
-              <td>${escapeHtml(b.bill_number || "")}</td>
-              <td>${escapeHtml(b.bill_date || "")}</td>
-              <td>${escapeHtml(b.vendor_name || b.vendor_party_id || "")}</td>
-              <td class="amount">${escapeHtml(formatCurrency(b.taxable_total || 0))}</td>
-              <td class="amount">${escapeHtml(formatCurrency(b.gst_total || 0))}</td>
-              <td class="amount">${escapeHtml(formatCurrency(b.bill_total || 0))}</td>
-              <td>${invoiceStatusPill(b.status)}</td>
-              <td><button class="secondary" type="button" data-business-action="view-bill" data-bill-id="${escapeHtml(b.bill_id)}">View</button></td>
-            </tr>
-          `).join("") : `<tr><td colspan="8" class="muted">No bills yet. Record your first vendor bill.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderBillCreateForm() {
-  const vendors = vendorPartyOptions();
-  const expenseAccounts = expenseAccountOptions();
-  const itemSelectable = !!inventoryItemOptions("");
-  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
-  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
-  const hasLineDimensions = !!(lineCostCentreOptions("") || lineProjectOptions(""));
-  const lineRows = billFormLines.map((l) => `
-    <tr data-bill-line="${escapeHtml(l.id)}">
-      <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
-      ${itemSelectable ? `<td><select name="item_id" style="min-width:110px;">${inventoryItemOptions(l.item_id || "")}</select></td>` : ""}
-      <td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>
-      <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
-      <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
-      <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
-      ${hasLineDimensions ? `<td class="line-dimensions">
-        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
-        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
-      </td>` : ""}
-      <td class="amount" data-line-taxable>—</td>
-      <td class="amount" data-line-gst>—</td>
-      <td class="amount" data-line-total>—</td>
-      <td><button class="secondary" type="button" data-business-action="remove-bill-line" data-line-id="${escapeHtml(l.id)}">✕</button></td>
-    </tr>
-  `).join("");
-
-  return `
-    <div class="verification-panel erp-workspace-panel" data-bill-form>
-      <div class="preview-heading compact">
-        <div>
-          <h4>New Purchase Bill</h4>
-          <p>Record a vendor bill. It posts to expenses, input GST (ITC), and accounts payable automatically.</p>
-        </div>
-        <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
-      </div>
-      <div class="invoice-form-grid">
-        <label>Vendor
-          <select name="vendor_party_id">
-            <option value="">Select vendor</option>
-            ${vendors.map((v) => `<option value="${escapeHtml(v.party_id)}" ${v.party_id === billFormHeader.vendor_party_id ? "selected" : ""}>${escapeHtml(v.party_name)}${v.gstin ? ` (${escapeHtml(v.gstin)})` : ""}</option>`).join("")}
-          </select>
-        </label>
-        <label>Supplier bill no. *
-          <input type="text" name="bill_number" value="${escapeHtml(billFormHeader.bill_number)}" placeholder="Vendor's invoice number">
-        </label>
-        <label>Bill date
-          <input type="date" name="bill_date" value="${escapeHtml(billFormHeader.bill_date)}">
-        </label>
-        <label>Due date
-          <input type="date" name="due_date" value="${escapeHtml(billFormHeader.due_date)}">
-        </label>
-        <label>Expense account
-          <select name="expense_account_code">
-            ${expenseAccounts.length ? expenseAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === billFormHeader.expense_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="51001" selected>51001 - Purchases</option>`}
-          </select>
-        </label>
-        <label>Place of supply
-          <input type="text" name="place_of_supply" value="${escapeHtml(billFormHeader.place_of_supply)}" placeholder="State / code">
-        </label>
-        <label>TDS (income-tax, on taxable value)
-          <select name="tds_section">${tdsSectionOptions("tds", billFormHeader.tds_section)}</select>
-        </label>
-        ${dimensionOptions("cost_centre", billFormHeader.cost_centre_id) ? `<label>Cost centre
-          <select name="cost_centre_id">${dimensionOptions("cost_centre", billFormHeader.cost_centre_id)}</select>
-        </label>` : ""}
-        ${dimensionOptions("project", billFormHeader.project_id) ? `<label>Project
-          <select name="project_id">${dimensionOptions("project", billFormHeader.project_id)}</select>
-        </label>` : ""}
-        <label class="invoice-inter-toggle">
-          <input type="checkbox" name="is_inter_state" ${billFormHeader.is_inter_state ? "checked" : ""}>
-          Inter-state supply (IGST)
-        </label>
-        <label class="invoice-inter-toggle">
-          <input type="checkbox" name="is_reverse_charge" ${billFormHeader.is_reverse_charge ? "checked" : ""}>
-          Reverse charge (RCM) — you pay the GST, not the vendor
-        </label>
-      </div>
-
-      <div class="table-preview compact-table invoice-lines">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              ${itemSelectable ? `<th>Item</th>` : ""}
-              <th>HSN/SAC</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>GST %</th>
-              ${hasLineDimensions ? `<th>Line dimensions</th>` : ""}
-              <th class="amount">Taxable</th>
-              <th class="amount">ITC</th>
-              <th class="amount">Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>${lineRows}</tbody>
-        </table>
-      </div>
-      <button class="secondary" type="button" data-business-action="add-bill-line" aria-keyshortcuts="Alt+L">+ Add line</button>
-
-      <div class="invoice-totals">
-        <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
-        <div data-row-cgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input CGST</span><strong data-total-cgst>${formatCurrency(0)}</strong></div>
-        <div data-row-sgst ${billFormHeader.is_inter_state ? "hidden" : ""}><span>Input SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
-        <div data-row-igst ${billFormHeader.is_inter_state ? "" : "hidden"}><span>Input IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
-        <div class="invoice-grand"><span>Bill total</span><strong data-total-bill>${formatCurrency(0)}</strong></div>
-        <div data-row-rcm ${billFormHeader.is_reverse_charge ? "" : "hidden"}><span>GST payable under RCM (cash)</span><strong data-total-rcm>${formatCurrency(0)}</strong></div>
-        <div data-row-tds ${billFormHeader.tds_section ? "" : "hidden"}><span>TDS deducted</span><strong data-total-tds>${formatCurrency(0)}</strong></div>
-        <div class="invoice-grand" data-row-net-payable ${(billFormHeader.tds_section || billFormHeader.is_reverse_charge) ? "" : "hidden"}><span>Net payable to vendor</span><strong data-total-net-payable>${formatCurrency(0)}</strong></div>
-      </div>
-
-      <label class="invoice-notes">Notes
-        <textarea name="notes" rows="2" placeholder="Optional notes">${escapeHtml(billFormHeader.notes)}</textarea>
-      </label>
-
-      <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-bill" aria-keyshortcuts="Control+Enter">Post Bill</button>
-        <button class="secondary" type="button" data-business-action="bill-back">Cancel</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderBillDetail() {
-  const b = lastBillDetail;
-  if (!b) {
-    return `<div class="verification-panel erp-workspace-panel"><p class="muted">Bill not found.</p></div>`;
-  }
-  const lines = Array.isArray(b.line_items) ? b.line_items : [];
-  const taxRow = b.is_inter_state
-    ? `<div><span>Input IGST</span><strong>${formatCurrency(b.igst_total || 0)}</strong></div>`
-    : `<div><span>Input CGST</span><strong>${formatCurrency(b.cgst_total || 0)}</strong></div><div><span>Input SGST</span><strong>${formatCurrency(b.sgst_total || 0)}</strong></div>`;
-  return `
-    <div class="verification-panel erp-workspace-panel">
-      <div class="preview-heading compact">
-        <div>
-          <h4>Bill ${escapeHtml(b.bill_number || "")} ${invoiceStatusPill(b.status)}</h4>
-          <p>${escapeHtml(b.vendor_name || b.vendor_party_id || "")}${b.vendor_gstin ? ` · ${escapeHtml(b.vendor_gstin)}` : ""} · ${escapeHtml(b.bill_date || "")}${b.due_date ? ` · due ${escapeHtml(b.due_date)}` : ""}</p>
-        </div>
-        <div class="invoice-detail-actions">
-          <button class="secondary" type="button" data-business-action="bill-back">← Back to list</button>
-          ${String(b.status).toLowerCase() === "posted" && !billReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-bill">Reverse Bill</button>` : ""}
-        </div>
-      </div>
-      ${String(b.status).toLowerCase() === "posted" && billReverseOpen ? reversalPanel("bill", b.bill_id, b.bill_date) : ""}
-      <p class="muted">${escapeHtml(b.is_inter_state ? "Inter-state supply (IGST input)" : "Intra-state supply (CGST + SGST input)")}${b.is_reverse_charge ? ` · <strong>Reverse charge</strong> — GST self-assessed, payable in cash` : ""}</p>
-      <div class="table-preview compact-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>HSN/SAC</th>
-              <th class="amount">Qty</th>
-              <th class="amount">Rate</th>
-              <th class="amount">GST %</th>
-              <th class="amount">Taxable</th>
-              <th class="amount">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lines.map((l) => `
-              <tr>
-                <td>${escapeHtml(l.description || "")}</td>
-                <td>${escapeHtml(l.hsn_sac || "")}</td>
-                <td class="amount">${escapeHtml(l.quantity || "")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.rate || 0))}</td>
-                <td class="amount">${escapeHtml(String(l.gst_rate || 0))}%</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.taxable_amount || 0))}</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.line_total || 0))}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>
-      <div class="invoice-totals">
-        <div><span>Taxable</span><strong>${formatCurrency(b.taxable_total || 0)}</strong></div>
-        ${taxRow}
-        <div class="invoice-grand"><span>Bill total</span><strong>${formatCurrency(b.bill_total || 0)}</strong></div>
-        ${b.is_reverse_charge ? `
-        <div><span>GST payable under RCM (cash)</span><strong>${formatCurrency(b.rcm_payable || 0)}</strong></div>` : ""}
-        ${Number(b.tds_amount || 0) > 0 ? `
-        <div><span>TDS ${escapeHtml(b.tds_section || "")} @ ${escapeHtml(String(b.tds_rate || 0))}%</span><strong>${formatCurrency(b.tds_amount || 0)}</strong></div>` : ""}
-        ${(b.is_reverse_charge || Number(b.tds_amount || 0) > 0) ? `
-        <div class="invoice-grand"><span>Net payable to vendor</span><strong>${formatCurrency(b.net_payable || b.bill_total || 0)}</strong></div>` : ""}
-      </div>
-      ${renderBusinessAttachmentPanel({
-        ownerType: "purchase_bill",
-        ownerId: b.bill_id || "",
-        items: lastBillAttachments,
-        loading: billAttachmentsLoading,
-        title: "Bill attachments",
-        emptyCopy: "Upload supplier scans, supporting bills, or compliance evidence for this purchase bill.",
-        uploadButtonLabel: "Upload bill files",
-      })}
-      ${b.deductee_pan_missing ? `<p class="muted">⚠ Vendor PAN missing — section 206AA prescribes deduction at 20%. Capture the PAN on the party record.</p>` : ""}
-      ${b.notes ? `<p class="muted">${escapeHtml(b.notes)}</p>` : ""}
-      ${String(b.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${b.cancel_reason ? `: ${escapeHtml(b.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(b.reversal_journal_entry_id || "")} posted.</p>` : ""}
-    </div>
-  `;
-}
-
-
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: PURCHASE BILLS WORKSPACE
-// API   : GET /api/v1/business/bills  POST /api/v1/business/bills
-// NOTE  : loadBusinessBills, submitBill, renderBusinessPurchaseWorkspace
-// ══════════════════════════════════════════════════════════════════════
-
-function renderBusinessPurchaseWorkspace() {
-  if (purchaseView === "create") {
-    return renderBillCreateForm();
-  }
-  if (purchaseView === "detail") {
-    return renderBillDetail();
-  }
-  return `
-    <div class="verification-panel erp-workspace-panel">
-      <div class="preview-heading compact">
-        <div>
-          <h4>Purchase Bills</h4>
-          <p>Vendor bills with input GST. Each posting updates expenses, ITC, and accounts payable.</p>
-        </div>
-        <button class="secondary" type="button" data-business-action="open-create-bill" aria-keyshortcuts="Control+Alt+B">+ New Bill</button>
-      </div>
-      ${renderBillListTable()}
-    </div>
-  `;
-}
 
 // ========== Business Module: Credit Notes (sales GST adjustment) ==========
 
@@ -11218,12 +10675,12 @@ async function loadDebitNotes() {
 }
 
 function resolveDebitNoteSourceBill(billId) {
-  return (Array.isArray(lastBusinessBills) ? lastBusinessBills : [])
+  return (Array.isArray(purchaseUi.bills) ? purchaseUi.bills : [])
     .find((bill) => String(bill.bill_id || "") === String(billId || ""));
 }
 
 function debitNoteSourceBillOptions(selectedId) {
-  const bills = Array.isArray(lastBusinessBills) ? lastBusinessBills : [];
+  const bills = Array.isArray(purchaseUi.bills) ? purchaseUi.bills : [];
   if (!bills.length) {
     return `<option value="">Load or create a source bill first</option>`;
   }
@@ -11328,7 +10785,7 @@ function openDebitNoteCreate() {
   dnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
-  if (!Array.isArray(lastBusinessBills) || lastBusinessBills.length === 0) loadBusinessBills();
+  if (!Array.isArray(purchaseUi.bills) || purchaseUi.bills.length === 0) loadBusinessBills();
   if (!lastDimensions) loadDimensions().then(() => rerenderDebitNoteIfActive());
   setDebitNoteView("create");
 }
@@ -15946,10 +15403,10 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "view-bill") {
     openBillDetail(button.getAttribute("data-bill-id") || "");
   } else if (businessAction === "begin-reverse-bill") {
-    billReverseOpen = true;
+    purchaseUi.reverseOpen = true;
     rerenderPurchaseIfActive();
   } else if (businessAction === "cancel-reverse-bill") {
-    billReverseOpen = false;
+    purchaseUi.reverseOpen = false;
     rerenderPurchaseIfActive();
   } else if (businessAction === "confirm-reverse-bill") {
     const billId = button.getAttribute("data-bill-id") || "";
@@ -16577,6 +16034,41 @@ initSalesInvoices({
   hasTdsSectionsCache: () => !!tdsSectionsCache,
 });
 
+// Wire purchase bills workspace (avoids import cycle with app.js)
+initPurchaseBills({
+  escapeHtml,
+  formatCurrency,
+  todayIsoDate,
+  setLoginStatus,
+  statusDetailText,
+  round2,
+  tdsSectionOptions,
+  tdsSectionRate,
+  loadTdsSections,
+  isBusinessAdmin,
+  reversalPanel,
+  focusBusinessEntryField,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+  getLastBusinessParties: () => lastBusinessParties,
+  loadBusinessParties,
+  hasLoadedBusinessAccounts,
+  loadBusinessAccounts,
+  businessAccountsForSelection,
+  dimensionOptions,
+  getLastDimensions: () => lastDimensions,
+  loadDimensions,
+  getLastInventoryItems: () => lastInventoryItems,
+  loadInventoryItems,
+  inventoryItemOptions,
+  renderBusinessAttachmentPanel,
+  listBusinessAttachments,
+  getApiOutput: () => apiOutput,
+  hasTdsSectionsCache: () => !!tdsSectionsCache,
+});
+
 // Initialize theme on app load
 initializeTheme();
 
@@ -16782,7 +16274,7 @@ function activeBusinessDocumentFormConfig() {
   if (activeBusinessWorkspace === "sales" && salesUi.view === "create" && document.querySelector("[data-invoice-form]")) {
     return { addLine: addInvoiceLine, submit: submitInvoice };
   }
-  if (activeBusinessWorkspace === "bills" && purchaseView === "create" && document.querySelector("[data-bill-form]")) {
+  if (activeBusinessWorkspace === "bills" && purchaseUi.view === "create" && document.querySelector("[data-bill-form]")) {
     return { addLine: addBillLine, submit: submitBill };
   }
   if (activeBusinessWorkspace === "credit-notes" && creditNoteView === "create" && document.querySelector("[data-cn-form]")) {
