@@ -113,6 +113,30 @@ import {
   previewGstr1FromInput,
   downloadGstr1Json,
 } from "./modules/workspaces/gst-returns.js";
+import {
+  initSalesInvoices,
+  salesUi,
+  loadInvoiceSettings,
+  loadBusinessInvoices,
+  syncSalesFormFromDom,
+  updateInvoiceTotalsDisplay,
+  computeInvoiceLine,
+  invoiceStatusPill,
+  customerPartyOptions,
+  incomeAccountOptions,
+  setBusinessSalesView,
+  openInvoiceCreate,
+  addInvoiceLine,
+  removeInvoiceLine,
+  submitInvoice,
+  downloadInvoicePdf,
+  openInvoiceDetail,
+  cancelInvoice,
+  openInvoiceSettings,
+  saveInvoiceSettings,
+  renderBusinessSalesWorkspace,
+  rerenderSalesIfActive,
+} from "./modules/documents/sales-invoices.js";
 
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
@@ -1061,8 +1085,6 @@ function caPracticeClientBreakdown(rows) {
     .map(([client, count]) => ({ client, count }));
 }
 
-let lastInvoiceAttachments = [];
-let invoiceAttachmentsLoading = false;
 let lastBillAttachments = [];
 let billAttachmentsLoading = false;
 let caDocumentAttachmentState = {
@@ -6345,7 +6367,7 @@ function setBusinessWorkspace(workspace) {
     loadBusinessAccounts();
     refreshCurrentBusinessReport();
   } else if (workspace === "sales") {
-    salesView = "list";
+    salesUi.view = "list";
     loadBusinessParties();
     loadBusinessAccounts();
     loadInvoiceSettings();
@@ -9816,27 +9838,6 @@ function loadBusinessReportLedgerFromSelect() {
   loadBusinessGeneralLedger(accountId);
 }
 
-// ========== Business Module: Sales Invoices (GST) ==========
-
-let salesView = "list"; // list | create | detail | settings
-let lastBusinessInvoices = [];
-let lastInvoiceDetail = null;
-let lastInvoiceSettings = null;
-let invoiceLineSeq = 0;
-let invoiceFormLines = [];
-const salesFormHeader = {
-  customer_party_id: "",
-  invoice_date: todayIsoDate(),
-  due_date: "",
-  is_inter_state: false,
-  income_account_code: "41001",
-  place_of_supply: "",
-  reference: "",
-  notes: "",
-  tcs_section: "",
-  cost_centre_id: "",
-  project_id: "",
-};
 
 // TDS/TCS section masters from GET /business/tds/sections (cached per session).
 let tdsSectionsCache = null;
@@ -9861,13 +9862,6 @@ function tdsSectionOptions(kind, selected) {
   ).join("");
 }
 
-const INVOICE_STANDARD_FIELD_LABELS = {
-  due_date: "Due date",
-  place_of_supply: "Place of supply",
-  reference: "Reference / PO",
-  notes: "Notes",
-  hsn_sac: "HSN/SAC (line column)",
-};
 
 function isBusinessAdmin() {
   const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
@@ -9880,34 +9874,9 @@ function isCaViewer() {
   return role === "ca_viewer";
 }
 
-function invoiceFieldRule(key) {
-  const fc = (lastInvoiceSettings && lastInvoiceSettings.field_config) || {};
-  return fc[key] || { visible: true, required: false };
-}
 
-function invoiceFieldVisible(key) {
-  return invoiceFieldRule(key).visible !== false;
-}
 
-function invoiceFieldRequired(key) {
-  return !!invoiceFieldRule(key).required;
-}
 
-async function loadInvoiceSettings() {
-  const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", { method: "GET" });
-  if (result.ok) {
-    lastInvoiceSettings = result.payload;
-  } else if (!lastInvoiceSettings) {
-    // Fall back to permissive defaults so the form still renders.
-    lastInvoiceSettings = {
-      field_config: { due_date: { visible: true, required: false }, place_of_supply: { visible: true, required: false }, reference: { visible: true, required: false }, notes: { visible: true, required: false }, hsn_sac: { visible: true, required: false } },
-      numbering: { prefix: "INV", number_format: "{PREFIX}-{FY}-{SEQ}", seq_padding: 6, start_number: 1, reset_yearly: true },
-      custom_fields: [],
-      branding: {},
-    };
-  }
-  rerenderSalesIfActive();
-}
 
 async function loadBusinessAdminSettings() {
   const result = await apiRequest("mitrabooks", "/api/v1/business/admin-settings", { method: "GET" });
@@ -9955,7 +9924,6 @@ function round2(value) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-let invoiceReverseOpen = false;
 let billReverseOpen = false;
 
 // Reversal must stay within the document's GST month. Returns the date input
@@ -9989,48 +9957,10 @@ function reversalPanel(kind, id, isoDate) {
   `;
 }
 
-function rerenderSalesIfActive() {
-  if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "sales") {
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    if (salesView === "create") {
-      focusBusinessEntryField("[data-invoice-form] select[name='customer_party_id']");
-    }
-  }
-}
 
-async function loadBusinessInvoices() {
-  const result = await apiRequest("mitrabooks", "/api/v1/business/invoices?limit=100", { method: "GET" });
-  if (result.ok) {
-    lastBusinessInvoices = Array.isArray(result.payload?.items) ? result.payload.items : [];
-  } else {
-    lastBusinessInvoices = [];
-    setLoginStatus("danger", "Unable to load invoices", statusDetailText(result.payload?.detail) || `Invoice list request failed with HTTP ${result.status}.`);
-  }
-  rerenderSalesIfActive();
-  renderJson(apiOutput, { invoices: { ok: result.ok, status: result.status, count: lastBusinessInvoices.length } });
-}
 
-function customerPartyOptions() {
-  return (Array.isArray(lastBusinessParties) ? lastBusinessParties : [])
-    .filter((p) => ["customer", "both"].includes(String(p.party_type || "").toLowerCase()));
-}
 
-function incomeAccountOptions() {
-  return businessAccountsForSelection().filter((acc) => String(acc.code || "").startsWith("4"));
-}
 
-function computeInvoiceLine(qty, rate, gstRate, inter) {
-  const taxable = round2(Number(qty || 0) * Number(rate || 0));
-  const gst = round2(taxable * Number(gstRate || 0) / 100);
-  let cgst = 0, sgst = 0, igst = 0;
-  if (inter) {
-    igst = gst;
-  } else {
-    cgst = round2(gst / 2);
-    sgst = round2(gst - cgst);
-  }
-  return { taxable, cgst, sgst, igst, total: round2(taxable + cgst + sgst + igst) };
-}
 
 function focusBusinessEntryField(selector) {
   setTimeout(() => {
@@ -10041,540 +9971,22 @@ function focusBusinessEntryField(selector) {
   }, 0);
 }
 
-function syncSalesFormFromDom() {
-  const form = document.querySelector("[data-invoice-form]");
-  if (!form) return;
-  const val = (sel) => form.querySelector(sel)?.value ?? "";
-  salesFormHeader.customer_party_id = val("select[name='customer_party_id']");
-  salesFormHeader.invoice_date = val("input[name='invoice_date']") || todayIsoDate();
-  salesFormHeader.due_date = val("input[name='due_date']");
-  salesFormHeader.is_inter_state = !!form.querySelector("input[name='is_inter_state']")?.checked;
-  salesFormHeader.income_account_code = val("select[name='income_account_code']") || "41001";
-  salesFormHeader.place_of_supply = val("input[name='place_of_supply']");
-  salesFormHeader.reference = val("input[name='reference']");
-  salesFormHeader.notes = val("textarea[name='notes']");
-  salesFormHeader.tcs_section = val("select[name='tcs_section']");
-  salesFormHeader.cost_centre_id = val("select[name='cost_centre_id']");
-  salesFormHeader.project_id = val("select[name='project_id']");
-  invoiceFormLines = Array.from(form.querySelectorAll("[data-invoice-line]")).map((row) => ({
-    id: row.getAttribute("data-invoice-line"),
-    description: row.querySelector("input[name='description']")?.value || "",
-    item_id: row.querySelector("select[name='item_id']")?.value || "",
-    hsn_sac: row.querySelector("input[name='hsn_sac']")?.value || "",
-    uqc: row.querySelector("input[name='uqc']")?.value || "",
-    supply_type: row.querySelector("select[name='supply_type']")?.value || "taxable",
-    quantity: row.querySelector("input[name='quantity']")?.value || "",
-    rate: row.querySelector("input[name='rate']")?.value || "",
-    gst_rate: row.querySelector("input[name='gst_rate']")?.value || "",
-    cost_centre_id: row.querySelector("select[name='line_cost_centre_id']")?.value || "",
-    project_id: row.querySelector("select[name='line_project_id']")?.value || "",
-  }));
-}
 
-function updateInvoiceTotalsDisplay() {
-  const form = document.querySelector("[data-invoice-form]");
-  if (!form) return;
-  const inter = !!form.querySelector("input[name='is_inter_state']")?.checked;
-  let taxableTotal = 0, cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
-  form.querySelectorAll("[data-invoice-line]").forEach((row) => {
-    const qty = row.querySelector("input[name='quantity']")?.value;
-    const rate = row.querySelector("input[name='rate']")?.value;
-    // Zero-rated (export/SEZ under LUT) lines carry no tax regardless of rate.
-    const supplyType = row.querySelector("select[name='supply_type']")?.value || "taxable";
-    const gstRate = supplyType === "zero_rated" ? 0 : row.querySelector("input[name='gst_rate']")?.value;
-    const c = computeInvoiceLine(qty, rate, gstRate, inter);
-    row.querySelector("[data-line-taxable]").textContent = formatCurrency(c.taxable);
-    row.querySelector("[data-line-gst]").textContent = formatCurrency(c.cgst + c.sgst + c.igst);
-    row.querySelector("[data-line-total]").textContent = formatCurrency(c.total);
-    taxableTotal += c.taxable; cgstTotal += c.cgst; sgstTotal += c.sgst; igstTotal += c.igst;
-  });
-  const gstTotal = round2(cgstTotal + sgstTotal + igstTotal);
-  const invoiceTotal = round2(taxableTotal + gstTotal);
-  // TCS (206C) is computed on the GST-inclusive invoice total.
-  const tcsSection = form.querySelector("select[name='tcs_section']")?.value || "";
-  const tcsAmount = tcsSection ? round2(invoiceTotal * tdsSectionRate("tcs", tcsSection) / 100) : 0;
-  const set = (sel, v) => { const el = form.querySelector(sel); if (el) el.textContent = formatCurrency(v); };
-  set("[data-total-taxable]", taxableTotal);
-  set("[data-total-cgst]", cgstTotal);
-  set("[data-total-sgst]", sgstTotal);
-  set("[data-total-igst]", igstTotal);
-  set("[data-total-invoice]", invoiceTotal);
-  set("[data-total-tcs]", tcsAmount);
-  set("[data-total-grand]", round2(invoiceTotal + tcsAmount));
-  const tcsRow = form.querySelector("[data-row-tcs]");
-  const grandRow = form.querySelector("[data-row-grand]");
-  if (tcsRow) tcsRow.hidden = !tcsSection;
-  if (grandRow) grandRow.hidden = !tcsSection;
-  // Toggle CGST/SGST vs IGST total rows based on supply type
-  const cgstRow = form.querySelector("[data-row-cgst]");
-  const sgstRow = form.querySelector("[data-row-sgst]");
-  const igstRow = form.querySelector("[data-row-igst]");
-  if (cgstRow && sgstRow && igstRow) {
-    cgstRow.hidden = inter;
-    sgstRow.hidden = inter;
-    igstRow.hidden = !inter;
-  }
-}
 
-function setBusinessSalesView(view) {
-  salesView = view;
-  invoiceReverseOpen = false;
-  rerenderSalesIfActive();
-  if (view === "create") {
-    updateInvoiceTotalsDisplay();
-    focusBusinessEntryField("[data-invoice-form] select[name='customer_party_id']");
-  }
-}
 
-function openInvoiceCreate() {
-  invoiceFormLines = [{ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" }];
-  salesFormHeader.customer_party_id = "";
-  salesFormHeader.invoice_date = todayIsoDate();
-  salesFormHeader.due_date = "";
-  salesFormHeader.is_inter_state = false;
-  salesFormHeader.income_account_code = "41001";
-  salesFormHeader.place_of_supply = "";
-  salesFormHeader.reference = "";
-  salesFormHeader.notes = "";
-  salesFormHeader.tcs_section = "";
-  salesFormHeader.cost_centre_id = "";
-  salesFormHeader.project_id = "";
-  // Make sure customers, accounts, and settings are available for the form.
-  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
-  if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
-  if (!lastInvoiceSettings) loadInvoiceSettings();
-  if (!tdsSectionsCache) loadTdsSections().then(() => rerenderSalesIfActive());
-  if (!lastDimensions) loadDimensions().then(() => rerenderSalesIfActive());
-  if (!lastInventoryItems) loadInventoryItems().then(() => rerenderSalesIfActive());
-  setBusinessSalesView("create");
-}
 
-function addInvoiceLine() {
-  syncSalesFormFromDom();
-  invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
-  rerenderSalesIfActive();
-  updateInvoiceTotalsDisplay();
-}
 
-function removeInvoiceLine(lineId) {
-  syncSalesFormFromDom();
-  invoiceFormLines = invoiceFormLines.filter((l) => l.id !== lineId);
-  if (invoiceFormLines.length === 0) {
-    invoiceFormLines.push({ id: `il-${++invoiceLineSeq}`, description: "", hsn_sac: "", uqc: "", supply_type: "taxable", quantity: "1", rate: "", gst_rate: "18", cost_centre_id: "", project_id: "" });
-  }
-  rerenderSalesIfActive();
-  updateInvoiceTotalsDisplay();
-}
 
-async function submitInvoice() {
-  syncSalesFormFromDom();
-  if (!salesFormHeader.customer_party_id) {
-    setLoginStatus("warn", "Customer required", "Select a customer for this invoice.");
-    return;
-  }
-  // Client-side enforcement of admin-configured required fields (backend re-validates).
-  for (const key of ["due_date", "place_of_supply", "reference", "notes"]) {
-    if (invoiceFieldRequired(key) && !String(salesFormHeader[key] || "").trim()) {
-      setLoginStatus("warn", `${INVOICE_STANDARD_FIELD_LABELS[key]} required`, "This field is required by your invoice settings.");
-      return;
-    }
-  }
-  const lineItems = invoiceFormLines
-    .filter((l) => String(l.description).trim() && Number(l.quantity) > 0)
-    .map((l) => ({
-      description: String(l.description).trim(),
-      item_id: String(l.item_id || "").trim() || null,
-      hsn_sac: String(l.hsn_sac || "").trim() || null,
-      uqc: String(l.uqc || "").trim().toUpperCase() || null,
-      supply_type: l.supply_type || "taxable",
-      quantity: String(Number(l.quantity)),
-      rate: String(Number(l.rate || 0)),
-      gst_rate: String(Number(l.gst_rate || 0)),
-      cost_centre_id: String(l.cost_centre_id || "").trim() || null,
-      project_id: String(l.project_id || "").trim() || null,
-    }));
-  if (lineItems.length === 0) {
-    setLoginStatus("warn", "Add a line item", "Enter at least one line with a description and quantity.");
-    return;
-  }
-  const body = {
-    customer_party_id: salesFormHeader.customer_party_id,
-    invoice_date: salesFormHeader.invoice_date || todayIsoDate(),
-    due_date: salesFormHeader.due_date || null,
-    is_inter_state: !!salesFormHeader.is_inter_state,
-    income_account_code: salesFormHeader.income_account_code || "41001",
-    place_of_supply: String(salesFormHeader.place_of_supply || "").trim() || null,
-    reference: String(salesFormHeader.reference || "").trim() || null,
-    notes: String(salesFormHeader.notes || "").trim() || null,
-    line_items: lineItems,
-    tcs_section: salesFormHeader.tcs_section || null,
-    cost_centre_id: salesFormHeader.cost_centre_id || null,
-    project_id: salesFormHeader.project_id || null,
-  };
-  const result = await apiRequest("mitrabooks", "/api/v1/business/invoices", {
-    method: "POST",
-    headers: { "X-Idempotency-Key": `sales-invoice-${Date.now()}` },
-    body: JSON.stringify(body),
-  });
-  if (result.ok) {
-    setLoginStatus("ok", "Invoice posted", `${result.payload?.invoice_number || "Invoice"} posted to the ledger.`);
-    await loadBusinessInvoices();
-    setBusinessSalesView("list");
-  } else {
-    setLoginStatus("danger", "Invoice posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { create_invoice: { ok: result.ok, status: result.status, detail: result.payload?.detail || null } });
-}
 
-async function downloadInvoicePdf(invoiceId, invoiceNumber) {
-  if (!invoiceId) {
-    return;
-  }
-  const result = await downloadApiFile(
-    "mitrabooks",
-    `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}/pdf`,
-    `${invoiceNumber || invoiceId}.pdf`,
-  );
-  if (!result.ok) {
-    setLoginStatus("danger", "PDF download failed", statusDetailText(result.payload?.detail) || `Invoice PDF failed with HTTP ${result.status}.`);
-  }
-}
 
-async function openInvoiceDetail(invoiceId) {
-  invoiceAttachmentsLoading = true;
-  lastInvoiceAttachments = [];
-  const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}`, { method: "GET" });
-  if (result.ok) {
-    lastInvoiceDetail = result.payload;
-    lastEinvoiceView = null;
-    loadEinvoiceView(invoiceId);  // async — the section fills in when it lands
-    setBusinessSalesView("detail");
-    await loadInvoiceAttachments(invoiceId);
-  } else {
-    invoiceAttachmentsLoading = false;
-    setLoginStatus("danger", "Unable to load invoice", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { invoice_detail: { ok: result.ok, status: result.status } });
-}
 
-async function loadInvoiceAttachments(invoiceId) {
-  if (!invoiceId) {
-    lastInvoiceAttachments = [];
-    invoiceAttachmentsLoading = false;
-    rerenderSalesIfActive();
-    return { ok: false, status: 0, payload: { detail: "Missing invoice id." } };
-  }
-  invoiceAttachmentsLoading = true;
-  rerenderSalesIfActive();
-  const result = await listBusinessAttachments("sales_invoice", invoiceId);
-  lastInvoiceAttachments = result.ok ? (Array.isArray(result.payload?.items) ? result.payload.items : []) : [];
-  invoiceAttachmentsLoading = false;
-  if (!result.ok) {
-    setLoginStatus("warn", "Unable to load invoice files", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  rerenderSalesIfActive();
-  renderJson(apiOutput, { invoice_attachments: { ok: result.ok, status: result.status, count: lastInvoiceAttachments.length } });
-  return result;
-}
 
-async function cancelInvoice(invoiceId, reversalDate) {
-  const body = { reason: "Reversal" };
-  if (reversalDate) body.cancel_date = reversalDate;
-  const result = await apiRequest("mitrabooks", `/api/v1/business/invoices/${encodeURIComponent(invoiceId)}/cancel`, {
-    method: "POST",
-    headers: { "X-Idempotency-Key": `sales-invoice-cancel-${invoiceId}-${reversalDate || "today"}` },
-    body: JSON.stringify(body),
-  });
-  if (result.ok) {
-    invoiceReverseOpen = false;
-    setLoginStatus("ok", "Invoice reversed", "A reversing journal entry was posted.");
-    await loadBusinessInvoices();
-    if (lastInvoiceDetail && lastInvoiceDetail.invoice_id === invoiceId) {
-      lastInvoiceDetail = result.payload;
-    }
-    rerenderSalesIfActive();
-  } else {
-    setLoginStatus("danger", "Reverse failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { cancel_invoice: { ok: result.ok, status: result.status } });
-}
 
-function invoiceStatusPill(status) {
-  const s = String(status || "").toLowerCase();
-  // Backend marks a reversed document as "cancelled"; display it as "reversed"
-  // to match the accounting action (a reversing journal entry was posted).
-  if (s === "cancelled") return `<span class="pill warn">reversed</span>`;
-  if (s === "posted") return `<span class="pill ok">posted</span>`;
-  return `<span class="pill">${escapeHtml(status || "")}</span>`;
-}
 
-function renderInvoiceListTable() {
-  const rows = lastBusinessInvoices;
-  return `
-    <div class="table-preview compact-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Invoice #</th>
-            <th>Date</th>
-            <th>Customer</th>
-            <th class="amount">Taxable</th>
-            <th class="amount">GST</th>
-            <th class="amount">Total</th>
-            <th>Status</th>
-            <th>Open</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.length ? rows.map((inv) => `
-            <tr>
-              <td>${escapeHtml(inv.invoice_number || "")}</td>
-              <td>${escapeHtml(inv.invoice_date || "")}</td>
-              <td>${escapeHtml(inv.customer_name || inv.customer_party_id || "")}</td>
-              <td class="amount">${escapeHtml(formatCurrency(inv.taxable_total || 0))}</td>
-              <td class="amount">${escapeHtml(formatCurrency(inv.gst_total || 0))}</td>
-              <td class="amount">${escapeHtml(formatCurrency(inv.invoice_total || 0))}</td>
-              <td>${invoiceStatusPill(inv.status)}</td>
-              <td><button class="secondary" type="button" data-business-action="view-invoice" data-invoice-id="${escapeHtml(inv.invoice_id)}">View</button></td>
-            </tr>
-          `).join("") : `<tr><td colspan="8" class="muted">No invoices yet. Create your first sales invoice.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
 
-function invoiceFieldLabel(base, key) {
-  return `${base}${invoiceFieldRequired(key) ? " *" : ""}`;
-}
 
-function invoiceNumberPreview() {
-  const n = (lastInvoiceSettings && lastInvoiceSettings.numbering) || {};
-  const now = new Date();
-  const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
-  const fy = `${year}-${year + 1}`;
-  const fyShort = `${year}-${String(year + 1).slice(-2)}`;
-  const seq = String(n.start_number || 1).padStart(Number(n.seq_padding || 6), "0");
-  return String(n.number_format || "{PREFIX}-{FY}-{SEQ}")
-    .replace("{PREFIX}", n.prefix || "INV")
-    .replace("{FYSHORT}", fyShort)
-    .replace("{FY}", fy)
-    .replace("{SEQ}", seq);
-}
 
-function renderInvoiceCreateForm() {
-  const customers = customerPartyOptions();
-  const incomeAccounts = incomeAccountOptions();
-  const hsnVisible = invoiceFieldVisible("hsn_sac");
-  const hsnRequired = invoiceFieldRequired("hsn_sac");
-  const lineCostCentreOptions = (selected) => dimensionOptions("cost_centre", selected || "");
-  const lineProjectOptions = (selected) => dimensionOptions("project", selected || "");
-  const hasLineDimensions = !!(lineCostCentreOptions("") || lineProjectOptions(""));
-  const colspan = (hsnVisible ? 9 : 8) + (hasLineDimensions ? 1 : 0);
-  const itemSelectable = !!inventoryItemOptions("");
-  const lineRows = invoiceFormLines.map((l) => `
-    <tr data-invoice-line="${escapeHtml(l.id)}">
-      <td><input type="text" name="description" value="${escapeHtml(l.description)}" placeholder="Item / service"></td>
-      ${itemSelectable ? `<td><select name="item_id" style="min-width:110px;">${inventoryItemOptions(l.item_id || "")}</select></td>` : ""}
-      ${hsnVisible ? `<td><input type="text" name="hsn_sac" value="${escapeHtml(l.hsn_sac)}" placeholder="HSN/SAC"></td>` : ""}
-      ${hsnVisible ? `<td><input type="text" name="uqc" value="${escapeHtml(l.uqc || "")}" placeholder="UQC" style="width:70px;"></td>` : ""}
-      <td><select name="supply_type" style="min-width:96px;">
-        ${[["taxable", "Taxable"], ["zero_rated", "Zero-rated (exp/SEZ)"], ["exempt", "Exempt"], ["nil_rated", "Nil-rated"], ["non_gst", "Non-GST"]].map(([v, t]) =>
-          `<option value="${v}" ${(l.supply_type || "taxable") === v ? "selected" : ""}>${t}</option>`).join("")}
-      </select></td>
-      <td><input type="number" name="quantity" value="${escapeHtml(l.quantity)}" min="0" step="any"></td>
-      <td><input type="number" name="rate" value="${escapeHtml(l.rate)}" min="0" step="any" placeholder="0.00"></td>
-      <td><input type="number" name="gst_rate" value="${escapeHtml(l.gst_rate)}" min="0" max="100" step="any"></td>
-      ${hasLineDimensions ? `<td class="line-dimensions">
-        ${lineCostCentreOptions(l.cost_centre_id) ? `<select name="line_cost_centre_id" aria-label="Line cost centre">${lineCostCentreOptions(l.cost_centre_id)}</select>` : ""}
-        ${lineProjectOptions(l.project_id) ? `<select name="line_project_id" aria-label="Line project">${lineProjectOptions(l.project_id)}</select>` : ""}
-      </td>` : ""}
-      <td class="amount" data-line-taxable>—</td>
-      <td class="amount" data-line-gst>—</td>
-      <td class="amount" data-line-total>—</td>
-      <td><button class="secondary" type="button" data-business-action="remove-invoice-line" data-line-id="${escapeHtml(l.id)}">✕</button></td>
-    </tr>
-  `).join("");
 
-  const isComposition = (lastInvoiceSettings?.branding?.gst_registration_type === "composition");
-  const docTitle = isComposition ? "New Bill of Supply" : "New Sales Invoice";
-  const docSubtitle = isComposition
-    ? `Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · composition dealer — no GST is collected; posts to receivables and income only.`
-    : `Next number: <strong>${escapeHtml(invoiceNumberPreview())}</strong> · posts to receivables, sales income, and output GST automatically.`;
-  const compositionBanner = isComposition
-    ? `<p class="muted" style="padding:8px 10px;border:1px solid #f59e0b;border-radius:6px;background:#fffbeb;">⚠ Composition taxable person, not eligible to collect tax on supplies. GST rates entered below are ignored; inter-state sales are blocked.</p>`
-    : "";
-  return `
-    <div class="verification-panel erp-workspace-panel" data-invoice-form>
-      <div class="preview-heading compact">
-        <div>
-          <h4>${escapeHtml(docTitle)}</h4>
-          <p>${docSubtitle}</p>
-        </div>
-        <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
-      </div>
-      ${compositionBanner}
-      <div class="invoice-form-grid">
-        <label>Customer
-          <select name="customer_party_id">
-            <option value="">Select customer</option>
-            ${customers.map((c) => `<option value="${escapeHtml(c.party_id)}" ${c.party_id === salesFormHeader.customer_party_id ? "selected" : ""}>${escapeHtml(c.party_name)}${c.gstin ? ` (${escapeHtml(c.gstin)})` : ""}</option>`).join("")}
-          </select>
-        </label>
-        <label>Invoice date
-          <input type="date" name="invoice_date" value="${escapeHtml(salesFormHeader.invoice_date)}">
-        </label>
-        ${invoiceFieldVisible("due_date") ? `<label>${escapeHtml(invoiceFieldLabel("Due date", "due_date"))}
-          <input type="date" name="due_date" value="${escapeHtml(salesFormHeader.due_date)}">
-        </label>` : ""}
-        <label>Income account
-          <select name="income_account_code">
-            ${incomeAccounts.length ? incomeAccounts.map((a) => `<option value="${escapeHtml(a.code)}" ${a.code === salesFormHeader.income_account_code ? "selected" : ""}>${escapeHtml(`${a.code} - ${a.name}`)}</option>`).join("") : `<option value="41001" selected>41001 - Sales</option>`}
-          </select>
-        </label>
-        ${invoiceFieldVisible("place_of_supply") ? `<label>${escapeHtml(invoiceFieldLabel("Place of supply", "place_of_supply"))}
-          <input type="text" name="place_of_supply" value="${escapeHtml(salesFormHeader.place_of_supply)}" placeholder="State / code">
-        </label>` : ""}
-        ${invoiceFieldVisible("reference") ? `<label>${escapeHtml(invoiceFieldLabel("Reference / PO", "reference"))}
-          <input type="text" name="reference" value="${escapeHtml(salesFormHeader.reference)}" placeholder="${invoiceFieldRequired("reference") ? "Required" : "Optional"}">
-        </label>` : ""}
-        <label>TCS (income-tax, on sale consideration)
-          <select name="tcs_section">${tdsSectionOptions("tcs", salesFormHeader.tcs_section)}</select>
-        </label>
-        ${dimensionOptions("cost_centre", salesFormHeader.cost_centre_id) ? `<label>Cost centre
-          <select name="cost_centre_id">${dimensionOptions("cost_centre", salesFormHeader.cost_centre_id)}</select>
-        </label>` : ""}
-        ${dimensionOptions("project", salesFormHeader.project_id) ? `<label>Project
-          <select name="project_id">${dimensionOptions("project", salesFormHeader.project_id)}</select>
-        </label>` : ""}
-        <label class="invoice-inter-toggle">
-          <input type="checkbox" name="is_inter_state" ${salesFormHeader.is_inter_state ? "checked" : ""}>
-          Inter-state supply (IGST)
-        </label>
-      </div>
-
-      <div class="table-preview compact-table invoice-lines">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              ${itemSelectable ? `<th>Item</th>` : ""}
-              ${hsnVisible ? `<th>HSN/SAC${hsnRequired ? " *" : ""}</th>` : ""}
-              ${hsnVisible ? `<th>UQC</th>` : ""}
-              <th>Type</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>GST %</th>
-              ${hasLineDimensions ? `<th>Line dimensions</th>` : ""}
-              <th class="amount">Taxable</th>
-              <th class="amount">GST</th>
-              <th class="amount">Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>${lineRows}</tbody>
-        </table>
-      </div>
-      <button class="secondary" type="button" data-business-action="add-invoice-line" aria-keyshortcuts="Alt+L">+ Add line</button>
-
-      <div class="invoice-totals">
-        <div><span>Taxable</span><strong data-total-taxable>${formatCurrency(0)}</strong></div>
-        <div data-row-cgst ${salesFormHeader.is_inter_state ? "hidden" : ""}><span>CGST</span><strong data-total-cgst>${formatCurrency(0)}</strong></div>
-        <div data-row-sgst ${salesFormHeader.is_inter_state ? "hidden" : ""}><span>SGST</span><strong data-total-sgst>${formatCurrency(0)}</strong></div>
-        <div data-row-igst ${salesFormHeader.is_inter_state ? "" : "hidden"}><span>IGST</span><strong data-total-igst>${formatCurrency(0)}</strong></div>
-        <div class="invoice-grand"><span>Invoice total</span><strong data-total-invoice>${formatCurrency(0)}</strong></div>
-        <div data-row-tcs ${salesFormHeader.tcs_section ? "" : "hidden"}><span>TCS</span><strong data-total-tcs>${formatCurrency(0)}</strong></div>
-        <div class="invoice-grand" data-row-grand ${salesFormHeader.tcs_section ? "" : "hidden"}><span>Amount receivable</span><strong data-total-grand>${formatCurrency(0)}</strong></div>
-      </div>
-
-      ${invoiceFieldVisible("notes") ? `<label class="invoice-notes">${escapeHtml(invoiceFieldLabel("Notes", "notes"))}
-        <textarea name="notes" rows="2" placeholder="${invoiceFieldRequired("notes") ? "Required" : "Optional notes shown on the invoice"}">${escapeHtml(salesFormHeader.notes)}</textarea>
-      </label>` : ""}
-
-      <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-invoice" aria-keyshortcuts="Control+Enter">Post Invoice</button>
-        <button class="secondary" type="button" data-business-action="invoice-back">Cancel</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderInvoiceDetail() {
-  const inv = lastInvoiceDetail;
-  if (!inv) {
-    return `<div class="verification-panel erp-workspace-panel"><p class="muted">Invoice not found.</p></div>`;
-  }
-  const lines = Array.isArray(inv.line_items) ? inv.line_items : [];
-  const taxRow = inv.is_inter_state
-    ? `<div data-row-igst><span>IGST</span><strong>${formatCurrency(inv.igst_total || 0)}</strong></div>`
-    : `<div><span>CGST</span><strong>${formatCurrency(inv.cgst_total || 0)}</strong></div><div><span>SGST</span><strong>${formatCurrency(inv.sgst_total || 0)}</strong></div>`;
-  return `
-    <div class="verification-panel erp-workspace-panel">
-      <div class="preview-heading compact">
-        <div>
-          <h4>${escapeHtml(inv.is_composition || inv.document_type === "bill_of_supply" ? "Bill of Supply" : "Invoice")} ${escapeHtml(inv.invoice_number || "")} ${invoiceStatusPill(inv.status)}${inv.is_composition || inv.document_type === "bill_of_supply" ? ` <span class="pill">composition</span>` : ""}</h4>
-          <p>${escapeHtml(inv.customer_name || inv.customer_party_id || "")}${inv.customer_gstin ? ` · ${escapeHtml(inv.customer_gstin)}` : ""} · ${escapeHtml(inv.invoice_date || "")}${inv.due_date ? ` · due ${escapeHtml(inv.due_date)}` : ""}</p>
-        </div>
-        <div class="invoice-detail-actions">
-          <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
-          <button class="secondary" type="button" data-business-action="download-invoice-pdf" data-invoice-id="${escapeHtml(inv.invoice_id || "")}" data-invoice-number="${escapeHtml(inv.invoice_number || "")}">Download PDF</button>
-          ${String(inv.status).toLowerCase() === "posted" && !invoiceReverseOpen ? `<button class="secondary" type="button" data-business-action="begin-reverse-invoice">Reverse Invoice</button>` : ""}
-        </div>
-      </div>
-      ${String(inv.status).toLowerCase() === "posted" && invoiceReverseOpen ? reversalPanel("invoice", inv.invoice_id, inv.invoice_date) : ""}
-      <p class="muted">${escapeHtml(inv.is_composition || inv.document_type === "bill_of_supply" ? "Composition taxable person, not eligible to collect tax on supplies" : (inv.is_inter_state ? "Inter-state supply (IGST)" : "Intra-state supply (CGST + SGST)"))}${inv.reference ? ` · Ref: ${escapeHtml(inv.reference)}` : ""}</p>
-      <div class="table-preview compact-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>HSN/SAC</th>
-              <th class="amount">Qty</th>
-              <th class="amount">Rate</th>
-              <th class="amount">GST %</th>
-              <th class="amount">Taxable</th>
-              <th class="amount">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lines.map((l) => `
-              <tr>
-                <td>${escapeHtml(l.description || "")}</td>
-                <td>${escapeHtml(l.hsn_sac || "")}</td>
-                <td class="amount">${escapeHtml(l.quantity || "")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.rate || 0))}</td>
-                <td class="amount">${escapeHtml(String(l.gst_rate || 0))}%</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.taxable_amount || 0))}</td>
-                <td class="amount">${escapeHtml(formatCurrency(l.line_total || 0))}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>
-      <div class="invoice-totals">
-        <div><span>Taxable</span><strong>${formatCurrency(inv.taxable_total || 0)}</strong></div>
-        ${taxRow}
-        <div class="invoice-grand"><span>Invoice total</span><strong>${formatCurrency(inv.invoice_total || 0)}</strong></div>
-        ${Number(inv.tcs_amount || 0) > 0 ? `
-        <div><span>TCS ${escapeHtml(inv.tcs_section || "")} @ ${escapeHtml(String(inv.tcs_rate || 0))}%</span><strong>${formatCurrency(inv.tcs_amount || 0)}</strong></div>
-        <div class="invoice-grand"><span>Amount receivable</span><strong>${formatCurrency(inv.grand_total || inv.invoice_total || 0)}</strong></div>` : ""}
-      </div>
-      ${inv.collectee_pan_missing ? `<p class="muted">⚠ Customer PAN missing — section 206AA prescribes a higher TCS rate. Capture the PAN on the party record.</p>` : ""}
-      ${renderEinvoiceSection(inv)}
-      ${renderBusinessAttachmentPanel({
-        ownerType: "sales_invoice",
-        ownerId: inv.invoice_id || "",
-        items: lastInvoiceAttachments,
-        loading: invoiceAttachmentsLoading,
-        title: "Invoice attachments",
-        emptyCopy: "Upload supporting sales documents, signed copies, or customer references for this invoice.",
-        uploadButtonLabel: "Upload invoice files",
-      })}
-      ${inv.notes ? `<p class="muted">${escapeHtml(inv.notes)}</p>` : ""}
-      ${String(inv.status).toLowerCase() === "cancelled" ? `<p class="muted">Reversed${inv.cancel_reason ? `: ${escapeHtml(inv.cancel_reason)}` : ""}. Reversing journal entry #${escapeHtml(inv.reversal_journal_entry_id || "")} posted.</p>` : ""}
-    </div>
-  `;
-}
 
 function renderBusinessVouchersListFilters(rowsLength) {
   const state = businessListState.vouchers;
@@ -10693,184 +10105,10 @@ function renderVoucherApprovalQueuePanel(items) {
   `;
 }
 
-function openInvoiceSettings() {
-  if (!lastInvoiceSettings) loadInvoiceSettings();
-  setBusinessSalesView("settings");
-}
-
-async function saveInvoiceSettings() {
-  const panel = document.querySelector("[data-invoice-settings-form]");
-  if (!panel) return;
-  const field_config = {};
-  Object.keys(INVOICE_STANDARD_FIELD_LABELS).forEach((key) => {
-    const visible = panel.querySelector(`input[data-field-visible='${key}']`);
-    const required = panel.querySelector(`input[data-field-required='${key}']`);
-    field_config[key] = { visible: !!visible?.checked, required: !!required?.checked };
-  });
-  const numVal = (name) => panel.querySelector(`[data-numbering='${name}']`)?.value;
-  const numbering = {
-    prefix: (numVal("prefix") || "INV").trim() || "INV",
-    number_format: (numVal("number_format") || "{PREFIX}-{FY}-{SEQ}").trim() || "{PREFIX}-{FY}-{SEQ}",
-    seq_padding: Math.max(1, Math.min(12, Number(numVal("seq_padding") || 6))),
-    start_number: Math.max(1, Number(numVal("start_number") || 1)),
-    reset_yearly: !!panel.querySelector("[data-numbering='reset_yearly']")?.checked,
-  };
-  // Merge the GST registration choices into branding, preserving other fields.
-  const regType = panel.querySelector("[data-gst-reg='type']")?.value === "composition" ? "composition" : "regular";
-  const regCategory = panel.querySelector("[data-gst-reg='category']")?.value || "goods";
-  const branding = {
-    ...((lastInvoiceSettings && lastInvoiceSettings.branding) || {}),
-    gst_registration_type: regType,
-    composition_category: regType === "composition" ? regCategory : null,
-  };
-  const inventoryToggle = panel.querySelector("[data-inventory-enabled]");
-  const inventoryPolicy = panel.querySelector("[data-inventory-valuation-policy]")?.value || "weighted_average_periodic";
-  const body = {
-    field_config,
-    numbering,
-    // Preserve sections managed in Phase 2 (custom fields).
-    custom_fields: (lastInvoiceSettings && lastInvoiceSettings.custom_fields) || [],
-    branding,
-    inventory_enabled: inventoryToggle ? !!inventoryToggle.checked : !!lastInvoiceSettings?.inventory_enabled,
-    inventory_valuation_policy: inventoryPolicy,
-  };
-  const result = await apiRequest("mitrabooks", "/api/v1/business/invoice-settings", {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-  if (result.ok) {
-    lastInvoiceSettings = result.payload;
-    setLoginStatus("ok", "Invoice settings saved", "New invoices will use these settings.");
-    setBusinessSalesView("list");
-  } else if (result.status === 403) {
-    setLoginStatus("danger", "Admin only", "Only a tenant admin can change invoice settings.");
-  } else {
-    setLoginStatus("danger", "Save failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
-  }
-  renderJson(apiOutput, { save_invoice_settings: { ok: result.ok, status: result.status } });
-}
-
-function renderInvoiceSettingsPanel() {
-  const s = lastInvoiceSettings || {};
-  const fc = s.field_config || {};
-  const n = s.numbering || {};
-  const fieldRows = Object.entries(INVOICE_STANDARD_FIELD_LABELS).map(([key, label]) => {
-    const rule = fc[key] || { visible: true, required: false };
-    return `
-      <tr>
-        <td>${escapeHtml(label)}</td>
-        <td><label class="inline-check"><input type="checkbox" data-field-visible="${key}" ${rule.visible !== false ? "checked" : ""}> Visible</label></td>
-        <td><label class="inline-check"><input type="checkbox" data-field-required="${key}" ${rule.required ? "checked" : ""}> Required</label></td>
-      </tr>
-    `;
-  }).join("");
-
-  return `
-    <div class="verification-panel erp-workspace-panel" data-invoice-settings-form>
-      <div class="preview-heading compact">
-        <div>
-          <h4>Invoice Settings</h4>
-          <p>Configure the sales invoice form for this business. Applies to all users.</p>
-        </div>
-        <button class="secondary" type="button" data-business-action="invoice-back">← Back to list</button>
-      </div>
-
-      <h5 class="settings-section-title">Form fields</h5>
-      <p class="muted">Show, hide, or require the optional fields on the invoice form.</p>
-      <div class="table-preview compact-table">
-        <table>
-          <thead><tr><th>Field</th><th>Show on form</th><th>Make mandatory</th></tr></thead>
-          <tbody>${fieldRows}</tbody>
-        </table>
-      </div>
-
-      <h5 class="settings-section-title">Invoice numbering</h5>
-      <p class="muted">Tokens: <code>{PREFIX}</code> <code>{FY}</code> (2026-2027) <code>{FYSHORT}</code> (2026-27) <code>{SEQ}</code></p>
-      <div class="invoice-form-grid">
-        <label>Prefix<input type="text" data-numbering="prefix" value="${escapeHtml(n.prefix || "INV")}"></label>
-        <label>Number format<input type="text" data-numbering="number_format" value="${escapeHtml(n.number_format || "{PREFIX}-{FY}-{SEQ}")}"></label>
-        <label>Sequence digits<input type="number" data-numbering="seq_padding" min="1" max="12" value="${escapeHtml(n.seq_padding || 6)}"></label>
-        <label>Start number<input type="number" data-numbering="start_number" min="1" value="${escapeHtml(n.start_number || 1)}"></label>
-        <label class="invoice-inter-toggle"><input type="checkbox" data-numbering="reset_yearly" ${n.reset_yearly !== false ? "checked" : ""}> Reset sequence each financial year</label>
-      </div>
-      <p class="muted">Preview: <strong>${escapeHtml(invoiceNumberPreview())}</strong></p>
-
-      <h5 class="settings-section-title">GST registration</h5>
-      <p class="muted">Composition dealers (Section 10) issue a <strong>Bill of Supply</strong>, do not collect GST, and cannot claim ITC. Inter-state sales are not allowed.</p>
-      <div class="invoice-form-grid">
-        <label>Registration type
-          <select data-gst-reg="type">
-            <option value="regular" ${(s.branding?.gst_registration_type || "regular") !== "composition" ? "selected" : ""}>Regular (collect GST, claim ITC)</option>
-            <option value="composition" ${s.branding?.gst_registration_type === "composition" ? "selected" : ""}>Composition (Bill of Supply)</option>
-          </select>
-        </label>
-        <label>Composition category
-          <select data-gst-reg="category">
-            <option value="goods" ${(s.branding?.composition_category || "goods") === "goods" ? "selected" : ""}>Manufacturer / Trader — 1%</option>
-            <option value="restaurant" ${s.branding?.composition_category === "restaurant" ? "selected" : ""}>Restaurant (non-alcoholic) — 5%</option>
-            <option value="services" ${s.branding?.composition_category === "services" ? "selected" : ""}>Other services — 6%</option>
-          </select>
-        </label>
-      </div>
-
-      <h5 class="settings-section-title">Inventory accounting</h5>
-      <p class="muted">Optional. Service businesses and traders who don't keep stock should leave this OFF — nothing changes for them. When ON, the item master, stock register and the period-end closing-stock journal appear under Financial Statements → Inventory.</p>
-      <label class="invoice-inter-toggle">
-        <input type="checkbox" data-inventory-enabled ${s.inventory_enabled ? "checked" : ""}>
-        Enable inventory accounting (item master, stock register, closing stock)
-      </label>
-      <div class="invoice-form-grid">
-        <label>Valuation policy
-          <select data-inventory-valuation-policy>
-            <option value="weighted_average_periodic" ${(s.inventory_valuation_policy || "weighted_average_periodic") === "weighted_average_periodic" ? "selected" : ""}>Weighted average (periodic)</option>
-          </select>
-        </label>
-      </div>
-      <p class="muted">The current local policy is locked to weighted-average periodic costing. Stock issues and adjustments affect the register; the financial impact is posted through the closing-stock journal.</p>
-
-      <p class="muted settings-coming-soon">Custom fields and invoice branding / print template are coming in the next update.</p>
-
-      <div class="invoice-form-actions">
-        <button class="primary" type="button" data-business-action="save-invoice-settings">Save Settings</button>
-        <button class="secondary" type="button" data-business-action="invoice-back">Cancel</button>
-      </div>
-    </div>
-  `;
-}
 
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: SALES INVOICES WORKSPACE
-// API   : GET /api/v1/business/invoices  POST /api/v1/business/invoices
-// NOTE  : loadBusinessInvoices, submitInvoice, renderBusinessSalesWorkspace; e-invoice section included
-// ══════════════════════════════════════════════════════════════════════
 
-function renderBusinessSalesWorkspace() {
-  if (salesView === "create") {
-    return renderInvoiceCreateForm();
-  }
-  if (salesView === "detail") {
-    return renderInvoiceDetail();
-  }
-  if (salesView === "settings") {
-    return renderInvoiceSettingsPanel();
-  }
-  return `
-    <div class="verification-panel erp-workspace-panel">
-      <div class="preview-heading compact">
-        <div>
-          <h4>Sales Invoices</h4>
-          <p>GST invoices for customers. Each posting updates receivables, income, and output GST.</p>
-        </div>
-        <div class="invoice-detail-actions">
-          ${isBusinessAdmin() ? `<button class="secondary" type="button" data-business-action="open-invoice-settings">⚙ Settings</button>` : ""}
-          <button class="secondary" type="button" data-business-action="open-create-invoice" aria-keyshortcuts="Control+Alt+I">+ New Invoice</button>
-        </div>
-      </div>
-      ${renderInvoiceListTable()}
-    </div>
-  `;
-}
+
 
 // ========== Business Module: Purchase Bills (Input GST / ITC) ==========
 
@@ -11478,12 +10716,12 @@ async function loadCreditNotes() {
 }
 
 function resolveCreditNoteSourceInvoice(invoiceId) {
-  return (Array.isArray(lastBusinessInvoices) ? lastBusinessInvoices : [])
+  return (Array.isArray(salesUi.invoices) ? salesUi.invoices : [])
     .find((invoice) => String(invoice.invoice_id || "") === String(invoiceId || ""));
 }
 
 function creditNoteSourceInvoiceOptions(selectedId) {
-  const invoices = Array.isArray(lastBusinessInvoices) ? lastBusinessInvoices : [];
+  const invoices = Array.isArray(salesUi.invoices) ? salesUi.invoices : [];
   if (!invoices.length) {
     return `<option value="">Load or create a source invoice first</option>`;
   }
@@ -11589,7 +10827,7 @@ function openCreditNoteCreate() {
   cnFormHeader.project_id = "";
   if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) loadBusinessParties();
   if (!hasLoadedBusinessAccounts()) loadBusinessAccounts();
-  if (!Array.isArray(lastBusinessInvoices) || lastBusinessInvoices.length === 0) loadBusinessInvoices();
+  if (!Array.isArray(salesUi.invoices) || salesUi.invoices.length === 0) loadBusinessInvoices();
   if (!lastDimensions) loadDimensions().then(() => rerenderCreditNoteIfActive());
   setCreditNoteView("create");
 }
@@ -16682,10 +15920,10 @@ dashboardPreview.addEventListener("click", async (event) => {
   } else if (businessAction === "view-invoice") {
     openInvoiceDetail(button.getAttribute("data-invoice-id") || "");
   } else if (businessAction === "begin-reverse-invoice") {
-    invoiceReverseOpen = true;
+    salesUi.reverseOpen = true;
     rerenderSalesIfActive();
   } else if (businessAction === "cancel-reverse-invoice") {
-    invoiceReverseOpen = false;
+    salesUi.reverseOpen = false;
     rerenderSalesIfActive();
   } else if (businessAction === "confirm-reverse-invoice") {
     const invoiceId = button.getAttribute("data-invoice-id") || "";
@@ -17301,6 +16539,43 @@ initGstReturns({
   recentFyQuarters,
   getApiOutput: () => apiOutput,
 });
+// Wire sales invoices workspace (avoids import cycle with app.js)
+initSalesInvoices({
+  escapeHtml,
+  formatCurrency,
+  todayIsoDate,
+  setLoginStatus,
+  statusDetailText,
+  round2,
+  tdsSectionOptions,
+  tdsSectionRate,
+  loadTdsSections,
+  isBusinessAdmin,
+  reversalPanel,
+  focusBusinessEntryField,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+  getLastBusinessParties: () => lastBusinessParties,
+  loadBusinessParties,
+  hasLoadedBusinessAccounts,
+  loadBusinessAccounts,
+  businessAccountsForSelection,
+  dimensionOptions,
+  getLastDimensions: () => lastDimensions,
+  loadDimensions,
+  getLastInventoryItems: () => lastInventoryItems,
+  loadInventoryItems,
+  inventoryItemOptions,
+  renderEinvoiceSection,
+  loadEinvoiceView,
+  clearEinvoiceView: () => { lastEinvoiceView = null; },
+  renderBusinessAttachmentPanel,
+  listBusinessAttachments,
+  getApiOutput: () => apiOutput,
+  hasTdsSectionsCache: () => !!tdsSectionsCache,
+});
 
 // Initialize theme on app load
 initializeTheme();
@@ -17504,7 +16779,7 @@ function openBusinessDocumentWorkspaceAndForm(workspace) {
 }
 
 function activeBusinessDocumentFormConfig() {
-  if (activeBusinessWorkspace === "sales" && salesView === "create" && document.querySelector("[data-invoice-form]")) {
+  if (activeBusinessWorkspace === "sales" && salesUi.view === "create" && document.querySelector("[data-invoice-form]")) {
     return { addLine: addInvoiceLine, submit: submitInvoice };
   }
   if (activeBusinessWorkspace === "bills" && purchaseView === "create" && document.querySelector("[data-bill-form]")) {
