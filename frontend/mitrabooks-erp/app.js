@@ -190,6 +190,8 @@ import {
   rerenderDebitNoteIfActive,
 } from "./modules/documents/debit-notes.js";
 
+import { initEventHandlers } from "./modules/events.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -14044,948 +14046,6 @@ nav.addEventListener("click", (event) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════
-// SECTION: EVENT HANDLERS — click / change / input / keydown
-// NOTE  : Single delegated listener on dashboardPreview for all workspace actions
-// ══════════════════════════════════════════════════════════════════════
-
-nav.addEventListener("click", (event) => {
-  const link = event.target.closest("a[data-platform-workspace]");
-  if (!link) {
-    return;
-  }
-  event.preventDefault();
-  if (link.getAttribute("aria-disabled") === "true") {
-    return;
-  }
-  setPlatformWorkspace(link.dataset.platformWorkspace || "dashboard");
-});
-
-dashboardPreview.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-platform-action], [data-mandir-action], [data-gruha-action], [data-accounting-action], [data-business-action], [data-coa-action]");
-  if (!button) {
-    return;
-  }
-  const requestId = button.getAttribute("data-request-id") || "";
-  const action = button.getAttribute("data-platform-action");
-  const mandirAction = button.getAttribute("data-mandir-action");
-  const gruhaAction = button.getAttribute("data-gruha-action");
-  const accountingAction = button.getAttribute("data-accounting-action");
-  const businessAction = button.getAttribute("data-business-action");
-  if (action === "approve") {
-    approveOnboardingRequest(requestId);
-  } else if (action === "reject") {
-    rejectOnboardingRequest(requestId);
-  } else if (action === "entitlements") {
-    openTenantEntitlementsDialog(button);
-  } else if (action === "open-platform-owner") {
-    setExperience("platform");
-  } else if (mandirAction === "verify-public-payment") {
-    openMandirVerificationDialog(button);
-  } else if (mandirAction === "reject-public-payment") {
-    openMandirRejectionDialog(button);
-  } else if (mandirAction === "correct-public-payment") {
-    openMandirCorrectionDialog(button);
-  } else if (mandirAction === "download-receipt") {
-    downloadMandirReceipt(button);
-  } else if (mandirAction === "preview-receipt") {
-    previewMandirReceipt(button);
-  } else if (mandirAction === "cancel-receipt") {
-    openMandirCancelReceiptDialog(button);
-  } else if (mandirAction === "apply-list-filter") {
-    applyMandirListFilter(button.getAttribute("data-list-kind") || "");
-  } else if (mandirAction === "reset-list-filter") {
-    resetMandirListFilter(button.getAttribute("data-list-kind") || "");
-  } else if (mandirAction === "page-list") {
-    pageMandirList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
-  } else if (mandirAction === "workspace-view") {
-    setMandirWorkspace(button.getAttribute("data-workspace-view") || "overview");
-  } else if (gruhaAction === "workspace-view") {
-    setGruhaWorkspace(button.getAttribute("data-workspace-view") || "overview");
-  } else if (accountingAction === "apply-drilldown") {
-    applyAccountingDrilldownFilters();
-  } else if (accountingAction === "reset-drilldown") {
-    resetAccountingDrilldown();
-  } else if (accountingAction === "drill") {
-    drillAccountingReport(button);
-  } else if (accountingAction === "voucher-detail") {
-    openAccountingVoucherDetail(button);
-  } else if (accountingAction === "tb-ledger") {
-    openMandirTrialBalanceLedger(button);
-  } else if (businessAction === "open-create-party") {
-    openBusinessCreatePartyDialog();
-  } else if (businessAction === "edit-party") {
-    openBusinessEditPartyDialog(button);
-  } else if (businessAction === "deactivate-party") {
-    const partyId = button.getAttribute("data-party-id") || "";
-    if (confirm("Deactivate this party? It will no longer appear in new vouchers.")) {
-      deactivateBusinessParty(partyId);
-    }
-  } else if (businessAction === "apply-list-filter") {
-    applyBusinessListFilter(button.getAttribute("data-list-kind") || "");
-  } else if (businessAction === "reset-list-filter") {
-    resetBusinessListFilter(button.getAttribute("data-list-kind") || "");
-  } else if (businessAction === "page-list") {
-    pageBusinessList(button.getAttribute("data-list-kind") || "", button.getAttribute("data-page-direction") || "next");
-  } else if (businessAction === "voucher-queue-refresh") {
-    loadVoucherApprovalQueue(true, { surfaceErrors: true });
-  } else if (businessAction === "workspace-view") {
-    setBusinessWorkspace(button.getAttribute("data-workspace-view") || "overview");
-  } else if (businessAction === "settings-detail") {
-    activeSettingsDetailId = button.getAttribute("data-settings-id") || "";
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "settings-back") {
-    activeSettingsDetailId = "";
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "save-settings-section") {
-    saveBusinessAdminSettingsSection(button.getAttribute("data-settings-section") || "");
-  } else if (businessAction === "ca-client-filter") {
-    caPracticeFilters = { ...caPracticeFilters, client_name: button.getAttribute("data-client-name") || "" };
-    loadCaPracticeDocuments();
-  } else if (businessAction === "ca-client-filter-clear") {
-    caPracticeFilters = { ...caPracticeFilters, client_name: "" };
-    loadCaPracticeDocuments();
-  } else if (businessAction === "ca-client-refresh") {
-    loadCaClients();
-  } else if (businessAction === "hr-refresh") {
-    loadHrWorkspace();
-  } else if (businessAction === "hr-enable") {
-    hrEnable();
-  } else if (businessAction === "hr-add-employee-toggle") {
-    hrUi.showAddEmployee = true; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-add-employee-cancel") {
-    hrUi.showAddEmployee = false; hrUi.error = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-create-employee") {
-    hrCreateEmployee();
-  } else if (businessAction === "hr-create-structure") {
-    hrCreateStructure();
-  } else if (businessAction === "hr-assign-open") {
-    hrUi.assignFor = button.getAttribute("data-emp-id") || ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-assign-cancel") {
-    hrUi.assignFor = ""; hrUi.error = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-assign-submit") {
-    hrAssignSalary();
-  } else if (businessAction === "hr-letter") {
-    hrDownloadLetter(button);
-  } else if (businessAction === "hr-joining-letter") {
-    hrDownloadJoiningLetter(button);
-  } else if (businessAction === "hr-mark-joined") {
-    hrMarkJoined(button);
-  } else if (businessAction === "hr-mark-declined") {
-    hrMarkDeclined(button);
-  } else if (businessAction === "hr-letter-settings-toggle") {
-    hrUi.showLetterSettings = true; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-letter-settings-cancel") {
-    hrUi.showLetterSettings = false; hrUi.error = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "hr-save-letter-settings") {
-    hrSaveLetterSettings();
-  } else if (businessAction === "hr-tab") {
-    hrUi.tab = button.getAttribute("data-hr-tab") || "employees";
-    if (hrUi.tab !== "payroll") { hrUi.selectedRunId = ""; hrUi.runSlips = []; }
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    if (hrUi.tab === "leave") loadHrLeave();
-    else if (hrUi.tab === "tax") loadHrTax();
-    else if (hrUi.tab === "fnf") loadHrFnf();
-  } else if (businessAction === "hr-run-payroll") {
-    hrRunPayroll();
-  } else if (businessAction === "hr-view-slips") {
-    loadHrRunSlips(button.getAttribute("data-run-id") || "");
-  } else if (businessAction === "hr-slip-pdf") {
-    hrDownloadSlipPdf(button);
-  } else if (businessAction === "hr-create-leave-type") {
-    hrCreateLeaveType();
-  } else if (businessAction === "hr-allocate-leave") {
-    hrAllocateLeave();
-  } else if (businessAction === "hr-apply-leave") {
-    hrApplyLeave();
-  } else if (businessAction === "hr-approve-leave") {
-    hrDecideLeave(button, "approve");
-  } else if (businessAction === "hr-reject-leave") {
-    hrDecideLeave(button, "reject");
-  } else if (businessAction === "hr-create-declaration") {
-    hrCreateDeclaration();
-  } else if (businessAction === "hr-approve-decl") {
-    hrVerifyDeclaration(button, true);
-  } else if (businessAction === "hr-reject-decl") {
-    hrVerifyDeclaration(button, false);
-  } else if (businessAction === "hr-create-fnf") {
-    hrCreateFnf();
-  } else if (businessAction === "hr-fnf-approve") {
-    hrTransitionFnf(button, "approve");
-  } else if (businessAction === "hr-fnf-pay") {
-    hrTransitionFnf(button, "pay");
-  } else if (businessAction === "hr-fnf-pdf") {
-    hrDownloadFnfPdf(button);
-  } else if (businessAction === "mfg-refresh") {
-    loadMfgWorkspace();
-  } else if (businessAction === "mfg-tab") {
-    mfgTab = button.getAttribute("data-mfg-tab") || "cost-centres";
-    mfgBudgetVsActual = null;
-    mfgCompleteFor = "";
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    if (mfgTab === "pl" && !mfgPl) loadMfgPl();
-  } else if (businessAction === "mfg-enable-cost-centre") {
-    mfgEnableLayer("cost-centre");
-  } else if (businessAction === "mfg-enable-manufacturing") {
-    mfgEnableLayer("manufacturing");
-  } else if (businessAction === "mfg-create-cc") {
-    mfgCreateCostCentre();
-  } else if (businessAction === "mfg-create-budget") {
-    mfgCreateBudget();
-  } else if (businessAction === "mfg-budget-status") {
-    mfgSetBudgetStatus(button);
-  } else if (businessAction === "mfg-budget-vs-actual") {
-    mfgViewBudgetVsActual(button);
-  } else if (businessAction === "mfg-pl-run") {
-    mfgPlFrom = document.getElementById("mfg-pl-from")?.value || "";
-    mfgPlTo = document.getElementById("mfg-pl-to")?.value || "";
-    loadMfgPl();
-  } else if (businessAction === "mfg-pl-export") {
-    const fmt = button.getAttribute("data-format") || "csv";
-    const qs = [`format=${encodeURIComponent(fmt)}`];
-    if (mfgPlFrom) qs.push("from_date=" + encodeURIComponent(mfgPlFrom));
-    if (mfgPlTo) qs.push("to_date=" + encodeURIComponent(mfgPlTo));
-    downloadApiFile("mitrabooks", "/api/v1/business/mfg/cost-centre/pl/export?" + qs.join("&"), `cost_centre_pl.${fmt}`);
-  } else if (businessAction === "mfg-bom-add-comp") {
-    mfgAddBomComponent();
-  } else if (businessAction === "mfg-bom-remove-comp") {
-    mfgRemoveBomComponent(button);
-  } else if (businessAction === "mfg-create-bom") {
-    mfgCreateBom();
-  } else if (businessAction === "mfg-create-wo") {
-    mfgCreateWorkOrder();
-  } else if (businessAction === "mfg-wo-status") {
-    mfgSetWorkOrderStatus(button);
-  } else if (businessAction === "mfg-wo-open-complete") {
-    mfgOpenComplete(button);
-  } else if (businessAction === "mfg-wo-complete-cancel") {
-    mfgCompleteFor = ""; mfgWoActualDraft = []; mfgError = ""; dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (businessAction === "mfg-wo-add-actual") {
-    mfgAddWoActual();
-  } else if (businessAction === "mfg-wo-remove-actual") {
-    mfgRemoveWoActual(button);
-  } else if (businessAction === "mfg-wo-complete") {
-    mfgCompleteWorkOrder();
-  } else if (businessAction === "open-create-voucher") {
-    openBusinessCreateVoucherDialog();
-  } else if (businessAction === "remove-voucher-line") {
-    removeVoucherLine(button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "reverse-voucher") {
-    const voucherId = button.getAttribute("data-voucher-id") || "";
-    if (confirm("Reverse this voucher? A reversal entry will be created.")) {
-      reverseBusinessVoucher(voucherId);
-    }
-  } else if (businessAction === "review-voucher-approve") {
-    const voucherId = button.getAttribute("data-voucher-id") || "";
-    reviewBusinessVoucher(voucherId, true, "Approved from voucher queue");
-  } else if (businessAction === "review-voucher-reject") {
-    const voucherId = button.getAttribute("data-voucher-id") || "";
-    const rejectionReason = prompt("Enter rejection reason for this voucher:", "Needs correction") || "";
-    if (rejectionReason) {
-      reviewBusinessVoucher(voucherId, false, "Rejected from voucher queue", rejectionReason);
-    }
-  } else if (businessAction === "view-audit-event") {
-    openAuditEventDetailDialog(button.getAttribute("data-event-id") || "");
-  } else if (businessAction === "apply-audit-filter") {
-    applyAuditFilters();
-  } else if (businessAction === "reset-audit-filter") {
-    resetAuditFilters();
-  } else if (businessAction === "page-audit") {
-    pageAuditList(button.getAttribute("data-page-direction") || "next");
-  } else if (businessAction === "ca-doc-refresh") {
-    loadCaPracticeDocuments();
-  } else if (businessAction === "ca-doc-clear-filters") {
-    caPracticeFilters = { status: "", client_name: "", assigned_to: "", priority: "" };
-    loadCaPracticeDocuments();
-  } else if (businessAction === "ca-doc-files") {
-    loadCaDocumentAttachments(
-      button.getAttribute("data-document-id") || "",
-      button.getAttribute("data-client-name") || "",
-    );
-  } else if (businessAction === "refresh-financial-health") {
-    loadFinancialHealth();
-  } else if (businessAction === "ca-doc-status") {
-    updateCaPracticeDocumentStatus(
-      button.getAttribute("data-document-id") || "",
-      button.getAttribute("data-status") || "",
-    );
-  } else if (businessAction === "refresh-attachments") {
-    const ownerType = button.getAttribute("data-owner-type") || "";
-    const ownerId = button.getAttribute("data-owner-id") || "";
-    if (ownerType === "sales_invoice") {
-      loadInvoiceAttachments(ownerId);
-    } else if (ownerType === "purchase_bill") {
-      loadBillAttachments(ownerId);
-    } else {
-      loadCaDocumentAttachments(ownerId, caDocumentAttachmentState.client_name);
-    }
-  } else if (businessAction === "upload-attachments") {
-    const ownerType = button.getAttribute("data-owner-type") || "";
-    const ownerId = button.getAttribute("data-owner-id") || "";
-    const panel = button.closest("[data-attachment-panel]");
-    const input = panel?.querySelector("[data-attachment-input]");
-    const files = Array.from(input?.files || []);
-    if (!ownerType || !ownerId) {
-      setLoginStatus("warn", "Attachment target missing", "Refresh the document and try again.");
-      return;
-    }
-    if (!files.length) {
-      setLoginStatus("warn", "Choose files first", "Select one or more files before uploading.");
-      return;
-    }
-    button.disabled = true;
-    const results = await uploadBusinessAttachmentFiles(ownerType, ownerId, files);
-    button.disabled = false;
-    if (input) {
-      input.value = "";
-    }
-    const successCount = results.filter((item) => item.ok).length;
-    const failureCount = results.length - successCount;
-    if (ownerType === "sales_invoice") {
-      await loadInvoiceAttachments(ownerId);
-    } else if (ownerType === "purchase_bill") {
-      await loadBillAttachments(ownerId);
-    } else {
-      await loadCaDocumentAttachments(ownerId, caDocumentAttachmentState.client_name);
-    }
-    if (failureCount === 0) {
-      setLoginStatus("ok", "Attachments uploaded", `${successCount} file(s) uploaded successfully.`);
-    } else if (successCount > 0) {
-      setLoginStatus("warn", "Attachment upload partially failed", `${successCount} file(s) uploaded and ${failureCount} failed.`);
-    } else {
-      setLoginStatus("danger", "Attachment upload failed", statusDetailText(results[0]?.payload?.detail) || "No files were uploaded.");
-    }
-  } else if (businessAction === "download-attachment") {
-    const ownerType = button.getAttribute("data-owner-type") || "";
-    const ownerId = button.getAttribute("data-owner-id") || "";
-    const attachmentId = button.getAttribute("data-attachment-id") || "";
-    const fileName = button.getAttribute("data-file-name") || "attachment";
-    if (!ownerType || !ownerId || !attachmentId) {
-      setLoginStatus("warn", "Attachment missing", "Refresh the document and try the download again.");
-      return;
-    }
-    downloadApiFile("mitrabooks", businessAttachmentPath(ownerType, ownerId, attachmentId), fileName);
-  } else if (businessAction === "widget-collapse") {
-    toggleWidgetCollapse(button.getAttribute("data-widget-id") || "");
-  } else if (businessAction === "open-widget-settings") {
-    openWidgetSettings();
-  } else if (businessAction === "report-tab") {
-    setBusinessReportTab(button.getAttribute("data-report-tab") || "trial-balance");
-  } else if (businessAction === "apply-report-filter") {
-    applyBusinessReportFilter();
-  } else if (businessAction === "aging-kind") {
-    setAgingKind(button.getAttribute("data-alloc-kind") || "receivable");
-  } else if (businessAction === "alloc-kind") {
-    setAllocationKind(button.getAttribute("data-alloc-kind") || "receivable");
-  } else if (businessAction === "alloc-select-payment") {
-    selectAllocationPayment(button.getAttribute("data-payment-id") || "");
-  } else if (businessAction === "alloc-fifo") {
-    applyFifoSuggestion();
-  } else if (businessAction === "alloc-submit") {
-    submitAllocation();
-  } else if (businessAction === "export-report") {
-    downloadBusinessReport(
-      button.getAttribute("data-report-key") || "",
-      button.getAttribute("data-report-format") || "csv",
-      button.getAttribute("data-report-kind") || "",
-    );
-  } else if (businessAction === "export-tally-xml") {
-    downloadTallyXmlExport();
-  } else if (businessAction === "print-report") {
-    printBusinessReport();
-  } else if (businessAction === "report-ledger") {
-    setBusinessReportTab("general-ledger");
-    loadBusinessGeneralLedger(button.getAttribute("data-account-id") || "");
-  } else if (businessAction === "load-report-ledger") {
-    loadBusinessReportLedgerFromSelect();
-  } else if (businessAction === "open-create-invoice") {
-    openInvoiceCreate();
-  } else if (businessAction === "add-invoice-line") {
-    addInvoiceLine();
-  } else if (businessAction === "remove-invoice-line") {
-    removeInvoiceLine(button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "save-invoice") {
-    submitInvoice();
-  } else if (businessAction === "download-invoice-pdf") {
-    downloadInvoicePdf(
-      button.getAttribute("data-invoice-id") || "",
-      button.getAttribute("data-invoice-number") || "",
-    );
-  } else if (businessAction === "invoice-back") {
-    setBusinessSalesView("list");
-  } else if (businessAction === "view-invoice") {
-    openInvoiceDetail(button.getAttribute("data-invoice-id") || "");
-  } else if (businessAction === "begin-reverse-invoice") {
-    salesUi.reverseOpen = true;
-    rerenderSalesIfActive();
-  } else if (businessAction === "cancel-reverse-invoice") {
-    salesUi.reverseOpen = false;
-    rerenderSalesIfActive();
-  } else if (businessAction === "confirm-reverse-invoice") {
-    const invoiceId = button.getAttribute("data-invoice-id") || "";
-    const dateInput = document.querySelector("[data-reversal-date]");
-    cancelInvoice(invoiceId, dateInput?.value || "");
-  } else if (businessAction === "open-invoice-settings") {
-    openInvoiceSettings();
-  } else if (businessAction === "save-invoice-settings") {
-    saveInvoiceSettings();
-  } else if (businessAction === "open-create-bill") {
-    openBillCreate();
-  } else if (businessAction === "add-bill-line") {
-    addBillLine();
-  } else if (businessAction === "remove-bill-line") {
-    removeBillLine(button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "save-bill") {
-    submitBill();
-  } else if (businessAction === "bill-back") {
-    setBusinessPurchaseView("list");
-  } else if (businessAction === "view-bill") {
-    openBillDetail(button.getAttribute("data-bill-id") || "");
-  } else if (businessAction === "begin-reverse-bill") {
-    purchaseUi.reverseOpen = true;
-    rerenderPurchaseIfActive();
-  } else if (businessAction === "cancel-reverse-bill") {
-    purchaseUi.reverseOpen = false;
-    rerenderPurchaseIfActive();
-  } else if (businessAction === "confirm-reverse-bill") {
-    const billId = button.getAttribute("data-bill-id") || "";
-    const dateInput = document.querySelector("[data-reversal-date]");
-    cancelBill(billId, dateInput?.value || "");
-  } else if (businessAction === "lock-period") {
-    lockGstPeriodFromInput();
-  } else if (businessAction === "unlock-period") {
-    setGstPeriodLock(button.getAttribute("data-period") || "", false);
-  } else if (businessAction === "gst-preview") {
-    previewGstSettlementFromInput();
-  } else if (businessAction === "gst-post") {
-    postGstSettlement();
-  } else if (businessAction === "gstr3b-load") {
-    previewGstr3bFromInput();
-  } else if (businessAction === "gstr3b-download-json") {
-    downloadGstr3bJson();
-  } else if (businessAction === "gst-return-type") {
-    const rt = button.getAttribute("data-return-type");
-    gstReturnState.gstReturnType = ["gstr1", "cmp08", "gstr4", "gstr2b"].includes(rt) ? rt : "gstr3b";
-    rerenderBusinessReportsIfActive();
-    refreshCurrentBusinessReport();
-  } else if (businessAction === "gstr1-load") {
-    previewGstr1FromInput();
-  } else if (businessAction === "gstr1-download-json") {
-    downloadGstr1Json();
-  } else if (businessAction === "cmp08-load") {
-    previewCmp08FromInput();
-  } else if (businessAction === "cmp08-download-json") {
-    downloadCmp08Json();
-  } else if (businessAction === "cmp08-post") {
-    postCmp08Liability();
-  } else if (businessAction === "gstr4-load") {
-    previewGstr4FromInput();
-  } else if (businessAction === "gstr4-download-json") {
-    downloadGstr4Json();
-  } else if (businessAction === "gstr2b-reconcile") {
-    reconcileGstr2b();
-  } else if (businessAction === "tds-load") {
-    previewTdsRegisterFromInput();
-  } else if (businessAction === "bankrecon-load") {
-    loadBankReconciliation(document.querySelector("[data-bankrecon-account]")?.value || "");
-  } else if (businessAction === "bankrecon-upload") {
-    uploadBankStatementFile();
-  } else if (businessAction === "bankrecon-match") {
-    confirmBankReconMatch(button.getAttribute("data-stmt-id") || "", button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "bankrecon-unmatch") {
-    reverseBankReconMatch(button.getAttribute("data-match-id") || "");
-  } else if (businessAction === "bankrecon-post-voucher") {
-    postBankReconStatementVoucher(button.getAttribute("data-stmt-id") || "");
-  } else if (businessAction === "stmt-load") {
-    loadPartyStatement();
-  } else if (businessAction === "dunning-record") {
-    recordDunningSent();
-  } else if (businessAction === "dunning-copy") {
-    copyDunningLetter();
-  } else if (businessAction === "ob-template") {
-    downloadObTemplate();
-  } else if (businessAction === "ob-export") {
-    downloadObExport();
-  } else if (businessAction === "ob-preview") {
-    previewOpeningBalances();
-  } else if (businessAction === "ob-post") {
-    postOpeningBalances();
-  } else if (businessAction === "vi-template") {
-    downloadViTemplate();
-  } else if (businessAction === "vi-preview") {
-    previewBulkVouchers();
-  } else if (businessAction === "vi-post") {
-    postBulkVouchers();
-  } else if (businessAction === "ye-preview") {
-    previewYearEnd();
-  } else if (businessAction === "ye-post") {
-    postYearEndClose();
-  } else if (businessAction === "fa-toggle-form") {
-    faFormOpen = !faFormOpen;
-    rerenderBusinessReportsIfActive();
-  } else if (businessAction === "fa-create") {
-    createFixedAssetFromForm();
-  } else if (businessAction === "fa-dispose") {
-    disposeFixedAsset(button.getAttribute("data-asset-id") || "", button);
-  } else if (businessAction === "dep-preview") {
-    previewDepreciation();
-  } else if (businessAction === "dep-post") {
-    postDepreciationRun();
-  } else if (businessAction === "dim-create") {
-    createDimensionFromForm();
-  } else if (businessAction === "dim-deactivate") {
-    deactivateDimension(button.getAttribute("data-dimension-id") || "");
-  } else if (businessAction === "dim-report-load") {
-    loadDimensionReport();
-    loadBranchConsolidatedReport();
-  } else if (businessAction === "dim-report-export") {
-    downloadDimensionReport(button.getAttribute("data-format") || "csv");
-  } else if (businessAction === "einv-download") {
-    downloadInv01Json();
-  } else if (businessAction === "einv-record") {
-    recordEinvoiceIrn();
-  } else if (businessAction === "item-create") {
-    createInventoryItemFromForm();
-  } else if (businessAction === "item-deactivate") {
-    deactivateInventoryItem(button.getAttribute("data-item-id") || "");
-  } else if (businessAction === "stock-register-load") {
-    loadStockMovements();
-    loadStockRegister();
-  } else if (businessAction === "stock-movement-create") {
-    createStockMovementFromForm();
-  } else if (businessAction === "closing-stock-post") {
-    postClosingStock();
-  } else if (businessAction === "itc-preview") {
-    previewItcReversalsFromInput();
-  } else if (businessAction === "itc-reverse") {
-    reverseItcForBill(button.getAttribute("data-bill-id") || "");
-  } else if (businessAction === "itc-reclaim") {
-    reclaimItcForBill(button.getAttribute("data-bill-id") || "");
-  } else if (businessAction === "bill-mark-paid") {
-    markBillPaidFull(button.getAttribute("data-bill-id") || "", button.getAttribute("data-bill-amount") || "0");
-  } else if (businessAction === "open-create-credit-note") {
-    openCreditNoteCreate();
-  } else if (businessAction === "add-cn-line") {
-    addCnLine();
-  } else if (businessAction === "remove-cn-line") {
-    removeCnLine(button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "save-credit-note") {
-    submitCreditNote();
-  } else if (businessAction === "cn-back") {
-    setCreditNoteView("list");
-  } else if (businessAction === "view-credit-note") {
-    openCreditNoteDetail(button.getAttribute("data-cn-id") || "");
-  } else if (businessAction === "print-credit-note") {
-    printCreditNoteDetail();
-  } else if (businessAction === "export-credit-note-json") {
-    downloadCreditNoteJson();
-  } else if (businessAction === "begin-reverse-cn") {
-    creditUi.reverseOpen = true;
-    rerenderCreditNoteIfActive();
-  } else if (businessAction === "cancel-reverse-cn") {
-    creditUi.reverseOpen = false;
-    rerenderCreditNoteIfActive();
-  } else if (businessAction === "confirm-reverse-cn") {
-    const noteId = button.getAttribute("data-cn-id") || "";
-    const dateInput = document.querySelector("[data-reversal-date]");
-    cancelCreditNote(noteId, dateInput?.value || "");
-  } else if (businessAction === "open-create-debit-note") {
-    openDebitNoteCreate();
-  } else if (businessAction === "add-dn-line") {
-    addDnLine();
-  } else if (businessAction === "remove-dn-line") {
-    removeDnLine(button.getAttribute("data-line-id") || "");
-  } else if (businessAction === "save-debit-note") {
-    submitDebitNote();
-  } else if (businessAction === "dn-back") {
-    setDebitNoteView("list");
-  } else if (businessAction === "view-debit-note") {
-    openDebitNoteDetail(button.getAttribute("data-dn-id") || "");
-  } else if (businessAction === "print-debit-note") {
-    printDebitNoteDetail();
-  } else if (businessAction === "export-debit-note-json") {
-    downloadDebitNoteJson();
-  } else if (businessAction === "begin-reverse-dn") {
-    debitUi.reverseOpen = true;
-    rerenderDebitNoteIfActive();
-  } else if (businessAction === "cancel-reverse-dn") {
-    debitUi.reverseOpen = false;
-    rerenderDebitNoteIfActive();
-  } else if (businessAction === "confirm-reverse-dn") {
-    const noteId = button.getAttribute("data-dn-id") || "";
-    const dateInput = document.querySelector("[data-reversal-date]");
-    cancelDebitNote(noteId, dateInput?.value || "");
-  }
-
-  // COA actions use their own attribute to avoid collisions with businessAction
-  const coaAction = button.getAttribute("data-coa-action");
-  if (coaAction === "toggle-add-form") {
-    const form = document.getElementById("coa-add-form");
-    if (form) form.style.display = form.style.display === "none" ? "" : "none";
-  } else if (coaAction === "submit-add") {
-    coaHandleAddSubmit();
-  } else if (coaAction === "edit-name") {
-    const row = button.closest("tr[data-coa-code]");
-    if (row) coaEnterEditMode(row);
-  } else if (coaAction === "save-name") {
-    const row = button.closest("tr[data-coa-code]");
-    if (row) coaHandleSaveName(row);
-  } else if (coaAction === "cancel-name") {
-    const row = button.closest("tr[data-coa-code]");
-    if (row) coaExitEditMode(row);
-  } else if (coaAction === "clear-filter") {
-    coaTypeFilter = "";
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-  } else if (coaAction === "ca-invite-submit") {
-    const form = button.closest("[data-ca-invite-form]");
-    if (!form) return;
-    const email = (form.querySelector("[name=email]")?.value || "").trim();
-    const full_name = (form.querySelector("[name=full_name]")?.value || "").trim();
-    if (!email || !full_name) {
-      caInviteError = "Please fill in both name and email.";
-      caInviteSuccess = "";
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-      return;
-    }
-    button.disabled = true;
-    const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
-      method: "POST",
-      body: JSON.stringify({ email, full_name }),
-      timeoutMs: 30000,
-    });
-    button.disabled = false;
-    if (result.ok) {
-      const payload = result.payload || {};
-      if (payload.email_sent) {
-        caInviteSuccess = `${payload.resent ? "Invite link resent" : "Invite link sent"} to ${email}.`;
-        caInviteError = "";
-      } else {
-        caInviteSuccess = "";
-        caInviteError = `CA account was provisioned, but the credential email was not delivered: ${payload.email_error || "SMTP delivery failed."}`;
-      }
-      form.reset();
-      loadCaAccessUsers();
-    } else {
-      caInviteError = result.payload?.detail || `Failed to send invite (HTTP ${result.status}).`;
-      caInviteSuccess = "";
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else if (coaAction === "ca-resend") {
-    const email = button.getAttribute("data-ca-email");
-    const full_name = button.getAttribute("data-ca-name") || "";
-    if (!email) return;
-    if (!confirm(`Resend the secure invite link to ${email}? The recipient will set their password on first use.`)) return;
-    button.disabled = true;
-    const result = await apiRequest("mitrabooks", "/api/v1/business/ca/invite", {
-      method: "POST",
-      body: JSON.stringify({ email, full_name }),
-      timeoutMs: 30000,
-    });
-    button.disabled = false;
-    if (result.ok) {
-      const payload = result.payload || {};
-      if (payload.email_sent) {
-        caInviteSuccess = `New invite link sent to ${email}.`;
-        caInviteError = "";
-      } else {
-        caInviteSuccess = "";
-        caInviteError = `Account refreshed but email delivery failed: ${payload.email_error || "SMTP not configured."}`;
-      }
-      loadCaAccessUsers();
-    } else {
-      alert(result.payload?.detail || `Resend failed (HTTP ${result.status}).`);
-    }
-  } else if (coaAction === "ca-delete") {
-    const inviteId = button.getAttribute("data-ca-invite-id");
-    const email = button.getAttribute("data-ca-email");
-    if (!inviteId) return;
-    if (!confirm(`Permanently delete the CA record for ${email}? This cannot be undone.`)) return;
-    button.disabled = true;
-    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/invite/${encodeURIComponent(inviteId)}/cancel`, {
-      method: "POST",
-    });
-    button.disabled = false;
-    if (result.ok) {
-      loadCaAccessUsers();
-    } else {
-      alert(result.payload?.detail || `Delete failed (HTTP ${result.status}).`);
-    }
-  } else if (coaAction === "ca-reinstate") {
-    const userId = button.getAttribute("data-ca-user-id");
-    const email = button.getAttribute("data-ca-email");
-    if (!userId) return;
-    if (!confirm(`Reinstate CA access for ${email}? They will be able to log in again.`)) return;
-    button.disabled = true;
-    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/${encodeURIComponent(userId)}/reinstate`, {
-      method: "POST",
-    });
-    button.disabled = false;
-    if (result.ok) {
-      loadCaAccessUsers();
-    } else {
-      alert(result.payload?.detail || `Reinstate failed (HTTP ${result.status}).`);
-    }
-  } else if (coaAction === "ca-revoke") {
-    const userId = button.getAttribute("data-ca-user-id");
-    const email = button.getAttribute("data-ca-email");
-    if (!userId) return;
-    if (!confirm(`Revoke CA access for ${email}? They will no longer be able to log in.`)) return;
-    button.disabled = true;
-    const result = await apiRequest("mitrabooks", `/api/v1/business/ca/${encodeURIComponent(userId)}/revoke`, {
-      method: "POST",
-    });
-    button.disabled = false;
-    if (result.ok) {
-      loadCaAccessUsers();
-    } else {
-      alert(result.payload?.detail || `Revoke failed (HTTP ${result.status}).`);
-    }
-  }
-});
-dashboardPreview.addEventListener("input", (event) => {
-  if (event.target.closest("[data-invoice-form]")) {
-    updateInvoiceTotalsDisplay();
-  } else if (event.target.closest("[data-bill-form]")) {
-    updateBillTotalsDisplay();
-  } else if (event.target.closest("[data-cn-form]")) {
-    updateCnTotalsDisplay();
-  } else if (event.target.closest("[data-dn-form]")) {
-    updateDnTotalsDisplay();
-  }
-});
-dashboardPreview.addEventListener("change", (event) => {
-  if (event.target.id === "coa-type-filter") {
-    coaTypeFilter = event.target.value;
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    return;
-  }
-  if (!["is_inter_state", "is_reverse_charge", "tds_section", "tcs_section", "supply_type"].includes(event.target.name)) {
-    return;
-  }
-  if (event.target.closest("[data-invoice-form]")) {
-    updateInvoiceTotalsDisplay();
-  } else if (event.target.closest("[data-bill-form]")) {
-    updateBillTotalsDisplay();
-  } else if (event.target.closest("[data-cn-form]")) {
-    updateCnTotalsDisplay();
-  } else if (event.target.closest("[data-dn-form]")) {
-    updateDnTotalsDisplay();
-  }
-});
-dashboardPreview.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") {
-    return;
-  }
-  const input = event.target.closest("[data-mandir-list] input, [data-mandir-list] select, [data-business-list] input, [data-business-list] select");
-  if (!input) {
-    const accountingInput = event.target.closest("[data-accounting-drilldown] input, [data-accounting-drilldown] select");
-    if (!accountingInput) {
-      return;
-    }
-    event.preventDefault();
-    applyAccountingDrilldownFilters();
-    return;
-  }
-  event.preventDefault();
-  const mandirPanel = input.closest("[data-mandir-list]");
-  const businessPanel = input.closest("[data-business-list]");
-  if (mandirPanel) {
-    applyMandirListFilter(mandirPanel.getAttribute("data-mandir-list") || "");
-  } else if (businessPanel) {
-    applyBusinessListFilter(businessPanel.getAttribute("data-business-list") || "");
-  }
-});
-dashboardPreview.addEventListener("input", (event) => {
-  const field = event.target.closest("[data-ca-client-form] input, [data-ca-client-form] select");
-  if (!field || !field.name) {
-    return;
-  }
-  caClientDraft = {
-    ...caClientDraft,
-    [field.name]: field.value,
-  };
-});
-dashboardPreview.addEventListener("submit", (event) => {
-  const mandirForm = event.target.closest("[data-mandir-create-form]");
-  const mandirComplianceForm = event.target.closest("[data-mandir-compliance-form]");
-  const caClientForm = event.target.closest("[data-ca-client-form]");
-  const caDocumentForm = event.target.closest("[data-ca-document-form]");
-  const caFilterForm = event.target.closest("[data-ca-filter-form]");
-  if (!mandirForm && !mandirComplianceForm && !caClientForm && !caDocumentForm && !caFilterForm) {
-    return;
-  }
-  event.preventDefault();
-  if (mandirForm) {
-    submitMandirCreateForm(mandirForm);
-  } else if (mandirComplianceForm) {
-    submitMandirComplianceForm(mandirComplianceForm);
-  } else if (caClientForm) {
-    createCaClient(caClientForm);
-  } else if (caDocumentForm) {
-    createCaPracticeDocument(caDocumentForm);
-  } else if (caFilterForm) {
-    const formData = new FormData(caFilterForm);
-    caPracticeFilters = {
-      status: String(formData.get("status") || "").trim(),
-      client_name: String(formData.get("client_name") || "").trim(),
-      assigned_to: String(formData.get("assigned_to") || "").trim(),
-      priority: String(formData.get("priority") || "").trim(),
-    };
-    loadCaPracticeDocuments();
-  }
-});
-entitlementForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitTenantEntitlements();
-});
-mandirVerificationForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitMandirPublicPaymentVerification();
-});
-mandirRejectionForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitMandirPublicPaymentRejection();
-});
-mandirCorrectionForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitMandirPublicPaymentCorrection();
-});
-document.getElementById("entitlement-close").addEventListener("click", () => entitlementDialog.close());
-document.getElementById("entitlement-cancel").addEventListener("click", () => entitlementDialog.close());
-document.getElementById("mandir-verification-close").addEventListener("click", () => mandirVerificationDialog.close());
-document.getElementById("mandir-verification-cancel").addEventListener("click", () => mandirVerificationDialog.close());
-document.getElementById("mandir-rejection-close").addEventListener("click", () => mandirRejectionDialog.close());
-document.getElementById("mandir-rejection-cancel").addEventListener("click", () => mandirRejectionDialog.close());
-document.getElementById("mandir-correction-close").addEventListener("click", () => mandirCorrectionDialog.close());
-document.getElementById("mandir-correction-cancel").addEventListener("click", () => mandirCorrectionDialog.close());
-document.getElementById("receipt-preview-close").addEventListener("click", closeReceiptPreview);
-document.getElementById("mandir-cancel-receipt-close").addEventListener("click", () => mandirCancelReceiptDialog.close());
-document.getElementById("mandir-cancel-receipt-cancel").addEventListener("click", () => mandirCancelReceiptDialog.close());
-mandirCancelReceiptForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitMandirCancelReceipt();
-});
-receiptPreviewDialog.addEventListener("close", () => {
-  receiptPreviewFrame.removeAttribute("src");
-  if (activeReceiptPreviewObjectUrl) {
-    window.URL.revokeObjectURL(activeReceiptPreviewObjectUrl);
-    activeReceiptPreviewObjectUrl = "";
-  }
-});
-const businessPartyCreateDialog = document.getElementById("business-party-create-dialog");
-const businessPartyCreateForm = document.getElementById("business-party-create-form");
-const businessPartyEditDialog = document.getElementById("business-party-edit-dialog");
-const businessPartyEditForm = document.getElementById("business-party-edit-form");
-
-if (businessPartyCreateForm) {
-  businessPartyCreateForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const name = document.getElementById("business-party-name")?.value || "";
-    const party_type = document.getElementById("business-party-type")?.value || "customer";
-    const gstin = document.getElementById("business-party-gstin")?.value || "";
-    const pan = document.getElementById("business-party-pan")?.value || "";
-    const city = document.getElementById("business-party-city")?.value || "";
-    const state = document.getElementById("business-party-state")?.value || "";
-    const pincode = document.getElementById("business-party-pincode")?.value || "";
-    if (!name.trim()) {
-      setLoginStatus("warn", "Party name required", "Enter a name for the party.");
-      return;
-    }
-
-    createBusinessParty({ name, party_type, gstin, pan, city, state, pincode });
-  });
-}
-
-if (businessPartyEditForm) {
-  businessPartyEditForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const partyId = document.getElementById("business-party-edit-id")?.value || "";
-    const name = document.getElementById("business-party-edit-name")?.value || "";
-    const party_type = document.getElementById("business-party-edit-type")?.value || "customer";
-    const gstin = document.getElementById("business-party-edit-gstin")?.value || "";
-    const pan = document.getElementById("business-party-edit-pan")?.value || "";
-    const city = document.getElementById("business-party-edit-city")?.value || "";
-    const state = document.getElementById("business-party-edit-state")?.value || "";
-    const pincode = document.getElementById("business-party-edit-pincode")?.value || "";
-    if (!name.trim()) {
-      setLoginStatus("warn", "Party name required", "Enter a name for the party.");
-      return;
-    }
-
-    updateBusinessParty(partyId, { name, party_type, gstin, pan, city, state, pincode });
-  });
-}
-
-document.getElementById("business-party-create-close")?.addEventListener("click", () => businessPartyCreateDialog?.close());
-document.getElementById("business-party-create-cancel")?.addEventListener("click", () => businessPartyCreateDialog?.close());
-document.getElementById("business-party-edit-close")?.addEventListener("click", () => businessPartyEditDialog?.close());
-document.getElementById("business-party-edit-cancel")?.addEventListener("click", () => businessPartyEditDialog?.close());
-
-const businessVoucherCreateDialog = document.getElementById("business-voucher-create-dialog");
-const businessVoucherCreateForm = document.getElementById("business-voucher-create-form");
-
-if (businessVoucherCreateForm) {
-  businessVoucherCreateForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const voucherType = document.getElementById("business-voucher-type-select")?.value || "";
-    const date = document.getElementById("business-voucher-date")?.value || "";
-
-    if (!voucherType) {
-      setLoginStatus("warn", "Voucher type required", "Select a voucher type.");
-      return;
-    }
-
-    if (!date) {
-      setLoginStatus("warn", "Date required", "Enter the voucher date.");
-      return;
-    }
-
-    createBusinessVoucherByType(voucherType, date);
-  });
-
-  // Add event listener for voucher type selector
-  document.getElementById("business-voucher-type-select")?.addEventListener("change", (event) => {
-    const voucherType = event.target.value;
-    updateVoucherTypeForm(voucherType);
-  });
-}
-
-document.getElementById("business-voucher-create-close")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
-document.getElementById("business-voucher-create-cancel")?.addEventListener("click", () => businessVoucherCreateDialog?.close());
-businessVoucherCreateDialog?.addEventListener("keydown", handleVoucherDialogKeyboard);
-businessVoucherCreateDialog?.addEventListener("click", (event) => {
-  const button = event.target.closest('[data-business-action="remove-voucher-line"]');
-  if (!button) {
-    return;
-  }
-  event.preventDefault();
-  removeVoucherLine(button.getAttribute("data-line-id") || "");
-});
-
-document.getElementById("business-voucher-add-line")?.addEventListener("click", (event) => {
-  event.preventDefault();
-  addVoucherLine();
-});
-
-const auditEventDetailDialog = document.getElementById("audit-event-detail-dialog");
-document.getElementById("audit-event-detail-close")?.addEventListener("click", () => auditEventDetailDialog?.close());
-document.getElementById("audit-event-detail-cancel")?.addEventListener("click", () => auditEventDetailDialog?.close());
-
-dashboardPreview.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") {
-    return;
-  }
-  const input = event.target.closest("[data-business-list='audit'] input, [data-business-list='audit'] select");
-  if (!input) {
-    return;
-  }
-  event.preventDefault();
-  applyAuditFilters();
-});
-
-document.getElementById("mode-mitrabooks").addEventListener("click", () => setExperience("mitrabooks"));
-document.getElementById("mode-platform").addEventListener("click", () => setExperience("platform"));
-document.getElementById("mode-mandir").addEventListener("click", () => setExperience("mandir"));
-document.getElementById("mode-gruha").addEventListener("click", () => setExperience("gruha"));
 
 // Wire widget system deps (avoids modules/widgets.js importing app.js)
 initWidgets({
@@ -15153,6 +14213,287 @@ initDebitNotes({
   getLastDimensions: () => lastDimensions,
   loadDimensions,
   getApiOutput: () => apiOutput,
+});
+
+// Wire workspace event handlers (avoids import cycle with app.js)
+initEventHandlers({
+  get activeReceiptPreviewObjectUrl() { return activeReceiptPreviewObjectUrl; },
+  set activeReceiptPreviewObjectUrl(v) { activeReceiptPreviewObjectUrl = v; },
+  get activeSettingsDetailId() { return activeSettingsDetailId; },
+  set activeSettingsDetailId(v) { activeSettingsDetailId = v; },
+  addBillLine,
+  addCnLine,
+  addDnLine,
+  addInvoiceLine,
+  addVoucherLine,
+  apiRequest,
+  applyAccountingDrilldownFilters,
+  applyAuditFilters,
+  applyBusinessListFilter,
+  applyBusinessReportFilter,
+  applyFifoSuggestion,
+  applyMandirListFilter,
+  approveOnboardingRequest,
+  businessAttachmentPath,
+  get caClientDraft() { return caClientDraft; },
+  set caClientDraft(v) { caClientDraft = v; },
+  caDocumentAttachmentState,
+  get caInviteError() { return caInviteError; },
+  set caInviteError(v) { caInviteError = v; },
+  get caInviteSuccess() { return caInviteSuccess; },
+  set caInviteSuccess(v) { caInviteSuccess = v; },
+  get caPracticeFilters() { return caPracticeFilters; },
+  set caPracticeFilters(v) { caPracticeFilters = v; },
+  cancelBill,
+  cancelCreditNote,
+  cancelDebitNote,
+  cancelInvoice,
+  closeReceiptPreview,
+  coaEnterEditMode,
+  coaExitEditMode,
+  coaHandleAddSubmit,
+  coaHandleSaveName,
+  get coaTypeFilter() { return coaTypeFilter; },
+  set coaTypeFilter(v) { coaTypeFilter = v; },
+  confirmBankReconMatch,
+  copyDunningLetter,
+  createBusinessParty,
+  createBusinessVoucherByType,
+  createCaClient,
+  createCaPracticeDocument,
+  createDimensionFromForm,
+  createFixedAssetFromForm,
+  createInventoryItemFromForm,
+  createStockMovementFromForm,
+  creditUi,
+  dashboardPreview,
+  deactivateBusinessParty,
+  deactivateDimension,
+  deactivateInventoryItem,
+  debitUi,
+  disposeFixedAsset,
+  downloadApiFile,
+  downloadBusinessReport,
+  downloadCmp08Json,
+  downloadCreditNoteJson,
+  downloadDebitNoteJson,
+  downloadDimensionReport,
+  downloadGstr1Json,
+  downloadGstr3bJson,
+  downloadGstr4Json,
+  downloadInv01Json,
+  downloadInvoicePdf,
+  downloadMandirReceipt,
+  downloadObExport,
+  downloadObTemplate,
+  downloadTallyXmlExport,
+  downloadViTemplate,
+  drillAccountingReport,
+  entitlementDialog,
+  entitlementForm,
+  get faFormOpen() { return faFormOpen; },
+  set faFormOpen(v) { faFormOpen = v; },
+  gstReturnState,
+  handleVoucherDialogKeyboard,
+  hrAllocateLeave,
+  hrApplyLeave,
+  hrAssignSalary,
+  hrCreateDeclaration,
+  hrCreateEmployee,
+  hrCreateFnf,
+  hrCreateLeaveType,
+  hrCreateStructure,
+  hrDecideLeave,
+  hrDownloadFnfPdf,
+  hrDownloadJoiningLetter,
+  hrDownloadLetter,
+  hrDownloadSlipPdf,
+  hrEnable,
+  hrMarkDeclined,
+  hrMarkJoined,
+  hrRunPayroll,
+  hrSaveLetterSettings,
+  hrTransitionFnf,
+  hrUi,
+  hrVerifyDeclaration,
+  loadBankReconciliation,
+  loadBillAttachments,
+  loadBranchConsolidatedReport,
+  loadBusinessGeneralLedger,
+  loadBusinessReportLedgerFromSelect,
+  loadCaAccessUsers,
+  loadCaClients,
+  loadCaDocumentAttachments,
+  loadCaPracticeDocuments,
+  loadDimensionReport,
+  loadFinancialHealth,
+  loadHrFnf,
+  loadHrLeave,
+  loadHrRunSlips,
+  loadHrTax,
+  loadHrWorkspace,
+  loadMfgPl,
+  loadMfgWorkspace,
+  loadPartyStatement,
+  loadStockMovements,
+  loadStockRegister,
+  loadVoucherApprovalQueue,
+  lockGstPeriodFromInput,
+  mandirCancelReceiptDialog,
+  mandirCancelReceiptForm,
+  mandirCorrectionDialog,
+  mandirCorrectionForm,
+  mandirRejectionDialog,
+  mandirRejectionForm,
+  mandirVerificationDialog,
+  mandirVerificationForm,
+  markBillPaidFull,
+  mfgAddBomComponent,
+  mfgAddWoActual,
+  get mfgBudgetVsActual() { return mfgBudgetVsActual; },
+  set mfgBudgetVsActual(v) { mfgBudgetVsActual = v; },
+  get mfgCompleteFor() { return mfgCompleteFor; },
+  set mfgCompleteFor(v) { mfgCompleteFor = v; },
+  mfgCompleteWorkOrder,
+  mfgCreateBom,
+  mfgCreateBudget,
+  mfgCreateCostCentre,
+  mfgCreateWorkOrder,
+  mfgEnableLayer,
+  get mfgError() { return mfgError; },
+  set mfgError(v) { mfgError = v; },
+  mfgOpenComplete,
+  mfgPl,
+  get mfgPlFrom() { return mfgPlFrom; },
+  set mfgPlFrom(v) { mfgPlFrom = v; },
+  get mfgPlTo() { return mfgPlTo; },
+  set mfgPlTo(v) { mfgPlTo = v; },
+  mfgRemoveBomComponent,
+  mfgRemoveWoActual,
+  mfgSetBudgetStatus,
+  mfgSetWorkOrderStatus,
+  get mfgTab() { return mfgTab; },
+  set mfgTab(v) { mfgTab = v; },
+  mfgViewBudgetVsActual,
+  get mfgWoActualDraft() { return mfgWoActualDraft; },
+  set mfgWoActualDraft(v) { mfgWoActualDraft = v; },
+  nav,
+  openAccountingVoucherDetail,
+  openAuditEventDetailDialog,
+  openBillCreate,
+  openBillDetail,
+  openBusinessCreatePartyDialog,
+  openBusinessCreateVoucherDialog,
+  openBusinessEditPartyDialog,
+  openCreditNoteCreate,
+  openCreditNoteDetail,
+  openDebitNoteCreate,
+  openDebitNoteDetail,
+  openInvoiceCreate,
+  openInvoiceDetail,
+  openInvoiceSettings,
+  openMandirCancelReceiptDialog,
+  openMandirCorrectionDialog,
+  openMandirRejectionDialog,
+  openMandirTrialBalanceLedger,
+  openMandirVerificationDialog,
+  openTenantEntitlementsDialog,
+  openWidgetSettings,
+  pageAuditList,
+  pageBusinessList,
+  pageMandirList,
+  postBankReconStatementVoucher,
+  postBulkVouchers,
+  postClosingStock,
+  postCmp08Liability,
+  postDepreciationRun,
+  postGstSettlement,
+  postOpeningBalances,
+  postYearEndClose,
+  previewBulkVouchers,
+  previewCmp08FromInput,
+  previewDepreciation,
+  previewGstSettlementFromInput,
+  previewGstr1FromInput,
+  previewGstr3bFromInput,
+  previewGstr4FromInput,
+  previewItcReversalsFromInput,
+  previewMandirReceipt,
+  previewOpeningBalances,
+  previewTdsRegisterFromInput,
+  previewYearEnd,
+  printBusinessReport,
+  printCreditNoteDetail,
+  printDebitNoteDetail,
+  purchaseUi,
+  receiptPreviewDialog,
+  receiptPreviewFrame,
+  reclaimItcForBill,
+  reconcileGstr2b,
+  recordDunningSent,
+  recordEinvoiceIrn,
+  refreshCurrentBusinessReport,
+  rejectOnboardingRequest,
+  removeBillLine,
+  removeCnLine,
+  removeDnLine,
+  removeInvoiceLine,
+  removeVoucherLine,
+  renderBusinessWorkspace,
+  rerenderBusinessReportsIfActive,
+  rerenderCreditNoteIfActive,
+  rerenderDebitNoteIfActive,
+  rerenderPurchaseIfActive,
+  rerenderSalesIfActive,
+  resetAccountingDrilldown,
+  resetAuditFilters,
+  resetBusinessListFilter,
+  resetMandirListFilter,
+  reverseBankReconMatch,
+  reverseBusinessVoucher,
+  reverseItcForBill,
+  reviewBusinessVoucher,
+  salesUi,
+  saveBusinessAdminSettingsSection,
+  saveInvoiceSettings,
+  selectAllocationPayment,
+  setAgingKind,
+  setAllocationKind,
+  setBusinessPurchaseView,
+  setBusinessReportTab,
+  setBusinessSalesView,
+  setBusinessWorkspace,
+  setCreditNoteView,
+  setDebitNoteView,
+  setExperience,
+  setGruhaWorkspace,
+  setGstPeriodLock,
+  setLoginStatus,
+  setMandirWorkspace,
+  setPlatformWorkspace,
+  statusDetailText,
+  submitAllocation,
+  submitBill,
+  submitCreditNote,
+  submitDebitNote,
+  submitInvoice,
+  submitMandirCancelReceipt,
+  submitMandirComplianceForm,
+  submitMandirCreateForm,
+  submitMandirPublicPaymentCorrection,
+  submitMandirPublicPaymentRejection,
+  submitMandirPublicPaymentVerification,
+  submitTenantEntitlements,
+  toggleWidgetCollapse,
+  updateBillTotalsDisplay,
+  updateBusinessParty,
+  updateCaPracticeDocumentStatus,
+  updateCnTotalsDisplay,
+  updateDnTotalsDisplay,
+  updateInvoiceTotalsDisplay,
+  updateVoucherTypeForm,
+  uploadBankStatementFile,
+  uploadBusinessAttachmentFiles,
 });
 
 // Initialize theme on app load
