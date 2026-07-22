@@ -24,13 +24,10 @@ import {
   setConfiguredApiBaseUrl,
   statusLabel,
 } from "../shared/api-client.js";
-
-// ============================================
-// THEME MANAGEMENT (PWA-Compatible)
-// ============================================
-
-const THEME_STORAGE_KEY = "mitrabooks-theme";
-
+import {
+  setTheme,
+  initializeTheme,
+} from "./modules/theme.js";
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: NAVIGATION GROUPS + ITEMS
@@ -124,75 +121,6 @@ function businessNavigationGroups() {
 
 function businessNavigationItems() {
   return businessNavigationGroups().flatMap((group) => group.items);
-}
-
-/**
- * Set the app theme (dark or light)
- * Persists to localStorage for offline retention
- */
-
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: THEME (dark / light)
-// NOTE  : setTheme, getTheme, initializeTheme, updateThemeButtons
-// ══════════════════════════════════════════════════════════════════════
-
-function setTheme(theme) {
-  const validTheme = theme === "light" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", validTheme);
-  localStorage.setItem(THEME_STORAGE_KEY, validTheme);
-  updateThemeButtons(validTheme);
-}
-
-/**
- * Get the current theme or user preference
- */
-function getTheme() {
-  const saved = localStorage.getItem(THEME_STORAGE_KEY);
-  if (saved) {
-    return saved;
-  }
-
-  // Check system preference
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
-
-  return "dark"; // Default to dark
-}
-
-/**
- * Initialize theme on app load
- */
-function initializeTheme() {
-  const theme = getTheme();
-  document.documentElement.setAttribute("data-theme", theme);
-  updateThemeButtons(theme);
-}
-
-/**
- * Update UI buttons to show active theme
- */
-function updateThemeButtons(theme) {
-  const darkBtn = document.getElementById("theme-dark-btn");
-  const lightBtn = document.getElementById("theme-light-btn");
-
-  if (darkBtn) {
-    darkBtn.classList.toggle("active", theme === "dark");
-  }
-  if (lightBtn) {
-    lightBtn.classList.toggle("active", theme === "light");
-  }
-}
-
-/**
- * Listen for system theme changes (respects user's OS preference)
- */
-if (window.matchMedia) {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-    if (!localStorage.getItem(THEME_STORAGE_KEY)) {
-      setTheme(e.matches ? "dark" : "light");
-    }
-  });
 }
 
 
