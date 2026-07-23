@@ -474,7 +474,7 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
     run_block = app_source[run_start:run_end]
     settings_start = app_source.index("function renderMitraBooksSettingsWorkspace()")
-    settings_end = app_source.index("function renderCaStatusPill", settings_start)
+    settings_end = app_source.index("function renderProfessionalSuiteWorkspace()", settings_start)
     settings_block = app_source[settings_start:settings_end]
     dashboard_start = app_source.index('if (dashboard.type === "business"')
     dashboard_end = app_source.index("// ========== Business Module: Party Master", dashboard_start)
@@ -608,9 +608,19 @@ def test_mitrabooks_admin_settings_use_business_routes() -> None:
 
 def test_ca_practice_documents_use_attachment_api_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("async function loadCaPracticeDocuments")
-    end = app_source.index("async function updateBusinessParty", start)
-    ca_block = app_source[start:end]
+    ca_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "ca-practice.js"
+    ).read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(
+        encoding="utf-8"
+    )
+    nav_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "navigation.js").read_text(
+        encoding="utf-8"
+    )
+    combined = f"{app_source}\n{ca_source}\n{events_source}\n{nav_source}"
+    start = ca_source.index("export async function loadCaPracticeDocuments")
+    end = ca_source.index("// --- CA practice renderers (seam 34) ---", start)
+    ca_block = ca_source[start:end]
 
     assert 'new URLSearchParams({ limit: "100" })' in ca_block
     assert "/api/v1/business/ca-documents?${params.toString()}" in ca_block
@@ -619,23 +629,23 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
     assert 'method: "PATCH"' in ca_block
     assert 'label: "CA Practice Portal"' in app_source
-    assert 'businessWorkspace: "ca-access"' in app_source
+    assert 'businessWorkspace: "ca-access"' in nav_source
     assert 'activeBusinessWorkspace === "ca-access"' in app_source
-    assert 'data-business-action="ca-client-filter"' in app_source
-    assert 'businessAction === "ca-client-filter"' in app_source
-    assert 'businessAction === "ca-client-filter-clear"' in app_source
-    assert 'businessAction === "ca-client-refresh"' in app_source
-    assert 'module_key: "ca_access"' in app_source
-    nav_start = app_source.index('businessWorkspace: "ca-access"')
-    assert 'enabled: true' in app_source[nav_start:nav_start + 220]
-    assert "data-ca-document-form" in app_source
-    assert "data-ca-client-form" in app_source
-    assert "data-ca-filter-form" in app_source
-    assert 'name="ca_attachments" type="file" multiple' in app_source
-    assert 'data-business-action="ca-doc-files"' in app_source
-    assert 'data-business-action="upload-attachments"' in app_source
-    assert 'data-business-action="download-attachment"' in app_source
-    assert 'data-business-action="refresh-attachments"' in app_source
+    assert 'data-business-action="ca-client-filter"' in combined
+    assert 'businessAction === "ca-client-filter"' in events_source
+    assert 'businessAction === "ca-client-filter-clear"' in events_source
+    assert 'businessAction === "ca-client-refresh"' in events_source
+    assert 'module_key: "ca_access"' in nav_source
+    nav_start = nav_source.index('businessWorkspace: "ca-access"')
+    assert 'enabled: true' in nav_source[nav_start:nav_start + 220]
+    assert "data-ca-document-form" in ca_source
+    assert "data-ca-client-form" in ca_source
+    assert "data-ca-filter-form" in ca_source
+    assert 'name="ca_attachments" type="file" multiple' in ca_source
+    assert 'data-business-action="ca-doc-files"' in ca_source
+    assert 'data-business-action="upload-attachments"' in combined
+    assert 'data-business-action="download-attachment"' in combined
+    assert 'data-business-action="refresh-attachments"' in combined
     assert "client_owner" in ca_block
     assert "client_access_enabled" in ca_block
     assert 'uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles)' in ca_block
@@ -643,12 +653,13 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert '/api/v1/business/ca-documents/${safeOwnerId}/attachments' in app_source
     assert '/api/v1/business/invoices/${safeOwnerId}/attachments' in app_source
     assert '/api/v1/business/bills/${safeOwnerId}/attachments' in app_source
-    assert "renderCaPracticeOperations" in app_source
-    assert "renderCaClientMaster" in app_source
+    assert "renderCaPracticeOperations" in ca_source
+    assert "renderCaClientMaster" in ca_source
     assert 'subtitle: "Client document workflow"' in app_source
     assert 'return renderCaPracticePortalWorkspace();' in app_source
-    assert "CA Practice Portal planned" not in app_source
-    assert "Planned multi-client books" not in app_source
+    assert "CA Practice Portal planned" not in combined
+    assert "Planned multi-client books" not in combined
+    assert 'from "./modules/workspaces/ca-practice.js"' in app_source
 
 
 def test_mitrabooks_report_exports_expose_governed_json_format() -> None:
