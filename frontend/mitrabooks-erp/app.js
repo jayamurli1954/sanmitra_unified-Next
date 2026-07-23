@@ -411,6 +411,25 @@ import {
   renderManufacturingWorkspace,
 } from "./modules/workspaces/manufacturing.js";
 
+import {
+  initVouchers,
+  lastBusinessVouchers,
+  lastVoucherApprovalQueue,
+  clearVoucherListState,
+  setLastBusinessVouchers,
+  setLastVoucherApprovalQueue,
+  loadBusinessVouchers,
+  loadVoucherApprovalQueue,
+  reviewBusinessVoucher,
+  reverseBusinessVoucher,
+  renderVoucherTypeForm,
+  updateVoucherTypeForm,
+  focusFirstVoucherField,
+  submitVoucherDialogFromKeyboard,
+  handleVoucherDialogKeyboard,
+  openBusinessCreateVoucherDialog,
+} from "./modules/workspaces/vouchers.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -2906,8 +2925,7 @@ function signOutAndReturnToLogin() {
   lastModuleContext = null;
   lastBusinessAccounts = [];
   lastBusinessParties = [];
-  lastBusinessVouchers = [];
-  lastVoucherApprovalQueue = [];
+  clearVoucherListState();
   lastAccountingDrilldown = null;
   if (tokenInput) {
     tokenInput.value = "";
@@ -7024,8 +7042,6 @@ function renderVoucherApprovalQueuePanel(items) {
 
 // ========== Business Module: Typed Vouchers ==========
 
-let lastBusinessVouchers = [];
-let lastVoucherApprovalQueue = [];
 let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
 let voucherLineCounter = 0;
@@ -8469,392 +8485,12 @@ async function createBusinessVoucher(voucherData) {
 }
 
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: VOUCHERS — CRUD + list
-// API   : GET /api/v1/business/vouchers  POST /api/v1/business/vouchers/{type}
-// NOTE  : loadBusinessVouchers, reverseBusinessVoucher, openBusinessCreateVoucherDialog
-// ══════════════════════════════════════════════════════════════════════
-
-async function loadBusinessVouchers(filters = {}) {
-  const appKey = "mitrabooks";
-  const params = new URLSearchParams();
-  const state = businessListState.vouchers;
-  const merged = {
-    offset: state.offset || 0,
-    limit: 20,
-    voucher_type: state.voucher_type || "",
-    status: state.status || "",
-    approval_status: state.approval_status || "",
-    ...filters,
-  };
-  params.append("offset", merged.offset);
-  params.append("limit", merged.limit);
-  if (merged.voucher_type) params.append("voucher_type", merged.voucher_type);
-  if (merged.status) params.append("status", merged.status);
-  if (merged.approval_status) params.append("approval_status", merged.approval_status);
-
-  const queryString = params.toString();
-  const url = `/api/v1/business/vouchers${queryString ? "?" + queryString : ""}`;
-
-  const result = await apiRequest(appKey, url, { method: "GET" });
-  if (result.ok) {
-    lastBusinessVouchers = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else {
-    lastBusinessVouchers = [];
-    setLoginStatus("danger", "Unable to load vouchers", statusDetailText(result.payload?.detail) || `Voucher list request failed with HTTP ${result.status}.`);
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  }
-  renderJson(apiOutput, { vouchers: { ok: result.ok, status: result.status, count: lastBusinessVouchers.length, detail: result.payload?.detail || null } });
-}
-
-async function loadVoucherApprovalQueue(includeReviewed = true, options = {}) {
-  const appKey = "mitrabooks";
-  const surfaceErrors = options?.surfaceErrors === true;
-  const params = new URLSearchParams({
-    document_type: "voucher",
-    include_reviewed: includeReviewed ? "true" : "false",
-    limit: "100",
-  });
-  const result = await apiRequest(appKey, `/api/v1/business/approval-queue?${params.toString()}`, { method: "GET" });
-
-  if (result.ok) {
-    const items = Array.isArray(result.payload?.items) ? result.payload.items : [];
-    lastVoucherApprovalQueue = items;
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "vouchers") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else {
-    lastVoucherApprovalQueue = [];
-    if (surfaceErrors) {
-      setLoginStatus("danger", "Unable to load voucher review queue", statusDetailText(result.payload?.detail) || `Approval queue request failed with HTTP ${result.status}.`);
-    }
-  }
-  renderJson(apiOutput, { approval_queue: { ok: result.ok, status: result.status, count: lastVoucherApprovalQueue.length, detail: result.payload?.detail || null } });
-}
-
-async function reviewBusinessVoucher(voucherId, approve, notes, rejectionReason = "") {
-  const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, `/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/review`, {
-    method: "POST",
-    body: JSON.stringify({
-      approve,
-      notes,
-      rejection_reason: rejectionReason || null,
-      accounting_entity_id: "primary",
-    }),
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", approve ? "Voucher approved" : "Voucher rejected", approve ? "Voucher review recorded." : "Voucher rejection recorded.");
-    await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
-  } else {
-    setLoginStatus("danger", approve ? "Voucher approval failed" : "Voucher rejection failed", statusDetailText(result.payload?.detail) || "Try again.");
-  }
-  renderJson(apiOutput, { review_voucher: result });
-}
-
-async function reverseBusinessVoucher(voucherId) {
-  const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, `/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/reverse`, {
-    method: "POST",
-    headers: {
-      "X-Idempotency-Key": `business-voucher-reversal-${voucherId}`,
-    },
-    body: JSON.stringify({
-      reason: "Reversal",
-    }),
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", "Voucher reversed", "Reversal entry created.");
-    await loadBusinessVouchers();
-  } else {
-    setLoginStatus("danger", "Reverse voucher failed", result.payload?.detail || "Try again.");
-  }
-  renderJson(apiOutput, { reverse_voucher: result });
-}
-
 /**
  * Render form fields for specific voucher type
  */
-function renderVoucherTypeForm(voucherType) {
-  const accountSelector = (fieldId) => renderAccountSelectorComponent(fieldId);
-  const costCentreOptions = dimensionOptions("cost_centre");
-  const projectOptions = dimensionOptions("project");
-  const dimensionFields = (costCentreOptions || projectOptions) ? `
-        <div class="report-date-controls voucher-dimension-fields">
-          ${costCentreOptions ? `<label>Cost centre <select id="business-voucher-cost-centre">${costCentreOptions}</select></label>` : ""}
-          ${projectOptions ? `<label>Project <select id="business-voucher-project">${projectOptions}</select></label>` : ""}
-        </div>` : "";
-
-  if (voucherType === "payment") {
-    return `
-      <div class="voucher-type-form">
-        <div class="voucher-posting-map" aria-label="Payment voucher posting">
-          <div>
-            <span>Debit</span>
-            <strong>Vendor / party ledger</strong>
-          </div>
-          <div>
-            <span>Credit</span>
-            <strong>Bank or cash account</strong>
-          </div>
-        </div>
-        <div class="field">
-          <label for="business-voucher-party">Party (Vendor/Customer)</label>
-          <select id="business-voucher-party" required>
-            <option value="">-- Select Party --</option>
-            ${Array.isArray(lastBusinessParties) ? lastBusinessParties.map(p =>
-              `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
-            ).join('') : ''}
-          </select>
-          <div id="business-voucher-outstanding" class="muted voucher-outstanding" data-voucher-type="${voucherType}"></div>
-        </div>
-        <div class="field">
-          <label for="business-voucher-amount">Amount (₹)</label>
-          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
-        </div>
-        ${dimensionFields}
-        <div class="voucher-entry-lines">
-          <div class="voucher-entry-line debit-line">
-            <div>
-              <span>Debit</span>
-              <strong>Party payable / expense ledger</strong>
-            </div>
-            ${accountSelector("business-voucher-debit-account")}
-          </div>
-          <div class="voucher-entry-line credit-line">
-            <div>
-              <span>Credit</span>
-              <strong>Bank / cash ledger</strong>
-            </div>
-            ${accountSelector("business-voucher-credit-account")}
-          </div>
-        </div>
-        <div class="voucher-balance-panel">
-          <strong>Double-entry check</strong>
-          <span id="business-voucher-balance" class="voucher-balance-status imbalanced">
-            <span>Debit: Rs. 0.00</span>
-            <span>Credit: Rs. 0.00</span>
-            <strong>Debit must equal Credit</strong>
-          </span>
-        </div>
-        <div class="field">
-          <label for="business-voucher-description">Description</label>
-          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Payment description"></textarea>
-        </div>
-        <div class="field">
-          <label for="business-voucher-reference">Reference (Check #, UTR, etc.)</label>
-          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: check number or reference">
-        </div>
-      </div>
-    `;
-  }
-
-  if (voucherType === "receipt") {
-    return `
-      <div class="voucher-type-form">
-        <div class="voucher-posting-map" aria-label="Receipt voucher posting">
-          <div>
-            <span>Debit</span>
-            <strong>Bank or cash account</strong>
-          </div>
-          <div>
-            <span>Credit</span>
-            <strong>Customer / party ledger</strong>
-          </div>
-        </div>
-        <div class="field">
-          <label for="business-voucher-party">Party (Customer/Vendor)</label>
-          <select id="business-voucher-party" required>
-            <option value="">-- Select Party --</option>
-            ${Array.isArray(lastBusinessParties) ? lastBusinessParties.map(p =>
-              `<option value="${escapeHtml(p.party_id)}">${escapeHtml(p.party_name)} (${p.party_type})</option>`
-            ).join('') : ''}
-          </select>
-          <div id="business-voucher-outstanding" class="muted voucher-outstanding" data-voucher-type="${voucherType}"></div>
-        </div>
-        <div class="field">
-          <label for="business-voucher-amount">Amount (₹)</label>
-          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
-        </div>
-        ${dimensionFields}
-        <div class="voucher-entry-lines">
-          <div class="voucher-entry-line debit-line">
-            <div>
-              <span>Debit</span>
-              <strong>Bank / cash ledger</strong>
-            </div>
-            ${accountSelector("business-voucher-debit-account")}
-          </div>
-          <div class="voucher-entry-line credit-line">
-            <div>
-              <span>Credit</span>
-              <strong>Customer receivable / party ledger</strong>
-            </div>
-            ${accountSelector("business-voucher-credit-account")}
-          </div>
-        </div>
-        <div class="voucher-balance-panel">
-          <strong>Double-entry check</strong>
-          <span id="business-voucher-balance" class="voucher-balance-status imbalanced">
-            <span>Debit: Rs. 0.00</span>
-            <span>Credit: Rs. 0.00</span>
-            <strong>Debit must equal Credit</strong>
-          </span>
-        </div>
-        <div class="field">
-          <label for="business-voucher-description">Description</label>
-          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Receipt description"></textarea>
-        </div>
-        <div class="field">
-          <label for="business-voucher-reference">Reference (Invoice #, etc.)</label>
-          <input id="business-voucher-reference" type="text" maxlength="80" placeholder="Optional: invoice number or reference">
-        </div>
-      </div>
-    `;
-  }
-
-  if (voucherType === "contra") {
-    return `
-      <div class="voucher-type-form">
-        <div class="field">
-          <label>From Account</label>
-          ${accountSelector("business-voucher-from-account")}
-        </div>
-        <div class="field">
-          <label>To Account</label>
-          ${accountSelector("business-voucher-to-account")}
-        </div>
-        <div class="field">
-          <label for="business-voucher-amount">Amount (₹)</label>
-          <input id="business-voucher-amount" type="number" placeholder="0.00" min="0.01" step="0.01" required>
-        </div>
-        ${dimensionFields}
-        <div class="field">
-          <label for="business-voucher-description">Description</label>
-          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Transfer description (e.g., sweep to savings)"></textarea>
-        </div>
-      </div>
-    `;
-  }
-
-  if (voucherType === "journal") {
-    return `
-      <div class="voucher-type-form">
-        <div class="field">
-          <label for="business-voucher-description">Description</label>
-          <textarea id="business-voucher-description" rows="2" maxlength="300" placeholder="Journal entry description" required></textarea>
-        </div>
-        <div class="voucher-lines-panel">
-          <h4>Debit/Credit Lines</h4>
-          <p class="muted" id="business-voucher-accounts-status">Select accounts and enter amounts.</p>
-          <div id="business-voucher-lines"></div>
-          <button class="secondary" type="button" id="business-voucher-add-line" aria-keyshortcuts="Alt+L">+ Add Line</button>
-        </div>
-        ${dimensionFields}
-        <div class="voucher-balance-panel">
-          <strong>Balance Check:</strong>
-          <span id="business-voucher-balance" style="font-weight: bold; margin-left: 8px;">Debit: ₹0 | Credit: ₹0</span>
-        </div>
-      </div>
-    `;
-  }
-
-  return `<p class="muted">Select a voucher type to proceed.</p>`;
-}
-
 /**
  * Update form when voucher type changes
  */
-function updateVoucherTypeForm(voucherType) {
-  const container = document.getElementById("business-voucher-form-container");
-  if (!container) return;
-
-  container.innerHTML = renderVoucherTypeForm(voucherType);
-
-  // For journal entries, add initial lines
-  if (voucherType === "journal") {
-    addVoucherLine();
-    addVoucherLine();
-  }
-
-  document.getElementById("business-voucher-add-line")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    addVoucherLine();
-  });
-
-  // Re-attach event listeners for new elements
-  updateVoucherBalance();
-}
-
-function focusFirstVoucherField() {
-  const firstField = document.getElementById("business-voucher-type-select");
-  if (firstField) {
-    setTimeout(() => firstField.focus(), 0);
-  }
-}
-
-function submitVoucherDialogFromKeyboard() {
-  const submitButton = document.getElementById("business-voucher-submit");
-  if (!submitButton || submitButton.disabled) {
-    return;
-  }
-  businessVoucherCreateForm?.requestSubmit();
-}
-
-function handleVoucherDialogKeyboard(event) {
-  if (!businessVoucherCreateDialog?.open) {
-    return;
-  }
-  if (event.key === "Enter" && event.ctrlKey) {
-    event.preventDefault();
-    submitVoucherDialogFromKeyboard();
-    return;
-  }
-  if (event.key.toLowerCase() === "l" && event.altKey) {
-    const voucherType = document.getElementById("business-voucher-type-select")?.value || "";
-    if (voucherType === "journal") {
-      event.preventDefault();
-      addVoucherLine();
-    }
-  }
-}
-
-async function openBusinessCreateVoucherDialog() {
-  const dialog = document.getElementById("business-voucher-create-dialog");
-  if (!dialog) return;
-
-  if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
-    await loadBusinessAccounts();
-  }
-  if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) {
-    await loadBusinessParties();
-  }
-  if (!lastDimensions) {
-    await loadDimensions();
-  }
-
-  // Reset form
-  document.getElementById("business-voucher-type-select").value = "";
-  document.getElementById("business-voucher-form-container").innerHTML = "";
-  document.getElementById("business-voucher-date").valueAsDate = new Date();
-
-  if (!Array.isArray(lastBusinessAccounts) || lastBusinessAccounts.length === 0) {
-    setLoginStatus("warn", "Accounts unavailable", "Load the MitraBooks chart of accounts before posting a voucher.");
-  }
-
-  dialog.showModal();
-  focusFirstVoucherField();
-}
-
-
 async function runChecks() {
   const activeAppKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
   const tokenAtStart = getAccessToken();
@@ -10342,8 +9978,7 @@ window.addEventListener("auth-session-expired", () => {
   lastModuleContext = null;
   lastBusinessAccounts = [];
   lastBusinessParties = [];
-  lastBusinessVouchers = [];
-  lastVoucherApprovalQueue = [];
+  clearVoucherListState();
   lastAccountingDrilldown = null;
   clearAllTokens();
   if (loginPassword) loginPassword.value = "";
@@ -11126,6 +10761,34 @@ initManufacturing({
       dashboardPreview.innerHTML = renderBusinessWorkspace();
     }
   },
+});
+
+// Wire vouchers CRUD/list (avoids import cycle with app.js)
+initVouchers({
+  escapeHtml,
+  setLoginStatus,
+  statusDetailText,
+  getBusinessListState: () => businessListState,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+  getApiOutput: () => apiOutput,
+  getLastBusinessParties: () => lastBusinessParties,
+  getLastBusinessAccounts: () => lastBusinessAccounts,
+  getLastDimensions: () => lastDimensions,
+  loadBusinessAccounts,
+  loadBusinessParties,
+  loadDimensions,
+  renderAccountSelectorComponent,
+  dimensionOptions,
+  addVoucherLine,
+  updateVoucherBalance,
+  clearVoucherForm,
+  loadVoucherPartyOutstanding,
+  createBusinessVoucherByType,
+  getBusinessVoucherCreateForm: () => document.getElementById("business-voucher-create-form"),
+  getBusinessVoucherCreateDialog: () => document.getElementById("business-voucher-create-dialog"),
 });
 
 // HEADER & HEALTH WIDGET (Phase 1C Step 7)
