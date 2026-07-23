@@ -191,6 +191,7 @@ import {
 } from "./modules/documents/debit-notes.js";
 
 import { initEventHandlers } from "./modules/events.js";
+import { initShellUi } from "./modules/shell-ui.js";
 
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
@@ -14499,108 +14500,50 @@ initEventHandlers({
 // Initialize theme on app load
 initializeTheme();
 
-// Theme toggle buttons (if they exist in the sidebar)
-const themeDarkBtn = document.getElementById("theme-dark-btn");
-const themeLightBtn = document.getElementById("theme-light-btn");
-
-if (themeDarkBtn) {
-  themeDarkBtn.addEventListener("click", () => setTheme("dark"));
-}
-if (themeLightBtn) {
-  themeLightBtn.addEventListener("click", () => setTheme("light"));
-}
-
-// ============================================
-// SIDEBAR UI INTERACTIONS (Phase 1C)
-// ============================================
-
-/**
- * Org Selector Dropdown Toggle
- */
-const orgTrigger = document.getElementById("org-trigger");
-const orgMenu = document.getElementById("org-menu");
-const orgSelector = document.getElementById("org-selector");
-const orgOptions = document.querySelectorAll(".org-option");
-
-if (orgTrigger) {
-  orgTrigger.addEventListener("click", () => {
-    const isOpen = !orgMenu.hidden;
-    orgMenu.hidden = isOpen;
-    orgSelector.classList.toggle("open", !isOpen);
-  });
-}
-
-// Close org dropdown when option is selected
-orgOptions.forEach((option) => {
-  option.addEventListener("click", (e) => {
-    const orgType = e.currentTarget.getAttribute("data-org");
-    const selectorMeta = orgSelectorMeta[orgType] || orgSelectorMeta.BUSINESS;
-    selectedOrgType = orgType;
-    syncOrgSelectorOptions(orgType);
-    orgMenu.hidden = true;
-    orgSelector.classList.remove("open");
-    if (orgType === "BUSINESS" || orgType === "PROFESSIONAL" || orgType === "CA_PRACTICE") {
-      setLoginStatus("ok", selectorMeta.statusTitle, selectorMeta.statusCopy);
-    } else {
-      setLoginStatus("warn", selectorMeta.statusTitle, selectorMeta.statusCopy);
-    }
-    updateTrustedContextUi();
-    if (currentExperience === "mitrabooks") {
-      activeBusinessWorkspace = "overview";
-      syncBusinessNavActiveState();
-      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-      if (orgType === "BUSINESS" && hasTrustedSession()) {
-        loadBusinessDashboardStats();
-      } else if (orgType === "CA_PRACTICE") {
-        lastCaDocumentsResult = null;
-        lastCaDocuments = [];
-        loadCaPracticeDocuments();
-      }
-    }
-  });
+// Wire shell UI (theme toggles, sidebar org/FY, quick actions)
+initShellUi({
+  get activeBusinessWorkspace() { return activeBusinessWorkspace; },
+  set activeBusinessWorkspace(v) { activeBusinessWorkspace = v; },
+  addBillLine,
+  addCnLine,
+  addDnLine,
+  addInvoiceLine,
+  creditUi,
+  currentExperience,
+  dashboardPreview,
+  debitUi,
+  experienceConfig,
+  hasTrustedSession,
+  get lastCaDocuments() { return lastCaDocuments; },
+  set lastCaDocuments(v) { lastCaDocuments = v; },
+  get lastCaDocumentsResult() { return lastCaDocumentsResult; },
+  set lastCaDocumentsResult(v) { lastCaDocumentsResult = v; },
+  loadBusinessDashboardStats,
+  loadCaPracticeDocuments,
+  openBillCreate,
+  openBusinessCreatePartyDialog,
+  openBusinessCreateVoucherDialog,
+  openCreditNoteCreate,
+  openDebitNoteCreate,
+  openInvoiceCreate,
+  orgSelectorMeta,
+  purchaseUi,
+  renderBusinessWorkspace,
+  renderDashboardPreview,
+  salesUi,
+  get selectedOrgType() { return selectedOrgType; },
+  set selectedOrgType(v) { selectedOrgType = v; },
+  setLoginStatus,
+  setTheme,
+  submitBill,
+  submitCreditNote,
+  submitDebitNote,
+  submitInvoice,
+  syncBusinessNavActiveState,
+  syncOrgSelectorOptions,
+  updateTrustedContextUi,
 });
 
-/**
- * FY Selector Dropdown Toggle
- */
-const fyTrigger = document.getElementById("fy-trigger");
-const fyMenu = document.getElementById("fy-menu");
-const fyOptions = document.querySelectorAll(".fy-option");
-
-if (fyTrigger) {
-  fyTrigger.addEventListener("click", () => {
-    const isOpen = !fyMenu.hidden;
-    fyMenu.hidden = isOpen;
-  });
-}
-
-// Close FY dropdown when option is selected
-fyOptions.forEach((option) => {
-  option.addEventListener("click", (e) => {
-    const fy = e.currentTarget.getAttribute("data-fy");
-    fyOptions.forEach((o) => o.classList.remove("active"));
-    e.currentTarget.classList.add("active");
-    fyMenu.hidden = true;
-    document.getElementById("current-fy").textContent = `FY ${fy}`;
-  });
-});
-
-/**
- * Close dropdowns when clicking outside
- */
-document.addEventListener("click", (e) => {
-  // Close org dropdown if click is outside
-  if (orgMenu && orgSelector && !orgSelector.contains(e.target)) {
-    orgMenu.hidden = true;
-    orgSelector.classList.remove("open");
-  }
-  // Close FY dropdown if click is outside
-  if (fyMenu && fyTrigger && !fyTrigger.closest(".fy-selector").contains(e.target)) {
-    fyMenu.hidden = true;
-  }
-});
-
-// ============================================
 // HEADER & HEALTH WIDGET (Phase 1C Step 7)
 // ============================================
 
@@ -14669,120 +14612,6 @@ function refreshBooksHealthWidget() {
   );
 }
 
-/**
- * Quick Action Buttons
- */
-const btnQuickParty = document.getElementById("btn-quick-party");
-const btnQuickJournal = document.getElementById("btn-quick-post-journal");
-
-async function openVoucherWorkspaceAndDialog() {
-  activeBusinessWorkspace = "vouchers";
-  syncBusinessNavActiveState();
-  dashboardPreview.innerHTML = renderBusinessWorkspace();
-  await openBusinessCreateVoucherDialog();
-}
-
-function openBusinessDocumentWorkspaceAndForm(workspace) {
-  activeBusinessWorkspace = workspace;
-  syncBusinessNavActiveState();
-  dashboardPreview.innerHTML = renderBusinessWorkspace();
-  if (workspace === "sales") {
-    openInvoiceCreate();
-  } else if (workspace === "bills") {
-    openBillCreate();
-  } else if (workspace === "credit-notes") {
-    openCreditNoteCreate();
-  } else if (workspace === "debit-notes") {
-    openDebitNoteCreate();
-  }
-}
-
-function activeBusinessDocumentFormConfig() {
-  if (activeBusinessWorkspace === "sales" && salesUi.view === "create" && document.querySelector("[data-invoice-form]")) {
-    return { addLine: addInvoiceLine, submit: submitInvoice };
-  }
-  if (activeBusinessWorkspace === "bills" && purchaseUi.view === "create" && document.querySelector("[data-bill-form]")) {
-    return { addLine: addBillLine, submit: submitBill };
-  }
-  if (activeBusinessWorkspace === "credit-notes" && creditUi.view === "create" && document.querySelector("[data-cn-form]")) {
-    return { addLine: addCnLine, submit: submitCreditNote };
-  }
-  if (activeBusinessWorkspace === "debit-notes" && debitUi.view === "create" && document.querySelector("[data-dn-form]")) {
-    return { addLine: addDnLine, submit: submitDebitNote };
-  }
-  return null;
-}
-
-function handleBusinessDocumentEntryKeyboard(event) {
-  if (currentExperience !== "mitrabooks" || !hasTrustedSession()) {
-    return;
-  }
-  if (document.querySelector("dialog[open]")) {
-    return;
-  }
-  const key = String(event.key || "").toLowerCase();
-  if (event.ctrlKey && event.altKey) {
-    const workspaceByKey = { i: "sales", b: "bills", c: "credit-notes", d: "debit-notes" };
-    const workspace = workspaceByKey[key];
-    if (workspace) {
-      event.preventDefault();
-      openBusinessDocumentWorkspaceAndForm(workspace);
-    }
-    return;
-  }
-
-  const formConfig = activeBusinessDocumentFormConfig();
-  if (!formConfig) {
-    return;
-  }
-  if (event.ctrlKey && event.key === "Enter") {
-    event.preventDefault();
-    formConfig.submit();
-    return;
-  }
-  if (event.altKey && !event.ctrlKey && key === "l") {
-    event.preventDefault();
-    formConfig.addLine();
-  }
-}
-
-if (btnQuickParty) {
-  btnQuickParty.addEventListener("click", () => {
-    activeBusinessWorkspace = "parties";
-    syncBusinessNavActiveState();
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-    openBusinessCreatePartyDialog();
-  });
-}
-
-if (btnQuickJournal) {
-  btnQuickJournal.addEventListener("click", async () => {
-    await openVoucherWorkspaceAndDialog();
-  });
-}
-
-document.addEventListener("keydown", (event) => {
-  if (!(event.ctrlKey && event.altKey && event.key.toLowerCase() === "v")) {
-    return;
-  }
-  if (document.querySelector("dialog[open]")) {
-    return;
-  }
-  if (currentExperience !== "mitrabooks" || !hasTrustedSession()) {
-    return;
-  }
-  event.preventDefault();
-  openVoucherWorkspaceAndDialog();
-});
-
-document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard);
-
-/**
- * Update page title and breadcrumb based on current view
- * @param {string} parentName - Parent breadcrumb name
- * @param {string} currentName - Current breadcrumb name
- * @param {string} pageTitle - Full page title
- */
 function updatePageHeader(parentName = "Workspaces", currentName = "Dashboard", pageTitle = "Dashboard Workspace") {
   const breadcrumbParent = document.getElementById("breadcrumb-parent");
   const breadcrumbCurrent = document.getElementById("breadcrumb-current");
