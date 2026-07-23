@@ -440,6 +440,21 @@ import {
   createBusinessVoucher,
 } from "./modules/workspaces/voucher-create.js";
 
+import {
+  initParties,
+  lastBusinessParties,
+  lastBusinessPartiesResult,
+  setLastBusinessParties,
+  setLastBusinessPartiesResult,
+  clearPartiesState,
+  loadBusinessParties,
+  createBusinessParty,
+  updateBusinessParty,
+  deactivateBusinessParty,
+  openBusinessCreatePartyDialog,
+  openBusinessEditPartyDialog,
+} from "./modules/workspaces/parties.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -687,7 +702,6 @@ let accountingDrilldownState = {
 };
 let lastAccountingDrilldown = null;
 let lastAccountingVoucherDetail = null;
-let lastBusinessParties = [];
 let lastBusinessAccounts = [];
 let coaTypeFilter = "";
 let lastCaDocuments = [];
@@ -2934,7 +2948,7 @@ function signOutAndReturnToLogin() {
   clearAllTokens();
   lastModuleContext = null;
   lastBusinessAccounts = [];
-  lastBusinessParties = [];
+  setLastBusinessParties([]);
   clearVoucherListState();
   lastAccountingDrilldown = null;
   if (tokenInput) {
@@ -4543,7 +4557,6 @@ function renderDashboardPreview(config) {
 // ========== Business Module: Party Master ==========
 
 let activeBusinessWorkspace = "overview";
-let lastBusinessPartiesResult = null;
 let activeSettingsDetailId = "";
 let lastBusinessAdminSettings = null;
 
@@ -5742,65 +5755,6 @@ function renderFinancialHealthWorkspace() {
 // NOTE  : loadBusinessParties, createBusinessParty, updateBusinessParty
 // ══════════════════════════════════════════════════════════════════════
 
-async function loadBusinessParties(filters = {}) {
-  const appKey = "mitrabooks";
-  const state = businessListState.parties;
-  const params = new URLSearchParams();
-
-  if (state.q) params.append("q", state.q);
-  if (state.party_type) params.append("party_type", state.party_type);
-  params.append("offset", state.offset || 0);
-  params.append("limit", 20);
-
-  const queryString = params.toString();
-  const url = `/api/v1/business/parties${queryString ? "?" + queryString : ""}`;
-
-  const result = await apiRequest(appKey, url, { method: "GET" });
-  lastBusinessPartiesResult = result;
-  if (result.ok) {
-    lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "parties") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else {
-    lastBusinessParties = [];
-    setLoginStatus("warn", "Unable to load parties", result.payload?.detail || "Check connection and try again.");
-  }
-  renderJson(apiOutput, { parties: { ok: result.ok, count: lastBusinessParties.length } });
-  return result;
-}
-
-async function createBusinessParty(data) {
-  const appKey = "mitrabooks";
-  const payload = {
-    party_name: data.name,
-    party_type: data.party_type,
-    gstin: data.gstin || null,
-    pan: data.pan?.trim().toUpperCase() || null,
-    city: data.city?.trim() || null,
-    state: data.state?.trim() || null,
-    pincode: data.pincode?.trim() || null,
-  };
-
-  const result = await apiRequest(appKey, "/api/v1/business/parties", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", "Party created", result.payload?.party_name || "New party added.");
-    document.getElementById("business-party-create-dialog")?.close();
-    await loadBusinessParties();
-    // Force refresh of current workspace
-    if (activeBusinessWorkspace === "parties") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else {
-    setLoginStatus("danger", "Create party failed", statusDetailText(result.payload?.detail) || "Try again.");
-  }
-  renderJson(apiOutput, { create_party: result });
-}
-
 async function loadCaPracticeDocuments(options = {}) {
   const rerender = options?.rerender !== false;
   const params = new URLSearchParams({ limit: "100" });
@@ -6034,89 +5988,6 @@ async function updateCaPracticeDocumentStatus(documentId, status) {
   }
   renderJson(apiOutput, { update_ca_document: result });
 }
-
-async function updateBusinessParty(partyId, data) {
-  const appKey = "mitrabooks";
-  const payload = {
-    party_name: data.name,
-    gstin: data.gstin || null,
-    pan: data.pan?.trim().toUpperCase() || null,
-    city: data.city?.trim() || null,
-    state: data.state?.trim() || null,
-    pincode: data.pincode?.trim() || null,
-  };
-  if (data.party_type) {
-    payload.party_type = data.party_type;
-  }
-
-  const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", "Party updated", result.payload?.party_name || "Changes saved.");
-    document.getElementById("business-party-edit-dialog")?.close();
-    await loadBusinessParties();
-  } else {
-    setLoginStatus("danger", "Update party failed", statusDetailText(result.payload?.detail) || "Try again.");
-  }
-  renderJson(apiOutput, { update_party: result });
-}
-
-async function deactivateBusinessParty(partyId) {
-  const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, `/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate`, {
-    method: "POST",
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", "Party deactivated", "Party is now inactive.");
-    await loadBusinessParties();
-  } else {
-    setLoginStatus("danger", "Deactivate party failed", result.payload?.detail || "Try again.");
-  }
-  renderJson(apiOutput, { deactivate_party: result });
-}
-
-function openBusinessCreatePartyDialog() {
-  const dialog = document.getElementById("business-party-create-dialog");
-  const form = document.getElementById("business-party-create-form");
-  if (!form) return;
-
-  form.reset();
-  dialog?.showModal();
-}
-
-function openBusinessEditPartyDialog(button) {
-  const dialog = document.getElementById("business-party-edit-dialog");
-  const form = document.getElementById("business-party-edit-form");
-  if (!form) return;
-
-  const partyId = button.getAttribute("data-party-id") || "";
-  const partyName = button.getAttribute("data-party-name") || "";
-  const partyType = button.getAttribute("data-party-type") || "customer";
-  const partyGstin = button.getAttribute("data-party-gstin") || "";
-  const partyPan = button.getAttribute("data-party-pan") || "";
-  const partyCity = button.getAttribute("data-party-city") || "";
-  const partyState = button.getAttribute("data-party-state") || "";
-  const partyPincode = button.getAttribute("data-party-pincode") || "";
-
-  document.getElementById("business-party-edit-id").value = partyId;
-  const editTypeSelect = document.getElementById("business-party-edit-type");
-  if (editTypeSelect) editTypeSelect.value = partyType;
-  document.getElementById("business-party-edit-name").value = partyName;
-  document.getElementById("business-party-edit-gstin").value = partyGstin;
-  const editPanInput = document.getElementById("business-party-edit-pan");
-  if (editPanInput) editPanInput.value = partyPan;
-  document.getElementById("business-party-edit-city").value = partyCity;
-  document.getElementById("business-party-edit-state").value = partyState;
-  document.getElementById("business-party-edit-pincode").value = partyPincode;
-  document.getElementById("business-party-edit-label").textContent = `Editing ${partyName}`;
-
-  dialog?.showModal();
-}
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: BUSINESS WORKSPACE ROUTER — state + navigation
@@ -7545,9 +7416,9 @@ function renderBusinessDataHealthPanel() {
 
 async function loadBusinessPartiesForHealth() {
   const result = await apiRequest("mitrabooks", "/api/v1/business/parties?offset=0&limit=20", { method: "GET" });
-  lastBusinessPartiesResult = result;
+  setLastBusinessPartiesResult(result);
   if (result.ok) {
-    lastBusinessParties = Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : [];
+    setLastBusinessParties(Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : []);
   }
   return result;
 }
@@ -9712,7 +9583,7 @@ if (pendingPasswordResetToken) {
 window.addEventListener("auth-session-expired", () => {
   lastModuleContext = null;
   lastBusinessAccounts = [];
-  lastBusinessParties = [];
+  setLastBusinessParties([]);
   clearVoucherListState();
   lastAccountingDrilldown = null;
   clearAllTokens();
@@ -10499,6 +10370,18 @@ initManufacturing({
 });
 
 // Wire voucher creation helpers (avoids import cycle with app.js / vouchers.js)
+// Wire parties CRUD (avoids import cycle with app.js)
+initParties({
+  setLoginStatus,
+  statusDetailText,
+  getBusinessListState: () => businessListState,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+  getApiOutput: () => apiOutput,
+});
+
 initVoucherCreate({
   escapeHtml,
   formatCurrency,
