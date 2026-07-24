@@ -593,7 +593,6 @@ import {
   createSimplePartyVoucher,
   createContraVoucher,
   createJournalVoucher,
-  createBusinessVoucher,
 } from "./modules/workspaces/voucher-create.js";
 
 import {
