@@ -2984,6 +2984,61 @@ html[data-theme="light"] .erp-sidebar .theme-btn {
   display: none; /* Hide diagnostic pills */
 }
 
+/* MIS KPI Contracts — match top executive widgets (override app-shell #fff cards) */
+.executive-dashboard .metric-grid {
+  gap: 16px;
+  margin: 12px 0 16px;
+}
+
+.executive-dashboard .metric-tile {
+  background: var(--bg-secondary, #0f1424);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  box-shadow: none;
+  color: var(--text-primary, #f8fafc);
+}
+
+.executive-dashboard .metric-tile span,
+.executive-dashboard .metric-tile small {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.executive-dashboard .metric-tile strong {
+  color: var(--accent-color, #3b82f6);
+  font-size: 22px;
+}
+
+.executive-dashboard .dashboard-main-grid {
+  gap: 16px;
+}
+
+.executive-dashboard .dashboard-main-grid > article {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  box-shadow: none;
+  color: var(--text-primary, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.executive-dashboard .dashboard-main-grid > article h4 {
+  color: var(--text-primary, #f8fafc);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.executive-dashboard .dashboard-main-grid > article .table-preview {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
 /* CEO Panel Refinements */
 .ceo-panel {
   padding: 20px;
@@ -4582,10 +4637,12 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
    light-card defaults from .verification-panel .metric-tile and
    .dashboard-main-grid > article so reports match the rest of the workspace). */
 .app:not(.mandir-domain) .erp-workspace-panel .metric-tile,
-.app:not(.mandir-domain) .erp-workspace-panel .dashboard-main-grid > article {
+.app:not(.mandir-domain) .erp-workspace-panel .dashboard-main-grid > article,
+.app:not(.mandir-domain) .executive-dashboard .dashboard-main-grid > article {
   background: var(--bg-card, rgba(18, 25, 47, 0.72));
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   color: var(--text-primary, #f8fafc);
+  box-shadow: none;
 }
 
 /* Sales invoice form */
