@@ -456,6 +456,13 @@ import {
 } from "./modules/workspaces/org-workspace.js";
 
 import {
+  initShellBoot,
+  runChecks,
+  loadPlatformOwnerDashboard,
+  setExperience,
+} from "./modules/workspaces/shell-boot.js";
+
+import {
   isMandirHost,
   isGruhaHost,
   isProductionShell,
@@ -1470,107 +1477,7 @@ document.addEventListener("keydown", (event) => {
 
 // Journal voucher posting lives in modules/workspaces/voucher-create.js
 // (createJournalVoucher). An orphaned mid-function remnant was removed here.
-
-async function runChecks() {
-  const activeAppKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-  const tokenAtStart = getAccessToken();
-  const health = await loadHealth(activeAppKey);
-  healthPill.textContent = statusLabel(health);
-  healthPill.className = `pill ${health.ok ? "ok" : "danger"}`;
-
-  const modules = await loadModules(activeAppKey);
-  if (modules.ok) {
-    lastModuleContext = modules.payload;
-    updateTrustedContextUi(lastModuleContext);
-    updateSessionUi();
-  }
-  renderJson(apiOutput, { health, modules });
-  renderModuleState(moduleState, modules);
-
-  if (!modules.ok && modules.status === 401) {
-    // Ignore stale unauthenticated 401s that finish after a concurrent login.
-    if (getAccessToken() && getAccessToken() !== tokenAtStart) {
-      return;
-    }
-    lastModuleContext = null;
-    clearAllTokens();
-    renderModules();
-    if (!isPasswordRecoveryPanelOpen()) {
-      setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
-    }
-    updateSessionUi();
-    return;
-  }
-
-  if (!modules.ok && currentExperience === "mitrabooks") {
-    lastModuleContext = null;
-    // Treat network/timeout failures the same as 401 when a cached token cannot
-    // establish tenant context, so hosted smoke does not keep a dead session.
-    if (tokenAtStart && getAccessToken() === tokenAtStart) {
-      clearAllTokens();
-      renderModules();
-      if (!isPasswordRecoveryPanelOpen()) {
-        setLoginStatus("warn", "Sign in required", "Enter your email and password to load tenant data.");
-      }
-      updateSessionUi();
-      return;
-    }
-    renderModules();
-    if (!isPasswordRecoveryPanelOpen()) {
-      setLoginStatus("warn", "Tenant session required", "Sign in to load your MitraBooks dashboard.");
-    }
-    updateSessionUi();
-    return;
-  }
-
-  if (modules.ok && currentExperience === "mitrabooks" && isPlatformOwnerContext(modules.payload)) {
-    currentExperience = "platform";
-    document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
-    document.getElementById("mode-platform")?.classList.add("active");
-    renderModules();
-    setLoginStatus("ok", "Platform owner signed in", "Showing the platform-owner workspace. Business tenant data remains tenant-scoped.");
-    updateSessionUi();
-    await loadPlatformOwnerDashboard();
-    return;
-  }
-
-  if (modules.ok && currentExperience === "mitrabooks") {
-    renderModules(moduleItemsFromPayload(modules.payload), { preview: false });
-  } else {
-    renderModules();
-  }
-
-  if (currentExperience === "platform") {
-    await loadPlatformOwnerDashboard();
-  } else if (currentExperience === "mandir") {
-    await loadMandirDashboard();
-  } else if (currentExperience === "gruha") {
-    await loadGruhaDashboard();
-  } else if (currentExperience === "mitrabooks") {
-    await loadBusinessAccounts();
-    await loadBusinessPartiesForHealth();
-    const accountingDrilldown = await loadAccountingDrilldownResult();
-    renderJson(apiOutput, { health, modules, accounting_drilldown: accountingDrilldown });
-    refreshBooksHealthWidget();
-    dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
-  }
-}
-
-async function loadPlatformOwnerDashboard() {
-  const result = await apiRequest(APP_KEY, "/api/v1/platform-owner/dashboard", { method: "GET" });
-  renderJson(apiOutput, { platform_owner_dashboard: result });
-  if (result.ok) {
-    lastPlatformOwnerDashboard = result.payload;
-    dashboardPreview.innerHTML = renderPlatformDashboard(result.payload);
-    syncPlatformNavActiveState();
-    return;
-  }
-
-  dashboardPreview.insertAdjacentHTML(
-    "afterbegin",
-    `<div class="module-state warn"><strong>Platform dashboard unavailable</strong><span>Provide a super-admin access token and run checks to load live platform-owner data.</span></div>`
-  );
-}
+// Shell boot (runChecks / setExperience / platform dashboard) lives in modules/workspaces/shell-boot.js
 
 function buildQueryString(params) {
   const query = new URLSearchParams();
@@ -1766,29 +1673,6 @@ async function setPlatformWorkspace(workspace) {
   syncPlatformNavActiveState();
   dashboardPreview.innerHTML = renderPlatformDashboard(lastPlatformOwnerDashboard || emptyPlatformDashboardPayload());
   await loadPlatformOwnerDashboard();
-}
-
-function setExperience(nextExperience) {
-  currentExperience = nextExperience;
-  document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
-  document.getElementById(`mode-${nextExperience}`)?.classList.add("active");
-  if (nextExperience === "platform") {
-    activePlatformWorkspace = "dashboard";
-  }
-  renderModules();
-  if (nextExperience === "platform") {
-    loadPlatformOwnerDashboard();
-  } else if (nextExperience === "mandir") {
-    loadMandirDashboard();
-  } else if (nextExperience === "gruha") {
-    loadGruhaDashboard();
-  } else if (nextExperience === "mitrabooks") {
-    const appKey = EXPERIENCE_APP_KEYS[nextExperience] || APP_KEY;
-    loadAndRenderGroupedNav(appKey);
-    loadAccountingDrilldownResult().then(() => {
-      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig[currentExperience]);
-    });
-  }
 }
 
 document.getElementById("save-config").addEventListener("click", () => {
@@ -2633,6 +2517,51 @@ initGruhamitra({
 // Wire platform dashboard + preview shell (avoids import cycle with app.js)
 // Wire navigation shell + module boot renderers (avoids import cycle with app.js)
 // Wire org / planned-suite workspace renderers (avoids import cycle with app.js)
+// Wire shell boot helpers (avoids import cycle with app.js)
+initShellBoot({
+  healthPill,
+  apiOutput,
+  moduleState,
+  dashboardPreview,
+  getAccessToken,
+  clearAllTokens,
+  loadHealth,
+  loadModules,
+  statusLabel,
+  moduleItemsFromPayload,
+  renderJson,
+  renderModuleState,
+  updateTrustedContextUi,
+  updateSessionUi,
+  renderModules,
+  setLoginStatus,
+  isPasswordRecoveryPanelOpen,
+  isPlatformOwnerContext,
+  apiRequest,
+  renderPlatformDashboard,
+  syncPlatformNavActiveState,
+  loadMandirDashboard,
+  loadGruhaDashboard,
+  loadBusinessAccounts,
+  loadBusinessPartiesForHealth,
+  loadAccountingDrilldownResult,
+  refreshBooksHealthWidget,
+  renderDashboardPreview,
+  emptyPlatformDashboardPayload,
+  loadAndRenderGroupedNav,
+  getCurrentExperience: () => currentExperience,
+  setCurrentExperience: (value) => { currentExperience = value; },
+  getLastModuleContext: () => lastModuleContext,
+  setLastModuleContext: (value) => { lastModuleContext = value; },
+  getLastPlatformOwnerDashboard: () => lastPlatformOwnerDashboard,
+  setLastPlatformOwnerDashboard: (value) => { lastPlatformOwnerDashboard = value; },
+  getActivePlatformWorkspace: () => activePlatformWorkspace,
+  setActivePlatformWorkspace: (value) => { activePlatformWorkspace = value; },
+  getExperienceConfig: () => experienceConfig,
+  getExperienceAppKeys: () => EXPERIENCE_APP_KEYS,
+  getAppKey: () => APP_KEY,
+});
+
 initOrgWorkspace({
   escapeHtml,
   activeOrgSelectorType,

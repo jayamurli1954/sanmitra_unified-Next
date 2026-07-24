@@ -569,9 +569,12 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "dashboard-preview-shell.js"
     ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    run_start = app_source.index("async function runChecks()")
-    run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
-    run_block = app_source[run_start:run_end]
+    boot_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "shell-boot.js"
+    ).read_text(encoding="utf-8")
+    run_start = boot_source.index("export async function runChecks()")
+    run_end = boot_source.index("export async function loadPlatformOwnerDashboard()", run_start)
+    run_block = boot_source[run_start:run_end]
     settings_start = settings_source.index("function renderMitraBooksSettingsWorkspace()")
     settings_end = settings_source.index("function renderProfessionalSuiteWorkspace()", settings_start)
     settings_block = settings_source[settings_start:settings_end]
@@ -593,7 +596,7 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert "Voucher drill-down" in helpers_source
     assert "function isPlatformOwnerContext" in app_source
     assert "function isBusinessTenantContext" in app_source
-    assert 'currentExperience === "mitrabooks" && isPlatformOwnerContext(modules.payload)' in run_block
+    assert 'getCurrentExperience() === "mitrabooks" && isPlatformOwnerContext(modules.payload)' in run_block
     assert run_block.index("isPlatformOwnerContext(modules.payload)") < run_block.index("await loadBusinessAccounts();")
     assert "await loadBusinessAccounts();" in run_block
     assert "await loadBusinessPartiesForHealth();" in run_block
