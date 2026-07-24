@@ -1895,63 +1895,8 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-    const creditInput = lineEl.querySelector(".voucher-credit");
-
-    const accountId = accountIdInput?.value || "";
-    const debit = Number(debitInput?.value) || 0;
-    const credit = Number(creditInput?.value) || 0;
-
-    if (accountId && (debit > 0 || credit > 0)) {
-      if (debit > 0) debitLines.push({ account_id: Number(accountId), amount: debit.toFixed(2) });
-      if (credit > 0) creditLines.push({ account_id: Number(accountId), amount: credit.toFixed(2) });
-    }
-  });
-
-  if (debitLines.length !== 1 || creditLines.length !== 1) {
-    setLoginStatus("warn", "One debit and one credit required", "Phase 1 voucher posting supports one debit account and one credit account.");
-    return;
-  }
-  const debitTotal = debitLines[0].amount;
-  const creditTotal = creditLines[0].amount;
-  if (Math.abs(debitTotal - creditTotal) >= 0.01) {
-    setLoginStatus("warn", "Voucher is not balanced", "Debit amount must equal credit amount.");
-    return;
-  }
-
-  const payload = {
-    voucher_type: "journal",
-    entry_date: voucherData.date,
-    amount: debitTotal.toFixed(2),
-    debit_account_id: debitLines[0].account_id,
-    credit_account_id: creditLines[0].account_id,
-    description: voucherData.narration || voucherData.reference || "Business voucher",
-    reference: voucherData.reference || null,
-    ...voucherDimensionPayload(),
-  };
-
-  const result = await apiRequest(appKey, "/api/v1/business/vouchers", {
-    method: "POST",
-    headers: {
-      "X-Idempotency-Key": `business-voucher-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (result.ok) {
-    setLoginStatus("ok", "Voucher submitted", `Journal entry ${result.payload?.voucher_number || "created"} sent for approval.`);
-    document.getElementById("business-voucher-create-dialog")?.close();
-    clearVoucherForm();
-    await loadBusinessVouchers();
-    await loadVoucherApprovalQueue(true, { surfaceErrors: false });
-    // Force refresh of current workspace
-    if (activeBusinessWorkspace === "vouchers") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
-    }
-  } else {
-    setLoginStatus("danger", "Create voucher failed", statusDetailText(result.payload?.detail) || "Check entries and try again.");
-  }
-  renderJson(apiOutput, { create_voucher: result });
-}
+// Journal voucher posting lives in modules/workspaces/voucher-create.js
+// (createJournalVoucher). An orphaned mid-function remnant was removed here.
 
 async function runChecks() {
   const activeAppKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
