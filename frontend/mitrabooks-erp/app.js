@@ -515,6 +515,21 @@ import {
 } from "./modules/workspaces/business-entry-helpers.js";
 
 import {
+  initContextPathHelpers,
+  isBusinessModuleEnabled,
+  enabledModuleKeys,
+  isPlatformOwnerContext,
+  isBusinessTenantContext,
+  loadBusinessPartiesForHealth,
+  loadModuleContextForAccounts,
+  buildQueryString,
+  mandirListPath,
+  mandirPublicPaymentsPath,
+  mandirPublicPaymentExceptionsPath,
+  todayIsoDate,
+} from "./modules/workspaces/context-path-helpers.js";
+
+import {
   initManufacturing,
   mfgAccess,
   mfgTab,
@@ -1110,56 +1125,7 @@ let lastModuleContext = null;
 const voucherLineState = [];
 
 // Account helpers + data health live in modules/workspaces/account-helpers.js
-// Context helpers (platform owner / business tenant) remain below.
-
-function isBusinessModuleEnabled(context) {
-  const modules = Array.isArray(context?.enabled_modules) ? context.enabled_modules : [];
-  return modules.some((module) => {
-    const key = typeof module === "string" ? module : module?.module_key;
-    return key === "business";
-  });
-}
-
-function enabledModuleKeys(context = lastModuleContext) {
-  const modules = Array.isArray(context?.enabled_modules) ? context.enabled_modules : [];
-  return new Set(modules
-    .map((module) => typeof module === "string" ? module : module?.module_key)
-    .map((key) => String(key || "").trim().toLowerCase())
-    .filter(Boolean));
-}
-
-function isPlatformOwnerContext(context = lastModuleContext) {
-  const tenantId = String(context?.tenant_id || "").trim().toLowerCase();
-  const role = String(context?.role || context?.user_role || "").trim().toLowerCase();
-  const organizationType = String(context?.organization_type || "").trim().toUpperCase();
-  return context?.is_platform_owner === true
-    || role === "super_admin"
-    || tenantId === "platform"
-    || organizationType === "PLATFORM";
-}
-
-function isBusinessTenantContext(context = lastModuleContext) {
-  const organizationType = String(context?.organization_type || "").trim().toUpperCase();
-  return organizationType === "BUSINESS" && !isPlatformOwnerContext(context) && isBusinessModuleEnabled(context);
-}
-
-async function loadBusinessPartiesForHealth() {
-  const result = await apiRequest("mitrabooks", "/api/v1/business/parties?offset=0&limit=20", { method: "GET" });
-  setLastBusinessPartiesResult(result);
-  if (result.ok) {
-    setLastBusinessParties(Array.isArray(result.payload?.items) ? result.payload.items : Array.isArray(result.payload) ? result.payload : []);
-  }
-  return result;
-}
-
-async function loadModuleContextForAccounts() {
-  if (lastModuleContext) return lastModuleContext;
-  const result = await loadModules("mitrabooks");
-  if (result.ok) {
-    lastModuleContext = result.payload;
-  }
-  return lastModuleContext;
-}
+// Context + Mandir list path helpers live in modules/workspaces/context-path-helpers.js
 
 // Account selector helpers live in modules/workspaces/account-selector.js
 // Mixed document listeners (allocation + voucher amounts) remain below.
@@ -1236,61 +1202,7 @@ document.addEventListener("keydown", (event) => {
 // (createJournalVoucher). An orphaned mid-function remnant was removed here.
 // Shell boot (runChecks / setExperience / platform dashboard) lives in modules/workspaces/shell-boot.js
 
-function buildQueryString(params) {
-  const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      query.set(key, String(value).trim());
-    }
-  });
-  return query.toString();
-}
-
-function mandirListPath(kind) {
-  const state = mandirListState[kind] || {};
-  const path = kind === "sevas" ? "/api/v1/sevas/bookings" : "/api/v1/donations";
-  const query = buildQueryString({
-    limit: MANDIR_LIST_PAGE_SIZE,
-    offset: state.offset || 0,
-    q: state.q,
-    from_date: state.from_date,
-    to_date: state.to_date,
-    payment_mode: kind === "donations" ? state.payment_mode : "",
-    status: kind === "sevas" ? state.status : "",
-  });
-  return `${path}?${query}`;
-}
-
-function mandirPublicPaymentsPath() {
-  const state = mandirListState.payments;
-  const query = buildQueryString({
-    limit: MANDIR_LIST_PAGE_SIZE,
-    offset: state.offset || 0,
-    q: state.q,
-    status: state.status || "pending",
-    payment_type: state.payment_type,
-  });
-  return `/api/v1/public-payments?${query}`;
-}
-
-function mandirPublicPaymentExceptionsPath() {
-  const state = mandirListState.exceptions;
-  const query = buildQueryString({
-    older_than_hours: 24,
-    limit: MANDIR_LIST_PAGE_SIZE,
-    offset: state.offset || 0,
-    q: state.q,
-    reason: state.reason,
-    status: state.status,
-    payment_type: state.payment_type,
-  });
-  return `/api/v1/public-payments/exceptions?${query}`;
-}
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
+// Context + Mandir list path helpers live in modules/workspaces/context-path-helpers.js
 // Mandir create forms + posting dialogs live in modules/workspaces/mandir-create-forms.js
 // Platform-owner onboarding/entitlements live in modules/workspaces/platform-owner-ops.js
 // Mandir verification/cancel dialogs live in modules/workspaces/mandir-create-forms.js
@@ -2746,6 +2658,18 @@ initAccountHelpers({
 });
 
 // Wire business entry helpers (avoids import cycle with app.js)
+// Wire context + Mandir list path helpers (avoids import cycle with app.js)
+initContextPathHelpers({
+  apiRequest,
+  loadModules,
+  setLastBusinessPartiesResult,
+  setLastBusinessParties,
+  getLastModuleContext: () => lastModuleContext,
+  setLastModuleContext: (value) => { lastModuleContext = value; },
+  getMandirListState: () => mandirListState,
+  getMandirListPageSize: () => MANDIR_LIST_PAGE_SIZE,
+});
+
 initBusinessEntryHelpers({
   apiRequest,
   escapeHtml,

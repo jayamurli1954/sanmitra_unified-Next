@@ -23,7 +23,7 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     index_source = index_html.read_text(encoding="utf-8")
     worker_source = service_worker.read_text(encoding="utf-8")
 
-    assert "app.js?v=mitrabooks-erp-v102" in index_source
+    assert "app.js?v=mitrabooks-erp-v103" in index_source
     assert "pwa-shell.js?v=mitrabooks-erp-v11" in index_source
     assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
     assert "CACHE_NAME = 'mitrabooks-erp-v18'" in worker_source
@@ -559,6 +559,9 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     helpers_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-helpers.js"
     ).read_text(encoding="utf-8")
+    context_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "context-path-helpers.js"
+    ).read_text(encoding="utf-8")
     loading_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
     ).read_text(encoding="utf-8")
@@ -594,14 +597,15 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert "Expense accounts" in helpers_source
     assert "Party GSTIN sample" in helpers_source
     assert "Voucher drill-down" in helpers_source
-    assert "function isPlatformOwnerContext" in app_source
-    assert "function isBusinessTenantContext" in app_source
+    assert "function isPlatformOwnerContext" in context_source
+    assert "function isBusinessTenantContext" in context_source
+    assert 'from "./modules/workspaces/context-path-helpers.js"' in app_source
     assert 'getCurrentExperience() === "mitrabooks" && isPlatformOwnerContext(modules.payload)' in run_block
     assert run_block.index("isPlatformOwnerContext(modules.payload)") < run_block.index("await loadBusinessAccounts();")
     assert "await loadBusinessAccounts();" in run_block
     assert "await loadBusinessPartiesForHealth();" in run_block
     assert "/api/v1/accounting/accounts" in loading_source
-    assert "/api/v1/business/parties?offset=0&limit=20" in app_source
+    assert "/api/v1/business/parties?offset=0&limit=20" in context_source
     assert "loadModules(activeAppKey)" in run_block
     assert 'from "./modules/workspaces/account-helpers.js"' in app_source
     assert ".erp-health-panel" in css_source
