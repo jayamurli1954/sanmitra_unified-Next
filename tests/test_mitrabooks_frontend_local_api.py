@@ -280,29 +280,44 @@ def test_mitrabooks_public_pages_are_product_scoped() -> None:
 
 def test_business_voucher_accounts_use_backend_account_contract() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    helpers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-helpers.js"
+    ).read_text(encoding="utf-8")
+    selector_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-selector.js"
+    ).read_text(encoding="utf-8")
+    loading_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
+    ).read_text(encoding="utf-8")
+    voucher_create_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-create.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    combined = f"{app_source}\n{helpers_source}\n{selector_source}\n{loading_source}"
 
-    assert "function normalizeBusinessAccount(acc)" in app_source
-    assert "acc.account_id ?? acc.id" in app_source
-    assert "acc.account_code" in app_source
-    assert "?? acc.code" in app_source
-    assert "acc.account_name" in app_source
-    assert "?? acc.name" in app_source
-    assert "populateVoucherAccountSelect(select" in app_source
+    assert "function normalizeBusinessAccount(acc)" in helpers_source
+    assert "acc.account_id" in helpers_source
+    assert "?? acc.id" in helpers_source
+    assert "acc.account_code" in helpers_source
+    assert "?? acc.code" in helpers_source
+    assert "acc.account_name" in helpers_source
+    assert "?? acc.name" in helpers_source
+    assert "populateVoucherAccountSelect(select" in helpers_source
     assert "syncVoucherAccountFromText" in app_source
-    assert "account-selector-component" in app_source
-    assert "account-suggestions" in app_source
-    assert "updateVoucherAccountsStatus" in app_source
+    assert "account-selector-component" in selector_source
+    assert "account-suggestions" in selector_source
+    assert "updateVoucherAccountsStatus" in helpers_source
     assert "grid-column: 1 / -1" in css_source
-    assert "Account code dropdown" in app_source
-    assert "accountRowsFromPayload" in app_source
-    assert "MitraBooks business tenant required" in app_source
-    assert "business.admin@sanmitra.local" in app_source
+    assert "Account code dropdown" in selector_source
+    assert "accountRowsFromPayload" in helpers_source
+    assert "MitraBooks business tenant required" in loading_source
+    assert "business.admin@sanmitra.local" in combined
     assert 'await loadBusinessAccounts();' in app_source
-    assert "function findBusinessAccountById(accountId)" in app_source
-    assert "function accountIdForVoucherPayload(account)" in app_source
-    assert "debit_account_code: debitAccount.code" in app_source
-    assert "credit_account_code: creditAccount.code" in app_source
+    assert "function findBusinessAccountById(accountId)" in helpers_source
+    assert "function accountIdForVoucherPayload(account)" in helpers_source
+    assert 'from "./modules/workspaces/account-helpers.js"' in app_source
+    assert "debit_account_code: debitAccount.code" in voucher_create_source
+    assert "credit_account_code: creditAccount.code" in voucher_create_source
 
 
 def test_business_voucher_keyboard_shortcuts_are_wired() -> None:
@@ -418,19 +433,23 @@ def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
 
 def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    helpers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-helpers.js"
+    ).read_text(encoding="utf-8")
     loading_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
     ).read_text(encoding="utf-8")
-    combined = f"{app_source}\n{loading_source}"
+    combined = f"{app_source}\n{helpers_source}\n{loading_source}"
 
     assert 'apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" })' in loading_source
     assert "lastBusinessDataHealth" in combined
-    assert "Data Health Score" in app_source
-    assert "renderBusinessDataHealthIssueList" in app_source
-    assert "Remediation Queue" in app_source
-    assert 'data-data-health-rule="${escapeHtml(issue.rule_key || "")}"' in app_source
-    assert "rule.score_impact" in app_source
+    assert "Data Health Score" in helpers_source
+    assert "renderBusinessDataHealthIssueList" in helpers_source
+    assert "Remediation Queue" in helpers_source
+    assert 'data-data-health-rule="${escapeHtml(issue.rule_key || "")}"' in helpers_source
+    assert "rule.score_impact" in helpers_source
     assert 'from "./modules/workspaces/account-loading.js"' in app_source
+    assert 'from "./modules/workspaces/account-helpers.js"' in app_source
 
 
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
@@ -478,6 +497,9 @@ def test_shared_pwa_shell_supports_mitrabooks_install_prompt() -> None:
 
 def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    helpers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-helpers.js"
+    ).read_text(encoding="utf-8")
     loading_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
     ).read_text(encoding="utf-8")
@@ -492,17 +514,17 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     dashboard_end = app_source.index("// ========== Business Module: Party Master", dashboard_start)
     business_dashboard_block = app_source[dashboard_start:dashboard_end]
 
-    assert "function renderBusinessDataHealthPanel()" in app_source
+    assert "function renderBusinessDataHealthPanel()" in helpers_source
     assert "renderBusinessDataHealthPanel()" in settings_block
     assert "renderBusinessDataHealthPanel()" not in business_dashboard_block
-    assert "Tenant, module, chart, and drill-down readiness" in app_source
-    assert "Business tenant context" in app_source
-    assert "Chart of accounts loaded" in app_source
-    assert "Cash and bank accounts" in app_source
-    assert "Revenue / income accounts" in app_source
-    assert "Expense accounts" in app_source
-    assert "Party GSTIN sample" in app_source
-    assert "Voucher drill-down" in app_source
+    assert "Tenant, module, chart, and drill-down readiness" in helpers_source
+    assert "Business tenant context" in helpers_source
+    assert "Chart of accounts loaded" in helpers_source
+    assert "Cash and bank accounts" in helpers_source
+    assert "Revenue / income accounts" in helpers_source
+    assert "Expense accounts" in helpers_source
+    assert "Party GSTIN sample" in helpers_source
+    assert "Voucher drill-down" in helpers_source
     assert "function isPlatformOwnerContext" in app_source
     assert "function isBusinessTenantContext" in app_source
     assert 'currentExperience === "mitrabooks" && isPlatformOwnerContext(modules.payload)' in run_block
@@ -512,16 +534,19 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert "/api/v1/accounting/accounts" in loading_source
     assert "/api/v1/business/parties?offset=0&limit=20" in app_source
     assert "loadModules(activeAppKey)" in run_block
+    assert 'from "./modules/workspaces/account-helpers.js"' in app_source
     assert ".erp-health-panel" in css_source
     assert ".erp-health-actions" in css_source
 
 
 def test_mitrabooks_phase_2b_data_health_actions_are_actionable_not_future_scope() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    helpers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-helpers.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    start = app_source.index("function renderBusinessDataHealthActions")
-    end = app_source.index("function renderBusinessDataHealthPanel", start)
-    actions_block = app_source[start:end]
+    start = helpers_source.index("function renderBusinessDataHealthActions")
+    end = helpers_source.index("function renderBusinessDataHealthPanel", start)
+    actions_block = helpers_source[start:end]
 
     assert "Action Queue" in actions_block
     assert "Complete party GSTINs" in actions_block
