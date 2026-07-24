@@ -409,23 +409,27 @@ def test_mandirmitra_compliance_shell_exposes_governed_operator_controls() -> No
     dashboard = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-dashboard.js"
     ).read_text(encoding="utf-8")
+    create_forms = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-create-forms.js"
+    ).read_text(encoding="utf-8")
     ops = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-operational-reports.js"
     ).read_text(encoding="utf-8")
-    combined = f"{shell}\n{dashboard}\n{ops}"
+    combined = f"{shell}\n{dashboard}\n{create_forms}\n{ops}"
 
-    assert '"/api/v1/compliance/donations/config"' in shell
+    assert '"/api/v1/compliance/donations/config"' in combined
     assert '/api/v1/reports/compliance/80g?' in shell
     assert '/api/v1/reports/compliance/fcra?' in shell
     assert 'data-mandir-compliance-form' in dashboard
     assert 'Save Compliance Configuration' in dashboard
     assert 'from "./modules/workspaces/mandir-dashboard.js"' in shell
-    assert 'name="request_80g"' in shell
-    assert 'name="donor_pan"' in shell
-    assert 'name="is_foreign_contribution"' in shell
-    assert 'name="foreign_source_declaration"' in shell
-    assert '80G is off for this tenant.' in shell
-    assert 'FCRA is off for this tenant.' in shell
+    assert 'from "./modules/workspaces/mandir-create-forms.js"' in shell
+    assert 'name="request_80g"' in create_forms
+    assert 'name="donor_pan"' in create_forms
+    assert 'name="is_foreign_contribution"' in create_forms
+    assert 'name="foreign_source_declaration"' in create_forms
+    assert '80G is off for this tenant.' in create_forms
+    assert 'FCRA is off for this tenant.' in create_forms
     assert 'donor_pan_masked' in ops
     assert 'this is not an official certificate or filing' in combined
     assert 'this is not an official filing' in combined
