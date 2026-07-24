@@ -38,6 +38,7 @@ let forgotPasswordEmail;
 let resetPasswordForm;
 let resetNewPasswordInput;
 let resetConfirmPasswordInput;
+let loginStatus;
 
 export function initAuthSession(injected) {
   deps = injected;
@@ -69,6 +70,7 @@ export function initAuthSession(injected) {
   resetPasswordForm = injected.resetPasswordForm;
   resetNewPasswordInput = injected.resetNewPasswordInput;
   resetConfirmPasswordInput = injected.resetConfirmPasswordInput;
+  loginStatus = injected.loginStatus;
 }
 
 function requireDeps() {
@@ -99,7 +101,6 @@ function getPendingPasswordResetToken() { return requireDeps().getPendingPasswor
 function setPendingPasswordResetToken(value) { requireDeps().setPendingPasswordResetToken(value); }
 function apiRequest(...args) { return requireDeps().apiRequest(...args); }
 function renderJson(...args) { return requireDeps().renderJson(...args); }
-function setLoginStatus(...args) { return requireDeps().setLoginStatus(...args); }
 function statusDetailText(...args) { return requireDeps().statusDetailText(...args); }
 function escapeHtml(...args) { return requireDeps().escapeHtml(...args); }
 function setLastBusinessAccounts(...args) { return requireDeps().setLastBusinessAccounts(...args); }
@@ -115,6 +116,17 @@ function showMandirSplash(...args) { return requireDeps().showMandirSplash(...ar
 function hideMandirSplash(...args) { return requireDeps().hideMandirSplash(...args); }
 function runChecks(...args) { return requireDeps().runChecks(...args); }
 function delay(...args) { return requireDeps().delay(...args); }
+
+export function setLoginStatus(kind, title, detail = "") {
+  if (!loginStatus) {
+    return;
+  }
+  loginStatus.className = `module-state ${kind || ""}`.trim();
+  loginStatus.innerHTML = title
+    ? `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`
+    : "";
+}
+
 
 export function hasTrustedSession() {
   if (!getAccessToken()) {

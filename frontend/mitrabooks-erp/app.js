@@ -187,7 +187,7 @@ import {
 } from "./modules/documents/debit-notes.js";
 
 import { initEventHandlers } from "./modules/events.js";
-import { initShellUi } from "./modules/shell-ui.js";
+import { initShellUi, updatePageHeader, initializeHeader } from "./modules/shell-ui.js";
 
 import {
   initDimensions,
@@ -412,6 +412,7 @@ import {
   clearAuthFieldMessage,
   requestPasswordReset,
   completePasswordReset,
+  setLoginStatus,
 } from "./modules/workspaces/auth-session.js";
 
 import {
@@ -1028,18 +1029,7 @@ const confirmNewPasswordInput = document.getElementById("confirm-password");
 // Shared render/format utils live in modules/workspaces/shared-render-utils.js
 
 // Nav workspace mapping + sync live in modules/workspaces/navigation-shell.js
-
-function setLoginStatus(kind, title, detail = "") {
-  if (!loginStatus) {
-    return;
-  }
-  loginStatus.className = `module-state ${kind || ""}`.trim();
-  loginStatus.innerHTML = title
-    ? `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`
-    : "";
-}
-
-// Auth + session helpers live in modules/workspaces/auth-session.js
+// Auth + session helpers (incl. setLoginStatus) live in modules/workspaces/auth-session.js
 
 // Mandir panchang + operational reports live in modules/workspaces/mandir-operational-reports.js
 
@@ -1130,73 +1120,7 @@ const voucherLineState = [];
 // Account selector helpers live in modules/workspaces/account-selector.js
 // Mixed document listeners (allocation + voucher amounts) remain below.
 
-// ========== Account Selector Event Handlers ==========
-
-document.addEventListener("input", (event) => {
-  // Payment-allocation amount inputs: update state silently (no re-render) so
-  // the field keeps focus while typing. The total is recomputed on next render.
-  const allocLine = event.target.closest("[data-alloc-line]");
-  if (allocLine) {
-    setAllocationLineAmount(allocLine.getAttribute("data-alloc-line"), allocLine.value);
-    return;
-  }
-
-  // Handle account selector input
-  const accountInput = event.target.closest(".account-search-input");
-  if (accountInput) {
-    const fieldId = accountInput.getAttribute("data-field-id");
-    if (fieldId) {
-      updateAccountSuggestions(fieldId);
-    }
-    return;
-  }
-
-  if (event.target?.id === "business-voucher-amount") {
-    updateVoucherBalance();
-    return;
-  }
-
-  // Handle debit/credit input changes - update balance
-  const amountInput = event.target.closest(".voucher-debit, .voucher-credit");
-  if (amountInput) {
-    updateVoucherBalance();
-  }
-});
-
-document.addEventListener("change", (event) => {
-  if (event.target && event.target.id === "business-voucher-party") {
-    loadVoucherPartyOutstanding(event.target.value, event.target.getAttribute("data-voucher-type") || "");
-    return;
-  }
-  const accountSelect = event.target.closest(".account-picker-select");
-  if (!accountSelect) {
-    return;
-  }
-  const fieldId = accountSelect.getAttribute("data-field-id");
-  if (fieldId && accountSelect.value) {
-    selectBusinessAccount(fieldId, accountSelect.value);
-  }
-});
-
-document.addEventListener("click", (event) => {
-  const suggestion = event.target.closest(".account-suggestion-item");
-  if (suggestion) {
-    selectAccountFromSuggestion(suggestion);
-    return;
-  }
-
-  // Close suggestions if clicking outside
-  const component = event.target.closest(".account-selector-component");
-  if (!component) {
-    closeAllAccountSuggestions();
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    closeAllAccountSuggestions();
-  }
-});
+// Account selector helpers + document listeners live in modules/workspaces/account-selector.js
 
 // Journal voucher posting lives in modules/workspaces/voucher-create.js
 // (createJournalVoucher). An orphaned mid-function remnant was removed here.
@@ -1829,6 +1753,7 @@ initializeTheme();
 
 // Wire shell UI (theme toggles, sidebar org/FY, quick actions)
 initShellUi({
+  initializeHealthWidget,
   get activeBusinessWorkspace() { return activeBusinessWorkspace; },
   set activeBusinessWorkspace(v) { activeBusinessWorkspace = v; },
   addBillLine,
@@ -2295,6 +2220,7 @@ initAuthSession({
   resetPasswordForm,
   resetNewPasswordInput,
   resetConfirmPasswordInput,
+  loginStatus,
   getAccessToken,
   getRefreshToken,
   clearAllTokens,
@@ -2316,7 +2242,6 @@ initAuthSession({
   setPendingPasswordResetToken: (value) => { pendingPasswordResetToken = value; },
   apiRequest,
   renderJson,
-  setLoginStatus,
   statusDetailText,
   escapeHtml,
   setLastBusinessAccounts,
@@ -2685,6 +2610,8 @@ initAccountSelector({
   populateAccountPickerSelect,
   normalizeBusinessAccount,
   updateVoucherBalance,
+  setAllocationLineAmount,
+  loadVoucherPartyOutstanding,
 });
 
 initAccountLoading({
@@ -2826,30 +2753,7 @@ initVouchers({
   getBusinessVoucherCreateDialog: () => document.getElementById("business-voucher-create-dialog"),
 });
 
-// HEADER & HEALTH WIDGET (Phase 1C Step 7)
-// ============================================
-
-// Books health widget lives in modules/workspaces/account-helpers.js
-
-function updatePageHeader(parentName = "Workspaces", currentName = "Dashboard", pageTitle = "Dashboard Workspace") {
-  const breadcrumbParent = document.getElementById("breadcrumb-parent");
-  const breadcrumbCurrent = document.getElementById("breadcrumb-current");
-  const viewTitle = document.getElementById("view-title");
-
-  if (breadcrumbParent) breadcrumbParent.textContent = parentName;
-  if (breadcrumbCurrent) breadcrumbCurrent.textContent = currentName;
-  if (viewTitle) viewTitle.textContent = pageTitle;
-}
-
-/**
- * Initialize header on page load
- */
-function initializeHeader() {
-  updatePageHeader("Workspaces", "Dashboard", "Dashboard Workspace");
-  initializeHealthWidget();
-}
-
-// Call on app initialization
+// Header helpers live in modules/shell-ui.js; books health widget in account-helpers.js
 initializeHeader();
 
 if (isProductionShell()) {

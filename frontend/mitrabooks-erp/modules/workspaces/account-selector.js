@@ -2,7 +2,7 @@
 // SECTION: ACCOUNT SELECTOR COMPONENT
 // Extracted from app.js per docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md.
 // Pure move: logic unchanged. Shell deps injected via initAccountSelector(...).
-// Mixed document listeners (payment-allocation + voucher amounts) remain in app.js.
+// Document listeners (account selector + allocation/voucher amounts) installed via init.
 // ====================================================================
 
 /** @type {Record<string, Function> | null} */
@@ -10,6 +10,7 @@ let deps = null;
 
 export function initAccountSelector(injected) {
   deps = injected;
+  installAccountSelectorListeners();
 }
 
 function requireDeps() {
@@ -28,6 +29,8 @@ function populateAccountPickerSelect(fieldId, accounts, selectedId = "") {
 }
 function normalizeBusinessAccount(acc) { return requireDeps().normalizeBusinessAccount(acc); }
 function updateVoucherBalance() { return requireDeps().updateVoucherBalance(); }
+function setAllocationLineAmount(...args) { return requireDeps().setAllocationLineAmount(...args); }
+function loadVoucherPartyOutstanding(...args) { return requireDeps().loadVoucherPartyOutstanding(...args); }
 
 export function renderAccountSelectorComponent(fieldId, selectedAccountId = null) {
   const accounts = businessAccountsForSelection();
@@ -163,3 +166,71 @@ export function closeAllAccountSuggestions() {
   });
 }
 
+export function installAccountSelectorListeners() {
+  document.addEventListener("input", (event) => {
+    // Payment-allocation amount inputs: update state silently (no re-render) so
+    // the field keeps focus while typing. The total is recomputed on next render.
+    const allocLine = event.target.closest("[data-alloc-line]");
+    if (allocLine) {
+      setAllocationLineAmount(allocLine.getAttribute("data-alloc-line"), allocLine.value);
+      return;
+    }
+
+    // Handle account selector input
+    const accountInput = event.target.closest(".account-search-input");
+    if (accountInput) {
+      const fieldId = accountInput.getAttribute("data-field-id");
+      if (fieldId) {
+        updateAccountSuggestions(fieldId);
+      }
+      return;
+    }
+
+    if (event.target?.id === "business-voucher-amount") {
+      updateVoucherBalance();
+      return;
+    }
+
+    // Handle debit/credit input changes - update balance
+    const amountInput = event.target.closest(".voucher-debit, .voucher-credit");
+    if (amountInput) {
+      updateVoucherBalance();
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    if (event.target && event.target.id === "business-voucher-party") {
+      loadVoucherPartyOutstanding(event.target.value, event.target.getAttribute("data-voucher-type") || "");
+      return;
+    }
+    const accountSelect = event.target.closest(".account-picker-select");
+    if (!accountSelect) {
+      return;
+    }
+    const fieldId = accountSelect.getAttribute("data-field-id");
+    if (fieldId && accountSelect.value) {
+      selectBusinessAccount(fieldId, accountSelect.value);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const suggestion = event.target.closest(".account-suggestion-item");
+    if (suggestion) {
+      selectAccountFromSuggestion(suggestion);
+      return;
+    }
+
+    // Close suggestions if clicking outside
+    const component = event.target.closest(".account-selector-component");
+    if (!component) {
+      closeAllAccountSuggestions();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAllAccountSuggestions();
+    }
+  });
+
+}

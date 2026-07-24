@@ -234,11 +234,22 @@ function installShellUi() {
 
   document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard);
 
-  /**
-   * Update page title and breadcrumb based on current view
-   * @param {string} parentName - Parent breadcrumb name
-   * @param {string} currentName - Current breadcrumb name
-   * @param {string} pageTitle - Full page title
-   */
-
 }
+
+export function updatePageHeader(parentName = "Workspaces", currentName = "Dashboard", pageTitle = "Dashboard Workspace") {
+  const breadcrumbParent = document.getElementById("breadcrumb-parent");
+  const breadcrumbCurrent = document.getElementById("breadcrumb-current");
+  const viewTitle = document.getElementById("view-title");
+
+  if (breadcrumbParent) breadcrumbParent.textContent = parentName;
+  if (breadcrumbCurrent) breadcrumbCurrent.textContent = currentName;
+  if (viewTitle) viewTitle.textContent = pageTitle;
+}
+
+
+export function initializeHeader() {
+  updatePageHeader("Workspaces", "Dashboard", "Dashboard Workspace");
+  requireDeps().initializeHealthWidget();
+}
+
+
