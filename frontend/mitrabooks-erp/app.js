@@ -413,6 +413,13 @@ import {
 } from "./modules/workspaces/auth-session.js";
 
 import {
+  initBusinessWorkspace,
+  renderBusinessWorkspace,
+  setBusinessWorkspace,
+  syncBusinessNavActiveState,
+} from "./modules/workspaces/business-workspace.js";
+
+import {
   initManufacturing,
   mfgAccess,
   mfgTab,
@@ -2521,158 +2528,9 @@ let activeBusinessWorkspace = "overview";
 
 // Vouchers list table renderers live in modules/workspaces/business-list-tables.js
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: BUSINESS WORKSPACE DISPATCHER
-// NOTE  : renderBusinessWorkspace — top-level if/else dispatches to each workspace render function
-// ══════════════════════════════════════════════════════════════════════
+// Business workspace dispatcher + router live in modules/workspaces/business-workspace.js
 
 // ══════════════════════════════════════════════════════════════════════
-
-function renderBusinessWorkspace() {
-  if (activeBusinessWorkspace === "settings") {
-    return renderMitraBooksSettingsWorkspace();
-  }
-  if (activeBusinessWorkspace === "ca-access") {
-    return renderCaPracticePortalWorkspace();
-  }
-  if (activeBusinessWorkspace === "parties") {
-    return `
-      <div class="verification-panel erp-workspace-panel">
-        <div class="preview-heading compact">
-          <div>
-            <h4>Parties</h4>
-            <p>Customers and vendors for this business workspace.</p>
-          </div>
-          <button class="secondary" type="button" data-business-action="open-create-party">+ New Party</button>
-        </div>
-        ${renderBusinessPartiesListFilters(lastBusinessParties.length)}
-        ${renderBusinessPartiesTable(lastBusinessParties)}
-      </div>
-    `;
-  }
-  if (activeBusinessWorkspace === "vouchers") {
-    return `
-      <div class="verification-panel erp-workspace-panel">
-        <div class="preview-heading compact">
-          <div>
-            <h4>Vouchers</h4>
-            <p>Posted journal entries, payments, receipts, and contra vouchers.</p>
-          </div>
-          <button class="secondary" type="button" data-business-action="open-create-voucher" aria-keyshortcuts="Control+Alt+V">+ New Voucher</button>
-        </div>
-        ${renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)}
-        ${renderBusinessVouchersListFilters(lastBusinessVouchers.length)}
-        ${renderBusinessVouchersTable(lastBusinessVouchers)}
-      </div>
-    `;
-  }
-  if (activeBusinessWorkspace === "audit") {
-    return `
-      <div class="verification-panel erp-workspace-panel">
-        <div class="preview-heading compact">
-          <div>
-            <h4>Audit Trail</h4>
-            <p>All party, voucher, and account changes for compliance and troubleshooting.</p>
-          </div>
-        </div>
-        ${renderAuditListFilters(lastAuditEvents.length)}
-        ${renderAuditEventsTable(lastAuditEvents)}
-      </div>
-    `;
-  }
-  if (activeBusinessWorkspace === "accounting") {
-    return `
-      <div class="verification-panel erp-workspace-panel">
-        <div class="preview-heading compact">
-          <div>
-            <h4>Accounting</h4>
-            <p>Chart readiness, voucher drill-down, and posted ledger checks for the active tenant.</p>
-          </div>
-        </div>
-        ${renderAccountingDrilldownPanel()}
-      </div>
-    `;
-  }
-  // "gst-returns", "reconciliation" and "tds-tcs" are sidebar shortcuts into the
-  // reports workspace (which hosts those tabs); the tab is pre-selected in setBusinessWorkspace.
-  if (activeBusinessWorkspace === "reports"
-      || activeBusinessWorkspace === "gst-returns"
-      || activeBusinessWorkspace === "reconciliation"
-      || activeBusinessWorkspace === "tds-tcs"
-      || activeBusinessWorkspace === "bank-recon") {
-    return renderBusinessReportsWorkspace();
-  }
-  if (activeBusinessWorkspace === "sales") {
-    return renderBusinessSalesWorkspace();
-  }
-  if (activeBusinessWorkspace === "bills") {
-    return renderBusinessPurchaseWorkspace();
-  }
-  if (activeBusinessWorkspace === "credit-notes") {
-    return renderBusinessCreditNoteWorkspace();
-  }
-  if (activeBusinessWorkspace === "debit-notes") {
-    return renderBusinessDebitNoteWorkspace();
-  }
-  if (activeBusinessWorkspace === "coa") {
-    return renderBusinessCoaWorkspace();
-  }
-  if (activeBusinessWorkspace === "financial-health") {
-    return renderFinancialHealthWorkspace();
-  }
-  if (activeBusinessWorkspace === "hr") {
-    return renderHrWorkspace();
-  }
-  if (activeBusinessWorkspace === "manufacturing") {
-    return renderManufacturingWorkspace();
-  }
-  return `
-    <div class="erp-workbench-grid">
-      <article class="erp-workbench-card">
-        <span class="workbench-kicker">Core Master</span>
-        <h4>Parties</h4>
-        <strong>${escapeHtml(lastBusinessParties.length)}</strong>
-        <p>Customers and vendors available for business posting.</p>
-        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="parties">Open Parties</button>
-      </article>
-      <article class="erp-workbench-card">
-        <span class="workbench-kicker">Posting</span>
-        <h4>Vouchers</h4>
-        <strong>${escapeHtml(lastBusinessVouchers.length)}</strong>
-        <p>Posted journal entries, receipts, payments, and reversals.</p>
-        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">Open Vouchers</button>
-      </article>
-      <article class="erp-workbench-card">
-        <span class="workbench-kicker">Chart</span>
-        <h4>Accounts</h4>
-        <strong>${escapeHtml(lastBusinessAccounts.length)}</strong>
-        <p>Tenant-owned chart of accounts loaded from accounting APIs.</p>
-        <button class="secondary" type="button" data-business-action="workspace-view" data-workspace-view="accounting">Open Accounting</button>
-      </article>
-    </div>
-  `;
-  return `
-    <div class="dashboard-main-grid erp-command-grid">
-      <article>
-        <h4>Quick Actions</h4>
-        <div class="quick-grid">
-          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="parties">
-            <span class="quick-icon">●</span>
-            <span>Parties</span>
-          </button>
-          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="vouchers">
-            <span class="quick-icon">▤</span>
-            <span>Vouchers</span>
-          </button>
-          <button class="quick-tile" type="button" data-business-action="workspace-view" data-workspace-view="audit">
-            <span class="quick-icon">⏱</span>
-            <span>Audit</span>
-          </button>
-        </div>
-      </article>
-    </div>
-  `;
-}
 
 // Financial Health (CFO Insight) — every figure is computed server-side from the
 // posted ledger (see app/modules/business/financial_health.py). The frontend only
@@ -2685,143 +2543,6 @@ function renderBusinessWorkspace() {
 // API   : GET/POST /api/v1/business/parties  PATCH .../deactivate
 // NOTE  : loadBusinessParties, createBusinessParty, updateBusinessParty
 // ══════════════════════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: BUSINESS WORKSPACE ROUTER — state + navigation
-// NOTE  : setBusinessWorkspace, syncBusinessNavActiveState — drives activeBusinessWorkspace
-// ══════════════════════════════════════════════════════════════════════
-
-function setBusinessWorkspace(workspace) {
-  if (currentExperience === "mitrabooks" && activeOrgSelectorType() !== "BUSINESS") {
-    selectedOrgType = "BUSINESS";
-    updateTrustedContextUi();
-  }
-  if (workspace !== "settings") {
-    setActiveSettingsDetailId("");
-  }
-  activeBusinessWorkspace = workspace;
-  syncBusinessNavActiveState();
-  dashboardPreview.innerHTML = workspace === "overview"
-    ? renderDashboardPreview(experienceConfig.mitrabooks)
-    : renderBusinessWorkspace();
-  if (workspace === "overview" && hasTrustedSession()) {
-    loadBusinessDashboardStats();
-  } else if (workspace === "parties") {
-    loadBusinessParties();
-  } else if (workspace === "vouchers") {
-    loadBusinessAccounts();
-    loadBusinessVouchers();
-    loadVoucherApprovalQueue(true, { surfaceErrors: false });
-  } else if (workspace === "audit") {
-    loadAuditEvents();
-  } else if (workspace === "accounting") {
-    refreshCurrentAccountingDrilldown();
-  } else if (workspace === "reports" || workspace === "gst-returns" || workspace === "reconciliation" || workspace === "tds-tcs" || workspace === "bank-recon") {
-    // Sidebar shortcuts open the reports workspace on a specific tab.
-    if (workspace === "gst-returns") businessReportState.tab = "gst-returns";
-    else if (workspace === "reconciliation") businessReportState.tab = "payment-allocation";
-    else if (workspace === "tds-tcs") businessReportState.tab = "tds";
-    else if (workspace === "bank-recon") businessReportState.tab = "bank-recon";
-    loadBusinessAccounts();
-    refreshCurrentBusinessReport();
-  } else if (workspace === "sales") {
-    salesUi.view = "list";
-    loadBusinessParties();
-    loadBusinessAccounts();
-    loadInvoiceSettings();
-    loadBusinessInvoices();
-  } else if (workspace === "settings") {
-    loadBusinessAdminSettings();
-    loadBusinessAccounts();
-    loadBusinessPartiesForHealth();
-    loadAccountingDrilldownResult();
-    loadBusinessDataHealth();
-  } else if (workspace === "bills") {
-    purchaseUi.view = "list";
-    loadBusinessParties();
-    loadBusinessAccounts();
-    loadBusinessBills();
-  } else if (workspace === "credit-notes") {
-    creditUi.view = "list";
-    loadBusinessParties();
-    loadBusinessAccounts();
-    loadCreditNotes();
-  } else if (workspace === "debit-notes") {
-    debitUi.view = "list";
-    loadBusinessParties();
-    loadBusinessAccounts();
-    loadDebitNotes();
-  } else if (workspace === "coa") {
-    setCoaTypeFilter("");
-    loadBusinessAccounts();
-  } else if (workspace === "ca-access") {
-    resetCaPracticeWorkspaceState();
-    const startupLoads = [];
-    if (isBusinessAdmin()) {
-      startupLoads.push(loadCaAccessUsers({ rerender: false }));
-    }
-    startupLoads.push(loadCaClients({ rerender: false }));
-    startupLoads.push(loadCaPracticeDocuments({ rerender: false }));
-    Promise.allSettled(startupLoads).then(() => {
-      if (activeBusinessWorkspace === "ca-access") {
-        dashboardPreview.innerHTML = renderBusinessWorkspace();
-      }
-    });
-  } else if (workspace === "hr") {
-    hrUi.tab = "employees";
-    hrUi.error = "";
-    hrUi.selectedRunId = "";
-    hrUi.runSlips = [];
-    loadHrWorkspace();
-  } else if (workspace === "manufacturing") {
-    setMfgTab("cost-centres");
-    setMfgError("");
-    loadMfgWorkspace();
-  }
-}
-
-function syncBusinessNavActiveState() {
-  const selectorOrgType = activeOrgSelectorType();
-  const isPlannedOrgWorkspace = currentExperience === "mitrabooks"
-    && activeBusinessWorkspace === "overview"
-    && selectorOrgType !== "BUSINESS";
-  nav.querySelectorAll("a").forEach((link) => {
-    const workspace = link.dataset.businessWorkspace || "";
-    const isActive = currentExperience === "mitrabooks"
-      && !isPlannedOrgWorkspace
-      && workspace
-      && workspace === activeBusinessWorkspace;
-    link.classList.toggle("active", isActive);
-  });
-  if (topbarCurrent && currentExperience === "mitrabooks") {
-    const labels = {
-      overview: "Dashboard",
-      parties: "Parties",
-      vouchers: "Vouchers",
-      audit: "Audit Trail",
-      accounting: "Accounting",
-      reports: "Financial Reports",
-      sales: "Sales Invoices",
-      bills: "Purchase Bills",
-      "credit-notes": "Credit Notes",
-      "debit-notes": "Debit Notes",
-      "financial-health": "Financial Health",
-      "gst-returns": "GST Returns",
-      "reconciliation": "Reconciliation",
-      "tds-tcs": "TDS / TCS",
-      "bank-recon": "Bank Reconciliation",
-      "ca-access": "CA Practice Portal",
-      coa: "Chart of Accounts",
-      settings: "Settings",
-    };
-    const plannedMeta = orgSelectorMeta[selectorOrgType];
-    const label = isPlannedOrgWorkspace
-      ? plannedMeta?.label || "Planned Workspace"
-      : labels[activeBusinessWorkspace] || "Dashboard";
-    topbarCurrent.textContent = label;
-    updatePageHeader("MitraBooks", label, `${label} Workspace`);
-  }
-}
 
 // Business list filtering lives in modules/workspaces/business-list-filters.js
 
@@ -4459,6 +4180,84 @@ initGruhamitra({
 // Wire core financial reports (avoids import cycle with app.js)
 // Wire business reports hub (avoids import cycle with app.js)
 // Wire auth + session helpers (avoids import cycle with app.js)
+// Wire business workspace dispatcher + router (avoids import cycle with app.js)
+initBusinessWorkspace({
+  dashboardPreview,
+  nav,
+  topbarCurrent,
+  escapeHtml,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  setActiveBusinessWorkspace: (value) => { activeBusinessWorkspace = value; },
+  getCurrentExperience: () => currentExperience,
+  getSelectedOrgType: () => selectedOrgType,
+  setSelectedOrgType: (value) => { selectedOrgType = value; },
+  getOrgSelectorMeta: () => orgSelectorMeta,
+  getExperienceConfig: () => experienceConfig,
+  getBusinessReportState: () => businessReportState,
+  getLastBusinessParties: () => lastBusinessParties,
+  getLastBusinessVouchers: () => lastBusinessVouchers,
+  getLastBusinessAccounts: () => lastBusinessAccounts,
+  getLastVoucherApprovalQueue: () => lastVoucherApprovalQueue,
+  getLastAuditEvents: () => lastAuditEvents,
+  getSalesUi: () => salesUi,
+  getPurchaseUi: () => purchaseUi,
+  getCreditUi: () => creditUi,
+  getDebitUi: () => debitUi,
+  getHrUi: () => hrUi,
+  activeOrgSelectorType,
+  updateTrustedContextUi,
+  setActiveSettingsDetailId,
+  hasTrustedSession,
+  updatePageHeader,
+  renderMitraBooksSettingsWorkspace,
+  renderCaPracticePortalWorkspace,
+  renderBusinessPartiesListFilters,
+  renderBusinessPartiesTable,
+  renderVoucherApprovalQueuePanel,
+  renderBusinessVouchersListFilters,
+  renderBusinessVouchersTable,
+  renderAuditListFilters,
+  renderAuditEventsTable,
+  renderAccountingDrilldownPanel,
+  renderBusinessReportsWorkspace,
+  renderBusinessSalesWorkspace,
+  renderBusinessPurchaseWorkspace,
+  renderBusinessCreditNoteWorkspace,
+  renderBusinessDebitNoteWorkspace,
+  renderBusinessCoaWorkspace,
+  renderFinancialHealthWorkspace,
+  renderHrWorkspace,
+  renderManufacturingWorkspace,
+  renderDashboardPreview,
+  loadBusinessDashboardStats,
+  loadBusinessParties,
+  loadBusinessAccounts,
+  loadBusinessVouchers,
+  loadVoucherApprovalQueue,
+  loadAuditEvents,
+  refreshCurrentAccountingDrilldown,
+  refreshCurrentBusinessReport,
+  loadInvoiceSettings,
+  loadBusinessInvoices,
+  loadBusinessAdminSettings,
+  loadBusinessPartiesForHealth,
+  loadAccountingDrilldownResult,
+  loadBusinessDataHealth,
+  loadBusinessBills,
+  loadCreditNotes,
+  loadDebitNotes,
+  setCoaTypeFilter,
+  resetCaPracticeWorkspaceState,
+  isBusinessAdmin,
+  loadCaAccessUsers,
+  loadCaClients,
+  loadCaPracticeDocuments,
+  loadHrWorkspace,
+  setMfgTab,
+  setMfgError,
+  loadMfgWorkspace,
+});
+
 initAuthSession({
   appRoot,
   sessionPill,

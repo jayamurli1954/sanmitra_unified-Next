@@ -132,10 +132,14 @@ def test_mitrabooks_dashboard_preview_closes_before_business_module() -> None:
 
 def test_business_workspace_menu_renders_main_preview_directly() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("function setBusinessWorkspace(workspace)")
-    end = app_source.index("function syncBusinessNavActiveState()", start)
-    workspace_switcher = app_source[start:end]
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
+    start = workspace_source.index("export function setBusinessWorkspace(workspace)")
+    end = workspace_source.index("export function syncBusinessNavActiveState()", start)
+    workspace_switcher = workspace_source[start:end]
 
+    assert 'from "./modules/workspaces/business-workspace.js"' in app_source
     assert 'workspace === "overview"' in workspace_switcher
     assert "renderBusinessWorkspace()" in workspace_switcher
     assert "refreshCurrentAccountingDrilldown();" in workspace_switcher
@@ -178,38 +182,64 @@ def test_business_party_payload_matches_backend_schema() -> None:
 
 def test_business_loaders_refresh_active_workspace_panel() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
+    parties_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "parties.js"
+    ).read_text(encoding="utf-8")
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    audit_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "audit-trail.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{app_source}\n{workspace_source}\n{parties_source}\n{vouchers_source}\n{audit_source}"
 
-    assert 'activeBusinessWorkspace === "parties"' in app_source
-    assert 'activeBusinessWorkspace === "vouchers"' in app_source
-    assert 'activeBusinessWorkspace === "audit"' in app_source
-    assert app_source.count("dashboardPreview.innerHTML = renderBusinessWorkspace();") >= 3
+    assert 'getActiveBusinessWorkspace() === "parties"' in parties_source or 'activeBusinessWorkspace === "parties"' in combined
+    assert 'getActiveBusinessWorkspace() === "vouchers"' in vouchers_source or 'activeBusinessWorkspace === "vouchers"' in combined
+    assert 'getActiveBusinessWorkspace() === "audit"' in audit_source or 'activeBusinessWorkspace === "audit"' in combined
+    assert combined.count("dashboardPreview.innerHTML = renderBusinessWorkspace();") >= 3
+    assert 'from "./modules/workspaces/business-workspace.js"' in app_source
 
 
 def test_mitrabooks_settings_menu_is_business_specific() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    settings_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "settings-workspace.js"
+    ).read_text(encoding="utf-8")
+    nav_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "navigation.js").read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(encoding="utf-8")
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
 
-    assert 'businessWorkspace: "settings"' in app_source
-    assert 'activeBusinessWorkspace === "settings"' in app_source
-    assert "MitraBooks Settings" in app_source
-    assert "Core Settings" in app_source
-    assert "Module Settings" in app_source
-    assert "Professional Practice Settings" in app_source
-    assert 'data-business-action="settings-detail"' in app_source
-    assert 'businessAction === "settings-detail"' in app_source
-    assert 'businessAction === "settings-back"' in app_source
-    assert "/api/v1/business/admin-settings" in app_source
-    assert 'data-business-action="save-settings-section"' in app_source
-    assert 'businessAction === "save-settings-section"' in app_source
-    assert "Client Management" in app_source
-    assert "Multi-Company Dashboard" in app_source
-    assert "Integrations" in app_source
-    assert "AI Settings" in app_source
-    assert "MITRABOOKS_COMPLETION_PHASES" in app_source
-    assert "Jun 15-21" in app_source
-    assert "Jul 13-19" in app_source
-    assert "Accounting guardrail:" in app_source
-    assert "Housing Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
-    assert "Temple Settings" not in app_source[app_source.index("const MITRABOOKS_SETTINGS_GROUPS"):app_source.index("const businessListState")]
+    assert 'businessWorkspace: "settings"' in nav_source
+    assert 'getActiveBusinessWorkspace() === "settings"' in workspace_source or 'getActiveBusinessWorkspace() === "settings"' in settings_source
+    assert "MitraBooks Settings" in settings_source
+    assert "Core Settings" in settings_source
+    assert "Module Settings" in settings_source
+    assert "Professional Practice Settings" in settings_source
+    assert 'data-business-action="settings-detail"' in settings_source
+    assert 'businessAction === "settings-detail"' in events_source
+    assert 'businessAction === "settings-back"' in events_source
+    assert "/api/v1/business/admin-settings" in settings_source
+    assert 'data-business-action="save-settings-section"' in settings_source
+    assert 'businessAction === "save-settings-section"' in events_source
+    assert "Client Management" in settings_source
+    assert "Multi-Company Dashboard" in settings_source
+    assert "Integrations" in settings_source
+    assert "AI Settings" in settings_source
+    assert "MITRABOOKS_COMPLETION_PHASES" in settings_source
+    assert "Jun 15-21" in settings_source
+    assert "Jul 13-19" in settings_source
+    assert "Accounting guardrail:" in settings_source
+    groups_start = settings_source.index("const MITRABOOKS_SETTINGS_GROUPS")
+    groups_end = settings_source.index("export function", groups_start)
+    settings_groups = settings_source[groups_start:groups_end]
+    assert "Housing Settings" not in settings_groups
+    assert "Temple Settings" not in settings_groups
+    assert 'from "./modules/workspaces/settings-workspace.js"' in app_source or "settings-workspace" in app_source
 
 
 def test_mitrabooks_landing_page_covers_onboarding_pricing_and_limits() -> None:
