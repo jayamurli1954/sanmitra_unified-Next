@@ -666,6 +666,14 @@ import {
   financialYearStartIso,
 } from "./modules/workspaces/fiscal-year.js";
 
+import {
+  initDashboardPrimitives,
+  renderStatCards,
+  renderActionTiles,
+  renderActivity,
+  renderBusinessRecentVoucherRows,
+} from "./modules/workspaces/dashboard-primitives.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -1373,77 +1381,7 @@ function renderGroupedNavFromItems(items) {
   syncBusinessNavActiveState();
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: STAT CARDS + ACTIVITY + RECENT VOUCHERS
-// NOTE  : renderStatCards, renderActionTiles, renderActivity, renderBusinessRecentVoucherRows
-// ══════════════════════════════════════════════════════════════════════
-
-function renderStatCards(stats) {
-  return stats.map(([label, value, subtext]) => `
-    <article class="metric-tile">
-      <span>${label}</span>
-      <strong>${value}</strong>
-      <small>${subtext}</small>
-    </article>
-  `).join("");
-}
-
-function renderActionTiles(actions) {
-  return actions.map((action) => `
-    <button class="quick-tile" type="button">
-      <span class="quick-icon">${action.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>
-      <span>${action}</span>
-    </button>
-  `).join("");
-}
-
-function renderActivity(items) {
-  return items.map((item) => `<li><span class="activity-dot"></span><span>${item}</span></li>`).join("");
-}
-
-function renderBusinessRecentVoucherRows(rows) {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return `
-      <div class="empty-state compact">
-        <strong>No posted vouchers yet</strong>
-        <span>Post the first balanced journal to start the operational timeline.</span>
-      </div>
-    `;
-  }
-  return `
-    <div class="table-preview compact-table erp-table business-recent-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Reference</th>
-            <th>Date</th>
-            <th>Type</th>
-            <th>Amount</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.slice(0, 5).map((row) => {
-            const status = String(row.status || "posted");
-            const isReversed = status === "reversed";
-            return `
-              <tr>
-                <td>
-                  <strong>${escapeHtml(row.reference || row.cheque_number || "-")}</strong>
-                  <span class="row-subtext">${escapeHtml((row.description || row.narration || "").slice(0, 42))}</span>
-                </td>
-                <td>${escapeHtml(String(row.entry_date || row.created_at || "").slice(0, 10))}</td>
-                <td>${escapeHtml(row.voucher_type || "journal")}</td>
-                <td class="amount">${escapeHtml(formatCurrency(row.total_debit || row.amount || 0))}</td>
-                <td><span class="pill ${isReversed ? "warn" : "ok"}">${escapeHtml(status)}</span></td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
+// Dashboard stat/activity primitives live in modules/workspaces/dashboard-primitives.js
 
 // Shared business attachment helpers (invoices, bills, CA documents)
 
@@ -6799,6 +6737,12 @@ initManufacturing({
 // Wire business attachments (avoids import cycle with app.js)
 // Wire MitraBooks settings workspace (avoids import cycle with app.js)
 // Wire business list filtering (avoids import cycle with app.js)
+// Wire dashboard stat/activity primitives (avoids import cycle with app.js)
+initDashboardPrimitives({
+  escapeHtml,
+  formatCurrency,
+});
+
 initBusinessListFilters({
   loadBusinessParties,
   loadBusinessVouchers,
