@@ -6,6 +6,7 @@ import pytest
 
 import app.modules.mandir_compat.report_helpers as report_helpers
 import app.modules.mandir_compat.router as mandir_router
+import app.modules.mandir_compat.routes.journal_entries as journal_entries
 from app.core.auth.dependencies import get_current_user
 from app.db.postgres import get_async_session
 from app.main import app
@@ -167,7 +168,8 @@ def test_trial_balance_returns_503_when_db_connection_fails(report_client, monke
     async def _raise_connection_error(_session, *, tenant_id, as_of):
         raise ConnectionRefusedError('postgres connection refused')
 
-    monkeypatch.setattr(mandir_router, 'trial_balance_report', _raise_connection_error)
+    # Route lives in journal_entries (post-extract); patch the bound name used there.
+    monkeypatch.setattr(journal_entries, 'trial_balance_report', _raise_connection_error)
 
     response = report_client.get(
         '/api/v1/journal-entries/reports/trial-balance',
