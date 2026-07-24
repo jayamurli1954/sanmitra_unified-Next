@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import Depends, Header, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models.entities import Account
