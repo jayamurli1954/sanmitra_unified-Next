@@ -467,6 +467,10 @@ def test_mandirmitra_stage3_automated_smoke_discovers_all_mandir_tests() -> None
 
 def test_mandirmitra_shell_exposes_accounting_backed_fund_and_inventory_drilldown() -> None:
     shell = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    ops_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-operational-reports.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{shell}\n{ops_source}"
 
     assert "/api/v1/reports/donations/fund-wise?" in shell
     assert "/api/v1/reports/donations/festival-wise?" in shell
@@ -476,11 +480,13 @@ def test_mandirmitra_shell_exposes_accounting_backed_fund_and_inventory_drilldow
     assert '"/api/v1/inventory/stock-balances"' in shell
     assert '"/api/v1/inventory/movements"' in shell
     assert '"/api/v1/inventory/consumptions"' in shell
-    assert "Fund and Inventory Drill-down" in shell
-    assert "Fund Subledger" in shell
-    assert "Inventory Stock Valuation" in shell
-    assert "Inventory Audit Trail" in shell
+    assert "Fund and Inventory Drill-down" in ops_source
+    assert "Fund Subledger" in ops_source
+    assert "Inventory Stock Valuation" in ops_source
+    assert "Inventory Audit Trail" in ops_source
     assert "Promise.all([" in shell
+    assert 'from "./modules/workspaces/mandir-operational-reports.js"' in shell
+    assert "Fund and Inventory Drill-down" in combined
 
 
 def test_mandirmitra_destructive_launcher_prompts_secrets_and_writes_sanitized_evidence() -> None:
