@@ -16,7 +16,8 @@ presentations/
 docs/
 tests/
 app/
-scripts/
+# Only ignore repo-root backend scripts — not frontend/scripts/build.js
+/scripts/
 *.log
 .env
 .env.*
