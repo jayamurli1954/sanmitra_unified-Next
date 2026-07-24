@@ -422,13 +422,20 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
 
 def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    exec_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "executive-dashboard.js"
+    ).read_text(encoding="utf-8")
+    loading_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
+    ).read_text(encoding="utf-8")
 
-    assert 'apiRequest(appKey, "/api/v1/business/mis/kpis", { method: "GET" })' in app_source
-    assert "function renderMisKpiContractPanel(data)" in app_source
-    assert "MIS KPI Contracts" in app_source
-    assert "Monthly Sales / Purchase Trend" in app_source
-    assert "Top Customers" in app_source
-    assert "Top Vendors" in app_source
+    assert 'apiRequest(appKey, "/api/v1/business/mis/kpis", { method: "GET" })' in loading_source
+    assert "function renderMisKpiContractPanel(data)" in exec_source
+    assert "MIS KPI Contracts" in exec_source
+    assert "Monthly Sales / Purchase Trend" in exec_source
+    assert "Top Customers" in exec_source
+    assert "Top Vendors" in exec_source
+    assert 'from "./modules/workspaces/executive-dashboard.js"' in app_source
 
 
 def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
