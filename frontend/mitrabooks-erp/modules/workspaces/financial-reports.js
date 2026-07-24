@@ -2,7 +2,7 @@
 // SECTION: FINANCIAL REPORTS (TB / P&L / BS / GL / R&P)
 // Extracted from app.js per docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md.
 // Pure move: logic unchanged. Shell deps injected via initFinancialReports(...).
-// Hub (refreshCurrentBusinessReport / renderBusinessReportsWorkspace) stays in app.js.
+// Hub (refreshCurrentBusinessReport / renderBusinessReportsWorkspace) lives in business-reports-hub.js.
 // ====================================================================
 
 import { apiRequest, renderJson } from "../../../shared/api-client.js";

@@ -243,6 +243,7 @@ import {
   bankAccountOptions,
   loadBankCashBook,
   loadBankReconciliation,
+  bankReconAccountId,
   uploadBankStatementFile,
   confirmBankReconMatch,
   reverseBankReconMatch,
@@ -373,6 +374,26 @@ import {
   applyBusinessReportFilter,
   loadBusinessReportLedgerFromSelect,
 } from "./modules/workspaces/financial-reports.js";
+
+import {
+  initBusinessReportsHub,
+  reportResultPayload,
+  refreshCurrentBusinessReport,
+  rerenderBusinessReportsIfActive,
+  reportExportToolbar,
+  businessReportExports,
+  downloadBusinessReport,
+  downloadTallyXmlExport,
+  printBusinessReport,
+  downloadJsonObject,
+  printBusinessDocumentDetail,
+  downloadCreditNoteJson,
+  downloadDebitNoteJson,
+  printCreditNoteDetail,
+  printDebitNoteDetail,
+  renderBusinessReportsWorkspace,
+  reportUnavailablePanel,
+} from "./modules/workspaces/business-reports-hub.js";
 
 import {
   initManufacturing,
@@ -3214,367 +3235,14 @@ const businessReportState = {
   agingKind: "receivable",
 };
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: FINANCIAL REPORTS — workspace renderer + report framework
-// API   : GET /api/v1/business/reports/... (all report tabs)
-// NOTE  : refreshCurrentBusinessReport, reportResultPayload — dispatches to tab-specific renderers
-// ══════════════════════════════════════════════════════════════════════
-
-function reportResultPayload(result, extra = {}) {
-  if (result.ok) {
-    return { ok: true, ...(result.payload || {}), ...extra };
-  }
-  return { ok: false, status: result.status, detail: result.payload?.detail || null, ...extra };
-}
-
-async function refreshCurrentBusinessReport() {
-  const tab = businessReportState.tab;
-  if (tab === "trial-balance") {
-    await loadBusinessTrialBalance();
-  } else if (tab === "pnl") {
-    await loadBusinessProfitLoss();
-  } else if (tab === "balance-sheet") {
-    await loadBusinessBalanceSheet();
-  } else if (tab === "receivables-payables") {
-    await loadBusinessReceivablesPayables();
-  } else if (tab === "aging") {
-    await loadBusinessAging();
-  } else if (tab === "payment-allocation") {
-    await loadUnallocatedPayments();
-    await loadAllocationReconciliation();
-  } else if (tab === "general-ledger") {
-    if (businessReportState.ledgerAccountId === "__all_nonzero__") {
-      await loadBusinessAllLedgers();
-    } else if (businessReportState.ledgerAccountId) {
-      await loadBusinessGeneralLedger(businessReportState.ledgerAccountId);
-    } else {
-      rerenderBusinessReportsIfActive();
-    }
-  } else if (tab === "period-locks") {
-    await loadPeriodLocks();
-  } else if (tab === "gst-settlement") {
-    await loadGstSettlementPreview(gstReturnState.gstSettlementPeriod);
-  } else if (tab === "gst-returns") {
-    if (gstReturnState.gstReturnType === "gstr1") { await loadGstr1(gstReturnState.gstr3bPeriod); }
-    else if (gstReturnState.gstReturnType === "cmp08") { await loadCmp08(gstReturnState.cmp08Quarter); }
-    else if (gstReturnState.gstReturnType === "gstr4") { await loadGstr4(gstReturnState.gstr4Fy); }
-    else if (gstReturnState.gstReturnType === "gstr2b") { rerenderBusinessReportsIfActive(); }  // upload-driven
-    else { await loadGstr3b(gstReturnState.gstr3bPeriod); }
-  } else if (tab === "itc-reversals") {
-    await loadItcReversalPreview(itcReversalAsOf);
-  } else if (tab === "tds") {
-    await loadTdsRegister(tdsQuarter);
-  } else if (tab === "bank-recon") {
-    if (!hasLoadedBusinessAccounts()) await loadBusinessAccounts();
-    if (bankReconAccountId) await loadBankReconciliation(bankReconAccountId);
-    else rerenderBusinessReportsIfActive();
-  } else if (tab === "bank-cash-book") {
-    await loadBankCashBook();
-  } else if (tab === "statements") {
-    if (!Array.isArray(lastBusinessParties) || lastBusinessParties.length === 0) await loadBusinessParties();
-    if (statementPartyId) await loadPartyStatement();
-    else rerenderBusinessReportsIfActive();
-  } else if (tab === "opening-yearend") {
-    // Workflow tab — both halves load on demand (Preview buttons).
-    rerenderBusinessReportsIfActive();
-  } else if (tab === "fixed-assets") {
-    if (!hasLoadedBusinessAccounts()) await loadBusinessAccounts();
-    await loadFixedAssets();
-  } else if (tab === "dimensions") {
-    await loadDimensions();
-    await loadDimensionReport();
-    await loadBranchConsolidatedReport();
-  } else if (tab === "inventory") {
-    await loadInventoryItems();
-    if (lastInventoryItems?.inventory_enabled) {
-      await loadInventoryPolicy();
-      await loadStockMovements();
-      await loadStockRegister();
-      await loadClosingStockEntries();
-    } else {
-      rerenderBusinessReportsIfActive();
-    }
-  }
-}
-
-function rerenderBusinessReportsIfActive() {
-  const reportWorkspaces = ["reports", "gst-returns", "reconciliation", "tds-tcs", "bank-recon"];
-  if (currentExperience === "mitrabooks" && reportWorkspaces.includes(activeBusinessWorkspace)) {
-    dashboardPreview.innerHTML = renderBusinessWorkspace();
-  }
-}
-
-function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
-  const kAttr = kind ? ` data-report-kind="${escapeHtml(kind)}"` : "";
-  const key = escapeHtml(reportKey);
-  const lbl = label ? `<span class="export-label muted">${escapeHtml(label)}</span>` : "";
-  const tallyXml = reportKey === "trial_balance"
-    ? `<button class="secondary" type="button" data-business-action="export-tally-xml">Tally XML</button>`
-    : "";
-  return `
-    <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;">
-      ${lbl}
-      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="csv"${kAttr}>CSV</button>
-      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="xlsx"${kAttr}>Excel</button>
-      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="pdf"${kAttr}>PDF</button>
-      <button class="secondary" type="button" data-business-action="export-report" data-report-key="${key}" data-report-format="json"${kAttr}>JSON</button>
-      ${tallyXml}
-      <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
-    </div>`;
-}
+// Business reports hub lives in modules/workspaces/business-reports-hub.js
 
 // Export/print toolbars per report tab. Backend supports CSV/XLSX/PDF for the
 // core set (trial_balance, party_ledger, itc_reversals, aging, balance_sheet,
 // profit_loss); other tabs get Print only for now.
-function businessReportExports() {
-  const tab = businessReportState.tab;
-  if (tab === "trial-balance") return reportExportToolbar("trial_balance");
-  if (tab === "balance-sheet") return reportExportToolbar("balance_sheet");
-  if (tab === "pnl") return reportExportToolbar("profit_loss");
-  if (tab === "aging") return reportExportToolbar("aging", { kind: businessReportState.agingKind });
-  if (tab === "payment-allocation") return "";  // workflow screen has its own controls
-  if (tab === "itc-reversals") return reportExportToolbar("itc_reversals");
-  if (tab === "statements") {
-    return statementPartyId ? reportExportToolbar("statement", { kind: statementKind }) : "";
-  }
-  if (tab === "receivables-payables") {
-    return `
-      ${reportExportToolbar("party_ledger", { kind: "receivable", label: "Debtors:" })}
-      ${reportExportToolbar("party_ledger", { kind: "payable", label: "Creditors:" })}`;
-  }
-  if (tab === "general-ledger") {
-    const acc = businessReportState.ledgerAccountId;
-    if (acc && acc !== "__all_nonzero__") {
-      return reportExportToolbar("general_ledger");
-    }
-    return `
-      <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;">
-        <span class="muted">Select a single account to download (CSV/Excel/PDF). "All Ledger Accounts" supports Print only.</span>
-        <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
-      </div>`;
-  }
-  return `
-    <div class="report-export-toolbar" style="display:flex;gap:6px;align-items:center;margin:8px 0;">
-      <button class="secondary" type="button" data-business-action="print-report" title="Open a printable view">Print</button>
-    </div>`;
-}
-
-async function downloadBusinessReport(reportKey, format, kind) {
-  if (!reportKey) return;
-  const params = new URLSearchParams();
-  params.set("report", reportKey);
-  params.set("format", format || "csv");
-  if (kind) params.set("kind", kind);
-  if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
-  if (reportKey === "profit_loss") {
-    if (businessReportState.from_date) params.set("from_date", businessReportState.from_date);
-    if (businessReportState.to_date) params.set("to_date", businessReportState.to_date);
-  }
-  if (reportKey === "general_ledger") {
-    const acc = businessReportState.ledgerAccountId;
-    if (!acc || acc === "__all_nonzero__") {
-      renderJson(apiOutput, { export_error: { report: reportKey, detail: "Select a single ledger account before downloading." } });
-      return;
-    }
-    params.set("account_id", acc);
-  }
-  if (reportKey === "statement") {
-    if (!statementPartyId) {
-      renderJson(apiOutput, { export_error: { report: reportKey, detail: "Select a party before downloading the statement." } });
-      return;
-    }
-    params.set("party_id", statementPartyId);
-    params.set("kind", statementKind);
-    if (statementFromDate) params.set("from_date", statementFromDate);
-    if (statementToDate) params.set("to_date", statementToDate);
-  }
-  const periodStamp = reportKey === "profit_loss"
-    ? `${businessReportState.from_date}_${businessReportState.to_date}`
-    : businessReportState.as_of;
-  const filename = `${reportKey}${kind ? "_" + kind : ""}_${periodStamp}.${format || "csv"}`;
-  const path = `/api/v1/business/reports/export?${params.toString()}`;
-  const result = await downloadApiFile("mitrabooks", path, filename, { timeoutMs: 30000 });
-  if (result.ok) {
-    renderJson(apiOutput, { export: { report: reportKey, format, kind: kind || null, filename } });
-  } else {
-    renderJson(apiOutput, { export_error: { report: reportKey, format, status: result.status, detail: result.payload?.detail || result.payload } });
-  }
-}
-
-async function downloadTallyXmlExport() {
-  const params = new URLSearchParams();
-  if (businessReportState.as_of) params.set("as_of", businessReportState.as_of);
-  const filename = `tally_trial_balance_${businessReportState.as_of || todayIsoDate()}.xml`;
-  const result = await downloadApiFile("mitrabooks", `/api/v1/business/tally/xml-export?${params.toString()}`, filename, { timeoutMs: 30000 });
-  if (result.ok) {
-    renderJson(apiOutput, { tally_xml_export: { report: "trial_balance", filename } });
-  } else {
-    renderJson(apiOutput, { tally_xml_export_error: { status: result.status, detail: result.payload?.detail || result.payload } });
-  }
-}
-
 // Print the currently rendered report by cloning its HTML into a clean window —
 // avoids fighting the app's global/screen CSS and works across browsers
 // (the user picks "Save as PDF" there too if they prefer a browser-rendered PDF).
-function printBusinessReport() {
-  const node = document.getElementById("business-report-printable");
-  if (!node) { window.print(); return; }
-  const win = window.open("", "_blank", "width=940,height=720");
-  if (!win) { window.print(); return; }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Financial Report</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}
-      h3,h4{margin:0 0 6px;}
-      table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0 18px;}
-      th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}
-      td.amount,th.amount,.amount,.num,td.right{text-align:right;}
-      .muted{color:#666;font-size:11px;}
-      button,.report-export-toolbar,.report-tabs,.report-date-controls,input,select{display:none!important;}
-    </style></head><body>${node.innerHTML}</body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { try { win.print(); } catch (_e) {} }, 300);
-}
-
-function downloadJsonObject(payload, filename) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function printBusinessDocumentDetail(title, selector) {
-  const node = document.querySelector(selector);
-  if (!node) { window.print(); return; }
-  const win = window.open("", "_blank", "width=940,height=720");
-  if (!win) { window.print(); return; }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}
-      h3,h4{margin:0 0 6px;}
-      table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0 18px;}
-      th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}
-      td.amount,th.amount,.amount,.num,td.right{text-align:right;}
-      .muted{color:#666;font-size:11px;}
-      button,.invoice-detail-actions,.reversal-panel,input,select{display:none!important;}
-    </style></head><body>${node.innerHTML}</body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { try { win.print(); } catch (_e) {} }, 300);
-}
-
-function downloadCreditNoteJson() {
-  if (!creditUi.detail) {
-    renderJson(apiOutput, { credit_note_export_error: { detail: "Open a credit note before exporting." } });
-    return;
-  }
-  const filename = `${creditUi.detail.credit_note_number || creditUi.detail.credit_note_id || "credit_note"}.json`;
-  downloadJsonObject(creditUi.detail, filename);
-  renderJson(apiOutput, { credit_note_export: { format: "json", filename } });
-}
-
-function downloadDebitNoteJson() {
-  if (!debitUi.detail) {
-    renderJson(apiOutput, { debit_note_export_error: { detail: "Open a debit note before exporting." } });
-    return;
-  }
-  const filename = `${debitUi.detail.debit_note_number || debitUi.detail.debit_note_id || "debit_note"}.json`;
-  downloadJsonObject(debitUi.detail, filename);
-  renderJson(apiOutput, { debit_note_export: { format: "json", filename } });
-}
-
-function printCreditNoteDetail() {
-  printBusinessDocumentDetail("Credit Note", "[data-credit-note-printable]");
-  renderJson(apiOutput, { credit_note_print: { ok: true } });
-}
-
-function printDebitNoteDetail() {
-  printBusinessDocumentDetail("Debit Note", "[data-debit-note-printable]");
-  renderJson(apiOutput, { debit_note_print: { ok: true } });
-}
-
-function renderBusinessReportsWorkspace() {
-  const tabs = BUSINESS_REPORT_TABS.map((tab) => `
-    <button
-      class="report-tab ${businessReportState.tab === tab.id ? "active" : ""}"
-      type="button"
-      data-business-action="report-tab"
-      data-report-tab="${escapeHtml(tab.id)}"
-    >${escapeHtml(tab.label)}</button>
-  `).join("");
-
-  let body = "";
-  if (businessReportState.tab === "trial-balance") {
-    body = renderBusinessTrialBalance();
-  } else if (businessReportState.tab === "pnl") {
-    body = renderBusinessProfitLoss();
-  } else if (businessReportState.tab === "balance-sheet") {
-    body = renderBusinessBalanceSheet();
-  } else if (businessReportState.tab === "general-ledger") {
-    body = renderBusinessGeneralLedger();
-  } else if (businessReportState.tab === "receivables-payables") {
-    body = renderBusinessReceivablesPayables();
-  } else if (businessReportState.tab === "aging") {
-    body = renderBusinessAging();
-  } else if (businessReportState.tab === "payment-allocation") {
-    body = renderPaymentAllocation();
-  } else if (businessReportState.tab === "period-locks") {
-    body = renderPeriodLocksPanel();
-  } else if (businessReportState.tab === "gst-settlement") {
-    body = renderGstSettlementPanel();
-  } else if (businessReportState.tab === "gst-returns") {
-    body = renderGstReturns();
-  } else if (businessReportState.tab === "itc-reversals") {
-    body = renderItcReversalPanel();
-  } else if (businessReportState.tab === "tds") {
-    body = renderTdsRegisterPanel();
-  } else if (businessReportState.tab === "bank-recon") {
-    body = renderBankReconPanel();
-  } else if (businessReportState.tab === "bank-cash-book") {
-    body = renderBankCashBookPanel();
-  } else if (businessReportState.tab === "statements") {
-    body = renderStatementsPanel();
-  } else if (businessReportState.tab === "opening-yearend") {
-    body = renderOpeningYearEndPanel();
-  } else if (businessReportState.tab === "fixed-assets") {
-    body = renderFixedAssetsPanel();
-  } else if (businessReportState.tab === "dimensions") {
-    body = renderDimensionsPanel();
-  } else if (businessReportState.tab === "inventory") {
-    body = renderInventoryPanel();
-  }
-
-  return `
-    <div class="verification-panel erp-workspace-panel">
-      <div class="preview-heading compact">
-        <div>
-          <h4>Financial Reports</h4>
-          <p>Live reports from posted ledger entries for this tenant.</p>
-        </div>
-      </div>
-      <div class="report-tabs" role="tablist">${tabs}</div>
-      ${reportDateControls()}
-      ${businessReportExports()}
-      <div id="business-report-printable">${body}</div>
-    </div>
-  `;
-}
-
-function reportUnavailablePanel(title, payload) {
-  const detail = payload?.detail || "Report unavailable. Check accounting access and try again.";
-  return `
-    <div class="table-preview compact-table">
-      <h4>${escapeHtml(title)}</h4>
-      <p class="muted">${escapeHtml(detail)}</p>
-    </div>
-  `;
-}
-
 // TDS/TCS section masters from GET /business/tds/sections (cached per session).
 let tdsSectionsCache = null;
 async function loadTdsSections() {
@@ -5166,6 +4834,85 @@ initGruhamitra({
 });
 
 // Wire core financial reports (avoids import cycle with app.js)
+// Wire business reports hub (avoids import cycle with app.js)
+initBusinessReportsHub({
+  escapeHtml,
+  todayIsoDate,
+  renderJson,
+  downloadApiFile,
+  getApiOutput: () => apiOutput,
+  getBusinessReportState: () => businessReportState,
+  getBusinessReportTabs: () => BUSINESS_REPORT_TABS,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+  getGstReturnState: () => gstReturnState,
+  getItcReversalAsOf: () => itcReversalAsOf,
+  getTdsQuarter: () => tdsQuarter,
+  getBankReconAccountId: () => bankReconAccountId,
+  getStatementPartyId: () => statementPartyId,
+  getStatementKind: () => statementKind,
+  getStatementFromDate: () => statementFromDate,
+  getStatementToDate: () => statementToDate,
+  getLastBusinessParties: () => lastBusinessParties,
+  getLastInventoryItems: () => lastInventoryItems,
+  getCreditUi: () => creditUi,
+  getDebitUi: () => debitUi,
+  hasLoadedBusinessAccounts,
+  loadBusinessAccounts,
+  loadBusinessParties,
+  loadBusinessTrialBalance,
+  loadBusinessProfitLoss,
+  loadBusinessBalanceSheet,
+  loadBusinessReceivablesPayables,
+  loadBusinessAging,
+  loadUnallocatedPayments,
+  loadAllocationReconciliation,
+  loadBusinessAllLedgers,
+  loadBusinessGeneralLedger,
+  loadPeriodLocks,
+  loadGstSettlementPreview,
+  loadGstr1,
+  loadCmp08,
+  loadGstr4,
+  loadGstr3b,
+  loadItcReversalPreview,
+  loadTdsRegister,
+  loadBankReconciliation,
+  loadBankCashBook,
+  loadPartyStatement,
+  loadFixedAssets,
+  loadDimensions,
+  loadDimensionReport,
+  loadBranchConsolidatedReport,
+  loadInventoryItems,
+  loadInventoryPolicy,
+  loadStockMovements,
+  loadStockRegister,
+  loadClosingStockEntries,
+  reportDateControls,
+  renderBusinessTrialBalance,
+  renderBusinessProfitLoss,
+  renderBusinessBalanceSheet,
+  renderBusinessGeneralLedger,
+  renderBusinessReceivablesPayables,
+  renderBusinessAging,
+  renderPaymentAllocation,
+  renderPeriodLocksPanel,
+  renderGstSettlementPanel,
+  renderGstReturns,
+  renderItcReversalPanel,
+  renderTdsRegisterPanel,
+  renderBankReconPanel,
+  renderBankCashBookPanel,
+  renderStatementsPanel,
+  renderOpeningYearEndPanel,
+  renderFixedAssetsPanel,
+  renderDimensionsPanel,
+  renderInventoryPanel,
+});
+
 initFinancialReports({
   escapeHtml,
   formatCurrency,
