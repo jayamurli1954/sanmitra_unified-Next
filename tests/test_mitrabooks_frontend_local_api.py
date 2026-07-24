@@ -100,13 +100,17 @@ def test_vercel_proxies_api_requests_to_render_backend() -> None:
 
 def test_mitrabooks_shell_forces_password_change_after_temporary_password_login() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    auth_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "auth-session.js"
+    ).read_text(encoding="utf-8")
 
-    assert "pendingForcedPasswordChange = false;" in app_source
-    assert 'const currentUser = await loadCurrentUserProfile(appKey);' in app_source
-    assert 'pendingForcedPasswordChange = Boolean(currentUser?.must_change_password);' in app_source
-    assert 'setLoginStatus("warn", "Temporary password in use", "Change the temporary password to continue into the MitraBooks workspace.");' in app_source
-    assert "openPasswordDialog();" in app_source
-    assert "await completeWorkspaceSignIn(appKey);" in app_source
+    assert 'from "./modules/workspaces/auth-session.js"' in app_source
+    assert "pendingForcedPasswordChange = false;" in auth_source
+    assert 'const currentUser = await loadCurrentUserProfile(appKey);' in auth_source
+    assert 'pendingForcedPasswordChange = Boolean(currentUser?.must_change_password);' in auth_source
+    assert 'setLoginStatus("warn", "Temporary password in use", "Change the temporary password to continue into the MitraBooks workspace.");' in auth_source
+    assert "openPasswordDialog();" in auth_source
+    assert "await completeWorkspaceSignIn(appKey);" in auth_source
 
 
 def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:
@@ -474,11 +478,15 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert 'id="forgot-password-form"' in index_source
     assert 'id="reset-password-form"' in index_source
     assert "Your user ID is your registered email" in index_source
-    assert "function signOutAndReturnToLogin()" in app_source
-    assert "function updateCurrentPassword()" in app_source
+    auth_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "auth-session.js"
+    ).read_text(encoding="utf-8")
+    assert 'from "./modules/workspaces/auth-session.js"' in app_source
+    assert "export function signOutAndReturnToLogin()" in auth_source
+    assert "export async function updateCurrentPassword()" in auth_source
     assert "async function requestPasswordReset()" in app_source
     assert "async function completePasswordReset()" in app_source
-    assert "/api/v1/auth/change-password" in app_source
+    assert "/api/v1/auth/change-password" in auth_source
     assert "/api/v1/auth/forgot-password" in app_source
     assert "/api/v1/auth/reset-password" in app_source
     assert 'document.getElementById("topbar-logout")?.addEventListener("click"' in app_source

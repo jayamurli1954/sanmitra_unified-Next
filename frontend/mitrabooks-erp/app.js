@@ -396,6 +396,23 @@ import {
 } from "./modules/workspaces/business-reports-hub.js";
 
 import {
+  initAuthSession,
+  hasTrustedSession,
+  updateSessionUi,
+  compactAccountLabel,
+  signOutAndReturnToLogin,
+  closeAccountMenu,
+  openPasswordDialog,
+  loadCurrentUserProfile,
+  completeWorkspaceSignIn,
+  updateCurrentPassword,
+  activeOrgSelectorType,
+  syncOrgSelectorOptions,
+  updateTrustedContextUi,
+  signInWithPassword,
+} from "./modules/workspaces/auth-session.js";
+
+import {
   initManufacturing,
   mfgAccess,
   mfgTab,
@@ -2125,401 +2142,7 @@ function hideMandirSplash() {
   mandirSplashVideo?.pause();
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: AUTH + SESSION
-// API   : POST /api/v1/auth/login  POST /api/v1/auth/change-password
-// NOTE  : signInWithPassword, signOutAndReturnToLogin, hasTrustedSession, updateSessionUi
-// ══════════════════════════════════════════════════════════════════════
-
-let pendingForcedPasswordChange = false;
-
-function hasTrustedSession() {
-  if (!getAccessToken()) {
-    return false;
-  }
-  if (currentExperience !== "mitrabooks") {
-    return true;
-  }
-  return Boolean(lastModuleContext && typeof lastModuleContext === "object");
-}
-
-function updateSessionUi() {
-  const signedIn = hasTrustedSession();
-  appRoot.classList.toggle("signed-in", signedIn);
-  appRoot.classList.toggle("signed-out", !signedIn);
-  document.getElementById("access-panel")?.classList.toggle("signed-in", signedIn);
-  document.getElementById("access-panel")?.classList.toggle("signed-out", !signedIn);
-  if (sessionPill) {
-    sessionPill.textContent = signedIn ? "Signed in" : "Not signed in";
-    sessionPill.className = `pill ${signedIn ? "ok" : "warn"}`;
-  }
-  const savedEmail = window.localStorage.getItem(LOGIN_EMAIL_STORAGE_KEY) || "";
-  if (topbarUser) {
-    topbarUser.textContent = compactAccountLabel(savedEmail || "Signed in");
-    topbarUser.title = savedEmail || "Signed in";
-  }
-  if (topbarAvatar) {
-    topbarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
-  }
-  if (sidebarAvatar) {
-    sidebarAvatar.textContent = (savedEmail || "S").trim().charAt(0).toUpperCase();
-  }
-  if (sidebarUserName) {
-    sidebarUserName.textContent = signedIn ? (savedEmail || "Signed in") : "Not signed in";
-  }
-  if (sidebarUserRole) {
-    const role = lastModuleContext?.role || lastModuleContext?.user_role || "";
-    sidebarUserRole.textContent = signedIn ? (role || "Tenant context pending") : "Sign in to load tenant";
-  }
-
-  // Update user credentials display in topbar
-  const emailDisplay = document.getElementById("topbar-email-display");
-  const menuEmailDisplay = document.getElementById("menu-email-display");
-  const menuTenantDisplay = document.getElementById("menu-tenant-display");
-  if (emailDisplay) {
-    emailDisplay.textContent = savedEmail || "Not signed in";
-  }
-  if (menuEmailDisplay) {
-    menuEmailDisplay.textContent = savedEmail || "Not signed in";
-  }
-  if (menuTenantDisplay && lastModuleContext?.tenant_id) {
-    menuTenantDisplay.textContent = lastModuleContext.tenant_id;
-  }
-
-  document.getElementById("topbar-actions")?.toggleAttribute("hidden", !signedIn);
-  document.getElementById("sidebar-logout")?.toggleAttribute("hidden", !signedIn);
-  if (loginEmail && !loginEmail.value) {
-    loginEmail.value = savedEmail || DEFAULT_MITRABOOKS_LOGIN_EMAIL;
-  }
-  if (tokenInput) {
-    tokenInput.value = getAccessToken();
-  }
-  const publicLink = document.getElementById("mandir-public-link");
-  if (publicLink) {
-    publicLink.href = mandirPublicPaymentPageUrl();
-  }
-}
-
-function compactAccountLabel(email) {
-  const value = String(email || "").trim();
-  if (!value.includes("@")) {
-    return value || "Account";
-  }
-  const [name, domain] = value.split("@");
-  const shortName = name.length > 12 ? `${name.slice(0, 10)}...` : name;
-  const shortDomain = String(domain || "").split(".")[0] || domain;
-  return `${shortName}@${shortDomain}`;
-}
-
-function signOutAndReturnToLogin() {
-  const rt = getRefreshToken();
-  if (rt) {
-    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-    apiRequest(appKey, "/api/v1/auth/logout", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token: rt }),
-    }).catch(() => {});
-  }
-  clearAllTokens();
-  lastModuleContext = null;
-  setLastBusinessAccounts([]);
-  setLastBusinessParties([]);
-  clearVoucherListState();
-  setLastAccountingDrilldown(null);
-  if (tokenInput) {
-    tokenInput.value = "";
-  }
-  if (loginPassword) {
-    loginPassword.value = "";
-  }
-  setAuthPanelMode("login");
-  setLoginStatus("", "", "");
-  dashboardPreview.innerHTML = "";
-  renderJson(apiOutput, {});
-  renderModuleState(moduleState);
-  currentExperience = initialExperience();
-  document.querySelectorAll(".module-switch button").forEach((button) => button.classList.remove("active"));
-  document.getElementById(`mode-${currentExperience}`)?.classList.add("active");
-  renderModules();
-  updateSessionUi();
-}
-
-function closeAccountMenu() {
-  if (accountMenuPanel) {
-    accountMenuPanel.hidden = true;
-  }
-  accountMenuTrigger?.setAttribute("aria-expanded", "false");
-}
-
-function openPasswordDialog() {
-  closeAccountMenu();
-  passwordForm?.reset();
-  _clearPasswordError();
-  if (passwordStatus && pendingForcedPasswordChange) {
-    const field = document.getElementById("password-error-field");
-    if (field) field.style.display = "block";
-    passwordStatus.className = "module-state warn";
-    passwordStatus.innerHTML = "<strong>Temporary password in use</strong><span>Change the temporary password before opening the MitraBooks workspace.</span>";
-  }
-  passwordDialog?.showModal();
-}
-
-async function loadCurrentUserProfile(appKey) {
-  const token = getAccessToken();
-  if (!token) {
-    return null;
-  }
-  const result = await apiRequest(appKey, "/api/v1/users/me", {
-    method: "GET",
-    timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return result.ok ? (result.payload || null) : null;
-}
-
-async function completeWorkspaceSignIn(appKey) {
-  if (currentExperience === "mitrabooks") {
-    loadAndRenderGroupedNav(appKey).catch(err => {
-      console.error("[Login] Failed to load grouped nav:", err);
-    });
-  }
-
-  await showMandirSplash();
-  try {
-    const checks = runChecks();
-    const loadingBudget = delay(8000).then(() => ({ timedOut: true }));
-    const result = await Promise.race([
-      checks.then(() => ({ timedOut: false })),
-      loadingBudget,
-    ]);
-    await delay(700);
-    if (result.timedOut) {
-      checks.catch((error) => {
-        console.error("[Login] Background workspace load failed:", error);
-      });
-      setLoginStatus("warn", "Workspace is still loading", "Dashboard checks are continuing in the background.");
-    }
-  } finally {
-    hideMandirSplash();
-  }
-}
-
-function _showPasswordError(msg) {
-  const field = document.getElementById("password-error-field");
-  if (field) field.style.display = "block";
-  if (passwordStatus) {
-    passwordStatus.className = "module-state danger";
-    passwordStatus.innerHTML = msg;
-  }
-}
-
-function _clearPasswordError() {
-  const field = document.getElementById("password-error-field");
-  if (field) field.style.display = "none";
-  if (passwordStatus) {
-    passwordStatus.className = "module-state";
-    passwordStatus.textContent = "";
-  }
-}
-
-async function updateCurrentPassword() {
-  const currentPassword = String(currentPasswordInput?.value || "");
-  const newPassword = String(newPasswordInput?.value || "");
-  const confirmPassword = String(confirmNewPasswordInput?.value || "");
-  const submitButton = document.getElementById("change-password-submit");
-
-  if (!currentPassword || currentPassword.length < 6) {
-    _showPasswordError("<strong>Current password required</strong><span>Enter the current account password first.</span>");
-    return;
-  }
-  if (!newPassword || newPassword.length < 6) {
-    _showPasswordError("<strong>New password too short</strong><span>Use at least 6 characters.</span>");
-    return;
-  }
-  if (newPassword !== confirmPassword) {
-    _showPasswordError("<strong>Passwords do not match</strong><span>Confirm the new password again.</span>");
-    return;
-  }
-  _clearPasswordError();
-
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "Updating...";
-  }
-  const result = await apiRequest(APP_KEY, "/api/v1/auth/change-password", {
-    method: "POST",
-    body: JSON.stringify({
-      current_password: currentPassword,
-      new_password: newPassword,
-    }),
-  });
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = "Update Password";
-  }
-
-  if (result.ok) {
-    const wasForcedPasswordChange = pendingForcedPasswordChange;
-    pendingForcedPasswordChange = false;
-    passwordForm?.reset();
-    if (passwordStatus) {
-      passwordStatus.className = "module-state ok";
-      passwordStatus.innerHTML = "<strong>Password updated</strong><span>Use the new password for your next sign-in.</span>";
-    }
-    passwordDialog?.close();
-    if (wasForcedPasswordChange) {
-      setLoginStatus("ok", "Password updated", "Password changed. Loading your MitraBooks workspace.");
-      await completeWorkspaceSignIn(EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY);
-    } else {
-      setLoginStatus("ok", "Password updated", "Use the new password for your next sign-in.");
-    }
-  } else {
-    _showPasswordError(`<strong>Password update failed</strong><span>${escapeHtml(statusDetailText(result.payload?.detail) || statusDetailText(result.payload) || "Try again.")}</span>`);
-  }
-  renderJson(apiOutput, { change_password: { ok: result.ok, status: result.status, detail: result.payload?.detail } });
-}
-
-function activeOrgSelectorType(context = lastModuleContext) {
-  const organizationType = String(context?.organization_type || "").toUpperCase();
-  return selectedOrgType || organizationType || "BUSINESS";
-}
-
-function syncOrgSelectorOptions(orgType) {
-  document.querySelectorAll(".org-option").forEach((option) => {
-    option.classList.toggle("active", option.getAttribute("data-org") === orgType);
-  });
-}
-
-function updateTrustedContextUi(context = lastModuleContext) {
-  const organizationType = String(context?.organization_type || "").toUpperCase();
-  const selectorOrgType = activeOrgSelectorType(context);
-  const selectorMeta = orgSelectorMeta[selectorOrgType] || orgSelectorMeta.BUSINESS;
-  const tenantLabel = context?.tenant_name || context?.organization_name || context?.tenant_id || "";
-  const enabledCount = Array.isArray(context?.enabled_modules)
-    ? context.enabled_modules.length
-    : Array.isArray(context?.modules)
-      ? context.modules.filter((module) => module.enabled !== false).length
-      : 0;
-
-  if (currentOrgType) {
-    currentOrgType.textContent = selectorMeta.label;
-  }
-  if (currentOrgTenant) {
-    currentOrgTenant.textContent = selectorOrgType === "BUSINESS"
-      ? tenantLabel || selectorMeta.subtitle
-      : selectorMeta.subtitle;
-  }
-  syncOrgSelectorOptions(selectorOrgType);
-  if (sidebarUserRole && getAccessToken()) {
-    const role = context?.role || context?.user_role || "";
-    sidebarUserRole.textContent = role || (enabledCount ? `${enabledCount} enabled module(s)` : "Tenant context loaded");
-  }
-}
-
-async function signInWithPassword() {
-  const email = String(loginEmail?.value || "").trim().toLowerCase();
-  const password = String(loginPassword?.value || "");
-  const loginSubmitBtn = document.getElementById("login-submit");
-  const errorField = document.getElementById("login-error-field");
-  const errorMessage = document.getElementById("login-error-message");
-
-  // Validate input
-  if (!email || !password) {
-    if (errorField && errorMessage) {
-      errorField.hidden = false;
-      errorMessage.textContent = "Email and password are required.";
-    }
-    setLoginStatus("warn", "Email and password required", "Enter your MitraBooks tenant admin login.");
-    return;
-  }
-
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    if (errorField && errorMessage) {
-      errorField.hidden = false;
-      errorMessage.textContent = "Please enter a valid email address.";
-    }
-    setLoginStatus("warn", "Invalid email", "Email must be a valid email address.");
-    return;
-  }
-
-  // Clear previous errors
-  if (errorField) {
-    errorField.hidden = true;
-  }
-
-  // Disable button and show loading state
-  if (loginSubmitBtn) {
-    loginSubmitBtn.disabled = true;
-    loginSubmitBtn.textContent = "Signing in...";
-  }
-
-  try {
-    setLoginStatus("", "Signing in", "Checking your tenant access...");
-    const appKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
-    const result = await apiRequest(appKey, "/api/v1/auth/login", {
-      method: "POST",
-      timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!result.ok) {
-      clearAccessToken();
-      updateSessionUi();
-      const detail = statusDetailText(result.payload?.detail) ||
-        statusDetailText(result.payload) ||
-        "Unable to sign in with these credentials.";
-
-      // Show error message in form
-      if (errorField && errorMessage) {
-        errorField.hidden = false;
-        errorMessage.textContent = detail;
-      }
-
-      setLoginStatus("danger", "Sign in failed", detail);
-      renderJson(apiOutput, { login: { ok: result.ok, status: result.status, detail } });
-      return;
-    }
-
-    // Successful login
-    setAccessToken(result.payload?.access_token || "");
-    setRefreshToken(result.payload?.refresh_token || "");
-    window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
-
-    // Clear password for security
-    if (loginPassword) {
-      loginPassword.value = "";
-    }
-
-    updateSessionUi();
-    renderJson(apiOutput, { login: { ok: true, status: result.status, token_type: result.payload?.token_type || "bearer" } });
-    const currentUser = await loadCurrentUserProfile(appKey);
-    pendingForcedPasswordChange = Boolean(currentUser?.must_change_password);
-    if (pendingForcedPasswordChange) {
-      setLoginStatus("warn", "Temporary password in use", "Change the temporary password to continue into the MitraBooks workspace.");
-      openPasswordDialog();
-      return;
-    }
-    setLoginStatus("ok", "Signed in", "Tenant workspace is loading.");
-    await completeWorkspaceSignIn(appKey);
-  } catch (error) {
-    console.error("[Login] Error during sign in:", error);
-    if (errorField && errorMessage) {
-      errorField.hidden = false;
-      errorMessage.textContent = "An unexpected error occurred. Please try again.";
-    }
-    setLoginStatus("danger", "Sign in error", "An unexpected error occurred. Please try again.");
-  } finally {
-    // Re-enable button
-    if (loginSubmitBtn) {
-      loginSubmitBtn.disabled = false;
-      loginSubmitBtn.textContent = "Sign in";
-    }
-  }
-}
+// Auth + session helpers live in modules/workspaces/auth-session.js
 
 // ══════════════════════════════════════════════════════════════════════
 
@@ -4835,6 +4458,69 @@ initGruhamitra({
 
 // Wire core financial reports (avoids import cycle with app.js)
 // Wire business reports hub (avoids import cycle with app.js)
+// Wire auth + session helpers (avoids import cycle with app.js)
+initAuthSession({
+  appRoot,
+  sessionPill,
+  topbarUser,
+  topbarAvatar,
+  sidebarAvatar,
+  sidebarUserName,
+  sidebarUserRole,
+  loginEmail,
+  loginPassword,
+  tokenInput,
+  accountMenuPanel,
+  accountMenuTrigger,
+  passwordForm,
+  passwordStatus,
+  passwordDialog,
+  currentPasswordInput,
+  newPasswordInput,
+  confirmNewPasswordInput,
+  currentOrgType,
+  currentOrgTenant,
+  dashboardPreview,
+  apiOutput,
+  moduleState,
+  getAccessToken,
+  getRefreshToken,
+  clearAllTokens,
+  clearAccessToken,
+  setAccessToken,
+  setRefreshToken,
+  getCurrentExperience: () => currentExperience,
+  setCurrentExperience: (value) => { currentExperience = value; },
+  getLastModuleContext: () => lastModuleContext,
+  setLastModuleContext: (value) => { lastModuleContext = value; },
+  getSelectedOrgType: () => selectedOrgType,
+  getOrgSelectorMeta: () => orgSelectorMeta,
+  getExperienceAppKeys: () => EXPERIENCE_APP_KEYS,
+  getAppKey: () => APP_KEY,
+  getLoginEmailStorageKey: () => LOGIN_EMAIL_STORAGE_KEY,
+  getDefaultMitraBooksLoginEmail: () => DEFAULT_MITRABOOKS_LOGIN_EMAIL,
+  getLoginRequestTimeoutMs: () => LOGIN_REQUEST_TIMEOUT_MS,
+  apiRequest,
+  renderJson,
+  setLoginStatus,
+  setAuthPanelMode,
+  statusDetailText,
+  escapeHtml,
+  setLastBusinessAccounts,
+  setLastBusinessParties,
+  clearVoucherListState,
+  setLastAccountingDrilldown,
+  renderModules,
+  renderModuleState,
+  initialExperience,
+  mandirPublicPaymentPageUrl,
+  loadAndRenderGroupedNav,
+  showMandirSplash,
+  hideMandirSplash,
+  runChecks,
+  delay,
+});
+
 initBusinessReportsHub({
   escapeHtml,
   todayIsoDate,
