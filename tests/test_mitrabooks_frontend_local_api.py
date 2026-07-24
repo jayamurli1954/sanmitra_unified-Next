@@ -140,12 +140,16 @@ def test_business_workspace_menu_renders_main_preview_directly() -> None:
 
 def test_mitrabooks_accounting_refresh_preserves_accounting_panel() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("async function refreshCurrentAccountingDrilldown()")
-    end = app_source.index("async function applyAccountingDrilldownFilters()", start)
-    refresh_block = app_source[start:end]
+    drill_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "accounting-drilldown.js"
+    ).read_text(encoding="utf-8")
+    start = drill_source.index("export async function refreshCurrentAccountingDrilldown()")
+    end = drill_source.index("export async function applyAccountingDrilldownFilters()", start)
+    refresh_block = drill_source[start:end]
 
-    assert 'currentExperience === "mitrabooks" && activeBusinessWorkspace === "accounting"' in refresh_block
-    assert "dashboardPreview.innerHTML = renderAccountingDrilldownPanel();" in refresh_block
+    assert 'getCurrentExperience() === "mitrabooks" && getActiveBusinessWorkspace() === "accounting"' in refresh_block
+    assert "getDashboardPreview().innerHTML = renderAccountingDrilldownPanel();" in refresh_block
+    assert 'from "./modules/workspaces/accounting-drilldown.js"' in app_source
 
 
 def test_business_party_payload_matches_backend_schema() -> None:
@@ -702,10 +706,12 @@ def test_professional_suite_routes_to_active_workspace_without_planned_cards() -
 
 
 def test_accounting_voucher_detail_surfaces_reversal_links() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("function renderAccountingVoucherDetail")
-    end = app_source.index("function renderAccountingDrilldownPanel", start)
-    detail_block = app_source[start:end]
+    drill_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "accounting-drilldown.js"
+    ).read_text(encoding="utf-8")
+    start = drill_source.index("export function renderAccountingVoucherDetail")
+    end = drill_source.index("export function renderAccountingDrilldownPanel", start)
+    detail_block = drill_source[start:end]
 
     assert "reversed_by_journal_ids" in detail_block
     assert "reversal_of_journal_id" in detail_block

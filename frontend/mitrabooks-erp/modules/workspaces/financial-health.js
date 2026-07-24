@@ -196,8 +196,8 @@ export async function loadFinancialHealth() {
 
   if (hasValidPayload) {
     lastFinancialHealth = result.payload;
-    if (currentExperience === "mitrabooks" && activeBusinessWorkspace === "financial-health") {
-      dashboardPreview.innerHTML = renderBusinessWorkspace();
+    if (getCurrentExperience() === "mitrabooks" && getActiveBusinessWorkspace() === "financial-health") {
+      getDashboardPreview().innerHTML = renderBusinessWorkspace();
     }
   } else if (!lastFinancialHealth) {
     setLoginStatus(
@@ -207,6 +207,6 @@ export async function loadFinancialHealth() {
     );
   }
 
-  renderJson(apiOutput, { financialHealth: { ok: result.ok, hasData: !!lastFinancialHealth } });
+  renderJson(getApiOutput(), { financialHealth: { ok: result.ok, hasData: !!lastFinancialHealth } });
 }
 
