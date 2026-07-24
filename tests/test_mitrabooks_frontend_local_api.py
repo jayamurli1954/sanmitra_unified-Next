@@ -418,14 +418,19 @@ def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
 
 def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    loading_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{app_source}\n{loading_source}"
 
-    assert 'apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" })' in app_source
-    assert "lastBusinessDataHealth" in app_source
+    assert 'apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" })' in loading_source
+    assert "lastBusinessDataHealth" in combined
     assert "Data Health Score" in app_source
     assert "renderBusinessDataHealthIssueList" in app_source
     assert "Remediation Queue" in app_source
     assert 'data-data-health-rule="${escapeHtml(issue.rule_key || "")}"' in app_source
     assert "rule.score_impact" in app_source
+    assert 'from "./modules/workspaces/account-loading.js"' in app_source
 
 
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
@@ -473,6 +478,9 @@ def test_shared_pwa_shell_supports_mitrabooks_install_prompt() -> None:
 
 def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    loading_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
     run_start = app_source.index("async function runChecks()")
     run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
@@ -501,7 +509,7 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     assert run_block.index("isPlatformOwnerContext(modules.payload)") < run_block.index("await loadBusinessAccounts();")
     assert "await loadBusinessAccounts();" in run_block
     assert "await loadBusinessPartiesForHealth();" in run_block
-    assert "/api/v1/accounting/accounts" in app_source
+    assert "/api/v1/accounting/accounts" in loading_source
     assert "/api/v1/business/parties?offset=0&limit=20" in app_source
     assert "loadModules(activeAppKey)" in run_block
     assert ".erp-health-panel" in css_source

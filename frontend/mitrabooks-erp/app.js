@@ -549,6 +549,24 @@ import {
   clearVoucherForm,
 } from "./modules/workspaces/voucher-form.js";
 
+import {
+  initAccountLoading,
+  lastBusinessAccounts,
+  lastBusinessAccountsResult,
+  lastBusinessDashboardStats,
+  lastBusinessMisKpis,
+  lastBusinessDataHealth,
+  businessDashboardLoadInFlight,
+  businessMisLoadInFlight,
+  businessDataHealthLoadInFlight,
+  setLastBusinessAccounts,
+  loadBusinessAccounts,
+  loadBusinessDashboardStats,
+  loadBusinessMisKpis,
+  loadBusinessDataHealth,
+  filterBusinessAccountsByQuery,
+} from "./modules/workspaces/account-loading.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -784,7 +802,6 @@ let lastMandirPanchang = null;
 let lastMandirOperationalReports = {};
 let lastMandirModuleConfig = {};
 let lastMandirComplianceConfig = { enable_80g: false, enable_fcra: false };
-let lastBusinessAccounts = [];
 
 const appRoot = document.getElementById("app-root");
 const brandLogo = document.getElementById("brand-logo");
@@ -1583,8 +1600,6 @@ function renderSelectedOrgWorkspace() {
   `;
 }
 
-let businessDashboardLoadInFlight = false;
-let businessMisLoadInFlight = false;
 
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2462,7 +2477,7 @@ function signOutAndReturnToLogin() {
   }
   clearAllTokens();
   lastModuleContext = null;
-  lastBusinessAccounts = [];
+  setLastBusinessAccounts([]);
   setLastBusinessParties([]);
   clearVoucherListState();
   setLastAccountingDrilldown(null);
@@ -5537,12 +5552,7 @@ function renderVoucherApprovalQueuePanel(items) {
 
 // ========== Business Module: Typed Vouchers ==========
 
-let lastBusinessAccountsResult = null;
 let lastModuleContext = null;
-let lastBusinessDashboardStats = null;
-let lastBusinessMisKpis = null;
-let lastBusinessDataHealth = null;
-let businessDataHealthLoadInFlight = false;
 
 const voucherLineState = [];
 
@@ -6043,176 +6053,6 @@ async function loadModuleContextForAccounts() {
   return lastModuleContext;
 }
 
-
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: ACCOUNT LOADING + FINANCIAL HEALTH LOADER
-// API   : GET /api/v1/accounting/accounts  GET /api/v1/business/financial-health
-// NOTE  : loadBusinessAccounts, loadFinancialHealth, loadBusinessDashboardStats
-// ══════════════════════════════════════════════════════════════════════
-
-async function loadBusinessAccounts() {
-  const appKey = "mitrabooks";
-  const result = await apiRequest(appKey, "/api/v1/accounting/accounts", { method: "GET" });
-  lastBusinessAccountsResult = result;
-
-  if (result.ok) {
-    lastBusinessAccounts = accountRowsFromPayload(result.payload);
-    if (lastBusinessAccounts.length === 0) {
-      const context = await loadModuleContextForAccounts();
-      if (String(context?.organization_type || "").toUpperCase() !== "BUSINESS" || !isBusinessModuleEnabled(context)) {
-        setLoginStatus(
-          "warn",
-          "MitraBooks business tenant required",
-          `Current tenant is ${context?.organization_type || "unknown"} (${context?.tenant_id || "unknown"}). Sign in as ${DEFAULT_MITRABOOKS_LOGIN_EMAIL} for voucher posting.`
-        );
-      } else {
-        setLoginStatus("warn", "No chart of accounts found", "Initialize the MitraBooks chart of accounts before posting vouchers.");
-      }
-    }
-    refreshVoucherAccountSelects();
-  } else {
-    lastBusinessAccounts = [];
-    setLoginStatus("danger", "Unable to load accounts", statusDetailText(result.payload?.detail) || "Check accounting access and try again.");
-    updateVoucherAccountsStatus();
-  }
-}
-
-// ========== Business Dashboard Data Loading ==========
-
-/**
- * Load dashboard statistics from API
- * Fetches live KPI data: income, expenses, net position, GST, cash, receivables, payables
- */
-async function loadBusinessDashboardStats() {
-  if (!hasTrustedSession()) {
-    return;
-  }
-  const appKey = "mitrabooks";
-  businessDashboardLoadInFlight = true;
-  let result;
-  try {
-    result = await apiRequest(appKey, "/api/v1/business/dashboard", { method: "GET" });
-  } finally {
-    businessDashboardLoadInFlight = false;
-  }
-
-  // A valid dashboard payload always carries the income block; guard against an
-  // empty/partial body (e.g. a transient 0-byte response during a service-worker
-  // swap) so it can't blank out good data we already rendered.
-  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object" && result.payload.income;
-
-  if (hasValidPayload) {
-    lastBusinessDashboardStats = result.payload;
-    // Re-render whenever we're in the MitraBooks experience; renderDashboardPreview
-    // itself routes to the right view (overview vs other workspaces).
-    if (currentExperience === "mitrabooks") {
-      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-    }
-  } else if (!lastBusinessDashboardStats) {
-    // Only surface "unavailable" when we have no prior good data — never clobber a
-    // working dashboard with a transient failure.
-    setLoginStatus(
-      "warn",
-      "Dashboard data unavailable",
-      "Live dashboard figures could not be loaded; showing zeros until the ledger responds."
-    );
-  }
-
-  renderJson(apiOutput, { dashboard: { ok: result.ok, hasData: !!lastBusinessDashboardStats } });
-}
-
-async function loadBusinessMisKpis() {
-  if (!hasTrustedSession()) {
-    return;
-  }
-  const appKey = "mitrabooks";
-  businessMisLoadInFlight = true;
-  let result;
-  try {
-    result = await apiRequest(appKey, "/api/v1/business/mis/kpis", { method: "GET" });
-  } finally {
-    businessMisLoadInFlight = false;
-  }
-
-  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object"
-    && Array.isArray(result.payload.monthly_sales_purchase_trend);
-
-  if (hasValidPayload) {
-    lastBusinessMisKpis = result.payload;
-    if (currentExperience === "mitrabooks") {
-      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-    }
-  } else if (!lastBusinessMisKpis) {
-    setLoginStatus(
-      "warn",
-      "MIS KPIs unavailable",
-      result.payload?.detail || "Source-backed MIS KPI contracts could not be loaded.",
-    );
-  }
-
-  renderJson(apiOutput, { misKpis: { ok: result.ok, hasData: !!lastBusinessMisKpis } });
-}
-
-async function loadBusinessDataHealth() {
-  if (!hasTrustedSession()) {
-    return;
-  }
-  businessDataHealthLoadInFlight = true;
-  let result;
-  try {
-    result = await apiRequest("mitrabooks", "/api/v1/business/data-health", { method: "GET" });
-  } finally {
-    businessDataHealthLoadInFlight = false;
-  }
-
-  const hasValidPayload = result.ok && result.payload && typeof result.payload === "object"
-    && Array.isArray(result.payload.rules);
-
-  if (hasValidPayload) {
-    lastBusinessDataHealth = result.payload;
-    if (currentExperience === "mitrabooks") {
-      dashboardPreview.innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-    }
-  } else if (!lastBusinessDataHealth) {
-    setLoginStatus(
-      "warn",
-      "Data Health unavailable",
-      result.payload?.detail || "Source-backed data-health rules could not be loaded.",
-    );
-  }
-
-  renderJson(apiOutput, { dataHealth: { ok: result.ok, hasData: !!lastBusinessDataHealth } });
-}
-
-// ========== Account Selector Component (Searchable) ==========
-
-/**
- * Filter accounts by search query (min 3 chars)
- * Returns array of matching accounts with code and name
- */
-function filterBusinessAccountsByQuery(query) {
-  const q = String(query || "").trim().toLowerCase();
-
-  // Min 3 characters to filter
-  if (q.length < 3) {
-    return [];
-  }
-
-  const matches = businessAccountsForSelection().filter((normalized) => {
-    const code = normalized.code.toLowerCase();
-    const name = normalized.name.toLowerCase();
-    const type = String(normalized.account_type || normalized.type || "").toLowerCase();
-
-    return (
-      code.includes(q) ||
-      name.includes(q) ||
-      type.includes(q)
-    );
-  });
-
-  // Return max 20 results
-  return matches.slice(0, 20);
-}
 
 /**
  * Render account selector HTML (searchable input + suggestions)
@@ -7868,7 +7708,7 @@ if (pendingPasswordResetToken) {
 // Fired by api-client when silent token refresh fails — show clean login screen
 window.addEventListener("auth-session-expired", () => {
   lastModuleContext = null;
-  lastBusinessAccounts = [];
+  setLastBusinessAccounts([]);
   setLastBusinessParties([]);
   clearVoucherListState();
   setLastAccountingDrilldown(null);
@@ -8662,6 +8502,25 @@ initManufacturing({
 // Wire Financial Health (avoids import cycle with app.js)
 // Wire Accounting Drilldown (avoids import cycle with app.js)
 // Wire voucher form helpers (avoids import cycle with app.js)
+// Wire account/dashboard loaders (avoids import cycle with app.js)
+initAccountLoading({
+  setLoginStatus,
+  statusDetailText,
+  accountRowsFromPayload,
+  loadModuleContextForAccounts,
+  isBusinessModuleEnabled,
+  refreshVoucherAccountSelects,
+  updateVoucherAccountsStatus,
+  hasTrustedSession,
+  getCurrentExperience: () => currentExperience,
+  getDashboardPreview: () => dashboardPreview,
+  getExperienceConfig: () => experienceConfig,
+  renderDashboardPreview: (config) => renderDashboardPreview(config),
+  getApiOutput: () => apiOutput,
+  getDefaultMitraBooksLoginEmail: () => DEFAULT_MITRABOOKS_LOGIN_EMAIL,
+  businessAccountsForSelection,
+});
+
 initVoucherForm({
   escapeHtml,
   formatCurrency,
