@@ -659,6 +659,9 @@ def test_mitrabooks_admin_settings_use_business_routes() -> None:
 
 def test_ca_practice_documents_use_attachment_api_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    attachments_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "attachments.js"
+    ).read_text(encoding="utf-8")
     ca_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "ca-practice.js"
     ).read_text(encoding="utf-8")
@@ -668,7 +671,7 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     nav_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "navigation.js").read_text(
         encoding="utf-8"
     )
-    combined = f"{app_source}\n{ca_source}\n{events_source}\n{nav_source}"
+    combined = f"{app_source}\n{attachments_source}\n{ca_source}\n{events_source}\n{nav_source}"
     start = ca_source.index("export async function loadCaPracticeDocuments")
     end = ca_source.index("// --- CA practice renderers (seam 34) ---", start)
     ca_block = ca_source[start:end]
@@ -701,9 +704,10 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert "client_access_enabled" in ca_block
     assert 'uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles)' in ca_block
     assert 'listBusinessAttachments("ca_document", documentId)' in ca_block
-    assert '/api/v1/business/ca-documents/${safeOwnerId}/attachments' in app_source
-    assert '/api/v1/business/invoices/${safeOwnerId}/attachments' in app_source
-    assert '/api/v1/business/bills/${safeOwnerId}/attachments' in app_source
+    assert '/api/v1/business/ca-documents/${safeOwnerId}/attachments' in attachments_source
+    assert '/api/v1/business/invoices/${safeOwnerId}/attachments' in attachments_source
+    assert '/api/v1/business/bills/${safeOwnerId}/attachments' in attachments_source
+    assert 'from "./modules/workspaces/attachments.js"' in app_source
     assert "renderCaPracticeOperations" in ca_source
     assert "renderCaClientMaster" in ca_source
     assert 'subtitle: "Client document workflow"' in app_source
