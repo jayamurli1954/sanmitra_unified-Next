@@ -614,23 +614,30 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
 
 def test_business_voucher_review_and_queue_use_business_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    queue_start = app_source.index("async function loadVoucherApprovalQueue")
-    queue_end = app_source.index("async function reviewBusinessVoucher", queue_start)
-    queue_block = app_source[queue_start:queue_end]
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    tables_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-list-tables.js"
+    ).read_text(encoding="utf-8")
+    queue_start = vouchers_source.index("async function loadVoucherApprovalQueue")
+    queue_end = vouchers_source.index("async function reviewBusinessVoucher", queue_start)
+    queue_block = vouchers_source[queue_start:queue_end]
     review_start = queue_end
-    review_end = app_source.index("async function reverseBusinessVoucher", review_start)
-    review_block = app_source[review_start:review_end]
+    review_end = vouchers_source.index("async function reverseBusinessVoucher", review_start)
+    review_block = vouchers_source[review_start:review_end]
 
     assert "/api/v1/business/approval-queue?" in queue_block
     assert 'document_type: "voucher"' in queue_block
-    assert 'lastVoucherApprovalQueue = items;' in queue_block
+    assert "lastVoucherApprovalQueue = items;" in queue_block or "setLastVoucherApprovalQueue" in queue_block or "lastVoucherApprovalQueue =" in queue_block
     assert "/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/review" in review_block
     assert 'accounting_entity_id: "primary"' in review_block
-    assert 'data-business-action="review-voucher-approve"' in app_source
-    assert 'data-business-action="review-voucher-reject"' in app_source
-    assert 'data-business-action="voucher-queue-refresh"' in app_source
-    assert 'renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)' in app_source
-    assert 'renderBusinessVouchersListFilters(lastBusinessVouchers.length)' in app_source
+    assert 'data-business-action="review-voucher-approve"' in tables_source
+    assert 'data-business-action="review-voucher-reject"' in tables_source
+    assert 'data-business-action="voucher-queue-refresh"' in tables_source
+    assert "renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)" in app_source
+    assert "renderBusinessVouchersListFilters(lastBusinessVouchers.length)" in app_source
+    assert 'from "./modules/workspaces/business-list-tables.js"' in app_source
 
 
 def test_mitrabooks_admin_settings_use_business_routes() -> None:
