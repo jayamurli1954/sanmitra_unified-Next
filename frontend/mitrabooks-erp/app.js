@@ -435,6 +435,12 @@ import {
   loadAndRenderGroupedNav,
   renderGroupedNav,
   renderGroupedNavFromItems,
+  mandirWorkspaceFromModule,
+  platformWorkspaceFromModule,
+  navIconForMandirWorkspace,
+  syncMandirNavActiveState,
+  syncGruhaNavActiveState,
+  syncPlatformNavActiveState,
 } from "./modules/workspaces/navigation-shell.js";
 
 import {
@@ -1151,173 +1157,8 @@ function renderSimpleTable(rows, columns, emptyText) {
   `;
 }
 
-function mandirWorkspaceFromModule(module = {}) {
-  const path = String(module.frontend_path || "").toLowerCase();
-  const displayName = String(module.display_name || "").toLowerCase();
-  if (path.includes("/donations") || displayName.includes("donation")) {
-    return "donations";
-  }
-  if (path.includes("/devotees") || displayName.includes("devotee")) {
-    return "devotees";
-  }
-  if (path.includes("/sevas") || displayName.includes("seva")) {
-    return "sevas";
-  }
-  if (path.includes("/public-payments") || displayName.includes("public payment")) {
-    return "payments";
-  }
-  if (path.includes("/receipts") || displayName.includes("receipt")) {
-    return "receipts";
-  }
-  if (path.includes("/panchang") || displayName.includes("panchang")) {
-    return "panchang";
-  }
-  if (path.includes("/reports") || displayName.includes("report")) {
-    return "reports";
-  }
-  if (path.includes("/settings") || displayName.includes("setting")) {
-    return "settings";
-  }
-  if (path.includes("/implementation") || displayName.includes("implementation")) {
-    return "implementation";
-  }
-  if (path.includes("/platform-owner") || displayName.includes("platform owner")) {
-    return "platform-owners";
-  }
-  if (path.includes("/accounting") || displayName.includes("accounting")) {
-    return "accounting";
-  }
-  if (path.includes("/dashboard") || displayName.includes("dashboard")) {
-    return "overview";
-  }
-  return "";
-}
-
-function platformWorkspaceFromModule(module = {}) {
-  const path = String(module.frontend_path || "").toLowerCase();
-  const displayName = String(module.display_name || "").toLowerCase();
-  if (path.includes("/onboarding") || displayName.includes("onboarding")) {
-    return "onboarding";
-  }
-  if (path.includes("/tenants") || displayName.includes("tenant")) {
-    return "tenants";
-  }
-  if (path.includes("/subscriptions") || displayName.includes("subscription")) {
-    return "subscriptions";
-  }
-  return "dashboard";
-}
-
-function navIconForMandirWorkspace(workspace) {
-  return ({
-    overview: "▦",
-    sevas: "♜",
-    "book-sevas": "♜",
-    "seva-bookings": "▤",
-    "seva-management": "▤",
-    "reschedule-approval": "✓",
-    donations: "▰",
-    devotees: "●●",
-    payments: "▣",
-    receipts: "▤",
-    reports: "▥",
-    panchang: "□",
-    settings: "⚙",
-    implementation: "☑",
-    "platform-owners": "♜",
-    accounting: "▣",
-  }[workspace] || "");
-}
-
-function syncMandirNavActiveState() {
-  nav.querySelectorAll("a").forEach((link) => {
-    const workspace = link.dataset.mandirWorkspace || "";
-    const isActive = currentExperience === "mandir" && workspace && workspace === activeMandirWorkspace;
-    link.classList.toggle("active", isActive);
-  });
-  if (topbarCurrent) {
-    const labels = {
-      overview: "Dashboard",
-      donations: "Donations",
-      sevas: "Sevas",
-      payments: "Public Payments",
-      exceptions: "Exceptions",
-      receipts: "Receipts",
-      panchang: "Panchang",
-      reports: "Reports",
-      accounting: "Accounting",
-      settings: "Settings",
-      implementation: "Implementation Checks",
-      "platform-owners": "Platform Owners",
-    };
-    const gruhaLabels = {
-      overview: "Dashboard",
-      maintenance: "Maintenance",
-      members: "Members",
-      flats: "Flats",
-      complaints: "Complaints",
-      messages: "Messages",
-      meetings: "Meetings",
-      assets: "Assets",
-      accounting: "Accounting",
-      reports: "Reports",
-      settings: "Settings",
-    };
-    topbarCurrent.textContent = currentExperience === "mandir"
-      ? labels[activeMandirWorkspace] || "Dashboard"
-      : currentExperience === "gruha"
-        ? gruhaLabels[activeGruhaWorkspace] || "Dashboard"
-        : "Dashboard";
-  }
-}
-
-function syncGruhaNavActiveState() {
-  nav.querySelectorAll("a").forEach((link) => {
-    const workspace = link.dataset.gruhaWorkspace || "";
-    const isActive = currentExperience === "gruha" && workspace && workspace === activeGruhaWorkspace;
-    link.classList.toggle("active", isActive);
-  });
-  if (topbarCurrent && currentExperience === "gruha") {
-    const labels = {
-      overview: "Dashboard",
-      maintenance: "Maintenance",
-      members: "Members",
-      flats: "Flats",
-      complaints: "Complaints",
-      messages: "Messages",
-      meetings: "Meetings",
-      assets: "Assets",
-      accounting: "Accounting",
-      reports: "Reports",
-      settings: "Settings",
-    };
-    topbarCurrent.textContent = labels[activeGruhaWorkspace] || "Dashboard";
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: SHARED UTILITIES
-// NOTE  : escapeHtml, formatCurrency, formatCountLabel, setLoginStatus, statusDetailText, delay
-// ══════════════════════════════════════════════════════════════════════
-
-function syncPlatformNavActiveState() {
-  nav.querySelectorAll("a").forEach((link) => {
-    const workspace = link.dataset.platformWorkspace || "";
-    const isActive = currentExperience === "platform" && workspace && workspace === activePlatformWorkspace;
-    link.classList.toggle("active", isActive);
-  });
-  if (topbarCurrent && currentExperience === "platform") {
-    const labels = {
-      dashboard: "Dashboard",
-      onboarding: "Onboarding Requests",
-      tenants: "Tenant Status",
-      subscriptions: "Subscriptions",
-    };
-    const label = labels[activePlatformWorkspace] || "Dashboard";
-    topbarCurrent.textContent = label;
-    updatePageHeader("Platform Owner", label, `${label} Workspace`);
-  }
-}
+// Shared utilities (escapeHtml, formatters, auth status) remain below.
+// Nav workspace mapping + sync live in modules/workspaces/navigation-shell.js
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -3042,9 +2883,14 @@ initNavigationShell({
   dashboardPreview,
   nav,
   moduleList,
+  topbarCurrent,
   escapeHtml,
   getExperienceConfig: () => experienceConfig,
   getCurrentExperience: () => currentExperience,
+  getActiveMandirWorkspace: () => activeMandirWorkspace,
+  getActiveGruhaWorkspace: () => activeGruhaWorkspace,
+  getActivePlatformWorkspace: () => activePlatformWorkspace,
+  updatePageHeader,
   getActiveBusinessWorkspace: () => activeBusinessWorkspace,
   getAppKey: () => APP_KEY,
   getExperienceAppKeys: () => EXPERIENCE_APP_KEYS,
@@ -3057,12 +2903,6 @@ initNavigationShell({
   activeOrgSelectorType,
   loadBusinessDashboardStats,
   renderDashboardPreview,
-  mandirWorkspaceFromModule,
-  navIconForMandirWorkspace,
-  platformWorkspaceFromModule,
-  syncMandirNavActiveState,
-  syncGruhaNavActiveState,
-  syncPlatformNavActiveState,
   syncBusinessNavActiveState,
   loadModules,
 });

@@ -31,6 +31,7 @@ let legacyImage;
 let dashboardPreview;
 let nav;
 let moduleList;
+let topbarCurrent;
 
 export function initNavigationShell(injected) {
   deps = injected;
@@ -51,6 +52,7 @@ export function initNavigationShell(injected) {
   dashboardPreview = injected.dashboardPreview;
   nav = injected.nav;
   moduleList = injected.moduleList;
+  topbarCurrent = injected.topbarCurrent;
 }
 
 function requireDeps() {
@@ -63,6 +65,10 @@ function requireDeps() {
 function escapeHtml(value) { return requireDeps().escapeHtml(value); }
 function getExperienceConfig() { return requireDeps().getExperienceConfig(); }
 function getCurrentExperience() { return requireDeps().getCurrentExperience(); }
+function getActiveMandirWorkspace() { return requireDeps().getActiveMandirWorkspace(); }
+function getActiveGruhaWorkspace() { return requireDeps().getActiveGruhaWorkspace(); }
+function getActivePlatformWorkspace() { return requireDeps().getActivePlatformWorkspace(); }
+function updatePageHeader(...args) { return requireDeps().updatePageHeader(...args); }
 function getActiveBusinessWorkspace() { return requireDeps().getActiveBusinessWorkspace(); }
 function getAppKey() { return requireDeps().getAppKey(); }
 function getExperienceAppKeys() { return requireDeps().getExperienceAppKeys(); }
@@ -75,12 +81,6 @@ function hasTrustedSession(...args) { return requireDeps().hasTrustedSession(...
 function activeOrgSelectorType(...args) { return requireDeps().activeOrgSelectorType(...args); }
 function loadBusinessDashboardStats(...args) { return requireDeps().loadBusinessDashboardStats(...args); }
 function renderDashboardPreview(...args) { return requireDeps().renderDashboardPreview(...args); }
-function mandirWorkspaceFromModule(...args) { return requireDeps().mandirWorkspaceFromModule(...args); }
-function navIconForMandirWorkspace(...args) { return requireDeps().navIconForMandirWorkspace(...args); }
-function platformWorkspaceFromModule(...args) { return requireDeps().platformWorkspaceFromModule(...args); }
-function syncMandirNavActiveState(...args) { return requireDeps().syncMandirNavActiveState(...args); }
-function syncGruhaNavActiveState(...args) { return requireDeps().syncGruhaNavActiveState(...args); }
-function syncPlatformNavActiveState(...args) { return requireDeps().syncPlatformNavActiveState(...args); }
 function syncBusinessNavActiveState(...args) { return requireDeps().syncBusinessNavActiveState(...args); }
 function loadModules(...args) { return requireDeps().loadModules(...args); }
 
@@ -443,5 +443,169 @@ export function renderGroupedNavFromItems(items) {
   });
 
   syncBusinessNavActiveState();
+}
+
+
+export function mandirWorkspaceFromModule(module = {}) {
+  const path = String(module.frontend_path || "").toLowerCase();
+  const displayName = String(module.display_name || "").toLowerCase();
+  if (path.includes("/donations") || displayName.includes("donation")) {
+    return "donations";
+  }
+  if (path.includes("/devotees") || displayName.includes("devotee")) {
+    return "devotees";
+  }
+  if (path.includes("/sevas") || displayName.includes("seva")) {
+    return "sevas";
+  }
+  if (path.includes("/public-payments") || displayName.includes("public payment")) {
+    return "payments";
+  }
+  if (path.includes("/receipts") || displayName.includes("receipt")) {
+    return "receipts";
+  }
+  if (path.includes("/panchang") || displayName.includes("panchang")) {
+    return "panchang";
+  }
+  if (path.includes("/reports") || displayName.includes("report")) {
+    return "reports";
+  }
+  if (path.includes("/settings") || displayName.includes("setting")) {
+    return "settings";
+  }
+  if (path.includes("/implementation") || displayName.includes("implementation")) {
+    return "implementation";
+  }
+  if (path.includes("/platform-owner") || displayName.includes("platform owner")) {
+    return "platform-owners";
+  }
+  if (path.includes("/accounting") || displayName.includes("accounting")) {
+    return "accounting";
+  }
+  if (path.includes("/dashboard") || displayName.includes("dashboard")) {
+    return "overview";
+  }
+  return "";
+}
+
+export function platformWorkspaceFromModule(module = {}) {
+  const path = String(module.frontend_path || "").toLowerCase();
+  const displayName = String(module.display_name || "").toLowerCase();
+  if (path.includes("/onboarding") || displayName.includes("onboarding")) {
+    return "onboarding";
+  }
+  if (path.includes("/tenants") || displayName.includes("tenant")) {
+    return "tenants";
+  }
+  if (path.includes("/subscriptions") || displayName.includes("subscription")) {
+    return "subscriptions";
+  }
+  return "dashboard";
+}
+
+export function navIconForMandirWorkspace(workspace) {
+  return ({
+    overview: "▦",
+    sevas: "♜",
+    "book-sevas": "♜",
+    "seva-bookings": "▤",
+    "seva-management": "▤",
+    "reschedule-approval": "✓",
+    donations: "▰",
+    devotees: "●●",
+    payments: "▣",
+    receipts: "▤",
+    reports: "▥",
+    panchang: "□",
+    settings: "⚙",
+    implementation: "☑",
+    "platform-owners": "♜",
+    accounting: "▣",
+  }[workspace] || "");
+}
+
+export function syncMandirNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.mandirWorkspace || "";
+    const isActive = getCurrentExperience() === "mandir" && workspace && workspace === getActiveMandirWorkspace();
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent) {
+    const labels = {
+      overview: "Dashboard",
+      donations: "Donations",
+      sevas: "Sevas",
+      payments: "Public Payments",
+      exceptions: "Exceptions",
+      receipts: "Receipts",
+      panchang: "Panchang",
+      reports: "Reports",
+      accounting: "Accounting",
+      settings: "Settings",
+      implementation: "Implementation Checks",
+      "platform-owners": "Platform Owners",
+    };
+    const gruhaLabels = {
+      overview: "Dashboard",
+      maintenance: "Maintenance",
+      members: "Members",
+      flats: "Flats",
+      complaints: "Complaints",
+      messages: "Messages",
+      meetings: "Meetings",
+      assets: "Assets",
+      accounting: "Accounting",
+      reports: "Reports",
+      settings: "Settings",
+    };
+    topbarCurrent.textContent = getCurrentExperience() === "mandir"
+      ? labels[getActiveMandirWorkspace()] || "Dashboard"
+      : getCurrentExperience() === "gruha"
+        ? gruhaLabels[getActiveGruhaWorkspace()] || "Dashboard"
+        : "Dashboard";
+  }
+}
+
+export function syncGruhaNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.gruhaWorkspace || "";
+    const isActive = getCurrentExperience() === "gruha" && workspace && workspace === getActiveGruhaWorkspace();
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent && getCurrentExperience() === "gruha") {
+    const labels = {
+      overview: "Dashboard",
+      maintenance: "Maintenance",
+      members: "Members",
+      flats: "Flats",
+      complaints: "Complaints",
+      messages: "Messages",
+      meetings: "Meetings",
+      assets: "Assets",
+      accounting: "Accounting",
+      reports: "Reports",
+      settings: "Settings",
+    };
+    topbarCurrent.textContent = labels[getActiveGruhaWorkspace()] || "Dashboard";
+  }
+}
+
+export function syncPlatformNavActiveState() {
+  nav.querySelectorAll("a").forEach((link) => {
+    const workspace = link.dataset.platformWorkspace || "";
+    const isActive = getCurrentExperience() === "platform" && workspace && workspace === getActivePlatformWorkspace();
+    link.classList.toggle("active", isActive);
+  });
+  if (topbarCurrent && getCurrentExperience() === "platform") {
+    const labels = {
+      dashboard: "Dashboard",
+      onboarding: "Onboarding Requests",
+      tenants: "Tenant Status",
+      subscriptions: "Subscriptions",
+    };
+    const label = labels[getActivePlatformWorkspace()] || "Dashboard";
+    topbarCurrent.textContent = label;
+    updatePageHeader("Platform Owner", label, `${label} Workspace`);
+  }
 }
 
