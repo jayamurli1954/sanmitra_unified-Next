@@ -49,29 +49,9 @@ export function setMfgPlFrom(value) { mfgPlFrom = value; }
 export function setMfgPlTo(value) { mfgPlTo = value; }
 export function setMfgWoActualDraft(value) { mfgWoActualDraft = value; }
 
-// ══════════════════════════════════════════════════════════════════════
-// MANUFACTURING & COST-CENTRE ADD-ON (enterprise, opt-in)
+// State lives in the export let bindings above (single declaration).
 // Backend /api/v1/business/mfg/*. Menu always shows; content gates on
 // GET /business/mfg/access (platform provisioning + tenant enable + role).
-// Two independent layers: Cost-Centre Accounting and Manufacturing.
-// ══════════════════════════════════════════════════════════════════════
-
-let mfgAccess = null;            // GET /business/mfg/access
-let mfgTab = "cost-centres";     // cost-centres | budgets | pl | boms | work-orders
-let mfgError = "";
-let mfgCostCentres = [];         // from /business/dimensions (cost_centres)
-let mfgTree = [];                // hierarchy roots
-let mfgBudgets = [];
-let mfgBudgetVsActual = null;    // {budget_id, report}
-let mfgBoms = [];
-let mfgWorkOrders = [];
-let mfgItems = [];               // inventory items for selects
-let mfgPl = null;                // cost-centre P&L report
-let mfgPlFrom = "";
-let mfgPlTo = "";
-let mfgBomDraft = [];            // [{item_id, qty, rate, scrap_pct}] while building a BOM
-let mfgWoActualDraft = [];       // [{item_id, qty, rate}] while completing a work order
-let mfgCompleteFor = "";         // wo_id being completed
 
 export function mfgMoney(value) {
   const n = Number(value || 0);
