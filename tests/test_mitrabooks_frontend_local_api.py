@@ -123,11 +123,22 @@ def test_pwa_shell_unregisters_service_workers_on_localhost() -> None:
 
 def test_mitrabooks_dashboard_preview_closes_before_business_module() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("function renderDashboardPreview(config)")
-    marker = app_source.index("// ========== Business Module: Party Master ==========", start)
-    preview_block = app_source[start:marker].rstrip()
+    preview_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "dashboard-preview-shell.js"
+    ).read_text(encoding="utf-8")
 
-    assert preview_block.endswith("}\n}")
+    assert 'from "./modules/workspaces/dashboard-preview-shell.js"' in app_source
+    assert "export function renderDashboardPreview(config)" in preview_source
+    assert "export function renderPlatformDashboard" in preview_source
+    assert "export function emptyPlatformDashboardPayload" in preview_source
+    assert 'dashboard.type === "platform"' in preview_source
+    assert 'dashboard.type === "mandir"' in preview_source
+    assert 'dashboard.type === "gruha"' in preview_source
+    assert 'dashboard.type === "business"' in preview_source
+    assert "renderBusinessExecutiveDashboard()" in preview_source
+    # Preview shell must remain a leaf: no import cycle back into app.js.
+    assert 'from "../../app.js"' not in preview_source
+    assert 'from "../app.js"' not in preview_source
 
 
 def test_business_workspace_menu_renders_main_preview_directly() -> None:
@@ -551,6 +562,9 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     settings_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "settings-workspace.js"
     ).read_text(encoding="utf-8")
+    preview_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "dashboard-preview-shell.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
     run_start = app_source.index("async function runChecks()")
     run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
@@ -558,9 +572,10 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     settings_start = settings_source.index("function renderMitraBooksSettingsWorkspace()")
     settings_end = settings_source.index("function renderProfessionalSuiteWorkspace()", settings_start)
     settings_block = settings_source[settings_start:settings_end]
-    dashboard_start = app_source.index('if (dashboard.type === "business"')
-    dashboard_end = app_source.index("// ========== Business Module: Party Master", dashboard_start)
-    business_dashboard_block = app_source[dashboard_start:dashboard_end]
+    dashboard_start = preview_source.index('if (dashboard.type === "business"')
+    dashboard_end = preview_source.index("renderBusinessExecutiveDashboard()", dashboard_start)
+    # Include the business branch through the executive-dashboard render call.
+    business_dashboard_block = preview_source[dashboard_start:dashboard_end + len("renderBusinessExecutiveDashboard()")]
 
     assert "function renderBusinessDataHealthPanel()" in helpers_source
     assert "renderBusinessDataHealthPanel()" in settings_block
