@@ -650,6 +650,14 @@ import {
   saveBusinessAdminSettingsSection,
 } from "./modules/workspaces/settings-workspace.js";
 
+import {
+  initBusinessListFilters,
+  businessListState,
+  applyBusinessListFilter,
+  resetBusinessListFilter,
+  pageBusinessList,
+} from "./modules/workspaces/business-list-filters.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -3656,24 +3664,6 @@ function renderDashboardPreview(config) {
 let activeBusinessWorkspace = "overview";
 
 
-const businessListState = {
-  parties: {
-    offset: 0,
-    q: "",
-    party_type: "",
-    from_date: "",
-    to_date: "",
-  },
-  vouchers: {
-    offset: 0,
-    voucher_type: "",
-    status: "",
-    approval_status: "",
-    include_reviewed: false,
-  },
-};
-
-
 // Parties list table renderers live in modules/workspaces/business-list-tables.js
 
 // Vouchers list table renderers live in modules/workspaces/business-list-tables.js
@@ -3981,74 +3971,7 @@ function syncBusinessNavActiveState() {
 }
 
 
-// ══════════════════════════════════════════════════════════════════════
-// SECTION: BUSINESS LIST FILTERING + PAGINATION
-// NOTE  : applyBusinessListFilter, resetBusinessListFilter, pageBusinessList
-// ══════════════════════════════════════════════════════════════════════
-
-function applyBusinessListFilter(listKind) {
-  if (listKind === "parties") {
-    const panel = document.querySelector("[data-business-list='parties']");
-    if (!panel) return;
-
-    const qInput = panel.querySelector("input[name='q']");
-    const typeInput = panel.querySelector("select[name='party_type']");
-
-    businessListState.parties.q = qInput?.value || "";
-    businessListState.parties.party_type = typeInput?.value || "";
-    businessListState.parties.offset = 0;
-
-    loadBusinessParties();
-  } else if (listKind === "vouchers") {
-    const panel = document.querySelector("[data-business-list='vouchers']");
-    if (!panel) return;
-
-    const voucherTypeInput = panel.querySelector("select[name='voucher_type']");
-    const statusInput = panel.querySelector("select[name='status']");
-    const approvalInput = panel.querySelector("select[name='approval_status']");
-
-    businessListState.vouchers.voucher_type = voucherTypeInput?.value || "";
-    businessListState.vouchers.status = statusInput?.value || "";
-    businessListState.vouchers.approval_status = approvalInput?.value || "";
-    businessListState.vouchers.offset = 0;
-
-    loadBusinessVouchers();
-  }
-}
-
-function resetBusinessListFilter(listKind) {
-  if (listKind === "parties") {
-    businessListState.parties = {
-      offset: 0,
-      q: "",
-      party_type: "",
-      from_date: "",
-      to_date: "",
-    };
-    loadBusinessParties();
-  } else if (listKind === "vouchers") {
-    businessListState.vouchers = {
-      offset: 0,
-      voucher_type: "",
-      status: "",
-      approval_status: "",
-      include_reviewed: false,
-    };
-    loadBusinessVouchers();
-  }
-}
-
-function pageBusinessList(listKind, direction) {
-  if (listKind === "parties") {
-    const offset = Number(businessListState.parties.offset || 0);
-    businessListState.parties.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
-    loadBusinessParties();
-  } else if (listKind === "vouchers") {
-    const offset = Number(businessListState.vouchers.offset || 0);
-    businessListState.vouchers.offset = direction === "next" ? offset + 20 : Math.max(0, offset - 20);
-    loadBusinessVouchers();
-  }
-}
+// Business list filtering lives in modules/workspaces/business-list-filters.js
 
 // ========== Business Module: Financial Reports ==========
 
@@ -6969,6 +6892,12 @@ initManufacturing({
 // Wire parties/vouchers list table renderers (avoids import cycle with app.js)
 // Wire business attachments (avoids import cycle with app.js)
 // Wire MitraBooks settings workspace (avoids import cycle with app.js)
+// Wire business list filtering (avoids import cycle with app.js)
+initBusinessListFilters({
+  loadBusinessParties,
+  loadBusinessVouchers,
+});
+
 initSettingsWorkspace({
   escapeHtml,
   setLoginStatus,
