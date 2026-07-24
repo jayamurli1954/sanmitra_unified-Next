@@ -279,22 +279,3 @@ export async function createJournalVoucher(appKey, date) {
   renderJson(getApiOutput(), { create_voucher: result });
 }
 
-
-async function createBusinessVoucherByType(voucherType, date) {
-  const appKey = "mitrabooks";
-
-  try {
-    if (voucherType === "payment" || voucherType === "receipt") {
-      await createSimplePartyVoucher(appKey, voucherType, date);
-    } else if (voucherType === "contra") {
-      await createContraVoucher(appKey, date);
-    } else if (voucherType === "journal") {
-      await createJournalVoucher(appKey, date);
-    } else {
-      setLoginStatus("warn", "Unknown voucher type", `Voucher type '${voucherType}' is not supported.`);
-    }
-  } catch (error) {
-    setLoginStatus("danger", "Voucher creation failed", error.message || "An unexpected error occurred.");
-  }
-}
-
