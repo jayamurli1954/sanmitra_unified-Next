@@ -406,6 +406,12 @@ import {
   syncOrgSelectorOptions,
   updateTrustedContextUi,
   signInWithPassword,
+  isPasswordRecoveryPanelOpen,
+  setAuthPanelMode,
+  showAuthFieldMessage,
+  clearAuthFieldMessage,
+  requestPasswordReset,
+  completePasswordReset,
 } from "./modules/workspaces/auth-session.js";
 
 import {
@@ -1155,134 +1161,6 @@ function setLoginStatus(kind, title, detail = "") {
   loginStatus.innerHTML = title
     ? `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`
     : "";
-}
-
-function isPasswordRecoveryPanelOpen() {
-  const forgotOpen = Boolean(forgotPasswordForm && !forgotPasswordForm.hasAttribute("hidden"));
-  const resetOpen = Boolean(resetPasswordForm && !resetPasswordForm.hasAttribute("hidden"));
-  return forgotOpen || resetOpen;
-}
-
-function setAuthPanelMode(mode) {
-  const normalized = mode === "forgot" || mode === "reset" ? mode : "login";
-  const title = document.getElementById("access-title");
-  const copy = document.getElementById("access-copy");
-  const loginForm = document.getElementById("login-form");
-  loginForm?.toggleAttribute("hidden", normalized !== "login");
-  forgotPasswordForm?.toggleAttribute("hidden", normalized !== "forgot");
-  resetPasswordForm?.toggleAttribute("hidden", normalized !== "reset");
-  if (title) {
-    title.textContent = normalized === "forgot"
-      ? "Reset password"
-      : normalized === "reset"
-        ? "Set new password"
-        : "Sign in";
-  }
-  if (copy) {
-    copy.textContent = normalized === "forgot"
-      ? "Enter your MitraBooks account email. If it exists, a reset link will be sent."
-      : normalized === "reset"
-        ? "Choose a new password for your MitraBooks account."
-        : "Use your tenant admin credentials to open the workspace.";
-  }
-}
-
-function showAuthFieldMessage(fieldId, message) {
-  const field = document.getElementById(fieldId);
-  const messageNode = field?.querySelector("p");
-  if (field) field.hidden = false;
-  if (messageNode) messageNode.textContent = message;
-}
-
-function clearAuthFieldMessage(fieldId) {
-  const field = document.getElementById(fieldId);
-  const messageNode = field?.querySelector("p");
-  if (field) field.hidden = true;
-  if (messageNode) messageNode.textContent = "";
-}
-
-async function requestPasswordReset() {
-  const email = String(forgotPasswordEmail?.value || loginEmail?.value || "").trim().toLowerCase();
-  const submitButton = document.getElementById("forgot-password-submit");
-  clearAuthFieldMessage("forgot-error-field");
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    showAuthFieldMessage("forgot-error-field", "Enter a valid account email.");
-    setLoginStatus("warn", "Email required", "Enter the MitraBooks account email to request a reset link.");
-    return;
-  }
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "Sending...";
-  }
-  const result = await apiRequest(APP_KEY, "/api/v1/auth/forgot-password", {
-    method: "POST",
-    timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
-    body: JSON.stringify({ email }),
-  });
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = "Send reset link";
-  }
-  if (result.ok) {
-    window.localStorage.setItem(LOGIN_EMAIL_STORAGE_KEY, email);
-    if (loginEmail) loginEmail.value = email;
-    setLoginStatus("ok", "Reset link requested", result.payload?.message || "If this account exists, password reset instructions have been sent.");
-  } else {
-    const detail = statusDetailText(result.payload?.detail) || "Password reset email could not be sent. Please try again.";
-    showAuthFieldMessage("forgot-error-field", detail);
-    setLoginStatus("danger", "Reset request failed", detail);
-  }
-  renderJson(apiOutput, { forgot_password: { ok: result.ok, status: result.status } });
-}
-
-async function completePasswordReset() {
-  const newPassword = String(resetNewPasswordInput?.value || "");
-  const confirmPassword = String(resetConfirmPasswordInput?.value || "");
-  const submitButton = document.getElementById("reset-password-submit");
-  clearAuthFieldMessage("reset-error-field");
-  if (!pendingPasswordResetToken) {
-    showAuthFieldMessage("reset-error-field", "Reset token is missing or expired. Request a new reset link.");
-    return;
-  }
-  if (newPassword.length < 6) {
-    showAuthFieldMessage("reset-error-field", "Password must be at least 6 characters.");
-    return;
-  }
-  if (newPassword !== confirmPassword) {
-    showAuthFieldMessage("reset-error-field", "Password and confirm password do not match.");
-    return;
-  }
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "Updating...";
-  }
-  const result = await apiRequest(APP_KEY, "/api/v1/auth/reset-password", {
-    method: "POST",
-    timeoutMs: LOGIN_REQUEST_TIMEOUT_MS,
-    body: JSON.stringify({
-      token: pendingPasswordResetToken,
-      new_password: newPassword,
-      confirm_password: confirmPassword,
-    }),
-  });
-  if (submitButton) {
-    submitButton.disabled = false;
-    submitButton.textContent = "Update password";
-  }
-  if (result.ok) {
-    pendingPasswordResetToken = "";
-    resetPasswordForm?.reset();
-    if (window.history?.replaceState) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-    setAuthPanelMode("login");
-    setLoginStatus("ok", "Password updated", "Use the new password to sign in.");
-  } else {
-    const detail = statusDetailText(result.payload?.detail) || "Password could not be updated. Request a new reset link.";
-    showAuthFieldMessage("reset-error-field", detail);
-    setLoginStatus("danger", "Password reset failed", detail);
-  }
-  renderJson(apiOutput, { reset_password: { ok: result.ok, status: result.status } });
 }
 
 function delay(ms) {
@@ -2927,6 +2805,11 @@ initAuthSession({
   dashboardPreview,
   apiOutput,
   moduleState,
+  forgotPasswordForm,
+  forgotPasswordEmail,
+  resetPasswordForm,
+  resetNewPasswordInput,
+  resetConfirmPasswordInput,
   getAccessToken,
   getRefreshToken,
   clearAllTokens,
@@ -2944,10 +2827,11 @@ initAuthSession({
   getLoginEmailStorageKey: () => LOGIN_EMAIL_STORAGE_KEY,
   getDefaultMitraBooksLoginEmail: () => DEFAULT_MITRABOOKS_LOGIN_EMAIL,
   getLoginRequestTimeoutMs: () => LOGIN_REQUEST_TIMEOUT_MS,
+  getPendingPasswordResetToken: () => pendingPasswordResetToken,
+  setPendingPasswordResetToken: (value) => { pendingPasswordResetToken = value; },
   apiRequest,
   renderJson,
   setLoginStatus,
-  setAuthPanelMode,
   statusDetailText,
   escapeHtml,
   setLastBusinessAccounts,

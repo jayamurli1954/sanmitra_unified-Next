@@ -525,15 +525,18 @@ def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     assert 'from "./modules/workspaces/auth-session.js"' in app_source
     assert "export function signOutAndReturnToLogin()" in auth_source
     assert "export async function updateCurrentPassword()" in auth_source
-    assert "async function requestPasswordReset()" in app_source
-    assert "async function completePasswordReset()" in app_source
+    assert "export async function requestPasswordReset()" in auth_source
+    assert "export async function completePasswordReset()" in auth_source
     assert "/api/v1/auth/change-password" in auth_source
-    assert "/api/v1/auth/forgot-password" in app_source
-    assert "/api/v1/auth/reset-password" in app_source
+    assert "/api/v1/auth/forgot-password" in auth_source
+    assert "/api/v1/auth/reset-password" in auth_source
     assert 'document.getElementById("topbar-logout")?.addEventListener("click"' in app_source
     assert 'document.getElementById("sidebar-logout")?.addEventListener("click"' in app_source
     assert 'document.getElementById("topbar-update-password")?.addEventListener("click", openPasswordDialog)' in app_source
-    assert 'topbarControlStrip.hidden = currentExperience !== "mitrabooks";' in app_source
+    nav_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "navigation-shell.js"
+    ).read_text(encoding="utf-8")
+    assert 'topbarControlStrip.hidden = getCurrentExperience() !== "mitrabooks";' in nav_source
     assert ".account-menu-trigger" in css_source
     assert ".account-menu-panel" in css_source
     assert ".app.signed-out .main" in css_source

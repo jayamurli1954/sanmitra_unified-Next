@@ -33,6 +33,11 @@ let currentOrgTenant;
 let dashboardPreview;
 let apiOutput;
 let moduleState;
+let forgotPasswordForm;
+let forgotPasswordEmail;
+let resetPasswordForm;
+let resetNewPasswordInput;
+let resetConfirmPasswordInput;
 
 export function initAuthSession(injected) {
   deps = injected;
@@ -59,6 +64,11 @@ export function initAuthSession(injected) {
   dashboardPreview = injected.dashboardPreview;
   apiOutput = injected.apiOutput;
   moduleState = injected.moduleState;
+  forgotPasswordForm = injected.forgotPasswordForm;
+  forgotPasswordEmail = injected.forgotPasswordEmail;
+  resetPasswordForm = injected.resetPasswordForm;
+  resetNewPasswordInput = injected.resetNewPasswordInput;
+  resetConfirmPasswordInput = injected.resetConfirmPasswordInput;
 }
 
 function requireDeps() {
@@ -85,10 +95,11 @@ function getAppKey() { return requireDeps().getAppKey(); }
 function getLoginEmailStorageKey() { return requireDeps().getLoginEmailStorageKey(); }
 function getDefaultMitraBooksLoginEmail() { return requireDeps().getDefaultMitraBooksLoginEmail(); }
 function getLoginRequestTimeoutMs() { return requireDeps().getLoginRequestTimeoutMs(); }
+function getPendingPasswordResetToken() { return requireDeps().getPendingPasswordResetToken(); }
+function setPendingPasswordResetToken(value) { requireDeps().setPendingPasswordResetToken(value); }
 function apiRequest(...args) { return requireDeps().apiRequest(...args); }
 function renderJson(...args) { return requireDeps().renderJson(...args); }
 function setLoginStatus(...args) { return requireDeps().setLoginStatus(...args); }
-function setAuthPanelMode(...args) { return requireDeps().setAuthPanelMode(...args); }
 function statusDetailText(...args) { return requireDeps().statusDetailText(...args); }
 function escapeHtml(...args) { return requireDeps().escapeHtml(...args); }
 function setLastBusinessAccounts(...args) { return requireDeps().setLastBusinessAccounts(...args); }
@@ -491,5 +502,134 @@ export async function signInWithPassword() {
       loginSubmitBtn.textContent = "Sign in";
     }
   }
+}
+
+
+export function isPasswordRecoveryPanelOpen() {
+  const forgotOpen = Boolean(forgotPasswordForm && !forgotPasswordForm.hasAttribute("hidden"));
+  const resetOpen = Boolean(resetPasswordForm && !resetPasswordForm.hasAttribute("hidden"));
+  return forgotOpen || resetOpen;
+}
+
+export function setAuthPanelMode(mode) {
+  const normalized = mode === "forgot" || mode === "reset" ? mode : "login";
+  const title = document.getElementById("access-title");
+  const copy = document.getElementById("access-copy");
+  const loginForm = document.getElementById("login-form");
+  loginForm?.toggleAttribute("hidden", normalized !== "login");
+  forgotPasswordForm?.toggleAttribute("hidden", normalized !== "forgot");
+  resetPasswordForm?.toggleAttribute("hidden", normalized !== "reset");
+  if (title) {
+    title.textContent = normalized === "forgot"
+      ? "Reset password"
+      : normalized === "reset"
+        ? "Set new password"
+        : "Sign in";
+  }
+  if (copy) {
+    copy.textContent = normalized === "forgot"
+      ? "Enter your MitraBooks account email. If it exists, a reset link will be sent."
+      : normalized === "reset"
+        ? "Choose a new password for your MitraBooks account."
+        : "Use your tenant admin credentials to open the workspace.";
+  }
+}
+
+export function showAuthFieldMessage(fieldId, message) {
+  const field = document.getElementById(fieldId);
+  const messageNode = field?.querySelector("p");
+  if (field) field.hidden = false;
+  if (messageNode) messageNode.textContent = message;
+}
+
+export function clearAuthFieldMessage(fieldId) {
+  const field = document.getElementById(fieldId);
+  const messageNode = field?.querySelector("p");
+  if (field) field.hidden = true;
+  if (messageNode) messageNode.textContent = "";
+}
+
+export async function requestPasswordReset() {
+  const email = String(forgotPasswordEmail?.value || loginEmail?.value || "").trim().toLowerCase();
+  const submitButton = document.getElementById("forgot-password-submit");
+  clearAuthFieldMessage("forgot-error-field");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showAuthFieldMessage("forgot-error-field", "Enter a valid account email.");
+    setLoginStatus("warn", "Email required", "Enter the MitraBooks account email to request a reset link.");
+    return;
+  }
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Sending...";
+  }
+  const result = await apiRequest(getAppKey(), "/api/v1/auth/forgot-password", {
+    method: "POST",
+    timeoutMs: getLoginRequestTimeoutMs(),
+    body: JSON.stringify({ email }),
+  });
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Send reset link";
+  }
+  if (result.ok) {
+    window.localStorage.setItem(getLoginEmailStorageKey(), email);
+    if (loginEmail) loginEmail.value = email;
+    setLoginStatus("ok", "Reset link requested", result.payload?.message || "If this account exists, password reset instructions have been sent.");
+  } else {
+    const detail = statusDetailText(result.payload?.detail) || "Password reset email could not be sent. Please try again.";
+    showAuthFieldMessage("forgot-error-field", detail);
+    setLoginStatus("danger", "Reset request failed", detail);
+  }
+  renderJson(apiOutput, { forgot_password: { ok: result.ok, status: result.status } });
+}
+
+export async function completePasswordReset() {
+  const newPassword = String(resetNewPasswordInput?.value || "");
+  const confirmPassword = String(resetConfirmPasswordInput?.value || "");
+  const submitButton = document.getElementById("reset-password-submit");
+  clearAuthFieldMessage("reset-error-field");
+  if (!getPendingPasswordResetToken()) {
+    showAuthFieldMessage("reset-error-field", "Reset token is missing or expired. Request a new reset link.");
+    return;
+  }
+  if (newPassword.length < 6) {
+    showAuthFieldMessage("reset-error-field", "Password must be at least 6 characters.");
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showAuthFieldMessage("reset-error-field", "Password and confirm password do not match.");
+    return;
+  }
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Updating...";
+  }
+  const result = await apiRequest(getAppKey(), "/api/v1/auth/reset-password", {
+    method: "POST",
+    timeoutMs: getLoginRequestTimeoutMs(),
+    body: JSON.stringify({
+      token: getPendingPasswordResetToken(),
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    }),
+  });
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Update password";
+  }
+  if (result.ok) {
+    setPendingPasswordResetToken("");
+    resetPasswordForm?.reset();
+    if (window.history?.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    setAuthPanelMode("login");
+    setLoginStatus("ok", "Password updated", "Use the new password to sign in.");
+  } else {
+    const detail = statusDetailText(result.payload?.detail) || "Password could not be updated. Request a new reset link.";
+    showAuthFieldMessage("reset-error-field", detail);
+    setLoginStatus("danger", "Password reset failed", detail);
+  }
+  renderJson(apiOutput, { reset_password: { ok: result.ok, status: result.status } });
 }
 
