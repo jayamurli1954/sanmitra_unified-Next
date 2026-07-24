@@ -77,12 +77,28 @@ def test_active_legacy_sources_have_no_inline_event_handler_attributes() -> None
 
 
 def test_backend_module_metadata_is_escaped_before_legacy_html_rendering() -> None:
-    for relative_path in ("frontend/mitrabooks-erp/app.js", "frontend/legalmitra/app.js"):
-        source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        assert "<strong>${module.display_name}</strong>" not in source
-        assert '<span class="muted">${module.module_key}' not in source
-        assert "${escapeHtml(module.display_name)}" in source
-        assert "${escapeHtml(module.module_key)}" in source
+    sources = {
+        "frontend/mitrabooks-erp/modules/workspaces/navigation-shell.js": (
+            REPO_ROOT / "frontend/mitrabooks-erp/modules/workspaces/navigation-shell.js"
+        ).read_text(encoding="utf-8"),
+        "frontend/legalmitra/app.js": (
+            REPO_ROOT / "frontend/legalmitra/app.js"
+        ).read_text(encoding="utf-8"),
+        # app.js must not reintroduce an unescaped module-list renderer after extract.
+        "frontend/mitrabooks-erp/app.js": (
+            REPO_ROOT / "frontend/mitrabooks-erp/app.js"
+        ).read_text(encoding="utf-8"),
+    }
+    for relative_path, source in sources.items():
+        assert "<strong>${module.display_name}</strong>" not in source, relative_path
+        assert '<span class="muted">${module.module_key}' not in source, relative_path
+    for relative_path in (
+        "frontend/mitrabooks-erp/modules/workspaces/navigation-shell.js",
+        "frontend/legalmitra/app.js",
+    ):
+        source = sources[relative_path]
+        assert "${escapeHtml(module.display_name)}" in source, relative_path
+        assert "${escapeHtml(module.module_key)}" in source, relative_path
 
 
 def test_public_backend_error_text_is_escaped_before_html_rendering() -> None:
