@@ -406,21 +406,29 @@ def test_mandirmitra_compliance_realstack_spec_is_guarded_and_restores_tenant_co
 
 def test_mandirmitra_compliance_shell_exposes_governed_operator_controls() -> None:
     shell = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    dashboard = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-dashboard.js"
+    ).read_text(encoding="utf-8")
+    ops = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-operational-reports.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{shell}\n{dashboard}\n{ops}"
 
     assert '"/api/v1/compliance/donations/config"' in shell
     assert '/api/v1/reports/compliance/80g?' in shell
     assert '/api/v1/reports/compliance/fcra?' in shell
-    assert 'data-mandir-compliance-form' in shell
-    assert 'Save Compliance Configuration' in shell
+    assert 'data-mandir-compliance-form' in dashboard
+    assert 'Save Compliance Configuration' in dashboard
+    assert 'from "./modules/workspaces/mandir-dashboard.js"' in shell
     assert 'name="request_80g"' in shell
     assert 'name="donor_pan"' in shell
     assert 'name="is_foreign_contribution"' in shell
     assert 'name="foreign_source_declaration"' in shell
     assert '80G is off for this tenant.' in shell
     assert 'FCRA is off for this tenant.' in shell
-    assert 'donor_pan_masked' in shell
-    assert 'this is not an official certificate or filing' in shell
-    assert 'this is not an official filing' in shell
+    assert 'donor_pan_masked' in ops
+    assert 'this is not an official certificate or filing' in combined
+    assert 'this is not an official filing' in combined
 
 
 def test_mandirmitra_stage3_browser_smoke_has_no_embedded_password_and_checks_compliance() -> None:
