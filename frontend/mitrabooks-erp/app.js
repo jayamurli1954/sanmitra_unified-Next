@@ -658,6 +658,14 @@ import {
   pageBusinessList,
 } from "./modules/workspaces/business-list-filters.js";
 
+import {
+  currentFinancialYear,
+  recentFinancialYears,
+  currentFyQuarter,
+  recentFyQuarters,
+  financialYearStartIso,
+} from "./modules/workspaces/fiscal-year.js";
+
 const APP_KEY = "mitrabooks";
 const DEFAULT_DEPLOYED_API_BASE_URL = "https://sanmitra-unified-next-staging-sg.onrender.com";
 const DEFAULT_MITRABOOKS_LOGIN_EMAIL = "business.admin@sanmitra.local";
@@ -673,7 +681,6 @@ const EXPERIENCE_APP_KEYS = {
   mandir: "mandirmitra",
   gruha: "gruhamitra",
 };
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: EXPERIENCE DETECTION + PRODUCT SHELL
@@ -983,7 +990,6 @@ const passwordStatus = document.getElementById("password-error-message");
 const currentPasswordInput = document.getElementById("current-password");
 const newPasswordInput = document.getElementById("new-password");
 const confirmNewPasswordInput = document.getElementById("confirm-password");
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: EXPERIENCE + MODULE CONFIG
@@ -1367,7 +1373,6 @@ function renderGroupedNavFromItems(items) {
   syncBusinessNavActiveState();
 }
 
-
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: STAT CARDS + ACTIVITY + RECENT VOUCHERS
 // NOTE  : renderStatCards, renderActionTiles, renderActivity, renderBusinessRecentVoucherRows
@@ -1439,7 +1444,6 @@ function renderBusinessRecentVoucherRows(rows) {
     </div>
   `;
 }
-
 
 // Shared business attachment helpers (invoices, bills, CA documents)
 
@@ -1572,8 +1576,6 @@ function renderSelectedOrgWorkspace() {
     </div>
   `;
 }
-
-
 
 // Business executive dashboard lives in modules/workspaces/executive-dashboard.js
 
@@ -1798,7 +1800,6 @@ function syncGruhaNavActiveState() {
     topbarCurrent.textContent = labels[activeGruhaWorkspace] || "Dashboard";
   }
 }
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: SHARED UTILITIES
@@ -2107,7 +2108,6 @@ function hideMandirSplash() {
   mandirSplash.setAttribute("aria-hidden", "true");
   mandirSplashVideo?.pause();
 }
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: AUTH + SESSION
@@ -2505,7 +2505,6 @@ async function signInWithPassword() {
   }
 }
 
-
 // ══════════════════════════════════════════════════════════════════════
 
 function renderRecentTenantsTable(rows) {
@@ -2556,7 +2555,6 @@ function renderRecentTenantsTable(rows) {
     </div>
   `;
 }
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: MANDIR — financial reports (TB / I&E / B&P / BS)
@@ -3193,7 +3191,6 @@ function renderMandirDevoteesView(reports = lastMandirOperationalReports) {
   `;
 }
 
-
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: MANDIR — dashboard home + workspace tabs
 // API   : GET /api/v1/mandir/dashboard
@@ -3541,7 +3538,6 @@ function renderMandirPlatformOwnerShortcut() {
   `;
 }
 
-
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: DASHBOARD PREVIEW SHELL
 // NOTE  : renderDashboardPreview — outermost wrapper rendered into dashboardPreview element
@@ -3662,7 +3658,6 @@ function renderDashboardPreview(config) {
 // ========== Business Module: Party Master ==========
 
 let activeBusinessWorkspace = "overview";
-
 
 // Parties list table renderers live in modules/workspaces/business-list-tables.js
 
@@ -3970,7 +3965,6 @@ function syncBusinessNavActiveState() {
   }
 }
 
-
 // Business list filtering lives in modules/workspaces/business-list-filters.js
 
 // ========== Business Module: Financial Reports ==========
@@ -3997,57 +3991,6 @@ const BUSINESS_REPORT_TABS = [
   { id: "period-locks", label: "Period Locks" },
 ];
 
-
-
-
-// Current Indian financial year as "YYYY-YY" (FY starts April).
-function currentFinancialYear() {
-  const d = new Date();
-  const startYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
-  return `${startYear}-${String(startYear + 1).slice(-2)}`;
-}
-
-function recentFinancialYears(count = 4) {
-  let startYear = Number(currentFinancialYear().slice(0, 4));
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    out.push(`${startYear}-${String(startYear + 1).slice(-2)}`);
-    startYear -= 1;
-  }
-  return out;
-}
-
-// Current Indian-FY quarter as "YYYY-Q[1-4]" (FY starts April; Q1 = Apr-Jun).
-function currentFyQuarter() {
-  const d = new Date();
-  const m = d.getMonth(); // 0-11
-  const y = d.getFullYear();
-  if (m >= 3 && m <= 5) return `${y}-Q1`;
-  if (m >= 6 && m <= 8) return `${y}-Q2`;
-  if (m >= 9 && m <= 11) return `${y}-Q3`;
-  return `${y - 1}-Q4`;       // Jan-Mar belongs to the FY that started the prior April
-}
-
-// A handful of recent FY quarters for the CMP-08 picker.
-function recentFyQuarters(count = 6) {
-  const cur = currentFyQuarter();
-  let [fy, q] = cur.split("-Q").map((x, i) => (i === 0 ? Number(x) : Number(x)));
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    out.push(`${fy}-Q${q}`);
-    q -= 1;
-    if (q < 1) { q = 4; fy -= 1; }
-  }
-  return out;
-}
-
-function financialYearStartIso() {
-  const now = new Date();
-  // Indian financial year starts April 1. Jan-Mar (month index 0-2) belong to the prior FY.
-  const year = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
-  return `${year}-04-01`;
-}
-
 const businessReportState = {
   tab: "trial-balance",
   as_of: todayIsoDate(),
@@ -4056,7 +3999,6 @@ const businessReportState = {
   ledgerAccountId: "",
   agingKind: "receivable",
 };
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: FINANCIAL REPORTS — workspace renderer + report framework
@@ -4141,16 +4083,12 @@ async function refreshCurrentBusinessReport() {
   }
 }
 
-
-
-
 function rerenderBusinessReportsIfActive() {
   const reportWorkspaces = ["reports", "gst-returns", "reconciliation", "tds-tcs", "bank-recon"];
   if (currentExperience === "mitrabooks" && reportWorkspaces.includes(activeBusinessWorkspace)) {
     dashboardPreview.innerHTML = renderBusinessWorkspace();
   }
 }
-
 
 function reportExportToolbar(reportKey, { kind = "", label = "" } = {}) {
   const kAttr = kind ? ` data-report-kind="${escapeHtml(kind)}"` : "";
@@ -4446,7 +4384,6 @@ function tdsSectionOptions(kind, selected) {
   ).join("");
 }
 
-
 function isBusinessAdmin() {
   const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
   // Show settings to admins; when role is unknown the backend still enforces access on save.
@@ -4457,10 +4394,6 @@ function isCaViewer() {
   const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
   return role === "ca_viewer";
 }
-
-
-
-
 
 function round2(value) {
   const n = Number(value);
@@ -4499,11 +4432,6 @@ function reversalPanel(kind, id, isoDate) {
   `;
 }
 
-
-
-
-
-
 function focusBusinessEntryField(selector) {
   setTimeout(() => {
     const field = document.querySelector(selector);
@@ -4512,23 +4440,6 @@ function focusBusinessEntryField(selector) {
     }
   }, 0);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // ========== Business Module: Typed Vouchers ==========
 
@@ -4588,7 +4499,6 @@ async function loadModuleContextForAccounts() {
   return lastModuleContext;
 }
 
-
 // Account selector helpers live in modules/workspaces/account-selector.js
 // Mixed document listeners (allocation + voucher amounts) remain below.
 
@@ -4639,7 +4549,6 @@ document.addEventListener("change", (event) => {
     selectBusinessAccount(fieldId, accountSelect.value);
   }
 });
-
 
 document.addEventListener("click", (event) => {
   const suggestion = event.target.closest(".account-suggestion-item");
@@ -4718,7 +4627,6 @@ document.addEventListener("keydown", (event) => {
   }
   renderJson(apiOutput, { create_voucher: result });
 }
-
 
 async function runChecks() {
   const activeAppKey = EXPERIENCE_APP_KEYS[currentExperience] || APP_KEY;
@@ -5017,7 +4925,6 @@ async function loadMandirDashboard() {
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: MANDIR — account options / create forms / posting dialogs
@@ -5882,7 +5789,6 @@ async function rejectOnboardingRequest(requestId) {
   renderJson(apiOutput, { reject_onboarding_request: result });
   await loadPlatformOwnerDashboard();
 }
-
 
 // ══════════════════════════════════════════════════════════════════════
 // SECTION: MANDIR — dialogs: drilldown / verification / rejection / cancel
