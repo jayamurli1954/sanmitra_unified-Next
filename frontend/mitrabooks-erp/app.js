@@ -501,6 +501,20 @@ import {
 } from "./modules/workspaces/shared-render-utils.js";
 
 import {
+  initBusinessEntryHelpers,
+  hasTdsSectionsCache,
+  loadTdsSections,
+  tdsSectionRate,
+  tdsSectionOptions,
+  isBusinessAdmin,
+  isCaViewer,
+  round2,
+  reversalDateBounds,
+  reversalPanel,
+  focusBusinessEntryField,
+} from "./modules/workspaces/business-entry-helpers.js";
+
+import {
   initManufacturing,
   mfgAccess,
   mfgTab,
@@ -1086,86 +1100,9 @@ const businessReportState = {
 // Print the currently rendered report by cloning its HTML into a clean window —
 // avoids fighting the app's global/screen CSS and works across browsers
 // (the user picks "Save as PDF" there too if they prefer a browser-rendered PDF).
-// TDS/TCS section masters from GET /business/tds/sections (cached per session).
-let tdsSectionsCache = null;
-async function loadTdsSections() {
-  if (tdsSectionsCache) return tdsSectionsCache;
-  const result = await apiRequest("mitrabooks", "/api/v1/business/tds/sections", { method: "GET" });
-  if (result.ok) tdsSectionsCache = result.payload;
-  return tdsSectionsCache;
-}
-
-function tdsSectionRate(kind, section) {
-  const rows = tdsSectionsCache?.[kind] || [];
-  const hit = rows.find((r) => r.section === section);
-  return hit ? Number(hit.rate) : 0;
-}
-
-function tdsSectionOptions(kind, selected) {
-  const rows = tdsSectionsCache?.[kind] || [];
-  const none = `<option value="">No ${kind === "tds" ? "TDS" : "TCS"}</option>`;
-  return none + rows.map((r) =>
-    `<option value="${escapeHtml(r.section)}" ${r.section === selected ? "selected" : ""}>${escapeHtml(`${r.section} · ${r.label} @ ${r.rate}%`)}</option>`
-  ).join("");
-}
-
-function isBusinessAdmin() {
-  const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
-  // Show settings to admins; when role is unknown the backend still enforces access on save.
-  return role === "" || role === "tenant_admin" || role === "super_admin";
-}
-
-function isCaViewer() {
-  const role = String(lastModuleContext?.role || lastModuleContext?.user_role || "").trim().toLowerCase();
-  return role === "ca_viewer";
-}
-
-function round2(value) {
-  const n = Number(value);
-  if (!isFinite(n)) return 0;
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
 // Reversal must stay within the document's GST month. Returns the date input
 // bounds + a sensible default (today if in-month, else month end).
-function reversalDateBounds(isoDate) {
-  const d = String(isoDate || todayIsoDate());
-  const ym = d.slice(0, 7);
-  const [y, m] = ym.split("-").map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
-  const start = `${ym}-01`;
-  const end = `${ym}-${String(lastDay).padStart(2, "0")}`;
-  const today = todayIsoDate();
-  const inMonth = today.slice(0, 7) === ym;
-  return { min: start, max: inMonth ? today : end, def: inMonth ? today : end, label: ym };
-}
-
-function reversalPanel(kind, id, isoDate) {
-  const b = reversalDateBounds(isoDate);
-  return `
-    <div class="reversal-panel">
-      <label>Reversal date
-        <input type="date" data-reversal-date value="${escapeHtml(b.def)}" min="${escapeHtml(b.min)}" max="${escapeHtml(b.max)}">
-      </label>
-      <div class="reversal-panel-actions">
-        <button class="primary" type="button" data-business-action="confirm-reverse-${kind}" data-${kind}-id="${escapeHtml(id)}">Confirm reverse</button>
-        <button class="secondary" type="button" data-business-action="cancel-reverse-${kind}">Cancel</button>
-      </div>
-      <p class="muted">Must be dated within the document's GST month (${escapeHtml(b.label)}). A reversing journal entry will be posted on this date.</p>
-      <p class="muted reversal-scope-note">Use reverse only to correct an entry made in error in the open period. For returns, price changes, or ITC reversal, raise a ${kind === "bill" ? "debit note" : "credit note"} instead (coming soon).</p>
-    </div>
-  `;
-}
-
-function focusBusinessEntryField(selector) {
-  setTimeout(() => {
-    const field = document.querySelector(selector);
-    if (field) {
-      field.focus();
-    }
-  }, 0);
-}
-
+// Business entry helpers live in modules/workspaces/business-entry-helpers.js
 // ========== Business Module: Typed Vouchers ==========
 
 let lastModuleContext = null;
@@ -1608,7 +1545,7 @@ initSalesInvoices({
   renderBusinessAttachmentPanel,
   listBusinessAttachments,
   getApiOutput: () => apiOutput,
-  hasTdsSectionsCache: () => !!tdsSectionsCache,
+  hasTdsSectionsCache,
 });
 
 // Wire purchase bills workspace (avoids import cycle with app.js)
@@ -1643,7 +1580,7 @@ initPurchaseBills({
   renderBusinessAttachmentPanel,
   listBusinessAttachments,
   getApiOutput: () => apiOutput,
-  hasTdsSectionsCache: () => !!tdsSectionsCache,
+  hasTdsSectionsCache,
 });
 
 // Wire credit notes workspace (avoids import cycle with app.js)
@@ -2806,6 +2743,14 @@ initAccountHelpers({
   hasTrustedSession,
   enabledModuleKeys,
   isBusinessTenantContext,
+});
+
+// Wire business entry helpers (avoids import cycle with app.js)
+initBusinessEntryHelpers({
+  apiRequest,
+  escapeHtml,
+  todayIsoDate,
+  getLastModuleContext: () => lastModuleContext,
 });
 
 initAccountSelector({
