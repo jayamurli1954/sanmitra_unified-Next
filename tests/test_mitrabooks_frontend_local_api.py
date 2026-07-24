@@ -510,13 +510,16 @@ def test_mitrabooks_phase_2a_data_health_panel_uses_existing_contracts() -> None
     loading_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
     ).read_text(encoding="utf-8")
+    settings_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "settings-workspace.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
     run_start = app_source.index("async function runChecks()")
     run_end = app_source.index("async function loadPlatformOwnerDashboard()", run_start)
     run_block = app_source[run_start:run_end]
-    settings_start = app_source.index("function renderMitraBooksSettingsWorkspace()")
-    settings_end = app_source.index("function renderProfessionalSuiteWorkspace()", settings_start)
-    settings_block = app_source[settings_start:settings_end]
+    settings_start = settings_source.index("function renderMitraBooksSettingsWorkspace()")
+    settings_end = settings_source.index("function renderProfessionalSuiteWorkspace()", settings_start)
+    settings_block = settings_source[settings_start:settings_end]
     dashboard_start = app_source.index('if (dashboard.type === "business"')
     dashboard_end = app_source.index("// ========== Business Module: Party Master", dashboard_start)
     business_dashboard_block = app_source[dashboard_start:dashboard_end]
@@ -642,19 +645,23 @@ def test_business_voucher_review_and_queue_use_business_routes() -> None:
 
 def test_mitrabooks_admin_settings_use_business_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    load_start = app_source.index("async function loadBusinessAdminSettings")
-    load_end = app_source.index("async function saveBusinessAdminSettingsSection", load_start)
-    load_block = app_source[load_start:load_end]
+    settings_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "settings-workspace.js"
+    ).read_text(encoding="utf-8")
+    load_start = settings_source.index("async function loadBusinessAdminSettings")
+    load_end = settings_source.index("async function saveBusinessAdminSettingsSection", load_start)
+    load_block = settings_source[load_start:load_end]
     save_start = load_end
-    save_end = app_source.index("function round2", save_start)
-    save_block = app_source[save_start:save_end]
+    save_end = len(settings_source)
+    save_block = settings_source[save_start:save_end]
 
-    assert '/api/v1/business/admin-settings' in load_block
-    assert '/api/v1/business/admin-settings' in save_block
+    assert "/api/v1/business/admin-settings" in load_block
+    assert "/api/v1/business/admin-settings" in save_block
     assert 'method: "GET"' in load_block
     assert 'method: "PUT"' in save_block
     assert 'JSON.parse(editor.value || "{}")' in save_block
-    assert 'buildBusinessAdminSettingsPayload(lastBusinessAdminSettings || {})' in save_block
+    assert "buildBusinessAdminSettingsPayload(lastBusinessAdminSettings || {})" in save_block
+    assert 'from "./modules/workspaces/settings-workspace.js"' in app_source
 
 
 def test_ca_practice_documents_use_attachment_api_routes() -> None:
