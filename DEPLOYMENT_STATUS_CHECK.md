@@ -41,9 +41,11 @@ Production: https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/
 - [ ] Vercel deployment triggered for the intended branch.
 - [ ] Vercel build completed successfully.
 - [ ] Custom domain resolves to the intended Vercel project.
+- [ ] `/mitrabooks-erp/` and `/mitrabooks-erp` redirect to `/mitrabooks-erp/landing.html`.
+- [ ] MitraBooks host root (`/`) redirects to `/mitrabooks-erp/landing.html`.
 - [ ] `/mitrabooks-erp/landing.html` loads.
 - [ ] About, Contact, Privacy Policy, and Terms of Use pages load.
-- [ ] Existing login page remains reachable.
+- [ ] Existing login page remains reachable at `/mitrabooks-erp/login.html` / `index.html`.
 - [ ] MitraBooks ERP shell loads after login.
 - [ ] Backend pricing endpoint returns the MitraBooks Free, Basic, Starter, and Growth plans.
 

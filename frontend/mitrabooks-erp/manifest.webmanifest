@@ -2,7 +2,7 @@
   "name": "MitraBooks Pro",
   "short_name": "MitraBooks",
   "description": "Premium PWA for unified accounting-heavy ERP workflows with offline support.",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
@@ -31,7 +31,7 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "Open MitraBooks dashboard",
-      "url": "./?view=dashboard",
+      "url": "./index.html?view=dashboard",
       "icons": [
         {
           "src": "../assets/brand/mitrabooks-pro-logo.png",
@@ -43,7 +43,7 @@
       "name": "Create Voucher",
       "short_name": "New Voucher",
       "description": "Create a new accounting voucher",
-      "url": "./?view=vouchers",
+      "url": "./index.html?view=vouchers",
       "icons": [
         {
           "src": "../assets/brand/mitrabooks-pro-logo.png",

@@ -9,12 +9,21 @@ test.describe('Global SanMitra public smoke', () => {
     await expect(page.getByText(/pre-deployment testing against the unified backend/i)).toBeVisible();
   });
 
-  test('mitrabooks entrypoint opens the login shell', async ({ page }) => {
+  test('mitrabooks entrypoint opens the public landing page', async ({ page }) => {
     await page.goto('/');
 
     await page.getByRole('link', { name: 'Open' }).first().click();
 
-    await expect(page).toHaveURL(/\/mitrabooks-erp\/?$/);
+    await expect(page).toHaveURL(/\/mitrabooks-erp\/landing\.html$/);
+    await expect(page.getByRole('heading', { name: 'MitraBooks', exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'MitraBooks sections' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Login$/i }).first()).toBeVisible();
+  });
+
+  test('mitrabooks login shell remains reachable', async ({ page }) => {
+    await page.goto('/mitrabooks-erp/login.html');
+
+    await expect(page).toHaveURL(/\/mitrabooks-erp\/(login\.html|index\.html)/);
     await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible();
     await expect(page.locator('#brand-title')).toContainText('MitraBooks');
   });

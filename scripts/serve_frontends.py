@@ -4,6 +4,7 @@ import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class LocalFrontendHandler(SimpleHTTPRequestHandler):
@@ -14,6 +15,15 @@ class LocalFrontendHandler(SimpleHTTPRequestHandler):
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
         super().end_headers()
+
+    def do_GET(self) -> None:
+        path = urlsplit(self.path).path.rstrip("/")
+        if path == "/mitrabooks-erp":
+            self.send_response(302)
+            self.send_header("Location", "/mitrabooks-erp/landing.html")
+            self.end_headers()
+            return
+        super().do_GET()
 
 
 def main() -> None:
@@ -29,7 +39,8 @@ def main() -> None:
 
     print(f"Serving SanMitra frontends from {frontend_root}")
     print(f"Index: http://{args.host}:{args.port}/")
-    print(f"MitraBooks ERP: http://{args.host}:{args.port}/mitrabooks-erp/")
+    print(f"MitraBooks landing: http://{args.host}:{args.port}/mitrabooks-erp/")
+    print(f"MitraBooks login: http://{args.host}:{args.port}/mitrabooks-erp/login.html")
     print(f"LegalMitra: http://{args.host}:{args.port}/legalmitra/")
     print("Press Ctrl+C to stop.")
 

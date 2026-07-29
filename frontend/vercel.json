@@ -12,7 +12,12 @@
     },
     {
       "source": "/mitrabooks-erp",
-      "destination": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
+      "permanent": false
+    },
+    {
+      "source": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
       "permanent": false
     },
     {
@@ -41,7 +46,7 @@
       "has": [
         { "type": "host", "value": "www.mitrabooks.sanmitratech.in" }
       ],
-      "destination": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
       "permanent": false
     },
     {
@@ -49,7 +54,7 @@
       "has": [
         { "type": "host", "value": "mitrabooks.sanmitratech.in" }
       ],
-      "destination": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
       "permanent": false
     },
     {
@@ -57,7 +62,7 @@
       "has": [
         { "type": "host", "value": "staging.mitrabooks.sanmitratech.in" }
       ],
-      "destination": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
       "permanent": false
     },
     {
@@ -65,7 +70,7 @@
       "has": [
         { "type": "host", "value": "mitrabooks-erp-staging.vercel.app" }
       ],
-      "destination": "/mitrabooks-erp/",
+      "destination": "/mitrabooks-erp/landing.html",
       "permanent": false
     },
     {
@@ -118,6 +123,10 @@
       "destination": "/mitrabooks-erp/login.html"
     },
     {
+      "source": "/mitrabooks-erp/landing",
+      "destination": "/mitrabooks-erp/landing.html"
+    },
+    {
       "source": "/mitrabooks-erp/:path((?!.*\\.).*)",
       "destination": "/mitrabooks-erp/index.html"
     },
@@ -141,6 +150,12 @@
     },
     {
       "source": "/mitrabooks-erp/login.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/mitrabooks-erp/landing.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]

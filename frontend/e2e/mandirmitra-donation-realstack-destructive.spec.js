@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+﻿const { test, expect } = require('@playwright/test');
 
 const expectedDemoTenantId = (process.env.MANDIRMITRA_DEMO_TENANT_ID || '').trim();
 const email = process.env.MANDIRMITRA_E2E_USER_EMAIL || '';
@@ -9,6 +9,12 @@ const hundiMakerEmail = process.env.MANDIRMITRA_E2E_MAKER_EMAIL || '';
 const hundiMakerPassword = process.env.MANDIRMITRA_E2E_MAKER_PASSWORD || '';
 const baseUrl = (process.env.E2E_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || '').replace(/\/+$/, '');
 const apiBaseUrl = (process.env.E2E_API_BASE_URL || '').replace(/\/+$/, '');
+
+function shellUrl() {
+  if (!baseUrl) return '/mitrabooks-erp/index.html';
+  if (/\/mitrabooks-erp$/i.test(baseUrl)) return `${baseUrl}/index.html`;
+  return baseUrl;
+}
 
 function safeUrl(value) {
   try {
@@ -133,7 +139,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     approverToken = await login(page);
     makerToken = await login(page, hundiMakerEmail, hundiMakerPassword);
     approverId = await assertDemoIdentity(page, approverToken, 'Approver');
@@ -145,11 +151,11 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
   });
 
   test('creates a donation receipt, reports it, and reverses it safely', async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const token = await login(page);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -210,7 +216,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
 
   test('maker-checker approves, reports, settles, and idempotently retries a receipt refund', async ({ page }) => {
     test.skip(!hundiMakerEmail || !hundiMakerPassword, 'Set distinct MandirMitra maker credentials.');
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const approverToken = await login(page);
     const makerToken = await login(page, hundiMakerEmail, hundiMakerPassword);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -290,7 +296,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
   });
 
   test('books a paid seva, reports it, and reverses the receipt safely', async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const token = await login(page);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -351,7 +357,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
   });
 
   test('posts validated fund and festival sponsorship designations and reports them', async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const token = await login(page);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -403,7 +409,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
 
   test('counts, maker-checker posts, reports, and reverses a hundi opening', async ({ page }) => {
     test.skip(!hundiMakerEmail || !hundiMakerPassword, 'Set distinct MandirMitra Hundi maker credentials.');
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const approverToken = await login(page);
     const makerToken = await login(page, hundiMakerEmail, hundiMakerPassword);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -463,7 +469,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
 
   test('maker-checker transfers between fund subledgers and reverses safely', async ({ page }) => {
     test.skip(!hundiMakerEmail || !hundiMakerPassword, 'Set distinct MandirMitra maker credentials.');
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const approverToken = await login(page);
     const makerToken = await login(page, hundiMakerEmail, hundiMakerPassword);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -558,7 +564,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
 
   test('maker-checker values in-kind stock, issues it, and reverses both movements', async ({ page }) => {
     test.skip(!hundiMakerEmail || !hundiMakerPassword, 'Set distinct MandirMitra maker credentials.');
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const approverToken = await login(page);
     const makerToken = await login(page, hundiMakerEmail, hundiMakerPassword);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -667,7 +673,7 @@ test.describe('MandirMitra donation destructive real-stack demo E2E', () => {
   });
 
   test('guards tenant 80G readiness and FCRA designated-account acceptance', async ({ page }) => {
-    await page.goto(baseUrl || '/mitrabooks-erp/');
+    await page.goto(shellUrl());
     const token = await login(page);
     const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const today = new Date().toISOString().slice(0, 10);
