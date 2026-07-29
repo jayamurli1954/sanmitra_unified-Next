@@ -2619,12 +2619,14 @@ test.describe('MitraBooks ERP static shell', () => {
     await Promise.all([
       page.waitForResponse(response =>
         response.url().includes('/api/v1/business/ca-documents') &&
+        !response.url().includes('/attachments') &&
         response.request().method() === 'POST'
       ),
-      caDocumentForm.evaluate(form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))),
+      caDocumentForm.getByRole('button', { name: 'Add Document Metadata' }).click(),
     ]);
-    await expect(page.locator('.erp-workspace-panel')).toContainText('Book primary');
-    await expect(page.locator('.erp-workspace-panel')).toContainText('attachment(s)');
+    await expect(page.locator('#login-status')).toContainText(/Document metadata added|attachment\(s\)/i, { timeout: 20000 });
+    await expect(page.locator('.ca-document-status-table')).toContainText('Book primary', { timeout: 20000 });
+    await expect(page.locator('.ca-document-status-table')).toContainText('attachment(s)');
 
     await page.locator('nav#nav a[data-business-workspace="sales"]').click();
     await page.keyboard.press('Control+Alt+I');
@@ -2919,11 +2921,13 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('[data-mandir-create-form="donation"] input[name="is_foreign_contribution"]')).toBeEnabled();
 
     await page.locator('nav#nav a[data-mandir-workspace="reports"]').click();
-    await expect(page.getByRole('heading', { name: '80G Readiness' })).toBeVisible();
+    await expect(page.locator('.mandir-dashboard h3')).toHaveText('Reports', { timeout: 30000 });
+    await expect(page.getByRole('heading', { name: 'MandirMitra Reports' })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('heading', { name: '80G Readiness' })).toBeVisible({ timeout: 30000 });
     await expect(page.locator('.mandir-dashboard')).toContainText('*****6789L');
     await expect(page.locator('.mandir-dashboard')).not.toContainText('PQRST6789L');
     await expect(page.locator('.mandir-dashboard')).toContainText('not an official certificate or filing');
-    await expect(page.getByRole('heading', { name: 'FCRA Readiness' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'FCRA Readiness' })).toBeVisible({ timeout: 20000 });
     await expect(page.getByRole('heading', { name: 'Fund and Inventory Drill-down' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Fund Subledger' })).toBeVisible();
     await expect(page.locator('.mandir-dashboard')).toContainText('Annadanam');

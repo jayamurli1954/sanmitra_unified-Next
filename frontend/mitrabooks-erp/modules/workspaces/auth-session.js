@@ -518,8 +518,10 @@ export async function signInWithPassword() {
 
 
 export function isPasswordRecoveryPanelOpen() {
-  const forgotOpen = Boolean(forgotPasswordForm && !forgotPasswordForm.hasAttribute("hidden"));
-  const resetOpen = Boolean(resetPasswordForm && !resetPasswordForm.hasAttribute("hidden"));
+  const forgotForm = document.getElementById("forgot-password-form") || forgotPasswordForm;
+  const resetForm = document.getElementById("reset-password-form") || resetPasswordForm;
+  const forgotOpen = Boolean(forgotForm && !forgotForm.hasAttribute("hidden"));
+  const resetOpen = Boolean(resetForm && !resetForm.hasAttribute("hidden"));
   return forgotOpen || resetOpen;
 }
 
@@ -527,10 +529,14 @@ export function setAuthPanelMode(mode) {
   const normalized = mode === "forgot" || mode === "reset" ? mode : "login";
   const title = document.getElementById("access-title");
   const copy = document.getElementById("access-copy");
-  const loginForm = document.getElementById("login-form");
+  // Resolve forms from the live DOM so panel mode works even before initAuthSession
+  // binds module refs (e.g. ?action=reset boot path).
+  const loginForm = document.getElementById("login-form") || null;
+  const forgotForm = document.getElementById("forgot-password-form") || forgotPasswordForm || null;
+  const resetForm = document.getElementById("reset-password-form") || resetPasswordForm || null;
   loginForm?.toggleAttribute("hidden", normalized !== "login");
-  forgotPasswordForm?.toggleAttribute("hidden", normalized !== "forgot");
-  resetPasswordForm?.toggleAttribute("hidden", normalized !== "reset");
+  forgotForm?.toggleAttribute("hidden", normalized !== "forgot");
+  resetForm?.toggleAttribute("hidden", normalized !== "reset");
   if (title) {
     title.textContent = normalized === "forgot"
       ? "Reset password"

@@ -133,20 +133,14 @@ export async function loadCaPracticeDocuments(options = {}) {
         caDocumentAttachmentState = { document_id: "", client_name: "", items: [], loading: false };
       }
     }
-    if (rerender && getCurrentExperience() === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || getActiveBusinessWorkspace() === "ca-access")) {
-      getDashboardPreview().innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-      if (getActiveBusinessWorkspace() === "ca-access") {
-        getDashboardPreview().innerHTML = renderBusinessWorkspace();
-      }
+    if (rerender) {
+      rerenderCaPracticeIfActive();
     }
   } else {
     lastCaDocuments = [];
     setLoginStatus("warn", "Unable to load CA documents", statusDetailText(result.payload?.detail) || `Document metadata request failed with HTTP ${result.status}.`);
-    if (rerender && getCurrentExperience() === "mitrabooks" && (activeOrgSelectorType() === "CA_PRACTICE" || getActiveBusinessWorkspace() === "ca-access")) {
-      getDashboardPreview().innerHTML = renderDashboardPreview(experienceConfig.mitrabooks);
-      if (getActiveBusinessWorkspace() === "ca-access") {
-        getDashboardPreview().innerHTML = renderBusinessWorkspace();
-      }
+    if (rerender) {
+      rerenderCaPracticeIfActive();
     }
   }
   renderJson(getApiOutput(), { ca_documents: { ok: result.ok, status: result.status, count: lastCaDocuments.length, detail: result.payload?.detail || null } });
@@ -232,24 +226,27 @@ export async function createCaPracticeDocument(form) {
         loading: false,
       };
     }
+    setLoginStatus(
+      "ok",
+      "Document metadata added",
+      `${result.payload?.client_name || "Client"} is now in the CA review queue.`,
+    );
     await loadCaPracticeDocuments();
     let uploadResults = [];
     if (documentId) {
       if (selectedFiles.length) {
         uploadResults = await uploadBusinessAttachmentFiles("ca_document", documentId, selectedFiles);
-        await loadCaPracticeDocuments({ rerender: false });
+        await loadCaPracticeDocuments({ rerender: true });
       }
       await loadCaDocumentAttachments(documentId, result.payload?.client_name || payload.client_name);
     }
     const successCount = uploadResults.filter((item) => item.ok).length;
     const failureCount = uploadResults.length - successCount;
-    if (!uploadResults.length) {
-      setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} is now in the CA review queue.`);
-    } else if (failureCount === 0) {
+    if (uploadResults.length && failureCount === 0) {
       setLoginStatus("ok", "Document metadata added", `${result.payload?.client_name || "Client"} was created with ${successCount} attachment(s).`);
-    } else if (successCount > 0) {
+    } else if (uploadResults.length && successCount > 0) {
       setLoginStatus("warn", "Document added with partial file upload", `${successCount} attachment(s) uploaded and ${failureCount} failed. Refresh the file panel for details.`);
-    } else {
+    } else if (uploadResults.length) {
       setLoginStatus("warn", "Document added but files failed", `${result.payload?.client_name || "Client"} was created, but the attachment upload failed.`);
     }
   } else {

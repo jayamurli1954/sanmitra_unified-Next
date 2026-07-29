@@ -4,6 +4,9 @@
 // Pure move: logic unchanged. Shell deps injected via initMandirOperationalReports(...).
 // ====================================================================
 
+import { accountingDrilldownState } from "./accounting-drilldown.js";
+import { formatCountLabel } from "./shared-render-utils.js";
+
 /** @type {Record<string, Function> | null} */
 let deps = null;
 

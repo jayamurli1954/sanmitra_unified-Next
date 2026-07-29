@@ -793,24 +793,26 @@ function installEventHandlers() {
       return;
     }
     event.preventDefault();
-    if (mandirForm) {
-      deps.submitMandirCreateForm(mandirForm);
-    } else if (mandirComplianceForm) {
-      deps.submitMandirComplianceForm(mandirComplianceForm);
-    } else if (caClientForm) {
-      deps.createCaClient(caClientForm);
-    } else if (caDocumentForm) {
-      deps.createCaPracticeDocument(caDocumentForm);
-    } else if (caFilterForm) {
-      const formData = new FormData(caFilterForm);
-      deps.caPracticeFilters = {
-        status: String(formData.get("status") || "").trim(),
-        client_name: String(formData.get("client_name") || "").trim(),
-        assigned_to: String(formData.get("assigned_to") || "").trim(),
-        priority: String(formData.get("priority") || "").trim(),
-      };
-      deps.loadCaPracticeDocuments();
-    }
+    void (async () => {
+      if (mandirForm) {
+        await deps.submitMandirCreateForm(mandirForm);
+      } else if (mandirComplianceForm) {
+        await deps.submitMandirComplianceForm(mandirComplianceForm);
+      } else if (caClientForm) {
+        await deps.createCaClient(caClientForm);
+      } else if (caDocumentForm) {
+        await deps.createCaPracticeDocument(caDocumentForm);
+      } else if (caFilterForm) {
+        const formData = new FormData(caFilterForm);
+        deps.caPracticeFilters = {
+          status: String(formData.get("status") || "").trim(),
+          client_name: String(formData.get("client_name") || "").trim(),
+          assigned_to: String(formData.get("assigned_to") || "").trim(),
+          priority: String(formData.get("priority") || "").trim(),
+        };
+        await deps.loadCaPracticeDocuments();
+      }
+    })();
   });
   deps.entitlementForm.addEventListener("submit", (event) => {
     event.preventDefault();

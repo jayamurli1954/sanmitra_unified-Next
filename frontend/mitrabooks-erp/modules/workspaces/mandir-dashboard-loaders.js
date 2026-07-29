@@ -61,6 +61,8 @@ function setLastMandirOperationalReports(value) { requireDeps().setLastMandirOpe
 function getLastMandirReceipt() { return requireDeps().getLastMandirReceipt(); }
 function getLastMandirFormResult() { return requireDeps().getLastMandirFormResult(); }
 
+let mandirDashboardLoadGeneration = 0;
+
 export async function showMandirSplash() {
   if (!mandirSplash) {
     return;
@@ -106,6 +108,7 @@ export function hideMandirSplash() {
 }
 
 export async function loadMandirDashboard() {
+  const loadGeneration = ++mandirDashboardLoadGeneration;
   const reportRangeQuery = buildQueryString({
     from_date: accountingDrilldownState.from_date,
     to_date: accountingDrilldownState.to_date,
@@ -153,6 +156,9 @@ export async function loadMandirDashboard() {
     apiRequest("mandirmitra", "/api/v1/inventory/consumptions", { method: "GET" }),
     loadAccountingDrilldownResult(),
   ]);
+  if (loadGeneration !== mandirDashboardLoadGeneration) {
+    return;
+  }
   if (paymentAccounts.ok) {
     setLastMandirPaymentAccounts(paymentAccounts.payload || { cash_accounts: [], bank_accounts: [] });
   }
@@ -221,6 +227,9 @@ export async function loadMandirDashboard() {
     accounting_drilldown: accountingDrilldown,
   });
   const hasLiveData = stats.ok || pendingPayments.ok || paymentExceptions.ok || donations.ok || sevaBookings.ok;
+  if (loadGeneration !== mandirDashboardLoadGeneration) {
+    return;
+  }
   dashboardPreview.innerHTML = renderMandirDashboard({
     stats: stats.ok ? stats.payload : {},
     pending_payments: pendingPayments.ok && Array.isArray(pendingPayments.payload) ? pendingPayments.payload : [],

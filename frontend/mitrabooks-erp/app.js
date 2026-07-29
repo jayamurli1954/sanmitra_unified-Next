@@ -1199,12 +1199,6 @@ resetPasswordForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   await completePasswordReset();
 });
-if (pendingPasswordResetToken) {
-  setAuthPanelMode("reset");
-  setLoginStatus("warn", "Reset link opened", "Enter a new password to complete the reset.");
-} else {
-  setAuthPanelMode("login");
-}
 
 // Fired by api-client when silent token refresh fails — show clean login screen
 window.addEventListener("auth-session-expired", () => {
@@ -2257,6 +2251,14 @@ initAuthSession({
   runChecks,
   delay,
 });
+
+// Apply auth panel mode only after initAuthSession so form refs are bound.
+if (pendingPasswordResetToken) {
+  setAuthPanelMode("reset");
+  setLoginStatus("warn", "Reset link opened", "Enter a new password to complete the reset.");
+} else {
+  setAuthPanelMode("login");
+}
 
 initBusinessReportsHub({
   escapeHtml,
