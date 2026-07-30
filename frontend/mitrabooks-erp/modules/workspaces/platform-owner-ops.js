@@ -106,20 +106,34 @@ export function openTenantEntitlementsDialog(button) {
   entitlementStatus.value = currentStatus;
   entitlementStatus.dataset.currentStatus = currentStatus;
   const hrAddonAvailable = button.getAttribute("data-hr-addon-available") === "1";
-  // Show the HR add-on provisioning toggle only for MitraBooks (business) tenants.
+  const costCentreAddonAvailable = button.getAttribute("data-cost-centre-addon-available") === "1";
+  const manufacturingAddonAvailable = button.getAttribute("data-manufacturing-addon-available") === "1";
+  // Enterprise add-on provisioning toggles — MitraBooks (business) tenants only.
   const isBusiness = String(organizationType || "").toUpperCase() === "BUSINESS";
-  const hrToggle = isBusiness ? `
-    <label class="checkbox-option" style="margin-top:10px;border-top:1px solid var(--border,#333);padding-top:10px;">
-      <input type="checkbox" id="entitlement-hr-addon" ${hrAddonAvailable ? "checked" : ""}>
-      <span><strong>HR &amp; Payroll add-on</strong> (enterprise) — provision for this tenant</span>
-    </label>` : "";
+  const enterpriseAddonToggles = isBusiness ? `
+    <div class="enterprise-addon-toggles" style="margin-top:10px;border-top:1px solid var(--border,#333);padding-top:10px;display:grid;gap:8px;">
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-hr-addon" ${hrAddonAvailable ? "checked" : ""}>
+        <span><strong>HR &amp; Payroll add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-cost-centre-addon" ${costCentreAddonAvailable ? "checked" : ""}>
+        <span><strong>Cost-Centre Accounting add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-manufacturing-addon" ${manufacturingAddonAvailable ? "checked" : ""}>
+        <span><strong>Manufacturing add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+    </div>` : "";
   entitlementModules.innerHTML = availableModules.map((moduleKey) => `
     <label class="checkbox-option">
       <input type="checkbox" value="${escapeHtml(moduleKey)}" ${currentModules.has(moduleKey) ? "checked" : ""}>
       <span>${escapeHtml(moduleKey)}</span>
     </label>
-  `).join("") + hrToggle;
+  `).join("") + enterpriseAddonToggles;
   entitlementModules.dataset.hrInitial = hrAddonAvailable ? "1" : "0";
+  entitlementModules.dataset.costCentreInitial = costCentreAddonAvailable ? "1" : "0";
+  entitlementModules.dataset.manufacturingInitial = manufacturingAddonAvailable ? "1" : "0";
 
   entitlementDialog.showModal();
 }
@@ -129,7 +143,7 @@ export async function submitTenantEntitlements() {
   const subscriptionPlan = entitlementPlan.value;
   const tenantStatus = entitlementStatus.value;
   const currentTenantStatus = entitlementStatus.dataset.currentStatus || "active";
-  const enabledModules = Array.from(entitlementModules.querySelectorAll("input:checked"))
+  const enabledModules = Array.from(entitlementModules.querySelectorAll('input[type="checkbox"][value]:checked'))
     .map((input) => input.value)
     .filter(Boolean);
   if (!tenantId || enabledModules.length === 0) {
@@ -156,8 +170,10 @@ export async function submitTenantEntitlements() {
     }),
   });
 
-  // Provision / revoke the HR add-on if its toggle changed (super_admin only).
+  // Provision / revoke enterprise add-ons if toggles changed (super_admin only).
   let hrResult = null;
+  let costCentreResult = null;
+  let manufacturingResult = null;
   const hrCheckbox = document.getElementById("entitlement-hr-addon");
   if (hrCheckbox) {
     const hrWanted = !!hrCheckbox.checked;
@@ -169,8 +185,36 @@ export async function submitTenantEntitlements() {
       });
     }
   }
+  const costCentreCheckbox = document.getElementById("entitlement-cost-centre-addon");
+  if (costCentreCheckbox) {
+    const wanted = !!costCentreCheckbox.checked;
+    const initial = entitlementModules.dataset.costCentreInitial === "1";
+    if (wanted !== initial) {
+      costCentreResult = await apiRequest(getAppKey(), `/api/v1/platform-owner/tenants/${encodeURIComponent(tenantId)}/addon/cost-centre`, {
+        method: "PUT",
+        body: JSON.stringify({ available: wanted }),
+      });
+    }
+  }
+  const manufacturingCheckbox = document.getElementById("entitlement-manufacturing-addon");
+  if (manufacturingCheckbox) {
+    const wanted = !!manufacturingCheckbox.checked;
+    const initial = entitlementModules.dataset.manufacturingInitial === "1";
+    if (wanted !== initial) {
+      manufacturingResult = await apiRequest(getAppKey(), `/api/v1/platform-owner/tenants/${encodeURIComponent(tenantId)}/addon/manufacturing`, {
+        method: "PUT",
+        body: JSON.stringify({ available: wanted }),
+      });
+    }
+  }
 
-  renderJson(apiOutput, { update_tenant_status: statusResult, update_tenant_entitlements: result, hr_addon: hrResult });
+  renderJson(apiOutput, {
+    update_tenant_status: statusResult,
+    update_tenant_entitlements: result,
+    hr_addon: hrResult,
+    cost_centre_addon: costCentreResult,
+    manufacturing_addon: manufacturingResult,
+  });
   entitlementDialog.close();
   await loadPlatformOwnerDashboard();
 }

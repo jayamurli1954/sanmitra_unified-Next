@@ -19,8 +19,8 @@ from app.config import get_settings
 from app.core.audit.service import ensure_audit_indexes
 from app.core.onboarding.service import ensure_onboarding_indexes
 from app.core.tenants.context import InvalidAppKeyError, TenantContextMiddleware
-from app.core.tenants.service import ensure_seed_tenant, set_hr_addon_available
-from app.modules.business.service import set_hr_enabled
+from app.core.tenants.service import ensure_seed_tenant, set_addon_available, set_hr_addon_available
+from app.modules.business.service import set_hr_enabled, set_module_enabled
 from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
@@ -146,24 +146,44 @@ async def on_startup() -> None:
                     settings.DEMO_MITRABOOKS_TENANT_ID,
                     seeded_count,
                 )
-                # Auto-provision + enable the HR/Payroll add-on for the demo tenant
-                # so the demo workspace is usable out of the box (real tenants are
-                # provisioned via Platform Owner -> Entitlements).
+                # Auto-provision + enable enterprise add-ons for the demo tenant so
+                # client demos work out of the box (real tenants use Platform Owner).
                 if seeded_count:
+                    demo_tenant_id = settings.DEMO_MITRABOOKS_TENANT_ID
+                    demo_app_key = "mitrabooks"
+                    demo_entity = "primary"
                     try:
                         await set_hr_addon_available(
-                            tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID, available=True, updated_by="system",
+                            tenant_id=demo_tenant_id, available=True, updated_by="system",
                         )
                         await set_hr_enabled(
-                            tenant_id=settings.DEMO_MITRABOOKS_TENANT_ID, app_key="mitrabooks",
-                            accounting_entity_id="primary", enabled=True, updated_by="system",
+                            tenant_id=demo_tenant_id, app_key=demo_app_key,
+                            accounting_entity_id=demo_entity, enabled=True, updated_by="system",
+                        )
+                        await set_addon_available(
+                            tenant_id=demo_tenant_id, flag="cost_centre_addon_available",
+                            available=True, updated_by="system",
+                        )
+                        await set_addon_available(
+                            tenant_id=demo_tenant_id, flag="manufacturing_addon_available",
+                            available=True, updated_by="system",
+                        )
+                        await set_module_enabled(
+                            tenant_id=demo_tenant_id, app_key=demo_app_key,
+                            accounting_entity_id=demo_entity, flag="cost_centre_enabled",
+                            enabled=True, updated_by="system",
+                        )
+                        await set_module_enabled(
+                            tenant_id=demo_tenant_id, app_key=demo_app_key,
+                            accounting_entity_id=demo_entity, flag="manufacturing_enabled",
+                            enabled=True, updated_by="system",
                         )
                         _startup_logger.info(
-                            "HR add-on auto-provisioned + enabled for demo tenant=%s",
-                            settings.DEMO_MITRABOOKS_TENANT_ID,
+                            "Enterprise add-ons auto-provisioned + enabled for demo tenant=%s",
+                            demo_tenant_id,
                         )
                     except Exception as exc:  # pragma: no cover - best-effort demo convenience
-                        _startup_logger.warning("HR demo provisioning skipped: %s", exc)
+                        _startup_logger.warning("Demo enterprise add-on provisioning skipped: %s", exc)
             else:
                 _startup_logger.warning(
                     "MitraBooks demo admin bootstrap skipped: DEMO_MITRABOOKS_ADMIN_PASSWORD is not set"

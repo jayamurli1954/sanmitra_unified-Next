@@ -63,6 +63,8 @@ def _compact_tenant(row: dict[str, Any]) -> dict[str, Any]:
         "subscription_plan": str(row.get("subscription_plan") or "free").strip().lower() or "free",
         "subscription_status": str(row.get("subscription_status") or row.get("status") or "active").strip().lower(),
         "hr_addon_available": bool(row.get("hr_addon_available", False)),
+        "cost_centre_addon_available": bool(row.get("cost_centre_addon_available", False)),
+        "manufacturing_addon_available": bool(row.get("manufacturing_addon_available", False)),
         "updated_at": row.get("updated_at"),
     }
 
