@@ -35,7 +35,10 @@ tmp/
 .tmp.driveupload/
 .deploy-staging/
 .deploy-staging-v35/
-data/
+# Ignore data contents but keep committed LegalMitra seed registries.
+data/*
+!data/legal_seed/
+!data/legal_seed/**
 .pgdata/
 *.log
 

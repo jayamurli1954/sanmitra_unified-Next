@@ -13,11 +13,16 @@ from fastapi import BackgroundTasks
 from app.config import get_settings
 from app.db.mongo import get_collection
 from app.modules.legal_compat.offline_fallbacks import offline_legal_fallback as _offline_legal_fallback
+from app.modules.legal_compat.quality_gate import apply_research_trust_layers
 from app.modules.legal_compat.response_contract import (
     finalize_research_response,
     insufficient_sources_response,
     missing_jurisdiction_response,
     resolve_jurisdiction,
+)
+from app.modules.legal_compat.statute_normalize import (
+    CANONICAL_STATUTE_CROSSWALK as _CANONICAL_STATUTE_CROSSWALK,
+    normalize_verified_statute_mappings,
 )
 
 _logger = logging.getLogger(__name__)
@@ -420,85 +425,8 @@ End with: **Legal Position:** Settled Law / Divergent Views / Res Integra.
 }
 
 
-_CANONICAL_STATUTE_CROSSWALK = """\
-CANONICAL STATUTE CROSSWALK - MUST VERIFY BEFORE FINAL ANSWER
-1. CrPC Section 482 (saving of inherent powers of High Court; FIR/proceeding quashing) maps to BNSS Section 528.
-   - Do NOT map CrPC Section 482 to BNSS Section 504, 538, or any other BNSS section.
-2. IPC Section 420 (cheating and dishonestly inducing delivery of property) maps broadly to BNS Section 318.
-3. If the answer discusses FIR quashing, inherent powers, civil dispute dressed as cheating, matrimonial settlement quashing, or abuse of process, use BNSS Section 528 for the inherent-powers route.
-4. If unsure about a new-code section number, say verification is required instead of inventing a number.
-5. NI Act Section 138 territorial jurisdiction:
-   - If the cheque is delivered for collection through an account, apply NI Act Section 142(2)(a): jurisdiction is generally where the payee/holder's bank branch is situated.
-   - If the cheque is presented otherwise than through an account, apply NI Act Section 142(2)(b): jurisdiction is generally where the drawee bank branch is situated.
-   - Do NOT state a blanket drawee-bank-only rule after the 2015 amendment.
-"""
-
-_WRONG_BNSS_482_PATTERNS = [
-    re.compile(r"\bSection\s+504\s+BNSS\b", re.IGNORECASE),
-    re.compile(r"\bBNSS\s+Section\s+504\b", re.IGNORECASE),
-    re.compile(r"\bSection\s+538\s+BNSS\b", re.IGNORECASE),
-    re.compile(r"\bBNSS\s+Section\s+538\b", re.IGNORECASE),
-]
-_SECTION_138_EXCLUSIVE_DRAWEE_BANK_PATTERN = re.compile(
-    r"(must|shall|only|exclusively).{0,80}(filed|jurisdiction|court).{0,120}drawee\s+bank",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _references_crpc_482_or_inherent_quashing(text: str) -> bool:
-    lower = (text or "").lower()
-    return (
-        "section 482" in lower
-        or "crpc 482" in lower
-        or ("inherent power" in lower and ("quash" in lower or "quashing" in lower))
-        or ("saving of inherent powers" in lower and "high court" in lower)
-    )
-
-
-def normalize_verified_statute_mappings(response_text: str, query: str = "") -> str:
-    """Apply deterministic high-risk statute crosswalk corrections.
-
-    LegalMitra cannot allow model/RAG drift on well-known replacement mappings.
-    The corrected text keeps the user's answer usable while explicitly flagging
-    that a statutory citation was normalized by the verification layer.
-    """
-    if not response_text:
-        return response_text
-
-    haystack = f"{query}\n{response_text}"
-
-    corrected = response_text
-    changed = False
-
-    if _references_crpc_482_or_inherent_quashing(haystack):
-        for pattern in _WRONG_BNSS_482_PATTERNS:
-            corrected, count = pattern.subn("Section 528 BNSS", corrected)
-            changed = changed or count > 0
-
-    if changed and "CrPC Section 482 maps to BNSS Section 528" not in corrected:
-        corrected += (
-            "\n\n> [!CAUTION]\n"
-            "> **Statute Verification:** CrPC Section 482 maps to BNSS Section 528 "
-            "for saving of inherent powers of the High Court. Any generated reference "
-            "to BNSS Section 504 or 538 for this route has been normalized."
-        )
-
-    lower_haystack = haystack.lower()
-    if (
-        ("section 138" in lower_haystack or "cheque" in lower_haystack or "dishonour" in lower_haystack)
-        and _SECTION_138_EXCLUSIVE_DRAWEE_BANK_PATTERN.search(corrected)
-        and "NI Act Section 138 territorial jurisdiction" not in corrected
-    ):
-        corrected += (
-            "\n\n> [!CAUTION]\n"
-            "> **Statute Verification:** NI Act Section 142(2) distinguishes cheque "
-            "delivery through an account from direct presentation. For collection "
-            "through the payee/holder's account, jurisdiction is generally where the "
-            "payee/holder's bank branch is situated; drawee-bank jurisdiction applies "
-            "where the cheque is presented otherwise than through an account."
-        )
-
-    return corrected
+# Statute crosswalk + normalizer live in statute_normalize.py (BNSS 504 is real;
+# only CrPC-482→BNSS-504 inherent-powers mis-maps are rewritten to BNSS 528).
 
 
 def _build_rag_context_block(citations: list[dict[str, Any]]) -> str:
@@ -799,16 +727,18 @@ def _finalize_offline_or_payload(
     jurisdiction: str | None,
     missing_jurisdiction: bool = False,
 ) -> dict[str, Any]:
-    return finalize_research_response(
-        question=question,
-        response=str(payload.get("response") or ""),
-        citations=list(payload.get("citations") or []),
-        strategy=str(payload.get("strategy") or "offline"),
-        provider=payload.get("provider"),
-        note=payload.get("note"),
-        dropped_citation_count=int(payload.get("dropped_citation_count") or 0),
-        jurisdiction=jurisdiction,
-        missing_jurisdiction=missing_jurisdiction,
+    return apply_research_trust_layers(
+        finalize_research_response(
+            question=question,
+            response=str(payload.get("response") or ""),
+            citations=list(payload.get("citations") or []),
+            strategy=str(payload.get("strategy") or "offline"),
+            provider=payload.get("provider"),
+            note=payload.get("note"),
+            dropped_citation_count=int(payload.get("dropped_citation_count") or 0),
+            jurisdiction=jurisdiction,
+            missing_jurisdiction=missing_jurisdiction,
+        )
     )
 
 
@@ -843,9 +773,11 @@ async def build_hybrid_legal_response(
     )
 
     if missing_jurisdiction:
-        return missing_jurisdiction_response(
-            question=current_query,
-            dropped_citation_count=len(dropped_citations),
+        return apply_research_trust_layers(
+            missing_jurisdiction_response(
+                question=current_query,
+                dropped_citation_count=len(dropped_citations),
+            )
         )
 
     if _FABRICATION_REQUEST_RE.search(current_query or ""):
@@ -855,11 +787,13 @@ async def build_hybrid_legal_response(
             app_key,
             query_preview,
         )
-        return insufficient_sources_response(
-            question=current_query,
-            jurisdiction=jurisdiction,
-            dropped_citation_count=len(dropped_citations),
-            note="Refused fabrication / unpublished-authority request under Stage 2 contract.",
+        return apply_research_trust_layers(
+            insufficient_sources_response(
+                question=current_query,
+                jurisdiction=jurisdiction,
+                dropped_citation_count=len(dropped_citations),
+                note="Refused fabrication / unpublished-authority request under Stage 2 contract.",
+            )
         )
 
     # Enqueue low-confidence queries for background sync regardless of provider outcome.
@@ -912,10 +846,12 @@ async def build_hybrid_legal_response(
             tenant_id,
             app_key,
         )
-        return insufficient_sources_response(
-            question=current_query,
-            jurisdiction=jurisdiction,
-            dropped_citation_count=len(dropped_citations),
+        return apply_research_trust_layers(
+            insufficient_sources_response(
+                question=current_query,
+                jurisdiction=jurisdiction,
+                dropped_citation_count=len(dropped_citations),
+            )
         )
 
     today_ist = _now_ist().strftime("%d-%m-%Y")
@@ -943,15 +879,17 @@ async def build_hybrid_legal_response(
             "hybrid_response path=claude_legal_counsel tenant=%s app=%s format=%s response_len=%d",
             tenant_id, app_key, format_mode, len(response_text),
         )
-        return finalize_research_response(
-            question=current_query,
-            response=response_text,
-            citations=relevant_citations,
-            strategy=f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
-            provider="claude_legal_counsel",
-            note=None,
-            dropped_citation_count=len(dropped_citations),
-            jurisdiction=jurisdiction,
+        return apply_research_trust_layers(
+            finalize_research_response(
+                question=current_query,
+                response=response_text,
+                citations=relevant_citations,
+                strategy=f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
+                provider="claude_legal_counsel",
+                note=None,
+                dropped_citation_count=len(dropped_citations),
+                jurisdiction=jurisdiction,
+            )
         )
 
     gemini_answer = await _call_gemini_text(
@@ -968,15 +906,17 @@ async def build_hybrid_legal_response(
             "hybrid_response path=gemini tenant=%s app=%s format=%s response_len=%d",
             tenant_id, app_key, format_mode, len(response_text),
         )
-        return finalize_research_response(
-            question=current_query,
-            response=response_text,
-            citations=relevant_citations,
-            strategy=f"{str(rag_result.get('strategy') or 'rag')}_gemini",
-            provider="gemini",
-            note=None,
-            dropped_citation_count=len(dropped_citations),
-            jurisdiction=jurisdiction,
+        return apply_research_trust_layers(
+            finalize_research_response(
+                question=current_query,
+                response=response_text,
+                citations=relevant_citations,
+                strategy=f"{str(rag_result.get('strategy') or 'rag')}_gemini",
+                provider="gemini",
+                note=None,
+                dropped_citation_count=len(dropped_citations),
+                jurisdiction=jurisdiction,
+            )
         )
 
     # Providers unavailable — use authorized offline fallback when available.
@@ -996,26 +936,28 @@ async def build_hybrid_legal_response(
         "hybrid_response path=provider_unavailable tenant=%s app=%s (no API key or empty response)",
         tenant_id, app_key,
     )
-    return finalize_research_response(
-        question=current_query,
-        response=(
-            "**Advisory Unavailable**\n\n"
-            "The AI engine did not return a response for this query. "
-            "Retrieved sources were available, but generation failed.\n\n"
-            "**Suggested action:** Retry the query, narrow the scope, "
-            "or route to a junior for manual research."
-        ),
-        citations=relevant_citations,
-        strategy="provider_unavailable",
-        provider=None,
-        note="AI engine did not respond — retry or rephrase the query.",
-        dropped_citation_count=len(dropped_citations),
-        jurisdiction=jurisdiction,
-        confidence="low",
-        limitations=[
-            "Generation provider failed despite retrieved sources.",
-            "Manual review of retrieved citations is required.",
-        ],
+    return apply_research_trust_layers(
+    finalize_research_response(
+            question=current_query,
+            response=(
+                "**Advisory Unavailable**\n\n"
+                "The AI engine did not return a response for this query. "
+                "Retrieved sources were available, but generation failed.\n\n"
+                "**Suggested action:** Retry the query, narrow the scope, "
+                "or route to a junior for manual research."
+            ),
+            citations=relevant_citations,
+            strategy="provider_unavailable",
+            provider=None,
+            note="AI engine did not respond — retry or rephrase the query.",
+            dropped_citation_count=len(dropped_citations),
+            jurisdiction=jurisdiction,
+            confidence="low",
+            limitations=[
+                "Generation provider failed despite retrieved sources.",
+                "Manual review of retrieved citations is required.",
+            ],
+        )
     )
 
 

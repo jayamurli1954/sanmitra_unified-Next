@@ -22,6 +22,7 @@ Do not treat this file as a substitute for the PRD. If product intent and this s
 | `D:\Download\LegalMitra_Vision_Implementation_Blueprint.docx` | Working vision (July 2026) |
 | `docs/prd/SANMITRA_UNIFIED_PLATFORM_PRD.md` | Platform scope; LegalMitra separation; Claude gating |
 | `docs/architecture/LEGALMITRA_RAG_RESPONSE_CONTRACT.md` | Research response field contract |
+| `docs/architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md` | Planned Stage 2.1 quality gate + citation audit (patterns only) |
 | `docs/architecture/LEGALMITRA_TEMPLATE_ENGINE.md` | Launch-grade template rules |
 | `docs/architecture/LEGALMITRA_BLOG_EDITORIAL_STANDARD.md` | Insights editorial rules |
 | `docs/architecture/MODULE_REGISTRY.md` | Modules `legal`, `rag`, `compliance`, `legal_ai` |

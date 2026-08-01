@@ -154,6 +154,10 @@ Remaining gaps after Stage 2 foundation work:
   GST Section 54 family; expand to Income Tax slice next).
 - UI affordances for confidence/limitations/human-review are present on the
   research answer card; deeper workspace surfaces still pending.
+- Named **Quality Gate** + statute-first **Citation Audit** (claim ↔ source
+  tri-state outcomes) are planned as Stage 2.1 — see
+  `docs/architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md`.
+  Not yet implemented.
 
 ## Implementation Sequence
 

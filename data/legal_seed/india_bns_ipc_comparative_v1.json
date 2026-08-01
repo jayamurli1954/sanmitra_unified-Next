@@ -1,0 +1,5444 @@
+{
+  "version": "1.0",
+  "title": "BNS ↔ IPC Corresponding Section Table (machine extract)",
+  "source_pdf": "202406281710564823BNS_IPC_Comparative.pdf",
+  "source_note": "Extracted for LegalMitra deterministic lookup. Verify against Bare Acts / NCRB Sankalan before filing. Not a substitute for human review.",
+  "counts": {
+    "total_rows": 543,
+    "mapped": 508,
+    "new": 18,
+    "repealed": 17
+  },
+  "rows": [
+    {
+      "from_code": "IPC",
+      "from_section": "1",
+      "to_code": "BNS",
+      "to_section": "1",
+      "relation": "equivalent",
+      "subject": "Short title, commencement and application. 1(1)",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "1(2)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "2",
+      "to_code": "BNS",
+      "to_section": "1(3)",
+      "relation": "renumbered",
+      "subject": "Punishment of offences committed within India.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "3",
+      "to_code": "BNS",
+      "to_section": "1(4)",
+      "relation": "renumbered",
+      "subject": "Punishment of offences committed beyond, but which by law may be tried within, India.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "4",
+      "to_code": "BNS",
+      "to_section": "1(5)",
+      "relation": "renumbered",
+      "subject": "Extension of Code to extra-territorial offences.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "5",
+      "to_code": "BNS",
+      "to_section": "1(6)",
+      "relation": "renumbered",
+      "subject": "Certain laws not to be affected by this Act.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "33",
+      "to_code": "BNS",
+      "to_section": "2(1)",
+      "relation": "renumbered",
+      "subject": "‘act’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "47",
+      "to_code": "BNS",
+      "to_section": "2(2)",
+      "relation": "renumbered",
+      "subject": "‘animal’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "2(3)",
+      "relation": "new",
+      "subject": "‘child’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "28",
+      "to_code": "BNS",
+      "to_section": "2(4)",
+      "relation": "renumbered",
+      "subject": "‘counterfeit’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "20",
+      "to_code": "BNS",
+      "to_section": "2(5)",
+      "relation": "renumbered",
+      "subject": "‘Court’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "46",
+      "to_code": "BNS",
+      "to_section": "2(6)",
+      "relation": "renumbered",
+      "subject": "‘death’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "24",
+      "to_code": "BNS",
+      "to_section": "2(7)",
+      "relation": "renumbered",
+      "subject": "‘dishonestly’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "29",
+      "to_code": "BNS",
+      "to_section": "2(8)",
+      "relation": "renumbered",
+      "subject": "‘document’ (Change)",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "29A",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“Electronic record”.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "25",
+      "to_code": "BNS",
+      "to_section": "2(9)",
+      "relation": "renumbered",
+      "subject": "’fraudulently’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "8",
+      "to_code": "BNS",
+      "to_section": "2(10)",
+      "relation": "renumbered",
+      "subject": "‘gender’ (Change)",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "52",
+      "to_code": "BNS",
+      "to_section": "2(11)",
+      "relation": "renumbered",
+      "subject": "‘good faith’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "17",
+      "to_code": "BNS",
+      "to_section": "2(12)",
+      "relation": "renumbered",
+      "subject": "‘Government’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "18",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“India”.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "52A",
+      "to_code": "BNS",
+      "to_section": "2(13)",
+      "relation": "renumbered",
+      "subject": "‘harbour’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "44",
+      "to_code": "BNS",
+      "to_section": "2(14)",
+      "relation": "renumbered",
+      "subject": "‘injury’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "43",
+      "to_code": "BNS",
+      "to_section": "2(15)",
+      "relation": "renumbered",
+      "subject": "‘illegal’and “legally bound to do”.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "19",
+      "to_code": "BNS",
+      "to_section": "2(16)",
+      "relation": "renumbered",
+      "subject": "‘Judge’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "45",
+      "to_code": "BNS",
+      "to_section": "2(17)",
+      "relation": "renumbered",
+      "subject": "‘life’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "42",
+      "to_code": "BNS",
+      "to_section": "2(18)",
+      "relation": "renumbered",
+      "subject": "‘local law’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "10",
+      "to_code": "BNS",
+      "to_section": "2(19)",
+      "relation": "renumbered",
+      "subject": "‘man’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "49",
+      "to_code": "BNS",
+      "to_section": "2(20)",
+      "relation": "renumbered",
+      "subject": "‘month’ and ‘year’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "22",
+      "to_code": "BNS",
+      "to_section": "2(21)",
+      "relation": "renumbered",
+      "subject": "‘movable property’ (Change)",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "9",
+      "to_code": "BNS",
+      "to_section": "2(22)",
+      "relation": "renumbered",
+      "subject": "‘number’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "51",
+      "to_code": "BNS",
+      "to_section": "2(23)",
+      "relation": "renumbered",
+      "subject": "‘oath’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "40",
+      "to_code": "BNS",
+      "to_section": "2(24)",
+      "relation": "renumbered",
+      "subject": "‘offence’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "33",
+      "to_code": "BNS",
+      "to_section": "2(25)",
+      "relation": "renumbered",
+      "subject": "‘omission’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "11",
+      "to_code": "BNS",
+      "to_section": "2(26)",
+      "relation": "renumbered",
+      "subject": "‘person’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "12",
+      "to_code": "BNS",
+      "to_section": "2(27)",
+      "relation": "renumbered",
+      "subject": "‘public’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "21",
+      "to_code": "BNS",
+      "to_section": "2(28)",
+      "relation": "renumbered",
+      "subject": "‘public servant’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "26",
+      "to_code": "BNS",
+      "to_section": "2(29)",
+      "relation": "renumbered",
+      "subject": "‘reason to believe’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "50",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“Section”.",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "41",
+      "to_code": "BNS",
+      "to_section": "2(30)",
+      "relation": "renumbered",
+      "subject": "‘special law’",
+      "source_page": 1,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "30",
+      "to_code": "BNS",
+      "to_section": "2(31)",
+      "relation": "renumbered",
+      "subject": "‘valuable security’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "48",
+      "to_code": "BNS",
+      "to_section": "2(32)",
+      "relation": "renumbered",
+      "subject": "‘vessel’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "39",
+      "to_code": "BNS",
+      "to_section": "2(33)",
+      "relation": "renumbered",
+      "subject": "‘voluntarily’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "31",
+      "to_code": "BNS",
+      "to_section": "2(34)",
+      "relation": "renumbered",
+      "subject": "‘will’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "10",
+      "to_code": "BNS",
+      "to_section": "2(35)",
+      "relation": "renumbered",
+      "subject": "‘woman’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "23",
+      "to_code": "BNS",
+      "to_section": "2(36)",
+      "relation": "renumbered",
+      "subject": "‘wrongful gain’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "23",
+      "to_code": "BNS",
+      "to_section": "2(37)",
+      "relation": "renumbered",
+      "subject": "‘wrongful loss’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "23",
+      "to_code": "BNS",
+      "to_section": "2(38)",
+      "relation": "renumbered",
+      "subject": "‘gaining wrongfully’ and ‘losing wrongfully’",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "2(39)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "6",
+      "to_code": "BNS",
+      "to_section": "3",
+      "relation": "renumbered",
+      "subject": "General explanations 3(1)",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "7",
+      "to_code": "BNS",
+      "to_section": "3(2)",
+      "relation": "renumbered",
+      "subject": "Sense of expression once explained.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "27",
+      "to_code": "BNS",
+      "to_section": "3(3)",
+      "relation": "renumbered",
+      "subject": "Property in possession of wife, clerk or servant.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "32",
+      "to_code": "BNS",
+      "to_section": "3(4)",
+      "relation": "renumbered",
+      "subject": "Words referring to acts include illegal omissions.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "34",
+      "to_code": "BNS",
+      "to_section": "3(5)",
+      "relation": "renumbered",
+      "subject": "Acts done by several persons in furtherance of common intention.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "35",
+      "to_code": "BNS",
+      "to_section": "3(6)",
+      "relation": "renumbered",
+      "subject": "When such an act is criminal by reason of its being done with a criminal knowledge or intention.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "36",
+      "to_code": "BNS",
+      "to_section": "3(7)",
+      "relation": "renumbered",
+      "subject": "Effect caused partly by act and partly by omission.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "37",
+      "to_code": "BNS",
+      "to_section": "3(8)",
+      "relation": "renumbered",
+      "subject": "Co-operation by doing one of several acts constituting an offence.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "38",
+      "to_code": "BNS",
+      "to_section": "3(9)",
+      "relation": "renumbered",
+      "subject": "Persons concerned in criminal act may be guilty of different offences.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "53",
+      "to_code": "BNS",
+      "to_section": "4",
+      "relation": "renumbered",
+      "subject": "Punishments. (Change)",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "53A",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Construction of reference to transportation.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "54",
+      "to_code": "BNS",
+      "to_section": "5",
+      "relation": "renumbered",
+      "subject": "Commutation of sentence. 5(a)",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "55",
+      "to_code": "BNS",
+      "to_section": "5(b)",
+      "relation": "renumbered",
+      "subject": "Commutation of sentence of imprisonment for life.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "57",
+      "to_code": "BNS",
+      "to_section": "6",
+      "relation": "renumbered",
+      "subject": "Fractions of terms of punishment.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "60",
+      "to_code": "BNS",
+      "to_section": "7",
+      "relation": "renumbered",
+      "subject": "Sentence may be (in certain cases of imprisonment) wholly or partly rigorous or simple.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "63",
+      "to_code": "BNS",
+      "to_section": "8",
+      "relation": "renumbered",
+      "subject": "Amount of fine, liability in default of payment of fine, etc. (Change) 8(1)",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "64",
+      "to_code": "BNS",
+      "to_section": "8(2)",
+      "relation": "renumbered",
+      "subject": "Sentence of imprisonment for non-payment of fine.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "65",
+      "to_code": "BNS",
+      "to_section": "8(3)",
+      "relation": "renumbered",
+      "subject": "Limit to imprisonment for non-payment of fine, when imprisonment and fine awardable.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "66",
+      "to_code": "BNS",
+      "to_section": "8(4)",
+      "relation": "renumbered",
+      "subject": "Description of imprisonment for non-payment of fine.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "67",
+      "to_code": "BNS",
+      "to_section": "8(5)",
+      "relation": "renumbered",
+      "subject": "Imprisonment for non-payment of fine, when offence punishable with fine only.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "68",
+      "to_code": "BNS",
+      "to_section": "8(6)(a)",
+      "relation": "renumbered",
+      "subject": "Imprisonment to terminate on payment of fine.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "69",
+      "to_code": "BNS",
+      "to_section": "8(6)(b)",
+      "relation": "renumbered",
+      "subject": "Termination of imprisonment on payment of proportional part of fine.",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "70",
+      "to_code": "BNS",
+      "to_section": "8(7)",
+      "relation": "renumbered",
+      "subject": "Fine leviable within six years, of during imprisonment. Death not to discharge property from",
+      "source_page": 2,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "71",
+      "to_code": "BNS",
+      "to_section": "9",
+      "relation": "renumbered",
+      "subject": "Limit of punishment of offence made up of several offences.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "72",
+      "to_code": "BNS",
+      "to_section": "10",
+      "relation": "renumbered",
+      "subject": "Punishment of person guilty of one of several offences, judgment stating that it is doubtful of which.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "73",
+      "to_code": "BNS",
+      "to_section": "11",
+      "relation": "renumbered",
+      "subject": "Solitary confinement.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "74",
+      "to_code": "BNS",
+      "to_section": "12",
+      "relation": "renumbered",
+      "subject": "Limit of solitary confinement.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "75",
+      "to_code": "BNS",
+      "to_section": "13",
+      "relation": "renumbered",
+      "subject": "Enhanced punishment for certain offences after previous conviction.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "76",
+      "to_code": "BNS",
+      "to_section": "14",
+      "relation": "renumbered",
+      "subject": "Act done by a person bound, or by mistake of fact believing himself bound, by law.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "77",
+      "to_code": "BNS",
+      "to_section": "15",
+      "relation": "renumbered",
+      "subject": "Act of Judge when acting judicially.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "78",
+      "to_code": "BNS",
+      "to_section": "16",
+      "relation": "renumbered",
+      "subject": "Act done pursuant to judgment or order of Court.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "79",
+      "to_code": "BNS",
+      "to_section": "17",
+      "relation": "renumbered",
+      "subject": "Act done by a person justified, or by mistake of fact believing himself justified, by law.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "80",
+      "to_code": "BNS",
+      "to_section": "18",
+      "relation": "renumbered",
+      "subject": "Accident in doing a lawful act.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "81",
+      "to_code": "BNS",
+      "to_section": "19",
+      "relation": "renumbered",
+      "subject": "Act likely to cause harm, but done without criminal intent, and to prevent other harm.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "82",
+      "to_code": "BNS",
+      "to_section": "20",
+      "relation": "renumbered",
+      "subject": "Act of a child under seven years of age.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "83",
+      "to_code": "BNS",
+      "to_section": "21",
+      "relation": "renumbered",
+      "subject": "Act of a child above seven and under twelve years of age of immature understanding.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "84",
+      "to_code": "BNS",
+      "to_section": "22",
+      "relation": "renumbered",
+      "subject": "Act of a person of unsound mind.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "85",
+      "to_code": "BNS",
+      "to_section": "23",
+      "relation": "renumbered",
+      "subject": "Act of a person incapable of judgment by reason of intoxication caused against his will.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "86",
+      "to_code": "BNS",
+      "to_section": "24",
+      "relation": "renumbered",
+      "subject": "Offence requiring a particular intent or knowledge committed by one who is intoxicated.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "87",
+      "to_code": "BNS",
+      "to_section": "25",
+      "relation": "renumbered",
+      "subject": "Act not intended and not known to be likely to cause death or grievous hurt, done by consent.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "88",
+      "to_code": "BNS",
+      "to_section": "26",
+      "relation": "renumbered",
+      "subject": "Act not intended to cause death, done by consent in good faith for person’s benefit.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "89",
+      "to_code": "BNS",
+      "to_section": "27",
+      "relation": "renumbered",
+      "subject": "Act done in good faith for benefit of child or person of unsound mind, by or by consent of guardian.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "90",
+      "to_code": "BNS",
+      "to_section": "28",
+      "relation": "renumbered",
+      "subject": "Consent known to be given under fear or misconception.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "91",
+      "to_code": "BNS",
+      "to_section": "29",
+      "relation": "renumbered",
+      "subject": "Exclusion of acts which are offences independently of harm caused.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "92",
+      "to_code": "BNS",
+      "to_section": "30",
+      "relation": "renumbered",
+      "subject": "Act done in good faith for benefit of a person without consent.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "93",
+      "to_code": "BNS",
+      "to_section": "31",
+      "relation": "renumbered",
+      "subject": "Communication made in good faith.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "94",
+      "to_code": "BNS",
+      "to_section": "32",
+      "relation": "renumbered",
+      "subject": "Act to which a person is compelled by threats.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "95",
+      "to_code": "BNS",
+      "to_section": "33",
+      "relation": "renumbered",
+      "subject": "Act causing slight harm.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "96",
+      "to_code": "BNS",
+      "to_section": "34",
+      "relation": "renumbered",
+      "subject": "Things done in private defence.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "97",
+      "to_code": "BNS",
+      "to_section": "35",
+      "relation": "renumbered",
+      "subject": "Right of private defence of body and of property.",
+      "source_page": 3,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "98",
+      "to_code": "BNS",
+      "to_section": "36",
+      "relation": "renumbered",
+      "subject": "Right of private defence against act of a person of unsound mind, etc.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "99",
+      "to_code": "BNS",
+      "to_section": "37",
+      "relation": "renumbered",
+      "subject": "Acts against which there is no right of private defence.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "100",
+      "to_code": "BNS",
+      "to_section": "38",
+      "relation": "renumbered",
+      "subject": "When right of private defence of body extends to causing death.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "101",
+      "to_code": "BNS",
+      "to_section": "39",
+      "relation": "renumbered",
+      "subject": "When such right extends to causing any harm other than death.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "102",
+      "to_code": "BNS",
+      "to_section": "40",
+      "relation": "renumbered",
+      "subject": "Commencement and continuance of right of private defence of body.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "103",
+      "to_code": "BNS",
+      "to_section": "41",
+      "relation": "renumbered",
+      "subject": "When right of private defence of property extends to causing death.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "104",
+      "to_code": "BNS",
+      "to_section": "42",
+      "relation": "renumbered",
+      "subject": "When such right extends to causing any harm other than death.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "105",
+      "to_code": "BNS",
+      "to_section": "43",
+      "relation": "renumbered",
+      "subject": "Commencement and continuance of right of private defence of property.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "106",
+      "to_code": "BNS",
+      "to_section": "44",
+      "relation": "renumbered",
+      "subject": "Right of private defence against deadly assault when there is risk of harm to innocent person.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "107",
+      "to_code": "BNS",
+      "to_section": "45",
+      "relation": "renumbered",
+      "subject": "Abetment of a thing.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "108",
+      "to_code": "BNS",
+      "to_section": "46",
+      "relation": "renumbered",
+      "subject": "Abettor.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "108A",
+      "to_code": "BNS",
+      "to_section": "47",
+      "relation": "renumbered",
+      "subject": "Abetment in India of offences outside India.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "48",
+      "relation": "new",
+      "subject": "Abetment outside India for offence in India.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "109",
+      "to_code": "BNS",
+      "to_section": "49",
+      "relation": "renumbered",
+      "subject": "Punishment of abetment if act abetted is committed in consequence and where no express provision is made for its punishment.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "110",
+      "to_code": "BNS",
+      "to_section": "50",
+      "relation": "renumbered",
+      "subject": "Punishment of abetment if person abetted does act with different intention from that of abettor.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "111",
+      "to_code": "BNS",
+      "to_section": "51",
+      "relation": "renumbered",
+      "subject": "Liability of abettor when one act abetted and different act done.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "112",
+      "to_code": "BNS",
+      "to_section": "52",
+      "relation": "renumbered",
+      "subject": "Abettor when liable to cumulative punishment for act abetted and for act done.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "113",
+      "to_code": "BNS",
+      "to_section": "53",
+      "relation": "renumbered",
+      "subject": "Liability of abettor for an effect caused by act abetted different from that intended by abettor.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "114",
+      "to_code": "BNS",
+      "to_section": "54",
+      "relation": "renumbered",
+      "subject": "Abettor present when offence is committed.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "115",
+      "to_code": "BNS",
+      "to_section": "55",
+      "relation": "renumbered",
+      "subject": "Abetment of offence punishable with death or imprisonment for life.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "116",
+      "to_code": "BNS",
+      "to_section": "56",
+      "relation": "renumbered",
+      "subject": "Abetment of offence punishable with imprisonment.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "117",
+      "to_code": "BNS",
+      "to_section": "57",
+      "relation": "renumbered",
+      "subject": "Abetting commission of offence by public or by more than ten persons. (Change)",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "118",
+      "to_code": "BNS",
+      "to_section": "58",
+      "relation": "renumbered",
+      "subject": "Concealing design to commit offence punishable with death or imprisonment for life.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "119",
+      "to_code": "BNS",
+      "to_section": "59",
+      "relation": "renumbered",
+      "subject": "Public servant concealing design to commit offence which it is his duty to prevent.",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "120",
+      "to_code": "BNS",
+      "to_section": "60",
+      "relation": "renumbered",
+      "subject": "Concealing design to commit offence",
+      "source_page": 4,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "120A",
+      "to_code": "BNS",
+      "to_section": "61",
+      "relation": "renumbered",
+      "subject": "Criminal conspiracy. 61(1)",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "120B",
+      "to_code": "BNS",
+      "to_section": "61(2)",
+      "relation": "renumbered",
+      "subject": "Punishment of criminal conspiracy.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "511",
+      "to_code": "BNS",
+      "to_section": "62",
+      "relation": "renumbered",
+      "subject": "Punishment for attempting to commit offences punishable with imprisonment for life or other imprisonment.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "375",
+      "to_code": "BNS",
+      "to_section": "63",
+      "relation": "renumbered",
+      "subject": "Rape.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376",
+      "to_code": "BNS",
+      "to_section": "64",
+      "relation": "renumbered",
+      "subject": "Punishment for rape.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376(3)",
+      "to_code": "BNS",
+      "to_section": "65",
+      "relation": "renumbered",
+      "subject": "Punishment for rape in certain cases. 65(1)",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376A",
+      "to_code": "BNS",
+      "to_section": "66",
+      "relation": "renumbered",
+      "subject": "Punishment for causing death or resulting in persistent vegetative state of victim.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376B",
+      "to_code": "BNS",
+      "to_section": "67",
+      "relation": "renumbered",
+      "subject": "Sexual intercourse by husband upon his wife during separation.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376C",
+      "to_code": "BNS",
+      "to_section": "68",
+      "relation": "renumbered",
+      "subject": "Sexual intercourse by a person in authority.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "69",
+      "relation": "new",
+      "subject": "Sexual intercourse by employing deceitful means etc.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376D",
+      "to_code": "BNS",
+      "to_section": "70",
+      "relation": "renumbered",
+      "subject": "Gang rape. 70(1)",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "376E",
+      "to_code": "BNS",
+      "to_section": "71",
+      "relation": "renumbered",
+      "subject": "Punishment for repeat offenders.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "377",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Unnatural Offences",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "228A",
+      "to_code": "BNS",
+      "to_section": "72",
+      "relation": "renumbered",
+      "subject": "Disclosure of identity of victim of certain offences, etc.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "228A(3)",
+      "to_code": "BNS",
+      "to_section": "73",
+      "relation": "renumbered",
+      "subject": "Printing or publishing of any matter relating to Court proceedings without permission.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "354",
+      "to_code": "BNS",
+      "to_section": "74",
+      "relation": "renumbered",
+      "subject": "Assault or use of criminal force to woman with intent to outrage her modesty.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "354A",
+      "to_code": "BNS",
+      "to_section": "75",
+      "relation": "renumbered",
+      "subject": "Sexual harassment.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "354B",
+      "to_code": "BNS",
+      "to_section": "76",
+      "relation": "renumbered",
+      "subject": "Assault or use of criminal force to woman with intent to disrobe. (Change)",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "354C",
+      "to_code": "BNS",
+      "to_section": "77",
+      "relation": "renumbered",
+      "subject": "Voyeurism. (Change)",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "354D",
+      "to_code": "BNS",
+      "to_section": "78",
+      "relation": "renumbered",
+      "subject": "Stalking.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "509",
+      "to_code": "BNS",
+      "to_section": "79",
+      "relation": "renumbered",
+      "subject": "Word, gesture or act intended to insult modesty of a woman.",
+      "source_page": 5,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "304B",
+      "to_code": "BNS",
+      "to_section": "80",
+      "relation": "renumbered",
+      "subject": "Dowry death.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "493",
+      "to_code": "BNS",
+      "to_section": "81",
+      "relation": "renumbered",
+      "subject": "Cohabitation caused by man deceitfully inducing belief of lawful marriage.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "494",
+      "to_code": "BNS",
+      "to_section": "82",
+      "relation": "renumbered",
+      "subject": "Marrying again during lifetime of husband or wife. 82(1)",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "495",
+      "to_code": "BNS",
+      "to_section": "82(2)",
+      "relation": "renumbered",
+      "subject": "Same offence with concealment of former marriage from person with whom subsequent marriage is contracted.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "496",
+      "to_code": "BNS",
+      "to_section": "83",
+      "relation": "renumbered",
+      "subject": "Marriage ceremony fraudulently gone through without lawful marriage.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "497",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Adultery",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "498",
+      "to_code": "BNS",
+      "to_section": "84",
+      "relation": "renumbered",
+      "subject": "Enticing or taking away or detaining with criminal intent a married woman.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "498A",
+      "to_code": "BNS",
+      "to_section": "85",
+      "relation": "renumbered",
+      "subject": "Husband or relative of husband of a woman subjecting her to cruelty.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "498A",
+      "to_code": "BNS",
+      "to_section": "86",
+      "relation": "renumbered",
+      "subject": "Cruelty Defined",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "366",
+      "to_code": "BNS",
+      "to_section": "87",
+      "relation": "renumbered",
+      "subject": "Kidnapping, abducting or inducing woman to compel her marriage, etc.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "312",
+      "to_code": "BNS",
+      "to_section": "88",
+      "relation": "renumbered",
+      "subject": "Causing miscarriage.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "313",
+      "to_code": "BNS",
+      "to_section": "89",
+      "relation": "renumbered",
+      "subject": "Causing miscarriage without woman’s consent.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "314",
+      "to_code": "BNS",
+      "to_section": "90",
+      "relation": "renumbered",
+      "subject": "Death caused by act done with intent to cause miscarriage.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "315",
+      "to_code": "BNS",
+      "to_section": "91",
+      "relation": "renumbered",
+      "subject": "Act done with intent to prevent child being born alive or to cause to die after birth.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "316",
+      "to_code": "BNS",
+      "to_section": "92",
+      "relation": "renumbered",
+      "subject": "Causing death of quick unborn child by act amounting to culpable homicide.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "317",
+      "to_code": "BNS",
+      "to_section": "93",
+      "relation": "renumbered",
+      "subject": "Exposure and abandonment of child under twelve years, by parent or person having care of it.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "318",
+      "to_code": "BNS",
+      "to_section": "94",
+      "relation": "renumbered",
+      "subject": "Concealment of birth by secret disposal of dead body.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "95",
+      "relation": "new",
+      "subject": "Hiring, employing or engaging a child to commit an offence.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "366A",
+      "to_code": "BNS",
+      "to_section": "96",
+      "relation": "renumbered",
+      "subject": "Procuration of child.",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "369",
+      "to_code": "BNS",
+      "to_section": "97",
+      "relation": "renumbered",
+      "subject": "Kidnapping or abducting child under ten years",
+      "source_page": 6,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "372",
+      "to_code": "BNS",
+      "to_section": "98",
+      "relation": "renumbered",
+      "subject": "Selling child for purposes of prostitution, etc.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "373",
+      "to_code": "BNS",
+      "to_section": "99",
+      "relation": "renumbered",
+      "subject": "Buying child for purposes of prostitution, etc. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "299",
+      "to_code": "BNS",
+      "to_section": "100",
+      "relation": "renumbered",
+      "subject": "Culpable homicide.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "300",
+      "to_code": "BNS",
+      "to_section": "101",
+      "relation": "renumbered",
+      "subject": "Murder.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "301",
+      "to_code": "BNS",
+      "to_section": "102",
+      "relation": "renumbered",
+      "subject": "Culpable homicide by causing death of person other than person whose death was intended.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "302",
+      "to_code": "BNS",
+      "to_section": "103",
+      "relation": "renumbered",
+      "subject": "Punishment for murder. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "303",
+      "to_code": "BNS",
+      "to_section": "104",
+      "relation": "renumbered",
+      "subject": "Punishment for murder by life-convict. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "304",
+      "to_code": "BNS",
+      "to_section": "105",
+      "relation": "renumbered",
+      "subject": "Punishment for culpable homicide not amounting to murder. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "304A",
+      "to_code": "BNS",
+      "to_section": "106",
+      "relation": "renumbered",
+      "subject": "Causing death by negligence. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "106(2)(Section106(2)",
+      "relation": "new",
+      "subject": "of BNS shall not come into force on 1st July 2024)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "305",
+      "to_code": "BNS",
+      "to_section": "107",
+      "relation": "renumbered",
+      "subject": "Abetment of suicide of child or person of unsound mind.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "306",
+      "to_code": "BNS",
+      "to_section": "108",
+      "relation": "renumbered",
+      "subject": "Abetment of suicide.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "307",
+      "to_code": "BNS",
+      "to_section": "109",
+      "relation": "renumbered",
+      "subject": "Attempt to murder. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "308",
+      "to_code": "BNS",
+      "to_section": "110",
+      "relation": "renumbered",
+      "subject": "Attempt to commit culpable homicide.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "111",
+      "relation": "new",
+      "subject": "Organised crime",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "112",
+      "relation": "new",
+      "subject": "Petty organised crime.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "113",
+      "relation": "new",
+      "subject": "Terrorist act.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "319",
+      "to_code": "BNS",
+      "to_section": "114",
+      "relation": "renumbered",
+      "subject": "Hurt.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "321",
+      "to_code": "BNS",
+      "to_section": "115",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt. (Change) 115(1)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "323",
+      "to_code": "BNS",
+      "to_section": "115(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for voluntarily causing hurt.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "320",
+      "to_code": "BNS",
+      "to_section": "116",
+      "relation": "renumbered",
+      "subject": "Grievous hurt. (Change)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "322",
+      "to_code": "BNS",
+      "to_section": "117",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt. (Change) 117(1)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "325",
+      "to_code": "BNS",
+      "to_section": "117(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for voluntarily causing grievous hurt.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "324",
+      "to_code": "BNS",
+      "to_section": "118",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt or grievous hurt by dangerous weapons or means. (Change) 118(1)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "326",
+      "to_code": "BNS",
+      "to_section": "118(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt by dangerous weapons or means.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "327",
+      "to_code": "BNS",
+      "to_section": "119",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt or grievous hurt to extort property, or to constrain to an illegal act. 119(1)",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "329",
+      "to_code": "BNS",
+      "to_section": "119(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt to extort property, or to constrain to an illegal act.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "330",
+      "to_code": "BNS",
+      "to_section": "120(1)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt to extort confession, or to compel restoration of property.",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "331",
+      "to_code": "BNS",
+      "to_section": "120(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt to extort",
+      "source_page": 7,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "332",
+      "to_code": "BNS",
+      "to_section": "121",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt or grievous hurt to deter public servant from his duty. (Change) 121(1)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "333",
+      "to_code": "BNS",
+      "to_section": "121(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt to deter public servant from his duty.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "334",
+      "to_code": "BNS",
+      "to_section": "122",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt or grievous hurt on provocation. (Change) 122(1)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "335",
+      "to_code": "BNS",
+      "to_section": "122(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt on provocation.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "328",
+      "to_code": "BNS",
+      "to_section": "123",
+      "relation": "renumbered",
+      "subject": "Causing hurt by means of poison, etc., with intent to commit an offence.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "326A",
+      "to_code": "BNS",
+      "to_section": "124",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing grievous hurt by use of acid, etc. 124(1)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "326B",
+      "to_code": "BNS",
+      "to_section": "124(2)",
+      "relation": "renumbered",
+      "subject": "Voluntarily throwing or attempting to throw acid.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "336",
+      "to_code": "BNS",
+      "to_section": "125",
+      "relation": "renumbered",
+      "subject": "Act endangering life or personal safety of others. (Change)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "337",
+      "to_code": "BNS",
+      "to_section": "125(a)",
+      "relation": "renumbered",
+      "subject": "Causing hurt by act endangering life or personal safety of others.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "338",
+      "to_code": "BNS",
+      "to_section": "125(b)",
+      "relation": "renumbered",
+      "subject": "Causing grievous hurt by act endangering life or personal safety of others.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "339",
+      "to_code": "BNS",
+      "to_section": "126",
+      "relation": "renumbered",
+      "subject": "Wrongful restraint. (Change) 126(1)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "341",
+      "to_code": "BNS",
+      "to_section": "126(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for wrongful restraint.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "340",
+      "to_code": "BNS",
+      "to_section": "127",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement. 127(1)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "342",
+      "to_code": "BNS",
+      "to_section": "127(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for wrongful confinement.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "343",
+      "to_code": "BNS",
+      "to_section": "127(3)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement for three or more days.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "344",
+      "to_code": "BNS",
+      "to_section": "127(4)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement for ten or more days.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "345",
+      "to_code": "BNS",
+      "to_section": "127(5)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement of person for whose liberation writ has been issued.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "346",
+      "to_code": "BNS",
+      "to_section": "127(6)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement in secret.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "347",
+      "to_code": "BNS",
+      "to_section": "127(7)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement to extort property, or constrain to illegal act.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "348",
+      "to_code": "BNS",
+      "to_section": "127(8)",
+      "relation": "renumbered",
+      "subject": "Wrongful confinement to extort confession, or compel restoration of property.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "349",
+      "to_code": "BNS",
+      "to_section": "128",
+      "relation": "renumbered",
+      "subject": "Force.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "350",
+      "to_code": "BNS",
+      "to_section": "129",
+      "relation": "renumbered",
+      "subject": "Criminal force.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "351",
+      "to_code": "BNS",
+      "to_section": "130",
+      "relation": "renumbered",
+      "subject": "Assault.",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "352",
+      "to_code": "BNS",
+      "to_section": "131",
+      "relation": "renumbered",
+      "subject": "Punishment for assault or criminal force otherwise than on grave provocation. (Change)",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "353",
+      "to_code": "BNS",
+      "to_section": "132",
+      "relation": "renumbered",
+      "subject": "Assault or criminal force to deter public servant from discharge of his duty",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "355",
+      "to_code": "BNS",
+      "to_section": "133",
+      "relation": "renumbered",
+      "subject": "Assault or criminal force with intent to dishonour person, otherwise than on grave",
+      "source_page": 8,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "356",
+      "to_code": "BNS",
+      "to_section": "134",
+      "relation": "renumbered",
+      "subject": "Assault or criminal force in attempt to commit theft of property carried by a person.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "357",
+      "to_code": "BNS",
+      "to_section": "135",
+      "relation": "renumbered",
+      "subject": "Assault or criminal force in attempt to wrongfully to confine a person. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "358",
+      "to_code": "BNS",
+      "to_section": "136",
+      "relation": "renumbered",
+      "subject": "Assault or criminal force on grave provocation. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "359",
+      "to_code": "BNS",
+      "to_section": "137",
+      "relation": "renumbered",
+      "subject": "Kidnapping. 137(1)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "360",
+      "to_code": "BNS",
+      "to_section": "137(1)(a)",
+      "relation": "renumbered",
+      "subject": "Kidnapping from India.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "361",
+      "to_code": "BNS",
+      "to_section": "137(1)(b)",
+      "relation": "renumbered",
+      "subject": "Kidnapping from lawful guardianship.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "363",
+      "to_code": "BNS",
+      "to_section": "137(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for kidnapping.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "362",
+      "to_code": "BNS",
+      "to_section": "138",
+      "relation": "renumbered",
+      "subject": "Abduction.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "363A",
+      "to_code": "BNS",
+      "to_section": "139",
+      "relation": "renumbered",
+      "subject": "Kidnapping or maiming a child for purposes of begging. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "364",
+      "to_code": "BNS",
+      "to_section": "140",
+      "relation": "renumbered",
+      "subject": "Kidnapping or abducting in order to murder or for ransom etc. 140(1)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "364A",
+      "to_code": "BNS",
+      "to_section": "140(2)",
+      "relation": "renumbered",
+      "subject": "Kidnapping for ransom, etc.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "365",
+      "to_code": "BNS",
+      "to_section": "140(3)",
+      "relation": "renumbered",
+      "subject": "Kidnapping or abducting with intent secretly and wrongfully to confine person.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "367",
+      "to_code": "BNS",
+      "to_section": "140(4)",
+      "relation": "renumbered",
+      "subject": "Kidnapping or abducting in order to subject person to grievous hurt, slavery, etc.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "366B",
+      "to_code": "BNS",
+      "to_section": "141",
+      "relation": "renumbered",
+      "subject": "Importation of girl or boy from foreign country. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "368",
+      "to_code": "BNS",
+      "to_section": "142",
+      "relation": "renumbered",
+      "subject": "Wrongfully concealing or keeping in confinement, kidnapped or abducted person.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "370",
+      "to_code": "BNS",
+      "to_section": "143",
+      "relation": "renumbered",
+      "subject": "Trafficking of person. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "370A",
+      "to_code": "BNS",
+      "to_section": "144",
+      "relation": "renumbered",
+      "subject": "Exploitation of a trafficked person. (Change)",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "371",
+      "to_code": "BNS",
+      "to_section": "145",
+      "relation": "renumbered",
+      "subject": "Habitual dealing in slaves.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "374",
+      "to_code": "BNS",
+      "to_section": "146",
+      "relation": "renumbered",
+      "subject": "Unlawful compulsory labour.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "121",
+      "to_code": "BNS",
+      "to_section": "147",
+      "relation": "renumbered",
+      "subject": "Waging, or attempting to wage war, or abetting waging of war, against Government of India.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "121A",
+      "to_code": "BNS",
+      "to_section": "148",
+      "relation": "renumbered",
+      "subject": "Conspiracy to commit offences punishable by section 147.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "122",
+      "to_code": "BNS",
+      "to_section": "149",
+      "relation": "renumbered",
+      "subject": "Collecting arms, etc., with intention of waging war against Government of India.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "123",
+      "to_code": "BNS",
+      "to_section": "150",
+      "relation": "renumbered",
+      "subject": "Concealing with intent to facilitate design to wage war.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "124",
+      "to_code": "BNS",
+      "to_section": "151",
+      "relation": "renumbered",
+      "subject": "Assaulting President, Governor, etc., with intent to compel or restrain exercise of any lawful power.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "124A",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Sedition",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "152",
+      "relation": "new",
+      "subject": "Acts endangering sovereignty, unity and integrity of India.",
+      "source_page": 9,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "125",
+      "to_code": "BNS",
+      "to_section": "153",
+      "relation": "renumbered",
+      "subject": "Waging war against Government of any foreign State at peace with Government of India.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "126",
+      "to_code": "BNS",
+      "to_section": "154",
+      "relation": "renumbered",
+      "subject": "Committing depredation on territories of foreign State at peace with Government of India.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "127",
+      "to_code": "BNS",
+      "to_section": "155",
+      "relation": "renumbered",
+      "subject": "Receiving property taken by war or depredation mentioned in sections 153 and 154.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "128",
+      "to_code": "BNS",
+      "to_section": "156",
+      "relation": "renumbered",
+      "subject": "Public servant voluntarily allowing prisoner of State or war to escape.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "129",
+      "to_code": "BNS",
+      "to_section": "157",
+      "relation": "renumbered",
+      "subject": "Public servant negligently suffering such prisoner to escape.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "130",
+      "to_code": "BNS",
+      "to_section": "158",
+      "relation": "renumbered",
+      "subject": "Aiding escape of, rescuing or harbouring such prisoner.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "131",
+      "to_code": "BNS",
+      "to_section": "159",
+      "relation": "renumbered",
+      "subject": "Abetting mutiny, or attempting to seduce a soldier, sailor or airman from his duty.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "132",
+      "to_code": "BNS",
+      "to_section": "160",
+      "relation": "renumbered",
+      "subject": "Abetment of mutiny, if mutiny is committed in consequence thereof.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "133",
+      "to_code": "BNS",
+      "to_section": "161",
+      "relation": "renumbered",
+      "subject": "Abetment of assault by soldier, sailor or airman on his superior officer, when in execution of his office.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "134",
+      "to_code": "BNS",
+      "to_section": "162",
+      "relation": "renumbered",
+      "subject": "Abetment of such assault, if assault committed.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "135",
+      "to_code": "BNS",
+      "to_section": "163",
+      "relation": "renumbered",
+      "subject": "Abetment of desertion of soldier, sailor or airman.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "136",
+      "to_code": "BNS",
+      "to_section": "164",
+      "relation": "renumbered",
+      "subject": "Harbouring deserter.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "137",
+      "to_code": "BNS",
+      "to_section": "165",
+      "relation": "renumbered",
+      "subject": "Deserter concealed on board merchant vessel through negligence of master. (Change)",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "138",
+      "to_code": "BNS",
+      "to_section": "166",
+      "relation": "renumbered",
+      "subject": "Abetment of act of insubordination by soldier, sailor or airman. (Change)",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "139",
+      "to_code": "BNS",
+      "to_section": "167",
+      "relation": "renumbered",
+      "subject": "Persons subject to certain Acts.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "140",
+      "to_code": "BNS",
+      "to_section": "168",
+      "relation": "renumbered",
+      "subject": "Wearing garb or carrying token used by soldier, sailor or airman. (Change)",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171A",
+      "to_code": "BNS",
+      "to_section": "169",
+      "relation": "renumbered",
+      "subject": "Candidate, electoral right defined.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171B",
+      "to_code": "BNS",
+      "to_section": "170",
+      "relation": "renumbered",
+      "subject": "Bribery.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171C",
+      "to_code": "BNS",
+      "to_section": "171",
+      "relation": "renumbered",
+      "subject": "Undue influence at elections.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171D",
+      "to_code": "BNS",
+      "to_section": "172",
+      "relation": "renumbered",
+      "subject": "Personation at elections.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171E",
+      "to_code": "BNS",
+      "to_section": "173",
+      "relation": "renumbered",
+      "subject": "Punishment for bribery.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171F",
+      "to_code": "BNS",
+      "to_section": "174",
+      "relation": "renumbered",
+      "subject": "Punishment for undue influence or personation at an election.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171G",
+      "to_code": "BNS",
+      "to_section": "175",
+      "relation": "renumbered",
+      "subject": "False statement in connection with an election.",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171H",
+      "to_code": "BNS",
+      "to_section": "176",
+      "relation": "renumbered",
+      "subject": "Illegal payments in connection with an election. (Change)",
+      "source_page": 10,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "231",
+      "to_code": "BNS",
+      "to_section": "178",
+      "relation": "renumbered",
+      "subject": "Counterfeiting coin, Government stamps, currency-notes or bank-notes.",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "230",
+      "to_code": "BNS",
+      "to_section": "178(2)",
+      "relation": "renumbered",
+      "subject": "“Coin” defined.",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "246",
+      "to_code": "BNS",
+      "to_section": "178(5)",
+      "relation": "renumbered",
+      "subject": "Fraudulently or dishonestly diminishing weight or altering composition of coin. 248. Altering appearance of coin with intent that it shall pass as coin of different description. (reference to ‘Indian coin’ removed)",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "237",
+      "to_code": "BNS",
+      "to_section": "179",
+      "relation": "renumbered",
+      "subject": "Using as genuine, forged or counterfeit coin, Government stamp, currency-notes or bank-notes.",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "242",
+      "to_code": "BNS",
+      "to_section": "180",
+      "relation": "renumbered",
+      "subject": "Possession of forged or counterfeit coin, Government stamp, currency-notes or bank-notes.",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "233",
+      "to_code": "BNS",
+      "to_section": "181",
+      "relation": "renumbered",
+      "subject": "Making or possessing instruments or materials",
+      "source_page": 11,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "236",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Abetting in India the counterfeiting out of India of coin.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "489E",
+      "to_code": "BNS",
+      "to_section": "182",
+      "relation": "renumbered",
+      "subject": "Making or using documents resembling currency-notes or bank-notes. (Change)",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "261",
+      "to_code": "BNS",
+      "to_section": "183",
+      "relation": "renumbered",
+      "subject": "Effacing writing from substance bearing Government stamp, or removing from document a stamp used for it, with intent to cause loss to Government.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "262",
+      "to_code": "BNS",
+      "to_section": "184",
+      "relation": "renumbered",
+      "subject": "Using Government stamp known to have been before used.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "263",
+      "to_code": "BNS",
+      "to_section": "185",
+      "relation": "renumbered",
+      "subject": "Erasure of mark denoting that stamp has been used.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "263A",
+      "to_code": "BNS",
+      "to_section": "186",
+      "relation": "renumbered",
+      "subject": "Prohibition of fictitious stamps.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "244",
+      "to_code": "BNS",
+      "to_section": "187",
+      "relation": "renumbered",
+      "subject": "Person employed in mint causing coin to be of different weight or composition from that fixed by law.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "245",
+      "to_code": "BNS",
+      "to_section": "188",
+      "relation": "renumbered",
+      "subject": "Unlawfully taking coining instrument from mint.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "141",
+      "to_code": "BNS",
+      "to_section": "189",
+      "relation": "renumbered",
+      "subject": "Unlawful assembly. 189 (1)",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "143",
+      "to_code": "BNS",
+      "to_section": "189(2)",
+      "relation": "renumbered",
+      "subject": "Punishment.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "145",
+      "to_code": "BNS",
+      "to_section": "189(3)",
+      "relation": "renumbered",
+      "subject": "Joining or continuing in unlawful assembly, knowing it has been commanded to disperse.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "144",
+      "to_code": "BNS",
+      "to_section": "189(4)",
+      "relation": "renumbered",
+      "subject": "Joining unlawful assembly armed with deadly weapon.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "151",
+      "to_code": "BNS",
+      "to_section": "189(5)",
+      "relation": "renumbered",
+      "subject": "Knowingly joining or continuing in assembly of five or more persons after it has been commanded to disperse.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "150",
+      "to_code": "BNS",
+      "to_section": "189(6)",
+      "relation": "renumbered",
+      "subject": "Hiring, or conniving at hiring, of persons to join unlawful assembly.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "157",
+      "to_code": "BNS",
+      "to_section": "189(7)",
+      "relation": "renumbered",
+      "subject": "Harbouring persons hired for an unlawful assembly.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "158",
+      "to_code": "BNS",
+      "to_section": "189(8)",
+      "relation": "renumbered",
+      "subject": "Being hired to take part in an unlawful assembly or riot.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "158",
+      "to_code": "BNS",
+      "to_section": "189(9)",
+      "relation": "renumbered",
+      "subject": "or to go armed.",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "149",
+      "to_code": "BNS",
+      "to_section": "190",
+      "relation": "renumbered",
+      "subject": "Every member of unlawful assembly guilty of offence committed in prosecution of common",
+      "source_page": 12,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "146",
+      "to_code": "BNS",
+      "to_section": "191",
+      "relation": "renumbered",
+      "subject": "Rioting. (Change) 191 (1)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "147",
+      "to_code": "BNS",
+      "to_section": "191(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for rioting.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "148",
+      "to_code": "BNS",
+      "to_section": "191(3)",
+      "relation": "renumbered",
+      "subject": "Rioting, armed with deadly weapon.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "153",
+      "to_code": "BNS",
+      "to_section": "192",
+      "relation": "renumbered",
+      "subject": "Wantonly giving provocation with intent to cause riot- if rioting be committed; if not committed.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "154",
+      "to_code": "BNS",
+      "to_section": "193",
+      "relation": "renumbered",
+      "subject": "Liability of owner, occupier etc., of land on which an unlawful assembly or riot takes place. 193(1)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "155",
+      "to_code": "BNS",
+      "to_section": "193(2)",
+      "relation": "renumbered",
+      "subject": "Liability of person for whose benefit riot is committed.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "156",
+      "to_code": "BNS",
+      "to_section": "193(3)",
+      "relation": "renumbered",
+      "subject": "Liability of agent of owner or occupier for whose benefit riot is committed.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "159",
+      "to_code": "BNS",
+      "to_section": "194",
+      "relation": "renumbered",
+      "subject": "Affray. (Change) 194 (1)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "160",
+      "to_code": "BNS",
+      "to_section": "194(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for committing affray.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "152",
+      "to_code": "BNS",
+      "to_section": "195",
+      "relation": "renumbered",
+      "subject": "Assaulting or obstructing public servant when suppressing riot, etc. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "153A",
+      "to_code": "BNS",
+      "to_section": "196",
+      "relation": "renumbered",
+      "subject": "Promoting enmity between different groups on ground of religion, race, place of birth, residence, language, etc., and doing acts prejudicial to maintenance of harmony.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "153B",
+      "to_code": "BNS",
+      "to_section": "197",
+      "relation": "renumbered",
+      "subject": "Imputations, assertions prejudicial to national integration. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "166",
+      "to_code": "BNS",
+      "to_section": "198",
+      "relation": "renumbered",
+      "subject": "Public servant disobeying law, with intent to cause injury to any person.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "166A",
+      "to_code": "BNS",
+      "to_section": "199",
+      "relation": "renumbered",
+      "subject": "Public servant disobeying direction under law.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "166B",
+      "to_code": "BNS",
+      "to_section": "200",
+      "relation": "renumbered",
+      "subject": "Punishment for non-treatment of victim.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "167",
+      "to_code": "BNS",
+      "to_section": "201",
+      "relation": "renumbered",
+      "subject": "Public servant framing an incorrect document with intent to cause injury.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "168",
+      "to_code": "BNS",
+      "to_section": "202",
+      "relation": "renumbered",
+      "subject": "Public servant unlawfully engaging in trade. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "169",
+      "to_code": "BNS",
+      "to_section": "203",
+      "relation": "renumbered",
+      "subject": "Public servant unlawfully buying or bidding for property.",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "170",
+      "to_code": "BNS",
+      "to_section": "204",
+      "relation": "renumbered",
+      "subject": "Personating a public servant. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "171",
+      "to_code": "BNS",
+      "to_section": "205",
+      "relation": "renumbered",
+      "subject": "Wearing garb or carrying token used by public servant with fraudulent intent. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "172",
+      "to_code": "BNS",
+      "to_section": "206",
+      "relation": "renumbered",
+      "subject": "Absconding to avoid service of summons or other proceeding. (Change)",
+      "source_page": 13,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "173",
+      "to_code": "BNS",
+      "to_section": "207",
+      "relation": "renumbered",
+      "subject": "Preventing service of summons or other proceeding, or preventing publication thereof. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "174",
+      "to_code": "BNS",
+      "to_section": "208",
+      "relation": "renumbered",
+      "subject": "Non-attendance in obedience to an order from public servant. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "175",
+      "to_code": "BNS",
+      "to_section": "210",
+      "relation": "renumbered",
+      "subject": "Omission to produce document or electronic record to public servant by person legally bound to produce it. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "176",
+      "to_code": "BNS",
+      "to_section": "211",
+      "relation": "renumbered",
+      "subject": "Omission to give notice or information to public servant by person legally bound to give it. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "177",
+      "to_code": "BNS",
+      "to_section": "212",
+      "relation": "renumbered",
+      "subject": "Furnishing false information. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "178",
+      "to_code": "BNS",
+      "to_section": "213",
+      "relation": "renumbered",
+      "subject": "Refusing oath or affirmation when duly required by public servant to make it. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "179",
+      "to_code": "BNS",
+      "to_section": "214",
+      "relation": "renumbered",
+      "subject": "Refusing to answer public servant authorised to question. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "180",
+      "to_code": "BNS",
+      "to_section": "215",
+      "relation": "renumbered",
+      "subject": "Refusing to sign statement. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "181",
+      "to_code": "BNS",
+      "to_section": "216",
+      "relation": "renumbered",
+      "subject": "False statement on oath or affirmation to public servant or person authorised to administer an oath or affirmation.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "182",
+      "to_code": "BNS",
+      "to_section": "217",
+      "relation": "renumbered",
+      "subject": "False information, with intent to cause public servant to use his lawful power to injury of another person. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "183",
+      "to_code": "BNS",
+      "to_section": "218",
+      "relation": "renumbered",
+      "subject": "Resistance to taking of property by lawful authority of a public servant. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "184",
+      "to_code": "BNS",
+      "to_section": "219",
+      "relation": "renumbered",
+      "subject": "Obstructing sale of property offered for sale by authority of public servant. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "185",
+      "to_code": "BNS",
+      "to_section": "220",
+      "relation": "renumbered",
+      "subject": "Illegal purchase or bid for property offered for sale by authority of public servant.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "186",
+      "to_code": "BNS",
+      "to_section": "221",
+      "relation": "renumbered",
+      "subject": "Obstructing public servant in discharge of public functions. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "187",
+      "to_code": "BNS",
+      "to_section": "222",
+      "relation": "renumbered",
+      "subject": "Omission to assist public servant when bound by law to give assistance. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "188",
+      "to_code": "BNS",
+      "to_section": "223",
+      "relation": "renumbered",
+      "subject": "Disobedience to order duly promulgated by public servant. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "189",
+      "to_code": "BNS",
+      "to_section": "224",
+      "relation": "renumbered",
+      "subject": "Threat of injury to public servant.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "190",
+      "to_code": "BNS",
+      "to_section": "225",
+      "relation": "renumbered",
+      "subject": "Threat of injury to induce person to refrain from applying for protection to public servant.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "226",
+      "relation": "new",
+      "subject": "Attempt to commit suicide to compel or restraint exercise of lawful power",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "191",
+      "to_code": "BNS",
+      "to_section": "227",
+      "relation": "renumbered",
+      "subject": "Giving false evidence.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "192",
+      "to_code": "BNS",
+      "to_section": "228",
+      "relation": "renumbered",
+      "subject": "Fabricating false evidence.",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "193",
+      "to_code": "BNS",
+      "to_section": "229",
+      "relation": "renumbered",
+      "subject": "Punishment for false evidence. (Change)",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "194",
+      "to_code": "BNS",
+      "to_section": "230",
+      "relation": "renumbered",
+      "subject": "Giving or fabricating false evidence with",
+      "source_page": 14,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "195",
+      "to_code": "BNS",
+      "to_section": "231",
+      "relation": "renumbered",
+      "subject": "Giving or fabricating false evidence with intent to procure conviction of offence punishable with imprisonment for life or imprisonment.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "195A",
+      "to_code": "BNS",
+      "to_section": "232",
+      "relation": "renumbered",
+      "subject": "Threatening any person to give false evidence.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "196",
+      "to_code": "BNS",
+      "to_section": "233",
+      "relation": "renumbered",
+      "subject": "Using evidence known to be false.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "197",
+      "to_code": "BNS",
+      "to_section": "234",
+      "relation": "renumbered",
+      "subject": "Issuing or signing false certificate.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "198",
+      "to_code": "BNS",
+      "to_section": "235",
+      "relation": "renumbered",
+      "subject": "Using as true a certificate known to be false.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "199",
+      "to_code": "BNS",
+      "to_section": "236",
+      "relation": "renumbered",
+      "subject": "False statement made in declaration which is by law receivable as evidence.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "200",
+      "to_code": "BNS",
+      "to_section": "237",
+      "relation": "renumbered",
+      "subject": "Using as true such declaration knowing it to be false.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "201",
+      "to_code": "BNS",
+      "to_section": "238",
+      "relation": "renumbered",
+      "subject": "Causing disappearance of evidence of offence, or giving false information to screen offender.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "202",
+      "to_code": "BNS",
+      "to_section": "239",
+      "relation": "renumbered",
+      "subject": "Intentional omission to give information of offence by person bound to inform. (Change)",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "203",
+      "to_code": "BNS",
+      "to_section": "240",
+      "relation": "renumbered",
+      "subject": "Giving false information respecting an offence committed.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "204",
+      "to_code": "BNS",
+      "to_section": "241",
+      "relation": "renumbered",
+      "subject": "Destruction of document or electronic record to prevent its production as evidence. (Change)",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "205",
+      "to_code": "BNS",
+      "to_section": "242",
+      "relation": "renumbered",
+      "subject": "False personation for purpose of act or proceeding in suit or prosecution.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "206",
+      "to_code": "BNS",
+      "to_section": "243",
+      "relation": "renumbered",
+      "subject": "Fraudulent removal or concealment of property to prevent its seizure as forfeited or in execution. (Change)",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "207",
+      "to_code": "BNS",
+      "to_section": "244",
+      "relation": "renumbered",
+      "subject": "Fraudulent claim to property to prevent its seizure as forfeited or in execution.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "208",
+      "to_code": "BNS",
+      "to_section": "245",
+      "relation": "renumbered",
+      "subject": "Fraudulently suffering decree for sum not due.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "209",
+      "to_code": "BNS",
+      "to_section": "246",
+      "relation": "renumbered",
+      "subject": "Dishonestly making false claim in Court.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "210",
+      "to_code": "BNS",
+      "to_section": "247",
+      "relation": "renumbered",
+      "subject": "Fraudulently obtaining decree for sum not due.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "211",
+      "to_code": "BNS",
+      "to_section": "248",
+      "relation": "renumbered",
+      "subject": "False charge of offence made with intent to injure. (Change)",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "212",
+      "to_code": "BNS",
+      "to_section": "249",
+      "relation": "renumbered",
+      "subject": "Harbouring offender.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "213",
+      "to_code": "BNS",
+      "to_section": "250",
+      "relation": "renumbered",
+      "subject": "Taking gift, etc., to screen an offender from punishment.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "214",
+      "to_code": "BNS",
+      "to_section": "251",
+      "relation": "renumbered",
+      "subject": "Offering gift or restoration of property in consideration of screening offender.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "215",
+      "to_code": "BNS",
+      "to_section": "252",
+      "relation": "renumbered",
+      "subject": "Taking gift to help to recover stolen property, etc.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "216",
+      "to_code": "BNS",
+      "to_section": "253",
+      "relation": "renumbered",
+      "subject": "Harbouring offender who has escaped from custody or whose apprehension has been ordered.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "216A",
+      "to_code": "BNS",
+      "to_section": "254",
+      "relation": "renumbered",
+      "subject": "Penalty for harbouring robbers or dacoits.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "217",
+      "to_code": "BNS",
+      "to_section": "255",
+      "relation": "renumbered",
+      "subject": "Public servant disobeying direction of law with intent to save person from punishment or property from forfeiture.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "218",
+      "to_code": "BNS",
+      "to_section": "256",
+      "relation": "renumbered",
+      "subject": "Public servant framing incorrect record or writing with intent to save person from punishment or property from forfeiture.",
+      "source_page": 15,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "219",
+      "to_code": "BNS",
+      "to_section": "257",
+      "relation": "renumbered",
+      "subject": "Public servant in judicial proceeding corruptly making report, etc., contrary to law.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "220",
+      "to_code": "BNS",
+      "to_section": "258",
+      "relation": "renumbered",
+      "subject": "Commitment for trial or confinement by person having authority who knows that he is acting contrary to law.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "221",
+      "to_code": "BNS",
+      "to_section": "259",
+      "relation": "renumbered",
+      "subject": "Intentional omission to apprehend on part of public servant bound to apprehend.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "222",
+      "to_code": "BNS",
+      "to_section": "260",
+      "relation": "renumbered",
+      "subject": "Intentional omission to apprehend on the part of public servant bound to apprehend person under sentence or lawfully committed.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "223",
+      "to_code": "BNS",
+      "to_section": "261",
+      "relation": "renumbered",
+      "subject": "Escape from confinement or custody negligently suffered by public servant.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "224",
+      "to_code": "BNS",
+      "to_section": "262",
+      "relation": "renumbered",
+      "subject": "Resistance or obstruction by a person to his lawful apprehension.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "225",
+      "to_code": "BNS",
+      "to_section": "263",
+      "relation": "renumbered",
+      "subject": "Resistance or obstruction to lawful apprehension of another person.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "225A",
+      "to_code": "BNS",
+      "to_section": "264",
+      "relation": "renumbered",
+      "subject": "Omission to apprehend, or sufferance of escape, on part of public servant, in cases not otherwise provided for.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "225B",
+      "to_code": "BNS",
+      "to_section": "265",
+      "relation": "renumbered",
+      "subject": "Resistance or obstruction to lawful apprehension or escape or rescue in cases not otherwise provided for.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "227",
+      "to_code": "BNS",
+      "to_section": "266",
+      "relation": "renumbered",
+      "subject": "Violation of condition of remission of punishment.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "228",
+      "to_code": "BNS",
+      "to_section": "267",
+      "relation": "renumbered",
+      "subject": "Intentional insult or interruption to public servant sitting in judicial proceeding. (Change)",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "229",
+      "to_code": "BNS",
+      "to_section": "268",
+      "relation": "renumbered",
+      "subject": "Personation of an assessor.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "229A",
+      "to_code": "BNS",
+      "to_section": "269",
+      "relation": "renumbered",
+      "subject": "Failure by person released on bail bond or bond to appear in court.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "264",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Fraudulent use of false instrument for weighing.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "265",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Fraudulent use of false weight or measure.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "266",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Being in possession of false weight or measure.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "267",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Making or selling false weight or measure.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "268",
+      "to_code": "BNS",
+      "to_section": "270",
+      "relation": "renumbered",
+      "subject": "Public nuisance.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "269",
+      "to_code": "BNS",
+      "to_section": "271",
+      "relation": "renumbered",
+      "subject": "Negligent act likely to spread infection of disease dangerous to life.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "270",
+      "to_code": "BNS",
+      "to_section": "272",
+      "relation": "renumbered",
+      "subject": "Malignant act likely to spread infection of disease dangerous to life.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "271",
+      "to_code": "BNS",
+      "to_section": "273",
+      "relation": "renumbered",
+      "subject": "Disobedience to quarantine rule.",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "272",
+      "to_code": "BNS",
+      "to_section": "274",
+      "relation": "renumbered",
+      "subject": "Adulteration of food or drink intended for sale. (Change)",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "273",
+      "to_code": "BNS",
+      "to_section": "275",
+      "relation": "renumbered",
+      "subject": "Sale of noxious food or drink. (Change)",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "274",
+      "to_code": "BNS",
+      "to_section": "276",
+      "relation": "renumbered",
+      "subject": "Adulteration of drugs. (Change)",
+      "source_page": 16,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "275",
+      "to_code": "BNS",
+      "to_section": "277",
+      "relation": "renumbered",
+      "subject": "Sale of adulterated drugs. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "276",
+      "to_code": "BNS",
+      "to_section": "278",
+      "relation": "renumbered",
+      "subject": "Sale of drug as a different drug or preparation. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "277",
+      "to_code": "BNS",
+      "to_section": "279",
+      "relation": "renumbered",
+      "subject": "Fouling water of public spring or reservoir. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "278",
+      "to_code": "BNS",
+      "to_section": "280",
+      "relation": "renumbered",
+      "subject": "Making atmosphere noxious to health. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "279",
+      "to_code": "BNS",
+      "to_section": "281",
+      "relation": "renumbered",
+      "subject": "Rash driving or riding on a public way.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "280",
+      "to_code": "BNS",
+      "to_section": "282",
+      "relation": "renumbered",
+      "subject": "Rash navigation of vessel. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "281",
+      "to_code": "BNS",
+      "to_section": "283",
+      "relation": "renumbered",
+      "subject": "Exhibition of false light, mark or buoy. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "282",
+      "to_code": "BNS",
+      "to_section": "284",
+      "relation": "renumbered",
+      "subject": "Conveying person by water for hire in unsafe or overloaded vessel. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "283",
+      "to_code": "BNS",
+      "to_section": "285",
+      "relation": "renumbered",
+      "subject": "Danger or obstruction in public way or line of navigation. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "284",
+      "to_code": "BNS",
+      "to_section": "286",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to poisonous substance. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "285",
+      "to_code": "BNS",
+      "to_section": "287",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to fire or combustible matter. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "286",
+      "to_code": "BNS",
+      "to_section": "288",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to explosive substance. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "287",
+      "to_code": "BNS",
+      "to_section": "289",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to machinery. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "288",
+      "to_code": "BNS",
+      "to_section": "290",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to pulling down, repairing or constructing buildings etc. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "289",
+      "to_code": "BNS",
+      "to_section": "291",
+      "relation": "renumbered",
+      "subject": "Negligent conduct with respect to animal. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "290",
+      "to_code": "BNS",
+      "to_section": "292",
+      "relation": "renumbered",
+      "subject": "Punishment for public nuisance in cases not otherwise provided for. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "291",
+      "to_code": "BNS",
+      "to_section": "293",
+      "relation": "renumbered",
+      "subject": "Continuance of nuisance after injunction to discontinue. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "292",
+      "to_code": "BNS",
+      "to_section": "294",
+      "relation": "renumbered",
+      "subject": "Sale, etc., of obscene books, etc. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "293",
+      "to_code": "BNS",
+      "to_section": "295",
+      "relation": "renumbered",
+      "subject": "Sale, etc., of obscene objects to child.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "294",
+      "to_code": "BNS",
+      "to_section": "296",
+      "relation": "renumbered",
+      "subject": "Obscene acts and songs. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "294A",
+      "to_code": "BNS",
+      "to_section": "297",
+      "relation": "renumbered",
+      "subject": "Keeping lottery office. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "295",
+      "to_code": "BNS",
+      "to_section": "298",
+      "relation": "renumbered",
+      "subject": "Injuring or defiling place of worship with intent to insult religion of any class.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "295A",
+      "to_code": "BNS",
+      "to_section": "299",
+      "relation": "renumbered",
+      "subject": "Deliberate and malicious acts, intended to outrage religious feelings of any class by insulting its religion or religious beliefs.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "296",
+      "to_code": "BNS",
+      "to_section": "300",
+      "relation": "renumbered",
+      "subject": "Disturbing religious assembly.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "297",
+      "to_code": "BNS",
+      "to_section": "301",
+      "relation": "renumbered",
+      "subject": "Trespassing on burial places, etc.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "298",
+      "to_code": "BNS",
+      "to_section": "302",
+      "relation": "renumbered",
+      "subject": "Uttering words, etc., with deliberate intent to wound religious feelings of any person.",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "378",
+      "to_code": "BNS",
+      "to_section": "303",
+      "relation": "renumbered",
+      "subject": "Theft. (Change)",
+      "source_page": 17,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "379",
+      "to_code": "BNS",
+      "to_section": "303(2)(Change)",
+      "relation": "renumbered",
+      "subject": "Punishment for theft.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "304",
+      "relation": "new",
+      "subject": "Snatching.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "380",
+      "to_code": "BNS",
+      "to_section": "305",
+      "relation": "renumbered",
+      "subject": "Theft in a dwelling house, or means of transportation or place of worship, etc. (Change)",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "381",
+      "to_code": "BNS",
+      "to_section": "306",
+      "relation": "renumbered",
+      "subject": "Theft by clerk or servant of property in possession of master.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "382",
+      "to_code": "BNS",
+      "to_section": "307",
+      "relation": "renumbered",
+      "subject": "Theft after preparation made for causing death, hurt or restraint in order to committing of theft.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "383",
+      "to_code": "BNS",
+      "to_section": "308",
+      "relation": "renumbered",
+      "subject": "Extortion. 308 (1)",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "384",
+      "to_code": "BNS",
+      "to_section": "308(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for extortion.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "385",
+      "to_code": "BNS",
+      "to_section": "308(3)",
+      "relation": "renumbered",
+      "subject": "Putting person in fear of injury in order to commit extortion.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "387",
+      "to_code": "BNS",
+      "to_section": "308(4)",
+      "relation": "renumbered",
+      "subject": "Putting person in fear of death or of grievous hurt, in order to commit extortion.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "386",
+      "to_code": "BNS",
+      "to_section": "308(5)",
+      "relation": "renumbered",
+      "subject": "Extortion by putting a person in fear of death or grievous hurt.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "389",
+      "to_code": "BNS",
+      "to_section": "308(6)",
+      "relation": "renumbered",
+      "subject": "Putting person in fear or accusation of offence, in order to commit extortion.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "388",
+      "to_code": "BNS",
+      "to_section": "308(7)",
+      "relation": "renumbered",
+      "subject": "Extortion by threat of accusation of an offence punishable with death or imprisonment for life, etc.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "390",
+      "to_code": "BNS",
+      "to_section": "309",
+      "relation": "renumbered",
+      "subject": "Robbery. 309 (1)(2)(3)",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "392",
+      "to_code": "BNS",
+      "to_section": "309(4)",
+      "relation": "renumbered",
+      "subject": "Punishment for robbery.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "393",
+      "to_code": "BNS",
+      "to_section": "309(5)",
+      "relation": "renumbered",
+      "subject": "Attempt to commit robbery.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "394",
+      "to_code": "BNS",
+      "to_section": "309(6)",
+      "relation": "renumbered",
+      "subject": "Voluntarily causing hurt in committing robbery.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "391",
+      "to_code": "BNS",
+      "to_section": "310",
+      "relation": "renumbered",
+      "subject": "Dacoity (Change) 310 (1)",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "395",
+      "to_code": "BNS",
+      "to_section": "310(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for dacoity.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "396",
+      "to_code": "BNS",
+      "to_section": "310(3)",
+      "relation": "renumbered",
+      "subject": "Dacoity with murder.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "399",
+      "to_code": "BNS",
+      "to_section": "310(4)",
+      "relation": "renumbered",
+      "subject": "Making preparation to commit dacoity.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "402",
+      "to_code": "BNS",
+      "to_section": "310(5)",
+      "relation": "renumbered",
+      "subject": "Assembling for purpose of committing dacoity.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "400",
+      "to_code": "BNS",
+      "to_section": "310(6)",
+      "relation": "renumbered",
+      "subject": "Punishment for belonging to gang of dacoits.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "397",
+      "to_code": "BNS",
+      "to_section": "311",
+      "relation": "renumbered",
+      "subject": "Robbery, or dacoity, with attempt to cause death or grievous hurt.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "398",
+      "to_code": "BNS",
+      "to_section": "312",
+      "relation": "renumbered",
+      "subject": "Attempt to commit robbery or dacoity when armed with deadly weapon.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "401",
+      "to_code": "BNS",
+      "to_section": "313",
+      "relation": "renumbered",
+      "subject": "Punishment for belonging to gang of robbers, dacoits, etc.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "403",
+      "to_code": "BNS",
+      "to_section": "314",
+      "relation": "renumbered",
+      "subject": "Dishonest misappropriation of property. (Change)",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "404",
+      "to_code": "BNS",
+      "to_section": "315",
+      "relation": "renumbered",
+      "subject": "Dishonest misappropriation of property possessed by deceased person at the time of his death.",
+      "source_page": 18,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "405",
+      "to_code": "BNS",
+      "to_section": "316",
+      "relation": "renumbered",
+      "subject": "Criminal breach of trust. (Change) 316 (1)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "406",
+      "to_code": "BNS",
+      "to_section": "316(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for criminal breach of trust.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "407",
+      "to_code": "BNS",
+      "to_section": "316(3)",
+      "relation": "renumbered",
+      "subject": "Criminal breach of trust by carrier, etc.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "408",
+      "to_code": "BNS",
+      "to_section": "316(4)",
+      "relation": "renumbered",
+      "subject": "Criminal breach of trust by clerk or servant.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "409",
+      "to_code": "BNS",
+      "to_section": "316(5)",
+      "relation": "renumbered",
+      "subject": "Criminal breach of trust by public servant, or by banker, merchant or agent.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "410",
+      "to_code": "BNS",
+      "to_section": "317",
+      "relation": "renumbered",
+      "subject": "Stolen property. 317 (1)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "411",
+      "to_code": "BNS",
+      "to_section": "317(2)",
+      "relation": "renumbered",
+      "subject": "Dishonestly receiving stolen property.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "412",
+      "to_code": "BNS",
+      "to_section": "317(3)",
+      "relation": "renumbered",
+      "subject": "Dishonestly receiving property stolen in the commission of a dacoity.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "413",
+      "to_code": "BNS",
+      "to_section": "317(4)",
+      "relation": "renumbered",
+      "subject": "Habitually dealing in stolen property.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "414",
+      "to_code": "BNS",
+      "to_section": "317(5)",
+      "relation": "renumbered",
+      "subject": "Assisting in concealment of stolen property.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "415",
+      "to_code": "BNS",
+      "to_section": "318",
+      "relation": "renumbered",
+      "subject": "Cheating. (Change) 318 (1)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "417",
+      "to_code": "BNS",
+      "to_section": "318(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for cheating.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "418",
+      "to_code": "BNS",
+      "to_section": "318(3)",
+      "relation": "renumbered",
+      "subject": "Cheating with knowledge that wrongful loss may ensue to person whose interest offender is bound to protect.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "420",
+      "to_code": "BNS",
+      "to_section": "318(4)",
+      "relation": "renumbered",
+      "subject": "Cheating and dishonestly inducing delivery of property.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "419",
+      "to_code": "BNS",
+      "to_section": "319(2)",
+      "relation": "renumbered",
+      "subject": "Punishment of cheating by personation.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "421",
+      "to_code": "BNS",
+      "to_section": "320",
+      "relation": "renumbered",
+      "subject": "Dishonest or fraudulent removal or concealment of property to prevent distribution among creditors. (Change)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "422",
+      "to_code": "BNS",
+      "to_section": "321",
+      "relation": "renumbered",
+      "subject": "Dishonestly or fraudulently preventing debt being available for creditors.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "423",
+      "to_code": "BNS",
+      "to_section": "322",
+      "relation": "renumbered",
+      "subject": "Dishonest or fraudulent execution of deed of transfer containing false statement of consideration. (Change)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "424",
+      "to_code": "BNS",
+      "to_section": "323",
+      "relation": "renumbered",
+      "subject": "Dishonest or fraudulent removal or concealment of property. (Change)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "425",
+      "to_code": "BNS",
+      "to_section": "324",
+      "relation": "renumbered",
+      "subject": "Mischief. (Change) 324 (1)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "426",
+      "to_code": "BNS",
+      "to_section": "324(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for mischief.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "324(3)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "427",
+      "to_code": "BNS",
+      "to_section": "324(4)",
+      "relation": "renumbered",
+      "subject": "Mischief causing damage to the amount of fifty rupees.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "324(5)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "440",
+      "to_code": "BNS",
+      "to_section": "324(6)",
+      "relation": "renumbered",
+      "subject": "Mischief committed after preparation made for causing death or hurt.",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "428",
+      "to_code": "BNS",
+      "to_section": "325",
+      "relation": "renumbered",
+      "subject": "Mischief by killing or maiming animal. (Change)",
+      "source_page": 19,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "430",
+      "to_code": "BNS",
+      "to_section": "326",
+      "relation": "renumbered",
+      "subject": "Mischief by injury, inundation, fire or explosive substance, etc. 326 (a)",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "431",
+      "to_code": "BNS",
+      "to_section": "326(b)",
+      "relation": "renumbered",
+      "subject": "Mischief by injury to public road, bridge, river or channel.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "432",
+      "to_code": "BNS",
+      "to_section": "326(c)",
+      "relation": "renumbered",
+      "subject": "Mischief by causing inundation or obstruction to public drainage attended with damage.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "433",
+      "to_code": "BNS",
+      "to_section": "326(d)",
+      "relation": "renumbered",
+      "subject": "Mischief by destroying, moving or rendering less useful a light-house or sea-mark.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "434",
+      "to_code": "BNS",
+      "to_section": "326(e)",
+      "relation": "renumbered",
+      "subject": "Mischief by destroying or moving, etc., a land- mark fixed by public authority.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "435",
+      "to_code": "BNS",
+      "to_section": "326(f)",
+      "relation": "renumbered",
+      "subject": "Mischief by fire or explosive substance with intent to cause damage to amount of one hundred or (in case of agricultural produce) ten rupees.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "436",
+      "to_code": "BNS",
+      "to_section": "326(g)",
+      "relation": "renumbered",
+      "subject": "Mischief by fire or explosive substance with intent to destroy house, etc.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "437",
+      "to_code": "BNS",
+      "to_section": "327",
+      "relation": "renumbered",
+      "subject": "Mischief with intent to destroy or make unsafe a rail, aircraft, decked vessel or one of twenty tons burden. 327 (1)",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "438",
+      "to_code": "BNS",
+      "to_section": "327(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for the mischief described in section 437 committed by fire or explosive substance.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "439",
+      "to_code": "BNS",
+      "to_section": "328",
+      "relation": "renumbered",
+      "subject": "Punishment for intentionally running vessel aground or ashore with intent to commit theft, etc.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "441",
+      "to_code": "BNS",
+      "to_section": "329",
+      "relation": "renumbered",
+      "subject": "Criminal trespass and house-trespass. (Change) 329 (1)",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "442",
+      "to_code": "BNS",
+      "to_section": "329(2)",
+      "relation": "renumbered",
+      "subject": "House-trespass.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "447",
+      "to_code": "BNS",
+      "to_section": "329(3)",
+      "relation": "renumbered",
+      "subject": "Punishment for criminal trespass.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "448",
+      "to_code": "BNS",
+      "to_section": "329(4)",
+      "relation": "renumbered",
+      "subject": "Punishment for house-trespass.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "443",
+      "to_code": "BNS",
+      "to_section": "330",
+      "relation": "renumbered",
+      "subject": "House-trespass and house-breaking. 330(1)",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "444",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "Lurking house-trespass by night.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "445",
+      "to_code": "BNS",
+      "to_section": "330(2)",
+      "relation": "renumbered",
+      "subject": "House-breaking.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "446",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "House-breaking by night.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "453",
+      "to_code": "BNS",
+      "to_section": "331",
+      "relation": "renumbered",
+      "subject": "Punishment for house-trespass or house- breaking. 331 (1)",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "456",
+      "to_code": "BNS",
+      "to_section": "331(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for lurking house-trespass or house- breaking by night.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "454",
+      "to_code": "BNS",
+      "to_section": "331(3)",
+      "relation": "renumbered",
+      "subject": "Lurking house-trespass or house-breaking in order to commit offence punishable with imprisonment.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "457",
+      "to_code": "BNS",
+      "to_section": "331(4)",
+      "relation": "renumbered",
+      "subject": "Lurking house-trespass or house-breaking by night in order to commit offence punishable with imprisonment.",
+      "source_page": 20,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "455",
+      "to_code": "BNS",
+      "to_section": "331(5)",
+      "relation": "renumbered",
+      "subject": "Lurking house-trespass or house-breaking after preparation for hurt, assault or wrongful restraint.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "458",
+      "to_code": "BNS",
+      "to_section": "331(6)",
+      "relation": "renumbered",
+      "subject": "Lurking house-trespass or house-breaking by night after preparation for hurt, assault, or wrongful restraint.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "459",
+      "to_code": "BNS",
+      "to_section": "331(7)",
+      "relation": "renumbered",
+      "subject": "Grievous hurt caused whilst committing lurking house-trespass or house-breaking.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "460",
+      "to_code": "BNS",
+      "to_section": "331(8)",
+      "relation": "renumbered",
+      "subject": "All persons jointly concerned in lurking house- trespass or house-breaking by night punishable where death or grievous hurt caused by one of them.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "449",
+      "to_code": "BNS",
+      "to_section": "332",
+      "relation": "renumbered",
+      "subject": "House-trespass in order to commit offence. 332 (a)",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "450",
+      "to_code": "BNS",
+      "to_section": "332(b)",
+      "relation": "renumbered",
+      "subject": "House-trespass in order to commit offence punishable with imprisonment for life.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "451",
+      "to_code": "BNS",
+      "to_section": "332(c)",
+      "relation": "renumbered",
+      "subject": "House-trespass in order to commit offence punishable with imprisonment.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "452",
+      "to_code": "BNS",
+      "to_section": "333",
+      "relation": "renumbered",
+      "subject": "House-trespass after preparation for hurt, assault or wrongful restraint.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "461",
+      "to_code": "BNS",
+      "to_section": "334",
+      "relation": "renumbered",
+      "subject": "Dishonestly breaking open receptacle containing property. 334(1)",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "462",
+      "to_code": "BNS",
+      "to_section": "334(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for same offence when committed by person entrusted with custody.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "464",
+      "to_code": "BNS",
+      "to_section": "335",
+      "relation": "renumbered",
+      "subject": "Making a false document.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "463",
+      "to_code": "BNS",
+      "to_section": "336",
+      "relation": "renumbered",
+      "subject": "Forgery 336 (1)",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "465",
+      "to_code": "BNS",
+      "to_section": "336(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for forgery.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "468",
+      "to_code": "BNS",
+      "to_section": "336(3)",
+      "relation": "renumbered",
+      "subject": "Forgery for purpose of cheating.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "469",
+      "to_code": "BNS",
+      "to_section": "336(4)",
+      "relation": "renumbered",
+      "subject": "Forgery for purpose of harming reputation.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "466",
+      "to_code": "BNS",
+      "to_section": "337",
+      "relation": "renumbered",
+      "subject": "Forgery of record of Court or of public register, etc.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "467",
+      "to_code": "BNS",
+      "to_section": "338",
+      "relation": "renumbered",
+      "subject": "Forgery of valuable security, will, etc.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "474",
+      "to_code": "BNS",
+      "to_section": "339",
+      "relation": "renumbered",
+      "subject": "Having possession of document described in section 337 or section 338, knowing it to be forged and intending to use it as genuine.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "470",
+      "to_code": "BNS",
+      "to_section": "340",
+      "relation": "renumbered",
+      "subject": "Forged document or electronic record and using it as genuine. 340 (1)",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "471",
+      "to_code": "BNS",
+      "to_section": "340(2)",
+      "relation": "renumbered",
+      "subject": "Using as genuine a forged document or electronic record.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "472",
+      "to_code": "BNS",
+      "to_section": "341",
+      "relation": "renumbered",
+      "subject": "Making or possessing counterfeit seal, etc., with intent to commit forgery punishable under section 338. 341 (1)",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "473",
+      "to_code": "BNS",
+      "to_section": "341(2)",
+      "relation": "renumbered",
+      "subject": "Making or possessing counterfeit seal, etc., with intent to commit forgery punishable otherwise.",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "341(3)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 21,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "341(4)",
+      "relation": "new",
+      "subject": "",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "475",
+      "to_code": "BNS",
+      "to_section": "342",
+      "relation": "renumbered",
+      "subject": "Counterfeiting device or mark used for authenticating documents described in section 338, or possessing counterfeit marked material. 342(1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "476",
+      "to_code": "BNS",
+      "to_section": "342(2)",
+      "relation": "renumbered",
+      "subject": "Counterfeiting device or mark used for authenticating documents other than those described in section 467, or possessing counterfeit marked material.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "477",
+      "to_code": "BNS",
+      "to_section": "343",
+      "relation": "renumbered",
+      "subject": "Fraudulent cancellation, destruction, etc., of will, authority to adopt, or valuable security.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "477A",
+      "to_code": "BNS",
+      "to_section": "344",
+      "relation": "renumbered",
+      "subject": "Falsification of accounts.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "479",
+      "to_code": "BNS",
+      "to_section": "345",
+      "relation": "renumbered",
+      "subject": "Property mark. 345 (1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "481",
+      "to_code": "BNS",
+      "to_section": "345(2)",
+      "relation": "renumbered",
+      "subject": "Using a false property mark.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "482",
+      "to_code": "BNS",
+      "to_section": "345(3)",
+      "relation": "renumbered",
+      "subject": "Punishment for using a false property mark.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "489",
+      "to_code": "BNS",
+      "to_section": "346",
+      "relation": "renumbered",
+      "subject": "Tampering with property mark with intent to cause injury.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "483",
+      "to_code": "BNS",
+      "to_section": "347",
+      "relation": "renumbered",
+      "subject": "Counterfeiting a property mark. 347 (1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "484",
+      "to_code": "BNS",
+      "to_section": "347(2)",
+      "relation": "renumbered",
+      "subject": "Counterfeiting a mark used by a public servant.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "485",
+      "to_code": "BNS",
+      "to_section": "348",
+      "relation": "renumbered",
+      "subject": "Making or possession of any instrument for counterfeiting a property mark.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "486",
+      "to_code": "BNS",
+      "to_section": "349",
+      "relation": "renumbered",
+      "subject": "Selling goods marked with a counterfeit property mark.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "487",
+      "to_code": "BNS",
+      "to_section": "350",
+      "relation": "renumbered",
+      "subject": "Making a false mark upon any receptacle containing goods. 350 (1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "488",
+      "to_code": "BNS",
+      "to_section": "350(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for making use of any such false mark.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "503",
+      "to_code": "BNS",
+      "to_section": "351",
+      "relation": "renumbered",
+      "subject": "Criminal intimidation. 351 (1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "506",
+      "to_code": "BNS",
+      "to_section": "351",
+      "relation": "renumbered",
+      "subject": "(2), 351 (3)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "507",
+      "to_code": "BNS",
+      "to_section": "351(4)",
+      "relation": "renumbered",
+      "subject": "Criminal intimidation by an anonymous communication.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "504",
+      "to_code": "BNS",
+      "to_section": "352",
+      "relation": "renumbered",
+      "subject": "Intentional insult with intent to provoke breach of peace.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "505",
+      "to_code": "BNS",
+      "to_section": "353",
+      "relation": "renumbered",
+      "subject": "Statements conducing to public mischief.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "508",
+      "to_code": "BNS",
+      "to_section": "354",
+      "relation": "renumbered",
+      "subject": "Act caused by inducing person to believe that he will be rendered an object of Divine displeasure.",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "510",
+      "to_code": "BNS",
+      "to_section": "355",
+      "relation": "renumbered",
+      "subject": "Misconduct in public by a drunken person. (Change)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "499",
+      "to_code": "BNS",
+      "to_section": "356",
+      "relation": "renumbered",
+      "subject": "Defamation. (Change) 356 (1)",
+      "source_page": 22,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "500",
+      "to_code": "BNS",
+      "to_section": "356(2)",
+      "relation": "renumbered",
+      "subject": "Punishment for defamation.",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "501",
+      "to_code": "BNS",
+      "to_section": "356(3)",
+      "relation": "renumbered",
+      "subject": "Printing or engraving matter known to be defamatory.",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "502",
+      "to_code": "BNS",
+      "to_section": "356(4)",
+      "relation": "renumbered",
+      "subject": "Sale of printed or engraved substance containing defamatory matter.",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "491",
+      "to_code": "BNS",
+      "to_section": "357",
+      "relation": "renumbered",
+      "subject": "Breach of contract to attend on and supply wants of helpless person",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": null,
+      "to_code": "BNS",
+      "to_section": "358",
+      "relation": "new",
+      "subject": "Repeal and savings",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "309",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“Attempt to commit suicide”.",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "310",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“Thug”.",
+      "source_page": 23,
+      "confidence": "high"
+    },
+    {
+      "from_code": "IPC",
+      "from_section": "311",
+      "to_code": "BNS",
+      "to_section": null,
+      "relation": "repealed",
+      "subject": "“Punishment”.",
+      "source_page": 23,
+      "confidence": "high"
+    }
+  ]
+}

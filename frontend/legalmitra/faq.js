@@ -12,7 +12,7 @@ const faqs = [
   {
     category: "getting-started",
     q: "How do I get started?",
-    a: "Sign up free with email. No credit card required. You get instant access to launch-stage LegalMitra features, including basic research, selected templates, and compliance workflow testing.",
+    a: "Sign up free with email. No credit card required. You get instant access on the free Starter subscription, including basic research, selected templates, and compliance workflow tools within Starter limits.",
   },
   {
     category: "getting-started",
@@ -26,8 +26,8 @@ const faqs = [
   },
   {
     category: "getting-started",
-    q: "Is there a free trial?",
-    a: "Yes. LegalMitra is currently open for 15 days of free launch access while payment gateway integration is completed. No credit card or payment is required during this window.",
+    q: "Is there a free subscription?",
+    a: "Yes. LegalMitra offers a free Starter subscription with no time limit and no credit card required. Paid Growth and Professional plans unlock higher daily limits and advanced workflows when you need them.",
   },
   {
     category: "getting-started",
@@ -87,7 +87,7 @@ const faqs = [
   {
     category: "features",
     q: "Can I share research with clients?",
-    a: "Team sharing is planned for the Growth and Professional tiers. During the temporary free-access period, availability may be limited while billing and account controls are finalized.",
+    a: "Team sharing is planned for the Growth and Professional tiers. On the free Starter subscription, sharing may be limited; upgrade when you need higher-capacity team workflows.",
   },
   {
     category: "features",

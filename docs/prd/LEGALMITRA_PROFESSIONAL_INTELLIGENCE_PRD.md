@@ -321,6 +321,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Current engineering status (2026-08-01):** Local Stage 2 trust gate is met for the GST §54 / IT §139 offline slices — response contract, answer feedback, eval fixture (**20/20**, grounding 100%), and local statute ingest (CGST 164 + rules 126 + IT 1961 458 sections, no embeddings yet). Tracker preview labeling is honest. Staging `LEGAL_RAG_ENABLED` flip and Gemini `--embed` remain operator steps (see staging RAG verification runbook). Launch-grade template quality gate and Morning Brief demo remain parallel/optional and are **not** required to claim the Stage 2 research trust bar.
 
+**Planned Stage 2.1 (partially implemented 2026-08-01):** Named Quality Gate + statute-first Citation Audit are wired on the hybrid research path (`quality_gate` / `citation_audit` on responses; unsupported section numbers refuse). Remaining: broader claim segmentation, case-law citators, eval fault fixtures expansion. Spec: [`docs/architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md`](../architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md).
+
 **Stage 2 is complete when:**
 
 - Citation grounding on the GST/IT eval set is **≥ 95%** (answers cite only retrieved/authorized sources, or refuse).  

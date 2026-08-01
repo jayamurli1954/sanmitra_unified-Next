@@ -96,6 +96,21 @@ def test_procedure_guide_prompt_includes_advanced_litigation_notes() -> None:
     assert "security cheque" in prompt
 
 
+def test_statute_verifier_preserves_real_bnss_504_outside_inherent_powers() -> None:
+    """BNSS s.504 (seized-property / no-claimant) is real; do not rewrite it away."""
+    response = (
+        "Under BNSS Section 504, if no claimant appears within six months for seized "
+        "property, the Magistrate may place it at the disposal of the State Government."
+    )
+    corrected = service.normalize_verified_statute_mappings(
+        response,
+        query="What happens under BNSS Section 504 when no claimant appears for seized property?",
+    )
+    assert "Section 504" in corrected or "BNSS Section 504" in corrected
+    assert "Section 528 BNSS" not in corrected
+    assert "Statute Verification" not in corrected
+
+
 def test_statute_verifier_corrects_wrong_bnss_482_mappings() -> None:
     response = (
         "Section 482 CrPC is now Section 504 BNSS for inherent powers. "
