@@ -20,6 +20,7 @@ from app.modules.housing.router import router as housing_router
 from app.modules.housing_compat.router import router as housing_compat_router
 from app.modules.legal.router import router as legal_router
 from app.modules.legal_compat.router import router as legal_compat_router
+from app.modules.legal_compat.answer_feedback_router import router as legal_answer_feedback_router
 from app.modules.mandir_compat.router import router as mandir_compat_router
 from app.modules.mitrabooks_compat.router import router as mitrabooks_compat_router
 from app.modules.rag.router import router as rag_router
@@ -42,6 +43,7 @@ api_router.include_router(housing_router)
 api_router.include_router(housing_compat_router)
 api_router.include_router(legal_router)
 api_router.include_router(legal_compat_router)
+api_router.include_router(legal_answer_feedback_router)
 api_router.include_router(mandir_compat_router)
 api_router.include_router(mitrabooks_compat_router)
 api_router.include_router(rag_router)

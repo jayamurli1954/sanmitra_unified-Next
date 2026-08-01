@@ -157,19 +157,24 @@ async def test_hybrid_passes_relevant_citations_to_context(
         background_tasks=None,
     )
 
-    assert result["citations"] == [_rich_citation(1), _rich_citation(2)]
+    assert len(result["citations"]) == 2
     assert result["dropped_citation_count"] == 0
+    assert result["citations"][0]["title"] == _rich_citation(1)["title"]
+    assert result["citations"][1]["title"] == _rich_citation(2)["title"]
+    assert result["human_review_required"] is True
+    assert result["citations"][0].get("retrieved_at")
 
 
 @pytest.mark.asyncio
 async def test_hybrid_drops_irrelevant_citations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Citations unrelated to the query are dropped before Gemini context injection."""
+    """Citations unrelated to the query are dropped; uncited generation is refused."""
     async def _mock_gemini(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
         return "Gemini answer"
 
     monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_gemini)
 
     irrelevant = {
         "index": 1,
@@ -186,22 +191,26 @@ async def test_hybrid_drops_irrelevant_citations(
         background_tasks=None,
     )
 
-    # Irrelevant GST citation must be dropped
+    # Irrelevant GST citation must be dropped and uncited model output refused.
     assert result["citations"] == []
     assert result["dropped_citation_count"] == 1
+    assert result["confidence"] == "insufficient_sources"
+    assert result["strategy"] == "insufficient_sources"
+    assert result["human_review_required"] is True
 
 
-# ─── test: Gemini unavailable → clean failure ─────────────────────────────────
+# ─── test: no sources → insufficient / authorized offline ─────────────────────
 
 @pytest.mark.asyncio
 async def test_hybrid_returns_clean_message_when_gemini_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If Gemini returns None, return the 'Advisory Unavailable' message — no canned templates."""
+    """If no relevant sources exist, refuse uncited generation (Stage 2 contract)."""
     async def _mock_gemini(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
         return None
 
     monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_gemini)
 
     rag_result = _make_rag_result(
         "I do not have enough indexed content matching this question yet.",
@@ -215,9 +224,11 @@ async def test_hybrid_returns_clean_message_when_gemini_unavailable(
         background_tasks=None,
     )
 
-    assert "advisory unavailable" in result["response"].lower()
+    assert "insufficient" in result["response"].lower()
     assert result["citations"] == []
-    assert result["strategy"] == "gemini_unavailable"
+    assert result["strategy"] == "insufficient_sources"
+    assert result["confidence"] == "insufficient_sources"
+    assert result["human_review_required"] is True
 
 
 @pytest.mark.asyncio

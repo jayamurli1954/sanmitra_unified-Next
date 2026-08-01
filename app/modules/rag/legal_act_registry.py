@@ -63,6 +63,11 @@ _LEGAL_ACTS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("Central Goods and Services Tax Act", "CGST Act", "GST Act", "GST"),
     ),
     (
+        "cgst_rules",
+        "Central Goods and Services Tax Rules, 2017",
+        ("CGST Rules", "GST Rules", "Central Goods and Services Tax Rules"),
+    ),
+    (
         "income_tax",
         "Income-tax Act, 1961",
         ("Income Tax Act", "Income-tax Act", "IT Act 1961"),

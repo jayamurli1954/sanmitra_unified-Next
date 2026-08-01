@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.modules.business import export_governance, tally_xml
-from app.modules.business import router as business_router
+from app.modules.business.routes import reports as business_reports
 
 
 def _trial_balance_spec():
@@ -48,10 +48,10 @@ async def test_tally_xml_route_is_governed_and_audited(monkeypatch):
         audit_events.append(kwargs)
         return "audit-1"
 
-    monkeypatch.setattr(business_router, "_build_business_report", fake_build_report)
+    monkeypatch.setattr(business_reports, "_build_business_report", fake_build_report)
     monkeypatch.setattr(export_governance, "log_audit_event", fake_log_audit_event)
 
-    response = await business_router.export_business_tally_xml(
+    response = await business_reports.export_business_tally_xml(
         as_of=None,
         accounting_entity_id="primary",
         _module_context={},
@@ -79,10 +79,10 @@ async def test_tally_xml_cashier_denied_before_report_build(monkeypatch):
         called = True
         return _trial_balance_spec()
 
-    monkeypatch.setattr(business_router, "_build_business_report", fake_build_report)
+    monkeypatch.setattr(business_reports, "_build_business_report", fake_build_report)
 
     with pytest.raises(HTTPException) as exc:
-        await business_router.export_business_tally_xml(
+        await business_reports.export_business_tally_xml(
             as_of=None,
             accounting_entity_id="primary",
             _module_context={},

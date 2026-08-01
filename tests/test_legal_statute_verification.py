@@ -126,11 +126,27 @@ async def test_hybrid_normalizes_gemini_bnss_inherent_power_mapping(
     monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_claude)
     monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
 
+    # Stage 2 cite-or-refuse: Gemini only runs when RAG supplies relevant citations.
+    rag_result = _make_rag_result(
+        citations=[
+            {
+                "title": "BNSS Section 528 — inherent powers of High Court",
+                "reference": "BNSS s.528",
+                "snippet": (
+                    "Section 528 BNSS saves the inherent powers of the High Court "
+                    "and is the successor to CrPC Section 482 for quashing FIRs "
+                    "when a dispute is contractual or an abuse of process."
+                ),
+                "score": 0.92,
+            }
+        ],
+    )
+
     result = await service.build_hybrid_legal_response(
         tenant_id="tenant-1",
         app_key="legalmitra",
         query="Can an FIR under Section 420 BNS be quashed if the dispute is purely contractual?",
-        rag_result=_make_rag_result(),
+        rag_result=rag_result,
         background_tasks=None,
     )
 

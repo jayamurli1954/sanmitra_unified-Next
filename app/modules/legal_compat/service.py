@@ -12,8 +12,20 @@ from fastapi import BackgroundTasks
 
 from app.config import get_settings
 from app.db.mongo import get_collection
+from app.modules.legal_compat.offline_fallbacks import offline_legal_fallback as _offline_legal_fallback
+from app.modules.legal_compat.response_contract import (
+    finalize_research_response,
+    insufficient_sources_response,
+    missing_jurisdiction_response,
+    resolve_jurisdiction,
+)
 
 _logger = logging.getLogger(__name__)
+
+_FABRICATION_REQUEST_RE = re.compile(
+    r"\b(invent|fabricate|make up|hallucinate|fake citation|secretly|unpublished)\b",
+    re.IGNORECASE,
+)
 
 RAG_SYNC_QUEUE_COLLECTION = "rag_sync_queue"
 
@@ -104,334 +116,6 @@ def _rag_answer_insufficient(answer: str) -> bool:
         "ingest relevant documents",
     ]
     return any(marker in value for marker in markers)
-
-
-def _offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None:
-    """Return narrow, source-backed guidance when the AI provider is unavailable."""
-    q = _normalize_query(query)
-    if (
-        ("25" in q or "twenty five" in q or "twenty-five" in q)
-        and ("act" in q or "acts" in q or "law" in q or "laws" in q)
-        and ("india" in q or "indian" in q)
-    ):
-        response = (
-            "**25 Important Indian Acts**\n\n"
-            "**Core and procedural laws**\n"
-            "1. Constitution of India\n"
-            "2. Bharatiya Nyaya Sanhita, 2023\n"
-            "3. Bharatiya Nagarik Suraksha Sanhita, 2023\n"
-            "4. Bharatiya Sakshya Adhiniyam, 2023\n"
-            "5. Code of Civil Procedure, 1908\n\n"
-            "**Business, corporate and commercial laws**\n"
-            "6. Companies Act, 2013\n"
-            "7. Limited Liability Partnership Act, 2008\n"
-            "8. Indian Contract Act, 1872\n"
-            "9. Sale of Goods Act, 1930\n"
-            "10. Insolvency and Bankruptcy Code, 2016\n\n"
-            "**Taxation laws**\n"
-            "11. Income-tax Act, 1961\n"
-            "12. Central Goods and Services Tax Act, 2017\n"
-            "13. Integrated Goods and Services Tax Act, 2017\n\n"
-            "**Labour and employment laws**\n"
-            "14. Employees' Provident Funds and Miscellaneous Provisions Act, 1952\n"
-            "15. Payment of Gratuity Act, 1972\n"
-            "16. Minimum Wages Act, 1948\n"
-            "17. Industrial Disputes Act, 1947\n\n"
-            "**Consumer, technology and data laws**\n"
-            "18. Consumer Protection Act, 2019\n"
-            "19. Information Technology Act, 2000\n"
-            "20. Digital Personal Data Protection Act, 2023\n\n"
-            "**Property and real estate laws**\n"
-            "21. Transfer of Property Act, 1882\n"
-            "22. Registration Act, 1908\n"
-            "23. Real Estate (Regulation and Development) Act, 2016\n\n"
-            "**Family and financial crime laws**\n"
-            "24. Special Marriage Act, 1954\n"
-            "25. Prevention of Money Laundering Act, 2002\n\n"
-            "**Freshness note:** This is a deterministic LegalMitra reference list for "
-            "the requested count. For production use, verify repealed/replaced "
-            "criminal-law references and any recent amendments."
-        )
-        return {
-            "response": response + _CLOSING_DISCLAIMER,
-            "citations": [
-                {
-                    "title": "India Code - Central Acts",
-                    "source": "Government of India",
-                    "snippet": "Reference portal for central legislation.",
-                    "retrieved_at": _now_utc().isoformat(),
-                }
-            ],
-            "strategy": "deterministic_indian_acts_list",
-            "note": "Returned deterministic list response for explicit Indian Acts count query.",
-            "dropped_citation_count": 0,
-        }
-
-    if (
-        ("divorce" in q or "dissolution" in q)
-        and (
-            "hindu marriage act" in q
-            or "hma" in q
-            or ("hindu" in q and "marriage" in q)
-        )
-    ):
-        response = (
-            "**Grounds for Divorce Under the Hindu Marriage Act, 1955**\n\n"
-            "**Core provision:** Section 13 of the Hindu Marriage Act, 1955 "
-            "sets out the principal grounds on which a Hindu marriage may be "
-            "dissolved by a decree of divorce.\n\n"
-            "**Common grounds under Section 13(1):**\n"
-            "1. **Adultery:** voluntary sexual intercourse with a person other "
-            "than the spouse after marriage.\n"
-            "2. **Cruelty:** physical or mental cruelty making continued "
-            "cohabitation unsafe or unreasonable.\n"
-            "3. **Desertion:** abandonment for a continuous period of at least "
-            "two years immediately before filing the petition.\n"
-            "4. **Conversion:** ceasing to be Hindu by conversion to another "
-            "religion.\n"
-            "5. **Mental disorder:** incurable unsoundness of mind or a mental "
-            "disorder of such kind and degree that the petitioner cannot "
-            "reasonably be expected to live with the respondent.\n"
-            "6. **Virulent and incurable leprosy:** statutory availability must "
-            "be checked against current amendments before pleading.\n"
-            "7. **Venereal disease in communicable form:** statutory availability "
-            "must be checked against current amendments before pleading.\n"
-            "8. **Renunciation:** renouncing the world by entering a religious "
-            "order.\n"
-            "9. **Presumption of death:** not heard of as being alive for seven "
-            "years or more by persons who would naturally have heard of the spouse.\n\n"
-            "**Additional grounds:** A wife may have additional grounds under "
-            "Section 13(2), including situations involving the husband's earlier "
-            "marriage, certain sexual offences, non-resumption of cohabitation "
-            "after maintenance orders, and repudiation of marriage in specified "
-            "circumstances. Divorce by mutual consent is separately available "
-            "under Section 13B."
-        )
-        return {
-            "response": response + _CLOSING_DISCLAIMER,
-            "citations": [
-                {
-                    "title": "Hindu Marriage Act, 1955 - Section 13",
-                    "source": "India Code / Central Act",
-                    "snippet": "Divorce grounds under the Hindu Marriage Act, 1955.",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-                {
-                    "title": "Hindu Marriage Act, 1955 - Section 13B",
-                    "source": "India Code / Central Act",
-                    "snippet": "Divorce by mutual consent.",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-            ],
-            "strategy": "offline_hindu_marriage_divorce_fallback",
-            "note": "Gemini unavailable; returned narrow offline fallback with source caveats.",
-            "dropped_citation_count": 0,
-        }
-
-    if (
-        ("section 138" in q or "cheque bounce" in q or "check bounce" in q)
-        and ("limitation" in q or "timeline" in q or "filing" in q or "complaint" in q)
-        and ("ni act" in q or "negotiable instruments" in q or "cheque" in q or "check" in q)
-    ):
-        response = (
-            "**Limitation Timeline for a Cheque Bounce Complaint Under Section 138 NI Act**\n\n"
-            "**Core provision:** Section 138 read with Section 142(b) of the "
-            "Negotiable Instruments Act, 1881.\n\n"
-            "**Timeline:**\n"
-            "1. **Present the cheque:** within 3 months from the cheque date or "
-            "within its validity period, whichever is earlier.\n"
-            "2. **Send demand notice:** within 30 days from receiving bank "
-            "intimation that the cheque was dishonoured.\n"
-            "3. **Wait for payment:** the drawer gets 15 days from receipt of the "
-            "demand notice to pay.\n"
-            "4. **Cause of action:** arises after the 15-day payment period expires "
-            "without payment.\n"
-            "5. **File complaint:** within 1 month from the date the cause of "
-            "action arises, under Section 142(b).\n\n"
-            "**Delay:** The court may take cognizance after the prescribed period "
-            "if the complainant shows sufficient cause for delay under the proviso "
-            "to Section 142(b).\n\n"
-            "**Key authority:** *Econ Antri Ltd. v. Rom Industries Ltd.*, "
-            "(2014) 11 SCC 769, on computation of the Section 138/142 timeline."
-        )
-        return {
-            "response": response + _CLOSING_DISCLAIMER,
-            "citations": [
-                {
-                    "title": "Negotiable Instruments Act, 1881 - Section 138",
-                    "source": "India Code / Central Act",
-                    "snippet": "Cheque dishonour ingredients and statutory notice/payment periods.",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-                {
-                    "title": "Negotiable Instruments Act, 1881 - Section 142(b)",
-                    "source": "India Code / Central Act",
-                    "snippet": "Complaint within one month from cause of action, with delay condonation proviso.",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-                {
-                    "title": "Econ Antri Ltd. v. Rom Industries Ltd.",
-                    "source": "Supreme Court of India",
-                    "snippet": "Computation of limitation under Sections 138(c) and 142(b) of the NI Act.",
-                    "date": "2014",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-            ],
-            "strategy": "offline_ni_act_138_limitation_fallback",
-            "note": "Gemini unavailable; returned narrow offline fallback with source caveats.",
-            "dropped_citation_count": 0,
-        }
-
-    if (
-        ("section 244" in q or "244 companies" in q)
-        and ("companies act" in q or "company" in q)
-        and (
-            "oppression" in q
-            or "mismanagement" in q
-            or "who can file" in q
-            or "eligibility" in q
-            or "petition" in q
-            or "waiver" in q
-        )
-    ):
-        response = (
-            "**Provision / Concept:** Section 244, Companies Act, 2013\n"
-            "**Core Rule:** Section 244 specifies who is eligible to apply to the "
-            "National Company Law Tribunal (NCLT) for relief against oppression and "
-            "mismanagement under Section 241.\n"
-            "**Ingredients / Tests:**\n"
-            "* **Company having share capital:**\n"
-            "  * Not less than 100 members of the company, or not less than one-tenth "
-            "of the total number of members, whichever is less; or\n"
-            "  * Any member or members holding not less than one-tenth of the issued "
-            "share capital, provided all calls and other sums due on their shares "
-            "have been paid.\n"
-            "* **Company not having share capital:**\n"
-            "  * Not less than one-fifth of the total number of its members.\n"
-            "* **Waiver:** The NCLT may waive all or any of the Section 244(1) "
-            "requirements to enable members to apply under Section 241.\n"
-            "**Key Exception:** The Tribunal's waiver power under the proviso to "
-            "Section 244(1).\n"
-            "**Limitation / Timeline:** Not applicable to filing eligibility.\n"
-            "**Key SC Cases:**\n"
-            "* *Cyrus Investments Pvt. Ltd. v. Tata Sons Ltd.*, (2017) 1 SCC 777 "
-            "- recognised the discretionary waiver route under the proviso to "
-            "Section 244(1), to be considered on the facts of the case.\n"
-            "* *V.S. Krishnan v. M.S. Krishnan*, (2020) 14 SCC 1 - waiver under "
-            "Section 244 is a preliminary issue and must be considered before the "
-            "main oppression and mismanagement petition proceeds.\n"
-            "**Legal Position:** Settled Law on eligibility thresholds and the "
-            "Tribunal's power to waive them."
-        )
-        return {
-            "response": response + _CLOSING_DISCLAIMER,
-            "citations": [
-                {
-                    "title": "Companies Act, 2013 - Section 244",
-                    "source": "India Code / Central Act",
-                    "snippet": "Right to apply under Section 241 and waiver by the Tribunal.",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-                {
-                    "title": "Cyrus Investments Pvt. Ltd. v. Tata Sons Ltd.",
-                    "source": "Supreme Court of India",
-                    "snippet": "Waiver under the proviso to Section 244(1).",
-                    "date": "2017",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-                {
-                    "title": "V.S. Krishnan v. M.S. Krishnan",
-                    "source": "Supreme Court of India",
-                    "snippet": "Section 244 waiver as a preliminary issue.",
-                    "date": "2020",
-                    "retrieved_at": _now_utc().isoformat(),
-                },
-            ],
-            "strategy": "offline_companies_act_244_eligibility_fallback",
-            "note": "Gemini unavailable; returned narrow offline fallback with source caveats.",
-            "dropped_citation_count": 0,
-        }
-
-    if not (
-        "quash" in q
-        and "fir" in q
-        and ("bnss" in q or "bharatiya nagarik suraksha sanhita" in q)
-    ):
-        return None
-
-    response = (
-        "**FIR Quashing Under BNSS - Practical Procedure**\n\n"
-        "**Core route:** Move the jurisdictional High Court under **Section 528, "
-        "Bharatiya Nagarik Suraksha Sanhita, 2023 (BNSS)**, which preserves the "
-        "High Court's inherent powers to prevent abuse of process and secure the "
-        "ends of justice. In suitable cases, Article 226 of the Constitution may "
-        "also be invoked, especially where the challenge is to illegal or arbitrary "
-        "State action.\n\n"
-        "**Procedure checklist:**\n"
-        "1. Collect the FIR, complaint, notice/summons if any, settlement documents "
-        "if applicable, and all documents showing why the allegations are legally "
-        "untenable.\n"
-        "2. Prepare a criminal petition under BNSS Section 528 before the High Court "
-        "with a prayer to quash the FIR and consequential proceedings/investigation.\n"
-        "3. Plead the quashing grounds precisely: no offence made out even if the "
-        "FIR is accepted at face value, proceedings are mala fide, civil/commercial "
-        "dispute is given criminal colour, legal bar to prosecution, or continuation "
-        "would be abuse of process.\n"
-        "4. Add parties normally including the State/investigating agency and the "
-        "informant/complainant. Serve advance copies as required by local High Court "
-        "rules.\n"
-        "5. Seek interim protection only where justified, such as no coercive steps "
-        "or stay of further proceedings. Courts are cautious at the investigation "
-        "stage, so the petition must show an exceptional case.\n"
-        "6. At hearing, avoid disputed facts and argue from the FIR, admitted "
-        "documents, statutory ingredients, and binding quashing principles.\n\n"
-        "**Key authorities to verify before filing:**\n"
-        "- **BNSS, 2023, Section 528**: inherent powers of High Court.\n"
-        "- **State of Haryana v. Bhajan Lal**, 1992 Supp (1) SCC 335: illustrative "
-        "categories for quashing criminal proceedings.\n"
-        "- **Gian Singh v. State of Punjab**, (2012) 10 SCC 303 and **Narinder "
-        "Singh v. State of Punjab**, (2014) 6 SCC 466: quashing on settlement, "
-        "subject to offence nature and public interest.\n"
-        "- **Neeharika Infrastructure v. State of Maharashtra**, (2021) 19 SCC 401: "
-        "High Courts should be cautious in interfering with investigation.\n\n"
-        "**Drafting note:** Lead with the exact FIR allegations and map them against "
-        "the statutory ingredients of the alleged BNS/other offences. If any ingredient "
-        "is missing on the face of the FIR, make that the first ground.\n\n"
-        "**Freshness note:** This is an offline fallback because the AI provider did "
-        "not return a response. Verify current High Court rules, recent Supreme Court "
-        "and local High Court decisions, and any post-2023 BNSS amendments before filing."
-    )
-
-    citations = [
-        {
-            "title": "Bharatiya Nagarik Suraksha Sanhita, 2023 - Section 528",
-            "source": "BNSS 2023",
-            "snippet": "Saving of inherent powers of High Court.",
-            "retrieved_at": _now_utc().isoformat(),
-        },
-        {
-            "title": "State of Haryana v. Bhajan Lal",
-            "source": "Supreme Court of India",
-            "snippet": "Illustrative categories for quashing criminal proceedings.",
-            "date": "1992",
-            "retrieved_at": _now_utc().isoformat(),
-        },
-        {
-            "title": "Neeharika Infrastructure v. State of Maharashtra",
-            "source": "Supreme Court of India",
-            "snippet": "Caution against routine interference with criminal investigation.",
-            "date": "2021",
-            "retrieved_at": _now_utc().isoformat(),
-        },
-    ]
-
-    return {
-        "response": response + _CLOSING_DISCLAIMER,
-        "citations": citations,
-        "strategy": "offline_bnss_fir_quashing_fallback",
-        "note": "Gemini unavailable; returned narrow offline fallback with source caveats.",
-        "dropped_citation_count": 0,
-    }
 
 
 # ─── Format Detection ─────────────────────────────────────────────────────────
@@ -1108,6 +792,26 @@ def validate_legal_hallucinations(response_text: str) -> str:
 
 # ─── Main Response Builder ────────────────────────────────────────────────────
 
+def _finalize_offline_or_payload(
+    *,
+    question: str,
+    payload: dict[str, Any],
+    jurisdiction: str | None,
+    missing_jurisdiction: bool = False,
+) -> dict[str, Any]:
+    return finalize_research_response(
+        question=question,
+        response=str(payload.get("response") or ""),
+        citations=list(payload.get("citations") or []),
+        strategy=str(payload.get("strategy") or "offline"),
+        provider=payload.get("provider"),
+        note=payload.get("note"),
+        dropped_citation_count=int(payload.get("dropped_citation_count") or 0),
+        jurisdiction=jurisdiction,
+        missing_jurisdiction=missing_jurisdiction,
+    )
+
+
 async def build_hybrid_legal_response(
     *,
     tenant_id: str,
@@ -1123,15 +827,42 @@ async def build_hybrid_legal_response(
 
     # Filter RAG citations for relevance — only topically matching ones go into context.
     relevant_citations, dropped_citations = _filter_citations_by_relevance(citations, current_query)
+    jurisdiction, missing_jurisdiction = resolve_jurisdiction(current_query)
 
     query_preview = (current_query or "")[:80]
     _logger.info(
-        "hybrid_response tenant=%s app=%s rag_citations=%d relevant=%d dropped=%d query=%r",
-        tenant_id, app_key, len(citations), len(relevant_citations),
-        len(dropped_citations), query_preview,
+        "hybrid_response tenant=%s app=%s rag_citations=%d relevant=%d dropped=%d jurisdiction=%r missing_jurisdiction=%s query=%r",
+        tenant_id,
+        app_key,
+        len(citations),
+        len(relevant_citations),
+        len(dropped_citations),
+        jurisdiction,
+        missing_jurisdiction,
+        query_preview,
     )
 
-    # Enqueue low-confidence queries for background sync regardless of Gemini outcome.
+    if missing_jurisdiction:
+        return missing_jurisdiction_response(
+            question=current_query,
+            dropped_citation_count=len(dropped_citations),
+        )
+
+    if _FABRICATION_REQUEST_RE.search(current_query or ""):
+        _logger.info(
+            "hybrid_response path=fabrication_refused tenant=%s app=%s query=%r",
+            tenant_id,
+            app_key,
+            query_preview,
+        )
+        return insufficient_sources_response(
+            question=current_query,
+            jurisdiction=jurisdiction,
+            dropped_citation_count=len(dropped_citations),
+            note="Refused fabrication / unpublished-authority request under Stage 2 contract.",
+        )
+
+    # Enqueue low-confidence queries for background sync regardless of provider outcome.
     if not relevant_citations and background_tasks is not None:
         background_tasks.add_task(
             enqueue_auto_sync_query,
@@ -1141,14 +872,51 @@ async def build_hybrid_legal_response(
             reason="low_rag_confidence",
         )
 
-    # Build the Gemini prompt — relevant RAG snippets become context, not the answer.
-    deterministic_fallback = _offline_legal_fallback(current_query, query_type)
-    if deterministic_fallback and deterministic_fallback["strategy"] == "deterministic_indian_acts_list":
+    # Deterministic / authorized offline slices (acts list, GST s.54, etc.).
+    offline_early = _offline_legal_fallback(current_query, query_type)
+    if offline_early and offline_early["strategy"] in {
+        "deterministic_indian_acts_list",
+        "offline_cgst_section_54_refund_fallback",
+        "offline_it_section_139_return_fallback",
+    }:
+        # Prefer authorized Stage 2 slices even when RAG is empty; acts-list remains early-exit.
+        if offline_early["strategy"] == "deterministic_indian_acts_list" or not relevant_citations:
+            _logger.info(
+                "hybrid_response path=authorized_offline tenant=%s app=%s strategy=%s",
+                tenant_id,
+                app_key,
+                offline_early["strategy"],
+            )
+            return _finalize_offline_or_payload(
+                question=current_query,
+                payload=offline_early,
+                jurisdiction=jurisdiction or "India (Central)",
+            )
+
+    # Stage 2 contract: do not present uncited model memory as grounded research.
+    if not relevant_citations:
+        if offline_early:
+            _logger.info(
+                "hybrid_response path=offline_fallback_no_rag tenant=%s app=%s strategy=%s",
+                tenant_id,
+                app_key,
+                offline_early["strategy"],
+            )
+            return _finalize_offline_or_payload(
+                question=current_query,
+                payload=offline_early,
+                jurisdiction=jurisdiction,
+            )
         _logger.info(
-            "hybrid_response path=deterministic tenant=%s app=%s strategy=%s",
-            tenant_id, app_key, deterministic_fallback["strategy"],
+            "hybrid_response path=insufficient_sources tenant=%s app=%s",
+            tenant_id,
+            app_key,
         )
-        return deterministic_fallback
+        return insufficient_sources_response(
+            question=current_query,
+            jurisdiction=jurisdiction,
+            dropped_citation_count=len(dropped_citations),
+        )
 
     today_ist = _now_ist().strftime("%d-%m-%Y")
     format_mode = _detect_format_mode(current_query, query_type)
@@ -1175,14 +943,16 @@ async def build_hybrid_legal_response(
             "hybrid_response path=claude_legal_counsel tenant=%s app=%s format=%s response_len=%d",
             tenant_id, app_key, format_mode, len(response_text),
         )
-        return {
-            "response": response_text,
-            "citations": relevant_citations,
-            "strategy": f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
-            "provider": "claude_legal_counsel",
-            "note": None,
-            "dropped_citation_count": len(dropped_citations),
-        }
+        return finalize_research_response(
+            question=current_query,
+            response=response_text,
+            citations=relevant_citations,
+            strategy=f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
+            provider="claude_legal_counsel",
+            note=None,
+            dropped_citation_count=len(dropped_citations),
+            jurisdiction=jurisdiction,
+        )
 
     gemini_answer = await _call_gemini_text(
         prompt=prompt,
@@ -1191,50 +961,62 @@ async def build_hybrid_legal_response(
     )
 
     if gemini_answer and gemini_answer.strip():
-        # Apply Hallucination Guardrail
         response_text = validate_legal_hallucinations(gemini_answer.strip())
         response_text = normalize_verified_statute_mappings(response_text, current_query)
-
         response_text += _CLOSING_DISCLAIMER
         _logger.info(
             "hybrid_response path=gemini tenant=%s app=%s format=%s response_len=%d",
             tenant_id, app_key, format_mode, len(response_text),
         )
-        return {
-            "response": response_text,
-            "citations": relevant_citations,
-            "strategy": f"{str(rag_result.get('strategy') or 'rag')}_gemini",
-            "provider": "gemini",
-            "note": None,
-            "dropped_citation_count": len(dropped_citations),
-        }
+        return finalize_research_response(
+            question=current_query,
+            response=response_text,
+            citations=relevant_citations,
+            strategy=f"{str(rag_result.get('strategy') or 'rag')}_gemini",
+            provider="gemini",
+            note=None,
+            dropped_citation_count=len(dropped_citations),
+            jurisdiction=jurisdiction,
+        )
 
-    # Gemini unavailable or returned empty — return a clean, honest failure.
+    # Providers unavailable — use authorized offline fallback when available.
     offline_fallback = _offline_legal_fallback(current_query, query_type)
     if offline_fallback:
         _logger.warning(
             "hybrid_response path=offline_fallback tenant=%s app=%s strategy=%s",
             tenant_id, app_key, offline_fallback["strategy"],
         )
-        return offline_fallback
+        return _finalize_offline_or_payload(
+            question=current_query,
+            payload=offline_fallback,
+            jurisdiction=jurisdiction,
+        )
 
     _logger.warning(
-        "hybrid_response path=gemini_unavailable tenant=%s app=%s (no API key or empty response)",
+        "hybrid_response path=provider_unavailable tenant=%s app=%s (no API key or empty response)",
         tenant_id, app_key,
     )
-    return {
-        "response": (
+    return finalize_research_response(
+        question=current_query,
+        response=(
             "**Advisory Unavailable**\n\n"
             "The AI engine did not return a response for this query. "
-            "This may be a transient issue or an unsupported query type.\n\n"
+            "Retrieved sources were available, but generation failed.\n\n"
             "**Suggested action:** Retry the query, narrow the scope, "
             "or route to a junior for manual research."
         ),
-        "citations": relevant_citations,
-        "strategy": "gemini_unavailable",
-        "note": "AI engine did not respond — retry or rephrase the query.",
-        "dropped_citation_count": len(dropped_citations),
-    }
+        citations=relevant_citations,
+        strategy="provider_unavailable",
+        provider=None,
+        note="AI engine did not respond — retry or rephrase the query.",
+        dropped_citation_count=len(dropped_citations),
+        jurisdiction=jurisdiction,
+        confidence="low",
+        limitations=[
+            "Generation provider failed despite retrieved sources.",
+            "Manual review of retrieved citations is required.",
+        ],
+    )
 
 
 # ─── Index & Queue Management ─────────────────────────────────────────────────

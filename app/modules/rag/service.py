@@ -1,4 +1,4 @@
-import asyncio
+import logging
 import math
 import re
 from datetime import datetime, timezone
@@ -13,13 +13,13 @@ from app.db.mongo import get_collection
 from app.modules.rag.legal_act_registry import (
     detect_legal_act,
     legal_act_metadata_filter,
-    should_trigger_jit,
 )
 from app.modules.rag.providers import get_embedding_provider, get_embedding_strategy_name
 from app.modules.rag.schemas import RagIngestRequest, RagQueryRequest
 
 RAG_DOCUMENTS_COLLECTION = "rag_documents"
 RAG_CHUNKS_COLLECTION = "rag_chunks"
+_logger = logging.getLogger(__name__)
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 # Raised from 0.16 — previous value let low-quality hash-embedding matches through
@@ -568,11 +568,9 @@ async def query_knowledge(
         filters["legal_act_name"] = legal_act_metadata_filter(detected_act)
         effective_strategy = f"{strategy}_act_scoped_{detected_act.key}"
 
-    # --- Proactive JIT Trigger ---
-    if should_trigger_jit(payload.query):
-        from app.modules.rag.jit_service import trigger_jit_ingestion
-        asyncio.create_task(trigger_jit_ingestion(payload.query, tenant_id, app_key))
-    # --- End Proactive JIT ---
+    # Proactive JIT (optional; must never fail the query path)
+    from app.modules.rag.jit_service import schedule_jit_if_needed
+    schedule_jit_if_needed(payload.query, tenant_id, app_key)
 
     scored = await _score_candidate_chunks(
         chunks_collection=chunks_collection,

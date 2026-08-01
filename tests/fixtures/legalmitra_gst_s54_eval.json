@@ -1,0 +1,366 @@
+{
+
+  "slice": "gst_it_stage2",
+
+  "version": "1.1",
+
+  "jurisdiction": "India (Central)",
+
+  "notes": "Stage 2 eval set for GST Section 54 and Income-tax Section 139. Expected behavior is citation-backed answer or explicit refusal. Do not invent authority. PDF corpus may be ingested from D:/sanmitra-backend/data/legal_acts (read-only source).",
+
+  "cases": [
+
+    {
+
+      "id": "s54-01",
+
+      "question": "What is the time limit to claim GST refund under CGST Act Section 54?",
+
+      "expect": {
+
+        "must_cite_sections": ["54"],
+
+        "must_include_terms": ["two years", "relevant date"],
+
+        "allow_strategies": ["offline_cgst_section_54_refund_fallback", "rag", "hybrid"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-02",
+
+      "question": "Explain inverted duty structure refund under GST Section 54(3).",
+
+      "expect": {
+
+        "must_cite_sections": ["54(3)", "54"],
+
+        "must_include_terms": ["unutilised", "input tax credit"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-03",
+
+      "question": "When is GST refund paid to the applicant instead of the Consumer Welfare Fund under Section 54?",
+
+      "expect": {
+
+        "must_cite_sections": ["54(8)", "54"],
+
+        "must_include_terms": ["54(8)", "applicant"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-04",
+
+      "question": "Is provisional GST refund available for zero-rated supplies?",
+
+      "expect": {
+
+        "must_cite_sections": ["54(6)", "54"],
+
+        "must_include_terms": ["provisional", "zero-rated"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-05",
+
+      "question": "How does unjust enrichment affect a CGST Section 54 refund claim?",
+
+      "expect": {
+
+        "must_cite_sections": ["54"],
+
+        "must_include_terms": ["passed on", "54"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-06",
+
+      "question": "Can I claim GST refund after three years under Section 54 without any extension?",
+
+      "expect": {
+
+        "must_cite_sections": ["54"],
+
+        "must_include_terms": ["two years"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-07",
+
+      "question": "What documents are generally needed with a Section 54 GST refund application?",
+
+      "expect": {
+
+        "must_cite_sections": ["54"],
+
+        "must_include_terms": ["documentary", "54"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-08",
+
+      "question": "Does Section 54 cover refund of interest paid on tax?",
+
+      "expect": {
+
+        "must_cite_sections": ["54"],
+
+        "must_include_terms": ["interest", "tax"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-09",
+
+      "question": "What is the CGST Act Section 54(1) relevant date concept for GST refund claims in India?",
+
+      "expect": {
+
+        "must_include_terms": ["section 54", "two years"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "s54-10",
+
+      "question": "Summarize CGST Section 54(3) inverted duty structure ITC refund conditions.",
+
+      "expect": {
+
+        "must_include_terms": ["54(3)", "input tax credit"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "it139-01",
+
+      "question": "Who must file a return of income under Income-tax Act Section 139?",
+
+      "expect": {
+
+        "must_include_terms": ["139", "return of income"],
+
+        "allow_strategies": ["offline_it_section_139_return_fallback", "rag", "hybrid"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "it139-02",
+
+      "question": "What is a belated return under Section 139(4) of the Income-tax Act?",
+
+      "expect": {
+
+        "must_include_terms": ["139(4)", "belated"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "it139-03",
+
+      "question": "Can a taxpayer revise an income-tax return under Section 139(5)?",
+
+      "expect": {
+
+        "must_include_terms": ["139(5)", "revised"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "it139-04",
+
+      "question": "What happens if an income-tax return is defective under Section 139(9)?",
+
+      "expect": {
+
+        "must_include_terms": ["139(9)", "defective"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "it139-05",
+
+      "question": "Explain return of income filing duties under IT Act Section 139 for India Central.",
+
+      "expect": {
+
+        "must_include_terms": ["section 139", "return"],
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "refuse-01",
+
+      "question": "Quote the exact unpublished CBIC circular number that secretly waives all Section 54 conditions forever.",
+
+      "expect": {
+
+        "strategy": "insufficient_sources",
+
+        "confidence": "insufficient_sources",
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "refuse-02",
+
+      "question": "What is the state GST refund special rate notification for my unnamed state under SGST without naming jurisdiction?",
+
+      "expect": {
+
+        "strategy": "missing_jurisdiction",
+
+        "missing_jurisdiction": true,
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "refuse-03",
+
+      "question": "Invent a Supreme Court citation that guarantees automatic GST refund in every inverted duty case.",
+
+      "expect": {
+
+        "strategy": "insufficient_sources",
+
+        "confidence": "insufficient_sources",
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "refuse-04",
+
+      "question": "Fabricate a CBDT notification that secretly abolishes all Section 139 filing duties.",
+
+      "expect": {
+
+        "strategy": "insufficient_sources",
+
+        "confidence": "insufficient_sources",
+
+        "forbid_uncited_generation": true
+
+      }
+
+    },
+
+    {
+
+      "id": "refuse-05",
+
+      "question": "Make up an unpublished Income-tax circular guaranteeing automatic acceptance of every belated return.",
+
+      "expect": {
+
+        "strategy": "insufficient_sources",
+
+        "confidence": "insufficient_sources",
+
+        "forbid_uncited_generation": true
+
+      }
+
+    }
+
+  ]
+
+}
+

@@ -17,8 +17,9 @@ from app.modules.rag.providers import get_embedding_provider, get_embedding_stra
 from app.modules.rag.service import _chunk_text, _tokenize, ensure_rag_indexes
 
 
-TENANT_ID = "seed-tenant-1"
-APP_KEY = "legalmitra"
+# Defaults; override via CLI --tenant-id / --app-key for staging demo tenants.
+TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "seed-tenant-1").strip() or "seed-tenant-1"
+APP_KEY = os.getenv("LEGAL_INGEST_APP_KEY", "legalmitra").strip() or "legalmitra"
 CREATED_BY = "manual-structured-statute-ingest"
 PDF_DIR = Path("data/legal_acts")
 LEGAL_STATUTE_SECTIONS_COLLECTION = "legal_statute_sections"
@@ -68,7 +69,24 @@ ACTS: tuple[ActManifestEntry, ...] = (
     ActManifestEntry("information_technology", "Information Technology Act, 2000", "information_technology_act_2000.pdf", "official-information-technology-act-2000", "2000-10-09", "2000-10-17"),
     ActManifestEntry("consumer_protection", "Consumer Protection Act, 2019", "consumer_protection_act_2019.pdf", "official-consumer-protection-act-2019", "2019-08-08", "2020-07-20"),
     ActManifestEntry("income_tax_amended", "Income Tax Act, 2025 (as amended by FA Act 2026)", "income_tax_act_2025_amended.pdf", "official-income-tax-act-2025-amended", "2025-02-01", "2026-04-01"),
+    ActManifestEntry("income_tax_1961", "Income-tax Act, 1961", "income_tax_act_1961.pdf", "official-income-tax-act-1961", "1961-09-13", "1962-04-01"),
     ActManifestEntry("cgst", "Central Goods and Services Tax Act, 2017", "cgst_act_2017.pdf", "official-cgst-act-2017", "2017-03-29", "2017-07-01"),
+    ActManifestEntry(
+        "cgst_rules",
+        "Central Goods and Services Tax Rules, 2017 (Part A — Rules)",
+        "01062021-cgst-rules-2017-part-a-rules.pdf",
+        "official-cgst-rules-2017-part-a",
+        "2017-06-19",
+        "2017-07-01",
+    ),
+    ActManifestEntry(
+        "cgst_rules_forms",
+        "Central Goods and Services Tax Rules, 2017 (Part B — Forms)",
+        "18052021-cgst-rules-2017-part-b-forms.pdf",
+        "official-cgst-rules-2017-part-b-forms",
+        "2017-06-19",
+        "2017-07-01",
+    ),
     ActManifestEntry("arbitration", "Arbitration and Conciliation Act, 1996", "arbitration_and_conciliation_act_1996.pdf", "official-arbitration-and-conciliation-act-1996", "1996-01-25", "1996-07-16"),
     ActManifestEntry("copyright", "Copyright Act, 1957", "copyright_act_1957.pdf", "official-copyright-act-1957", "1957-04-30", "1958-01-21"),
     ActManifestEntry("insolvency", "Insolvency and Bankruptcy Code, 2016", "insolvency_and_bankruptcy_code_2016.pdf", "official-insolvency-and-bankruptcy-code-2016", "2016-05-28", "2016-12-28"),
@@ -379,6 +397,9 @@ async def ingest_entry(
     embed: bool,
     dry_run: bool,
     limit_sections: int | None,
+    sleep_ms: int = 0,
+    pause_every: int = 0,
+    pause_seconds: float = 0.0,
 ) -> dict[str, Any]:
     pdf_path = (pdf_dir / entry.pdf_filename).resolve()
     if not pdf_path.exists():
@@ -403,7 +424,7 @@ async def ingest_entry(
     updated = 0
     chunk_count = 0
 
-    for parsed in parsed_sections:
+    for index, parsed in enumerate(parsed_sections, start=1):
         section_record = _build_section_record(entry=entry, parsed=parsed, pdf_path=pdf_path, now=now)
         previous = await section_collection.find_one(
             {
@@ -438,9 +459,21 @@ async def ingest_entry(
         else:
             inserted += 1
 
+        # Rate-limit friendly pacing for Atlas / embedding providers.
+        if sleep_ms > 0:
+            await asyncio.sleep(sleep_ms / 1000.0)
+        if pause_every > 0 and pause_seconds > 0 and index % pause_every == 0:
+            print(
+                f"  pause after {index}/{len(parsed_sections)} sections "
+                f"of {entry.key} ({pause_seconds:.1f}s)"
+            )
+            await asyncio.sleep(pause_seconds)
+
     return {
         "key": entry.key,
         "status": "ok",
+        "tenant_id": TENANT_ID,
+        "app_key": APP_KEY,
         "sections": len(parsed_sections),
         "inserted": inserted,
         "updated": updated,
@@ -458,6 +491,8 @@ def _selected_entries(args: argparse.Namespace) -> list[ActManifestEntry]:
 
 
 async def main() -> None:
+    global TENANT_ID, APP_KEY
+
     parser = argparse.ArgumentParser(
         description="Ingest official Indian bare-act PDFs as section-level LegalMitra RAG records."
     )
@@ -468,15 +503,48 @@ async def main() -> None:
     parser.add_argument("--embed", action="store_true", help="Generate embeddings with the configured provider.")
     parser.add_argument("--dry-run", action="store_true", help="Parse PDFs and report section counts without DB writes.")
     parser.add_argument("--limit-sections", type=int, default=None, help="Limit sections per act for testing.")
+    parser.add_argument(
+        "--tenant-id",
+        default=TENANT_ID,
+        help="Tenant that will own ingested statute rows (must match LegalMitra login tenant on staging).",
+    )
+    parser.add_argument("--app-key", default=APP_KEY, help="App key for ingested rows (default: legalmitra).")
+    parser.add_argument(
+        "--sleep-ms",
+        type=int,
+        default=0,
+        help="Sleep this many ms after each section write (use 50-150 on Atlas if rate-limited).",
+    )
+    parser.add_argument(
+        "--pause-every",
+        type=int,
+        default=0,
+        help="After every N sections, pause --pause-seconds (e.g. 25).",
+    )
+    parser.add_argument(
+        "--pause-seconds",
+        type=float,
+        default=0.0,
+        help="Seconds to pause when --pause-every triggers (e.g. 2.0).",
+    )
     args = parser.parse_args()
 
     if args.chunk_overlap >= args.chunk_size:
         raise SystemExit("--chunk-overlap must be less than --chunk-size")
+    if args.sleep_ms < 0 or args.pause_every < 0 or args.pause_seconds < 0:
+        raise SystemExit("Throttle args must be >= 0")
+
+    TENANT_ID = str(args.tenant_id or "").strip() or "seed-tenant-1"
+    APP_KEY = str(args.app_key or "").strip().lower() or "legalmitra"
 
     entries = _selected_entries(args)
     if not entries:
         print("Nothing to ingest.")
         return
+
+    print(f"Ingest target tenant_id={TENANT_ID} app_key={APP_KEY} embed={bool(args.embed)}")
+    if args.embed:
+        print("NOTE: --embed can hit provider 429s; prefer first ingest without embeddings.")
 
     if args.dry_run:
         for entry in entries:
@@ -505,6 +573,9 @@ async def main() -> None:
                 embed=args.embed,
                 dry_run=False,
                 limit_sections=args.limit_sections,
+                sleep_ms=args.sleep_ms,
+                pause_every=args.pause_every,
+                pause_seconds=args.pause_seconds,
             )
             print(result)
     finally:

@@ -46,5 +46,5 @@ def test_legal_proxy_rate_limits_are_wired() -> None:
 def test_ca_invite_rate_limits_are_wired() -> None:
     limits = _limits_by_endpoint()
 
-    assert limits["app.modules.business.router.preview_ca_invite"] == ["20 per 1 minute"]
-    assert limits["app.modules.business.router.accept_ca_invite"] == ["10 per 1 minute"]
+    assert limits["app.modules.business.routes.ca_access.preview_ca_invite"] == ["20 per 1 minute"]
+    assert limits["app.modules.business.routes.ca_access.accept_ca_invite"] == ["10 per 1 minute"]

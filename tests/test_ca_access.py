@@ -43,7 +43,10 @@ def test_accept_route_accepts_text_plain_json(monkeypatch):
             "role": "ca_viewer",
         }
 
-    monkeypatch.setattr(business_router.ca_access_module, "accept_ca_invite", fake_accept_ca_invite)
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.accept_ca_invite",
+        fake_accept_ca_invite,
+    )
 
     with TestClient(app) as client:
         response = client.post(
@@ -65,7 +68,10 @@ def test_preview_route_returns_only_masked_email(monkeypatch):
         assert token == "tok123"
         return {"masked_email": "c***@example.com"}
 
-    monkeypatch.setattr(business_router.ca_access_module, "preview_ca_invite", fake_preview_ca_invite)
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.preview_ca_invite",
+        fake_preview_ca_invite,
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/v1/business/ca/invite/tok123/preview")
@@ -81,8 +87,14 @@ def test_public_invite_routes_use_generic_unavailable_error(monkeypatch):
     async def unavailable(**_kwargs):
         raise ValueError("A user with this email already exists in a different tenant")
 
-    monkeypatch.setattr(business_router.ca_access_module, "preview_ca_invite", unavailable)
-    monkeypatch.setattr(business_router.ca_access_module, "accept_ca_invite", unavailable)
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.preview_ca_invite",
+        unavailable,
+    )
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.accept_ca_invite",
+        unavailable,
+    )
 
     with TestClient(app) as client:
         preview = client.get("/api/v1/business/ca/invite/tok123/preview")

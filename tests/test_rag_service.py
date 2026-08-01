@@ -152,7 +152,10 @@ def test_query_knowledge_auto_scopes_detected_act(monkeypatch) -> None:
     monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
     monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
     monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
-    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+    monkeypatch.setattr(
+        "app.modules.rag.jit_service.schedule_jit_if_needed",
+        lambda *_args, **_kwargs: None,
+    )
 
     result = asyncio.run(
         rag_service.query_knowledge(
@@ -176,7 +179,10 @@ def test_query_knowledge_does_not_override_explicit_act_filter(monkeypatch) -> N
     monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
     monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
     monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
-    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+    monkeypatch.setattr(
+        "app.modules.rag.jit_service.schedule_jit_if_needed",
+        lambda *_args, **_kwargs: None,
+    )
 
     result = asyncio.run(
         rag_service.query_knowledge(
@@ -214,7 +220,10 @@ def test_query_knowledge_never_returns_cross_tenant_or_cross_app_citations(monke
     monkeypatch.setattr(rag_service, "get_collection", lambda _name: collection)
     monkeypatch.setattr(rag_service, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
     monkeypatch.setattr(rag_service, "get_embedding_strategy_name", lambda: "fake_hash")
-    monkeypatch.setattr(rag_service, "should_trigger_jit", lambda _query: False)
+    monkeypatch.setattr(
+        "app.modules.rag.jit_service.schedule_jit_if_needed",
+        lambda *_args, **_kwargs: None,
+    )
 
     result = asyncio.run(
         rag_service.query_knowledge(

@@ -245,31 +245,23 @@ async function persistAnswerFeedback(kind, value) {
   const feedback = loadAnswerFeedback();
   feedback[lastAnswerMeta.id] = {
     ...(feedback[lastAnswerMeta.id] || {}),
-    id: lastAnswerMeta.id,
-    kind,
-    value,
-    query: lastAnswerMeta.query,
-    provider: lastAnswerMeta.provider,
-    strategy: lastAnswerMeta.strategy,
+    id: lastAnswerMeta.id, kind, value,
+    query: lastAnswerMeta.query, provider: lastAnswerMeta.provider, strategy: lastAnswerMeta.strategy,
     timestamp: new Date().toISOString(),
   };
   saveAnswerFeedback(feedback);
-
   try {
     await apiRequest(APP_KEY, "/api/v1/legalmitra/answer-feedback", {
       method: "POST",
       body: JSON.stringify({
-        answer_id: lastAnswerMeta.id,
-        feedback_type: kind,
-        value,
-        query: lastAnswerMeta.query,
-        provider: lastAnswerMeta.provider,
-        strategy: lastAnswerMeta.strategy,
+        answer_id: lastAnswerMeta.id, feedback_type: kind, value,
+        query: lastAnswerMeta.query, provider: lastAnswerMeta.provider, strategy: lastAnswerMeta.strategy,
+        confidence: lastAnswerMeta.confidence || null, history_record_id: lastAnswerMeta.historyRecordId || null,
       }),
       timeoutMs: 3000,
     });
   } catch {
-    // Local feedback is retained even when the backend feedback endpoint is not available yet.
+    // Keep local feedback if the backend endpoint is unavailable.
   }
 }
 
@@ -1192,15 +1184,13 @@ function renderLegalAnswer(result) {
 
   const response = result.payload?.response || result.payload?.answer || "No response text returned.";
   lastAnswerText = String(response || "");
-  const strategy = result.payload?.strategy || "legal-research";
+  const strategy = result.payload?.strategy || result.payload?.retrieval_strategy || "legal-research";
   const provider = result.payload?.provider || (String(strategy).includes("claude") ? "claude_legal_counsel" : "legalmitra");
-  const answerId = result.payload?.answer_id || result.payload?.response_id || hashText(`${queryInput.value}|${provider}|${strategy}|${lastAnswerText}`);
-  lastAnswerMeta = {
-    id: answerId,
-    query: queryInput.value,
-    provider,
-    strategy,
-  };
+  const confidence = result.payload?.confidence || "unknown";
+  const advisoryNotice = result.payload?.advisory_notice || "This output is draft/advisory only and is not final legal advice.";
+  const limitations = Array.isArray(result.payload?.limitations) ? result.payload.limitations : [];
+  const answerId = result.payload?.answer_id || result.payload?.response_id || result.payload?.history_record_id || hashText(`${queryInput.value}|${provider}|${strategy}|${lastAnswerText}`);
+  lastAnswerMeta = { id: answerId, query: queryInput.value, provider, strategy, confidence, historyRecordId: result.payload?.history_record_id || null };
   const storedFeedback = loadAnswerFeedback()[answerId] || {};
   const citations = Array.isArray(result.payload?.citations) ? result.payload.citations : [];
   const followUps = buildFollowUps(queryInput.value, response);
@@ -1208,8 +1198,12 @@ function renderLegalAnswer(result) {
     ? `<div class="legal-answer-citations"><strong>Sources</strong>${citations.slice(0, 4).map((citation, index) => {
         const title = citation.title || citation.reference || citation.source || `Source ${index + 1}`;
         const snippet = citation.snippet || citation.text || "";
-        return `<p><b>${escapeHtml(title)}</b>${snippet ? `<span>${escapeHtml(snippet)}</span>` : ""}</p>`;
+        const retrievedAt = citation.retrieved_at ? ` · retrieved ${escapeHtml(String(citation.retrieved_at).slice(0, 10))}` : "";
+        return `<p><b>${escapeHtml(title)}</b>${snippet ? `<span>${escapeHtml(snippet)}</span>` : ""}<span>${retrievedAt}</span></p>`;
       }).join("")}</div>`
+    : "";
+  const limitationsHtml = limitations.length
+    ? `<div class="legal-answer-limitations"><strong>Limitations</strong><ul>${limitations.slice(0, 4).map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul></div>`
     : "";
 
   answerPanel.innerHTML = `
@@ -1218,6 +1212,8 @@ function renderLegalAnswer(result) {
         <div class="legal-answer-meta">
           <span>${escapeHtml(provider)}</span>
           <span>${escapeHtml(strategy)}</span>
+          <span>confidence: ${escapeHtml(confidence)}</span>
+          ${result.payload?.human_review_required === false ? "" : "<span>human review required</span>"}
         </div>
         <div class="legal-answer-actions">
           ${iconButton("like", "like", "Mark helpful")}
@@ -1232,8 +1228,10 @@ function renderLegalAnswer(result) {
         </div>
       </div>
       <div class="legal-answer-status" id="answer-action-status" aria-live="polite"></div>
+      <div class="legal-answer-advisory">${escapeHtml(advisoryNotice)}</div>
       <div class="legal-answer-body">${renderLegalMarkdown(response)}</div>
       ${citationHtml}
+      ${limitationsHtml}
       <div class="legal-next-actions">
         <strong>Next actions</strong>
         <div>

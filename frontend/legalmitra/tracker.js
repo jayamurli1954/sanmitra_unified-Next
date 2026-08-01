@@ -1,10 +1,10 @@
 const trackerProfiles = {
   advocate: {
     metrics: [
-      ["Today's hearings", "0"],
-      ["Pending tasks", "12"],
-      ["Active cases", "48"],
-      ["Fees outstanding", "Rs. 1,24,500"],
+      ["Urgent items", "0"],
+      ["Open items", "0"],
+      ["Logged items", "0"],
+      ["Fees outstanding", "—"],
     ],
     rows: [
       ["15 May 2024", "NI-138/Client-A", "JMFC Court", "Complaint limitation check", "urgent"],
@@ -24,10 +24,10 @@ const trackerProfiles = {
   },
   ca: {
     metrics: [
-      ["GST notices due", "7"],
-      ["Pending filings", "19"],
-      ["Active clients", "86"],
-      ["Fees outstanding", "Rs. 2,18,000"],
+      ["Urgent items", "0"],
+      ["Open items", "0"],
+      ["Logged items", "0"],
+      ["Fees outstanding", "—"],
     ],
     rows: [
       ["15 May 2024", "GST-SCN-2024-08", "GST Dept, Mumbai", "Notice reply filing", "urgent"],
@@ -47,10 +47,10 @@ const trackerProfiles = {
   },
   cs: {
     metrics: [
-      ["Board actions due", "5"],
-      ["MCA filings", "14"],
-      ["Active entities", "62"],
-      ["Fees outstanding", "Rs. 1,76,500"],
+      ["Urgent items", "0"],
+      ["Open items", "0"],
+      ["Logged items", "0"],
+      ["Fees outstanding", "—"],
     ],
     rows: [
       ["16 May 2024", "LLP-F11-2026", "MCA Portal", "Partner data confirmation", "urgent"],
@@ -206,12 +206,21 @@ function updateMetricsForRows() {
   const rows = getRoleRows();
   const urgentCount = rows.filter((row) => row.status === "urgent").length;
   const pendingCount = rows.filter((row) => row.status !== "done").length;
-  const metrics = [...profile.metrics];
-  metrics[0] = [metrics[0][0], String(urgentCount)];
-  metrics[1] = [metrics[1][0], String(pendingCount)];
+  const metrics = [
+    ["Urgent items", String(urgentCount)],
+    ["Open items", String(pendingCount)],
+    ["Logged items", String(rows.length)],
+    ["Fees outstanding", "—"],
+  ];
+  // Keep persona-specific first label when profile supplies one that matches count semantics.
+  if (profile.metrics?.[0]?.[0]) {
+    metrics[0][0] = profile.metrics[0][0];
+  }
   metrics.forEach(([label, value], index) => {
-    document.getElementById(`metric-label-${index + 1}`).textContent = label;
-    document.getElementById(`metric-value-${index + 1}`).textContent = value;
+    const labelEl = document.getElementById(`metric-label-${index + 1}`);
+    const valueEl = document.getElementById(`metric-value-${index + 1}`);
+    if (labelEl) labelEl.textContent = label;
+    if (valueEl) valueEl.textContent = value;
   });
 }
 
@@ -263,7 +272,8 @@ function renderDetail(card, options = {}) {
     const input = document.createElement("input");
     input.dataset.trackerField = String(index);
     input.dataset.trackerLabel = label;
-    input.value = saved[label] || sampleValue(label);
+    input.value = saved[label] || "";
+    input.placeholder = "Enter value (preview only)";
     field.appendChild(input);
 
     detailFragment.appendChild(field);

@@ -1,0 +1,44 @@
+/* LegalMitra Stage 2 answer-card trust affordances */
+.legal-tracker-preview-banner {
+  margin-top: 0.85rem !important;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.55rem;
+  background: rgba(255, 248, 239, 0.12);
+  color: #f8e7d3 !important;
+  font-size: 0.95rem;
+  max-width: 760px;
+}
+
+.legal-answer-advisory {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(231, 199, 124, 0.28);
+  background: rgba(197, 160, 89, 0.1);
+  color: #f3e6c2;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-answer-limitations {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.legal-answer-limitations strong {
+  color: #e7c77c;
+}
+
+.legal-answer-limitations ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}

@@ -320,6 +320,8 @@ Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assum
 - Claude Legal Counsel provider-gated research/drafting support, with human review and source attribution.
 - Client billing integration where needed.
 
+Detailed LegalMitra enhancement scope — current vs target vs gap, multi-persona Professional Intelligence Platform direction, stage gates, and Not Now list — is maintained in [LegalMitra Professional Intelligence PRD](LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md). Implementation detail (stack, modules, code surfaces, preflight) is in [LegalMitra Architecture Specification](../architecture/LEGALMITRA_ARCHITECTURE_SPEC.md). Those documents must not override LegalMitra separation from MitraBooks ERP, Claude production gating, or Stage 1 E2E baseline rules in this PRD and `AGENTS.md`.
+
 ## Non-Functional Requirements
 
 - Tenant isolation on every query.

@@ -91,6 +91,8 @@ def test_legalmitra_route_contracts_are_registered() -> None:
         ("GET", "/api/v1/legal/judgements"),
         ("GET", "/api/v1/legal/web-search-rag"),
         ("POST", "/api/v1/legal-research"),
+        ("POST", "/api/v1/legalmitra/answer-feedback"),
+        ("GET", "/api/v1/legalmitra/answer-feedback/summary"),
         ("GET", "/api/v1/legalmitra/history"),
         ("GET", "/api/v1/legalmitra/uploads"),
         ("POST", "/api/v1/rag/documents"),

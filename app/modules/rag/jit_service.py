@@ -1,24 +1,43 @@
 import asyncio
 import logging
 import re
-import httpx
-import fitz  # PyMuPDF
 from datetime import date
 from typing import Optional
 from uuid import uuid4
 
-from app.modules.rag.legal_act_registry import detect_legal_act, legal_act_metadata_filter
+import httpx
+
+try:
+    import fitz  # PyMuPDF — optional; JIT PDF download path needs it
+except ImportError:  # pragma: no cover - staging may omit PyMuPDF
+    fitz = None  # type: ignore[assignment]
+
+from app.modules.rag.legal_act_registry import detect_legal_act, legal_act_metadata_filter, should_trigger_jit
 from app.services.legal_web_search import legal_web_search
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
 from app.modules.rag.service import ingest_document
 
 logger = logging.getLogger(__name__)
 
+
+def schedule_jit_if_needed(query: str, tenant_id: str, app_key: str) -> None:
+    """Fire-and-forget JIT ingest; never raises into the query path."""
+    if not should_trigger_jit(query):
+        return
+    try:
+        asyncio.create_task(trigger_jit_ingestion(query, tenant_id, app_key))
+    except Exception:
+        logger.exception("JIT trigger skipped tenant=%s app=%s", tenant_id, app_key)
+
+
 async def trigger_jit_ingestion(query: str, tenant_id: str, app_key: str):
     """
     Background task to identify and ingest the relevant Bare Act based on a query.
     Checks if the act is already present in the local RAG database first.
     """
+    if fitz is None:
+        logger.warning("JIT ingestion skipped: PyMuPDF (fitz) is not installed")
+        return
     try:
         # 0. Detect canonical Act names through the shared LegalMitra registry.
         match = detect_legal_act(query)

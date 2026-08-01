@@ -415,11 +415,14 @@ def test_mandirmitra_compliance_shell_exposes_governed_operator_controls() -> No
     ops = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-operational-reports.js"
     ).read_text(encoding="utf-8")
-    combined = f"{shell}\n{dashboard}\n{create_forms}\n{ops}"
+    loaders = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "mandir-dashboard-loaders.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{shell}\n{dashboard}\n{create_forms}\n{ops}\n{loaders}"
 
     assert '"/api/v1/compliance/donations/config"' in combined
-    assert '/api/v1/reports/compliance/80g?' in shell
-    assert '/api/v1/reports/compliance/fcra?' in shell
+    assert '/api/v1/reports/compliance/80g?' in loaders
+    assert '/api/v1/reports/compliance/fcra?' in loaders
     assert 'data-mandir-compliance-form' in dashboard
     assert 'Save Compliance Configuration' in dashboard
     assert 'from "./modules/workspaces/mandir-dashboard.js"' in shell

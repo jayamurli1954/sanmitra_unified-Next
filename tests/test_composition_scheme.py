@@ -74,7 +74,13 @@ def _patch_common(monkeypatch, store, captured, *, category="restaurant"):
         return {"registration_type": "composition", "composition_category": category,
                 "composition_rate": COMPOSITION_RATES[category], "is_composition": True}
 
-    monkeypatch.setattr(business_service, "get_gst_profile", fake_profile)
+    # Patch the binding used by sales/purchase services (not the re-export on business_service).
+    monkeypatch.setattr(
+        "app.modules.business.services.sales_invoices.get_gst_profile", fake_profile,
+    )
+    monkeypatch.setattr(
+        "app.modules.business.services.purchase_bills.get_gst_profile", fake_profile,
+    )
 
     async def fake_resolve(_session, *, account_code, **_kwargs):
         return _INVOICE_ACCOUNT_IDS[account_code]

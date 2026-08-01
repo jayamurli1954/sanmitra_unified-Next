@@ -18,13 +18,17 @@ used only as secondary review lenses.
   tenant/app scoped. Public metadata endpoints, such as an ingested-acts catalog,
   may expose only non-confidential source metadata and must not expose
   tenant-private chunks, prompts, matter data, or document content.
-- Query responses currently include an `answer`, `citations`, retrieval
-  `strategy`, `candidate_count`, and optional raw `context`.
-- Ingested documents can carry legal metadata such as jurisdiction, court,
-  act, section, citation, matter type, and document date.
+- `/api/v1/legal-research` hybrid responses now emit Stage 2 contract fields:
+  `question`, `jurisdiction`, `answer_summary`, `citations`, `confidence`,
+  `limitations`, `human_review_required`, `advisory_notice`,
+  `retrieval_strategy`/`strategy`, `missing_jurisdiction`, and `generated_at`.
+- Uncited model generation is refused (`insufficient_sources`) when no relevant
+  retrieved or authorized offline sources exist.
+- Answer feedback is persisted via `POST /api/v1/legalmitra/answer-feedback`
+  with a tenant-admin summary endpoint.
+- Stage 2 GST refund / CGST Section 54 family has an authorized offline slice
+  and seed corpus under `data/legal_seed/cgst_section_54_family.md`.
 - Relevance gates exist for low-score or low-overlap local matches.
-- Provider or web fallback behavior exists, but the response shape does not yet
-  enforce a full LegalMitra legal-safety contract.
 
 ## Target State
 
@@ -140,21 +144,16 @@ Use concise source-backed reasoning or rationale only.
 
 ## Gap
 
-The current API response shape is useful for basic retrieval, but it does not
-yet fully express the LegalMitra legal-safety contract. Known gaps:
+Remaining gaps after Stage 2 foundation work:
 
-- No first-class `jurisdiction` field on the query response.
-- No first-class `confidence`, `limitations`, `human_review_required`, or
-  `advisory_notice` fields.
-- No required `retrieved_at` timestamp per citation.
-- No first-class source staleness/currentness field per citation.
-- No first-class provider fallback authorization/audit evidence fields.
-- No explicit access/audit contract for query execution, external-provider
-  fallback, or human-review state changes.
-- Some fallback paths can return uncited model output instead of a strict
-  insufficient-source response.
-- No dedicated prompt regression suite for citation fabrication, missing
-  jurisdiction, provider failure, stale law, or prompt injection.
+- Full CGST/IT PDF corpus ingest and section-primary chunking at production depth
+  (seed + authorized offline slice exist; broad Bare Act coverage does not).
+- Citation `source_backed` / provider authorization audit evidence fields are
+  still incomplete for external-provider paths.
+- Dedicated prompt-regression suite coverage is partial (fixture eval exists for
+  GST Section 54 family; expand to Income Tax slice next).
+- UI affordances for confidence/limitations/human-review are present on the
+  research answer card; deeper workspace surfaces still pending.
 
 ## Implementation Sequence
 
@@ -194,11 +193,10 @@ Minimum LegalMitra RAG contract tests:
 
 ## Non-Goals And Deferred Scope
 
-This design note does not implement:
+This design note does not itself implement:
 
-- New RAG endpoints or schema changes.
-- Provider selection changes.
-- Live legal research integration.
+- Full Bare Act PDF corpus expansion beyond the Stage 2 GST Section 54 seed/offline slice.
+- Provider selection productization / production enablement.
+- Live legal research integration beyond authorized hybrid paths.
 - Legal document drafting workflow changes.
-- UI changes.
-- Production enablement for external providers.
+- Broader workspace UI beyond the research answer card trust affordances.

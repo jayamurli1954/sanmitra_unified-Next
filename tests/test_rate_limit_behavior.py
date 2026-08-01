@@ -86,12 +86,13 @@ def test_mobile_otp_send_returns_429_after_five_attempts(monkeypatch):
 
 
 def test_ca_invite_preview_returns_429_after_twenty_attempts(monkeypatch):
-    from app.modules.business import router as business_router
-
     async def preview_stub(*, token: str):
         return {"masked_email": "c***@example.com"}
 
-    monkeypatch.setattr(business_router.ca_access_module, "preview_ca_invite", preview_stub)
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.preview_ca_invite",
+        preview_stub,
+    )
     with TestClient(app) as client:
         responses = [
             client.get("/api/v1/business/ca/invite/random-token/preview")
@@ -103,12 +104,13 @@ def test_ca_invite_preview_returns_429_after_twenty_attempts(monkeypatch):
 
 
 def test_ca_invite_accept_returns_429_after_ten_attempts(monkeypatch):
-    from app.modules.business import router as business_router
-
     async def reject_accept(**_kwargs):
         raise ValueError("unavailable")
 
-    monkeypatch.setattr(business_router.ca_access_module, "accept_ca_invite", reject_accept)
+    monkeypatch.setattr(
+        "app.modules.business.routes.ca_access.ca_access_module.accept_ca_invite",
+        reject_accept,
+    )
     with TestClient(app) as client:
         responses = [
             client.post(

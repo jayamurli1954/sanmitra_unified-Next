@@ -54,7 +54,7 @@ def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
 def test_mitrabooks_ca_invite_accept_page_is_public_token_acceptance_flow() -> None:
     accept_html = REPO_ROOT / "frontend" / "mitrabooks-erp" / "ca-invite-accept.html"
     accept_js = REPO_ROOT / "frontend" / "mitrabooks-erp" / "ca-invite-accept.js"
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(encoding="utf-8")
 
     html_source = accept_html.read_text(encoding="utf-8")
     js_source = accept_js.read_text(encoding="utf-8")
@@ -68,9 +68,9 @@ def test_mitrabooks_ca_invite_accept_page_is_public_token_acceptance_flow() -> N
     assert "accept" in js_source
     assert "textContent" in js_source
     assert "innerHTML" not in js_source
-    assert "A new temporary password will be generated and emailed" not in app_source
-    assert "New temporary password sent" not in app_source
-    assert "secure invite link" in app_source
+    assert "A new temporary password will be generated and emailed" not in events_source
+    assert "New temporary password sent" not in events_source
+    assert "secure invite link" in events_source
 
 
 def test_local_frontend_server_disables_browser_cache() -> None:
@@ -172,22 +172,24 @@ def test_mitrabooks_accounting_refresh_preserves_accounting_panel() -> None:
 
 
 def test_business_party_payload_matches_backend_schema() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    create_start = app_source.index("async function createBusinessParty(data)")
-    create_end = app_source.index("async function updateBusinessParty", create_start)
-    create_block = app_source[create_start:create_end]
-    update_end = app_source.index("async function deactivateBusinessParty", create_end)
-    update_block = app_source[create_end:update_end]
+    parties_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "parties.js"
+    ).read_text(encoding="utf-8")
+    create_start = parties_source.index("export async function createBusinessParty(data)")
+    create_end = parties_source.index("export async function updateBusinessParty", create_start)
+    create_block = parties_source[create_start:create_end]
+    update_end = parties_source.index("export async function deactivateBusinessParty", create_end)
+    update_block = parties_source[create_end:update_end]
 
     assert "party_name: data.name" in create_block
     assert "opening_balance: String(Number(data.opening_balance) || 0)" not in create_block
     assert "opening_balance_paise" not in create_block
     assert "party_name: data.name" in update_block
     assert "opening_balance_paise" not in update_block
-    assert '/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate' in app_source
-    deactivate_start = app_source.index("async function deactivateBusinessParty")
-    deactivate_end = app_source.index("function openBusinessCreatePartyDialog", deactivate_start)
-    deactivate_block = app_source[deactivate_start:deactivate_end]
+    assert '/api/v1/business/parties/${encodeURIComponent(partyId)}/deactivate' in parties_source
+    deactivate_start = parties_source.index("export async function deactivateBusinessParty")
+    deactivate_end = parties_source.index("export function openBusinessCreatePartyDialog", deactivate_start)
+    deactivate_block = parties_source[deactivate_start:deactivate_end]
     assert 'method: "POST"' in deactivate_block
 
 
@@ -334,11 +336,17 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     loading_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "account-loading.js"
     ).read_text(encoding="utf-8")
+    voucher_form_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-form.js"
+    ).read_text(encoding="utf-8")
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
     voucher_create_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-create.js"
     ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    combined = f"{app_source}\n{helpers_source}\n{selector_source}\n{loading_source}"
+    combined = f"{app_source}\n{helpers_source}\n{selector_source}\n{loading_source}\n{voucher_form_source}\n{vouchers_source}"
 
     assert "function normalizeBusinessAccount(acc)" in helpers_source
     assert "acc.account_id" in helpers_source
@@ -348,7 +356,7 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "acc.account_name" in helpers_source
     assert "?? acc.name" in helpers_source
     assert "populateVoucherAccountSelect(select" in helpers_source
-    assert "syncVoucherAccountFromText" in app_source
+    assert "export function syncVoucherAccountFromText(lineEl)" in voucher_form_source
     assert "account-selector-component" in selector_source
     assert "account-suggestions" in selector_source
     assert "updateVoucherAccountsStatus" in helpers_source
@@ -357,7 +365,7 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
     assert "accountRowsFromPayload" in helpers_source
     assert "MitraBooks business tenant required" in loading_source
     assert "business.admin@sanmitra.local" in combined
-    assert 'await loadBusinessAccounts();' in app_source
+    assert "await loadBusinessAccounts();" in vouchers_source
     assert "function findBusinessAccountById(accountId)" in helpers_source
     assert "function accountIdForVoucherPayload(account)" in helpers_source
     assert 'from "./modules/workspaces/account-helpers.js"' in app_source
@@ -366,24 +374,44 @@ def test_business_voucher_accounts_use_backend_account_contract() -> None:
 
 
 def test_business_voucher_keyboard_shortcuts_are_wired() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    shell_ui_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "shell-ui.js").read_text(encoding="utf-8")
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    voucher_create_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-create.js"
+    ).read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(encoding="utf-8")
     html_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
 
     assert 'aria-keyshortcuts="Control+Alt+V"' in html_source
     assert 'aria-keyshortcuts="Control+Enter"' in html_source
-    assert 'aria-keyshortcuts="Alt+L"' in app_source
-    assert "function openVoucherWorkspaceAndDialog()" in app_source
-    assert "function handleVoucherDialogKeyboard(event)" in app_source
-    assert 'event.ctrlKey && event.altKey && event.key.toLowerCase() === "v"' in app_source
-    assert 'event.key.toLowerCase() === "l" && event.altKey' in app_source
-    assert "submitVoucherDialogFromKeyboard()" in app_source
-    assert "focusFirstVoucherField()" in app_source
-    assert 'document.querySelectorAll(".voucher-line")' in app_source
-    assert "businessVoucherCreateDialog?.addEventListener(\"click\"" in app_source
+    assert 'aria-keyshortcuts="Alt+L"' in vouchers_source
+    assert "async function openVoucherWorkspaceAndDialog()" in shell_ui_source
+    assert "export function handleVoucherDialogKeyboard(event)" in vouchers_source
+    assert 'event.ctrlKey && event.altKey && event.key.toLowerCase() === "v"' in shell_ui_source
+    assert 'event.key.toLowerCase() === "l" && event.altKey' in vouchers_source
+    assert "submitVoucherDialogFromKeyboard()" in vouchers_source
+    assert "focusFirstVoucherField()" in vouchers_source
+    assert 'document.querySelectorAll(".voucher-line")' in voucher_create_source
+    assert "businessVoucherCreateDialog?.addEventListener(\"click\"" in events_source
 
 
 def test_business_document_entry_keyboard_shortcuts_are_wired() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    shell_ui_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "shell-ui.js").read_text(encoding="utf-8")
+    sales_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "sales-invoices.js"
+    ).read_text(encoding="utf-8")
+    bills_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "purchase-bills.js"
+    ).read_text(encoding="utf-8")
+    credit_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "credit-notes.js"
+    ).read_text(encoding="utf-8")
+    debit_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "debit-notes.js"
+    ).read_text(encoding="utf-8")
+    document_modules = f"{sales_source}\n{bills_source}\n{credit_source}\n{debit_source}"
 
     for shortcut in [
         'aria-keyshortcuts="Control+Alt+I"',
@@ -393,76 +421,110 @@ def test_business_document_entry_keyboard_shortcuts_are_wired() -> None:
         'aria-keyshortcuts="Alt+L"',
         'aria-keyshortcuts="Control+Enter"',
     ]:
-        assert shortcut in app_source
-    assert "function openBusinessDocumentWorkspaceAndForm(workspace)" in app_source
-    assert "function activeBusinessDocumentFormConfig()" in app_source
-    assert "function handleBusinessDocumentEntryKeyboard(event)" in app_source
-    assert 'const workspaceByKey = { i: "sales", b: "bills", c: "credit-notes", d: "debit-notes" }' in app_source
-    assert 'document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard)' in app_source
-    assert 'focusBusinessEntryField("[data-invoice-form] select[name=\'customer_party_id\']")' in app_source
-    assert 'focusBusinessEntryField("[data-bill-form] select[name=\'vendor_party_id\']")' in app_source
-    assert 'focusBusinessEntryField("[data-cn-form] select[name=\'customer_party_id\']")' in app_source
-    assert 'focusBusinessEntryField("[data-dn-form] select[name=\'vendor_party_id\']")' in app_source
+        assert shortcut in document_modules
+    assert "function openBusinessDocumentWorkspaceAndForm(workspace)" in shell_ui_source
+    assert "function activeBusinessDocumentFormConfig()" in shell_ui_source
+    assert "function handleBusinessDocumentEntryKeyboard(event)" in shell_ui_source
+    assert 'const workspaceByKey = { i: "sales", b: "bills", c: "credit-notes", d: "debit-notes" }' in shell_ui_source
+    assert 'document.addEventListener("keydown", handleBusinessDocumentEntryKeyboard)' in shell_ui_source
+    assert 'focusBusinessEntryField("[data-invoice-form] select[name=\'customer_party_id\']")' in sales_source
+    assert 'focusBusinessEntryField("[data-bill-form] select[name=\'vendor_party_id\']")' in bills_source
+    assert 'focusBusinessEntryField("[data-cn-form] select[name=\'customer_party_id\']")' in credit_source
+    assert 'focusBusinessEntryField("[data-dn-form] select[name=\'vendor_party_id\']")' in debit_source
 
 
 def test_credit_debit_notes_enforce_source_documents_and_local_exports() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    credit_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "credit-notes.js"
+    ).read_text(encoding="utf-8")
+    debit_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "debit-notes.js"
+    ).read_text(encoding="utf-8")
+    reports_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-reports-hub.js"
+    ).read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(encoding="utf-8")
 
-    assert 'select name="original_invoice_id" required data-source-document="sales_invoice"' in app_source
-    assert "function resolveCreditNoteSourceInvoice(invoiceId)" in app_source
-    assert "original_invoice_id: cnFormHeader.original_invoice_id || null" in app_source
-    assert "Source invoice required" in app_source
-    assert 'data-credit-note-printable' in app_source
-    assert 'data-business-action="print-credit-note"' in app_source
-    assert 'data-business-action="export-credit-note-json"' in app_source
+    assert 'select name="original_invoice_id" required data-source-document="sales_invoice"' in credit_source
+    assert "export function resolveCreditNoteSourceInvoice(invoiceId)" in credit_source
+    assert "original_invoice_id: creditUi.header.original_invoice_id || null" in credit_source
+    assert "Source invoice required" in credit_source
+    assert 'data-credit-note-printable' in credit_source
+    assert 'data-business-action="print-credit-note"' in credit_source
+    assert 'data-business-action="export-credit-note-json"' in credit_source
 
-    assert 'select name="original_bill_id" required data-source-document="purchase_bill"' in app_source
-    assert "function resolveDebitNoteSourceBill(billId)" in app_source
-    assert "original_bill_id: dnFormHeader.original_bill_id || null" in app_source
-    assert "Source bill required" in app_source
-    assert 'data-debit-note-printable' in app_source
-    assert 'data-business-action="print-debit-note"' in app_source
-    assert 'data-business-action="export-debit-note-json"' in app_source
+    assert 'select name="original_bill_id" required data-source-document="purchase_bill"' in debit_source
+    assert "export function resolveDebitNoteSourceBill(billId)" in debit_source
+    assert "original_bill_id: debitUi.header.original_bill_id || null" in debit_source
+    assert "Source bill required" in debit_source
+    assert 'data-debit-note-printable' in debit_source
+    assert 'data-business-action="print-debit-note"' in debit_source
+    assert 'data-business-action="export-debit-note-json"' in debit_source
 
-    assert "function downloadJsonObject(payload, filename)" in app_source
-    assert "function printBusinessDocumentDetail(title, selector)" in app_source
-    assert "credit_note_export" in app_source
-    assert "debit_note_export" in app_source
+    assert "export function downloadJsonObject(payload, filename)" in reports_source
+    assert "export function printBusinessDocumentDetail(title, selector)" in reports_source
+    assert "credit_note_export" in reports_source
+    assert "debit_note_export" in reports_source
+    assert 'businessAction === "export-credit-note-json"' in events_source
+    assert 'businessAction === "export-debit-note-json"' in events_source
 
 
 def test_inventory_policy_and_stock_movements_are_wired() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    inventory_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "inventory.js"
+    ).read_text(encoding="utf-8")
+    sales_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "sales-invoices.js"
+    ).read_text(encoding="utf-8")
+    events_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "events.js").read_text(encoding="utf-8")
 
-    assert "/api/v1/business/inventory/policy" in app_source
-    assert "/api/v1/business/inventory/movements" in app_source
-    assert "function loadInventoryPolicy()" in app_source
-    assert "function loadStockMovements()" in app_source
-    assert "function createStockMovementFromForm()" in app_source
-    assert 'data-inventory-valuation-policy' in app_source
-    assert "weighted_average_periodic" in app_source
-    assert 'data-stock-movement-form' in app_source
-    assert 'data-business-action="stock-movement-create"' in app_source
-    assert "adjustment_in_qty" in app_source
-    assert "adjustment_out_qty" in app_source
-    assert "stock_movement_create" in app_source
+    assert "/api/v1/business/inventory/policy" in inventory_source
+    assert "/api/v1/business/inventory/movements" in inventory_source
+    assert "export async function loadInventoryPolicy()" in inventory_source
+    assert "export async function loadStockMovements()" in inventory_source
+    assert "export async function createStockMovementFromForm()" in inventory_source
+    assert 'data-inventory-valuation-policy' in sales_source
+    assert "weighted_average_periodic" in sales_source
+    assert 'data-stock-movement-form' in inventory_source
+    assert 'data-business-action="stock-movement-create"' in inventory_source
+    assert "adjustment_in_qty" in inventory_source
+    assert "adjustment_out_qty" in inventory_source
+    assert "stock_movement_create" in inventory_source
+    assert 'businessAction === "stock-movement-create"' in events_source
 
 
 def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
+    voucher_form_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-form.js"
+    ).read_text(encoding="utf-8")
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    sales_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "documents" / "sales-invoices.js"
+    ).read_text(encoding="utf-8")
+    tables_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-list-tables.js"
+    ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
+    index_css_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.css").read_text(encoding="utf-8")
+    shell_modules = f"{workspace_source}\n{voucher_form_source}\n{vouchers_source}\n{sales_source}\n{tables_source}"
 
-    assert "erp-workspace-panel" in app_source
-    assert "erp-table" in app_source
-    assert "voucher-line" in app_source
-    assert "voucher-lines-panel" in app_source
+    assert "erp-workspace-panel" in shell_modules
+    assert "erp-table" in shell_modules
+    assert "voucher-line" in shell_modules
+    assert "voucher-lines-panel" in vouchers_source
     assert ".business-dashboard" in css_source
     assert ".voucher-balance-status.balanced" in css_source
-    assert "const hasAmount = totalDebit > 0 || totalCredit > 0" in app_source
-    assert "#business-voucher-create-dialog" in css_source
+    assert "const hasAmount = totalDebit > 0 || totalCredit > 0" in voucher_form_source
+    assert "#business-voucher-create-dialog" in index_css_source
     # Sprint 2: Sales Invoices with GST are part of the business shell.
-    assert "function renderBusinessSalesWorkspace()" in app_source
-    assert "/api/v1/business/invoices" in app_source
-    assert "function computeInvoiceLine(" in app_source
+    assert "export function renderBusinessSalesWorkspace()" in sales_source
+    assert "/api/v1/business/invoices" in sales_source
+    assert "export function computeInvoiceLine(" in sales_source
 
 
 def test_mitrabooks_shell_loads_source_backed_mis_kpi_contracts() -> None:
@@ -635,17 +697,19 @@ def test_mitrabooks_phase_2b_data_health_actions_are_actionable_not_future_scope
 
 
 def test_business_voucher_payload_matches_typed_voucher_api() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("async function createBusinessVoucher(voucherData)")
-    end = app_source.index("async function loadBusinessVouchers", start)
-    create_block = app_source[start:end]
+    voucher_create_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "voucher-create.js"
+    ).read_text(encoding="utf-8")
+    start = voucher_create_source.index("export async function createJournalVoucher(appKey, date)")
+    end = voucher_create_source.index("renderJson(getApiOutput(), { create_voucher: result });", start)
+    create_block = voucher_create_source[start:end]
 
     assert 'voucher_type: "journal"' in create_block
     assert "amount: debitTotal.toFixed(2)" in create_block
     assert "debit_account_id: debitLines[0].account_id" in create_block
     assert "credit_account_id: creditLines[0].account_id" in create_block
-    assert "debit_account_code: debitLines[0].account_code" in app_source
-    assert "credit_account_code: creditLines[0].account_code" in app_source
+    assert "debit_account_code: debitLines[0].account_code" in create_block
+    assert "credit_account_code: creditLines[0].account_code" in create_block
     assert '"X-Idempotency-Key"' in create_block
     assert "lines:" not in create_block
     assert "debit_paise" not in create_block
@@ -653,24 +717,28 @@ def test_business_voucher_payload_matches_typed_voucher_api() -> None:
 
 
 def test_business_voucher_loader_surfaces_backend_errors() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("async function loadBusinessVouchers")
-    end = app_source.index("async function loadVoucherApprovalQueue", start)
-    load_block = app_source[start:end]
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    start = vouchers_source.index("export async function loadBusinessVouchers(filters = {})")
+    end = vouchers_source.index("export async function loadVoucherApprovalQueue", start)
+    load_block = vouchers_source[start:end]
 
     assert 'setLoginStatus("danger", "Unable to load vouchers"' in load_block
     assert "statusDetailText(result.payload?.detail)" in load_block
-    assert "renderJson(apiOutput, { vouchers:" in load_block
+    assert "renderJson(getApiOutput(), { vouchers:" in load_block
     assert 'params.append("voucher_type", merged.voucher_type)' in load_block
     assert 'params.append("status", merged.status)' in load_block
     assert 'params.append("approval_status", merged.approval_status)' in load_block
 
 
 def test_business_voucher_reversal_uses_business_route_contract() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
-    start = app_source.index("async function reverseBusinessVoucher")
-    end = app_source.index("async function openBusinessCreateVoucherDialog", start)
-    reverse_block = app_source[start:end]
+    vouchers_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
+    ).read_text(encoding="utf-8")
+    start = vouchers_source.index("export async function reverseBusinessVoucher(voucherId)")
+    end = vouchers_source.index("export function renderVoucherTypeForm", start)
+    reverse_block = vouchers_source[start:end]
 
     assert "/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/reverse" in reverse_block
     assert "/api/v1/accounting/reversals" not in reverse_block
@@ -680,17 +748,20 @@ def test_business_voucher_reversal_uses_business_route_contract() -> None:
 
 def test_business_voucher_review_and_queue_use_business_routes() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
     vouchers_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "vouchers.js"
     ).read_text(encoding="utf-8")
     tables_source = (
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-list-tables.js"
     ).read_text(encoding="utf-8")
-    queue_start = vouchers_source.index("async function loadVoucherApprovalQueue")
-    queue_end = vouchers_source.index("async function reviewBusinessVoucher", queue_start)
+    queue_start = vouchers_source.index("export async function loadVoucherApprovalQueue")
+    queue_end = vouchers_source.index("export async function reviewBusinessVoucher", queue_start)
     queue_block = vouchers_source[queue_start:queue_end]
     review_start = queue_end
-    review_end = vouchers_source.index("async function reverseBusinessVoucher", review_start)
+    review_end = vouchers_source.index("export async function reverseBusinessVoucher", review_start)
     review_block = vouchers_source[review_start:review_end]
 
     assert "/api/v1/business/approval-queue?" in queue_block
@@ -701,8 +772,8 @@ def test_business_voucher_review_and_queue_use_business_routes() -> None:
     assert 'data-business-action="review-voucher-approve"' in tables_source
     assert 'data-business-action="review-voucher-reject"' in tables_source
     assert 'data-business-action="voucher-queue-refresh"' in tables_source
-    assert "renderVoucherApprovalQueuePanel(lastVoucherApprovalQueue)" in app_source
-    assert "renderBusinessVouchersListFilters(lastBusinessVouchers.length)" in app_source
+    assert "renderVoucherApprovalQueuePanel(getLastVoucherApprovalQueue())" in workspace_source
+    assert "renderBusinessVouchersListFilters(getLastBusinessVouchers().length)" in workspace_source
     assert 'from "./modules/workspaces/business-list-tables.js"' in app_source
 
 
@@ -741,7 +812,16 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     nav_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "navigation.js").read_text(
         encoding="utf-8"
     )
-    combined = f"{app_source}\n{attachments_source}\n{ca_source}\n{events_source}\n{nav_source}"
+    workspace_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-workspace.js"
+    ).read_text(encoding="utf-8")
+    experience_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "experience-config.js"
+    ).read_text(encoding="utf-8")
+    org_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "org-workspace.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{app_source}\n{attachments_source}\n{ca_source}\n{events_source}\n{nav_source}\n{workspace_source}\n{experience_source}\n{org_source}"
     start = ca_source.index("export async function loadCaPracticeDocuments")
     end = ca_source.index("// --- CA practice renderers (seam 34) ---", start)
     ca_block = ca_source[start:end]
@@ -752,9 +832,9 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-clients"' in ca_block
     assert 'apiRequest("mitrabooks", "/api/v1/business/ca-documents"' in ca_block
     assert 'method: "PATCH"' in ca_block
-    assert 'label: "CA Practice Portal"' in app_source
+    assert 'label: "CA Practice Portal"' in nav_source
     assert 'businessWorkspace: "ca-access"' in nav_source
-    assert 'activeBusinessWorkspace === "ca-access"' in app_source
+    assert 'getActiveBusinessWorkspace() === "ca-access"' in workspace_source
     assert 'data-business-action="ca-client-filter"' in combined
     assert 'businessAction === "ca-client-filter"' in events_source
     assert 'businessAction === "ca-client-filter-clear"' in events_source
@@ -780,49 +860,66 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert 'from "./modules/workspaces/attachments.js"' in app_source
     assert "renderCaPracticeOperations" in ca_source
     assert "renderCaClientMaster" in ca_source
-    assert 'subtitle: "Client document workflow"' in app_source
-    assert 'return renderCaPracticePortalWorkspace();' in app_source
+    assert 'subtitle: "Client document workflow"' in experience_source
+    assert 'return renderCaPracticePortalWorkspace();' in org_source
     assert "CA Practice Portal planned" not in combined
     assert "Planned multi-client books" not in combined
     assert 'from "./modules/workspaces/ca-practice.js"' in app_source
 
 
 def test_mitrabooks_report_exports_expose_governed_json_format() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    reports_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-reports-hub.js"
+    ).read_text(encoding="utf-8")
+    dimensions_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "dimensions.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{reports_source}\n{dimensions_source}"
 
-    assert 'data-business-action="export-report"' in app_source
-    assert 'data-report-format="json"' in app_source
-    assert 'data-business-action="dim-report-export" data-format="json"' in app_source
-    assert "/api/v1/business/reports/export" in app_source
-    assert "/api/v1/business/dimensions/report/export" in app_source
+    assert 'data-business-action="export-report"' in combined
+    assert 'data-report-format="json"' in reports_source
+    assert 'data-business-action="dim-report-export" data-format="json"' in dimensions_source
+    assert "/api/v1/business/reports/export" in reports_source
+    assert "/api/v1/business/dimensions/report/export" in dimensions_source
 
 
 def test_mitrabooks_trial_balance_exposes_tally_xml_export() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    reports_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-reports-hub.js"
+    ).read_text(encoding="utf-8")
 
-    assert 'reportKey === "trial_balance"' in app_source
-    assert 'data-business-action="export-tally-xml"' in app_source
-    assert "async function downloadTallyXmlExport()" in app_source
-    assert "/api/v1/business/tally/xml-export" in app_source
-    assert "tally_trial_balance_" in app_source
+    assert 'reportKey === "trial_balance"' in reports_source
+    assert 'data-business-action="export-tally-xml"' in reports_source
+    assert "export async function downloadTallyXmlExport()" in reports_source
+    assert "/api/v1/business/tally/xml-export" in reports_source
+    assert "tally_trial_balance_" in reports_source
 
 
 def test_professional_suite_routes_to_active_workspace_without_planned_cards() -> None:
-    app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
+    settings_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "settings-workspace.js"
+    ).read_text(encoding="utf-8")
+    experience_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "experience-config.js"
+    ).read_text(encoding="utf-8")
+    org_source = (
+        REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "org-workspace.js"
+    ).read_text(encoding="utf-8")
+    combined = f"{settings_source}\n{experience_source}\n{org_source}"
     index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
 
-    assert 'statusTitle: "Professional workspace active"' in app_source
-    assert 'statusCopy: "Using the signed-in MitraBooks tenant context for billing, client accounts, receipts, and reports."' in app_source
-    assert 'return renderProfessionalSuiteWorkspace();' in app_source
-    assert 'function renderProfessionalSuiteWorkspace()' in app_source
-    assert 'MitraBooks workflow active' in app_source
-    assert '["Client Billing", "Create GST-ready service invoices in the active Sales workspace.", "sales", "Open Sales"]' in app_source
-    assert '["Client Accounts", "Maintain professional clients and vendors in Parties.", "parties", "Open Parties"]' in app_source
-    assert '["Receipts", "Record client receipts and journal entries through the voucher workflow.", "vouchers", "Open Vouchers"]' in app_source
-    assert '["Professional Reports", "Review ledger-backed financial statements and receivables.", "reports", "Open Reports"]' in app_source
-    assert "Professional workspace planned" not in app_source
-    assert "Planned billing and invoicing" not in app_source
-    assert "planned workspace preview" not in app_source
+    assert 'statusTitle: "Professional workspace active"' in experience_source
+    assert 'statusCopy: "Using the signed-in MitraBooks tenant context for billing, client accounts, receipts, and reports."' in experience_source
+    assert 'return renderProfessionalSuiteWorkspace();' in org_source
+    assert 'export function renderProfessionalSuiteWorkspace()' in settings_source
+    assert 'MitraBooks workflow active' in settings_source
+    assert '["Client Billing", "Create GST-ready service invoices in the active Sales workspace.", "sales", "Open Sales"]' in settings_source
+    assert '["Client Accounts", "Maintain professional clients and vendors in Parties.", "parties", "Open Parties"]' in settings_source
+    assert '["Receipts", "Record client receipts and journal entries through the voucher workflow.", "vouchers", "Open Vouchers"]' in settings_source
+    assert '["Professional Reports", "Review ledger-backed financial statements and receivables.", "reports", "Open Reports"]' in settings_source
+    assert "Professional workspace planned" not in combined
+    assert "Planned billing and invoicing" not in combined
+    assert "planned workspace preview" not in combined
     assert "<strong>Professional Suite</strong><small>Billing and invoicing</small>" in index_source
 
 
