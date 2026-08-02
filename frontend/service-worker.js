@@ -186,6 +186,7 @@ async function cacheFirstStrategy(request) {
 function isApiRequest(url) {
   return url.pathname.includes('/api/v1/') ||
          url.pathname === '/health' ||
+         url.pathname === '/api/health' ||
          url.hostname === 'sanmitra-unified-next-staging-sg.onrender.com';
 }
 

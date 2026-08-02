@@ -289,7 +289,15 @@ async def root():
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health(response: Response):
+    """Root and Vercel-proxied health paths.
+
+    LegalMitra/MitraBooks call ``loadHealth`` with API base ``/api``, which
+    becomes ``/api/health`` through the Vercel rewrite to Render. Keep both
+    paths so browser probes do not 404 while ``/health`` still serves
+    Render/platform checks.
+    """
     mongo_task = _ping_with_timeout(ping_mongo(), timeout_seconds=2.5)
     pg_task = _ping_with_timeout(ping_postgres(), timeout_seconds=2.5)
     mongo_result, pg_result = await asyncio.gather(mongo_task, pg_task)
