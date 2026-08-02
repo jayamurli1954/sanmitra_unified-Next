@@ -38,6 +38,26 @@ def test_legal_workflows_runs_requires_login() -> None:
     assert response.json()["detail"] == "Missing authorization header"
 
 
+def test_legal_fee_summary_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/practice/fees/summary")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_fee_invoices_requires_login() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/legal/practice/fees/invoices",
+        json={
+            "matter_id": "00000000-0000-0000-0000-000000000001",
+            "lines": [{"description": "Retainer", "unit_rate": "1000.00"}],
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
 def test_legal_clients_requires_login() -> None:
     client = TestClient(app)
     response = client.get("/api/v1/legal/clients")

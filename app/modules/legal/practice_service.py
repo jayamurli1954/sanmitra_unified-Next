@@ -1056,6 +1056,19 @@ async def get_practice_dashboard(
             }
         )
 
+    fees_outstanding = "—"
+    try:
+        from app.config import get_settings
+        from app.modules.legal import billing_service
+
+        if getattr(get_settings(), "LEGALMITRA_BILLING_ENABLED", True):
+            summary = await billing_service.get_fee_summary(
+                tenant_id=tenant_id, app_key=app_key
+            )
+            fees_outstanding = summary.get("fees_outstanding_display") or "₹0.00"
+    except Exception:
+        fees_outstanding = "—"
+
     return {
         "active_matters": int(active_matters),
         "pending_matters": int(pending_matters),
@@ -1065,6 +1078,6 @@ async def get_practice_dashboard(
         "recent_clients": recent_clients,
         "recent_briefs": recent_briefs,
         "recent_documents": recent_documents,
-        "fees_outstanding": "—",
+        "fees_outstanding": fees_outstanding,
         "data_source": "live",
     }

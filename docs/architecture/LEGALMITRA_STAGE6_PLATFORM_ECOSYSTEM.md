@@ -2,8 +2,8 @@
 
 **Document type:** Implementation specification  
 **Product:** LegalMitra (with selective SanMitra shared services)  
-**Status:** Planned (not yet implemented)  
-**Version:** 1.0  
+**Status:** Implemented (MVP — feature-flagged)  
+**Version:** 1.1  
 **Date:** 2026-08-02  
 **Companion PRD:** [`docs/prd/LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md`](../prd/LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md)  
 **Depends on:**  
@@ -266,3 +266,4 @@ Audit issue / collect / void / post / reverse.
 | Version | Date | Note |
 | --- | --- | --- |
 | 1.0 | 2026-08-02 | Initial Stage 6 plan: native fee ledger, optional MitraBooks posting, selective shared patterns, LegalMitra remains separate |
+| 1.1 | 2026-08-02 | MVP implemented: fee invoices/collections/time entries/summary, GL map + optional posting adapter, tracker fee panel |

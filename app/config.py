@@ -211,6 +211,19 @@ class Settings:
         "on",
     }
 
+    # LegalMitra Stage 6 — Practice billing (+ optional MitraBooks posting).
+    # Billing default on for local/dev; MitraBooks posting stays off until owner enablement.
+    LEGALMITRA_BILLING_ENABLED = os.getenv("LEGALMITRA_BILLING_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    LEGALMITRA_MITRABOOKS_POSTING_ENABLED = os.getenv(
+        "LEGALMITRA_MITRABOOKS_POSTING_ENABLED",
+        "false",
+    ).lower() in {"1", "true", "yes", "on"}
+
     # MitraBooks Financial Health — AI narration of the CFO-Insight figures.
     # Reuses ANTHROPIC_API_KEY / ANTHROPIC_API_BASE. The model only rewrites the
     # already-computed figures as prose; it never invents numbers. Degrades to the

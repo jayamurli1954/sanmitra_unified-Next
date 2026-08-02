@@ -16,10 +16,12 @@ async def ensure_legal_indexes() -> None:
     from app.modules.legal.practice_service import ensure_practice_indexes
     from app.modules.legal.proactive_service import ensure_proactive_indexes
     from app.modules.legal.workflow_service import ensure_workflow_indexes
+    from app.modules.legal.billing_service import ensure_billing_indexes
 
     await ensure_practice_indexes()
     await ensure_proactive_indexes()
     await ensure_workflow_indexes()
+    await ensure_billing_indexes()
 
 
 async def create_legal_case(*, tenant_id: str, created_by: str, payload: LegalCaseCreateRequest):
