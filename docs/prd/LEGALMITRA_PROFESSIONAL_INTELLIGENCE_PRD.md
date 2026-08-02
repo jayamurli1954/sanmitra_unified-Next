@@ -336,6 +336,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Real clients and matters; documents on matters; persona workspace with real data; matter briefs with sources/limitations.
 
+**Current engineering status (2026-08-02):** Stage 3 foundation is in progress in-repo: Mongo-backed Clients/Matters/Documents/Timeline/Briefs/Dashboard under `/api/v1/legal/*`, with matter status lifecycle, auto matter numbers, structured Matter Intelligence Briefs, and tracker live widgets when authenticated. Spec: [`docs/architecture/LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](../architecture/LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md). Adoption gate (multi-user paid usage) remains a commercial go/no-go parallel to engineering readiness.
+
 **Stage 3 is complete when:**
 
 - Practice data persists per tenant and survives refresh (no localStorage system-of-record).  

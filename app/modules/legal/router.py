@@ -6,9 +6,11 @@ from app.core.rate_limiting import limiter
 from app.core.tenants.context import resolve_tenant_id
 from app.modules.legal.schemas import LegalCaseCreateRequest, LegalCaseListResponse, LegalCaseResponse
 from app.modules.legal.service import create_legal_case, list_legal_cases
+from app.modules.legal.practice_router import practice_router
 from app.services.legal_web_search import legal_web_search
 
 router = APIRouter(prefix="/legal", tags=["legal"])
+router.include_router(practice_router)
 LEGAL_PROXY_RATE_LIMIT = "20/minute"
 
 

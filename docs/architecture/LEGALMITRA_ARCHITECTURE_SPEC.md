@@ -151,7 +151,7 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | --- | --- |
 | Now | Stabilize live research/templates; label stubs; feedback endpoint |
 | 2 | RAG contract, GST/IT corpus + chunking, rerank, eval harness, launch templates |
-| 3 | Mongo Client/Matter APIs; replace tracker localStorage; matter briefs |
+| 3 | Mongo Client/Matter APIs; replace tracker localStorage; matter briefs. Spec: [`LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md) |
 | 4 | Morning Brief + deadline/compliance alerts from real tenant data |
 | 5 | Orchestrator + agents + knowledge-graph MVP |
 | 6 | Shared SanMitra services; optional MitraBooks fee posting |
@@ -163,3 +163,4 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | Version | Date | Note |
 | --- | --- | --- |
 | 1.0 | 2026-07-31 | Split from PRD v2.0 so product requirements stay library-agnostic |
+| 1.1 | 2026-08-02 | Linked Stage 3 Matter & Client Intelligence implementation spec |

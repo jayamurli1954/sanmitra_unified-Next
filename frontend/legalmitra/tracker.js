@@ -1,3 +1,7 @@
+import { apiRequest, getAccessToken } from "../shared/api-client.js";
+
+const APP_KEY = "legalmitra";
+
 const trackerProfiles = {
   advocate: {
     metrics: [
@@ -73,6 +77,7 @@ const trackerProfiles = {
 let currentRole = "advocate";
 let currentCard = "case-master";
 let editingRowIndex = null;
+let livePractice = null;
 const storageKey = "legalmitra-tracker-drafts";
 const rowStorageKey = "legalmitra-tracker-work-items";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
@@ -125,13 +130,6 @@ function getStoredRows() {
 
 function saveStoredRows(rowsByRole) {
   localStorage.setItem(rowStorageKey, JSON.stringify(rowsByRole));
-}
-
-function getRoleRows(role = currentRole) {
-  const stored = getStoredRows();
-  const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
-  if (savedRows.length) return savedRows;
-  return (trackerProfiles[role]?.rows || trackerProfiles.advocate.rows).map(normalizeRow);
 }
 
 function persistRoleRows(rows, role = currentRole) {
@@ -203,18 +201,27 @@ function renderRows(rows = getRoleRows()) {
 
 function updateMetricsForRows() {
   const profile = trackerProfiles[currentRole] || trackerProfiles.advocate;
-  const rows = getRoleRows();
-  const urgentCount = rows.filter((row) => row.status === "urgent").length;
-  const pendingCount = rows.filter((row) => row.status !== "done").length;
-  const metrics = [
-    ["Urgent items", String(urgentCount)],
-    ["Open items", String(pendingCount)],
-    ["Logged items", String(rows.length)],
-    ["Fees outstanding", "—"],
-  ];
-  // Keep persona-specific first label when profile supplies one that matches count semantics.
-  if (profile.metrics?.[0]?.[0]) {
-    metrics[0][0] = profile.metrics[0][0];
+  let metrics;
+  if (livePractice) {
+    metrics = [
+      ["Active matters", String(livePractice.active_matters ?? 0)],
+      ["Awaiting review", String(livePractice.awaiting_review ?? 0)],
+      ["Upcoming hearings", String((livePractice.upcoming_hearings || []).length)],
+      ["Fees outstanding", livePractice.fees_outstanding || "—"],
+    ];
+  } else {
+    const rows = getRoleRows();
+    const urgentCount = rows.filter((row) => row.status === "urgent").length;
+    const pendingCount = rows.filter((row) => row.status !== "done").length;
+    metrics = [
+      ["Urgent items", String(urgentCount)],
+      ["Open items", String(pendingCount)],
+      ["Logged items", String(rows.length)],
+      ["Fees outstanding", "—"],
+    ];
+    if (profile.metrics?.[0]?.[0]) {
+      metrics[0][0] = profile.metrics[0][0];
+    }
   }
   metrics.forEach(([label, value], index) => {
     const labelEl = document.getElementById(`metric-label-${index + 1}`);
@@ -222,6 +229,79 @@ function updateMetricsForRows() {
     if (labelEl) labelEl.textContent = label;
     if (valueEl) valueEl.textContent = value;
   });
+}
+
+function formatPracticeDate(value) {
+  if (!value) return "";
+  const text = String(value);
+  return text.length >= 10 ? text.slice(0, 10) : text;
+}
+
+function liveMatterRows() {
+  if (!livePractice) return null;
+  const hearings = (livePractice.upcoming_hearings || []).map((item) => ({
+    date: formatPracticeDate(item.next_hearing_date),
+    reference: item.matter_number || item.matter_id || "",
+    authority: item.court || "—",
+    purpose: item.title || "Hearing",
+    status: item.status || "pending",
+  }));
+  const deadlines = (livePractice.upcoming_deadlines || []).map((item) => ({
+    date: formatPracticeDate(item.next_deadline_date),
+    reference: item.matter_number || item.matter_id || "",
+    authority: "Compliance deadline",
+    purpose: item.title || "Deadline",
+    status: item.status || "pending",
+  }));
+  return [...hearings, ...deadlines];
+}
+
+function getRoleRows(role = currentRole) {
+  const liveRows = liveMatterRows();
+  if (liveRows !== null) return liveRows.map(normalizeRow);
+  const stored = getStoredRows();
+  const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
+  if (savedRows.length) return savedRows;
+  return (trackerProfiles[role]?.rows || trackerProfiles.advocate.rows).map(normalizeRow);
+}
+
+function updatePracticeBanner() {
+  const banner = document.querySelector(".legal-tracker-preview-banner");
+  if (!banner) return;
+  if (livePractice) {
+    banner.textContent =
+      "Live practice workspace — metrics and boards below come from your tenant clients and matters (Stage 3). Fee ledger posting remains deferred.";
+  } else if (getAccessToken()) {
+    banner.textContent =
+      "Signed in, but live practice data could not be loaded. Showing browser preview rows until the practice API responds.";
+  } else {
+    banner.textContent =
+      "Preview workspace — sign in to load tenant-backed clients, matters, hearings, and Matter Intelligence Briefs. Browser-only rows are not the system of record.";
+  }
+}
+
+async function loadLivePractice() {
+  if (!getAccessToken()) {
+    livePractice = null;
+    updatePracticeBanner();
+    return;
+  }
+  try {
+    const result = await apiRequest(APP_KEY, "/api/v1/legal/practice/dashboard?limit=8", {
+      method: "GET",
+      timeoutMs: 12000,
+    });
+    if (result?.ok && result.payload) {
+      livePractice = result.payload;
+    } else {
+      livePractice = null;
+    }
+  } catch (_error) {
+    livePractice = null;
+  }
+  updatePracticeBanner();
+  updateMetricsForRows();
+  renderRows(getRoleRows());
 }
 
 function setRole(role) {
@@ -343,6 +423,10 @@ function todayIso() {
 }
 
 function openRowEditor(rowIndex = null) {
+  if (livePractice) {
+    setSaveStatus("Live matter board is read-only here. Create or update matters through the practice APIs (Stage 3 foundation).");
+    return;
+  }
   const rows = getRoleRows();
   const row = rowIndex === null ? null : rows[rowIndex];
   editingRowIndex = rowIndex;
@@ -393,6 +477,10 @@ function saveRowFromEditor(event) {
 }
 
 function deleteRow(rowIndex) {
+  if (livePractice) {
+    setSaveStatus("Live matter board is read-only here.");
+    return;
+  }
   const rows = getRoleRows();
   if (!rows[rowIndex]) return;
   rows.splice(rowIndex, 1);
@@ -467,6 +555,8 @@ document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
 
 setRole("advocate");
 updateActiveTab("daily-board");
+updatePracticeBanner();
+loadLivePractice();
 const initialTab = String(window.location.hash || "").replace("#", "");
 if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {
   if (initialTab === "daily-board") {
