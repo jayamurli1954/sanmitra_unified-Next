@@ -37,7 +37,7 @@ Product posture remains **AI Professional Assistant**, not “AI Lawyer,” and 
 
 | Layer | Current state | Target (Stage 6) | Gap |
 | --- | --- | --- | --- |
-| Practice fees | Tracker fee ledger shows `—` / local drafts | LegalMitra-native fee ledger + GST-capable client invoices | Fee/invoice Mongo models + APIs + UI |
+| Practice fees | Live fee summary + invoice list on tracker (when billing enabled) | LegalMitra-native fee ledger + GST-capable client invoices | Broader invoice UX; optional MitraBooks posting still flagged off by default |
 | Accounting | MitraBooks posting unused by LegalMitra | Optional post of **collected** fees via shared accounting service | Cross-db boundary + idempotency + reversals |
 | Time | Not tracked | Optional time entries linked to matters | `legal_time_entries` + report rollups |
 | Notifications | LegalMitra in-app only | Optional reuse of shared notification patterns | Thin adapter; no product merge |

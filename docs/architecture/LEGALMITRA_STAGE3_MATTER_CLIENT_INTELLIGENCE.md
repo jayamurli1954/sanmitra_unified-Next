@@ -125,7 +125,7 @@ Replace placeholder tracker metrics with live aggregates where authenticated:
 - AI Matter Briefs (recent)  
 - Recent Documents  
 
-Fee ledger remains deferred (show `—` until Stage 6 billing path).
+Fee ledger is implemented in Stage 6 (live summary on tracker when billing is enabled).
 
 ---
 

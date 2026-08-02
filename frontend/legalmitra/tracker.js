@@ -82,8 +82,8 @@ let morningBrief = null;
 let activeWorkflowRun = null;
 let feeSummary = null;
 let feeInvoices = [];
-const storageKey = "legalmitra-tracker-drafts";
-const rowStorageKey = "legalmitra-tracker-work-items";
+const storageKey = "legalmitra-tracker-drafts-v2";
+const rowStorageKey = "legalmitra-tracker-work-items-v2";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
 
 const rowEditor = document.getElementById("tracker-row-editor");
@@ -275,13 +275,13 @@ function updatePracticeBanner() {
   if (!banner) return;
   if (livePractice) {
     banner.textContent =
-      "Live practice workspace — metrics and boards below come from your tenant clients and matters (Stage 3). Fee ledger posting remains deferred.";
+      "Live practice workspace — metrics and boards below come from your tenant clients and matters. Morning Brief, guided workflows, and the fee ledger load when practice data is available.";
   } else if (getAccessToken()) {
     banner.textContent =
       "Signed in, but live practice data could not be loaded. Showing browser preview rows until the practice API responds.";
   } else {
     banner.textContent =
-      "Preview workspace — sign in to load tenant-backed clients, matters, hearings, and Matter Intelligence Briefs. Browser-only rows are not the system of record.";
+      "Preview workspace — sign in to load tenant-backed clients, matters, hearings, Morning Brief, and fee records. Browser-only rows are not the system of record.";
   }
 }
 
@@ -619,7 +619,13 @@ function renderDetail(card, options = {}) {
   const safeIndex = cardIndex >= 0 ? cardIndex : 0;
   const [title, copy] = profile.registers[safeIndex];
   const labels = profile.details[currentCard] || profile.details["case-master"];
-  const saved = getSavedValues(currentRole, currentCard);
+  const saved = sanitizeSavedValues(getSavedValues(currentRole, currentCard));
+  // Drop corrupted browser drafts so Reset / reload show clean samples.
+  const drafts = getDrafts();
+  if (drafts?.[currentRole]?.[currentCard]) {
+    drafts[currentRole][currentCard] = saved;
+    localStorage.setItem(storageKey, JSON.stringify(drafts));
+  }
 
   document.getElementById("tracker-detail-kicker").textContent = document.querySelector(`[data-tracker-card="${currentCard}"] span`)?.textContent || "Register";
   document.getElementById("tracker-detail-title").textContent = title;
@@ -638,7 +644,7 @@ function renderDetail(card, options = {}) {
     const input = document.createElement("input");
     input.dataset.trackerField = String(index);
     input.dataset.trackerLabel = label;
-    input.value = saved[label] || "";
+    input.value = fieldValueFor(label, saved);
     input.placeholder = "Enter value (preview only)";
     field.appendChild(input);
 
@@ -676,6 +682,82 @@ function getDrafts() {
 
 function getSavedValues(role, card) {
   return getDrafts()?.[role]?.[card] || {};
+}
+
+function isCorruptedSample(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  // Known mangled preview drafts from typing inside "Structured field" / bad caps.
+  if (/structured field/i.test(text)) return true;
+  if (/stru.*ctured/i.test(text)) return true;
+  if (/^doen$/i.test(text)) return true;
+  if (/ramkumar/i.test(text) && text !== "Ramkumar") return true;
+  if (/high\s*c\s*ourt|banglaore|banglalore|banglaore/i.test(text)) return true;
+  // Mixed-case gibberish like rAMKUMAR / cOURT
+  if (/[a-z][A-Z]{2,}/.test(text) && /[A-Z][a-z][A-Z]/.test(text)) return true;
+  return false;
+}
+
+function sanitizeSavedValues(saved) {
+  const cleaned = {};
+  Object.entries(saved || {}).forEach(([label, value]) => {
+    if (!isCorruptedSample(value)) {
+      cleaned[label] = value;
+    }
+  });
+  return cleaned;
+}
+
+function sampleValue(label) {
+  const key = String(label || "").trim().toLowerCase();
+  const samples = {
+    "matter number": "OS/219-2024-25",
+    "client name": "Ramkumar",
+    "court / forum": "High Court, Bengaluru",
+    "next date": "23-05-2026",
+    "filing stage": "Done",
+    "limitation status": "Within limitation",
+    "client contact": "Client desk / mobile",
+    "instruction status": "Awaiting affidavit",
+    "documents pending": "Vakalatnama, annexures",
+    "last follow-up": "15-05-2026",
+    "next reminder": "20-05-2026",
+    "escalation owner": "Chamber clerk",
+    retainer: "Rs. 25,000",
+    "drafting fee": "Rs. 7,500",
+    "appearance fee": "Rs. 5,000",
+    expenses: "Rs. 1,200",
+    "amount received": "Rs. 20,000",
+    "balance due": "Rs. 18,700",
+    "gstin / pan": "29ABCDE1234F1Z5",
+    "notice reference": "SCN/GST/2024/081",
+    "assessment year": "2024-25",
+    "portal status": "Reply pending",
+    "working paper owner": "Tax manager",
+    "due date": "30-05-2026",
+    "entity name": "Acme Services LLP",
+    "cin / llpin": "AAB-1234",
+    "filing event": "Form 11 annual return",
+    "board action": "Circulation approved",
+    "mca form": "Form 11",
+  };
+  if (samples[key]) return samples[key];
+  if (/date|due|reminder/i.test(label)) return "30-05-2026";
+  if (/fee|retainer|received|balance|outstanding|collections|expenses/i.test(label)) {
+    return "Rs. 0";
+  }
+  if (/status|stage|approval|pending/i.test(label)) return "Pending";
+  if (/owner|contact|client|director|partner/i.test(label)) return "Assigned person";
+  if (/court|forum|authority/i.test(label)) return "High Court, Bengaluru";
+  return "";
+}
+
+function fieldValueFor(label, saved) {
+  const raw = saved?.[label];
+  if (raw == null || String(raw).trim() === "" || isCorruptedSample(raw)) {
+    return sampleValue(label);
+  }
+  return String(raw);
 }
 
 function setSaveStatus(message) {
@@ -784,15 +866,7 @@ function resetCurrentDetail() {
   }
   localStorage.setItem(storageKey, JSON.stringify(drafts));
   renderDetail(currentCard, { scroll: false, syncTab: false });
-  setSaveStatus("Reset to sample fields.");
-}
-
-function sampleValue(label) {
-  if (/date|due|reminder/i.test(label)) return "Track with reminder";
-  if (/fee|retainer|received|balance|outstanding|collections|expenses/i.test(label)) return "Rs. mapped ledger";
-  if (/status|stage|approval|pending/i.test(label)) return "Pending / Review / Done";
-  if (/owner|contact|client|director|partner/i.test(label)) return "Assigned person";
-  return "Structured field";
+  setSaveStatus("Reset to clean sample fields.");
 }
 
 document.querySelectorAll("[data-tracker-role]").forEach((button) => {
