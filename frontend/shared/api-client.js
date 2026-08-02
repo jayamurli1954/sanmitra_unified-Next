@@ -33,6 +33,24 @@ function getRuntimeApiBaseUrl() {
   return normalizeApiBaseUrl(window.location.origin) || LOCAL_API_BASE_URL;
 }
 
+function isLocalStaticShellApiBase(storedApi) {
+  if (!isLocalFrontendHost() || !storedApi) return false;
+  try {
+    const stored = new URL(storedApi, window.location.origin);
+    const page = window.location;
+    const storedHost = String(stored.hostname || "").toLowerCase();
+    const pageHost = String(page.hostname || "").toLowerCase();
+    const sameLocalHost =
+      storedHost === pageHost
+      || (storedHost === "localhost" && pageHost === "127.0.0.1")
+      || (storedHost === "127.0.0.1" && pageHost === "localhost");
+    // Saved base pointing at the static shell (e.g. :3300) is not the API.
+    return sameLocalHost && String(stored.port || "") === String(page.port || "");
+  } catch (_error) {
+    return false;
+  }
+}
+
 export function getConfiguredApiBaseUrl() {
   const params = new URLSearchParams(window.location.search);
   const queryApi = String(params.get("api") || "").trim();
@@ -50,6 +68,12 @@ export function getConfiguredApiBaseUrl() {
   const isProductionProxy = !isLocalFrontendHost() && runtimeApi === "/api";
   const isExternalOverride = /^https?:\/\//i.test(storedApi);
   if (isProductionProxy && isExternalOverride) {
+    localStorage.removeItem(API_BASE_STORAGE_KEY);
+    return runtimeApi;
+  }
+
+  // Local static shells often persist their own origin as the API base; ignore that.
+  if (isLocalStaticShellApiBase(storedApi)) {
     localStorage.removeItem(API_BASE_STORAGE_KEY);
     return runtimeApi;
   }

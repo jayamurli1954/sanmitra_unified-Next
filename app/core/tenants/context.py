@@ -99,6 +99,12 @@ async def _resolve_tenant_from_legacy_temple_header(x_temple_id: str | None) -> 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # CORS preflight must not be blocked by app-key validation. Browsers do not
+        # always omit X-App-Key on OPTIONS; an early 400 would strip CORS headers when
+        # this middleware sits outside CORSMiddleware.
+        if request.method.upper() == "OPTIONS":
+            return await call_next(request)
+
         tenant_id = request.headers.get("X-Tenant-ID")
         temple_tenant_id = await _resolve_tenant_from_legacy_temple_header(request.headers.get("X-Temple-Id"))
         if temple_tenant_id:
