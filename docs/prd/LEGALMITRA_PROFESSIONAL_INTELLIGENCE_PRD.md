@@ -336,6 +336,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Real clients and matters; documents on matters; persona workspace with real data; matter briefs with sources/limitations.
 
+**Current engineering status (2026-08-02):** Stage 3 foundation is in progress in-repo: Mongo-backed Clients/Matters/Documents/Timeline/Briefs/Dashboard under `/api/v1/legal/*`, with matter status lifecycle, auto matter numbers, structured Matter Intelligence Briefs, and tracker live widgets when authenticated. Spec: [`docs/architecture/LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](../architecture/LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md). Adoption gate (multi-user paid usage) remains a commercial go/no-go parallel to engineering readiness.
+
 **Stage 3 is complete when:**
 
 - Practice data persists per tenant and survives refresh (no localStorage system-of-record).  
@@ -345,6 +347,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 ### Stage 4 — Proactive Assistant
 
 **Build:** Production Morning Brief; deadline/limitation/filing watches; compliance-gap and practice-area notification alerts.
+
+**Planned engineering status (2026-08-02):** Implementation plan and foundation code in [`docs/architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md`](../architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md) — deterministic alerts, Practice Health Score, Morning Brief, in-app notifications, tracker panel. Feature-flagged via `LEGALMITRA_PROACTIVE_ENABLED`.
 
 **Stage 4 is complete when:**
 
@@ -356,6 +360,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Multi-step prepare/research/draft/check flows with human sign-off; knowledge-graph MVP for proven act families.
 
+**Planned engineering status (2026-08-02):** MVP implemented behind `LEGALMITRA_AGENTIC_ENABLED` — see [`docs/architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](../architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md). Guided Prepare Matter Response with human gates, catalog/templates, Morning Brief recommended-workflow CTA, and KG as optional research enrichment only (subgraph read API; empty miss is valid).
+
 **Stage 5 is complete when:**
 
 - One end-to-end agentic workflow runs with audit trail and mandatory human approval gates.  
@@ -365,6 +371,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 ### Stage 6 — Platform Ecosystem
 
 **Build:** Shared SanMitra intelligence/document/notification patterns where justified; optional MitraBooks fee posting; selective practice-OS parity only where it serves the north star.
+
+**Planned engineering status (2026-08-02):** MVP implemented behind `LEGALMITRA_BILLING_ENABLED` / `LEGALMITRA_MITRABOOKS_POSTING_ENABLED` — see [`docs/architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md`](../architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md). LegalMitra-native fee ledger (issue/collect/void/summary/time entries); optional MitraBooks GL posting only through shared accounting with explicit confirm. LegalMitra remains a separate product experience.
 
 **Stage 6 is complete when:**
 

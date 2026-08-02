@@ -1,3 +1,7 @@
+import { apiRequest, getAccessToken } from "../shared/api-client.js";
+
+const APP_KEY = "legalmitra";
+
 const trackerProfiles = {
   advocate: {
     metrics: [
@@ -73,6 +77,11 @@ const trackerProfiles = {
 let currentRole = "advocate";
 let currentCard = "case-master";
 let editingRowIndex = null;
+let livePractice = null;
+let morningBrief = null;
+let activeWorkflowRun = null;
+let feeSummary = null;
+let feeInvoices = [];
 const storageKey = "legalmitra-tracker-drafts";
 const rowStorageKey = "legalmitra-tracker-work-items";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
@@ -125,13 +134,6 @@ function getStoredRows() {
 
 function saveStoredRows(rowsByRole) {
   localStorage.setItem(rowStorageKey, JSON.stringify(rowsByRole));
-}
-
-function getRoleRows(role = currentRole) {
-  const stored = getStoredRows();
-  const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
-  if (savedRows.length) return savedRows;
-  return (trackerProfiles[role]?.rows || trackerProfiles.advocate.rows).map(normalizeRow);
 }
 
 function persistRoleRows(rows, role = currentRole) {
@@ -203,18 +205,28 @@ function renderRows(rows = getRoleRows()) {
 
 function updateMetricsForRows() {
   const profile = trackerProfiles[currentRole] || trackerProfiles.advocate;
-  const rows = getRoleRows();
-  const urgentCount = rows.filter((row) => row.status === "urgent").length;
-  const pendingCount = rows.filter((row) => row.status !== "done").length;
-  const metrics = [
-    ["Urgent items", String(urgentCount)],
-    ["Open items", String(pendingCount)],
-    ["Logged items", String(rows.length)],
-    ["Fees outstanding", "—"],
-  ];
-  // Keep persona-specific first label when profile supplies one that matches count semantics.
-  if (profile.metrics?.[0]?.[0]) {
-    metrics[0][0] = profile.metrics[0][0];
+  let metrics;
+  if (livePractice) {
+    const health = livePractice.practice_health_score;
+    metrics = [
+      ["Practice health", health == null ? "—" : String(health)],
+      ["Open alerts", String(livePractice.open_alerts ?? 0)],
+      ["Active matters", String(livePractice.active_matters ?? 0)],
+      ["Fees outstanding", livePractice.fees_outstanding || "—"],
+    ];
+  } else {
+    const rows = getRoleRows();
+    const urgentCount = rows.filter((row) => row.status === "urgent").length;
+    const pendingCount = rows.filter((row) => row.status !== "done").length;
+    metrics = [
+      ["Urgent items", String(urgentCount)],
+      ["Open items", String(pendingCount)],
+      ["Logged items", String(rows.length)],
+      ["Fees outstanding", "—"],
+    ];
+    if (profile.metrics?.[0]?.[0]) {
+      metrics[0][0] = profile.metrics[0][0];
+    }
   }
   metrics.forEach(([label, value], index) => {
     const labelEl = document.getElementById(`metric-label-${index + 1}`);
@@ -222,6 +234,360 @@ function updateMetricsForRows() {
     if (labelEl) labelEl.textContent = label;
     if (valueEl) valueEl.textContent = value;
   });
+}
+
+function formatPracticeDate(value) {
+  if (!value) return "";
+  const text = String(value);
+  return text.length >= 10 ? text.slice(0, 10) : text;
+}
+
+function liveMatterRows() {
+  if (!livePractice) return null;
+  const hearings = (livePractice.upcoming_hearings || []).map((item) => ({
+    date: formatPracticeDate(item.next_hearing_date),
+    reference: item.matter_number || item.matter_id || "",
+    authority: item.court || "—",
+    purpose: item.title || "Hearing",
+    status: item.status || "pending",
+  }));
+  const deadlines = (livePractice.upcoming_deadlines || []).map((item) => ({
+    date: formatPracticeDate(item.next_deadline_date),
+    reference: item.matter_number || item.matter_id || "",
+    authority: "Compliance deadline",
+    purpose: item.title || "Deadline",
+    status: item.status || "pending",
+  }));
+  return [...hearings, ...deadlines];
+}
+
+function getRoleRows(role = currentRole) {
+  const liveRows = liveMatterRows();
+  if (liveRows !== null) return liveRows.map(normalizeRow);
+  const stored = getStoredRows();
+  const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
+  if (savedRows.length) return savedRows;
+  return (trackerProfiles[role]?.rows || trackerProfiles.advocate.rows).map(normalizeRow);
+}
+
+function updatePracticeBanner() {
+  const banner = document.querySelector(".legal-tracker-preview-banner");
+  if (!banner) return;
+  if (livePractice) {
+    banner.textContent =
+      "Live practice workspace — metrics and boards below come from your tenant clients and matters (Stage 3). Fee ledger posting remains deferred.";
+  } else if (getAccessToken()) {
+    banner.textContent =
+      "Signed in, but live practice data could not be loaded. Showing browser preview rows until the practice API responds.";
+  } else {
+    banner.textContent =
+      "Preview workspace — sign in to load tenant-backed clients, matters, hearings, and Matter Intelligence Briefs. Browser-only rows are not the system of record.";
+  }
+}
+
+async function loadLivePractice() {
+  if (!getAccessToken()) {
+    livePractice = null;
+    morningBrief = null;
+    updatePracticeBanner();
+    renderMorningBrief();
+    return;
+  }
+  try {
+    const result = await apiRequest(APP_KEY, "/api/v1/legal/practice/dashboard?limit=8", {
+      method: "GET",
+      timeoutMs: 12000,
+    });
+    if (result?.ok && result.payload) {
+      livePractice = result.payload;
+    } else {
+      livePractice = null;
+    }
+  } catch (_error) {
+    livePractice = null;
+  }
+  updatePracticeBanner();
+  updateMetricsForRows();
+  renderRows(getRoleRows());
+  await Promise.all([loadMorningBrief(false), loadFeeLedger()]);
+}
+
+async function loadFeeLedger() {
+  const panel = document.getElementById("fee-ledger-live");
+  const listEl = document.getElementById("fee-ledger-live-list");
+  const summaryEl = document.getElementById("fee-ledger-live-summary");
+  if (!getAccessToken()) {
+    feeSummary = null;
+    feeInvoices = [];
+    if (panel) panel.hidden = true;
+    return;
+  }
+  try {
+    const [summaryRes, invoicesRes] = await Promise.all([
+      apiRequest(APP_KEY, "/api/v1/legal/practice/fees/summary", {
+        method: "GET",
+        timeoutMs: 12000,
+      }),
+      apiRequest(APP_KEY, "/api/v1/legal/practice/fees/invoices?limit=20", {
+        method: "GET",
+        timeoutMs: 12000,
+      }),
+    ]);
+    feeSummary = summaryRes?.ok ? summaryRes.payload : null;
+    feeInvoices = invoicesRes?.ok ? (invoicesRes.payload.items || []) : [];
+  } catch (_error) {
+    feeSummary = null;
+    feeInvoices = [];
+  }
+
+  if (!panel || !listEl || !summaryEl) return;
+  panel.hidden = false;
+  if (feeSummary) {
+    summaryEl.textContent =
+      `Outstanding ${feeSummary.fees_outstanding_display || "₹0.00"} · ` +
+      `billed ${feeSummary.total_billed ?? 0} · collected ${feeSummary.total_collected ?? 0}`;
+    if (livePractice) {
+      livePractice.fees_outstanding = feeSummary.fees_outstanding_display || livePractice.fees_outstanding;
+      updateMetricsForRows();
+    }
+  } else {
+    summaryEl.textContent = "Fee ledger unavailable.";
+  }
+  listEl.textContent = "";
+  if (!feeInvoices.length) {
+    const li = document.createElement("li");
+    li.textContent = "No fee notes yet. Create an invoice via the practice fees API.";
+    listEl.appendChild(li);
+    return;
+  }
+  feeInvoices.slice(0, 12).forEach((inv) => {
+    const li = document.createElement("li");
+    li.textContent =
+      `${inv.invoice_number || inv.invoice_id} · ${inv.status} · ` +
+      `due ${inv.amount_outstanding ?? "—"} / total ${inv.grand_total ?? "—"}`;
+    listEl.appendChild(li);
+  });
+}
+
+function renderMorningBrief() {
+  const panel = document.getElementById("morning-brief-panel");
+  const healthEl = document.getElementById("morning-brief-health");
+  const advisoryEl = document.getElementById("morning-brief-advisory");
+  const actionsEl = document.getElementById("morning-brief-actions");
+  if (!panel || !healthEl || !actionsEl) return;
+
+  if (!getAccessToken()) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  actionsEl.textContent = "";
+
+  if (!morningBrief) {
+    healthEl.textContent = "Morning Brief unavailable. Refresh after practice data is loaded.";
+    if (advisoryEl) advisoryEl.hidden = true;
+    return;
+  }
+
+  const score = morningBrief.practice_health_score;
+  const label = morningBrief.practice_health_label || "";
+  healthEl.textContent = `Practice Health ${score}/100 — ${label}`;
+  if (advisoryEl) {
+    advisoryEl.hidden = false;
+    advisoryEl.textContent = morningBrief.advisory_notice
+      || "Advisory — human review required. Never invent hearings, statutes, or court dates.";
+  }
+
+  const actions = morningBrief.sections?.priority_actions || [];
+  if (!actions.length) {
+    const li = document.createElement("li");
+    li.textContent = morningBrief.empty_practice
+      ? "No practice data yet. Create a client and matter to activate Priority Actions."
+      : "No open priority alerts for today.";
+    actionsEl.appendChild(li);
+    return;
+  }
+
+  actions.slice(0, 8).forEach((item) => {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = item.action_href || "./tracker.html#daily-board";
+    link.textContent = item.title || item.summary || "Open matter";
+    const meta = document.createElement("span");
+    meta.textContent = ` · ${item.severity || "normal"} · score ${item.priority_score ?? "—"}`;
+    const tip = document.createElement("div");
+    tip.textContent = (item.suggested_actions || []).slice(0, 2).join(" · ");
+    li.append(link, meta);
+    if (tip.textContent) li.appendChild(tip);
+
+    const wf = item.recommended_workflow;
+    if (wf && item.matter_id) {
+      const start = document.createElement("button");
+      start.type = "button";
+      start.className = "legal-workflow-start";
+      start.textContent = `Start: ${wf.display_name || "Prepare Matter Response"}`;
+      start.addEventListener("click", () => {
+        startRecommendedWorkflow(item);
+      });
+      li.appendChild(start);
+    }
+    actionsEl.appendChild(li);
+  });
+}
+
+function latestStepByKey(steps) {
+  const best = new Map();
+  (steps || []).forEach((step) => {
+    const prev = best.get(step.step_key);
+    if (!prev || (step.attempt || 1) >= (prev.attempt || 1)) {
+      best.set(step.step_key, step);
+    }
+  });
+  return Array.from(best.values());
+}
+
+function renderWorkflowRun() {
+  const panel = document.getElementById("workflow-run-panel");
+  const statusEl = document.getElementById("workflow-run-status");
+  const stepsEl = document.getElementById("workflow-run-steps");
+  const actionsEl = document.getElementById("workflow-run-actions");
+  if (!panel || !statusEl || !stepsEl || !actionsEl) return;
+
+  if (!activeWorkflowRun) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  stepsEl.textContent = "";
+  actionsEl.textContent = "";
+
+  const run = activeWorkflowRun;
+  statusEl.textContent =
+    `Status: ${run.status} · template ${run.workflow_template || "general"}` +
+    (run.ready_to_file ? " · ready-to-file marked (not filed)" : "");
+
+  const steps = latestStepByKey(run.steps);
+  steps.forEach((step) => {
+    const li = document.createElement("li");
+    const conf = step.confidence != null ? ` · confidence ${step.confidence}` : "";
+    li.textContent =
+      `${step.step_key}: ${step.status} (~${step.estimated_minutes || "?"} min)${conf}`;
+    if (step.error) {
+      const err = document.createElement("div");
+      err.textContent = step.error;
+      li.appendChild(err);
+    }
+    stepsEl.appendChild(li);
+  });
+
+  const awaiting = steps.find((s) => s.status === "awaiting_human");
+  if (awaiting) {
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.textContent = `Approve ${awaiting.step_key}`;
+    approve.addEventListener("click", () => approveWorkflowStep(run.run_id, awaiting.step_id));
+    const reject = document.createElement("button");
+    reject.type = "button";
+    reject.textContent = `Reject ${awaiting.step_key}`;
+    reject.addEventListener("click", () => rejectWorkflowStep(run.run_id, awaiting.step_id));
+    actionsEl.append(approve, reject);
+  }
+
+  if (run.status === "completed" && !run.ready_to_file) {
+    const mark = document.createElement("button");
+    mark.type = "button";
+    mark.textContent = "Mark ready to file (does not file)";
+    mark.addEventListener("click", () => markReadyToFile(run.run_id));
+    actionsEl.appendChild(mark);
+  }
+}
+
+async function startRecommendedWorkflow(item) {
+  if (!getAccessToken() || !item?.matter_id) return;
+  const wf = item.recommended_workflow || {
+    workflow_key: "prepare_matter_response",
+    workflow_template: "general",
+  };
+  const result = await apiRequest(APP_KEY, "/api/v1/legal/workflows/runs", {
+    method: "POST",
+    timeoutMs: 30000,
+    body: JSON.stringify({
+      workflow_key: wf.workflow_key || "prepare_matter_response",
+      workflow_template: wf.workflow_template || "general",
+      matter_id: item.matter_id,
+      alert_id: item.alert_id || null,
+      recommended_from: "morning_brief",
+      persona: currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate",
+    }),
+  });
+  activeWorkflowRun = result?.ok ? result.payload : null;
+  renderWorkflowRun();
+  document.getElementById("workflow-run-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function approveWorkflowStep(runId, stepId) {
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/approve`,
+    { method: "POST", timeoutMs: 30000 },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
+}
+
+async function rejectWorkflowStep(runId, stepId) {
+  const reason = window.prompt("Rejection reason (required for audit):", "Needs revision");
+  if (!reason || reason.trim().length < 2) return;
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/reject`,
+    {
+      method: "POST",
+      timeoutMs: 20000,
+      body: JSON.stringify({ reason: reason.trim() }),
+    },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
+}
+
+async function markReadyToFile(runId) {
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/ready-to-file`,
+    {
+      method: "POST",
+      timeoutMs: 15000,
+      body: JSON.stringify({ ready_to_file: true, confirm: true }),
+    },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
+}
+
+async function loadMorningBrief(forceRefresh) {
+  if (!getAccessToken()) {
+    morningBrief = null;
+    renderMorningBrief();
+    return;
+  }
+  const persona = currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate";
+  try {
+    const path = forceRefresh
+      ? "/api/v1/legal/practice/morning-brief"
+      : `/api/v1/legal/practice/morning-brief?persona=${encodeURIComponent(persona)}&window=daily`;
+    const result = await apiRequest(APP_KEY, path, {
+      method: forceRefresh ? "POST" : "GET",
+      timeoutMs: 20000,
+      body: forceRefresh
+        ? JSON.stringify({ persona, window: "daily", force_refresh: true })
+        : undefined,
+    });
+    morningBrief = result?.ok ? result.payload : null;
+  } catch (_error) {
+    morningBrief = null;
+  }
+  renderMorningBrief();
 }
 
 function setRole(role) {
@@ -343,6 +709,10 @@ function todayIso() {
 }
 
 function openRowEditor(rowIndex = null) {
+  if (livePractice) {
+    setSaveStatus("Live matter board is read-only here. Create or update matters through the practice APIs (Stage 3 foundation).");
+    return;
+  }
   const rows = getRoleRows();
   const row = rowIndex === null ? null : rows[rowIndex];
   editingRowIndex = rowIndex;
@@ -393,6 +763,10 @@ function saveRowFromEditor(event) {
 }
 
 function deleteRow(rowIndex) {
+  if (livePractice) {
+    setSaveStatus("Live matter board is read-only here.");
+    return;
+  }
   const rows = getRoleRows();
   if (!rows[rowIndex]) return;
   rows.splice(rowIndex, 1);
@@ -467,6 +841,11 @@ document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
 
 setRole("advocate");
 updateActiveTab("daily-board");
+updatePracticeBanner();
+loadLivePractice();
+document.getElementById("morning-brief-refresh")?.addEventListener("click", () => {
+  loadMorningBrief(true);
+});
 const initialTab = String(window.location.hash || "").replace("#", "");
 if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {
   if (initialTab === "daily-board") {

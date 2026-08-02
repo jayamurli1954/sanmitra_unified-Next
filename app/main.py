@@ -64,6 +64,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def invalid_app_key_exception_handler(_request: Request, exc: InvalidAppKeyError) -> Response:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+# Tenant context must stay inside CORS so preflight/error responses still get
+# Access-Control-Allow-Origin. Last added middleware is outermost in Starlette.
+app.add_middleware(TenantContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -77,7 +80,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(TenantContextMiddleware)
 
 
 _SECURITY_HEADERS = {

@@ -3855,13 +3855,33 @@ button.danger {
 }
 
 .legal-diary-panel-head button,
-.legal-diary-table button {
+.legal-diary-table button,
+.legal-workflow-start,
+.legal-workflow-actions button {
   min-height: 36px;
   border-radius: 9px;
   border: 0;
   background: #2563eb;
   color: #fff;
   font-weight: 850;
+  cursor: pointer;
+}
+
+.legal-workflow-panel .legal-workflow-steps {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+}
+
+.legal-workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.legal-workflow-start {
+  display: inline-block;
+  margin-top: 0.35rem;
+  margin-right: 0.5rem;
 }
 
 .legal-diary-table-wrap {

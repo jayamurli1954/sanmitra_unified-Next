@@ -36,7 +36,7 @@
           <h1>Master your deadlines, clients, cases, filings, and fee records in one intelligent space.</h1>
           <p>Built for advocates, chartered accountants, company secretaries, tax consultants, and professional teams managing recurring client obligations.</p>
           <p class="legal-tracker-preview-banner" role="status">
-            Preview workspace — metrics and boards below are from this browser only (not a live practice database). Tenant-backed clients/matters arrive in a later stage.
+            Preview workspace — sign in to load tenant-backed clients, matters, hearings, and Matter Intelligence Briefs. Browser-only rows are not the system of record.
           </p>
         </div>
         <div class="legal-role-switch" aria-label="Professional role">
@@ -51,6 +51,48 @@
         <article><span id="metric-label-2">Open items</span><strong id="metric-value-2">0</strong></article>
         <article><span id="metric-label-3">Logged items</span><strong id="metric-value-3">0</strong></article>
         <article><span id="metric-label-4">Fees outstanding</span><strong id="metric-value-4">—</strong></article>
+      </section>
+
+      <section class="legal-diary-panel legal-morning-brief" id="morning-brief-panel" hidden aria-label="Morning Brief">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Morning Brief</span>
+            <h2 id="morning-brief-title">What should I do today?</h2>
+            <p id="morning-brief-health">Sign in to generate today’s practice brief.</p>
+          </div>
+          <button type="button" id="morning-brief-refresh">Refresh Brief</button>
+        </div>
+        <p class="legal-morning-brief-advisory" id="morning-brief-advisory" hidden></p>
+        <ol class="legal-morning-brief-actions" id="morning-brief-actions"></ol>
+      </section>
+
+      <section class="legal-diary-panel legal-workflow-panel" id="workflow-run-panel" hidden aria-label="Prepare Matter Response">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Guided Workflow</span>
+            <h2 id="workflow-run-title">Prepare Matter Response</h2>
+            <p id="workflow-run-status">Start from a Morning Brief priority action, or open a matter and prepare a response.</p>
+          </div>
+        </div>
+        <p class="legal-morning-brief-advisory" id="workflow-run-advisory">
+          Advisory working product only. Approve research and drafts before any filing. This flow never files or sends.
+        </p>
+        <ol class="legal-workflow-steps" id="workflow-run-steps"></ol>
+        <div class="legal-workflow-actions" id="workflow-run-actions"></div>
+      </section>
+
+      <section class="legal-diary-panel legal-fee-ledger-live" id="fee-ledger-live" hidden aria-label="Fee ledger">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Practice Fees</span>
+            <h2>Fee ledger</h2>
+            <p id="fee-ledger-live-summary">Sign in to load outstanding fees.</p>
+          </div>
+        </div>
+        <p class="legal-morning-brief-advisory">
+          LegalMitra-native billing. MitraBooks posting is optional and requires explicit confirm — this product stays separate from MitraBooks ERP.
+        </p>
+        <ol id="fee-ledger-live-list"></ol>
       </section>
 
       <section class="legal-diary-tabs" aria-label="Tracker sections">
@@ -152,6 +194,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-ai-v33"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-stage6-v1"></script>
   </body>
 </html>

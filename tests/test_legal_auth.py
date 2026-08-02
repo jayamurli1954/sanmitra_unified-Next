@@ -4,11 +4,79 @@ from app.core.auth.security import create_access_token
 from app.main import app
 
 
-def test_legal_cases_get_requires_login() -> None:
+def test_legal_practice_dashboard_requires_login() -> None:
     client = TestClient(app)
-    response = client.get("/api/v1/legal/cases")
+    response = client.get("/api/v1/legal/practice/dashboard")
     assert response.status_code == 401
     assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_morning_brief_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/practice/morning-brief")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_workflows_catalog_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/workflows/catalog")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_workflows_runs_requires_login() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/legal/workflows/runs",
+        json={
+            "matter_id": "00000000-0000-0000-0000-000000000001",
+            "workflow_key": "prepare_matter_response",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_fee_summary_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/practice/fees/summary")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_fee_invoices_requires_login() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/legal/practice/fees/invoices",
+        json={
+            "matter_id": "00000000-0000-0000-0000-000000000001",
+            "lines": [{"description": "Retainer", "unit_rate": "1000.00"}],
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_clients_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/clients")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_matters_requires_login() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/legal/matters",
+        json={
+            "client_id": "00000000-0000-0000-0000-000000000001",
+            "title": "Sample Matter",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
 
 
 def test_legal_cases_post_requires_login() -> None:
@@ -288,3 +356,55 @@ def test_legal_rag_web_proxy_returns_429_after_abuse_threshold(monkeypatch) -> N
         assert "Rate limit exceeded" in responses[10].json()["error"]
     finally:
         limiter.reset()
+
+
+def test_legal_demo_user_bootstrap_and_login(monkeypatch) -> None:
+    from app.core.auth.security import hash_password
+
+    async def mock_get_user(email: str):
+        if email.strip().lower() == "legal.demo@sanmitra.local":
+            return {
+                "user_id": "demo-legal-user-1",
+                "email": "legal.demo@sanmitra.local",
+                "full_name": "Demo LegalMitra Advocate",
+                "tenant_id": "demo-legal-firm",
+                "app_key": "legalmitra",
+                "role": "tenant_admin",
+                "hashed_password": hash_password("LocalAdmin123"),
+                "is_active": True,
+            }
+        return None
+
+    class MockCollection:
+        async def find_one(self, *args, **kwargs):
+            return None
+        async def insert_one(self, *args, **kwargs):
+            return None
+        async def update_one(self, *args, **kwargs):
+            return None
+        async def create_index(self, *args, **kwargs):
+            return None
+
+    async def mock_ensure_active(tenant_id: str):
+        return True
+
+    monkeypatch.setattr("app.core.auth.service.get_user_by_email", mock_get_user)
+    monkeypatch.setattr("app.core.auth.service._refresh_collection", lambda: MockCollection())
+    monkeypatch.setattr("app.core.auth.service.ensure_tenant_is_active", mock_ensure_active)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/auth/login",
+        headers={"X-App-Key": "legalmitra", "Content-Type": "application/json"},
+        json={"email": "legal.demo@sanmitra.local", "password": "LocalAdmin123"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+
+
+
+
+

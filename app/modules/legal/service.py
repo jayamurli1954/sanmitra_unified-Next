@@ -12,6 +12,16 @@ async def ensure_legal_indexes() -> None:
     cases = get_collection(LEGAL_CASES_COLLECTION)
     await cases.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
     await cases.create_index("case_id", unique=True)
+    # Stage 3–5 practice / proactive / workflow collections.
+    from app.modules.legal.practice_service import ensure_practice_indexes
+    from app.modules.legal.proactive_service import ensure_proactive_indexes
+    from app.modules.legal.workflow_service import ensure_workflow_indexes
+    from app.modules.legal.billing_service import ensure_billing_indexes
+
+    await ensure_practice_indexes()
+    await ensure_proactive_indexes()
+    await ensure_workflow_indexes()
+    await ensure_billing_indexes()
 
 
 async def create_legal_case(*, tenant_id: str, created_by: str, payload: LegalCaseCreateRequest):

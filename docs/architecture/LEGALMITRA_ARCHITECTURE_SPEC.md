@@ -112,18 +112,19 @@ Statute PDF ingest (read-only source `D:\sanmitra-backend\data\legal_acts`) is d
 
 ---
 
-## 7. Agent layer (later)
+## 7. Agent layer (Stage 5 MVP)
 
-Stage 5 target specialists (adapters on FastAPI services, not a separate platform):
+**Current:** Guided `prepare_matter_response` workflow behind `LEGALMITRA_AGENTIC_ENABLED` — deterministic adapters (intake, research brief, evidence checklist, draft, human review), not LangGraph/swarm. Spec: [`LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md).
 
-- Legal Research Agent  
-- Tax / Compliance Agent  
-- Drafting Agent  
-- Document Agent  
-- Matter Agent  
-- Calendar / Alerts Agent  
+Specialist adapters on FastAPI services:
 
-Orchestrator classifies intent, routes, assembles response with citations. Human sign-off required before file/send.
+- Matter intake  
+- Legal research (grounded brief; Stage 2 citations required separately; no fabricated authorities)  
+- Document evidence checklist  
+- Drafting (always human-review)  
+- Human review gate  
+
+Orchestrator follows a declared step graph. Human sign-off required before any ready-to-file marker. Never auto-file or auto-send.
 
 ---
 
@@ -151,10 +152,10 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | --- | --- |
 | Now | Stabilize live research/templates; label stubs; feedback endpoint |
 | 2 | RAG contract, GST/IT corpus + chunking, rerank, eval harness, launch templates |
-| 3 | Mongo Client/Matter APIs; replace tracker localStorage; matter briefs |
-| 4 | Morning Brief + deadline/compliance alerts from real tenant data |
-| 5 | Orchestrator + agents + knowledge-graph MVP |
-| 6 | Shared SanMitra services; optional MitraBooks fee posting |
+| 3 | Mongo Client/Matter APIs; replace tracker localStorage; matter briefs. Spec: [`LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md) |
+| 4 | Morning Brief + deadline/compliance alerts from real tenant data. Spec: [`LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md`](LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md). Stage 4 MVP assembles briefs and alerts **deterministically** from Stage 3 practice records; optional provider enrichment of “Suggested Focus” is a later gated enhancement, not a Stage 4 requirement. |
+| 5 | Orchestrator + agents + knowledge-graph MVP. Spec: [`LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md) |
+| 6 | Shared SanMitra services; optional MitraBooks fee posting. Spec: [`LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md`](LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md) |
 
 ---
 
@@ -163,3 +164,7 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | Version | Date | Note |
 | --- | --- | --- |
 | 1.0 | 2026-07-31 | Split from PRD v2.0 so product requirements stay library-agnostic |
+| 1.1 | 2026-08-02 | Linked Stage 3 Matter & Client Intelligence implementation spec |
+| 1.2 | 2026-08-02 | Linked Stage 4 Proactive Assistant implementation spec |
+| 1.3 | 2026-08-02 | Linked Stage 5 Agentic Workflows implementation spec |
+| 1.4 | 2026-08-02 | Linked Stage 6 Platform Ecosystem implementation spec |
