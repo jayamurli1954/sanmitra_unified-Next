@@ -202,6 +202,15 @@ class Settings:
     LEGALMITRA_DORMANT_MATTER_DAYS = int(os.getenv("LEGALMITRA_DORMANT_MATTER_DAYS", "45"))
     LEGALMITRA_STALE_REVIEW_DAYS = int(os.getenv("LEGALMITRA_STALE_REVIEW_DAYS", "7"))
 
+    # LegalMitra Stage 5 — Agentic Workflows (guided, human-gated).
+    # Default on for local/dev testability; keep false in production until owner enablement.
+    LEGALMITRA_AGENTIC_ENABLED = os.getenv("LEGALMITRA_AGENTIC_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     # MitraBooks Financial Health — AI narration of the CFO-Insight figures.
     # Reuses ANTHROPIC_API_KEY / ANTHROPIC_API_BASE. The model only rewrites the
     # already-computed figures as prose; it never invents numbers. Degrades to the

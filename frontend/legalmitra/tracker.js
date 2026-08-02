@@ -79,6 +79,7 @@ let currentCard = "case-master";
 let editingRowIndex = null;
 let livePractice = null;
 let morningBrief = null;
+let activeWorkflowRun = null;
 const storageKey = "legalmitra-tracker-drafts";
 const rowStorageKey = "legalmitra-tracker-work-items";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
@@ -359,8 +360,150 @@ function renderMorningBrief() {
     tip.textContent = (item.suggested_actions || []).slice(0, 2).join(" · ");
     li.append(link, meta);
     if (tip.textContent) li.appendChild(tip);
+
+    const wf = item.recommended_workflow;
+    if (wf && item.matter_id) {
+      const start = document.createElement("button");
+      start.type = "button";
+      start.className = "legal-workflow-start";
+      start.textContent = `Start: ${wf.display_name || "Prepare Matter Response"}`;
+      start.addEventListener("click", () => {
+        startRecommendedWorkflow(item);
+      });
+      li.appendChild(start);
+    }
     actionsEl.appendChild(li);
   });
+}
+
+function latestStepByKey(steps) {
+  const best = new Map();
+  (steps || []).forEach((step) => {
+    const prev = best.get(step.step_key);
+    if (!prev || (step.attempt || 1) >= (prev.attempt || 1)) {
+      best.set(step.step_key, step);
+    }
+  });
+  return Array.from(best.values());
+}
+
+function renderWorkflowRun() {
+  const panel = document.getElementById("workflow-run-panel");
+  const statusEl = document.getElementById("workflow-run-status");
+  const stepsEl = document.getElementById("workflow-run-steps");
+  const actionsEl = document.getElementById("workflow-run-actions");
+  if (!panel || !statusEl || !stepsEl || !actionsEl) return;
+
+  if (!activeWorkflowRun) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  stepsEl.textContent = "";
+  actionsEl.textContent = "";
+
+  const run = activeWorkflowRun;
+  statusEl.textContent =
+    `Status: ${run.status} · template ${run.workflow_template || "general"}` +
+    (run.ready_to_file ? " · ready-to-file marked (not filed)" : "");
+
+  const steps = latestStepByKey(run.steps);
+  steps.forEach((step) => {
+    const li = document.createElement("li");
+    const conf = step.confidence != null ? ` · confidence ${step.confidence}` : "";
+    li.textContent =
+      `${step.step_key}: ${step.status} (~${step.estimated_minutes || "?"} min)${conf}`;
+    if (step.error) {
+      const err = document.createElement("div");
+      err.textContent = step.error;
+      li.appendChild(err);
+    }
+    stepsEl.appendChild(li);
+  });
+
+  const awaiting = steps.find((s) => s.status === "awaiting_human");
+  if (awaiting) {
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.textContent = `Approve ${awaiting.step_key}`;
+    approve.addEventListener("click", () => approveWorkflowStep(run.run_id, awaiting.step_id));
+    const reject = document.createElement("button");
+    reject.type = "button";
+    reject.textContent = `Reject ${awaiting.step_key}`;
+    reject.addEventListener("click", () => rejectWorkflowStep(run.run_id, awaiting.step_id));
+    actionsEl.append(approve, reject);
+  }
+
+  if (run.status === "completed" && !run.ready_to_file) {
+    const mark = document.createElement("button");
+    mark.type = "button";
+    mark.textContent = "Mark ready to file (does not file)";
+    mark.addEventListener("click", () => markReadyToFile(run.run_id));
+    actionsEl.appendChild(mark);
+  }
+}
+
+async function startRecommendedWorkflow(item) {
+  if (!getAccessToken() || !item?.matter_id) return;
+  const wf = item.recommended_workflow || {
+    workflow_key: "prepare_matter_response",
+    workflow_template: "general",
+  };
+  const result = await apiRequest(APP_KEY, "/api/v1/legal/workflows/runs", {
+    method: "POST",
+    timeoutMs: 30000,
+    body: JSON.stringify({
+      workflow_key: wf.workflow_key || "prepare_matter_response",
+      workflow_template: wf.workflow_template || "general",
+      matter_id: item.matter_id,
+      alert_id: item.alert_id || null,
+      recommended_from: "morning_brief",
+      persona: currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate",
+    }),
+  });
+  activeWorkflowRun = result?.ok ? result.payload : null;
+  renderWorkflowRun();
+  document.getElementById("workflow-run-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function approveWorkflowStep(runId, stepId) {
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/approve`,
+    { method: "POST", timeoutMs: 30000 },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
+}
+
+async function rejectWorkflowStep(runId, stepId) {
+  const reason = window.prompt("Rejection reason (required for audit):", "Needs revision");
+  if (!reason || reason.trim().length < 2) return;
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/reject`,
+    {
+      method: "POST",
+      timeoutMs: 20000,
+      body: JSON.stringify({ reason: reason.trim() }),
+    },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
+}
+
+async function markReadyToFile(runId) {
+  const result = await apiRequest(
+    APP_KEY,
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/ready-to-file`,
+    {
+      method: "POST",
+      timeoutMs: 15000,
+      body: JSON.stringify({ ready_to_file: true, confirm: true }),
+    },
+  );
+  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  renderWorkflowRun();
 }
 
 async function loadMorningBrief(forceRefresh) {

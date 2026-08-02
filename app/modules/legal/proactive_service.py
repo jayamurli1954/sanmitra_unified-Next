@@ -837,10 +837,19 @@ async def generate_morning_brief(
     today = _today()
     empty = not snapshot["matters"] and not snapshot["clients"]
 
+    from app.modules.legal.workflow_service import recommend_workflow_for
+
+    matters_by_id = {m.get("matter_id"): m for m in snapshot["matters"]}
     priority_actions = []
     for alert in sorted(open_alerts, key=lambda a: a.get("priority_score") or 0, reverse=True)[
         :15
     ]:
+        matter = matters_by_id.get(alert.get("matter_id")) or {}
+        recommended_workflow = recommend_workflow_for(
+            alert_type=alert.get("alert_type"),
+            practice_area=matter.get("practice_area"),
+            title=alert.get("title") or matter.get("title"),
+        )
         priority_actions.append(
             {
                 "alert_id": alert.get("alert_id"),
@@ -853,6 +862,7 @@ async def generate_morning_brief(
                 "matter_id": alert.get("matter_id"),
                 "action_href": alert.get("action_href") or _action_href(alert.get("matter_id")),
                 "matter_health": alert.get("matter_health"),
+                "recommended_workflow": recommended_workflow,
             }
         )
 

@@ -18,6 +18,26 @@ def test_legal_morning_brief_requires_login() -> None:
     assert response.json()["detail"] == "Missing authorization header"
 
 
+def test_legal_workflows_catalog_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/workflows/catalog")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
+def test_legal_workflows_runs_requires_login() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/legal/workflows/runs",
+        json={
+            "matter_id": "00000000-0000-0000-0000-000000000001",
+            "workflow_key": "prepare_matter_response",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
 def test_legal_clients_requires_login() -> None:
     client = TestClient(app)
     response = client.get("/api/v1/legal/clients")

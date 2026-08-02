@@ -2,8 +2,8 @@
 
 **Document type:** Implementation specification  
 **Product:** LegalMitra  
-**Status:** Planned (not yet implemented)  
-**Version:** 1.1  
+**Status:** Implemented (MVP — feature-flagged)  
+**Version:** 1.2  
 **Date:** 2026-08-02  
 **Companion PRD:** [`docs/prd/LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md`](../prd/LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md)  
 **Depends on:**  
@@ -408,3 +408,4 @@ Module gate: `legal` (+ `legal_ai` only if provider used). Audit create / advanc
 | --- | --- | --- |
 | 1.0 | 2026-08-02 | Initial Stage 5 plan |
 | 1.1 | 2026-08-02 | Review: templates, catalog, timeline, estimates, per-step confidence, retry classes, recommended workflow CTA, analytics, KG enrichment order, ban autonomous agent loops |
+| 1.2 | 2026-08-02 | MVP implemented: prepare_matter_response engine, human gates, Morning Brief recommended_workflow, tracker run panel |

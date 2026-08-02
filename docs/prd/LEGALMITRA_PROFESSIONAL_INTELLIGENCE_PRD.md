@@ -360,7 +360,7 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Multi-step prepare/research/draft/check flows with human sign-off; knowledge-graph MVP for proven act families.
 
-**Planned engineering status (2026-08-02):** Implementation plan v1.1 in [`docs/architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](../architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md) — guided Prepare Matter Response MVP with human gates, workflow catalog/templates, KG as research enrichment only. Not yet implemented.
+**Planned engineering status (2026-08-02):** MVP implemented behind `LEGALMITRA_AGENTIC_ENABLED` — see [`docs/architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](../architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md). Guided Prepare Matter Response with human gates, catalog/templates, Morning Brief recommended-workflow CTA, and KG as optional research enrichment only (subgraph read API; empty miss is valid).
 
 **Stage 5 is complete when:**
 

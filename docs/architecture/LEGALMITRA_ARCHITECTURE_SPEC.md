@@ -112,18 +112,19 @@ Statute PDF ingest (read-only source `D:\sanmitra-backend\data\legal_acts`) is d
 
 ---
 
-## 7. Agent layer (later)
+## 7. Agent layer (Stage 5 MVP)
 
-Stage 5 target specialists (adapters on FastAPI services, not a separate platform):
+**Current:** Guided `prepare_matter_response` workflow behind `LEGALMITRA_AGENTIC_ENABLED` — deterministic adapters (intake, research brief, evidence checklist, draft, human review), not LangGraph/swarm. Spec: [`LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md).
 
-- Legal Research Agent  
-- Tax / Compliance Agent  
-- Drafting Agent  
-- Document Agent  
-- Matter Agent  
-- Calendar / Alerts Agent  
+Specialist adapters on FastAPI services:
 
-Orchestrator classifies intent, routes, assembles response with citations. Human sign-off required before file/send.
+- Matter intake  
+- Legal research (grounded brief; Stage 2 citations required separately; no fabricated authorities)  
+- Document evidence checklist  
+- Drafting (always human-review)  
+- Human review gate  
+
+Orchestrator follows a declared step graph. Human sign-off required before any ready-to-file marker. Never auto-file or auto-send.
 
 ---
 
