@@ -333,3 +333,8 @@ class PracticeDashboardResponse(BaseModel):
     recent_documents: list[dict[str, Any]] = Field(default_factory=list)
     fees_outstanding: str = "—"
     data_source: str = "live"
+    # Stage 4 proactive enrichments (optional / non-breaking).
+    open_alerts: int = 0
+    practice_health_score: int | None = None
+    practice_health_label: str | None = None
+    priority_alerts: list[dict[str, Any]] = Field(default_factory=list)

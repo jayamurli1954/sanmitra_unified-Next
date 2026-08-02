@@ -183,6 +183,25 @@ class Settings:
     ANTHROPIC_API_BASE = os.getenv("ANTHROPIC_API_BASE", "https://api.anthropic.com/v1").strip()
     LEGAL_FALLBACK_GEMINI_MODEL = os.getenv("LEGAL_FALLBACK_GEMINI_MODEL", "gemini-2.5-flash").strip()
 
+    # LegalMitra Stage 4 — Proactive Assistant (Morning Brief + deterministic alerts).
+    # Default on for local/dev so Stage 4 APIs are testable; set false in production
+    # until the platform owner enables proactive surfaces for live tenants.
+    LEGALMITRA_PROACTIVE_ENABLED = os.getenv("LEGALMITRA_PROACTIVE_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    LEGALMITRA_MORNING_BRIEF_ENABLED = os.getenv("LEGALMITRA_MORNING_BRIEF_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    LEGALMITRA_ALERT_LOOKAHEAD_DAYS = int(os.getenv("LEGALMITRA_ALERT_LOOKAHEAD_DAYS", "7"))
+    LEGALMITRA_DORMANT_MATTER_DAYS = int(os.getenv("LEGALMITRA_DORMANT_MATTER_DAYS", "45"))
+    LEGALMITRA_STALE_REVIEW_DAYS = int(os.getenv("LEGALMITRA_STALE_REVIEW_DAYS", "7"))
+
     # MitraBooks Financial Health — AI narration of the CFO-Insight figures.
     # Reuses ANTHROPIC_API_KEY / ANTHROPIC_API_BASE. The model only rewrites the
     # already-computed figures as prose; it never invents numbers. Degrades to the

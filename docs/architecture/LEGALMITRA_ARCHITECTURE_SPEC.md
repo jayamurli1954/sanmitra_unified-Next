@@ -152,7 +152,7 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | Now | Stabilize live research/templates; label stubs; feedback endpoint |
 | 2 | RAG contract, GST/IT corpus + chunking, rerank, eval harness, launch templates |
 | 3 | Mongo Client/Matter APIs; replace tracker localStorage; matter briefs. Spec: [`LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md) |
-| 4 | Morning Brief + deadline/compliance alerts from real tenant data |
+| 4 | Morning Brief + deadline/compliance alerts from real tenant data. Spec: [`LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md`](LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md). Stage 4 MVP assembles briefs and alerts **deterministically** from Stage 3 practice records; optional provider enrichment of “Suggested Focus” is a later gated enhancement, not a Stage 4 requirement. |
 | 5 | Orchestrator + agents + knowledge-graph MVP |
 | 6 | Shared SanMitra services; optional MitraBooks fee posting |
 
@@ -164,3 +164,4 @@ Add or extend tests for tenant isolation, citation/refusal behavior, and review 
 | --- | --- | --- |
 | 1.0 | 2026-07-31 | Split from PRD v2.0 so product requirements stay library-agnostic |
 | 1.1 | 2026-08-02 | Linked Stage 3 Matter & Client Intelligence implementation spec |
+| 1.2 | 2026-08-02 | Linked Stage 4 Proactive Assistant implementation spec |

@@ -402,6 +402,11 @@ async def practice_dashboard(
 ):
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_legal_app_key(x_app_key)
-    return await practice_service.get_practice_dashboard(
+    dashboard = await practice_service.get_practice_dashboard(
         tenant_id=tenant_id, app_key=app_key, limit=limit
+    )
+    from app.modules.legal import proactive_service
+
+    return await proactive_service.extend_dashboard_proactive(
+        tenant_id=tenant_id, app_key=app_key, base_dashboard=dashboard
     )

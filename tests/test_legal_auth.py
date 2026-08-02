@@ -11,6 +11,13 @@ def test_legal_practice_dashboard_requires_login() -> None:
     assert response.json()["detail"] == "Missing authorization header"
 
 
+def test_legal_morning_brief_requires_login() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/legal/practice/morning-brief")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing authorization header"
+
+
 def test_legal_clients_requires_login() -> None:
     client = TestClient(app)
     response = client.get("/api/v1/legal/clients")

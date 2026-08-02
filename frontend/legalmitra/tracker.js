@@ -78,6 +78,7 @@ let currentRole = "advocate";
 let currentCard = "case-master";
 let editingRowIndex = null;
 let livePractice = null;
+let morningBrief = null;
 const storageKey = "legalmitra-tracker-drafts";
 const rowStorageKey = "legalmitra-tracker-work-items";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
@@ -203,10 +204,11 @@ function updateMetricsForRows() {
   const profile = trackerProfiles[currentRole] || trackerProfiles.advocate;
   let metrics;
   if (livePractice) {
+    const health = livePractice.practice_health_score;
     metrics = [
+      ["Practice health", health == null ? "—" : String(health)],
+      ["Open alerts", String(livePractice.open_alerts ?? 0)],
       ["Active matters", String(livePractice.active_matters ?? 0)],
-      ["Awaiting review", String(livePractice.awaiting_review ?? 0)],
-      ["Upcoming hearings", String((livePractice.upcoming_hearings || []).length)],
       ["Fees outstanding", livePractice.fees_outstanding || "—"],
     ];
   } else {
@@ -283,7 +285,9 @@ function updatePracticeBanner() {
 async function loadLivePractice() {
   if (!getAccessToken()) {
     livePractice = null;
+    morningBrief = null;
     updatePracticeBanner();
+    renderMorningBrief();
     return;
   }
   try {
@@ -302,6 +306,86 @@ async function loadLivePractice() {
   updatePracticeBanner();
   updateMetricsForRows();
   renderRows(getRoleRows());
+  await loadMorningBrief(false);
+}
+
+function renderMorningBrief() {
+  const panel = document.getElementById("morning-brief-panel");
+  const healthEl = document.getElementById("morning-brief-health");
+  const advisoryEl = document.getElementById("morning-brief-advisory");
+  const actionsEl = document.getElementById("morning-brief-actions");
+  if (!panel || !healthEl || !actionsEl) return;
+
+  if (!getAccessToken()) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  actionsEl.textContent = "";
+
+  if (!morningBrief) {
+    healthEl.textContent = "Morning Brief unavailable. Refresh after practice data is loaded.";
+    if (advisoryEl) advisoryEl.hidden = true;
+    return;
+  }
+
+  const score = morningBrief.practice_health_score;
+  const label = morningBrief.practice_health_label || "";
+  healthEl.textContent = `Practice Health ${score}/100 — ${label}`;
+  if (advisoryEl) {
+    advisoryEl.hidden = false;
+    advisoryEl.textContent = morningBrief.advisory_notice
+      || "Advisory — human review required. Never invent hearings, statutes, or court dates.";
+  }
+
+  const actions = morningBrief.sections?.priority_actions || [];
+  if (!actions.length) {
+    const li = document.createElement("li");
+    li.textContent = morningBrief.empty_practice
+      ? "No practice data yet. Create a client and matter to activate Priority Actions."
+      : "No open priority alerts for today.";
+    actionsEl.appendChild(li);
+    return;
+  }
+
+  actions.slice(0, 8).forEach((item) => {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = item.action_href || "./tracker.html#daily-board";
+    link.textContent = item.title || item.summary || "Open matter";
+    const meta = document.createElement("span");
+    meta.textContent = ` · ${item.severity || "normal"} · score ${item.priority_score ?? "—"}`;
+    const tip = document.createElement("div");
+    tip.textContent = (item.suggested_actions || []).slice(0, 2).join(" · ");
+    li.append(link, meta);
+    if (tip.textContent) li.appendChild(tip);
+    actionsEl.appendChild(li);
+  });
+}
+
+async function loadMorningBrief(forceRefresh) {
+  if (!getAccessToken()) {
+    morningBrief = null;
+    renderMorningBrief();
+    return;
+  }
+  const persona = currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate";
+  try {
+    const path = forceRefresh
+      ? "/api/v1/legal/practice/morning-brief"
+      : `/api/v1/legal/practice/morning-brief?persona=${encodeURIComponent(persona)}&window=daily`;
+    const result = await apiRequest(APP_KEY, path, {
+      method: forceRefresh ? "POST" : "GET",
+      timeoutMs: 20000,
+      body: forceRefresh
+        ? JSON.stringify({ persona, window: "daily", force_refresh: true })
+        : undefined,
+    });
+    morningBrief = result?.ok ? result.payload : null;
+  } catch (_error) {
+    morningBrief = null;
+  }
+  renderMorningBrief();
 }
 
 function setRole(role) {
@@ -557,6 +641,9 @@ setRole("advocate");
 updateActiveTab("daily-board");
 updatePracticeBanner();
 loadLivePractice();
+document.getElementById("morning-brief-refresh")?.addEventListener("click", () => {
+  loadMorningBrief(true);
+});
 const initialTab = String(window.location.hash || "").replace("#", "");
 if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {
   if (initialTab === "daily-board") {

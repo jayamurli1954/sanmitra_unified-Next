@@ -14,8 +14,10 @@ async def ensure_legal_indexes() -> None:
     await cases.create_index("case_id", unique=True)
     # Stage 3 practice collections (clients, matters, documents, timeline, briefs).
     from app.modules.legal.practice_service import ensure_practice_indexes
+    from app.modules.legal.proactive_service import ensure_proactive_indexes
 
     await ensure_practice_indexes()
+    await ensure_proactive_indexes()
 
 
 async def create_legal_case(*, tenant_id: str, created_by: str, payload: LegalCaseCreateRequest):
