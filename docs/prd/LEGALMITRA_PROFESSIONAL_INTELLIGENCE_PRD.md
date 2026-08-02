@@ -360,6 +360,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Multi-step prepare/research/draft/check flows with human sign-off; knowledge-graph MVP for proven act families.
 
+**Planned engineering status (2026-08-02):** Implementation plan v1.1 in [`docs/architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](../architecture/LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md) — guided Prepare Matter Response MVP with human gates, workflow catalog/templates, KG as research enrichment only. Not yet implemented.
+
 **Stage 5 is complete when:**
 
 - One end-to-end agentic workflow runs with audit trail and mandatory human approval gates.  
