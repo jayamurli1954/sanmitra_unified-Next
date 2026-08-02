@@ -372,6 +372,8 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Shared SanMitra intelligence/document/notification patterns where justified; optional MitraBooks fee posting; selective practice-OS parity only where it serves the north star.
 
+**Planned engineering status (2026-08-02):** Implementation plan in [`docs/architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md`](../architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md) — LegalMitra-native fee ledger first; optional MitraBooks GL posting only through the shared accounting service; LegalMitra remains a separate product experience. Not yet implemented.
+
 **Stage 6 is complete when:**
 
 - A shared capability is reused by LegalMitra without duplicating unsafe AI paths.  
