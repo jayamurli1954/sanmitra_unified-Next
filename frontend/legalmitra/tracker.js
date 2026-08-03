@@ -1,5 +1,6 @@
 import { apiRequest, getAccessToken } from "../shared/api-client.js";
 import { createCustodyController } from "./tracker-custody.js";
+import { createDocumentRegisterController } from "./tracker-register.js";
 
 const APP_KEY = "legalmitra";
 
@@ -95,6 +96,15 @@ const custody = createCustodyController({
   setLivePracticeDocCustody: (summary) => {
     if (livePractice) livePractice.doc_custody = summary;
   },
+});
+
+const documentRegister = createDocumentRegisterController({
+  apiRequest,
+  getAccessToken,
+  appKey: APP_KEY,
+  getCustodyMode: () =>
+    livePractice?.doc_custody?.doc_custody_mode ||
+    "cloud_minimized",
 });
 
 const rowEditor = document.getElementById("tracker-row-editor");
@@ -325,6 +335,7 @@ async function loadLivePractice() {
     loadMorningBrief(false),
     loadFeeLedger(),
     custody.loadCustodySettings(livePractice),
+    documentRegister.loadMatters(),
   ]);
 }
 
@@ -1018,12 +1029,13 @@ setRole("advocate");
 updateActiveTab("daily-board");
 updatePracticeBanner();
 custody.renderCustodyPanel();
+documentRegister.bindEvents();
 loadLivePractice();
 document.getElementById("morning-brief-refresh")?.addEventListener("click", () => {
   loadMorningBrief(true);
 });
 document.getElementById("custody-save")?.addEventListener("click", () => {
-  custody.saveCustodySettings();
+  custody.saveCustodySettings().then(() => documentRegister.renderEmptyCopy());
 });
 const initialTab = String(window.location.hash || "").replace("#", "");
 if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {

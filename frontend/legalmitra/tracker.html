@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v33">
     <link rel="stylesheet" href="./legal-answer.css?v=legalmitra-stage2">
     <link rel="stylesheet" href="./tracker-custody.css?v=legalmitra-custody-p0">
+    <link rel="stylesheet" href="./tracker-register.css?v=legalmitra-custody-p1">
   </head>
   <body class="legal-editorial-page">
     <header class="legal-navbar">
@@ -81,6 +82,72 @@
         <div class="legal-custody-actions">
           <button type="button" id="custody-save" hidden>Save custody mode</button>
         </div>
+      </section>
+
+      <section class="legal-diary-panel legal-document-register" id="document-register-panel" hidden aria-label="Document register">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Document register</span>
+            <h2>Case papers metadata</h2>
+            <p id="document-register-empty">Sign in to register matter documents. Full PDF upload is not required in this step.</p>
+          </div>
+        </div>
+        <label class="legal-document-register-field">
+          <span>Live matter</span>
+          <select id="document-register-matter"></select>
+        </label>
+        <div class="legal-document-register-case-card">
+          <label>
+            <span>Court case number</span>
+            <input id="document-register-case-number" maxlength="120" placeholder="e.g. WP 226/2024">
+          </label>
+          <label>
+            <span>Issues (one per line)</span>
+            <textarea id="document-register-issues" rows="3" placeholder="Limitation&#10;Maintainability&#10;Interim relief"></textarea>
+          </label>
+          <button type="button" id="document-register-save-case-card">Save case card fields</button>
+        </div>
+        <ol id="document-register-list" class="legal-document-register-list"></ol>
+        <form id="document-register-form" class="legal-document-register-form">
+          <label>
+            <span>Filename</span>
+            <input name="filename" required maxlength="260" placeholder="order-15-may.pdf">
+          </label>
+          <label>
+            <span>Type</span>
+            <input name="doc_type" maxlength="60" value="general" placeholder="notice / petition / order">
+          </label>
+          <label>
+            <span>Classification</span>
+            <select name="classification">
+              <option value="">Same as type</option>
+              <option value="court_order">Court order</option>
+              <option value="notice">Notice</option>
+              <option value="affidavit">Affidavit</option>
+              <option value="petition">Petition</option>
+              <option value="evidence">Evidence</option>
+              <option value="contract">Contract</option>
+              <option value="tax_notice">Tax notice</option>
+              <option value="invoice">Invoice</option>
+              <option value="identity">Identity</option>
+              <option value="board_resolution">Board resolution</option>
+            </select>
+          </label>
+          <label>
+            <span>Notes</span>
+            <input name="notes" maxlength="2000" placeholder="Optional notes">
+          </label>
+          <label>
+            <span>Local / chamber path (optional)</span>
+            <input name="storage_ref" maxlength="500" placeholder="\\\\server\\matters\\WP-226\\order.pdf">
+          </label>
+          <label>
+            <span>Content hash (optional)</span>
+            <input name="content_hash" maxlength="128" placeholder="sha256…">
+          </label>
+          <button type="submit">Register document</button>
+        </form>
+        <p class="legal-custody-status" id="document-register-status" role="status" aria-live="polite"></p>
       </section>
 
       <section class="legal-diary-metrics" aria-label="Tracker summary">
@@ -231,6 +298,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-custody-p0"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-custody-p1"></script>
   </body>
 </html>

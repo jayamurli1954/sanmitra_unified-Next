@@ -293,9 +293,13 @@ async def test_document_attach_timeline_and_brief(fake_db, captured_audit):
             practice_area="contract",
             status=MatterStatus.ACTIVE,
             jurisdiction="India",
+            case_number="CS 42/2024",
+            issues=["Indemnity cap", "Limitation"],
             next_hearing_date=date(2026, 9, 1),
         ),
     )
+    assert matter["case_number"] == "CS 42/2024"
+    assert matter["issues"] == ["Indemnity cap", "Limitation"]
     doc = await svc.attach_matter_document(
         tenant_id="tenant-a",
         app_key="legalmitra",
@@ -305,9 +309,26 @@ async def test_document_attach_timeline_and_brief(fake_db, captured_audit):
             filename="msa-draft-v1.pdf",
             doc_type="contract",
             notes="Client draft for review",
+            content_hash="abc123hash",
+            classification="contract",
+            custody_source="manual_register",
         ),
     )
     assert doc["document_id"]
+    assert doc["content_hash"] == "abc123hash"
+    assert doc["custody_source"] == "manual_register"
+    assert doc["classification"] == "contract"
+    assert doc["extract_status"] == "none"
+    assert doc["ocr_status"] == "none"
+
+    updated = await svc.update_matter(
+        tenant_id="tenant-a",
+        app_key="legalmitra",
+        matter_id=matter["matter_id"],
+        updated_by="user-1",
+        payload=MatterUpdateRequest(issues=["Indemnity cap", "Governing law"]),
+    )
+    assert updated["issues"] == ["Indemnity cap", "Governing law"]
 
     await svc.add_matter_timeline_event(
         tenant_id="tenant-a",

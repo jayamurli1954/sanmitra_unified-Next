@@ -170,8 +170,22 @@ class MatterCreateRequest(BaseModel):
     court: str | None = Field(default=None, max_length=200)
     opposite_party: str | None = Field(default=None, max_length=200)
     billing_reference: str | None = Field(default=None, max_length=120)
+    case_number: str | None = Field(default=None, max_length=120)
+    issues: list[str] = Field(default_factory=list, max_length=40)
     next_hearing_date: date | None = None
     next_deadline_date: date | None = None
+
+    @field_validator("issues")
+    @classmethod
+    def normalize_issues(cls, value: list[str] | None) -> list[str]:
+        cleaned: list[str] = []
+        for item in value or []:
+            text = str(item or "").strip()
+            if text and text not in cleaned:
+                cleaned.append(text[:500])
+            if len(cleaned) >= 40:
+                break
+        return cleaned
 
 
 class MatterUpdateRequest(BaseModel):
@@ -187,8 +201,24 @@ class MatterUpdateRequest(BaseModel):
     court: str | None = Field(default=None, max_length=200)
     opposite_party: str | None = Field(default=None, max_length=200)
     billing_reference: str | None = Field(default=None, max_length=120)
+    case_number: str | None = Field(default=None, max_length=120)
+    issues: list[str] | None = Field(default=None, max_length=40)
     next_hearing_date: date | None = None
     next_deadline_date: date | None = None
+
+    @field_validator("issues")
+    @classmethod
+    def normalize_issues(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for item in value:
+            text = str(item or "").strip()
+            if text and text not in cleaned:
+                cleaned.append(text[:500])
+            if len(cleaned) >= 40:
+                break
+        return cleaned
 
 
 class MatterResponse(BaseModel):
@@ -210,6 +240,8 @@ class MatterResponse(BaseModel):
     court: str | None = None
     opposite_party: str | None = None
     billing_reference: str | None = None
+    case_number: str | None = None
+    issues: list[str] = Field(default_factory=list)
     next_hearing_date: date | None = None
     next_deadline_date: date | None = None
     created_by: str
@@ -226,13 +258,56 @@ class MatterListResponse(BaseModel):
 # ── Documents ────────────────────────────────────────────────────────────────
 
 
+DocCustodySource = Literal["manual_register", "chamber_sync"]
+DocOcrStatus = Literal["none", "pending", "done", "failed", "not_applicable"]
+DocExtractStatus = Literal["none", "pending", "done", "failed"]
+
+DOC_CLASSIFICATION_VALUES = {
+    "court_order",
+    "notice",
+    "affidavit",
+    "petition",
+    "evidence",
+    "contract",
+    "tax_notice",
+    "invoice",
+    "identity",
+    "board_resolution",
+    "general",
+    "unclassified",
+}
+
+
 class MatterDocumentCreateRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=260)
     doc_type: str = Field(default="general", min_length=2, max_length=60)
     notes: str | None = Field(default=None, max_length=2000)
     storage_ref: str | None = Field(default=None, max_length=500)
+    content_hash: str | None = Field(default=None, max_length=128)
+    custody_source: DocCustodySource = "manual_register"
+    version: int = Field(default=1, ge=1, le=9999)
+    page_count: int | None = Field(default=None, ge=1, le=100000)
+    language: str | None = Field(default=None, max_length=40)
+    ocr_status: DocOcrStatus = "none"
+    classification: str | None = Field(default=None, max_length=60)
+    extract_status: DocExtractStatus = "none"
     ai_generated: bool = False
     human_review_required: bool = True
+
+    @field_validator("content_hash")
+    @classmethod
+    def normalize_hash(cls, value: str | None) -> str | None:
+        if value is None or not str(value).strip():
+            return None
+        return str(value).strip().lower()
+
+    @field_validator("classification")
+    @classmethod
+    def normalize_classification(cls, value: str | None) -> str | None:
+        if value is None or not str(value).strip():
+            return None
+        key = str(value).strip().lower().replace(" ", "_").replace("-", "_")
+        return key[:60]
 
 
 class MatterDocumentResponse(BaseModel):
@@ -244,6 +319,14 @@ class MatterDocumentResponse(BaseModel):
     doc_type: str
     notes: str | None = None
     storage_ref: str | None = None
+    content_hash: str | None = None
+    custody_source: str = "manual_register"
+    version: int = 1
+    page_count: int | None = None
+    language: str | None = None
+    ocr_status: str = "none"
+    classification: str | None = None
+    extract_status: str = "none"
     ai_generated: bool = False
     human_review_required: bool = True
     created_by: str

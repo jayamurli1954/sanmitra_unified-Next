@@ -2,8 +2,8 @@
 
 **Document type:** Implementation plan (for product approval)  
 **Product:** LegalMitra  
-**Status:** P0 implemented locally (awaiting commit/PR); P1–P4 not started  
-**Version:** 1.2  
+**Status:** P0 shipped in PR; P1 implemented locally (push pending)  
+**Version:** 1.3  
 **Date:** 2026-08-03  
 **Architecture source:** [`LEGALMITRA_DOCUMENT_CUSTODY_AND_CHAMBER_LAN.md`](LEGALMITRA_DOCUMENT_CUSTODY_AND_CHAMBER_LAN.md)
 

@@ -1,0 +1,50 @@
+/* LegalMitra Tracker — document register (P1) */
+
+.legal-document-register {
+  margin-bottom: 22px;
+}
+
+.legal-document-register-field,
+.legal-document-register-case-card,
+.legal-document-register-form {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.legal-document-register-case-card,
+.legal-document-register-form {
+  padding: 12px 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.legal-document-register-field span,
+.legal-document-register-case-card span,
+.legal-document-register-form span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.legal-document-register-list {
+  margin: 8px 0 0;
+  padding-left: 1.2rem;
+  color: var(--text, #0f172a);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.legal-document-register-form {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.legal-document-register-form button[type="submit"],
+.legal-document-register-case-card button {
+  justify-self: start;
+}
