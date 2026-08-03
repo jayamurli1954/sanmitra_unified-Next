@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -9,6 +9,19 @@ from urllib.parse import quote, quote_plus, urlparse
 import xml.etree.ElementTree as ET
 
 _legal_logger = logging.getLogger(__name__)
+
+# Live Legal Intelligence freshness window:
+# prefer the last 15 days; widen to 30 only when recent coverage is thin.
+LIVE_INTEL_PREFERRED_DAYS = 15
+LIVE_INTEL_MAX_DAYS = 30
+LIVE_INTEL_MIN_ITEMS = 3
+# Re-fetch the web pool at least every 6 hours; rotate the visible set on the same cadence
+# so the same judgment/news does not dominate the landing page for days.
+LIVE_INTEL_CACHE_TTL_HOURS = 6
+LIVE_INTEL_ROTATION_HOURS = 6
+LIVE_INTEL_SHOWN_COOLDOWN_HOURS = 24
+LIVE_INTEL_POOL_SIZE = 20
+LIVE_INTEL_DISPLAY_LIMIT = 8
 
 import httpx
 from io import BytesIO
@@ -53,6 +66,9 @@ router = APIRouter(tags=["legal-compat"])
 
 _DEFAULT_TENANT_ID = "seed-tenant-1"
 _DEFAULT_APP_KEY = "legalmitra"
+
+# In-process live-intel pool + display history (refreshed every LIVE_INTEL_CACHE_TTL_HOURS).
+_live_intel_cache: dict[str, dict[str, Any]] = {}
 
 # Minimum role required to call any LegalMitra endpoint.
 _any_authenticated = require_roles([Role.viewer, Role.operator, Role.accountant, Role.tenant_admin, Role.super_admin])
@@ -284,10 +300,202 @@ def _parse_pub_date(value: str) -> tuple[str, int]:
         return str(value)[:10] if value else datetime.now().date().isoformat(), year
 
 
-async def _fetch_google_news_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
+def _item_published_date(item: dict[str, Any]) -> date | None:
+    """Best-effort publish date for live-intel filtering."""
+    raw = item.get("date") or item.get("published_at") or item.get("pubDate") or ""
+    text = str(raw).strip()
+    if not text:
+        return None
+    if len(text) >= 10:
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            pass
+    try:
+        dt = parsedate_to_datetime(text)
+        if dt is not None:
+            return dt.date()
+    except Exception:
+        pass
+    return None
+
+
+def _filter_recent_items(
+    items: list[dict[str, Any]],
+    *,
+    max_age_days: int,
+    today: date | None = None,
+    keep_undated: bool = False,
+) -> list[dict[str, Any]]:
+    """Keep only items published within max_age_days (hard ceiling for live intel)."""
+    if max_age_days <= 0:
+        return list(items)
+    today = today or date.today()
+    cutoff = today - timedelta(days=max_age_days)
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        published = _item_published_date(item)
+        if published is None:
+            if keep_undated:
+                kept.append(item)
+            continue
+        if published >= cutoff:
+            kept.append(item)
+    return kept
+
+
+def _select_fresh_live_items(
+    items: list[dict[str, Any]],
+    *,
+    limit: int = 10,
+    today: date | None = None,
+) -> list[dict[str, Any]]:
+    """Prefer <=15 days; fall back to <=30 days when coverage is thin."""
+    preferred = _filter_recent_items(items, max_age_days=LIVE_INTEL_PREFERRED_DAYS, today=today)
+    if len(preferred) >= min(LIVE_INTEL_MIN_ITEMS, limit):
+        return preferred[:limit]
+    widened = _filter_recent_items(items, max_age_days=LIVE_INTEL_MAX_DAYS, today=today)
+    return widened[:limit]
+
+
+def _rotation_bucket(now: datetime | None = None) -> int:
+    """Integer bucket that advances every LIVE_INTEL_ROTATION_HOURS."""
+    now = now or datetime.now(timezone.utc)
+    seconds = LIVE_INTEL_ROTATION_HOURS * 3600
+    return int(now.timestamp() // seconds)
+
+
+def _prune_display_history(
+    history: list[dict[str, Any]],
+    *,
+    now: datetime,
+    retain_hours: int = 48,
+) -> list[dict[str, Any]]:
+    cutoff = now - timedelta(hours=retain_hours)
+    pruned: list[dict[str, Any]] = []
+    for row in history:
+        shown_at = row.get("shown_at")
+        if not isinstance(shown_at, datetime):
+            continue
+        if shown_at.tzinfo is None:
+            shown_at = shown_at.replace(tzinfo=timezone.utc)
+        if shown_at >= cutoff:
+            pruned.append({"title": str(row.get("title") or ""), "shown_at": shown_at})
+    return pruned[-120:]
+
+
+def _pick_dynamic_live_items(
+    pool: list[dict[str, Any]],
+    *,
+    kind: str,
+    limit: int = LIVE_INTEL_DISPLAY_LIMIT,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Rotate the visible set every few hours and cool down titles shown in the last 24h
+    so the landing page does not freeze on the same judgment/news for days.
+    """
+    if not pool:
+        return []
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    entry = _live_intel_cache.setdefault(kind, {})
+    history = _prune_display_history(list(entry.get("display_history") or []), now=now)
+    cooldown = now - timedelta(hours=LIVE_INTEL_SHOWN_COOLDOWN_HOURS)
+    recently_shown = {
+        str(row.get("title") or "")
+        for row in history
+        if row.get("shown_at") and row["shown_at"] >= cooldown and row.get("title")
+    }
+
+    fresh = [item for item in pool if str(item.get("title") or "") not in recently_shown]
+    rest = [item for item in pool if str(item.get("title") or "") in recently_shown]
+    candidates = fresh if fresh else rest
+    if not candidates:
+        return []
+
+    bucket = _rotation_bucket(now)
+    start = bucket % len(candidates)
+    rotated = candidates[start:] + candidates[:start]
+    rotated_titles = {str(item.get("title") or "") for item in rotated}
+    ordered = rotated + [item for item in rest if str(item.get("title") or "") not in rotated_titles]
+    selected = ordered[:limit]
+
+    for item in selected:
+        title = str(item.get("title") or "").strip()
+        if title:
+            history.append({"title": title, "shown_at": now})
+    entry["display_history"] = _prune_display_history(history, now=now)
+    return selected
+
+
+async def _get_or_refresh_live_pool(
+    kind: str,
+    fetcher,
+    *,
+    pool_size: int = LIVE_INTEL_POOL_SIZE,
+    force: bool = False,
+    now: datetime | None = None,
+) -> tuple[list[dict[str, Any]], datetime]:
+    """Return a cached live-intel pool, refreshing from the web at least every 6 hours."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    entry = _live_intel_cache.get(kind) or {}
+    fetched_at = entry.get("fetched_at")
+    pool = list(entry.get("pool") or [])
+    ttl_seconds = LIVE_INTEL_CACHE_TTL_HOURS * 3600
+    is_fresh = (
+        isinstance(fetched_at, datetime)
+        and pool
+        and (now - (fetched_at if fetched_at.tzinfo else fetched_at.replace(tzinfo=timezone.utc))).total_seconds()
+        < ttl_seconds
+    )
+    if force or not is_fresh:
+        pool = await fetcher(limit=pool_size)
+        _live_intel_cache[kind] = {
+            "fetched_at": now,
+            "pool": pool,
+            "display_history": list(entry.get("display_history") or []),
+        }
+        fetched_at = now
+    assert isinstance(fetched_at, datetime)
+    return list(_live_intel_cache[kind]["pool"]), fetched_at
+
+
+def _live_intel_meta(fetched_at: datetime, *, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    next_refresh = fetched_at + timedelta(hours=LIVE_INTEL_CACHE_TTL_HOURS)
+    return {
+        "cache_ttl_hours": LIVE_INTEL_CACHE_TTL_HOURS,
+        "rotation_hours": LIVE_INTEL_ROTATION_HOURS,
+        "shown_cooldown_hours": LIVE_INTEL_SHOWN_COOLDOWN_HOURS,
+        "refreshed_at": fetched_at.isoformat(),
+        "next_refresh_at": next_refresh.isoformat(),
+        "rotation_bucket": _rotation_bucket(now),
+    }
+
+
+async def _fetch_google_news_items(
+    query: str,
+    limit: int = 10,
+    *,
+    when_days: int | None = LIVE_INTEL_MAX_DAYS,
+) -> list[dict[str, Any]]:
+    search_query = query.strip()
+    if when_days and when_days > 0:
+        search_query = f"{search_query} when:{int(when_days)}d"
     feed_url = (
         "https://news.google.com/rss/search?"
-        f"q={quote_plus(query)}&hl=en-IN&gl=IN&ceid=IN:en"
+        f"q={quote_plus(search_query)}&hl=en-IN&gl=IN&ceid=IN:en"
     )
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
@@ -388,7 +596,8 @@ async def _fetch_web_major_cases(limit: int = 10) -> list[dict[str, Any]]:
     seen: set[str] = set()
 
     for query in queries:
-        items = await _fetch_google_news_items(query, limit=8)
+        # Ask Google News for the last 30 days; local filter prefers 15.
+        items = await _fetch_google_news_items(query, limit=12, when_days=LIVE_INTEL_MAX_DAYS)
         for item in items:
             title = str(item.get("title") or "").strip()
             if not title:
@@ -409,21 +618,21 @@ async def _fetch_web_major_cases(limit: int = 10) -> list[dict[str, Any]]:
                     "title": title,
                     "court": court,
                     "year": int(item.get("year") or datetime.now().year),
+                    "date": str(item.get("date") or ""),
                     "summary": str(item.get("summary") or f"Web update from {item.get('source') or 'Google News'}")[:220],
                     "query": title,
                     "url": str(item.get("url") or ""),
                 }
             )
-            # Fetch more items than limit to allow deduplication
-            if len(merged) >= limit * 2:
+            # Fetch more items than limit to allow deduplication + recency filter
+            if len(merged) >= limit * 3:
                 break
-        if len(merged) >= limit * 2:
+        if len(merged) >= limit * 3:
             break
 
     # Apply smart deduplication to catch similar titles (e.g., same judgment with different wording)
     deduplicated = _deduplicate_items_by_title(merged, similarity_threshold=0.55)
-
-    return deduplicated[:limit]  # Return only up to limit
+    return _select_fresh_live_items(deduplicated, limit=limit)
 
 
 async def _fetch_web_legal_news(limit: int = 10) -> list[dict[str, Any]]:
@@ -436,7 +645,7 @@ async def _fetch_web_legal_news(limit: int = 10) -> list[dict[str, Any]]:
     seen: set[str] = set()
 
     for query in queries:
-        items = await _fetch_google_news_items(query, limit=10)
+        items = await _fetch_google_news_items(query, limit=14, when_days=LIVE_INTEL_MAX_DAYS)
         for item in items:
             title = str(item.get("title") or "").strip()
             if not title:
@@ -457,16 +666,15 @@ async def _fetch_web_legal_news(limit: int = 10) -> list[dict[str, Any]]:
                     "url": str(item.get("url") or ""),
                 }
             )
-            # Fetch more than limit to allow deduplication
-            if len(merged) >= limit * 2:
+            # Fetch more than limit to allow deduplication + recency filter
+            if len(merged) >= limit * 3:
                 break
-        if len(merged) >= limit * 2:
+        if len(merged) >= limit * 3:
             break
 
     # Apply smart deduplication to catch similar titles
     deduplicated = _deduplicate_items_by_title(merged, similarity_threshold=0.55)
-
-    return deduplicated[:limit]  # Return only up to limit
+    return _select_fresh_live_items(deduplicated, limit=limit)
 
 
 def _merge_case_items(*sources: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
@@ -975,6 +1183,7 @@ async def major_cases(
                     "title": title,
                     "court": court,
                     "year": year,
+                    "date": _safe_iso_date(legal.get("doc_date") or doc.get("legal_doc_date") or doc.get("created_at")),
                     "summary": f"Indexed source: {str(doc.get('source_type') or 'document')}",
                     "query": title,
                     "url": str(doc.get("source_uri") or ""),
@@ -990,23 +1199,43 @@ async def major_cases(
         web_cases = await _fetch_web_major_cases(limit=10)
         cases = _merge_case_items(cases, web_cases, limit=10)
 
+    cases = _deduplicate_items_by_title(cases, similarity_threshold=0.55)
+    cases = _select_fresh_live_items(cases, limit=10)
+
     if len(cases) < 3:
         cases = _merge_case_items(cases, _static_case_items(), limit=10)
 
-    # Apply smart deduplication to catch similar titles from different sources
-    cases = _deduplicate_items_by_title(cases, similarity_threshold=0.55)
-    cases = cases[:10]  # Limit to 10 after deduplication
-
-    return {"cases": cases}
+    return {"cases": cases[:10]}
 
 
 @router.get("/public-major-cases")
-async def public_major_cases():
-    cases = await _fetch_web_major_cases(limit=10)
+async def public_major_cases(force_refresh: bool = Query(default=False)):
+    pool, fetched_at = await _get_or_refresh_live_pool(
+        "cases",
+        _fetch_web_major_cases,
+        pool_size=LIVE_INTEL_POOL_SIZE,
+        force=force_refresh,
+    )
+    cases = _pick_dynamic_live_items(pool, kind="cases", limit=LIVE_INTEL_DISPLAY_LIMIT)
     if len(cases) < 3:
-        cases = _merge_case_items(cases, _static_case_items(), limit=10)
+        cases = _merge_case_items(cases, _static_case_items(), limit=LIVE_INTEL_DISPLAY_LIMIT)
     cases = _deduplicate_items_by_title(cases, similarity_threshold=0.55)
-    return {"cases": cases[:10]}
+    return {"cases": cases[:LIVE_INTEL_DISPLAY_LIMIT], "meta": _live_intel_meta(fetched_at)}
+
+
+@router.get("/public-legal-news")
+async def public_legal_news(force_refresh: bool = Query(default=False)):
+    pool, fetched_at = await _get_or_refresh_live_pool(
+        "news",
+        _fetch_web_legal_news,
+        pool_size=LIVE_INTEL_POOL_SIZE,
+        force=force_refresh,
+    )
+    news = _pick_dynamic_live_items(pool, kind="news", limit=LIVE_INTEL_DISPLAY_LIMIT)
+    if len(news) < 3:
+        news = _merge_news_items(news, _static_news_items(), limit=LIVE_INTEL_DISPLAY_LIMIT)
+    news = _deduplicate_items_by_title(news, similarity_threshold=0.55)
+    return {"news": news[:LIVE_INTEL_DISPLAY_LIMIT], "meta": _live_intel_meta(fetched_at)}
 
 
 @router.get("/legal-news")
@@ -1081,22 +1310,12 @@ async def legal_news(
         web_news = await _fetch_web_legal_news(limit=10)
         news = _merge_news_items(news, web_news, limit=10)
 
+    news = _deduplicate_items_by_title(news, similarity_threshold=0.55)
+    news = _select_fresh_live_items(news, limit=10)
+
     if len(news) < 3:
         news = _merge_news_items(news, _static_news_items(), limit=10)
 
-    # Apply smart deduplication to catch similar titles from different sources
-    news = _deduplicate_items_by_title(news, similarity_threshold=0.55)
-    news = news[:10]  # Limit to 10 after deduplication
-
-    return {"news": news}
-
-
-@router.get("/public-legal-news")
-async def public_legal_news():
-    news = await _fetch_web_legal_news(limit=10)
-    if len(news) < 3:
-        news = _merge_news_items(news, _static_news_items(), limit=10)
-    news = _deduplicate_items_by_title(news, similarity_threshold=0.55)
     return {"news": news[:10]}
 
 
