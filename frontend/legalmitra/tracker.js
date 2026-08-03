@@ -426,8 +426,10 @@ function renderMorningBrief() {
       start.type = "button";
       start.className = "legal-workflow-start";
       start.textContent = `Start: ${wf.display_name || "Prepare Matter Response"}`;
-      start.addEventListener("click", () => {
-        startRecommendedWorkflow(item);
+      start.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        startRecommendedWorkflow(item, start);
       });
       li.appendChild(start);
     }
@@ -502,15 +504,29 @@ function renderWorkflowRun() {
   }
 }
 
-async function startRecommendedWorkflow(item) {
+async function startRecommendedWorkflow(item, triggerButton = null) {
   if (!getAccessToken() || !item?.matter_id) return;
+
+  const panel = document.getElementById("workflow-run-panel");
+  const statusEl = document.getElementById("workflow-run-status");
+  const stepsEl = document.getElementById("workflow-run-steps");
+  const actionsEl = document.getElementById("workflow-run-actions");
+  if (panel) panel.hidden = false;
+  if (statusEl) statusEl.textContent = "Starting Prepare Matter Response…";
+  if (stepsEl) stepsEl.textContent = "";
+  if (actionsEl) actionsEl.textContent = "";
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.textContent = "Starting…";
+  }
+
   const wf = item.recommended_workflow || {
     workflow_key: "prepare_matter_response",
     workflow_template: "general",
   };
   const result = await apiRequest(APP_KEY, "/api/v1/legal/workflows/runs", {
     method: "POST",
-    timeoutMs: 30000,
+    timeoutMs: 45000,
     body: JSON.stringify({
       workflow_key: wf.workflow_key || "prepare_matter_response",
       workflow_template: wf.workflow_template || "general",
@@ -520,7 +536,35 @@ async function startRecommendedWorkflow(item) {
       persona: currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate",
     }),
   });
-  activeWorkflowRun = result?.ok ? result.payload : null;
+
+  if (triggerButton) {
+    triggerButton.disabled = false;
+    triggerButton.textContent = `Start: ${wf.display_name || "Prepare Matter Response"}`;
+  }
+
+  if (!result?.ok) {
+    activeWorkflowRun = null;
+    let detail = `HTTP ${result?.status || 0}`;
+    const payload = result?.payload;
+    if (typeof payload === "string" && payload.trim()) {
+      detail = payload;
+    } else if (payload && typeof payload === "object") {
+      if (typeof payload.detail === "string") detail = payload.detail;
+      else if (Array.isArray(payload.detail)) {
+        detail = payload.detail
+          .map((row) => (typeof row === "string" ? row : row?.msg || JSON.stringify(row)))
+          .join("; ");
+      } else if (payload.message) detail = String(payload.message);
+      else detail = JSON.stringify(payload);
+    }
+    if (statusEl) {
+      statusEl.textContent = `Could not start workflow: ${detail}`;
+    }
+    panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  activeWorkflowRun = result.payload;
   renderWorkflowRun();
   document.getElementById("workflow-run-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
