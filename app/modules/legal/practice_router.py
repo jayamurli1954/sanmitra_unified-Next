@@ -10,11 +10,14 @@ from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.modules.legal import practice_service
+from app.modules.legal import custody_service
 from app.modules.legal.practice_schemas import (
     ClientCreateRequest,
     ClientListResponse,
     ClientResponse,
     ClientUpdateRequest,
+    DocCustodySettingsResponse,
+    DocCustodySettingsUpdateRequest,
     MatterBriefGenerateRequest,
     MatterBriefResponse,
     MatterCreateRequest,
@@ -31,6 +34,7 @@ from app.modules.legal.practice_schemas import (
 )
 
 DEFAULT_APP_KEY = "legalmitra"
+_CUSTODY_MANAGE_ROLES = frozenset({"tenant_admin", "super_admin"})
 
 practice_router = APIRouter(tags=["legal-practice"])
 
@@ -43,12 +47,19 @@ def _actor_id(current_user: dict) -> str:
     return str(current_user.get("sub") or "system")
 
 
+def _can_manage_custody(current_user: dict) -> bool:
+    role = str(current_user.get("role") or "").strip()
+    return role in _CUSTODY_MANAGE_ROLES
+
+
 def _http_for_practice_error(exc: Exception) -> HTTPException:
     if isinstance(exc, practice_service.PracticeNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, practice_service.PracticeConflictError):
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, practice_service.PracticeValidationError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, custody_service.CustodyValidationError):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail="Practice operation failed")
 
@@ -387,6 +398,57 @@ async def get_latest_matter_brief(
         )
     except practice_service.PracticeNotFoundError as exc:
         raise _http_for_practice_error(exc) from exc
+
+
+# ── Document custody settings (P0) ────────────────────────────────────────────
+
+
+@practice_router.get(
+    "/practice/custody-settings", response_model=DocCustodySettingsResponse
+)
+async def get_practice_custody_settings(
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    settings = await custody_service.get_custody_settings(
+        tenant_id=tenant_id, app_key=app_key
+    )
+    return custody_service.to_response(
+        settings, can_manage=_can_manage_custody(current_user)
+    )
+
+
+@practice_router.patch(
+    "/practice/custody-settings", response_model=DocCustodySettingsResponse
+)
+async def patch_practice_custody_settings(
+    payload: DocCustodySettingsUpdateRequest,
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if not _can_manage_custody(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only tenant_admin or super_admin can change document custody settings",
+        )
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        settings = await custody_service.update_custody_settings(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            payload=payload,
+            actor_user_id=_actor_id(current_user),
+        )
+    except custody_service.CustodyValidationError as exc:
+        raise _http_for_practice_error(exc) from exc
+    return custody_service.to_response(settings, can_manage=True)
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────

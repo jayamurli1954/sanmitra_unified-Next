@@ -1,0 +1,70 @@
+/* LegalMitra Tracker — document custody (P0) */
+
+.legal-custody-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px !important;
+  padding: 8px 12px;
+  border: 1px solid rgba(231, 199, 124, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  max-width: none !important;
+}
+
+.legal-custody-badge strong {
+  color: #e7c77c;
+  font-weight: 750;
+}
+
+.legal-custody-panel {
+  margin-bottom: 22px;
+}
+
+.legal-custody-choices {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+
+.legal-custody-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.legal-custody-choice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text, #0f172a);
+}
+
+.legal-custody-choice span {
+  color: var(--muted, #64748b);
+  font-size: 14px;
+  line-height: 1.45;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.legal-custody-status {
+  min-height: 1.2em;
+  margin: 8px 0;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+}
+
+.legal-custody-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}

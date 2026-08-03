@@ -226,6 +226,8 @@ def _matter_response(doc: dict, *, client_name: str | None = None) -> dict:
         "court": doc.get("court"),
         "opposite_party": doc.get("opposite_party"),
         "billing_reference": doc.get("billing_reference"),
+        "case_number": doc.get("case_number"),
+        "issues": list(doc.get("issues") or []),
         "next_hearing_date": _parse_optional_date(doc.get("next_hearing_date")),
         "next_deadline_date": _parse_optional_date(doc.get("next_deadline_date")),
         "created_by": doc.get("created_by", "system"),
@@ -424,6 +426,8 @@ async def create_matter(
         "court": (payload.court or "").strip() or None,
         "opposite_party": (payload.opposite_party or "").strip() or None,
         "billing_reference": (payload.billing_reference or "").strip() or None,
+        "case_number": (payload.case_number or "").strip() or None,
+        "issues": list(payload.issues or []),
         "next_hearing_date": _date_to_iso(payload.next_hearing_date),
         "next_deadline_date": _date_to_iso(payload.next_deadline_date),
         "created_by": created_by,
@@ -541,9 +545,13 @@ async def update_matter(
         "court",
         "opposite_party",
         "billing_reference",
+        "case_number",
     ):
         if key in updates and isinstance(updates[key], str):
             updates[key] = updates[key].strip() or None
+
+    if "issues" in updates and updates["issues"] is not None:
+        updates["issues"] = list(updates["issues"] or [])
 
     if "next_hearing_date" in updates:
         updates["next_hearing_date"] = _date_to_iso(updates["next_hearing_date"])
@@ -616,6 +624,10 @@ async def attach_matter_document(
     await get_matter(tenant_id=tenant_id, app_key=app_key, matter_id=matter_id)
     documents = get_collection(LEGAL_MATTER_DOCUMENTS_COLLECTION)
     now = _now()
+    classification = (payload.classification or "").strip() or None
+    if not classification:
+        classification = (payload.doc_type or "general").strip().lower() or "general"
+    custody_source = payload.custody_source or "manual_register"
     doc = {
         "document_id": str(uuid4()),
         **_scope(tenant_id=tenant_id, app_key=app_key),
@@ -624,6 +636,14 @@ async def attach_matter_document(
         "doc_type": payload.doc_type.strip(),
         "notes": (payload.notes or "").strip() or None,
         "storage_ref": (payload.storage_ref or "").strip() or None,
+        "content_hash": payload.content_hash,
+        "custody_source": custody_source,
+        "version": int(payload.version or 1),
+        "page_count": payload.page_count,
+        "language": (payload.language or "").strip() or None,
+        "ocr_status": payload.ocr_status or "none",
+        "classification": classification,
+        "extract_status": payload.extract_status or "none",
         "ai_generated": bool(payload.ai_generated),
         "human_review_required": bool(payload.human_review_required),
         "created_by": created_by,
@@ -636,8 +656,14 @@ async def attach_matter_document(
         matter_id=matter_id,
         actor_id=created_by,
         event_type="document_uploaded",
-        summary=f"Document uploaded: {doc['filename']}",
-        payload={"document_id": doc["document_id"], "doc_type": doc["doc_type"]},
+        summary=f"Document registered: {doc['filename']}",
+        payload={
+            "document_id": doc["document_id"],
+            "doc_type": doc["doc_type"],
+            "custody_source": doc["custody_source"],
+            "classification": doc["classification"],
+            "content_hash": doc.get("content_hash"),
+        },
     )
     await _audit(
         tenant_id=tenant_id,
@@ -646,7 +672,12 @@ async def attach_matter_document(
         action="legal_matter_document_attached",
         entity_type="legal_matter_document",
         entity_id=doc["document_id"],
-        new_value={"matter_id": matter_id, "filename": doc["filename"]},
+        new_value={
+            "matter_id": matter_id,
+            "filename": doc["filename"],
+            "custody_source": doc["custody_source"],
+            "content_hash": doc.get("content_hash"),
+        },
     )
     return _serialize(doc)
 
@@ -1069,6 +1100,17 @@ async def get_practice_dashboard(
     except Exception:
         fees_outstanding = "—"
 
+    doc_custody = None
+    try:
+        from app.modules.legal import custody_service
+
+        custody = await custody_service.get_custody_settings(
+            tenant_id=tenant_id, app_key=app_key
+        )
+        doc_custody = custody_service.dashboard_custody_summary(custody)
+    except Exception:
+        doc_custody = None
+
     return {
         "active_matters": int(active_matters),
         "pending_matters": int(pending_matters),
@@ -1080,4 +1122,5 @@ async def get_practice_dashboard(
         "recent_documents": recent_documents,
         "fees_outstanding": fees_outstanding,
         "data_source": "live",
+        "doc_custody": doc_custody,
     }
