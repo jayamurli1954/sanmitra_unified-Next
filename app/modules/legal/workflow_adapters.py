@@ -45,8 +45,16 @@ async def adapter_matter_intake(
         "practice_area": matter.get("practice_area"),
         "jurisdiction": matter.get("jurisdiction"),
         "court": matter.get("court"),
-        "next_deadline_date": matter.get("next_deadline_date"),
-        "next_hearing_date": matter.get("next_hearing_date"),
+        "next_deadline_date": (
+            matter["next_deadline_date"].isoformat()
+            if hasattr(matter.get("next_deadline_date"), "isoformat")
+            else matter.get("next_deadline_date")
+        ),
+        "next_hearing_date": (
+            matter["next_hearing_date"].isoformat()
+            if hasattr(matter.get("next_hearing_date"), "isoformat")
+            else matter.get("next_hearing_date")
+        ),
         "workflow_template": resolve_template(workflow_template),
         "intake_gaps": missing,
         "advisory_notice": ADVISORY,
