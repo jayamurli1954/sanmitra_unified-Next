@@ -12,6 +12,13 @@ import {
   setConfiguredApiBaseUrl,
   statusLabel,
 } from "../shared/api-client.js";
+import {
+  bindStampDutyStateDefaults,
+  buildStampDutyAiPrompt,
+  formatStampDutyEstimate,
+  readStampDutyIntake,
+  stampDutyToolBodyHtml,
+} from "./legal-tools-stamp.js";
 
 const APP_KEY = "legalmitra";
 const IS_CHAT_PAGE = document.body?.dataset?.legalPage === "chat";
@@ -538,22 +545,9 @@ const legalTools = {
   "stamp-duty": {
     requiredPlan: "growth",
     label: "Stamp Duty Estimator",
-    title: "Indicative property stamp duty estimate",
+    title: "Stamp duty & registration checklist",
     query: "Explain stamp duty and registration charge checklist for an Indian property transaction",
-    body: `
-      <label>Property value in rupees
-        <input id="tool-property-value" type="number" min="0" placeholder="Example: 10000000">
-      </label>
-      <label>Indicative rate
-        <select id="tool-stamp-rate">
-          <option value="5">5%</option>
-          <option value="6">6%</option>
-          <option value="7">7%</option>
-        </select>
-      </label>
-      <button type="button" data-tool-action="stamp-duty">Estimate duty</button>
-      <div class="legal-tool-result" id="tool-result">Enter property value for a broad estimate. Exact duty depends on state, city, property type, gender concessions, and registration rules.</div>
-    `,
+    body: null, // rendered from stampDutyToolBodyHtml()
   },
   "hsn-search": {
     requiredPlan: "growth",
@@ -664,18 +658,15 @@ function buildToolAiPrompt(toolKey) {
   }
 
   if (toolKey === "stamp-duty") {
-    const value = document.getElementById("tool-property-value")?.value || "";
-    const rate = document.getElementById("tool-stamp-rate")?.value || "";
-    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
-    return [
-      fallback,
-      value ? `Property value entered: ${value}.` : "",
-      rate ? `Indicative rate selected: ${rate}%.` : "",
-      resultText ? `Estimator note: ${resultText}` : "",
-      "Focus on stamp duty / registration checklist by state; do not discuss GST refunds unless asked.",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const handoff = buildStampDutyAiPrompt(formatCurrency);
+    if (!handoff.ok) {
+      const result = document.getElementById("tool-result");
+      if (result) {
+        result.innerHTML = `<span class="legal-tool-missing"><strong>Need more information before AI:</strong> ${escapeHtml(handoff.message)}</span>`;
+      }
+      return null;
+    }
+    return handoff.prompt;
   }
 
   return fallback;
@@ -687,12 +678,16 @@ function renderLegalTool(toolKey) {
   if (!requirePlan(tool.requiredPlan || "starter", tool.label, `${tool.label} is not included in the ${PLAN_DETAILS[currentPlan].label} plan.`)) {
     return;
   }
+  const bodyHtml = toolKey === "stamp-duty" ? stampDutyToolBodyHtml() : tool.body;
   legalToolPanel.innerHTML = `
     <span>${escapeHtml(tool.label)}</span>
     <h3>${escapeHtml(tool.title)}</h3>
-    <div class="legal-tool-form">${tool.body}</div>
+    <div class="legal-tool-form">${bodyHtml}</div>
     <button class="legal-tool-ai-button" type="button" data-tool-ai="${escapeHtml(toolKey)}">Open in LegalMitra AI</button>
   `;
+  if (toolKey === "stamp-duty") {
+    bindStampDutyStateDefaults();
+  }
   legalToolPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -747,13 +742,9 @@ function handleToolAction(action) {
   }
 
   if (action === "stamp-duty") {
-    const value = Number(document.getElementById("tool-property-value")?.value || 0);
-    const rate = Number(document.getElementById("tool-stamp-rate")?.value || 0);
-    if (!value || !rate) {
-      result.textContent = "Enter property value and rate first.";
-      return;
-    }
-    result.innerHTML = `<strong>Indicative stamp duty:</strong> ${formatCurrency(value * rate / 100)} at ${rate}%. Verify state law, property category, surcharge, registration fee, and concessions.`;
+    const intake = readStampDutyIntake();
+    const estimate = formatStampDutyEstimate(intake, formatCurrency);
+    result.innerHTML = estimate.html;
     return;
   }
 
@@ -1557,6 +1548,7 @@ legalToolPanel?.addEventListener("click", (event) => {
   if (aiButton) {
     const toolKey = aiButton.getAttribute("data-tool-ai") || "";
     const prompt = buildToolAiPrompt(toolKey);
+    if (!prompt) return;
     sendToolQuery(prompt, { autoAsk: true });
   }
 });
