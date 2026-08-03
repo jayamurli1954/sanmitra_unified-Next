@@ -6,13 +6,16 @@
 **Version:** 1.0  
 **Date:** 2026-08-03  
 **Companion:**  
+- Implementation plan (approval) — [`LEGALMITRA_DOCUMENT_CUSTODY_IMPLEMENTATION_PLAN.md`](LEGALMITRA_DOCUMENT_CUSTODY_IMPLEMENTATION_PLAN.md)  
 - Stage 3 practice context — [`LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md`](LEGALMITRA_STAGE3_MATTER_CLIENT_INTELLIGENCE.md)  
 - Stage 5 guided workflows — [`LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md`](LEGALMITRA_STAGE5_AGENTIC_WORKFLOWS.md)  
 - LegalMitra compliance skill / AGENTS.md LegalMitra guardrails  
 
 This document defines **two clearly demarcated document-custody modes** so chambers with a shared office server and offices without one can both use LegalMitra safely.
 
-**Product rule:** Case papers are never public domain. Encryption in cloud storage does **not** mean “safe to treat as public.” Full document custody is always tenant-private and mode-specific.
+**Philosophy:** LegalMitra treats documents as evidence, not as the primary source of intelligence. Intelligence is derived from structured case knowledge, selective retrieval, and human-reviewed extracts.
+
+**Product rule:** Case papers are never public domain. Encryption in cloud storage does **not** mean “safe to treat as public.” Full document custody is always tenant-private and mode-specific. LegalMitra manages document custody according to the customer’s operating model — it is a practice intelligence platform, not a document repository.
 
 ---
 
@@ -32,12 +35,14 @@ LegalMitra must **not** force one storage model on all tenants.
 
 Every LegalMitra tenant chooses (or is configured with) exactly one **primary document custody mode**:
 
-| Mode key | Display name | Who it is for |
+| Mode key (enum) | Advocate-facing display name | Who it is for |
 | --- | --- | --- |
-| `cloud_minimized` | **Cloud minimized (no chamber server)** | Solo advocates, small offices, laptop-only practices |
-| `chamber_lan` | **Chamber LAN / office server** | Chambers with shared file server and multi-advocate LAN |
+| `cloud_minimized` | **Personal Practice** | Solo advocates, small offices, laptop-only practices (no shared chamber server) |
+| `chamber_lan` | **Chamber LAN** | Chambers with shared file server and multi-advocate LAN |
 
-UI, onboarding, and ops docs must label these modes explicitly. Do not blur them into “upload everything optionally.”
+Internal enum keys stay implementation-stable. UI, onboarding, and ops copy must use the **display names** (where are my files?), not engineering labels like “minimized.” Do not blur modes into “upload everything optionally.”
+
+**Future (not implemented):** `enterprise_vault` — **Enterprise Vault** for banks, insurers, government, and corporate legal departments where originals stay in customer Azure/AWS/SharePoint/MinIO and LegalMitra holds metadata/AI/workflow only. Do not expose in UI until a later phase.
 
 ```text
                     ┌──────────────────────────────┐
@@ -52,16 +57,19 @@ UI, onboarding, and ops docs must label these modes explicitly. Do not blur them
            ▼                                               ▼
  ┌─────────────────────┐                     ┌─────────────────────────┐
  │ MODE A              │                     │ MODE B                  │
- │ cloud_minimized     │                     │ chamber_lan             │
+ │ Personal Practice   │                     │ Chamber LAN             │
+ │ (cloud_minimized)   │                     │ (chamber_lan)           │
  │                     │                     │                         │
- │ Full files: optional│                     │ Full files: chamber     │
- │ object store OR     │                     │ LAN/server ONLY         │
- │ advocate device     │                     │                         │
- │ Prefer: extracts +  │                     │ Connector pushes only   │
- │ case card + chunks  │                     │ metadata / extracts     │
- │ Retention tiers     │                     │ to cloud tenant         │
+ │ Full files: device  │                     │ Full files: chamber     │
+ │ or opt-in private   │                     │ LAN/server ONLY         │
+ │ store               │                     │                         │
+ │ Prefer: case card + │                     │ SanMitra Chamber        │
+ │ extracts + chunks   │                     │ Connector pushes only   │
+ │ Retention tiers     │                     │ metadata / extracts     │
  └─────────────────────┘                     └─────────────────────────┘
 ```
+
+**Intelligence stack (both modes):** Matter → Case Card → Matter Snapshot (planned) → Extracts → AI assist. The PDF is evidence; structured knowledge is the centre.
 
 ---
 
@@ -83,7 +91,7 @@ UI, onboarding, and ops docs must label these modes explicitly. Do not blur them
 
 ### 4.1 Intent
 
-Offices **without** a shared server keep using LegalMitra in the browser. Full papers may live on the advocate’s laptop or, if the tenant opts in, in **private** tenant object storage — never public.
+**Personal Practice** for offices **without** a shared server. Advocates keep using LegalMitra in the browser. Full papers may live on the advocate’s laptop or, if the tenant opts in, in **private** tenant object storage — never public.
 
 ### 4.2 What LegalMitra stores (preferred)
 
@@ -115,7 +123,7 @@ Offices **without** a shared server keep using LegalMitra in the browser. Full p
 
 ### 5.1 Intent
 
-Chambers that already share a **file server / NAS / Windows Server** among Sr and Jr advocates keep **full case papers on that server**. LegalMitra cloud holds practice workflows and **retrieval metadata/extracts only**.
+**Chamber LAN** for chambers that already share a **file server / NAS / Windows Server** among Sr and Jr advocates. Full case papers stay on that server. LegalMitra cloud holds practice workflows and **retrieval metadata/extracts only**.
 
 ### 5.2 Topology
 
@@ -124,13 +132,16 @@ Chamber LAN
   Sr PC ─┐
   Jr PC ─┼──▶ Chamber Document Server (matter folders + ACLs)
   Clerk ─┘         │
-                   │ Chamber Connector (local service)
+                   │ SanMitra Chamber Connector (separate package / future repo)
                    │  - watches folders
-                   │  - extracts case-card fields + chunks
+                   │  - fingerprints + classifies + extracts
+                   │  - optional Local AI on LAN (planned)
                    │  - pushes metadata/extracts only
                    ▼
             LegalMitra cloud (tenant = chamber)
 ```
+
+**Connector packaging (target):** Treat the connector as **SanMitra Chamber Connector** — reusable infrastructure (LegalMitra first; later MitraBooks / other products if approved). Prefer a separate repository when implementation starts (P3), not a LegalMitra-only embed.
 
 ### 5.3 What stays where
 
@@ -190,8 +201,10 @@ LEGALMITRA_EXTRACT_RETENTION_DAYS=...       # tenant policy
 Frontend onboarding copy must ask:
 
 > “Does this chamber use a shared office file server for case papers?”  
-> → Yes → Mode B guidance  
-> → No → Mode A guidance  
+> → Yes → **Chamber LAN** guidance  
+> → No → **Personal Practice** guidance  
+
+Badge copy examples: `Document custody: Personal Practice` / `Document custody: Chamber LAN`.  
 
 ---
 
@@ -199,17 +212,27 @@ Frontend onboarding copy must ask:
 
 | Phase | Scope | Modes |
 | --- | --- | --- |
-| **P0** | This architecture doc; tenant mode enum design; UI copy demarcation | Both |
-| **P1** | Tracker “document register” UX (metadata); case-card fields completeness | A (and B register mirroring) |
-| **P2** | Extract pipeline → case card + chunks; retention/dedupe | A first |
-| **P3** | Chamber Connector MVP (folder watch → metadata/extracts push) | B |
-| **P4** | In-office deep retrieval via connector; optional opt-in cloud original backup | B (+ A opt-in) |
+| **P0** | Architecture + plan; tenant custody settings; mode badge; audit | Both |
+| **P1** | Tracker document register; case-card completeness; fingerprint fields on register | A (+ B register mirror) |
+| **P2** | Classification → extract/chunk; Matter Snapshot; retention/dedupe; Stage 5 grounding | A first |
+| **P3** | SanMitra Chamber Connector MVP (separate package); metadata/extracts push | B |
+| **P4** | Deep retrieve; opt-in backup; optional Local AI on LAN | B (+ A opt-in) |
 
-Do not start P3/P4 until P0 mode demarcation is product-approved.
+Do not start P3/P4 until P0 mode demarcation is product-approved. `enterprise_vault` remains deferred.
 
 ---
 
-## 9. Non-goals
+## 9. Planned enrichments (later phases — design now)
+
+| Concept | Intent | Earliest phase |
+| --- | --- | --- |
+| **Matter Snapshot** | Living structured summary (facts, issues, timeline, deadlines, open questions, research, confidence) as primary Stage 5 context | P2 |
+| **Document fingerprint** | Hash, version, pages, language, OCR status, classification, extract status | P1 fields / P2 pipeline |
+| **Document classification** | Court order, notice, affidavit, petition, evidence, contract, tax notice, invoice, identity, board resolution — drives extract strategy | P2 |
+| **Local AI (Mode B)** | Optional Ollama/Qwen/Llama on chamber server so sensitive text never leaves the LAN | P4 |
+| **Enterprise Vault** | Customer cloud vault; LegalMitra = metadata/AI/workflow only | Future mode key |
+
+## 10. Non-goals
 
 - Making case documents public or SEO-visible  
 - Forcing all chambers onto LAN connectors  
@@ -217,10 +240,11 @@ Do not start P3/P4 until P0 mode demarcation is product-approved.
 - Storing full PDF bodies inside LLM provider context by default  
 - Merging LegalMitra document custody into MitraBooks ERP  
 - Replacing chamber IT backup policies  
+- Shipping Enterprise Vault or Local AI in P0–P2  
 
 ---
 
-## 10. Security and privacy checklist
+## 11. Security and privacy checklist
 
 - [ ] Tenant-scoped reads/writes for all metadata and extracts  
 - [ ] Mode B never defaults to uploading full originals to cloud  
@@ -232,23 +256,23 @@ Do not start P3/P4 until P0 mode demarcation is product-approved.
 
 ---
 
-## 11. Decision summary
+## 12. Decision summary
 
 | Question | Answer |
 | --- | --- |
-| Chamber has shared server/LAN? | Use **Mode B — chamber_lan** |
-| No server / solo laptop? | Use **Mode A — cloud_minimized** |
-| Where do full case papers live by default? | Mode B: chamber server. Mode A: device or opt-in private store |
-| What does AI need first? | Case card + selective extracts — not every byte of every upload |
-| Are papers public if encrypted in cloud? | **No** — still private tenant data; Mode B avoids that custody when possible |
+| Chamber has shared server/LAN? | **Chamber LAN** (`chamber_lan`) |
+| No server / solo laptop? | **Personal Practice** (`cloud_minimized`) |
+| Where do full case papers live by default? | Chamber LAN: chamber server. Personal Practice: device or opt-in private store |
+| What does AI need first? | Case card → Matter Snapshot → selective extracts — not every byte of every upload |
+| Are papers public if encrypted in cloud? | **No** — still private tenant data; Chamber LAN avoids that custody when possible |
 
 ---
 
-## 12. Next engineering actions
+## 13. Next engineering actions
 
-1. Product sign-off on Mode A / Mode B naming and onboarding question.  
-2. Add `doc_custody_mode` to tenant configuration design (schema + module registry notes).  
-3. P1 Tracker document-register panel for Mode A (and Mode B status “linked from chamber server”).  
-4. Spec Chamber Connector package (Windows service first — common in Indian chambers).  
+1. ~~Product sign-off on mode naming and onboarding~~ (approved with Personal Practice display name).  
+2. **P0 implement:** custody settings on Legal practice tenant scope + Tracker badge + audit.  
+3. P1 Tracker document-register + fingerprint fields.  
+4. Spec **SanMitra Chamber Connector** as a separate package/repo (Windows service first).  
 
-Until those land, operators and docs must keep saying: **planned dual-mode custody — not yet implemented.**
+Operators must distinguish: **P0 settings/badge may ship while extract pipeline and Connector remain planned.**

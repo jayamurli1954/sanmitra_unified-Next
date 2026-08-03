@@ -319,6 +319,48 @@ class MatterBriefGenerateRequest(BaseModel):
     notes_for_brief: str | None = Field(default=None, max_length=2000)
 
 
+# ── Document custody (P0) ────────────────────────────────────────────────────
+
+
+class DocCustodyMode(str, Enum):
+    """Stable enum keys. UI display names live in DOC_CUSTODY_DISPLAY_NAMES."""
+
+    CLOUD_MINIMIZED = "cloud_minimized"  # Personal Practice
+    CHAMBER_LAN = "chamber_lan"  # Chamber LAN
+
+
+DOC_CUSTODY_MODE_VALUES = {m.value for m in DocCustodyMode}
+
+DOC_CUSTODY_DISPLAY_NAMES: dict[str, str] = {
+    DocCustodyMode.CLOUD_MINIMIZED.value: "Personal Practice",
+    DocCustodyMode.CHAMBER_LAN.value: "Chamber LAN",
+}
+
+
+class DocCustodySettingsResponse(BaseModel):
+    tenant_id: str
+    app_key: str
+    doc_custody_mode: str
+    display_name: str
+    doc_cloud_originals_opt_in: bool = False
+    chamber_connector_enabled: bool = False
+    extract_retention_days: int = 365
+    onboarding_answered: bool = False
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+    can_manage: bool = False
+    onboarding_question: str
+    mode_guidance: dict[str, str] = Field(default_factory=dict)
+
+
+class DocCustodySettingsUpdateRequest(BaseModel):
+    doc_custody_mode: DocCustodyMode | None = None
+    doc_cloud_originals_opt_in: bool | None = None
+    chamber_connector_enabled: bool | None = None
+    extract_retention_days: int | None = Field(default=None, ge=1, le=3650)
+    onboarding_answered: bool | None = None
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 
@@ -338,3 +380,5 @@ class PracticeDashboardResponse(BaseModel):
     practice_health_score: int | None = None
     practice_health_label: str | None = None
     priority_alerts: list[dict[str, Any]] = Field(default_factory=list)
+    # P0 document custody identity (summary for Tracker badge).
+    doc_custody: dict[str, Any] | None = None

@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Professional Compliance Tracker | LegalMitra</title>
     <link rel="icon" href="../assets/brand/legalmitra-logo.png" type="image/png">
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v32">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v33">
     <link rel="stylesheet" href="./legal-answer.css?v=legalmitra-stage2">
+    <link rel="stylesheet" href="./tracker-custody.css?v=legalmitra-custody-p0">
   </head>
   <body class="legal-editorial-page">
     <header class="legal-navbar">
@@ -38,11 +39,47 @@
           <p class="legal-tracker-preview-banner" role="status">
             Preview workspace — sign in to load tenant-backed clients, matters, hearings, Morning Brief, and fee records. Browser-only rows are not the system of record.
           </p>
+          <p class="legal-custody-badge" id="custody-badge" hidden role="status">
+            Document custody: <strong id="custody-badge-label">Personal Practice</strong>
+          </p>
         </div>
         <div class="legal-role-switch" aria-label="Professional role">
           <button class="active" type="button" data-tracker-role="advocate">Advocate</button>
           <button type="button" data-tracker-role="ca">Chartered Accountant</button>
           <button type="button" data-tracker-role="cs">Company Secretary</button>
+        </div>
+      </section>
+
+      <section class="legal-diary-panel legal-custody-panel" id="custody-panel" hidden aria-label="Document custody">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Document custody</span>
+            <h2>Where do case papers live?</h2>
+            <p id="custody-panel-copy">LegalMitra manages custody by your chamber’s operating model — practice intelligence first, not a public document dump.</p>
+          </div>
+        </div>
+        <p class="legal-morning-brief-advisory" id="custody-onboarding-question">
+          Does this chamber use a shared office file server for case papers?
+        </p>
+        <div class="legal-custody-choices" id="custody-choices">
+          <label class="legal-custody-choice">
+            <input type="radio" name="custody-mode" value="cloud_minimized" checked>
+            <span>
+              <strong>No — Personal Practice</strong>
+              Papers stay on your device (or optional private cloud later). LegalMitra prefers case cards and extracts.
+            </span>
+          </label>
+          <label class="legal-custody-choice">
+            <input type="radio" name="custody-mode" value="chamber_lan">
+            <span>
+              <strong>Yes — Chamber LAN</strong>
+              Full papers stay on the chamber server. LegalMitra holds metadata and selective extracts only.
+            </span>
+          </label>
+        </div>
+        <p class="legal-custody-status" id="custody-status" role="status" aria-live="polite"></p>
+        <div class="legal-custody-actions">
+          <button type="button" id="custody-save" hidden>Save custody mode</button>
         </div>
       </section>
 
@@ -194,6 +231,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-stage5-workflow-v5"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-custody-p0"></script>
   </body>
 </html>

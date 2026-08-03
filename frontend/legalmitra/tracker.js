@@ -1,4 +1,5 @@
 import { apiRequest, getAccessToken } from "../shared/api-client.js";
+import { createCustodyController } from "./tracker-custody.js";
 
 const APP_KEY = "legalmitra";
 
@@ -85,6 +86,16 @@ let feeInvoices = [];
 const storageKey = "legalmitra-tracker-drafts-v2";
 const rowStorageKey = "legalmitra-tracker-work-items-v2";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
+
+const custody = createCustodyController({
+  apiRequest,
+  getAccessToken,
+  appKey: APP_KEY,
+  getLivePractice: () => livePractice,
+  setLivePracticeDocCustody: (summary) => {
+    if (livePractice) livePractice.doc_custody = summary;
+  },
+});
 
 const rowEditor = document.getElementById("tracker-row-editor");
 const rowEditorKicker = document.getElementById("tracker-row-editor-kicker");
@@ -289,6 +300,7 @@ async function loadLivePractice() {
   if (!getAccessToken()) {
     livePractice = null;
     morningBrief = null;
+    custody.clearCustodySettings();
     updatePracticeBanner();
     renderMorningBrief();
     return;
@@ -309,7 +321,11 @@ async function loadLivePractice() {
   updatePracticeBanner();
   updateMetricsForRows();
   renderRows(getRoleRows());
-  await Promise.all([loadMorningBrief(false), loadFeeLedger()]);
+  await Promise.all([
+    loadMorningBrief(false),
+    loadFeeLedger(),
+    custody.loadCustodySettings(livePractice),
+  ]);
 }
 
 async function loadFeeLedger() {
@@ -1001,9 +1017,13 @@ document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
 setRole("advocate");
 updateActiveTab("daily-board");
 updatePracticeBanner();
+custody.renderCustodyPanel();
 loadLivePractice();
 document.getElementById("morning-brief-refresh")?.addEventListener("click", () => {
   loadMorningBrief(true);
+});
+document.getElementById("custody-save")?.addEventListener("click", () => {
+  custody.saveCustodySettings();
 });
 const initialTab = String(window.location.hash || "").replace("#", "");
 if (initialTab && (initialTab === "daily-board" || registerCardOrder.includes(initialTab))) {

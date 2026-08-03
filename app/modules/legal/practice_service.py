@@ -1069,6 +1069,17 @@ async def get_practice_dashboard(
     except Exception:
         fees_outstanding = "—"
 
+    doc_custody = None
+    try:
+        from app.modules.legal import custody_service
+
+        custody = await custody_service.get_custody_settings(
+            tenant_id=tenant_id, app_key=app_key
+        )
+        doc_custody = custody_service.dashboard_custody_summary(custody)
+    except Exception:
+        doc_custody = None
+
     return {
         "active_matters": int(active_matters),
         "pending_matters": int(pending_matters),
@@ -1080,4 +1091,5 @@ async def get_practice_dashboard(
         "recent_documents": recent_documents,
         "fees_outstanding": fees_outstanding,
         "data_source": "live",
+        "doc_custody": doc_custody,
     }
