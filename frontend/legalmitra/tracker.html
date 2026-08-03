@@ -147,6 +147,28 @@
           </label>
           <button type="submit">Register document</button>
         </form>
+        <div class="legal-document-register-extract" id="document-register-extract-panel">
+          <h3>Paste extract (P2)</h3>
+          <p>Intelligence comes from approved extracts, not full PDF upload. Select a registered document, paste text, then review suggestions before applying.</p>
+          <label>
+            <span>Document for extract</span>
+            <select id="document-register-extract-doc"></select>
+          </label>
+          <label>
+            <span>Extract text</span>
+            <textarea id="document-register-extract-text" rows="5" maxlength="80000" placeholder="Paste notice / order extract text…"></textarea>
+          </label>
+          <label class="legal-document-register-check">
+            <input type="checkbox" id="document-register-extract-approve">
+            <span>Mark extract approved for Stage 5 / brief grounding</span>
+          </label>
+          <button type="button" id="document-register-extract-submit">Save extract + chunks</button>
+          <div id="document-register-suggestions" class="legal-document-register-suggestions" hidden>
+            <strong>Suggested case-card fields</strong>
+            <pre id="document-register-suggestions-body"></pre>
+            <button type="button" id="document-register-apply-suggestions">Apply suggested fields (human review)</button>
+          </div>
+        </div>
         <p class="legal-custody-status" id="document-register-status" role="status" aria-live="polite"></p>
       </section>
 

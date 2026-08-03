@@ -765,6 +765,7 @@ def _build_grounded_brief_sections(
     documents: list[dict],
     timeline: list[dict],
     notes_for_brief: str | None,
+    approved_chunks: list[dict] | None = None,
 ) -> dict:
     key_facts: list[str] = [
         f"Matter number: {matter.get('matter_number')}",
@@ -780,10 +781,22 @@ def _build_grounded_brief_sections(
         key_facts.append(f"Opposite party: {matter['opposite_party']}")
     if matter.get("jurisdiction"):
         key_facts.append(f"Jurisdiction: {matter['jurisdiction']}")
+    if matter.get("case_number"):
+        key_facts.append(f"Case number: {matter['case_number']}")
+    if matter.get("issues"):
+        key_facts.append("Issues: " + "; ".join(str(i) for i in matter["issues"][:8]))
     if matter.get("description"):
         key_facts.append(f"Description: {matter['description']}")
     if notes_for_brief:
         key_facts.append(f"Briefing notes: {notes_for_brief.strip()}")
+
+    chunks = approved_chunks or []
+    for chunk in chunks[:6]:
+        snippet = str(chunk.get("text") or "").strip()
+        if snippet:
+            key_facts.append(
+                f"Approved extract ({chunk.get('document_id') or 'doc'}): {snippet[:280]}"
+            )
 
     important_dates: list[str] = []
     if matter.get("next_hearing_date"):
@@ -801,6 +814,12 @@ def _build_grounded_brief_sections(
     docs_reviewed = [
         f"{d.get('filename')} ({d.get('doc_type')})" for d in documents[:20]
     ]
+    if chunks:
+        docs_reviewed.extend(
+            f"extract chunk {c.get('chunk_index')} · doc {c.get('document_id')} · "
+            f"{str(c.get('text') or '')[:120]}"
+            for c in chunks[:10]
+        )
 
     risks: list[str] = []
     if matter.get("status") == MatterStatus.PENDING.value:
@@ -809,6 +828,10 @@ def _build_grounded_brief_sections(
         risks.append(f"Priority is marked {matter.get('priority')}.")
     if not documents:
         risks.append("No documents attached yet — evidence file may be incomplete.")
+    if documents and not chunks:
+        risks.append(
+            "Documents are registered but no approved matter-paper extracts/chunks are available yet."
+        )
     if not important_dates:
         risks.append("No hearing or deadline dates recorded on the matter.")
 
@@ -822,9 +845,14 @@ def _build_grounded_brief_sections(
         next_actions.insert(0, f"Prepare for deadline on {matter['next_deadline_date']}.")
     if matter.get("next_hearing_date"):
         next_actions.insert(0, f"Prepare for hearing on {matter['next_hearing_date']}.")
+    if documents and not chunks:
+        next_actions.insert(
+            0,
+            "Paste or approve matter-paper extracts so Stage 5/briefs can ground on text, not filenames alone.",
+        )
 
     limitations = [
-        "Summary is grounded only in stored matter, client, document, and timeline records.",
+        "Summary is grounded in stored matter, client, document metadata, approved extracts/chunks, and timeline records.",
         "Statutory and case-law positions are not independently verified in this Stage 3 brief.",
         "Do not treat suggested next actions as legal advice or filing instructions.",
     ]
@@ -832,11 +860,13 @@ def _build_grounded_brief_sections(
     confidence = 0.55
     if documents:
         confidence += 0.1
+    if chunks:
+        confidence += 0.1
     if timeline:
         confidence += 0.05
     if matter.get("jurisdiction") and matter.get("practice_area"):
         confidence += 0.05
-    confidence = min(confidence, 0.75)
+    confidence = min(confidence, 0.8)
 
     overview_bits = [
         f"{matter.get('matter_number')} — {matter.get('title')}",
@@ -884,11 +914,26 @@ async def generate_matter_brief(
             tenant_id=tenant_id, app_key=app_key, matter_id=matter_id, limit=50
         )
 
+    approved_chunks: list[dict] = []
+    try:
+        from app.modules.legal import extract_service
+
+        approved_chunks = await extract_service.list_matter_chunks(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            approved_only=True,
+            limit=40,
+        )
+    except Exception:
+        approved_chunks = []
+
     sections = _build_grounded_brief_sections(
         matter=matter,
         documents=documents,
         timeline=timeline,
         notes_for_brief=options.notes_for_brief,
+        approved_chunks=approved_chunks,
     )
     sources: list[dict[str, Any]] = [
         {
@@ -903,6 +948,17 @@ async def generate_matter_brief(
                 "source_type": "matter_document",
                 "document_id": doc.get("document_id"),
                 "filename": doc.get("filename"),
+            }
+        )
+    for chunk in approved_chunks[:20]:
+        sources.append(
+            {
+                "source_type": "matter_paper_chunk",
+                "source_kind": chunk.get("source_kind") or "matter_paper",
+                "chunk_id": chunk.get("chunk_id"),
+                "extract_id": chunk.get("extract_id"),
+                "document_id": chunk.get("document_id"),
+                "chunk_index": chunk.get("chunk_index"),
             }
         )
     for event in timeline[:10]:
@@ -924,7 +980,11 @@ async def generate_matter_brief(
         "advisory_notice": ADVISORY_NOTICE,
         "generated_by": generated_by,
         "generated_at": now,
-        "generation_strategy": "grounded_matter_summary",
+        "generation_strategy": (
+            "grounded_matter_summary_with_extracts"
+            if approved_chunks
+            else "grounded_matter_summary"
+        ),
     }
     briefs = get_collection(LEGAL_MATTER_BRIEFS_COLLECTION)
     await briefs.insert_one(brief)

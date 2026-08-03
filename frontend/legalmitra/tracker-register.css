@@ -48,3 +48,46 @@
 .legal-document-register-case-card button {
   justify-self: start;
 }
+
+.legal-document-register-extract {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 10px;
+  background: #fff;
+  display: grid;
+  gap: 10px;
+}
+
+.legal-document-register-extract h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.legal-document-register-extract p {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-document-register-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.legal-document-register-suggestions {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px dashed var(--border, #dbe3ef);
+}
+
+.legal-document-register-suggestions pre {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}

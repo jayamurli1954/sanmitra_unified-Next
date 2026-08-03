@@ -8,6 +8,7 @@ import pytest
 from app.modules.legal import practice_service as practice
 from app.modules.legal import proactive_service as proactive
 from app.modules.legal import workflow_service as workflows
+from app.modules.legal import extract_service as extracts
 from app.modules.legal.practice_schemas import (
     ClientCreateRequest,
     MatterCreateRequest,
@@ -108,9 +109,11 @@ def fake_db(monkeypatch):
     monkeypatch.setattr(practice, "get_collection", _get)
     monkeypatch.setattr(proactive, "get_collection", _get)
     monkeypatch.setattr(workflows, "get_collection", _get)
+    monkeypatch.setattr(extracts, "get_collection", _get)
     monkeypatch.setattr(practice, "log_audit_event", _noop_audit)
     monkeypatch.setattr(proactive, "log_audit_event", _noop_audit)
     monkeypatch.setattr(workflows, "log_audit_event", _noop_audit)
+    monkeypatch.setattr(extracts, "log_audit_event", _noop_audit)
     return cols
 
 

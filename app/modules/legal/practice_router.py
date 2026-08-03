@@ -11,7 +11,10 @@ from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.modules.legal import practice_service
 from app.modules.legal import custody_service
+from app.modules.legal import extract_service
 from app.modules.legal.practice_schemas import (
+    CaseCardApplyRequest,
+    CaseCardSuggestResponse,
     ClientCreateRequest,
     ClientListResponse,
     ClientResponse,
@@ -20,14 +23,20 @@ from app.modules.legal.practice_schemas import (
     DocCustodySettingsUpdateRequest,
     MatterBriefGenerateRequest,
     MatterBriefResponse,
+    MatterChunkListResponse,
     MatterCreateRequest,
     MatterDocumentCreateRequest,
     MatterDocumentListResponse,
     MatterDocumentResponse,
+    MatterExtractIngestRequest,
+    MatterExtractIngestResponse,
+    MatterExtractListResponse,
+    MatterExtractResponse,
     MatterListResponse,
     MatterResponse,
     MatterUpdateRequest,
     PracticeDashboardResponse,
+    RetentionDryRunResponse,
     TimelineEventCreateRequest,
     TimelineEventResponse,
     TimelineListResponse,
@@ -53,13 +62,24 @@ def _can_manage_custody(current_user: dict) -> bool:
 
 
 def _http_for_practice_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, practice_service.PracticeNotFoundError):
+    if isinstance(
+        exc,
+        (
+            practice_service.PracticeNotFoundError,
+            extract_service.ExtractNotFoundError,
+        ),
+    ):
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, practice_service.PracticeConflictError):
         return HTTPException(status_code=409, detail=str(exc))
-    if isinstance(exc, practice_service.PracticeValidationError):
-        return HTTPException(status_code=400, detail=str(exc))
-    if isinstance(exc, custody_service.CustodyValidationError):
+    if isinstance(
+        exc,
+        (
+            practice_service.PracticeValidationError,
+            custody_service.CustodyValidationError,
+            extract_service.ExtractValidationError,
+        ),
+    ):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail="Practice operation failed")
 
@@ -300,6 +320,223 @@ async def list_matter_documents(
     except practice_service.PracticeNotFoundError as exc:
         raise _http_for_practice_error(exc) from exc
     return MatterDocumentListResponse(items=items, count=len(items))
+
+
+# ── Matter extracts / chunks (P2) ─────────────────────────────────────────────
+
+
+@practice_router.post(
+    "/matters/{matter_id}/documents/{document_id}/extracts",
+    response_model=MatterExtractIngestResponse,
+)
+async def ingest_matter_extract(
+    matter_id: str,
+    document_id: str,
+    payload: MatterExtractIngestRequest,
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        result = await extract_service.ingest_matter_extract(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            document_id=document_id,
+            actor_id=_actor_id(current_user),
+            extract_text=payload.extract_text,
+            approve=payload.approve,
+            authorize_external_provider=payload.authorize_external_provider,
+        )
+    except (
+        extract_service.ExtractNotFoundError,
+        extract_service.ExtractValidationError,
+        practice_service.PracticeNotFoundError,
+    ) as exc:
+        raise _http_for_practice_error(exc) from exc
+    return MatterExtractIngestResponse(
+        deduped=bool(result.get("deduped")),
+        extract=result["extract"],
+        chunks=result.get("chunks") or [],
+        suggestions=result.get("suggestions") or {},
+    )
+
+
+@practice_router.get(
+    "/matters/{matter_id}/extracts",
+    response_model=MatterExtractListResponse,
+)
+async def list_matter_extracts(
+    matter_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    items = await extract_service.list_matter_extracts(
+        tenant_id=tenant_id, app_key=app_key, matter_id=matter_id, limit=limit
+    )
+    return MatterExtractListResponse(items=items, count=len(items))
+
+
+@practice_router.get(
+    "/matters/{matter_id}/chunks",
+    response_model=MatterChunkListResponse,
+)
+async def list_matter_chunks(
+    matter_id: str,
+    extract_id: str | None = Query(default=None),
+    approved_only: bool = Query(default=True),
+    limit: int = Query(default=100, ge=1, le=500),
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    items = await extract_service.list_matter_chunks(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        matter_id=matter_id,
+        extract_id=extract_id,
+        approved_only=approved_only,
+        limit=limit,
+    )
+    return MatterChunkListResponse(items=items, count=len(items))
+
+
+@practice_router.post(
+    "/matters/{matter_id}/extracts/{extract_id}/approve",
+    response_model=MatterExtractResponse,
+)
+async def approve_matter_extract(
+    matter_id: str,
+    extract_id: str,
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        return await extract_service.approve_extract(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            extract_id=extract_id,
+            actor_id=_actor_id(current_user),
+        )
+    except extract_service.ExtractNotFoundError as exc:
+        raise _http_for_practice_error(exc) from exc
+
+
+@practice_router.get(
+    "/matters/{matter_id}/extracts/{extract_id}/case-card-suggestions",
+    response_model=CaseCardSuggestResponse,
+)
+async def suggest_case_card_from_extract(
+    matter_id: str,
+    extract_id: str,
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        return await extract_service.suggest_case_card(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            extract_id=extract_id,
+        )
+    except extract_service.ExtractNotFoundError as exc:
+        raise _http_for_practice_error(exc) from exc
+
+
+@practice_router.post(
+    "/matters/{matter_id}/extracts/{extract_id}/apply-case-card",
+    response_model=MatterResponse,
+)
+async def apply_case_card_from_extract(
+    matter_id: str,
+    extract_id: str,
+    payload: CaseCardApplyRequest,
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        return await extract_service.apply_case_card_suggestions(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            extract_id=extract_id,
+            actor_id=_actor_id(current_user),
+            fields=payload.fields,
+        )
+    except (
+        extract_service.ExtractNotFoundError,
+        extract_service.ExtractValidationError,
+        practice_service.PracticeNotFoundError,
+        practice_service.PracticeValidationError,
+    ) as exc:
+        raise _http_for_practice_error(exc) from exc
+
+
+@practice_router.get(
+    "/practice/extracts/retention-dry-run",
+    response_model=RetentionDryRunResponse,
+)
+async def extract_retention_dry_run(
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    if not _can_manage_custody(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only tenant_admin or super_admin can run retention dry-run",
+        )
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    return await extract_service.retention_dry_run(tenant_id=tenant_id, app_key=app_key)
+
+
+@practice_router.post("/practice/cloud-originals/assert-allowed")
+async def assert_cloud_original_allowed(
+    _module_context: dict = Depends(require_enabled_module("legal")),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """P2.8 gate probe — Mode B / missing opt-in fail closed. No binary storage yet."""
+    tenant_id = resolve_tenant_id(current_user, x_tenant_id)
+    app_key = _resolve_legal_app_key(x_app_key)
+    try:
+        settings = await extract_service.assert_cloud_original_allowed(
+            tenant_id=tenant_id, app_key=app_key
+        )
+    except extract_service.ExtractValidationError as exc:
+        raise _http_for_practice_error(exc) from exc
+    return {
+        "allowed": True,
+        "doc_custody_mode": settings.get("doc_custody_mode"),
+        "doc_cloud_originals_opt_in": settings.get("doc_cloud_originals_opt_in"),
+    }
 
 
 # ── Timeline ─────────────────────────────────────────────────────────────────

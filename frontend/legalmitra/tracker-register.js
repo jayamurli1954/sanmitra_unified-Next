@@ -1,4 +1,4 @@
-/* LegalMitra Tracker — P1 document register (metadata only) */
+/* LegalMitra Tracker — P1 document register + P2 paste extract */
 
 const REGISTER_EMPTY = {
   cloud_minimized:
@@ -16,6 +16,8 @@ export function createDocumentRegisterController({
   let matters = [];
   let selectedMatterId = "";
   let documents = [];
+  let lastSuggestions = null;
+  let lastExtractId = "";
 
   function panelEls() {
     return {
@@ -28,6 +30,13 @@ export function createDocumentRegisterController({
       caseNumber: document.getElementById("document-register-case-number"),
       issues: document.getElementById("document-register-issues"),
       saveCaseCard: document.getElementById("document-register-save-case-card"),
+      extractDoc: document.getElementById("document-register-extract-doc"),
+      extractText: document.getElementById("document-register-extract-text"),
+      extractApprove: document.getElementById("document-register-extract-approve"),
+      extractSubmit: document.getElementById("document-register-extract-submit"),
+      suggestionsBox: document.getElementById("document-register-suggestions"),
+      suggestionsBody: document.getElementById("document-register-suggestions-body"),
+      applySuggestions: document.getElementById("document-register-apply-suggestions"),
     };
   }
 
@@ -69,6 +78,28 @@ export function createDocumentRegisterController({
     }
   }
 
+  function renderExtractDocOptions() {
+    const { extractDoc } = panelEls();
+    if (!extractDoc) return;
+    const previous = extractDoc.value;
+    extractDoc.textContent = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = documents.length
+      ? "Select registered document…"
+      : "Register a document first";
+    extractDoc.appendChild(placeholder);
+    documents.forEach((doc) => {
+      const option = document.createElement("option");
+      option.value = doc.document_id;
+      option.textContent = `${doc.filename} (${doc.doc_type || "general"})`;
+      extractDoc.appendChild(option);
+    });
+    if (previous && documents.some((d) => d.document_id === previous)) {
+      extractDoc.value = previous;
+    }
+  }
+
   function renderDocumentList() {
     const { list } = panelEls();
     if (!list) return;
@@ -77,12 +108,14 @@ export function createDocumentRegisterController({
       const li = document.createElement("li");
       li.textContent = "Select a matter to view its document register.";
       list.appendChild(li);
+      renderExtractDocOptions();
       return;
     }
     if (!documents.length) {
       const li = document.createElement("li");
       li.textContent = "No documents registered for this matter yet.";
       list.appendChild(li);
+      renderExtractDocOptions();
       return;
     }
     documents.forEach((doc) => {
@@ -90,11 +123,13 @@ export function createDocumentRegisterController({
       const actor = doc.created_by ? ` · by ${doc.created_by}` : "";
       const klass = doc.classification ? ` · ${doc.classification}` : "";
       const hash = doc.content_hash ? ` · hash ${String(doc.content_hash).slice(0, 10)}…` : "";
+      const extract = doc.extract_status ? ` · extract ${doc.extract_status}` : "";
       li.textContent =
         `${doc.filename} (${doc.doc_type || "general"})${klass}` +
-        ` · ${doc.custody_source || "manual_register"}${hash}${actor}`;
+        ` · ${doc.custody_source || "manual_register"}${hash}${extract}${actor}`;
       list.appendChild(li);
     });
+    renderExtractDocOptions();
   }
 
   function fillCaseCardFields(matter) {
@@ -105,12 +140,30 @@ export function createDocumentRegisterController({
     }
   }
 
+  function clearSuggestions() {
+    lastSuggestions = null;
+    lastExtractId = "";
+    const { suggestionsBox, suggestionsBody } = panelEls();
+    if (suggestionsBox) suggestionsBox.hidden = true;
+    if (suggestionsBody) suggestionsBody.textContent = "";
+  }
+
+  function showSuggestions(suggestions, extractId) {
+    lastSuggestions = suggestions || {};
+    lastExtractId = extractId || "";
+    const { suggestionsBox, suggestionsBody } = panelEls();
+    if (!suggestionsBox || !suggestionsBody) return;
+    suggestionsBody.textContent = JSON.stringify(lastSuggestions, null, 2);
+    suggestionsBox.hidden = !Object.keys(lastSuggestions).length;
+  }
+
   async function loadMatters() {
     const { panel } = panelEls();
     if (!getAccessToken()) {
       if (panel) panel.hidden = true;
       matters = [];
       documents = [];
+      clearSuggestions();
       return;
     }
     if (panel) panel.hidden = false;
@@ -131,6 +184,7 @@ export function createDocumentRegisterController({
       documents = [];
       renderDocumentList();
       fillCaseCardFields(null);
+      clearSuggestions();
     }
   }
 
@@ -138,6 +192,7 @@ export function createDocumentRegisterController({
     selectedMatterId = matterId || "";
     const matter = matters.find((m) => m.matter_id === selectedMatterId);
     fillCaseCardFields(matter || null);
+    clearSuggestions();
     if (!selectedMatterId || !getAccessToken()) {
       documents = [];
       renderDocumentList();
@@ -253,6 +308,95 @@ export function createDocumentRegisterController({
     }
   }
 
+  async function submitExtract() {
+    if (!selectedMatterId || !getAccessToken()) {
+      setStatus("Select a live matter first.");
+      return;
+    }
+    const { extractDoc, extractText, extractApprove } = panelEls();
+    const documentId = String(extractDoc?.value || "").trim();
+    const text = String(extractText?.value || "").trim();
+    if (!documentId) {
+      setStatus("Select a registered document for the extract.");
+      return;
+    }
+    if (!text) {
+      setStatus("Paste extract text first.");
+      return;
+    }
+    setStatus("Saving extract + chunks…");
+    try {
+      const result = await apiRequest(
+        appKey,
+        `/api/v1/legal/matters/${encodeURIComponent(selectedMatterId)}/documents/${encodeURIComponent(documentId)}/extracts`,
+        {
+          method: "POST",
+          timeoutMs: 20000,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            extract_text: text,
+            approve: Boolean(extractApprove?.checked),
+            authorize_external_provider: false,
+          }),
+        }
+      );
+      if (!result?.ok) {
+        const detail = result?.payload?.detail;
+        throw new Error(
+          Array.isArray(detail)
+            ? detail.map((d) => d.msg || d).join("; ")
+            : detail || "Could not save extract"
+        );
+      }
+      const payload = result.payload || {};
+      showSuggestions(payload.suggestions || {}, payload.extract?.extract_id);
+      if (extractText) extractText.value = "";
+      await loadDocumentsForMatter(selectedMatterId);
+      const chunkCount = (payload.chunks || []).length;
+      setStatus(
+        payload.deduped
+          ? `Duplicate extract skipped (hash match). ${chunkCount} existing chunk(s).`
+          : `Extract saved with ${chunkCount} chunk(s). Review suggestions before apply.`
+      );
+    } catch (error) {
+      setStatus(error?.message || "Could not save extract.");
+    }
+  }
+
+  async function applySuggestions() {
+    if (!selectedMatterId || !lastExtractId || !lastSuggestions || !getAccessToken()) {
+      setStatus("Save an extract with suggestions first.");
+      return;
+    }
+    setStatus("Applying suggested case-card fields…");
+    try {
+      const result = await apiRequest(
+        appKey,
+        `/api/v1/legal/matters/${encodeURIComponent(selectedMatterId)}/extracts/${encodeURIComponent(lastExtractId)}/apply-case-card`,
+        {
+          method: "POST",
+          timeoutMs: 12000,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fields: lastSuggestions }),
+        }
+      );
+      if (!result?.ok) {
+        const detail = result?.payload?.detail;
+        throw new Error(
+          Array.isArray(detail)
+            ? detail.map((d) => d.msg || d).join("; ")
+            : detail || "Could not apply suggestions"
+        );
+      }
+      const updated = result.payload;
+      matters = matters.map((m) => (m.matter_id === selectedMatterId ? { ...m, ...updated } : m));
+      fillCaseCardFields(updated);
+      setStatus("Suggested fields applied after human review action.");
+    } catch (error) {
+      setStatus(error?.message || "Could not apply suggestions.");
+    }
+  }
+
   function bindEvents() {
     const els = panelEls();
     els.matterSelect?.addEventListener("change", () => {
@@ -261,6 +405,12 @@ export function createDocumentRegisterController({
     els.form?.addEventListener("submit", registerDocument);
     els.saveCaseCard?.addEventListener("click", () => {
       saveCaseCard();
+    });
+    els.extractSubmit?.addEventListener("click", () => {
+      submitExtract();
+    });
+    els.applySuggestions?.addEventListener("click", () => {
+      applySuggestions();
     });
   }
 

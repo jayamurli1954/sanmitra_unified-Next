@@ -12,6 +12,7 @@ from app.modules.legal.practice_service import (
     list_matter_documents,
     list_matter_timeline,
 )
+from app.modules.legal import extract_service
 from app.modules.legal.workflow_definitions import (
     TEMPLATE_DOC_CHECKLIST,
     TEMPLATE_QUERY_SEEDS,
@@ -100,6 +101,23 @@ async def adapter_legal_research(
                 "filename": doc.get("filename"),
             }
         )
+    chunks = await extract_service.list_matter_chunks(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        matter_id=matter_id,
+        approved_only=True,
+        limit=20,
+    )
+    for chunk in chunks:
+        sources.append(
+            {
+                "source_type": "matter_paper_chunk",
+                "source_kind": chunk.get("source_kind") or "matter_paper",
+                "chunk_id": chunk.get("chunk_id"),
+                "extract_id": chunk.get("extract_id"),
+                "document_id": chunk.get("document_id"),
+            }
+        )
 
     # Stage 5 MVP: matter-grounded research brief. No fabricated statute citations.
     # Optional KG enrichment hook reserved — graph miss degrades to this path.
@@ -135,28 +153,41 @@ async def adapter_legal_research(
             "force_awaiting_human": True,
         }
 
+    extract_facts = [
+        f"Approved extract ({c.get('document_id')}): {str(c.get('text') or '')[:220]}"
+        for c in chunks[:5]
+        if c.get("text")
+    ]
     payload = {
         "strategy": "grounded_matter_research_brief",
         "question": query,
         "answer": (
             f"Working research brief for {matter.get('matter_number')}: {matter.get('title')}. "
-            f"Use LegalMitra hybrid research on the suggested query to obtain statute/case "
-            f"citations. This Stage 5 step does not invent legal authorities."
+            f"Grounded on case card"
+            + (f" and {len(chunks)} approved matter-paper chunk(s)" if chunks else "")
+            + ". Use LegalMitra hybrid research on the suggested query to obtain statute/case "
+            "citations. This Stage 5 step does not invent legal authorities."
         ),
         "key_facts": [
             f"Matter number: {matter.get('matter_number')}",
             f"Status: {matter.get('status')}",
             f"Practice area: {matter.get('practice_area') or 'general'}",
             f"Jurisdiction: {jurisdiction}",
+            *extract_facts,
         ],
         "citations": [],
-        "confidence": 0.55 if docs else 0.45,
+        "confidence": 0.65 if chunks else (0.55 if docs else 0.45),
         "human_review_required": True,
         "advisory_notice": ADVISORY,
         "limitations": [
             "No statute or case citations were fabricated in this step.",
             "Run LegalMitra research (Stage 2) for grounded citations before filing.",
             "Knowledge graph enrichment is optional and was not required for this brief.",
+            (
+                "Matter-paper extracts were used with document attribution."
+                if chunks
+                else "No approved matter-paper extracts yet — research is case-card/filename grounded only."
+            ),
         ],
         "suggested_research_query": query,
         "suggested_next_actions": [
@@ -165,6 +196,7 @@ async def adapter_legal_research(
             "Approve this research step only after verifying authorities",
         ],
         "kg_enrichment_used": False,
+        "matter_paper_chunk_count": len(chunks),
     }
     return {
         "artifact_type": "research_response",
@@ -189,14 +221,26 @@ async def adapter_document_evidence(
     docs = await list_matter_documents(
         tenant_id=tenant_id, app_key=app_key, matter_id=matter_id, limit=50
     )
+    chunks = await extract_service.list_matter_chunks(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        matter_id=matter_id,
+        approved_only=True,
+        limit=40,
+    )
     filenames = " ".join(str(d.get("filename") or "").lower() for d in docs)
+    extract_blob = " ".join(str(c.get("text") or "").lower() for c in chunks)
     present = []
     missing = []
     for item in checklist:
         token = item.split()[0].lower()
-        if any(token in str(d.get("filename") or "").lower() for d in docs) or (
+        in_filename = any(token in str(d.get("filename") or "").lower() for d in docs) or (
             docs and item.lower() in filenames
-        ):
+        )
+        in_extract = bool(chunks) and (
+            token in extract_blob or item.lower() in extract_blob
+        )
+        if in_filename or in_extract:
             present.append(item)
         else:
             # Heuristic: if docs exist, mark generic items present only when filenames match.
@@ -214,18 +258,39 @@ async def adapter_document_evidence(
             {"document_id": d.get("document_id"), "filename": d.get("filename")}
             for d in docs
         ],
+        "approved_extract_snippets": [
+            {
+                "chunk_id": c.get("chunk_id"),
+                "document_id": c.get("document_id"),
+                "extract_id": c.get("extract_id"),
+                "text": str(c.get("text") or "")[:240],
+            }
+            for c in chunks[:8]
+        ],
         "present": present,
         "missing": missing,
         "advisory_notice": ADVISORY,
     }
     confidence = 1.0 if not missing else max(0.4, 1.0 - 0.15 * len(missing))
+    if chunks:
+        confidence = min(1.0, confidence + 0.05)
+    sources = [
+        {"source_type": "matter_document", "document_id": d.get("document_id")}
+        for d in docs
+    ]
+    sources.extend(
+        {
+            "source_type": "matter_paper_chunk",
+            "chunk_id": c.get("chunk_id"),
+            "document_id": c.get("document_id"),
+            "extract_id": c.get("extract_id"),
+        }
+        for c in chunks
+    )
     return {
         "artifact_type": "checklist",
         "payload": payload,
-        "sources": [
-            {"source_type": "matter_document", "document_id": d.get("document_id")}
-            for d in docs
-        ],
+        "sources": sources,
         "confidence": round(confidence, 2),
         "human_review_required": False,
         "failure_class": None,
@@ -255,6 +320,24 @@ async def adapter_drafting(
         None,
     )
     missing = (checklist or {}).get("payload", {}).get("missing") or []
+    extract_snips = (checklist or {}).get("payload", {}).get("approved_extract_snippets") or []
+    if not extract_snips:
+        chunks = await extract_service.list_matter_chunks(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            matter_id=matter_id,
+            approved_only=True,
+            limit=8,
+        )
+        extract_snips = [
+            {
+                "chunk_id": c.get("chunk_id"),
+                "document_id": c.get("document_id"),
+                "extract_id": c.get("extract_id"),
+                "text": str(c.get("text") or "")[:240],
+            }
+            for c in chunks
+        ]
     draft_body = [
         f"# Draft outline — {matter.get('matter_number')} ({template})",
         "",
@@ -269,8 +352,23 @@ async def adapter_drafting(
         "4. Prayer / relief sought",
         "5. Annexure list from evidence checklist",
         "",
-        "## Evidence gaps to resolve before filing",
+        "## Approved matter-paper extracts (attribution required)",
     ]
+    if extract_snips:
+        for snip in extract_snips[:6]:
+            draft_body.append(
+                f"- [doc {snip.get('document_id')}] {snip.get('text')}"
+            )
+    else:
+        draft_body.append(
+            "- No approved extracts yet — paste extracts in Tracker before relying on paper text."
+        )
+    draft_body.extend(
+        [
+            "",
+            "## Evidence gaps to resolve before filing",
+        ]
+    )
     if missing:
         draft_body.extend(f"- {item}" for item in missing)
     else:
@@ -296,12 +394,23 @@ async def adapter_drafting(
         "human_review_required": True,
         "advisory_notice": ADVISORY,
         "ready_to_file": False,
+        "matter_paper_extract_count": len(extract_snips),
     }
+    sources = [{"source_type": "matter_record", "matter_id": matter_id}]
+    sources.extend(
+        {
+            "source_type": "matter_paper_chunk",
+            "chunk_id": snip.get("chunk_id"),
+            "document_id": snip.get("document_id"),
+            "extract_id": snip.get("extract_id"),
+        }
+        for snip in extract_snips
+    )
     return {
         "artifact_type": "draft",
         "payload": payload,
-        "sources": [{"source_type": "matter_record", "matter_id": matter_id}],
-        "confidence": 0.7 if not missing else 0.55,
+        "sources": sources,
+        "confidence": 0.75 if extract_snips and not missing else (0.7 if not missing else 0.55),
         "human_review_required": True,
         "failure_class": None,
     }

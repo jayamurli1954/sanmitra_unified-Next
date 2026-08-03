@@ -9,6 +9,7 @@ from datetime import date
 import pytest
 
 from app.modules.legal import practice_service as svc
+from app.modules.legal import extract_service as extracts
 from app.modules.legal.practice_schemas import (
     ClientCreateRequest,
     ClientUpdateRequest,
@@ -93,6 +94,7 @@ def fake_db(monkeypatch):
         return cols.setdefault(name, FakeCollection())
 
     monkeypatch.setattr(svc, "get_collection", _get)
+    monkeypatch.setattr(extracts, "get_collection", _get)
     return cols
 
 
@@ -105,6 +107,7 @@ def captured_audit(monkeypatch):
         return "evt"
 
     monkeypatch.setattr(svc, "log_audit_event", _fake_log)
+    monkeypatch.setattr(extracts, "log_audit_event", _fake_log)
     return events
 
 

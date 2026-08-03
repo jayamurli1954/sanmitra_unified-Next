@@ -444,6 +444,95 @@ class DocCustodySettingsUpdateRequest(BaseModel):
     onboarding_answered: bool | None = None
 
 
+# ── Matter extracts / chunks (P2) ─────────────────────────────────────────────
+
+
+class MatterExtractIngestRequest(BaseModel):
+    extract_text: str = Field(min_length=1, max_length=80_000)
+    approve: bool = False
+    authorize_external_provider: bool = False
+
+
+class MatterExtractResponse(BaseModel):
+    extract_id: str
+    matter_id: str
+    document_id: str
+    tenant_id: str
+    app_key: str
+    source_kind: str = "matter_paper"
+    content_hash: str
+    extract_text: str
+    approval_status: str
+    retention_tier: str = "warm"
+    expires_at: datetime | None = None
+    provider_used: str = "none"
+    created_by: str
+    created_at: datetime
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    human_review_required: bool = True
+
+
+class MatterChunkResponse(BaseModel):
+    chunk_id: str
+    matter_id: str
+    document_id: str
+    extract_id: str
+    tenant_id: str
+    app_key: str
+    source_kind: str = "matter_paper"
+    chunk_index: int
+    text: str
+    token_count: int = 0
+    approval_status: str
+    expires_at: datetime | None = None
+    created_at: datetime
+
+
+class MatterExtractIngestResponse(BaseModel):
+    deduped: bool = False
+    extract: MatterExtractResponse
+    chunks: list[MatterChunkResponse] = Field(default_factory=list)
+    suggestions: dict[str, Any] = Field(default_factory=dict)
+    advisory_notice: str = (
+        "Suggestions are heuristic only. An advocate must review before apply. "
+        "Advisory working product — not final legal advice."
+    )
+
+
+class MatterExtractListResponse(BaseModel):
+    items: list[MatterExtractResponse]
+    count: int
+
+
+class MatterChunkListResponse(BaseModel):
+    items: list[MatterChunkResponse]
+    count: int
+
+
+class CaseCardSuggestResponse(BaseModel):
+    extract_id: str
+    matter_id: str
+    suggestions: dict[str, Any] = Field(default_factory=dict)
+    human_review_required: bool = True
+    advisory_notice: str
+
+
+class CaseCardApplyRequest(BaseModel):
+    """Explicit field map only — never silent overwrite of advocate-edited fields."""
+
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class RetentionDryRunResponse(BaseModel):
+    dry_run: bool = True
+    as_of: datetime
+    expired_extract_count: int = 0
+    expired_chunk_count: int = 0
+    expired_extracts: list[dict[str, Any]] = Field(default_factory=list)
+    advisory_notice: str
+
+
 # ── Dashboard ────────────────────────────────────────────────────────────────
 
 

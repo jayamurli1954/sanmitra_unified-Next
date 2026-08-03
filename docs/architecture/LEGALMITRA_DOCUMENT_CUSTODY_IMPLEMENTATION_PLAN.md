@@ -145,9 +145,9 @@ Modes must not blur into “upload everything optionally.”
 
 **Acceptance (P2):**
 
-- [ ] Mode A matter can produce case-card suggestions + chunks without keeping full PDF hot by default  
-- [ ] Stage 5 draft/research cites matter extracts with attribution/source document id  
-- [ ] Mode B tenants still cannot accidentally become “upload all PDFs to cloud”  
+- [x] Mode A matter can produce case-card suggestions + chunks without keeping full PDF hot by default  
+- [x] Stage 5 draft/research cites matter extracts with attribution/source document id  
+- [x] Mode B tenants still cannot accidentally become “upload all PDFs to cloud”  
 
 **Deferred in P2:** Chamber Connector, in-office deep retrieval.
 
