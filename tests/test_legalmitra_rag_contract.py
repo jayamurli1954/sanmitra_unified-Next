@@ -81,6 +81,8 @@ async def test_hybrid_refuses_when_no_relevant_sources(
     assert called["gemini"] is False
     assert called["claude"] is False
     assert "insufficient" in result["response"].lower()
+    assert "cgst act section 54" not in result["response"].lower()
+    assert "gst refunds" not in result["response"].lower()
 
 
 @pytest.mark.asyncio

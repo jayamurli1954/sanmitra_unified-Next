@@ -578,11 +578,107 @@ function formatCurrency(amount) {
   }).format(Number(amount) || 0);
 }
 
-function sendToolQuery(prompt) {
+function sendToolQuery(prompt, *, autoAsk = false) {
   if (!queryInput) return;
   queryInput.value = prompt;
   document.getElementById("assistant")?.scrollIntoView({ behavior: "smooth", block: "start" });
   queryInput.focus();
+  if (autoAsk) {
+    askLegalMitra();
+  }
+}
+
+function buildToolAiPrompt(toolKey) {
+  const tool = legalTools[toolKey];
+  const fallback = tool?.query || queryInput?.value || "";
+  if (!tool) return fallback;
+
+  if (toolKey === "limitation") {
+    const dateValue = document.getElementById("tool-date")?.value || "";
+    const typeSelect = document.getElementById("tool-limitation-type");
+    const years = Number(typeSelect?.value || 0);
+    const matterLabel = typeSelect?.selectedOptions?.[0]?.textContent?.trim() || "selected matter type";
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    let deadlineLine = "";
+    if (dateValue && years) {
+      const deadline = new Date(`${dateValue}T00:00:00`);
+      deadline.setFullYear(deadline.getFullYear() + years);
+      deadline.setDate(deadline.getDate() - 1);
+      deadlineLine = deadline.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+    return [
+      "Limitation period research under Indian law (not GST refund research).",
+      dateValue ? `Cause of action / starting date: ${dateValue}.` : "Cause of action date not yet entered in the calculator.",
+      `Matter orientation: ${matterLabel}.`,
+      deadlineLine ? `Calculator indicative last date: ${deadlineLine}.` : "",
+      resultText && resultText.toLowerCase().includes("indicative last date")
+        ? `Calculator note: ${resultText}`
+        : "",
+      "Provide a filing-deadline checklist covering: applicable Limitation Act schedule entry or special statute, exclusions/acknowledgements, condonation, forum-specific rules, and documents to preserve.",
+      "Do not discuss GST refunds or CGST Section 54 unless the matter type is expressly a GST appeal/refund issue.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (toolKey === "court-fee") {
+    const amount = document.getElementById("tool-amount")?.value || "";
+    const state = document.getElementById("tool-state")?.selectedOptions?.[0]?.textContent || "";
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    return [
+      fallback,
+      amount ? `Claim value entered: ${amount}.` : "",
+      state ? `Selected jurisdiction orientation: ${state}.` : "",
+      resultText ? `Calculator note: ${resultText}` : "",
+      "Focus on court-fee / suit valuation discipline, not GST classification.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+    if (toolKey === "gst-finder" || toolKey === "hsn-search") {
+    const inputId = toolKey === "gst-finder" ? "tool-gst-query" : "tool-hsn-query";
+    const term = (document.getElementById(inputId)?.value || "").trim();
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    return [
+      toolKey === "hsn-search"
+        ? "HSN / invoice classification research under Indian GST (not GST refund Section 54 unless asked)."
+        : "GST rate and HSN/SAC classification research under Indian law (not GST refund Section 54 unless asked).",
+      fallback,
+      term ? `Product/service term: ${term}.` : "",
+      resultText ? `Tool note: ${resultText}` : "",
+      "Focus on rate notification, HSN/SAC mapping, and classification risks.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (toolKey === "notice-drafter") {
+    const type = document.getElementById("tool-notice-type")?.value || "legal notice";
+    const opponent = document.getElementById("tool-opponent")?.value || "the opposite party";
+    return `Prepare a professional ${type} legal notice checklist and draft outline against ${opponent} under Indian law. This is advisory drafting support only.`;
+  }
+
+  if (toolKey === "stamp-duty") {
+    const value = document.getElementById("tool-property-value")?.value || "";
+    const rate = document.getElementById("tool-stamp-rate")?.value || "";
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    return [
+      fallback,
+      value ? `Property value entered: ${value}.` : "",
+      rate ? `Indicative rate selected: ${rate}%.` : "",
+      resultText ? `Estimator note: ${resultText}` : "",
+      "Focus on stamp duty / registration checklist by state; do not discuss GST refunds unless asked.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return fallback;
 }
 
 function renderLegalTool(toolKey) {
@@ -1459,8 +1555,9 @@ legalToolPanel?.addEventListener("click", (event) => {
   }
   const aiButton = event.target.closest("[data-tool-ai]");
   if (aiButton) {
-    const tool = legalTools[aiButton.getAttribute("data-tool-ai")];
-    sendToolQuery(tool?.query || queryInput?.value || "");
+    const toolKey = aiButton.getAttribute("data-tool-ai") || "";
+    const prompt = buildToolAiPrompt(toolKey);
+    sendToolQuery(prompt, { autoAsk: true });
   }
 });
 
