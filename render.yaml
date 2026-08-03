@@ -11,7 +11,10 @@ services:
     preDeployCommand: alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    autoDeploy: true
+    # Deploy staging automatically on every push/merge to main.
+    # (Do not use checksPass here — stalled/optional CI checks were blocking deploys.)
+    # Production remains manual via workflow_dispatch + version tag (AGENTS.md §27).
+    autoDeployTrigger: commit
     envVars:
       - key: ENVIRONMENT
         value: staging
