@@ -581,7 +581,10 @@ function formatCurrency(amount) {
 function sendToolQuery(prompt) {
   if (!queryInput) return;
   queryInput.value = prompt;
-  document.getElementById("assistant")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  (document.getElementById("hero") || document.getElementById("assistant"))?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
   queryInput.focus();
 }
 
