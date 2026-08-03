@@ -4,7 +4,7 @@ Deterministic declared step graph only. No autonomous agent loops, no file/send.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -62,6 +62,19 @@ class WorkflowConflictError(Exception):
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _bson_safe(value: Any) -> Any:
+    """Convert values Mongo/BSON cannot encode (e.g. datetime.date) before insert."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _bson_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_bson_safe(v) for v in value]
+    return value
 
 
 def _serialize(doc: dict) -> dict:
@@ -519,8 +532,8 @@ async def _execute_step(
             "run_id": run["run_id"],
             "step_id": step["step_id"],
             "artifact_type": result["artifact_type"],
-            "payload": result.get("payload") or {},
-            "sources": result.get("sources") or [],
+            "payload": _bson_safe(result.get("payload") or {}),
+            "sources": _bson_safe(result.get("sources") or []),
             "human_review_required": bool(result.get("human_review_required", True)),
             "created_at": finished,
         }

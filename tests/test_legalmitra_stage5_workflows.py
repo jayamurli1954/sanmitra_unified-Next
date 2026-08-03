@@ -18,6 +18,8 @@ from app.modules.legal.workflow_schemas import (
     WorkflowRunCreateRequest,
     WorkflowStepRejectRequest,
 )
+from app.modules.legal.workflow_adapters import adapter_matter_intake
+from bson import encode
 
 
 class _Cursor:
@@ -147,6 +149,28 @@ async def _seed_matter(
 def _latest(steps, key):
     rows = [s for s in steps if s["step_key"] == key]
     return max(rows, key=lambda s: int(s.get("attempt") or 1))
+
+
+def test_bson_safe_encodes_python_dates():
+    payload = workflows._bson_safe(
+        {"hearing": date(2026, 5, 23), "nested": {"deadline": date(2026, 4, 15)}}
+    )
+    encode(payload)
+    assert payload["hearing"] == "2026-05-23"
+    assert payload["nested"]["deadline"] == "2026-04-15"
+
+
+@pytest.mark.asyncio
+async def test_intake_artifact_payload_is_bson_encodable(fake_db):
+    matter = await _seed_matter()
+    result = await adapter_matter_intake(
+        tenant_id="tenant-a",
+        app_key="legalmitra",
+        matter_id=matter["matter_id"],
+        workflow_template="general",
+    )
+    encode({"payload": result["payload"], "sources": result["sources"]})
+    assert isinstance(result["payload"].get("next_deadline_date"), (str, type(None)))
 
 
 @pytest.mark.asyncio
