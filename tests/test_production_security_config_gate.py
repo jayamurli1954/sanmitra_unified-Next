@@ -18,6 +18,7 @@ def valid_environment() -> dict[str, str]:
         "DEMO_MANDIR_BOOTSTRAP": "false",
         "DEMO_MITRABOOKS_BOOTSTRAP": "false",
         "DEMO_MITRABOOKS_E2E_SEED_ENABLED": "false",
+        "DEMO_LEGAL_BOOTSTRAP": "false",
         "AUTH_EMAIL_DEBUG_RETURN_LINK": "false",
         "MOBILE_OTP_DEBUG_RETURN_CODE": "false",
         "ALLOW_OPEN_REGISTRATION": "false",
@@ -40,6 +41,8 @@ def production_settings() -> Settings:
     settings.DEMO_MITRABOOKS_BOOTSTRAP = False
     settings.DEMO_MITRABOOKS_ADMIN_PASSWORD = "Test-only-mitrabooks-password1!"
     settings.DEMO_MITRABOOKS_E2E_SEED_ENABLED = False
+    settings.DEMO_LEGAL_BOOTSTRAP = False
+    settings.DEMO_LEGAL_ADMIN_PASSWORD = "Test-only-legal-password1!"
     return settings
 
 
@@ -81,6 +84,7 @@ def test_sanitized_verifier_rejects_missing_weak_or_placeholder_secrets(
     "DEMO_MANDIR_BOOTSTRAP",
     "DEMO_MITRABOOKS_BOOTSTRAP",
     "DEMO_MITRABOOKS_E2E_SEED_ENABLED",
+    "DEMO_LEGAL_BOOTSTRAP",
     "AUTH_EMAIL_DEBUG_RETURN_LINK",
     "MOBILE_OTP_DEBUG_RETURN_CODE",
     "ALLOW_OPEN_REGISTRATION",
@@ -112,6 +116,7 @@ def test_sanitized_verifier_requires_distinct_secrets() -> None:
         "DEMO_MANDIR_BOOTSTRAP",
         "DEMO_MITRABOOKS_BOOTSTRAP",
         "DEMO_MITRABOOKS_E2E_SEED_ENABLED",
+        "DEMO_LEGAL_BOOTSTRAP",
     ],
 )
 def test_settings_validate_rejects_bootstrap_or_demo_seed_in_production(flag: str) -> None:
