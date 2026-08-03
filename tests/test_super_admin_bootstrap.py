@@ -177,6 +177,37 @@ async def test_ensure_demo_mitrabooks_user_creates_business_tenant(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ensure_demo_legal_user_creates_legal_tenant(monkeypatch):
+    fake_users = FakeUsersCollection()
+
+    monkeypatch.setattr(users_service, "get_collection", lambda _name: fake_users)
+
+    ensured = {}
+
+    async def fake_ensure_tenant_exists(tenant_id: str, **_kwargs):
+        ensured["tenant_id"] = tenant_id
+        ensured.update(_kwargs)
+        return {"tenant_id": tenant_id, "status": "active"}
+
+    monkeypatch.setattr(users_service, "ensure_tenant_exists", fake_ensure_tenant_exists)
+
+    result = await users_service.ensure_demo_legal_user(
+        email="legal.demo@sanmitra.local",
+        password="legaldemo123",
+    )
+
+    assert result is not None
+    assert result["email"] == "legal.demo@sanmitra.local"
+    assert result["tenant_id"] == "demo-legal-firm"
+    assert result["app_key"] == "legalmitra"
+    assert result["role"] == "tenant_admin"
+    assert ensured["organization_type"] == "LEGAL"
+    assert ensured["enabled_modules"] == ["legal", "rag", "compliance", "audit"]
+    assert ensured["app_keys"] == ["legalmitra"]
+    assert ensured["subscription_plan"] == "pro"
+
+
+@pytest.mark.asyncio
 async def test_ensure_demo_mitrabooks_user_updates_existing_account(monkeypatch):
     fake_users = FakeUsersCollection()
     fake_users.docs.append(

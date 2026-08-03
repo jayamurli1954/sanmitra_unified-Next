@@ -331,6 +331,18 @@ class Settings:
         "on",
     }
 
+    DEMO_LEGAL_BOOTSTRAP = os.getenv("DEMO_LEGAL_BOOTSTRAP", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    DEMO_LEGAL_TENANT_ID = os.getenv("DEMO_LEGAL_TENANT_ID", "demo-legal-firm")
+    DEMO_LEGAL_ADMIN_EMAIL = os.getenv("DEMO_LEGAL_ADMIN_EMAIL", "legal.demo@sanmitra.local")
+    # No default password — must be set explicitly when DEMO_LEGAL_BOOTSTRAP=true.
+    DEMO_LEGAL_ADMIN_PASSWORD = os.getenv("DEMO_LEGAL_ADMIN_PASSWORD", "")
+    DEMO_LEGAL_ADMIN_FULL_NAME = os.getenv("DEMO_LEGAL_ADMIN_FULL_NAME", "Demo LegalMitra Advocate")
+
 
     def validate(self) -> None:
         """Fail fast on dangerous mis-configuration before the app accepts traffic."""
@@ -425,15 +437,27 @@ class Settings:
                 "demo bootstrap will be skipped at startup."
             )
 
+        if self.DEMO_LEGAL_BOOTSTRAP and not self.DEMO_LEGAL_ADMIN_PASSWORD:
+            if is_prod:
+                raise ValueError(
+                    "DEMO_LEGAL_ADMIN_PASSWORD must be set when DEMO_LEGAL_BOOTSTRAP=true."
+                )
+            _config_logger.warning(
+                "DEMO_LEGAL_BOOTSTRAP=true but DEMO_LEGAL_ADMIN_PASSWORD is not set — "
+                "demo bootstrap will be skipped at startup."
+            )
+
         if is_prod and (
             self.SUPER_ADMIN_BOOTSTRAP
             or self.DEMO_MANDIR_BOOTSTRAP
             or self.DEMO_MITRABOOKS_BOOTSTRAP
             or self.DEMO_MITRABOOKS_E2E_SEED_ENABLED
+            or self.DEMO_LEGAL_BOOTSTRAP
         ):
             raise ValueError(
                 "Bootstrap flags (SUPER_ADMIN_BOOTSTRAP / DEMO_MANDIR_BOOTSTRAP / "
-                "DEMO_MITRABOOKS_BOOTSTRAP / DEMO_MITRABOOKS_E2E_SEED_ENABLED) are enabled "
+                "DEMO_MITRABOOKS_BOOTSTRAP / DEMO_MITRABOOKS_E2E_SEED_ENABLED / "
+                "DEMO_LEGAL_BOOTSTRAP) are enabled "
                 "in production. All bootstrap and demo seed flags must be disabled."
             )
 

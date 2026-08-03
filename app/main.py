@@ -21,7 +21,12 @@ from app.core.onboarding.service import ensure_onboarding_indexes
 from app.core.tenants.context import InvalidAppKeyError, TenantContextMiddleware
 from app.core.tenants.service import ensure_seed_tenant, set_addon_available, set_hr_addon_available
 from app.modules.business.service import set_hr_enabled, set_module_enabled
-from app.core.users.service import ensure_demo_mitrabooks_user, ensure_seed_user, ensure_super_admin_user
+from app.core.users.service import (
+    ensure_demo_legal_user,
+    ensure_demo_mitrabooks_user,
+    ensure_seed_user,
+    ensure_super_admin_user,
+)
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
 from app.modules.business.seed import ensure_mitrabooks_e2e_seed
@@ -126,6 +131,19 @@ async def on_startup() -> None:
         await ensure_seed_tenant()
         await ensure_seed_user()
         await ensure_super_admin_user()
+        if settings.DEMO_LEGAL_BOOTSTRAP:
+            if settings.DEMO_LEGAL_ADMIN_PASSWORD:
+                await ensure_demo_legal_user(
+                    email=settings.DEMO_LEGAL_ADMIN_EMAIL,
+                    password=settings.DEMO_LEGAL_ADMIN_PASSWORD,
+                    full_name=settings.DEMO_LEGAL_ADMIN_FULL_NAME,
+                    tenant_id=settings.DEMO_LEGAL_TENANT_ID,
+                )
+                _startup_logger.info(
+                    "LegalMitra demo admin bootstrap completed for tenant=%s email=%s",
+                    settings.DEMO_LEGAL_TENANT_ID,
+                    settings.DEMO_LEGAL_ADMIN_EMAIL,
+                )
         if settings.DEMO_MITRABOOKS_BOOTSTRAP:
             if settings.DEMO_MITRABOOKS_ADMIN_PASSWORD:
                 demo_mitrabooks_emails = []

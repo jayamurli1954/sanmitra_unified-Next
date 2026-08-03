@@ -79,6 +79,16 @@ services:
         value: MitraBooks Admin
       - key: DEMO_MITRABOOKS_E2E_SEED_ENABLED
         value: "true"
+      - key: DEMO_LEGAL_BOOTSTRAP
+        value: "true"
+      - key: DEMO_LEGAL_TENANT_ID
+        value: demo-legal-firm
+      - key: DEMO_LEGAL_ADMIN_EMAIL
+        value: legal.demo@sanmitra.local
+      - key: DEMO_LEGAL_ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_LEGAL_ADMIN_FULL_NAME
+        value: Demo LegalMitra Advocate
       - key: RAG_EMBEDDING_PROVIDER
         value: hash
       - key: LEGAL_HYBRID_AI_FALLBACK_ENABLED
