@@ -569,19 +569,46 @@ async function startRecommendedWorkflow(item, triggerButton = null) {
   document.getElementById("workflow-run-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function workflowErrorDetail(result) {
+  let detail = `HTTP ${result?.status || 0}`;
+  const payload = result?.payload;
+  if (typeof payload === "string" && payload.trim()) return payload;
+  if (payload && typeof payload === "object") {
+    if (typeof payload.detail === "string") return payload.detail;
+    if (Array.isArray(payload.detail)) {
+      return payload.detail
+        .map((row) => (typeof row === "string" ? row : row?.msg || JSON.stringify(row)))
+        .join("; ");
+    }
+    if (payload.message) return String(payload.message);
+    return JSON.stringify(payload);
+  }
+  return detail;
+}
+
 async function approveWorkflowStep(runId, stepId) {
+  const statusEl = document.getElementById("workflow-run-status");
+  if (statusEl) statusEl.textContent = "Approving step…";
   const result = await apiRequest(
     APP_KEY,
     `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/approve`,
-    { method: "POST", timeoutMs: 30000 },
+    { method: "POST", timeoutMs: 45000 },
   );
-  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  if (!result?.ok) {
+    if (statusEl) {
+      statusEl.textContent = `Could not approve step: ${workflowErrorDetail(result)}`;
+    }
+    return;
+  }
+  activeWorkflowRun = result.payload;
   renderWorkflowRun();
 }
 
 async function rejectWorkflowStep(runId, stepId) {
   const reason = window.prompt("Rejection reason (required for audit):", "Needs revision");
   if (!reason || reason.trim().length < 2) return;
+  const statusEl = document.getElementById("workflow-run-status");
+  if (statusEl) statusEl.textContent = "Rejecting step…";
   const result = await apiRequest(
     APP_KEY,
     `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/reject`,
@@ -591,11 +618,19 @@ async function rejectWorkflowStep(runId, stepId) {
       body: JSON.stringify({ reason: reason.trim() }),
     },
   );
-  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  if (!result?.ok) {
+    if (statusEl) {
+      statusEl.textContent = `Could not reject step: ${workflowErrorDetail(result)}`;
+    }
+    return;
+  }
+  activeWorkflowRun = result.payload;
   renderWorkflowRun();
 }
 
 async function markReadyToFile(runId) {
+  const statusEl = document.getElementById("workflow-run-status");
+  if (statusEl) statusEl.textContent = "Marking ready to file…";
   const result = await apiRequest(
     APP_KEY,
     `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/ready-to-file`,
@@ -605,7 +640,13 @@ async function markReadyToFile(runId) {
       body: JSON.stringify({ ready_to_file: true, confirm: true }),
     },
   );
-  activeWorkflowRun = result?.ok ? result.payload : activeWorkflowRun;
+  if (!result?.ok) {
+    if (statusEl) {
+      statusEl.textContent = `Could not mark ready to file: ${workflowErrorDetail(result)}`;
+    }
+    return;
+  }
+  activeWorkflowRun = result.payload;
   renderWorkflowRun();
 }
 

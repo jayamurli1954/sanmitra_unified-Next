@@ -64,6 +64,24 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc_datetime(value: Any) -> datetime | None:
+    """Normalize Mongo/naive/aware datetimes for safe arithmetic."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
+    if isinstance(value, str) and value.strip():
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return None
+
+
 def _bson_safe(value: Any) -> Any:
     """Convert values Mongo/BSON cannot encode (e.g. datetime.date) before insert."""
     if isinstance(value, datetime):
@@ -615,8 +633,12 @@ async def _execute_step(
 
     # COMPLETE success → mark run completed + analytics snapshot
     if step["step_key"] == "COMPLETE" and step_status == "succeeded":
-        started = run.get("started_at") or finished
-        duration_ms = int((finished - started).total_seconds() * 1000) if started else None
+        started = _as_utc_datetime(run.get("started_at")) or finished
+        duration_ms = None
+        try:
+            duration_ms = int((finished - started).total_seconds() * 1000)
+        except TypeError:
+            duration_ms = None
         await get_collection(LEGAL_WORKFLOW_RUNS).update_one(
             {**_scope(tenant_id=tenant_id, app_key=app_key), "run_id": run["run_id"]},
             {
@@ -702,6 +724,9 @@ async def advance_workflow_run(
             return await _serialize_run(tenant_id=tenant_id, app_key=app_key, run=run)
 
         next_step = next((s for s in steps if s.get("status") == "pending"), None)
+        if not next_step:
+            # Resume a step left "running" after a prior worker crash/timeout.
+            next_step = next((s for s in steps if s.get("status") == "running"), None)
         if not next_step:
             # All done without COMPLETE? treat as conflict.
             raise WorkflowConflictError("No pending step to advance")

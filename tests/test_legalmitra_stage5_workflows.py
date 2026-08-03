@@ -160,6 +160,16 @@ def test_bson_safe_encodes_python_dates():
     assert payload["nested"]["deadline"] == "2026-04-15"
 
 
+def test_as_utc_datetime_accepts_naive_mongo_datetimes():
+    from datetime import datetime, timezone
+
+    finished = datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc)
+    started = datetime(2026, 8, 3, 11, 0)  # naive, as Motor often returns
+    normalized = workflows._as_utc_datetime(started)
+    assert normalized is not None
+    assert (finished - normalized).total_seconds() == 3600
+
+
 @pytest.mark.asyncio
 async def test_intake_artifact_payload_is_bson_encodable(fake_db):
     matter = await _seed_matter()
