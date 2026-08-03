@@ -1,0 +1,891 @@
+{
+  "version": "2026.08.03",
+  "disclaimer": "Indicative decision-support only. Final court fee depends on pleadings, valuation adopted by the Court, state amendments, and registry practice. Verify the current State Court Fees / Suits Valuation Act text before filing.",
+  "common_caveats": [
+    "Nature of relief claimed can change valuation and fee mode (ad valorem vs fixed).",
+    "Multiple reliefs in one plaint may attract separate or combined fee rules.",
+    "Counterclaims, set-offs, appeals, cross-objections, and revisions often have distinct fee provisions.",
+    "Amendments that increase valuation can require additional court fee.",
+    "Under-valuation or incorrect valuation basis can lead to deficit fee, rejection, or later objections."
+  ],
+  "case_types": [
+    { "key": "money_recovery", "label": "Money Recovery Suit" },
+    { "key": "partition", "label": "Partition Suit" },
+    { "key": "declaration", "label": "Declaration Suit" },
+    { "key": "specific_performance", "label": "Specific Performance" },
+    { "key": "injunction", "label": "Injunction" },
+    { "key": "possession", "label": "Possession" },
+    { "key": "eviction", "label": "Eviction" },
+    { "key": "probate", "label": "Probate" },
+    { "key": "succession", "label": "Succession" },
+    { "key": "appeal", "label": "Appeal" },
+    { "key": "execution", "label": "Execution Petition" }
+  ],
+  "states": {
+    "karnataka": {
+      "label": "Karnataka",
+      "act": "Karnataka Court Fees and Suits Valuation Act, 1958",
+      "section_hint_default": "Verify the section governing the chosen relief under the Karnataka Act",
+      "schedule_hint_default": "Verify the applicable Schedule entry for fixed vs ad valorem fee",
+      "caveats": [
+        "Governed by the Karnataka Court Fees and Suits Valuation Act, 1958.",
+        "Different valuation rules apply depending on the nature of the suit (money, partition, declaration, etc.).",
+        "Certain proceedings attract fixed court fees rather than ad valorem fees."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim / ad valorem provisions — confirm current section",
+          "schedule_hint": "Schedule governing money suits — confirm current entry",
+          "formula_label": "Orientation: approx. percentage of suit value (subject to Act schedule)",
+          "valuation_notes": "Usually valued on the amount claimed. Confirm interest, costs, and additional reliefs."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition valuation / fee provisions — confirm current section",
+          "schedule_hint": "Schedule for partition suits — often special valuation, not market-value % alone",
+          "formula_label": "Special valuation under the Act — verify Schedule (not a simple market-value %)",
+          "valuation_notes": "Partition valuation rules differ from money suits; confirm share claimed and statutory valuation method."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaratory relief provisions — confirm current section",
+          "schedule_hint": "Schedule for declaration suits — may be fixed or special",
+          "formula_label": "Often fixed/special schedule fee — verify Act",
+          "valuation_notes": "Declaratory suits frequently follow distinct valuation/fee rules; consequential relief can change the fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance valuation — confirm current section",
+          "schedule_hint": "Schedule for specific performance — confirm current entry",
+          "formula_label": "Orientation against consideration / subject-matter value (verify Schedule)",
+          "valuation_notes": "Often linked to consideration or subject-matter value in the contract — verify statutory valuation basis."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction fee provisions — confirm current section",
+          "schedule_hint": "Schedule for injunction — may be fixed",
+          "formula_label": "Often fixed/special schedule fee — verify Act",
+          "valuation_notes": "Injunction relief may attract fixed fees; combined reliefs can change valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession / recovery of immovable property — confirm section",
+          "schedule_hint": "Schedule for possession suits — confirm valuation basis",
+          "formula_label": "Special valuation (e.g. land revenue / market-related rules) — verify Act",
+          "valuation_notes": "Possession valuation is often not a simple money-claim percentage; confirm statutory basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction / rent / possessory relief — confirm section",
+          "schedule_hint": "Schedule applicable to eviction proceedings",
+          "formula_label": "Verify fixed vs ad valorem entry for the relief claimed",
+          "valuation_notes": "Rent, mesne profits, and possession reliefs can interact — value each carefully."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate / letters of administration fee provisions",
+          "schedule_hint": "Schedule for probate — often estate-value linked",
+          "formula_label": "Estate-value / schedule based — verify Act",
+          "valuation_notes": "Usually linked to estate value and probate-specific schedules."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession certificate fee provisions",
+          "schedule_hint": "Schedule for succession — confirm debt/security value basis",
+          "formula_label": "Often linked to debt/security value — verify Act",
+          "valuation_notes": "Succession fees commonly depend on the value of debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeals / revisions — confirm appellate fee provisions",
+          "schedule_hint": "Schedule for appeals — may differ from original suit",
+          "formula_label": "Appellate fee rules — verify Act (not always same as trial court fee)",
+          "valuation_notes": "Appeal fees depend on the subject-matter of appeal and may have distinct caps or fixed fees."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution petition fee provisions",
+          "schedule_hint": "Schedule for execution — often fixed or special",
+          "formula_label": "Usually fixed/special execution fee — verify Act",
+          "valuation_notes": "Execution fees are often not ad valorem on the decree amount in the same way as the original suit."
+        }
+      }
+    },
+    "maharashtra": {
+      "label": "Maharashtra",
+      "act": "Maharashtra Court Fees Act (as applicable / amended)",
+      "section_hint_default": "Verify the section governing the chosen relief under the Maharashtra Act",
+      "schedule_hint_default": "Verify the applicable Schedule / table entry",
+      "caveats": [
+        "Governed by the Maharashtra Court Fees Act framework (verify current amendments).",
+        "Court fee structure differs from Karnataka.",
+        "Some proceedings have maximum fee limits.",
+        "Separate provisions often apply to appeals and revisions."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim provisions — confirm current section",
+          "schedule_hint": "Schedule/table for money suits — confirm current entry and any ceiling",
+          "formula_label": "Orientation percentage of suit value (verify ceiling/caps)",
+          "valuation_notes": "Confirm amount claimed and whether a statutory maximum fee applies."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition valuation — confirm section",
+          "schedule_hint": "Partition schedule — special valuation",
+          "formula_label": "Special valuation — verify Maharashtra Schedule",
+          "valuation_notes": "Partition valuation is state-specific; do not assume money-suit percentage."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaratory relief — confirm section",
+          "schedule_hint": "Declaration schedule — fixed/special",
+          "formula_label": "Fixed/special schedule — verify Act",
+          "valuation_notes": "Consequential relief can change fee treatment."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance schedule — confirm entry",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration and statutory valuation basis."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction schedule — often fixed",
+          "formula_label": "Often fixed fee — verify Act",
+          "valuation_notes": "Combined injunction + other reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Immovable property possession valuation is rarely a simple money %."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits claims may require separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate schedule — estate linked",
+          "formula_label": "Estate-linked schedule — verify Act",
+          "valuation_notes": "Confirm estate value basis used by the Act."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm value of debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal/revision — confirm section",
+          "schedule_hint": "Appellate schedule — may differ / capped",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Maharashtra may apply distinct appellate fee treatment and caps."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Do not assume execution fee equals original suit fee."
+        }
+      }
+    },
+    "tamil-nadu": {
+      "label": "Tamil Nadu",
+      "act": "Tamil Nadu Court Fees and Suits Valuation Act (as applicable / amended)",
+      "section_hint_default": "Verify the section governing the chosen relief under the Tamil Nadu Act",
+      "schedule_hint_default": "Verify the applicable Schedule entry (fixed vs ad valorem)",
+      "caveats": [
+        "Governed by the Tamil Nadu Court Fees and Suits Valuation Act framework.",
+        "Distinct valuation rules apply for partition, declaratory, and injunction suits.",
+        "Different schedules specify fixed and ad valorem fees."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money suits — confirm current section",
+          "schedule_hint": "Money-suit Schedule — confirm current entry",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed; confirm additional reliefs."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify TN Schedule",
+          "valuation_notes": "TN partition valuation rules are distinct from money suits."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaratory Schedule — fixed/special",
+          "formula_label": "Fixed/special schedule — verify Act",
+          "valuation_notes": "Declaratory + consequential relief can change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration and statutory valuation."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed fee — verify Act",
+          "valuation_notes": "TN schedules distinguish fixed injunction fees from ad valorem money claims."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "delhi": {
+      "label": "Delhi (NCT)",
+      "act": "Court Fees Act framework as applicable to the National Capital Territory of Delhi (verify current local amendments)",
+      "section_hint_default": "Verify the section applicable in Delhi for the chosen relief",
+      "schedule_hint_default": "Verify Delhi-applicable Schedule / table",
+      "caveats": [
+        "Court fee provisions for Delhi follow the legislation in force for the NCT.",
+        "Rates and schedules can differ materially from many states.",
+        "Confirm current Delhi High Court / district court practice notes where relevant."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm Delhi-applicable section",
+          "schedule_hint": "Money-suit Schedule — confirm Delhi entry",
+          "formula_label": "Orientation percentage of suit value (verify Delhi schedule)",
+          "valuation_notes": "Value on amount claimed; confirm local amendments."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Delhi rules",
+          "valuation_notes": "Do not assume money-suit percentage for partition."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "telangana": {
+      "label": "Telangana",
+      "act": "Telangana Court Fees and Suits Valuation framework (verify current Act / adaptations)",
+      "section_hint_default": "Verify the Telangana-applicable section for the relief claimed",
+      "schedule_hint_default": "Verify the applicable Schedule entry",
+      "caveats": [
+        "Confirm the current Telangana Court Fees / Suits Valuation text and adaptations.",
+        "Valuation rules vary by nature of suit.",
+        "Appeals and special proceedings may follow distinct fee entries."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm section",
+          "schedule_hint": "Money-suit Schedule — confirm entry",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Partition valuation is not a simple money %."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "kerala": {
+      "label": "Kerala",
+      "act": "Kerala Court Fees and Suits Valuation Act (as applicable / amended)",
+      "section_hint_default": "Verify the Kerala section for the relief claimed",
+      "schedule_hint_default": "Verify the Kerala Schedule entry",
+      "caveats": [
+        "Confirm current Kerala Court Fees and Suits Valuation text.",
+        "Fixed vs ad valorem treatment depends on relief.",
+        "Appeals and special applications may have distinct fees."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm section",
+          "schedule_hint": "Money-suit Schedule — confirm",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Partition valuation is statutory/special."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "gujarat": {
+      "label": "Gujarat",
+      "act": "Gujarat Court Fees Act framework (verify current text / amendments)",
+      "section_hint_default": "Verify the Gujarat section for the relief claimed",
+      "schedule_hint_default": "Verify the Gujarat Schedule / table entry",
+      "caveats": [
+        "Confirm current Gujarat court-fee legislation and amendments.",
+        "Fee mode depends on nature of suit and schedule entry.",
+        "Appeals may have distinct treatment."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm section",
+          "schedule_hint": "Money-suit Schedule — confirm",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Partition valuation is statutory/special."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "uttar-pradesh": {
+      "label": "Uttar Pradesh",
+      "act": "Uttar Pradesh Court Fees Act framework (verify current text / amendments)",
+      "section_hint_default": "Verify the UP section for the relief claimed",
+      "schedule_hint_default": "Verify the UP Schedule / table entry",
+      "caveats": [
+        "Confirm current UP court-fee legislation and amendments.",
+        "Fee mode depends on nature of suit and schedule entry.",
+        "Appeals and revisions may have distinct treatment."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm section",
+          "schedule_hint": "Money-suit Schedule — confirm",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Partition valuation is statutory/special."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    },
+    "west-bengal": {
+      "label": "West Bengal",
+      "act": "West Bengal Court Fees Act framework (verify current text / amendments)",
+      "section_hint_default": "Verify the West Bengal section for the relief claimed",
+      "schedule_hint_default": "Verify the West Bengal Schedule / table entry",
+      "caveats": [
+        "Confirm current West Bengal court-fee legislation and amendments.",
+        "Fee mode depends on nature of suit and schedule entry.",
+        "Appeals may have distinct treatment."
+      ],
+      "case_rules": {
+        "money_recovery": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Money claim — confirm section",
+          "schedule_hint": "Money-suit Schedule — confirm",
+          "formula_label": "Orientation percentage of suit value (verify Schedule)",
+          "valuation_notes": "Value on amount claimed."
+        },
+        "partition": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Partition — confirm section",
+          "schedule_hint": "Partition Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Partition valuation is statutory/special."
+        },
+        "declaration": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Declaration — confirm section",
+          "schedule_hint": "Declaration Schedule — fixed/special",
+          "formula_label": "Fixed/special — verify Act",
+          "valuation_notes": "Consequential relief may change fee."
+        },
+        "specific_performance": {
+          "fee_mode": "ad_valorem_orientation",
+          "orientation_pct": 3,
+          "min_fee": 200,
+          "max_fee": null,
+          "section_hint": "Specific performance — confirm section",
+          "schedule_hint": "Specific performance Schedule — confirm",
+          "formula_label": "Orientation against consideration / subject-matter value",
+          "valuation_notes": "Confirm contractual consideration."
+        },
+        "injunction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Injunction — confirm section",
+          "schedule_hint": "Injunction Schedule — often fixed",
+          "formula_label": "Often fixed — verify Act",
+          "valuation_notes": "Combined reliefs need careful valuation."
+        },
+        "possession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Possession — confirm section",
+          "schedule_hint": "Possession Schedule — special valuation",
+          "formula_label": "Special valuation — verify Act",
+          "valuation_notes": "Confirm statutory possession valuation basis."
+        },
+        "eviction": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Eviction — confirm section",
+          "schedule_hint": "Eviction Schedule — verify",
+          "formula_label": "Verify fixed vs special fee",
+          "valuation_notes": "Rent/mesne profits may need separate valuation."
+        },
+        "probate": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Probate — confirm section",
+          "schedule_hint": "Probate Schedule — estate linked",
+          "formula_label": "Estate-linked — verify Act",
+          "valuation_notes": "Confirm estate value basis."
+        },
+        "succession": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Succession — confirm section",
+          "schedule_hint": "Succession Schedule — debt/security value",
+          "formula_label": "Debt/security value based — verify Act",
+          "valuation_notes": "Confirm debts/securities claimed."
+        },
+        "appeal": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Appeal — confirm section",
+          "schedule_hint": "Appeal Schedule — may differ",
+          "formula_label": "Appellate fee rules — verify Act",
+          "valuation_notes": "Appeal subject-matter controls fee."
+        },
+        "execution": {
+          "fee_mode": "schedule_verification",
+          "section_hint": "Execution — confirm section",
+          "schedule_hint": "Execution Schedule — often fixed",
+          "formula_label": "Usually fixed/special — verify Act",
+          "valuation_notes": "Execution fee ≠ original suit fee by default."
+        }
+      }
+    }
+  }
+}

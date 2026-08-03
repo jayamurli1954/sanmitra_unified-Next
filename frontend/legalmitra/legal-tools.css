@@ -64,8 +64,36 @@
   margin-top: 2px;
 }
 
-.legal-tool-missing {
+.legal-tool-caveat-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-tool-config-meta {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.legal-tool-output-card {
+  display: grid;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.legal-tool-output-block ul {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+
+.legal-tool-disclaimer {
   margin-top: 8px;
   color: #fbbf24;
   font-size: 13px;
 }
+
