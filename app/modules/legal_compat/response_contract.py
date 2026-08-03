@@ -226,6 +226,103 @@ def finalize_research_response(
     return payload
 
 
+def _insufficient_sources_next_steps(question: str) -> list[str]:
+    """Query-aware guidance when RAG refuses uncited generation.
+
+    Never inject an unrelated topic tip (for example GST refund Section 54) into
+    limitation, court-fee, stamp, notice, or GST rate/HSN questions.
+    """
+    text = (question or "").strip().lower()
+    steps: list[str] = []
+
+    is_gst = any(
+        token in text
+        for token in (
+            "gst",
+            "cgst",
+            "sgst",
+            "igst",
+            "hsn",
+            "sac",
+            "input tax credit",
+            "itc ",
+            "gstr",
+        )
+    )
+    is_gst_refund = is_gst and any(
+        token in text for token in ("refund", "section 54", "s.54", "s 54")
+    )
+    is_gst_rate = is_gst and any(
+        token in text
+        for token in ("rate", "hsn", "sac", "classification", "invoice classification")
+    )
+    is_limitation = any(
+        token in text
+        for token in (
+            "limitation",
+            "limitation period",
+            "filing deadline",
+            "condonation",
+            "cause of action",
+            "time-bar",
+            "time bar",
+            "prescribed period",
+        )
+    )
+    is_court_fee = "court fee" in text or "court fees" in text or "suit valuation" in text
+    is_stamp = "stamp duty" in text or "registration charge" in text
+    is_notice = any(
+        token in text
+        for token in (
+            "legal notice",
+            "notice checklist",
+            "notice draft",
+            "drafter",
+            "eviction notice",
+            "recovery notice",
+        )
+    )
+    is_ni_act = "138" in text or "negotiable instruments" in text or "cheque" in text
+
+    # More specific tool intents first — never fall through to GST refund tips.
+    if is_limitation:
+        steps.append(
+            "Narrow the query to a specific cause of action and statute "
+            "(for example a Limitation Act schedule entry, or a special-law limitation such as GST appeal under Section 107)"
+        )
+        steps.append(
+            "State the forum and whether acknowledgements, exclusions, or condonation may apply"
+        )
+    elif is_court_fee:
+        steps.append("Narrow the query to the filing court/state and claim valuation basis")
+    elif is_stamp:
+        steps.append("Narrow the query to the state, property type, and instrument (sale, gift, lease)")
+    elif is_notice:
+        steps.append(
+            "Narrow the query to notice type, parties, cause of action, and the statute under which the notice is issued"
+        )
+    elif is_gst_refund:
+        steps.append("Narrow the query (for GST refunds: CGST Act Section 54 family)")
+    elif is_gst_rate:
+        steps.append(
+            "Narrow the query to product/service description, HSN/SAC family, and the current GST rate notification"
+        )
+    elif is_gst:
+        steps.append(
+            "Narrow the query to whether the issue is taxability, rate/HSN, ITC, refund, or appeal"
+        )
+    elif is_ni_act:
+        steps.append(
+            "Narrow the query to Section 138 NI Act limitation, territorial jurisdiction, and statutory notice timeline"
+        )
+    else:
+        steps.append("Narrow the query to a specific statute, section family, forum, and material facts")
+
+    steps.append("Confirm jurisdiction when the issue is state-specific")
+    steps.append("Ingest or sync the relevant Act/notification materials and retry")
+    return steps
+
+
 def insufficient_sources_response(
     *,
     question: str,
@@ -233,15 +330,15 @@ def insufficient_sources_response(
     dropped_citation_count: int = 0,
     note: str | None = None,
 ) -> dict[str, Any]:
+    next_steps = _insufficient_sources_next_steps(question)
+    steps_md = "\n".join(f"- {step}" for step in next_steps)
     response = (
         "**Insufficient Sources**\n\n"
         "LegalMitra does not have enough retrieved or authorized sources to answer this "
         "question with citation-backed legal research.\n\n"
         "No statute sections, case names, or court references are invented when sources are missing.\n\n"
         "**Suggested next steps**\n"
-        "- Narrow the query (for GST refunds: CGST Act Section 54 family)\n"
-        "- Confirm jurisdiction when the issue is state-specific\n"
-        "- Ingest or sync the relevant Act/notification materials and retry"
+        f"{steps_md}"
     )
     return finalize_research_response(
         question=question,

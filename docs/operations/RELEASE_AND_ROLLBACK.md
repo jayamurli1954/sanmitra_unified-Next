@@ -53,15 +53,18 @@ After code scanning is enabled and stable, the SARIF upload steps can be changed
 ## Release Flow
 
 1. Merge the reviewed PR into `main`.
-2. Update `VERSION` in a dedicated version bump commit.
-3. Run the GitHub Actions workflow: `release-tag`.
-4. Provide the exact `VERSION` value and short release notes.
-5. Confirm the created tag, for example `backend-v1.2.3`.
-6. Run `render-deploy` for `staging`.
-7. Verify staging health and critical accounting workflows.
-8. Run `render-deploy` for `production` with the same version tag.
+2. **Staging auto-deploys** from `main` (Render `autoDeployTrigger: commit` plus the
+   `render-staging-autodeploy` GitHub Action deploy hook). No manual staging click is required
+   for normal merges to `main`.
+3. Verify staging health and critical accounting workflows.
+4. Update `VERSION` in a dedicated version bump commit when preparing production.
+5. Run the GitHub Actions workflow: `release-tag`.
+6. Provide the exact `VERSION` value and short release notes.
+7. Confirm the created tag, for example `backend-v1.2.3`.
+8. Run `render-deploy` for `production` with the same version tag (manual only).
 
-Production deploy must always reference a version tag.
+Production deploy must always reference a version tag. Staging is continuous from `main`;
+production remains a deliberate, tagged promotion.
 
 ## MandirMitra First-Live Candidate
 

@@ -1,0 +1,32 @@
+name: render-staging-autodeploy
+
+# Staging only: automatically trigger the Render deploy hook when main updates.
+# Production stays manual via the separate render-deploy workflow + version tag.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: render-staging-autodeploy
+  cancel-in-progress: false
+
+jobs:
+  trigger-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate Staging Deploy Hook
+        run: |
+          if [ -z "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" ]; then
+            echo "RENDER_STAGING_DEPLOY_HOOK is not configured"
+            exit 1
+          fi
+
+      - name: Trigger Render Staging Deploy
+        run: |
+          echo "Triggering staging deploy for ${GITHUB_SHA}"
+          curl -fsS -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}"
+          echo "Staging deploy hook accepted"

@@ -12,6 +12,20 @@ import {
   setConfiguredApiBaseUrl,
   statusLabel,
 } from "../shared/api-client.js";
+import {
+  bindStampDutyStateDefaults,
+  buildStampDutyAiPrompt,
+  formatStampDutyEstimate,
+  readStampDutyIntake,
+  stampDutyToolBodyHtml,
+} from "./legal-tools-stamp.js";
+import {
+  buildCourtFeeAiPrompt,
+  courtFeeToolBodyHtml,
+  formatCourtFeeEstimate,
+  loadCourtFeeRules,
+  readCourtFeeIntake,
+} from "./legal-tools-court-fee.js";
 
 const APP_KEY = "legalmitra";
 const IS_CHAT_PAGE = document.body?.dataset?.legalPage === "chat";
@@ -463,23 +477,9 @@ const legalTools = {
   "court-fee": {
     requiredPlan: "growth",
     label: "Court Fee Calculator",
-    title: "Indicative civil court-fee orientation",
+    title: "Court fee decision-support (India)",
     query: "Calculate court fee for a civil suit in India and explain state-wise caveats",
-    body: `
-      <label>State or jurisdiction
-        <select id="tool-state">
-          <option value="karnataka">Karnataka</option>
-          <option value="delhi">Delhi</option>
-          <option value="maharashtra">Maharashtra</option>
-          <option value="tamil-nadu">Tamil Nadu</option>
-        </select>
-      </label>
-      <label>Claim value in rupees
-        <input id="tool-amount" type="number" min="0" placeholder="Example: 500000">
-      </label>
-      <button type="button" data-tool-action="court-fee">Calculate indicative fee</button>
-      <div class="legal-tool-result" id="tool-result">Enter a claim value to estimate a broad court-fee range. Verify the exact fee with the applicable Court Fees Act, state amendment, and court registry.</div>
-    `,
+    body: null,
   },
   "gst-finder": {
     requiredPlan: "starter",
@@ -538,22 +538,9 @@ const legalTools = {
   "stamp-duty": {
     requiredPlan: "growth",
     label: "Stamp Duty Estimator",
-    title: "Indicative property stamp duty estimate",
+    title: "Stamp duty & registration checklist",
     query: "Explain stamp duty and registration charge checklist for an Indian property transaction",
-    body: `
-      <label>Property value in rupees
-        <input id="tool-property-value" type="number" min="0" placeholder="Example: 10000000">
-      </label>
-      <label>Indicative rate
-        <select id="tool-stamp-rate">
-          <option value="5">5%</option>
-          <option value="6">6%</option>
-          <option value="7">7%</option>
-        </select>
-      </label>
-      <button type="button" data-tool-action="stamp-duty">Estimate duty</button>
-      <div class="legal-tool-result" id="tool-result">Enter property value for a broad estimate. Exact duty depends on state, city, property type, gender concessions, and registration rules.</div>
-    `,
+    body: null, // rendered from stampDutyToolBodyHtml()
   },
   "hsn-search": {
     requiredPlan: "growth",
@@ -578,41 +565,157 @@ function formatCurrency(amount) {
   }).format(Number(amount) || 0);
 }
 
-function sendToolQuery(prompt) {
+function sendToolQuery(prompt, { autoAsk = false } = {}) {
   if (!queryInput) return;
   queryInput.value = prompt;
-  document.getElementById("assistant")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  (document.getElementById("hero") || document.getElementById("assistant"))?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
   queryInput.focus();
+  if (autoAsk) {
+    askLegalMitra();
+  }
 }
 
-function renderLegalTool(toolKey) {
+function buildToolAiPrompt(toolKey) {
+  const tool = legalTools[toolKey];
+  const fallback = tool?.query || queryInput?.value || "";
+  if (!tool) return fallback;
+
+  if (toolKey === "limitation") {
+    const dateValue = document.getElementById("tool-date")?.value || "";
+    const typeSelect = document.getElementById("tool-limitation-type");
+    const years = Number(typeSelect?.value || 0);
+    const matterLabel = typeSelect?.selectedOptions?.[0]?.textContent?.trim() || "selected matter type";
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    let deadlineLine = "";
+    if (dateValue && years) {
+      const deadline = new Date(`${dateValue}T00:00:00`);
+      deadline.setFullYear(deadline.getFullYear() + years);
+      deadline.setDate(deadline.getDate() - 1);
+      deadlineLine = deadline.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+    return [
+      "Limitation period research under Indian law (not GST refund research).",
+      dateValue ? `Cause of action / starting date: ${dateValue}.` : "Cause of action date not yet entered in the calculator.",
+      `Matter orientation: ${matterLabel}.`,
+      deadlineLine ? `Calculator indicative last date: ${deadlineLine}.` : "",
+      resultText && resultText.toLowerCase().includes("indicative last date")
+        ? `Calculator note: ${resultText}`
+        : "",
+      "Provide a filing-deadline checklist covering: applicable Limitation Act schedule entry or special statute, exclusions/acknowledgements, condonation, forum-specific rules, and documents to preserve.",
+      "Do not discuss GST refunds or CGST Section 54 unless the matter type is expressly a GST appeal/refund issue.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (toolKey === "court-fee") {
+    if (!courtFeeRules) {
+      const result = document.getElementById("tool-result");
+      if (result) {
+        result.innerHTML = `<span class="legal-tool-missing">Open the Court Fee tool first so rules config can load.</span>`;
+      }
+      return null;
+    }
+    const handoff = buildCourtFeeAiPrompt(courtFeeRules, formatCurrency);
+    if (!handoff.ok) {
+      const result = document.getElementById("tool-result");
+      if (result) {
+        result.innerHTML = `<span class="legal-tool-missing"><strong>Need more information before AI:</strong> ${escapeHtml(handoff.message)}</span>`;
+      }
+      return null;
+    }
+    return handoff.prompt;
+  }
+
+  if (toolKey === "gst-finder" || toolKey === "hsn-search") {
+    const inputId = toolKey === "gst-finder" ? "tool-gst-query" : "tool-hsn-query";
+    const term = (document.getElementById(inputId)?.value || "").trim();
+    const resultText = document.getElementById("tool-result")?.textContent?.trim() || "";
+    return [
+      toolKey === "hsn-search"
+        ? "HSN / invoice classification research under Indian GST (not GST refund Section 54 unless asked)."
+        : "GST rate and HSN/SAC classification research under Indian law (not GST refund Section 54 unless asked).",
+      fallback,
+      term ? `Product/service term: ${term}.` : "",
+      resultText ? `Tool note: ${resultText}` : "",
+      "Focus on rate notification, HSN/SAC mapping, and classification risks.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (toolKey === "notice-drafter") {
+    const type = document.getElementById("tool-notice-type")?.value || "legal notice";
+    const opponent = document.getElementById("tool-opponent")?.value || "the opposite party";
+    return `Prepare a professional ${type} legal notice checklist and draft outline against ${opponent} under Indian law. This is advisory drafting support only.`;
+  }
+
+  if (toolKey === "stamp-duty") {
+    const handoff = buildStampDutyAiPrompt(formatCurrency);
+    if (!handoff.ok) {
+      const result = document.getElementById("tool-result");
+      if (result) {
+        result.innerHTML = `<span class="legal-tool-missing"><strong>Need more information before AI:</strong> ${escapeHtml(handoff.message)}</span>`;
+      }
+      return null;
+    }
+    return handoff.prompt;
+  }
+
+  return fallback;
+}
+
+let courtFeeRules = null;
+
+async function renderLegalTool(toolKey) {
   const tool = legalTools[toolKey];
   if (!tool || !legalToolPanel) return;
   if (!requirePlan(tool.requiredPlan || "starter", tool.label, `${tool.label} is not included in the ${PLAN_DETAILS[currentPlan].label} plan.`)) {
     return;
   }
+  let bodyHtml = tool.body;
+  if (toolKey === "stamp-duty") {
+    bodyHtml = stampDutyToolBodyHtml();
+  }
+  if (toolKey === "court-fee") {
+    try {
+      courtFeeRules = await loadCourtFeeRules();
+      bodyHtml = courtFeeToolBodyHtml(courtFeeRules);
+    } catch (_error) {
+      bodyHtml = `<p class="legal-tool-missing">Could not load court-fee rules configuration (court-fee-rules.json).</p>`;
+    }
+  }
   legalToolPanel.innerHTML = `
     <span>${escapeHtml(tool.label)}</span>
     <h3>${escapeHtml(tool.title)}</h3>
-    <div class="legal-tool-form">${tool.body}</div>
+    <div class="legal-tool-form">${bodyHtml}</div>
     <button class="legal-tool-ai-button" type="button" data-tool-ai="${escapeHtml(toolKey)}">Open in LegalMitra AI</button>
   `;
+  if (toolKey === "stamp-duty") {
+    bindStampDutyStateDefaults();
+  }
   legalToolPanel.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-function handleToolAction(action) {
+async function handleToolAction(action) {
   const result = document.getElementById("tool-result");
   if (!result) return;
 
   if (action === "court-fee") {
-    const amount = Number(document.getElementById("tool-amount")?.value || 0);
-    const state = document.getElementById("tool-state")?.selectedOptions?.[0]?.textContent || "selected jurisdiction";
-    if (!amount) {
-      result.textContent = "Enter the claim value first.";
-      return;
+    try {
+      if (!courtFeeRules) courtFeeRules = await loadCourtFeeRules();
+      const estimate = formatCourtFeeEstimate(courtFeeRules, readCourtFeeIntake(), formatCurrency);
+      result.innerHTML = estimate.html;
+    } catch (_error) {
+      result.innerHTML = `<span class="legal-tool-missing">Could not load court-fee rules configuration.</span>`;
     }
-    const estimated = Math.max(200, Math.round(amount * 0.03));
-    result.innerHTML = `<strong>Indicative estimate for ${escapeHtml(state)}:</strong> around ${formatCurrency(estimated)}. Verify exact slabs, maximum caps, valuation rules, and registry practice before filing.`;
     return;
   }
 
@@ -651,13 +754,9 @@ function handleToolAction(action) {
   }
 
   if (action === "stamp-duty") {
-    const value = Number(document.getElementById("tool-property-value")?.value || 0);
-    const rate = Number(document.getElementById("tool-stamp-rate")?.value || 0);
-    if (!value || !rate) {
-      result.textContent = "Enter property value and rate first.";
-      return;
-    }
-    result.innerHTML = `<strong>Indicative stamp duty:</strong> ${formatCurrency(value * rate / 100)} at ${rate}%. Verify state law, property category, surcharge, registration fee, and concessions.`;
+    const intake = readStampDutyIntake();
+    const estimate = formatStampDutyEstimate(intake, formatCurrency);
+    result.innerHTML = estimate.html;
     return;
   }
 
@@ -858,34 +957,56 @@ function renderLiveItems(target, items, emptyText) {
   }).join("");
 }
 
-async function loadLiveLegalIntelligence(kind = "all") {
+async function loadLiveLegalIntelligence(kind = "all", { forceRefresh = false } = {}) {
+  const openedAsLocalFile = String(window.location.protocol || "").toLowerCase() === "file:";
+  const offlineHint = openedAsLocalFile
+    ? "This section needs the LegalMitra API. Open the site via localhost/server or the live URL — not a raw file:// path."
+    : null;
+  const rotationBucket = Math.floor(Date.now() / (6 * 60 * 60 * 1000));
+  const query = forceRefresh
+    ? `?force_refresh=true&bucket=${rotationBucket}`
+    : `?bucket=${rotationBucket}`;
+
   const tasks = [];
   if ((kind === "all" || kind === "cases") && majorCasesList) {
     majorCasesList.innerHTML = '<p class="legal-live-empty">Refreshing recent judgments...</p>';
-    tasks.push(
-      apiRequest(APP_KEY, "/api/v1/public-major-cases", { method: "GET", timeoutMs: 15000 }).then((result) => {
-        renderLiveItems(
-          majorCasesList,
-          result.ok ? result.payload?.cases : [],
-          result.ok ? "No recent judgments available right now." : `Could not load recent judgments: HTTP ${result.status}`,
-        );
-      })
-    );
+    if (offlineHint) {
+      majorCasesList.innerHTML = `<p class="legal-live-empty">${escapeHtml(offlineHint)}</p>`;
+    } else {
+      tasks.push(
+        apiRequest(APP_KEY, `/api/v1/public-major-cases${query}`, { method: "GET", timeoutMs: 15000 }).then((result) => {
+          renderLiveItems(
+            majorCasesList,
+            result.ok ? result.payload?.cases : [],
+            result.ok
+              ? "No judgments from the last 15–30 days are available right now."
+              : `Could not load recent judgments: HTTP ${result.status}. Check API base URL and that the backend is running.`,
+          );
+        })
+      );
+    }
   }
   if ((kind === "all" || kind === "news") && legalNewsList) {
     legalNewsList.innerHTML = '<p class="legal-live-empty">Refreshing official legal updates...</p>';
-    tasks.push(
-      apiRequest(APP_KEY, "/api/v1/public-legal-news", { method: "GET", timeoutMs: 15000 }).then((result) => {
-        renderLiveItems(
-          legalNewsList,
-          result.ok ? result.payload?.news : [],
-          result.ok ? "No official legal updates available right now." : `Could not load legal updates: HTTP ${result.status}`,
-        );
-      })
-    );
+    if (offlineHint) {
+      legalNewsList.innerHTML = `<p class="legal-live-empty">${escapeHtml(offlineHint)}</p>`;
+    } else {
+      tasks.push(
+        apiRequest(APP_KEY, `/api/v1/public-legal-news${query}`, { method: "GET", timeoutMs: 15000 }).then((result) => {
+          renderLiveItems(
+            legalNewsList,
+            result.ok ? result.payload?.news : [],
+            result.ok
+              ? "No official legal updates from the last 15–30 days are available right now."
+              : `Could not load legal updates: HTTP ${result.status}. Check API base URL and that the backend is running.`,
+          );
+        })
+      );
+    }
   }
 
   await Promise.allSettled(tasks);
+  window.__legalmitraLiveIntelLoadedAt = Date.now();
 }
 
 function renderTemplateDetail(template) {
@@ -1459,8 +1580,10 @@ legalToolPanel?.addEventListener("click", (event) => {
   }
   const aiButton = event.target.closest("[data-tool-ai]");
   if (aiButton) {
-    const tool = legalTools[aiButton.getAttribute("data-tool-ai")];
-    sendToolQuery(tool?.query || queryInput?.value || "");
+    const toolKey = aiButton.getAttribute("data-tool-ai") || "";
+    const prompt = buildToolAiPrompt(toolKey);
+    if (!prompt) return;
+    sendToolQuery(prompt, { autoAsk: true });
   }
 });
 
@@ -1510,8 +1633,8 @@ templateDetail?.addEventListener("click", (event) => {
 });
 
 reloadTemplatesButton?.addEventListener("click", loadTemplateLibrary);
-refreshMajorCasesButton?.addEventListener("click", () => loadLiveLegalIntelligence("cases"));
-refreshLegalNewsButton?.addEventListener("click", () => loadLiveLegalIntelligence("news"));
+refreshMajorCasesButton?.addEventListener("click", () => loadLiveLegalIntelligence("cases", { forceRefresh: true }));
+refreshLegalNewsButton?.addEventListener("click", () => loadLiveLegalIntelligence("news", { forceRefresh: true }));
 
 document.getElementById("insights-list")?.addEventListener("click", (event) => {
   const target = event.target instanceof HTMLElement ? event.target.closest("[data-article-id]") : null;
@@ -1659,6 +1782,20 @@ updateUsageCounter();
 loadPersonalHistory();
 loadLandingContent();
 loadLiveLegalIntelligence();
+
+// Keep Live Legal Intelligence dynamic: auto-refresh about every 6 hours while the page stays open,
+// and again when the tab becomes visible after the rotation window.
+const LIVE_INTEL_AUTO_REFRESH_MS = 6 * 60 * 60 * 1000;
+window.setInterval(() => {
+  loadLiveLegalIntelligence("all");
+}, LIVE_INTEL_AUTO_REFRESH_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  const last = Number(window.__legalmitraLiveIntelLoadedAt || 0);
+  if (!last || Date.now() - last >= LIVE_INTEL_AUTO_REFRESH_MS) {
+    loadLiveLegalIntelligence("all");
+  }
+});
 loadTemplateLibrary();
 if (IS_CHAT_PAGE && chatParams.get("auto") === "1" && getAccessToken()) {
   askLegalMitra();

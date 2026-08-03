@@ -1,0 +1,99 @@
+/* LegalMitra Legal Tools — intake + checklist */
+
+.legal-tool-intake-lead {
+  margin: 0 0 12px;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.legal-tool-intake-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.legal-tool-checklist {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(231, 199, 124, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.legal-tool-checklist h4 {
+  margin: 0 0 6px;
+  color: #e7c77c;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.legal-tool-checklist > p {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.legal-tool-check-group {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.legal-tool-check-group strong {
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.legal-tool-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.4;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.legal-tool-check input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.legal-tool-caveat-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-tool-config-meta {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.legal-tool-output-card {
+  display: grid;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.legal-tool-output-block ul {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+
+.legal-tool-disclaimer {
+  margin-top: 8px;
+  color: #fbbf24;
+  font-size: 13px;
+}
+
