@@ -7,8 +7,10 @@ from app.core.modules.registry import (
     get_default_modules_for_org_type,
     get_module_context_for_tenant,
     get_module_definition,
+    is_module_feature_flag,
     normalize_organization_type,
     require_module_access,
+    require_module_feature,
     serialize_module_definition,
 )
 
@@ -21,7 +23,9 @@ __all__ = [
     "get_default_modules_for_org_type",
     "get_module_context_for_tenant",
     "get_module_definition",
+    "is_module_feature_flag",
     "normalize_organization_type",
     "require_module_access",
+    "require_module_feature",
     "serialize_module_definition",
 ]

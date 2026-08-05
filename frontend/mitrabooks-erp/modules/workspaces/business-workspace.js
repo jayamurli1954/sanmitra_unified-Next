@@ -68,6 +68,7 @@ function renderBusinessDebitNoteWorkspace(...args) { return requireDeps().render
 function renderBusinessCoaWorkspace(...args) { return requireDeps().renderBusinessCoaWorkspace(...args); }
 function renderFinancialHealthWorkspace(...args) { return requireDeps().renderFinancialHealthWorkspace(...args); }
 function renderHrWorkspace(...args) { return requireDeps().renderHrWorkspace(...args); }
+function renderOfficeAiWorkspace(...args) { return requireDeps().renderOfficeAiWorkspace(...args); }
 function renderManufacturingWorkspace(...args) { return requireDeps().renderManufacturingWorkspace(...args); }
 function renderDashboardPreview(...args) { return requireDeps().renderDashboardPreview(...args); }
 function loadBusinessDashboardStats(...args) { return requireDeps().loadBusinessDashboardStats(...args); }
@@ -94,6 +95,7 @@ function loadCaAccessUsers(...args) { return requireDeps().loadCaAccessUsers(...
 function loadCaClients(...args) { return requireDeps().loadCaClients(...args); }
 function loadCaPracticeDocuments(...args) { return requireDeps().loadCaPracticeDocuments(...args); }
 function loadHrWorkspace(...args) { return requireDeps().loadHrWorkspace(...args); }
+function loadOfficeAiWorkspace(...args) { return requireDeps().loadOfficeAiWorkspace(...args); }
 function setMfgTab(...args) { return requireDeps().setMfgTab(...args); }
 function setMfgError(...args) { return requireDeps().setMfgError(...args); }
 function loadMfgWorkspace(...args) { return requireDeps().loadMfgWorkspace(...args); }
@@ -192,6 +194,9 @@ export function renderBusinessWorkspace() {
   }
   if (getActiveBusinessWorkspace() === "hr") {
     return renderHrWorkspace();
+  }
+  if (getActiveBusinessWorkspace() === "office-ai") {
+    return renderOfficeAiWorkspace();
   }
   if (getActiveBusinessWorkspace() === "manufacturing") {
     return renderManufacturingWorkspace();
@@ -326,6 +331,8 @@ export function setBusinessWorkspace(workspace) {
     getHrUi().selectedRunId = "";
     getHrUi().runSlips = [];
     loadHrWorkspace();
+  } else if (workspace === "office-ai") {
+    loadOfficeAiWorkspace();
   } else if (workspace === "manufacturing") {
     setMfgTab("cost-centres");
     setMfgError("");
@@ -359,6 +366,7 @@ export function syncBusinessNavActiveState() {
       "credit-notes": "Credit Notes",
       "debit-notes": "Debit Notes",
       "financial-health": "Financial Health",
+      "office-ai": "OfficeMitra AI",
       "gst-returns": "GST Returns",
       "reconciliation": "Reconciliation",
       "tds-tcs": "TDS / TCS",

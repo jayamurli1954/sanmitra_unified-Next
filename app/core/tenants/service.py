@@ -99,7 +99,21 @@ def _validate_enabled_modules(*, organization_type: str, app_keys: list[str], en
     if not normalized_app_keys:
         raise ValueError("tenant must have at least one app key before modules can be updated")
 
+    from app.core.modules.registry import is_module_feature_flag, parent_module_key
+
     for module_key in enabled_modules:
+        if is_module_feature_flag(module_key):
+            parent = parent_module_key(module_key)
+            definition = get_module_definition(parent)
+            if definition is None:
+                raise ValueError(f"Unknown module feature flag: {module_key}")
+            if organization_type not in definition.allowed_organization_types:
+                raise ValueError(f"Module {parent} is not available for organization_type={organization_type}")
+            if not any(app_key in definition.allowed_app_keys for app_key in normalized_app_keys):
+                raise ValueError(f"Module {parent} is not available for tenant app keys")
+            if parent not in enabled_modules:
+                raise ValueError(f"Feature flag {module_key} requires parent module {parent} to be enabled")
+            continue
         definition = get_module_definition(module_key)
         if definition is None:
             raise ValueError(f"Unknown module: {module_key}")

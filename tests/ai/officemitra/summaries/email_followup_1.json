@@ -1,0 +1,8 @@
+{
+  "id": "email_followup_1",
+  "input": "Hi, please send the signed PO by Friday and confirm delivery next Monday. Thanks, Ravi.",
+  "expect": {
+    "summary_contains_any": ["PO", "Friday", "Monday", "delivery"],
+    "action_items_min": 1
+  }
+}

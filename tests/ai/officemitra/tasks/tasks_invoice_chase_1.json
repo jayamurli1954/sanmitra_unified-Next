@@ -1,0 +1,8 @@
+{
+  "id": "tasks_invoice_chase_1",
+  "input": "Need to call ACME about overdue invoice 1042 and prepare a payment reminder email.",
+  "expect": {
+    "tasks_min": 1,
+    "titles_contain_any": ["ACME", "invoice", "reminder", "call"]
+  }
+}

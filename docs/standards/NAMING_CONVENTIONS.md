@@ -28,9 +28,12 @@ Use lowercase app keys for API context:
 - `mandirmitra`
 - `mitrabooks`
 - `legalmitra`
+- `officemitra`
 - `investmitra`
 
 `investmitra` is reserved for separate personal-use InvestMitra work and must not be added to unified backend routing or deployment without an explicit scope reversal.
+
+`officemitra` is the standalone OfficeMitra AI app key (ADR-007). The same `office_ai` module also allows host keys `mitrabooks`, `legalmitra`, `gruhamitra`, and `mandirmitra` when embedded in those shells.
 
 ## Organization Types
 
@@ -58,9 +61,12 @@ Use lowercase snake case:
 - `inventory`
 - `legal`
 - `rag`
+- `office_ai`
 - `investment`
 - `portfolio`
 - `audit`
+
+Feature flags for OfficeMitra use dotted form in `enabled_modules` (optional): `office_ai.tasks`, `office_ai.email`, `office_ai.brief`.
 
 `investment` and `portfolio` are reserved outside unified SanMitra backend scope.
 

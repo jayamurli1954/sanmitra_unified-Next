@@ -1,0 +1,16 @@
+{
+  "id": "brief_facts_1",
+  "facts": {
+    "brief_date": "2026-08-05",
+    "sections": {
+      "mitrabooks_revenue": {"enabled": true, "income_fytd": "125000.00", "as_of": "2026-08-05"},
+      "mitrabooks_overdue": [{"party_name": "ACME", "overdue": 15000}],
+      "open_tasks": [{"title": "Call ACME"}]
+    },
+    "source_modules": ["business"]
+  },
+  "expect": {
+    "must_not_invent_numbers": true,
+    "content_contains_any": ["ACME", "125000", "advisory"]
+  }
+}

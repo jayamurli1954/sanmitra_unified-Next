@@ -46,6 +46,7 @@ These are always available to active tenants:
 | `professional` | `PROFESSIONAL` | MitraBooks professional workflows |
 | `legal` | `LEGAL` | LegalMitra workflows |
 | `legal_ai` | `LEGAL` | Claude for Legal and legal assistant integrations |
+| `office_ai` | `BUSINESS`, `PROFESSIONAL`, `HOUSING`, `TEMPLE`, `LEGAL` | OfficeMitra AI; app keys `officemitra` + host product keys; modular deployment (standalone or integrated) |
 
 InvestMitra modules are excluded from the SanMitra unified registry. Do not add `investment`, `portfolio`, `investment_research`, or `broker_research` to unified tenant entitlements unless the platform owner explicitly reverses the InvestMitra exclusion decision.
 
@@ -72,3 +73,4 @@ External integrations should be feature/module gated separately from base produc
 | module_key | Default | Reason |
 | --- | --- | --- |
 | `legal_ai` | Off | Requires confidentiality, legal-source, and lawyer-review workflow approval |
+| `office_ai` | Off | Thin AI layer; enable per tenant; gate sub-features `office_ai.tasks` / `office_ai.email` / `office_ai.brief` |

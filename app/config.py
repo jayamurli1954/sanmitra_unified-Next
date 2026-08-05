@@ -153,7 +153,7 @@ class Settings:
         key.strip().lower()
         for key in os.getenv(
             "ALLOWED_APP_KEYS",
-            "mandirmitra,gruhamitra,mitrabooks,legalmitra",
+            "mandirmitra,gruhamitra,mitrabooks,legalmitra,officemitra",
         ).split(",")
         if key.strip()
     ]
@@ -231,6 +231,18 @@ class Settings:
     FINANCIAL_HEALTH_AI_ENABLED = os.getenv("FINANCIAL_HEALTH_AI_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     FINANCIAL_HEALTH_AI_MODEL = os.getenv("FINANCIAL_HEALTH_AI_MODEL", "claude-haiku-4-5").strip()
     FINANCIAL_HEALTH_AI_MAX_TOKENS = int(os.getenv("FINANCIAL_HEALTH_AI_MAX_TOKENS", "400"))
+
+    # OfficeMitra AI — thin orchestration layer (replaceable providers; ADR-006).
+    OFFICEMITRA_AI_ENABLED = os.getenv("OFFICEMITRA_AI_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    OFFICEMITRA_AI_PROVIDER = os.getenv("OFFICEMITRA_AI_PROVIDER", "claude").strip().lower()
+    OFFICEMITRA_AI_MODEL = os.getenv("OFFICEMITRA_AI_MODEL", "claude-haiku-4-5").strip()
+    OFFICEMITRA_AI_MAX_TOKENS = int(os.getenv("OFFICEMITRA_AI_MAX_TOKENS", "800"))
+    # Optional USD-per-1M-token heuristics for monitoring only (not billing).
+    OFFICEMITRA_AI_COST_PER_1M_INPUT = os.getenv("OFFICEMITRA_AI_COST_PER_1M_INPUT", "0.80").strip()
+    OFFICEMITRA_AI_COST_PER_1M_OUTPUT = os.getenv("OFFICEMITRA_AI_COST_PER_1M_OUTPUT", "4.00").strip()
+    # Email paste + AI telemetry retention (days). Tasks/briefs are not auto-purged.
+    OFFICEMITRA_RETENTION_DAYS = int(os.getenv("OFFICEMITRA_RETENTION_DAYS", "90"))
+
     # Raised from 900 — Gemini fallback answers were truncating mid-sentence
     # because the prompt requests 5-6 structured sections (Quick Answer,
     # Business Impact, Key Rules, Action Plan, Risks, If You Want I Can).

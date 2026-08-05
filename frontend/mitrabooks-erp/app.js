@@ -64,6 +64,7 @@ import {
   hrTransitionFnf,
   hrDownloadFnfPdf,
 } from "./modules/workspaces/hr.js";
+import { initOfficeAiWorkspace, renderOfficeAiWorkspace, loadOfficeAiWorkspace } from "./modules/workspaces/office-ai.js";
 import {
   initMandirFinancialReports,
   mandirReportState,
@@ -1309,6 +1310,7 @@ initHrWorkspace({
     }
   },
 });
+initOfficeAiWorkspace({ escapeHtml, apiRequest, dashboardPreview, getActiveBusinessWorkspace: () => activeBusinessWorkspace });
 // Wire Mandir financial report renderers (avoids import cycle with app.js)
 initMandirFinancialReports({
   escapeHtml,
@@ -2178,10 +2180,8 @@ initBusinessWorkspace({
   loadCaAccessUsers,
   loadCaClients,
   loadCaPracticeDocuments,
-  loadHrWorkspace,
-  setMfgTab,
-  setMfgError,
-  loadMfgWorkspace,
+  loadHrWorkspace, loadOfficeAiWorkspace, renderOfficeAiWorkspace,
+  setMfgTab, setMfgError, loadMfgWorkspace,
 });
 
 initAuthSession({

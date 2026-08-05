@@ -428,6 +428,38 @@ Rules:
 - Domain records live in MongoDB; financial postings live in PostgreSQL.
 - Use `organization_type = TEMPLE`.
 
+## 13a. OfficeMitra AI Guardrails
+
+OfficeMitra AI is a **thin AI orchestration layer** inside the unified backend. It is **not** the SanMitra operating system and does **not** own accounting, inventory, parties, or legal documents.
+
+Architecture authority: `docs/architecture/OFFICEMITRA_AI_IMPLEMENTATION_PLAN.md` and `docs/adr/ADR-001` … `ADR-007`.
+
+### Current vs target (discipline)
+
+- Current: OfficeMitra AI is an additive module (`office_ai`) with modular deployment (ADR-007).
+- Target: Tasks, email summary (paste-in), and daily brief; optional connectors enrich the brief when companion modules are enabled.
+- Deferred: Gmail/WhatsApp/agents/vector DB, write-back automation, InvestMitra, marketplace.
+
+### Modular deployment (ADR-007)
+
+- Same codebase supports **unified** (ERP shell) and **standalone** (`officemitra` app key / only `office_ai` enabled) profiles.
+- OfficeMitra has **no mandatory dependency** on MitraBooks, LegalMitra, GruhaMitra, or MandirMitra.
+- Daily Brief uses a Connector Manager: missing connectors skip quietly; core tasks/email/brief still work from OfficeMitra-native data.
+- Internal modules (business/accounting, housing, temple) use in-process service interfaces; LegalMitra uses the same connector contract as a separate product. InvestMitra stays out of scope.
+
+### Rules
+
+- Communicate with companion products **only through connectors** / the Connector Manager that call existing product service layers. Never query another product’s Mongo collections or Postgres tables from OfficeMitra code.
+- Use `tenant_id` only (no parallel `organization_id` tenancy model). Never trust `tenant_id` from the request body.
+- Gate routes on module `office_ai` plus sub-feature flags `office_ai.tasks`, `office_ai.email`, `office_ai.brief`.
+- MVP connectors are **read-only**. Never post journals, create invoices, file GST, or send legal notices from OfficeMitra without a superseding ADR and explicit user confirmation.
+- AI-generated tasks must be flagged `source=ai`. Persist `prompt_version`, `updated_by`/`updated_at`, and AI telemetry (provider, model, tokens, latency, cost, success).
+- Call AI only through the replaceable provider interface (ADR-006). Fail soft when the provider is missing or errors — do not invent revenue or legal facts.
+- Never present OfficeMitra AI output as final legal or financial advice.
+- Do not send confidential tenant content to external providers unless tenant policy and user authorization allow it.
+- Do not add InvestMitra connectors or entitlements in unified OfficeMitra scope.
+- Primary UI may ship inside the MitraBooks ERP shell; a standalone OfficeMitra shell is allowed when clients request OfficeMitra-only — still not the platform OS.
+
 ## 13. LegalMitra Guardrails
 
 LegalMitra remains a separate product experience.

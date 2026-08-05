@@ -62,6 +62,7 @@ export function businessNavigationGroups() {
       items: [
         { label: "Financial Statements", businessWorkspace: "reports", icon: "FS", module: { module_key: "accounting", frontend_path: "/accounting/reports", enabled: true } },
         { label: "Financial Health", businessWorkspace: "financial-health", icon: "FH", module: { module_key: "analytics", frontend_path: "/business/financial-health", enabled: true } },
+        { label: "OfficeMitra AI", businessWorkspace: "office-ai", icon: "OA", module: { module_key: "office_ai", frontend_path: "/business/office-ai", enabled: true } },
         { label: "Analytics", businessWorkspace: "analytics", icon: "AN", module: { module_key: "analytics", frontend_path: "/business/analytics", enabled: false } },
       ],
     },

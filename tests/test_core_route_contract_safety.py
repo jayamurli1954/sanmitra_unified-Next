@@ -104,3 +104,22 @@ def test_legalmitra_route_contracts_are_registered() -> None:
     }
 
     assert expected <= routes
+
+
+def test_officemitra_route_contracts_are_registered() -> None:
+    routes = _route_keys()
+
+    expected = {
+        ("GET", "/api/v1/officemitra/ping"),
+        ("GET", "/api/v1/officemitra/tasks"),
+        ("POST", "/api/v1/officemitra/tasks"),
+        ("PATCH", "/api/v1/officemitra/tasks/{task_id}"),
+        ("POST", "/api/v1/officemitra/tasks/generate"),
+        ("GET", "/api/v1/officemitra/emails"),
+        ("POST", "/api/v1/officemitra/emails"),
+        ("POST", "/api/v1/officemitra/emails/summarize"),
+        ("GET", "/api/v1/officemitra/briefs/today"),
+        ("POST", "/api/v1/officemitra/briefs/generate"),
+    }
+
+    assert expected <= routes

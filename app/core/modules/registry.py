@@ -23,6 +23,7 @@ APP_KEY_TO_ORG_TYPE: dict[str, str] = {
     "mandirmitra": "TEMPLE",
     "mitrabooks": "BUSINESS",
     "legalmitra": "LEGAL",
+    "officemitra": "BUSINESS",
 }
 
 DEFAULT_MODULES_BY_ORG_TYPE: dict[str, tuple[str, ...]] = {
@@ -47,6 +48,7 @@ MODULE_API_PREFIXES: dict[str, str] = {
     "rag": "/api/v1/rag",
     "compliance": "/api/v1/legal",
     "legal_ai": "/api/v1/legal/ai",
+    "office_ai": "/api/v1/officemitra",
 }
 
 MODULE_FRONTEND_PATHS: dict[str, str] = {
@@ -63,6 +65,7 @@ MODULE_FRONTEND_PATHS: dict[str, str] = {
     "rag": "/legal/research",
     "compliance": "/legal/compliance",
     "legal_ai": "/legal/assistant",
+    "office_ai": "/business/office-ai",
 }
 
 MODULE_NAV_GROUPS: dict[str, str] = {
@@ -79,6 +82,7 @@ MODULE_NAV_GROUPS: dict[str, str] = {
     "rag": "Legal",
     "compliance": "Compliance",
     "legal_ai": "AI Assistant",
+    "office_ai": "AI Assistant",
 }
 
 NAV_GROUP_ORDER: tuple[str, ...] = (
@@ -200,6 +204,17 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         default_enabled=False,
         features=("claude_for_legal",),
     ),
+    "office_ai": ModuleDefinition(
+        module_key="office_ai",
+        display_name="OfficeMitra AI",
+        allowed_organization_types=frozenset({"BUSINESS", "PROFESSIONAL", "HOUSING", "TEMPLE", "LEGAL"}),
+        allowed_app_keys=frozenset(
+            {"officemitra", "mitrabooks", "legalmitra", "gruhamitra", "mandirmitra"}
+        ),
+        minimum_plan="pro",
+        default_enabled=False,
+        features=("tasks", "email", "brief"),
+    ),
 }
 
 
@@ -215,6 +230,7 @@ def normalize_organization_type(value: str | None, *, app_key: str | None = None
         "MANDIRMITRA": "TEMPLE",
         "MITRABOOKS": "BUSINESS",
         "LEGALMITRA": "LEGAL",
+        "OFFICEMITRA": "BUSINESS",
         "SOCIETY": "HOUSING",
         "TEMPLE_TRUST": "TEMPLE",
     }
@@ -241,6 +257,38 @@ def _normalize_modules(values: Iterable[str] | None) -> list[str]:
             seen.add(key)
             modules.append(key)
     return modules
+
+
+def is_module_feature_flag(module_or_feature_key: str) -> bool:
+    """Dotted keys like office_ai.tasks are feature flags, not registry modules."""
+    key = str(module_or_feature_key or "").strip().lower()
+    if "." not in key:
+        return False
+    parent, _, feature = key.partition(".")
+    if not parent or not feature or "." in feature:
+        return False
+    definition = get_module_definition(parent)
+    return definition is not None and feature in definition.features
+
+
+def parent_module_key(module_or_feature_key: str) -> str:
+    key = str(module_or_feature_key or "").strip().lower()
+    if is_module_feature_flag(key):
+        return key.partition(".")[0]
+    return key
+
+
+def registry_module_keys(values: Iterable[str] | None) -> list[str]:
+    """Return only real module keys (strip dotted feature flags)."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in _normalize_modules(values):
+        if is_module_feature_flag(value):
+            continue
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def get_default_modules_for_org_type(organization_type: str | None) -> list[str]:
@@ -289,6 +337,46 @@ def require_module_access(
     return definition
 
 
+def require_module_feature(
+    *,
+    module_key: str,
+    feature: str,
+    organization_type: str | None,
+    enabled_modules: Iterable[str] | None,
+    app_key: str | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> ModuleDefinition:
+    """Require parent module access plus an optional sub-feature flag."""
+    definition = require_module_access(
+        module_key=module_key,
+        organization_type=organization_type,
+        enabled_modules=enabled_modules,
+        app_key=app_key,
+    )
+    feature_key = str(feature or "").strip().lower()
+    if feature_key not in definition.features:
+        raise ModuleAccessError(f"Unknown feature {feature_key} for module {module_key}")
+
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    dotted = f"{module_key}.{feature_key}"
+    granular_flags = {
+        item.partition(".")[2]
+        for item in normalized_modules
+        if is_module_feature_flag(item) and item.startswith(f"{module_key}.")
+    }
+    explicit = [str(item or "").strip().lower() for item in (office_ai_features or ()) if str(item or "").strip()]
+    if module_key == "office_ai" and explicit:
+        if feature_key not in explicit:
+            raise ModuleAccessError(f"Feature {dotted} is not enabled for this tenant")
+        return definition
+    if granular_flags:
+        if feature_key not in granular_flags:
+            raise ModuleAccessError(f"Feature {dotted} is not enabled for this tenant")
+        return definition
+    # Parent module alone enables all declared features.
+    return definition
+
+
 def serialize_module_definition(module_key: str, *, enabled: bool) -> dict:
     key = str(module_key or "").strip().lower()
     definition = get_module_definition(key)
@@ -317,7 +405,7 @@ def get_module_context_for_tenant(
 ) -> dict:
     normalized_org_type = normalize_organization_type(organization_type, app_key=app_key)
     normalized_app_key = str(app_key or "").strip().lower()
-    enabled_keys = set(_normalize_modules(enabled_modules))
+    enabled_keys = set(registry_module_keys(enabled_modules))
 
     enabled: list[dict] = []
     available: list[dict] = []
@@ -337,6 +425,9 @@ def get_module_context_for_tenant(
         "app_key": normalized_app_key,
         "enabled_modules": sorted(enabled, key=lambda item: item["module_key"]),
         "available_modules": sorted(available, key=lambda item: item["module_key"]),
+        "feature_flags": sorted(
+            item for item in _normalize_modules(enabled_modules) if is_module_feature_flag(item)
+        ),
     }
 
 
