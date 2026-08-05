@@ -556,9 +556,10 @@ async def login_google_user(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if user is not None:
-        if requested_tenant_id and requested_tenant_id != str(user.get("tenant_id") or ""):
-            raise HTTPException(status_code=403, detail="Tenant mismatch for this account")
-
+        # Returning users: tenant is always taken from the account record.
+        # Ignore client-supplied tenant_id so product shells that still send a
+        # default/demo tenant (e.g. seed-tenant-1) do not block Google login
+        # for users on other LegalMitra client tenants.
         if user.get("auth_provider") == "google":
             existing_subject = str(user.get("provider_subject") or "")
             if existing_subject and existing_subject != provider_subject:

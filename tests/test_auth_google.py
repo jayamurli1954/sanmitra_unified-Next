@@ -117,7 +117,9 @@ async def test_google_login_creates_user_for_first_login(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_google_login_blocks_tenant_mismatch(monkeypatch) -> None:
+async def test_google_login_ignores_client_tenant_for_existing_user(monkeypatch) -> None:
+    """Any provisioned LegalMitra tenant user can Google-login even if UI sends a default tenant."""
+
     def fake_verify(_token: str):
         return {
             "email": "lawyer@example.com",
@@ -137,13 +139,25 @@ async def test_google_login_blocks_tenant_mismatch(monkeypatch) -> None:
             "is_active": True,
         }
 
+    issued_for: dict = {}
+
+    async def fake_issue_tokens(user: dict, app_key: str | None = None):
+        issued_for["tenant_id"] = user.get("tenant_id")
+        issued_for["app_key"] = app_key
+        return "access-token", "refresh-token"
+
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
     monkeypatch.setattr(auth_service, "_verify_google_id_token", fake_verify)
     monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(auth_service, "_issue_tokens_for_user", fake_issue_tokens)
+    monkeypatch.setattr(auth_service, "ensure_tenant_is_active", fake_tenant_check)
 
-    with pytest.raises(HTTPException) as exc:
-        await auth_service.login_google_user("id-token", "tenant-b")
-
-    assert exc.value.status_code == 403
+    access, refresh = await auth_service.login_google_user("id-token", "seed-tenant-1")
+    assert access == "access-token"
+    assert refresh == "refresh-token"
+    assert issued_for["tenant_id"] == "tenant-a"
 
 
 @pytest.mark.asyncio

@@ -236,10 +236,14 @@ async function loadGoogleConfig() {
 }
 
 async function submitGoogleToken(idToken) {
-  const tokenPayload = await postJson("/api/v1/auth/google", {
-    id_token: idToken,
-    tenant_id: DEFAULT_TENANT_ID,
-  });
+  // Returning users: never send a hardcoded tenant — the account's tenant wins.
+  // First-time Google users need an approved onboarding_request_id (invite flow).
+  const body = { id_token: idToken };
+  const onboardingRequestId = String(params.get("onboarding_request_id") || "").trim();
+  if (onboardingRequestId) {
+    body.onboarding_request_id = onboardingRequestId;
+  }
+  const tokenPayload = await postJson("/api/v1/auth/google", body);
   persistSession(tokenPayload);
   await acceptLegalTerms();
   showStatus("Google login successful. Redirecting...", "ok");
@@ -262,7 +266,15 @@ async function ensureGoogleReady(renderButton = true) {
         try {
           await submitGoogleToken(response.credential);
         } catch (error) {
-          showStatus(`Google login failed: ${error.message}`, "err");
+          const detail = String(error?.message || "");
+          if (detail.includes("approved onboarding")) {
+            showStatus(
+              "This Google account is not linked to a LegalMitra tenant yet. Use Register, or open your approved invite link, then try Google login again.",
+              "err",
+            );
+          } else {
+            showStatus(`Google login failed: ${detail}`, "err");
+          }
         }
       },
     });
