@@ -23,7 +23,8 @@ office_ai.brief
 ```
 
 3. Optional AI: set `ANTHROPIC_API_KEY` (and `OFFICEMITRA_AI_*` if needed). Without a key, AI soft-fails; briefs still save a deterministic fallback.
-4. Optional retention: `OFFICEMITRA_RETENTION_DAYS` (default 90) or tenant field `office_ai_retention_days`.
+4. Platform owner UI: **Tenant Entitlements** dialog lists `office_ai` for BUSINESS / PROFESSIONAL / HOUSING / TEMPLE tenants (requires frontend deploy with `experience-config.js` update).
+5. Optional retention: `OFFICEMITRA_RETENTION_DAYS` (default 90) or tenant field `office_ai_retention_days`.
 
 ## API smoke
 

@@ -33,10 +33,10 @@ export function initialExperience() {
   return "mitrabooks";
 }
 export const entitlementModulesByOrgType = {
-  TEMPLE: ["temple", "accounting", "audit"],
-  HOUSING: ["housing", "accounting", "audit"],
-  BUSINESS: ["business", "accounting", "gst", "inventory", "audit"],
-  PROFESSIONAL: ["professional", "accounting", "billing", "audit"],
+  TEMPLE: ["temple", "accounting", "audit", "office_ai"],
+  HOUSING: ["housing", "accounting", "audit", "office_ai"],
+  BUSINESS: ["business", "accounting", "gst", "inventory", "audit", "office_ai"],
+  PROFESSIONAL: ["professional", "accounting", "billing", "audit", "office_ai"],
 };
 
 export const orgSelectorMeta = {

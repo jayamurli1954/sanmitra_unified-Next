@@ -191,3 +191,19 @@ def test_office_ai_source_has_no_direct_sqlalchemy_accounting_imports():
             if needle in text:
                 offenders.append(f"{path.name}:{needle}")
     assert offenders == []
+
+
+def test_platform_owner_entitlements_include_office_ai_for_mitrabooks_org_types() -> None:
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
+    experience_source = (
+        repo_root / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "experience-config.js"
+    ).read_text(encoding="utf-8")
+
+    for org_type in ("BUSINESS", "PROFESSIONAL", "HOUSING", "TEMPLE"):
+        marker = f"{org_type}: ["
+        start = experience_source.index(marker)
+        end = experience_source.index("]", start)
+        block = experience_source[start:end]
+        assert '"office_ai"' in block or "'office_ai'" in block, f"{org_type} entitlements must include office_ai"
