@@ -440,6 +440,47 @@ async def test_password_login_can_repair_demo_mitrabooks_account_even_when_boots
 
 
 @pytest.mark.asyncio
+async def test_google_login_accepts_access_token_account_chooser(monkeypatch) -> None:
+    async def fake_verify_access(_token: str):
+        return {
+            "email": "jayathimr56@gmail.com",
+            "email_verified": True,
+            "sub": "google-sub-chooser",
+            "name": "Subscriber",
+        }
+
+    async def fake_get_user_by_email(_email: str):
+        return {
+            "user_id": "u-sub",
+            "email": "jayathimr56@gmail.com",
+            "tenant_id": "tenant-legal-sub",
+            "role": "tenant_admin",
+            "app_key": "legalmitra",
+            "auth_provider": "google",
+            "provider_subject": "google-sub-chooser",
+            "is_active": True,
+        }
+
+    async def fake_issue_tokens(_user: dict, app_key: str | None = None):
+        return "access-token", "refresh-token"
+
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    monkeypatch.setattr(auth_service, "_verify_google_access_token", fake_verify_access)
+    monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(auth_service, "_issue_tokens_for_user", fake_issue_tokens)
+    monkeypatch.setattr(auth_service, "ensure_tenant_is_active", fake_tenant_check)
+
+    access, refresh = await auth_service.login_google_user(
+        access_token="ya29.access-token",
+        app_key="legalmitra",
+    )
+    assert access == "access-token"
+    assert refresh == "refresh-token"
+
+
+@pytest.mark.asyncio
 async def test_google_login_allows_legalmitra_when_tenant_entitled(monkeypatch) -> None:
     """Subscribed LegalMitra tenant users can Google-login even if user.app_key differs."""
 

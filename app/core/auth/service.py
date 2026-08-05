@@ -538,6 +538,56 @@ def _verify_google_id_token(id_token: str) -> dict[str, Any]:
     return payload
 
 
+async def _verify_google_access_token(access_token: str) -> dict[str, Any]:
+    """Resolve Google profile claims from an OAuth access token (account-chooser flow)."""
+    client_ids = _google_client_ids()
+    if not client_ids:
+        raise HTTPException(status_code=503, detail="Google login is not configured")
+
+    token = str(access_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid Google access token")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            tokeninfo_resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"access_token": token},
+            )
+            if tokeninfo_resp.status_code >= 400:
+                raise HTTPException(status_code=401, detail="Invalid Google access token")
+            tokeninfo = tokeninfo_resp.json()
+
+            audience = str(tokeninfo.get("aud") or tokeninfo.get("azp") or "").strip()
+            if audience and audience not in client_ids:
+                raise HTTPException(status_code=401, detail="Google token audience mismatch")
+
+            userinfo_resp = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if userinfo_resp.status_code >= 400:
+                raise HTTPException(status_code=401, detail="Invalid Google access token")
+            payload = userinfo_resp.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Google access token")
+
+    if not payload.get("email"):
+        raise HTTPException(status_code=401, detail="Google account email missing")
+    email_verified = payload.get("email_verified")
+    if email_verified in (False, "false", "False", 0, "0"):
+        raise HTTPException(status_code=401, detail="Google account email is not verified")
+
+    return {
+        "email": payload.get("email"),
+        "email_verified": True,
+        "sub": str(payload.get("sub") or tokeninfo.get("sub") or "").strip(),
+        "name": payload.get("name") or "",
+    }
+
+
 async def _issue_tokens_for_user(user: dict, app_key: str | None = None) -> tuple[str, str]:
     role = str(user.get("role") or "").strip()
     if role != "super_admin":
@@ -592,12 +642,21 @@ async def login_user(email: str, password: str, app_key: str | None = None):
 
 
 async def login_google_user(
-    id_token: str,
+    id_token: str | None = None,
     tenant_id: str | None = None,
     onboarding_request_id: str | None = None,
     app_key: str | None = None,
+    access_token: str | None = None,
 ):
-    claims = _verify_google_id_token(id_token)
+    credential_id = str(id_token or "").strip()
+    credential_access = str(access_token or "").strip()
+    if credential_id:
+        claims = _verify_google_id_token(credential_id)
+    elif credential_access:
+        claims = await _verify_google_access_token(credential_access)
+    else:
+        raise HTTPException(status_code=400, detail="id_token or access_token is required")
+
     email = str(claims.get("email") or "").strip().lower()
     provider_subject = str(claims.get("sub") or "").strip()
     requested_tenant_id = str(tenant_id or "").strip()

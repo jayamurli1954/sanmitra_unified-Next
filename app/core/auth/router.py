@@ -584,10 +584,11 @@ async def auth_me(current_user: dict = Depends(get_current_user)):
 @limiter.limit(AUTH_GOOGLE_RATE_LIMIT)
 async def google_login(payload: GoogleLoginRequest, request: Request, app_key: str = Depends(inject_app_key)):
     access_token, refresh_token = await login_google_user(
-        payload.id_token,
-        payload.tenant_id,
+        id_token=payload.id_token,
+        tenant_id=payload.tenant_id,
         onboarding_request_id=payload.onboarding_request_id,
         app_key=app_key,
+        access_token=payload.access_token,
     )
     await _log_login_activity(
         request=request,

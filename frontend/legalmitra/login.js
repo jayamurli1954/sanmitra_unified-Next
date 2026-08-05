@@ -235,19 +235,43 @@ async function loadGoogleConfig() {
   }
 }
 
-async function submitGoogleToken(idToken) {
+async function submitGoogleCredential(body) {
   // Returning users: never send a hardcoded tenant — the account's tenant wins.
   // First-time Google users need an approved onboarding_request_id (invite flow).
-  const body = { id_token: idToken };
+  const payload = { ...body };
   const onboardingRequestId = String(params.get("onboarding_request_id") || "").trim();
   if (onboardingRequestId) {
-    body.onboarding_request_id = onboardingRequestId;
+    payload.onboarding_request_id = onboardingRequestId;
   }
-  const tokenPayload = await postJson("/api/v1/auth/google", body);
+  const tokenPayload = await postJson("/api/v1/auth/google", payload);
   persistSession(tokenPayload);
   await acceptLegalTerms();
   showStatus("Google login successful. Redirecting...", "ok");
   window.setTimeout(() => safeRedirect(), 350);
+}
+
+function describeGoogleLoginError(error) {
+  const detail = String(error?.message || "");
+  if (detail.includes("approved onboarding")) {
+    return "This Google account is not linked to a LegalMitra tenant yet. Use Register, or open your approved invite link, then try Google login again.";
+  }
+  if (detail.includes("App key mismatch")) {
+    return "Google login failed: this Google account is not entitled for LegalMitra on its tenant. Use Login With Google and choose the subscribed account.";
+  }
+  return `Google login failed: ${detail}`;
+}
+
+function clearStickyGoogleAccount() {
+  try {
+    window.google?.accounts?.id?.disableAutoSelect?.();
+    window.google?.accounts?.id?.cancel?.();
+  } catch (_error) {
+    // Ignore GIS cancel/disable errors on unsupported browsers.
+  }
+  if (googleSigninHost) {
+    googleSigninHost.innerHTML =
+      '<p class="legal-auth-google-hint">Previous Google profile cleared. Tap <strong>Login With Google</strong> and choose the subscribed account.</p>';
+  }
 }
 
 async function ensureGoogleReady(renderButton = true) {
@@ -258,28 +282,18 @@ async function ensureGoogleReady(renderButton = true) {
   if (!googleInitialized) {
     window.google.accounts.id.initialize({
       client_id: runtimeGoogleClientId,
+      auto_select: false,
+      cancel_on_tap_outside: true,
       callback: async (response) => {
         if (!response?.credential) {
           showStatus("Google token not received.", "err");
           return;
         }
         try {
-          await submitGoogleToken(response.credential);
+          await submitGoogleCredential({ id_token: response.credential });
         } catch (error) {
-          const detail = String(error?.message || "");
-          if (detail.includes("approved onboarding")) {
-            showStatus(
-              "This Google account is not linked to a LegalMitra tenant yet. Use Register, or open your approved invite link, then try Google login again.",
-              "err",
-            );
-          } else if (detail.includes("App key mismatch")) {
-            showStatus(
-              "Google login failed: this Google account is not entitled for LegalMitra on its tenant. Confirm you selected the subscribed Google account (not a different profile), then retry after a hard refresh.",
-              "err",
-            );
-          } else {
-            showStatus(`Google login failed: ${detail}`, "err");
-          }
+          clearStickyGoogleAccount();
+          showStatus(describeGoogleLoginError(error), "err");
         }
       },
     });
@@ -287,38 +301,68 @@ async function ensureGoogleReady(renderButton = true) {
   }
 
   if (renderButton && googleSigninHost) {
-    googleSigninHost.innerHTML = "";
-    const hostWidth = Math.floor(
-      googleSigninHost.getBoundingClientRect().width
-      || googleSigninHost.parentElement?.getBoundingClientRect().width
-      || 280,
-    );
-    const buttonWidth = Math.max(220, Math.min(360, hostWidth || 280));
-    window.google.accounts.id.renderButton(googleSigninHost, {
-      type: "standard",
-      theme: "outline",
-      size: "large",
-      text: "continue_with",
-      shape: "rectangular",
-      width: buttonWidth,
-    });
+    // Do not auto-render the sticky "Continue as …" button — it locks to the
+    // last browser Google profile. Account choice happens via Login With Google.
+    googleSigninHost.innerHTML =
+      '<p class="legal-auth-google-hint">Tap <strong>Login With Google</strong> to pick the correct Google account.</p>';
   }
   return { ok: true };
 }
 
 async function loginWithGoogle() {
   clearStatus();
-  const ready = await ensureGoogleReady(true);
-  if (!ready.ok) {
-    showStatus(
-      ready.reason === "config"
-        ? "Google login is not configured in backend environment variables."
-        : "Google Sign-In script did not load. Refresh and try again.",
-      "err",
-    );
+  if (!runtimeGoogleClientId) await loadGoogleConfig();
+  if (!runtimeGoogleClientId) {
+    showStatus("Google login is not configured in backend environment variables.", "err");
     return;
   }
-  window.google.accounts.id.prompt();
+  if (!(window.google?.accounts?.oauth2?.initTokenClient)) {
+    showStatus("Google Sign-In script did not load. Refresh and try again.", "err");
+    return;
+  }
+
+  clearStickyGoogleAccount();
+  googleLoginButton.disabled = true;
+  showStatus("Choose the subscribed Google account in the popup…", "ok");
+
+  try {
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: runtimeGoogleClientId,
+      scope: "openid email profile",
+      prompt: "select_account",
+      callback: async (tokenResponse) => {
+        googleLoginButton.disabled = false;
+        if (tokenResponse?.error) {
+          clearStickyGoogleAccount();
+          showStatus(`Google login failed: ${tokenResponse.error}`, "err");
+          return;
+        }
+        if (!tokenResponse?.access_token) {
+          showStatus("Google token not received.", "err");
+          return;
+        }
+        try {
+          await submitGoogleCredential({ access_token: tokenResponse.access_token });
+        } catch (error) {
+          clearStickyGoogleAccount();
+          showStatus(describeGoogleLoginError(error), "err");
+        }
+      },
+      error_callback: (error) => {
+        googleLoginButton.disabled = false;
+        const message = String(error?.type || error?.message || "popup_closed");
+        if (message === "popup_closed") {
+          showStatus("Google sign-in cancelled.", "err");
+          return;
+        }
+        showStatus(`Google login failed: ${message}`, "err");
+      },
+    });
+    tokenClient.requestAccessToken({ prompt: "select_account" });
+  } catch (error) {
+    googleLoginButton.disabled = false;
+    showStatus(describeGoogleLoginError(error), "err");
+  }
 }
 
 function initActionFlow() {

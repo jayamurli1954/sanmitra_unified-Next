@@ -2387,6 +2387,13 @@ button.danger {
   max-width: 100% !important;
 }
 
+.legal-auth-google-hint {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .legal-auth-google p,
 .legal-auth-panel p,
 .legal-auth-home {

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -31,9 +31,16 @@ class LogoutRequest(BaseModel):
 
 
 class GoogleLoginRequest(BaseModel):
-    id_token: str = Field(min_length=10)
+    id_token: str | None = Field(default=None, min_length=10)
+    access_token: str | None = Field(default=None, min_length=10)
     tenant_id: str | None = Field(default=None, min_length=2, max_length=64)
     onboarding_request_id: str | None = Field(default=None, min_length=2, max_length=128)
+
+    @model_validator(mode="after")
+    def require_google_credential(self):
+        if not str(self.id_token or "").strip() and not str(self.access_token or "").strip():
+            raise ValueError("id_token or access_token is required")
+        return self
 
 
 class MobileOtpSendRequest(BaseModel):
