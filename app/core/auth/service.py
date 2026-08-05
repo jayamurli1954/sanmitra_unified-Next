@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.core.auth.registration_policy import resolve_self_service_tenant_id
 from app.core.auth.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.core.tenants.context import get_app_key, resolve_app_key
-from app.core.tenants.service import ensure_tenant_is_active
+from app.core.tenants.service import ensure_tenant_is_active, get_tenant
 from app.core.users.service import (
     create_user_from_google,
     create_user_from_mobile,
@@ -79,12 +79,64 @@ async def _repair_demo_mitrabooks_login(email: str, password: str) -> dict | Non
     return resolved_user or user
 
 
-def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
-    user_app_key = str(user.get("app_key") or "").strip()
+def _user_app_keys(user: dict) -> set[str]:
+    keys: set[str] = set()
+    primary = str(user.get("app_key") or "").strip()
+    if primary:
+        keys.add(resolve_app_key(primary))
+    raw_keys = user.get("app_keys") or []
+    if isinstance(raw_keys, str):
+        raw_keys = [raw_keys]
+    for item in raw_keys:
+        value = str(item or "").strip()
+        if value:
+            keys.add(resolve_app_key(value))
+    return keys
+
+
+async def _tenant_allows_app_key(tenant_id: str | None, app_key: str) -> bool:
+    """Return True when the tenant is entitled to use the requested product app key."""
+    scoped_tenant = str(tenant_id or "").strip()
+    requested = resolve_app_key(app_key)
+    if not scoped_tenant or not requested:
+        return False
+    tenant = await get_tenant(scoped_tenant)
+    if not tenant:
+        return False
+    tenant_keys = {
+        resolve_app_key(item)
+        for item in (tenant.get("app_keys") or [])
+        if str(item or "").strip()
+    }
+    if requested in tenant_keys:
+        return True
+    # LegalMitra subscribers are often LEGAL org / legal-module tenants even when
+    # the admin user record was first provisioned under another product app_key.
+    if requested == "legalmitra":
+        org = str(tenant.get("organization_type") or "").strip().upper()
+        modules = {str(item or "").strip().lower() for item in (tenant.get("enabled_modules") or [])}
+        if org == "LEGAL" or "legal" in modules:
+            return True
+    return False
+
+
+async def _token_payload_from_user(user: dict, app_key: str | None = None) -> dict:
     requested_app_key = resolve_app_key(app_key or get_app_key())
-    resolved_app_key = resolve_app_key(user_app_key or requested_app_key)
-    if user_app_key and requested_app_key != resolved_app_key and str(user.get("role") or "").strip() != "super_admin":
+    user_keys = _user_app_keys(user)
+    role = str(user.get("role") or "").strip()
+
+    if role == "super_admin":
+        resolved_app_key = requested_app_key
+    elif not user_keys or requested_app_key in user_keys:
+        # Legacy users with no app_key, or explicit match on primary/app_keys list.
+        resolved_app_key = requested_app_key
+    elif await _tenant_allows_app_key(user.get("tenant_id"), requested_app_key):
+        # Subscribed product tenants can sign into that product even if the user
+        # record still carries a different primary app_key from first provisioning.
+        resolved_app_key = requested_app_key
+    else:
         raise HTTPException(status_code=403, detail="App key mismatch for this account")
+
     payload = {
         "sub": user["user_id"],
         "email": user["email"],
@@ -491,7 +543,7 @@ async def _issue_tokens_for_user(user: dict, app_key: str | None = None) -> tupl
     if role != "super_admin":
         await ensure_tenant_is_active(user.get("tenant_id"))
 
-    payload = _token_payload_from_user(user, app_key=app_key)
+    payload = await _token_payload_from_user(user, app_key=app_key)
     access_token = create_access_token(payload)
     refresh_token = create_refresh_token(payload)
     refresh_payload = decode_token(refresh_token)

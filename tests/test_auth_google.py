@@ -440,6 +440,89 @@ async def test_password_login_can_repair_demo_mitrabooks_account_even_when_boots
 
 
 @pytest.mark.asyncio
+async def test_google_login_allows_legalmitra_when_tenant_entitled(monkeypatch) -> None:
+    """Subscribed LegalMitra tenant users can Google-login even if user.app_key differs."""
+
+    def fake_verify(_token: str):
+        return {
+            "email": "jayathimr56@gmail.com",
+            "email_verified": True,
+            "sub": "google-sub-subscribed",
+            "name": "Subscriber",
+        }
+
+    async def fake_get_user_by_email(_email: str):
+        return {
+            "user_id": "u-sub",
+            "email": "jayathimr56@gmail.com",
+            "tenant_id": "tenant-legal-sub",
+            "role": "tenant_admin",
+            "app_key": "mitrabooks",
+            "auth_provider": "google",
+            "provider_subject": "google-sub-subscribed",
+            "is_active": True,
+        }
+
+    async def fake_get_tenant(tenant_id: str):
+        assert tenant_id == "tenant-legal-sub"
+        return {
+            "tenant_id": tenant_id,
+            "organization_type": "LEGAL",
+            "enabled_modules": ["legal", "rag", "compliance", "audit"],
+            "app_keys": ["legalmitra"],
+            "status": "active",
+        }
+
+    issued: dict = {}
+
+    async def fake_store(refresh_token: str, payload: dict):
+        issued["refresh_app_key"] = payload.get("app_key")
+
+    async def fake_tenant_check(_tenant_id: str | None) -> None:
+        return None
+
+    monkeypatch.setattr(auth_service, "_verify_google_id_token", fake_verify)
+    monkeypatch.setattr(auth_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(auth_service, "get_tenant", fake_get_tenant)
+    monkeypatch.setattr(auth_service, "_store_refresh_token", fake_store)
+    monkeypatch.setattr(auth_service, "ensure_tenant_is_active", fake_tenant_check)
+
+    access, refresh = await auth_service.login_google_user("id-token", app_key="legalmitra")
+    assert isinstance(access, str) and access
+    assert isinstance(refresh, str) and refresh
+    assert issued["refresh_app_key"] == "legalmitra"
+
+
+@pytest.mark.asyncio
+async def test_token_payload_rejects_unentitled_cross_app_login(monkeypatch) -> None:
+    async def fake_get_tenant(_tenant_id: str):
+        return {
+            "tenant_id": "tenant-housing",
+            "organization_type": "HOUSING",
+            "enabled_modules": ["housing", "accounting", "audit"],
+            "app_keys": ["gruhamitra"],
+            "status": "active",
+        }
+
+    monkeypatch.setattr(auth_service, "get_tenant", fake_get_tenant)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth_service._token_payload_from_user(
+            {
+                "user_id": "u1",
+                "email": "resident@example.com",
+                "tenant_id": "tenant-housing",
+                "role": "operator",
+                "app_key": "gruhamitra",
+            },
+            app_key="legalmitra",
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "App key mismatch for this account"
+
+
+@pytest.mark.asyncio
 async def test_issue_tokens_for_user_returns_tokens_and_stores_refresh(monkeypatch) -> None:
     seen = {}
 

@@ -272,6 +272,11 @@ async function ensureGoogleReady(renderButton = true) {
               "This Google account is not linked to a LegalMitra tenant yet. Use Register, or open your approved invite link, then try Google login again.",
               "err",
             );
+          } else if (detail.includes("App key mismatch")) {
+            showStatus(
+              "Google login failed: this Google account is not entitled for LegalMitra on its tenant. Confirm you selected the subscribed Google account (not a different profile), then retry after a hard refresh.",
+              "err",
+            );
           } else {
             showStatus(`Google login failed: ${detail}`, "err");
           }
