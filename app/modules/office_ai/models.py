@@ -39,6 +39,8 @@ def serialize_doc(doc: dict[str, Any] | None) -> dict[str, Any] | None:
             out[key] = [str(item) if isinstance(item, ObjectId) else item for item in value]
     if "_id" in out:
         out["id"] = out.pop("_id")
+    elif out.get("id") is not None:
+        out["id"] = str(out["id"])
     return out
 
 

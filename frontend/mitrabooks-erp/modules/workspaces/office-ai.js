@@ -61,6 +61,25 @@ export function setOfficeAiTab(tab) {
   state.tab = tab;
 }
 
+function taskRecordId(task) {
+  return String(task?.id || task?._id || task?.task_id || "").trim();
+}
+
+function formatTaskStatus(status) {
+  const key = String(status || "open").toLowerCase();
+  if (key === "done") return "Done";
+  if (key === "cancelled") return "Cancelled";
+  return "Open";
+}
+
+function normalizeTasks(items) {
+  return (items || []).map((task) => ({
+    ...task,
+    id: taskRecordId(task),
+    status: String(task?.status || "open").toLowerCase(),
+  }));
+}
+
 function advisoryBanner() {
   return `<p class="muted" style="margin:0.5rem 0 0;">Advisory only — not final legal or financial advice. Review before acting.</p>`;
 }
@@ -108,14 +127,17 @@ export function renderOfficeAiWorkspace() {
 function renderTasksPanel() {
   const rows = (state.tasks || [])
     .map((task) => {
+      const taskId = taskRecordId(task);
       const source = task.source === "ai" ? "AI" : "Manual";
+      const status = String(task.status || "open").toLowerCase();
+      const actionCell = status === "open" && taskId
+        ? `<button class="secondary" type="button" data-office-ai-action="complete-task" data-task-id="${escapeHtml(taskId)}">Done</button>`
+        : `<span class="muted">${status === "open" ? "—" : "Completed"}</span>`;
       return `<tr>
         <td>${escapeHtml(task.title || "")}</td>
-        <td>${escapeHtml(task.status || "")}</td>
+        <td>${escapeHtml(formatTaskStatus(status))}</td>
         <td>${escapeHtml(source)}</td>
-        <td>
-          <button class="secondary" type="button" data-office-ai-action="complete-task" data-task-id="${escapeHtml(task.id || "")}">Done</button>
-        </td>
+        <td class="office-ai-task-action">${actionCell}</td>
       </tr>`;
     })
     .join("");
@@ -178,7 +200,7 @@ function rerender() {
 
 async function refreshTasks() {
   const payload = unwrap(await apiRequest("/api/v1/officemitra/tasks"));
-  state.tasks = payload.items || [];
+  state.tasks = normalizeTasks(payload.items);
 }
 
 async function refreshEmails() {
@@ -219,6 +241,9 @@ export async function handleOfficeAiAction(action, el) {
 
   state.error = "";
   state.notice = "";
+  const completeTaskId = action === "complete-task"
+    ? String(el?.getAttribute("data-task-id") || el?.dataset?.taskId || "").trim()
+    : "";
   try {
     if (action === "tab") {
       state.tab = el?.dataset?.tab || "tasks";
@@ -252,13 +277,15 @@ export async function handleOfficeAiAction(action, el) {
         : `Generated ${(result?.saved_tasks || []).length} task(s).`;
       await refreshTasks();
     } else if (action === "complete-task") {
-      const taskId = el?.dataset?.taskId || "";
-      if (!taskId) return;
-      unwrap(await apiRequest(`/api/v1/officemitra/tasks/${encodeURIComponent(taskId)}`, {
+      if (!completeTaskId) {
+        throw new Error("Could not update task — missing task id. Click Refresh and try again.");
+      }
+      unwrap(await apiRequest(`/api/v1/officemitra/tasks/${encodeURIComponent(completeTaskId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "done", change_reason: "Marked done in UI" }),
       }));
+      state.notice = "Task marked done.";
       await refreshTasks();
     } else if (action === "summarize-email") {
       if (!(state.emailText || "").trim()) throw new Error("Paste an email first");

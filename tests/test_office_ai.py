@@ -207,3 +207,18 @@ def test_platform_owner_entitlements_include_office_ai_for_mitrabooks_org_types(
         end = experience_source.index("]", start)
         block = experience_source[start:end]
         assert '"office_ai"' in block or "'office_ai'" in block, f"{org_type} entitlements must include office_ai"
+
+
+def test_office_ai_tasks_done_action_uses_task_id_attribute() -> None:
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
+    office_ai_source = (
+        repo_root / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "office-ai.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'getAttribute("data-task-id")' in office_ai_source
+    assert "taskRecordId(task)" in office_ai_source
+    assert 'status: "done"' in office_ai_source
+    assert "Task marked done." in office_ai_source
+    assert "missing task id" in office_ai_source
