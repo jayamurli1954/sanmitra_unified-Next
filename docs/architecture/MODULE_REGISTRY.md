@@ -73,4 +73,4 @@ External integrations should be feature/module gated separately from base produc
 | module_key | Default | Reason |
 | --- | --- | --- |
 | `legal_ai` | Off | Requires confidentiality, legal-source, and lawyer-review workflow approval |
-| `office_ai` | Off | Thin AI layer; enable per tenant; gate sub-features `office_ai.tasks` / `office_ai.email` / `office_ai.brief` |
+| `office_ai` | Off | Thin AI layer; enable per tenant; gate sub-features `office_ai.tasks` / `office_ai.email` / `office_ai.brief` / `office_ai.calendar` / `office_ai.meeting_notes` / `office_ai.notifications` |

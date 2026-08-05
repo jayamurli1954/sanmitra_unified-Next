@@ -63,7 +63,24 @@ async def create_task(
         "change_reason": None,
     }
     await get_collection(TASKS_COLLECTION).insert_one(doc)
-    return serialize_doc(doc)
+    item = serialize_doc(doc)
+    if due_date:
+        from datetime import date
+
+        from app.modules.office_ai.services import notification_service
+
+        today = date.today().isoformat()
+        if str(due_date).strip()[:10] == today:
+            await notification_service.create_notification(
+                tenant_id=tenant_id,
+                user=user,
+                title=f"Task due today: {doc['title'][:120]}",
+                body="Open OfficeMitra AI → Tasks to review.",
+                kind="task_due",
+                href="/business/office-ai",
+                dedupe_key=f"task_due:{item['id']}",
+            )
+    return item
 
 
 async def update_task(

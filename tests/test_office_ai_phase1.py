@@ -9,7 +9,10 @@ from bson import ObjectId
 
 from app.modules.office_ai.models import (
     BRIEFS_COLLECTION,
+    CALENDAR_EVENTS_COLLECTION,
     EMAILS_COLLECTION,
+    MEETING_NOTES_COLLECTION,
+    NOTIFICATIONS_COLLECTION,
     TASKS_COLLECTION,
     TELEMETRY_COLLECTION,
 )
@@ -75,6 +78,9 @@ class _FakeCollection:
         self.docs = [d for d in self.docs if not _match(d, query)]
         return type("R", (), {"deleted_count": before - len(self.docs)})()
 
+    async def count_documents(self, query: dict):
+        return sum(1 for d in self.docs if _match(d, query))
+
     async def create_index(self, *_args, **_kwargs):
         return "ok"
 
@@ -87,14 +93,16 @@ def _match(doc: dict, query: dict) -> bool:
                 return False
             continue
         if isinstance(expected, dict):
+            if "$gte" in expected:
+                if actual is None or actual < expected["$gte"]:
+                    return False
             if "$lte" in expected:
                 if actual is None or actual > expected["$lte"]:
                     return False
-                continue
             if "$in" in expected:
                 if actual not in expected["$in"]:
                     return False
-                continue
+            continue
         if actual != expected:
             return False
     return True
@@ -107,6 +115,9 @@ def fake_mongo(monkeypatch):
         EMAILS_COLLECTION: _FakeCollection(),
         BRIEFS_COLLECTION: _FakeCollection(),
         TELEMETRY_COLLECTION: _FakeCollection(),
+        MEETING_NOTES_COLLECTION: _FakeCollection(),
+        CALENDAR_EVENTS_COLLECTION: _FakeCollection(),
+        NOTIFICATIONS_COLLECTION: _FakeCollection(),
     }
 
     def get_collection(name: str):
@@ -116,6 +127,9 @@ def fake_mongo(monkeypatch):
     monkeypatch.setattr("app.modules.office_ai.services.task_service.get_collection", get_collection)
     monkeypatch.setattr("app.modules.office_ai.services.email_service.get_collection", get_collection)
     monkeypatch.setattr("app.modules.office_ai.services.brief_service.get_collection", get_collection)
+    monkeypatch.setattr("app.modules.office_ai.services.calendar_service.get_collection", get_collection)
+    monkeypatch.setattr("app.modules.office_ai.services.meeting_notes_service.get_collection", get_collection)
+    monkeypatch.setattr("app.modules.office_ai.services.notification_service.get_collection", get_collection)
     monkeypatch.setattr("app.modules.office_ai.retention.get_collection", get_collection)
     monkeypatch.setattr("app.modules.office_ai.models._indexes_ready", True)
     return store
@@ -237,6 +251,7 @@ async def test_retention_purges_old_emails_and_telemetry(fake_mongo):
 
     result = await retention_mod.cleanup_expired_office_ai_records(tenant_id="t1", retention_days=90)
     assert result["emails_deleted"] == 1
+    assert result["meeting_notes_deleted"] == 0
     assert result["telemetry_deleted"] == 1
     assert len(fake_mongo[EMAILS_COLLECTION].docs) == 2  # t1 new + t2 old
     assert len(fake_mongo[TELEMETRY_COLLECTION].docs) == 1

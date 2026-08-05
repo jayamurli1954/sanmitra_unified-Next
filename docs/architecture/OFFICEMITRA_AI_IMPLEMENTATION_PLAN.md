@@ -2,11 +2,13 @@
 
 **Document type:** Implementation plan (architecture + delivery sequence)  
 **Product:** OfficeMitra AI  
-**Status:** Phase 1 (MVP) implemented locally — staging smoke pending  
-**Version:** 1.3  
+**Status:** Phase 2 (Productivity depth) implemented locally — use Phase 2 smoke checklist for staging signoff  
+**Version:** 1.4  
 **Date:** 2026-08-05  
 **ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-007  
-**Smoke checklist:** [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)  
+**Smoke checklists:**  
+- Phase 1: [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)  
+- Phase 2: [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md)  
 **Supersedes positioning in:** informal notes that framed OfficeMitra as the SanMitra “operating system”
 
 > **Success criteria:** A single tenant can securely create tasks, summarize pasted emails into actionable tasks, and generate a daily brief from OfficeMitra-native data and *any available* connectors (including zero connectors in standalone mode), without any direct cross-product database access, while remaining fully compliant with ADR-001 through ADR-007.
@@ -133,8 +135,8 @@ User → OfficeMitra UI → OfficeMitra service → Connector Manager → Produc
 | Phase | Name | Capability | Status in this plan |
 | --- | --- | --- | --- |
 | **0** | Foundation | ADRs, AGENTS.md, registry, scaffold, ping route, shell nav stub | **Done** |
-| **1 / MVP** | Three features | Task Generator, Email Summary (paste), Daily Brief via Connector Manager (standalone-safe) | **Implemented locally** — use [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md) for staging signoff |
-| **2** | Productivity depth | Calendar hooks, meeting notes, in-app notifications | Post-MVP |
+| **1 / MVP** | Three features | Task Generator, Email Summary (paste), Daily Brief via Connector Manager (standalone-safe) | **Done** — staging smoke signed off on demo CA tenant |
+| **2** | Productivity depth | Calendar hooks (paste), meeting notes, in-app notifications | **Implemented locally** — use [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md) |
 | **3** | Ecosystem read | Replace stub connectors for LegalMitra, GruhaMitra, MandirMitra | Weeks 6–8 stretch / Phase 3 |
 | **4** | Approved automation | AI-proposed writes with **explicit user confirmation** + audit | Requires new ADR |
 | **5** | Experience expansion | Optional standalone OfficeMitra UI for non-ERP tenants; third-party integrations | Optional |
@@ -615,3 +617,4 @@ When OfficeMitra PRs merge, each PR description must confirm:
 | 1.1 | 2026-08-05 | Approved; added success criteria, feature flags, telemetry, prompt versioning, brief generations, ADR-006, eval/observability |
 | 1.2 | 2026-08-05 | Modular deployment (ADR-007): Connector Manager, deployment profiles, `officemitra` app key, standalone-safe Daily Brief |
 | 1.3 | 2026-08-05 | Phase 1 complete locally: retention helper, Mongo isolation tests, smoke checklist |
+| 1.4 | 2026-08-05 | Phase 2 productivity: paste calendar, meeting notes, in-app notifications + smoke checklist |

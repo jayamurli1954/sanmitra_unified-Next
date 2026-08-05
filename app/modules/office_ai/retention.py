@@ -1,7 +1,8 @@
-"""OfficeMitra retention helpers — purge aged emails/telemetry (ADR-005 / Phase 1 polish).
+"""OfficeMitra retention helpers — purge aged paste bodies and telemetry.
 
-Tasks and briefs are kept by default (user work product). Email paste bodies and AI
-telemetry are purged after the tenant/policy retention window.
+Tasks, briefs, calendar events, and notifications are kept by default (user work
+product). Email/meeting-note paste bodies and AI telemetry are purged after the
+tenant/policy retention window.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from app.config import get_settings
 from app.db.mongo import get_collection
 from app.modules.office_ai.models import (
     EMAILS_COLLECTION,
+    MEETING_NOTES_COLLECTION,
     TELEMETRY_COLLECTION,
     ensure_indexes,
     utcnow,
@@ -43,7 +45,7 @@ async def cleanup_expired_office_ai_records(
     retention_days: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, int]:
-    """Delete aged email pastes and AI telemetry. Tenant-scoped when tenant_id set."""
+    """Delete aged email/meeting-note pastes and AI telemetry. Tenant-scoped when set."""
     await ensure_indexes()
     days = retention_days if retention_days is not None else get_settings().OFFICEMITRA_RETENTION_DAYS
     cutoff = retention_cutoff(int(days), now)
@@ -52,9 +54,11 @@ async def cleanup_expired_office_ai_records(
         query["tenant_id"] = tenant_id
 
     emails = await get_collection(EMAILS_COLLECTION).delete_many(query)
+    meeting_notes = await get_collection(MEETING_NOTES_COLLECTION).delete_many(query)
     telemetry = await get_collection(TELEMETRY_COLLECTION).delete_many(query)
     return {
         "emails_deleted": int(getattr(emails, "deleted_count", 0) or 0),
+        "meeting_notes_deleted": int(getattr(meeting_notes, "deleted_count", 0) or 0),
         "telemetry_deleted": int(getattr(telemetry, "deleted_count", 0) or 0),
         "retention_days": int(days),
         "cutoff": cutoff.isoformat(),

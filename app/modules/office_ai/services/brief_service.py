@@ -8,7 +8,7 @@ from app.db.mongo import get_collection
 from app.modules.office_ai.ai import orchestrator
 from app.modules.office_ai.connectors.manager import collect_connector_facts
 from app.modules.office_ai.models import BRIEFS_COLLECTION, ensure_indexes, new_object_id, serialize_doc, utcnow
-from app.modules.office_ai.services import email_service, task_service
+from app.modules.office_ai.services import calendar_service, email_service, meeting_notes_service, notification_service, task_service
 
 
 def _user_id(user: dict) -> str:
@@ -34,11 +34,17 @@ async def generate_brief(
     session=None,
     include_tasks: bool = True,
     include_emails: bool = True,
+    include_calendar: bool = True,
+    include_meeting_notes: bool = True,
 ) -> dict:
     await ensure_indexes()
 
     open_tasks = await task_service.list_tasks(tenant_id=tenant_id, status="open", limit=20) if include_tasks else []
     recent_emails = await email_service.list_emails(tenant_id=tenant_id, limit=5) if include_emails else []
+    today_events = await calendar_service.list_today_events(tenant_id=tenant_id, limit=20) if include_calendar else []
+    recent_notes = (
+        await meeting_notes_service.list_meeting_notes(tenant_id=tenant_id, limit=5) if include_meeting_notes else []
+    )
 
     connector_facts = await collect_connector_facts(
         tenant_id=tenant_id,
@@ -58,6 +64,18 @@ async def generate_brief(
         "open_tasks": [{"title": t.get("title"), "due_date": t.get("due_date")} for t in open_tasks],
         "recent_email_summaries": [
             {"summary": e.get("summary"), "created_at": e.get("created_at")} for e in recent_emails if e.get("summary")
+        ],
+        "today_calendar": [
+            {
+                "title": e.get("title"),
+                "starts_at": e.get("starts_at"),
+                "ends_at": e.get("ends_at"),
+                "location": e.get("location"),
+            }
+            for e in today_events
+        ],
+        "recent_meeting_notes": [
+            {"summary": n.get("summary"), "created_at": n.get("created_at")} for n in recent_notes if n.get("summary")
         ],
     }
     facts: dict[str, Any] = {
@@ -101,8 +119,18 @@ async def generate_brief(
         "updated_by": uid,
     }
     await get_collection(BRIEFS_COLLECTION).insert_one(doc)
+    brief = serialize_doc(doc)
+    await notification_service.create_notification(
+        tenant_id=tenant_id,
+        user=user,
+        title="Today's brief ready",
+        body="Open OfficeMitra AI → Today Brief to review.",
+        kind="brief_ready",
+        href="/business/office-ai",
+        dedupe_key=f"brief_ready:{date.today().isoformat()}:{uid}",
+    )
     return {
-        "brief": serialize_doc(doc),
+        "brief": brief,
         "ai_available": ai_result.get("ai_available"),
         "advisory": ai_result.get("advisory"),
         "error_code": ai_result.get("error_code"),

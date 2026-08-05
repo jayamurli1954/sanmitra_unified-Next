@@ -213,7 +213,7 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         ),
         minimum_plan="pro",
         default_enabled=False,
-        features=("tasks", "email", "brief"),
+        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications"),
     ),
 }
 

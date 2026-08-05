@@ -436,9 +436,9 @@ Architecture authority: `docs/architecture/OFFICEMITRA_AI_IMPLEMENTATION_PLAN.md
 
 ### Current vs target (discipline)
 
-- Current: OfficeMitra AI is an additive module (`office_ai`) with modular deployment (ADR-007).
-- Target: Tasks, email summary (paste-in), and daily brief; optional connectors enrich the brief when companion modules are enabled.
-- Deferred: Gmail/WhatsApp/agents/vector DB, write-back automation, InvestMitra, marketplace.
+- Current: OfficeMitra AI Phase 1 (tasks/email/brief) plus Phase 2 productivity (paste-in calendar, meeting notes, in-app notifications) under module `office_ai` with modular deployment (ADR-007).
+- Target: Productivity depth without OAuth mailboxes/calendars; optional connectors enrich the brief when companion modules are enabled.
+- Deferred: Gmail/Outlook/Google Calendar OAuth, multi-model routing marketplace, WhatsApp/agents/vector DB, write-back automation, InvestMitra.
 
 ### Modular deployment (ADR-007)
 
@@ -451,7 +451,8 @@ Architecture authority: `docs/architecture/OFFICEMITRA_AI_IMPLEMENTATION_PLAN.md
 
 - Communicate with companion products **only through connectors** / the Connector Manager that call existing product service layers. Never query another product’s Mongo collections or Postgres tables from OfficeMitra code.
 - Use `tenant_id` only (no parallel `organization_id` tenancy model). Never trust `tenant_id` from the request body.
-- Gate routes on module `office_ai` plus sub-feature flags `office_ai.tasks`, `office_ai.email`, `office_ai.brief`.
+- Gate routes on module `office_ai` plus sub-feature flags `office_ai.tasks`, `office_ai.email`, `office_ai.brief`, `office_ai.calendar`, `office_ai.meeting_notes`, `office_ai.notifications`.
+- Calendar and meeting notes are **paste-in only** in Phase 2 (no Google/Outlook OAuth). Notifications are OfficeMitra-owned inbox records — not LegalMitra or housing Web Push.
 - MVP connectors are **read-only**. Never post journals, create invoices, file GST, or send legal notices from OfficeMitra without a superseding ADR and explicit user confirmation.
 - AI-generated tasks must be flagged `source=ai`. Persist `prompt_version`, `updated_by`/`updated_at`, and AI telemetry (provider, model, tokens, latency, cost, success).
 - Call AI only through the replaceable provider interface (ADR-006). Fail soft when the provider is missing or errors — do not invent revenue or legal facts.

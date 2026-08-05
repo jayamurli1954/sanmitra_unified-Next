@@ -11,9 +11,16 @@ TASKS_COLLECTION = "officemitra_tasks"
 EMAILS_COLLECTION = "officemitra_emails"
 BRIEFS_COLLECTION = "officemitra_briefs"
 TELEMETRY_COLLECTION = "officemitra_ai_telemetry"
+CALENDAR_EVENTS_COLLECTION = "officemitra_calendar_events"
+MEETING_NOTES_COLLECTION = "officemitra_meeting_notes"
+NOTIFICATIONS_COLLECTION = "officemitra_notifications"
 
 TASK_STATUSES = frozenset({"open", "done", "cancelled"})
 TASK_SOURCES = frozenset({"manual", "ai"})
+CALENDAR_SOURCES = frozenset({"manual", "paste", "ai"})
+NOTIFICATION_KINDS = frozenset(
+    {"calendar_due", "note_processed", "task_due", "calendar_parsed", "brief_ready"}
+)
 
 _indexes_ready = False
 
@@ -56,6 +63,18 @@ async def ensure_indexes() -> None:
         )
         await get_collection(TELEMETRY_COLLECTION).create_index(
             [("tenant_id", 1), ("feature", 1), ("created_at", -1)]
+        )
+        await get_collection(CALENDAR_EVENTS_COLLECTION).create_index(
+            [("tenant_id", 1), ("starts_at", 1)]
+        )
+        await get_collection(MEETING_NOTES_COLLECTION).create_index(
+            [("tenant_id", 1), ("created_at", -1)]
+        )
+        await get_collection(NOTIFICATIONS_COLLECTION).create_index(
+            [("tenant_id", 1), ("user_id", 1), ("created_at", -1)]
+        )
+        await get_collection(NOTIFICATIONS_COLLECTION).create_index(
+            [("tenant_id", 1), ("dedupe_key", 1)]
         )
         _indexes_ready = True
     except Exception:

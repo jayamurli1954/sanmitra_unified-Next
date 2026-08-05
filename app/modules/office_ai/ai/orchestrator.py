@@ -14,6 +14,7 @@ _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
 PROMPT_GENERATE_TASKS = "generate_tasks_v1"
 PROMPT_SUMMARIZE_EMAIL = "summarize_email_v1"
+PROMPT_SUMMARIZE_MEETING_NOTES = "summarize_meeting_notes_v1"
 PROMPT_DAILY_BRIEF = "daily_brief_v1"
 
 
@@ -143,6 +144,46 @@ async def summarize_email(
         "model": result.model,
         "error_code": result.error_code,
         "advisory": "Email summaries are advisory and not legal or financial advice.",
+    }
+
+
+async def summarize_meeting_notes(
+    *,
+    tenant_id: str,
+    text: str,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    prompt_version = PROMPT_SUMMARIZE_MEETING_NOTES
+    system = load_prompt(prompt_version)
+    result, telemetry_id = await _complete(
+        tenant_id=tenant_id,
+        feature="meeting_notes",
+        prompt_version=prompt_version,
+        system=system,
+        user=text.strip(),
+        user_id=user_id,
+    )
+    summary = ""
+    action_items: list[str] = []
+    if result.success:
+        parsed = _extract_json(result.text)
+        if isinstance(parsed, dict):
+            summary = str(parsed.get("summary") or "").strip()
+            raw_items = parsed.get("action_items") or []
+            if isinstance(raw_items, list):
+                action_items = [str(item).strip() for item in raw_items if str(item).strip()]
+        if not summary:
+            summary = result.text.strip()
+    return {
+        "ai_available": bool(result.success and summary),
+        "summary": summary,
+        "action_items": action_items,
+        "prompt_version": prompt_version,
+        "telemetry_id": telemetry_id,
+        "provider": result.provider,
+        "model": result.model,
+        "error_code": result.error_code,
+        "advisory": "Meeting-note summaries are advisory and not legal or financial advice.",
     }
 
 
