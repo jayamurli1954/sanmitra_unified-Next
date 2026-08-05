@@ -2179,10 +2179,13 @@ button.danger {
 
 .legal-auth-page {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
   display: grid;
   place-items: center;
   margin: 0;
   padding: 24px;
+  overflow-x: hidden;
   background: radial-gradient(circle at top left, #eef2ff, #f8fafc 52%);
   color: #1c2434;
   font-family: "Segoe UI", Arial, sans-serif;
@@ -2190,6 +2193,8 @@ button.danger {
 
 .legal-auth-card {
   width: min(980px, 100%);
+  max-width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: 1.05fr 1fr;
   overflow: hidden;
@@ -2220,6 +2225,8 @@ button.danger {
 .legal-auth-forms {
   padding: 28px;
   background: #fff;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .legal-auth-brand {
@@ -2289,6 +2296,9 @@ button.danger {
   border-radius: 8px;
   font-size: 13px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .legal-auth-status.ok {
@@ -2363,6 +2373,18 @@ button.danger {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px dashed #d1d5db;
+  max-width: 100%;
+  min-width: 0;
+}
+
+#google-signin-button {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#google-signin-button > div {
+  max-width: 100% !important;
 }
 
 .legal-auth-google p,
@@ -6013,10 +6035,38 @@ pre {
 
   .legal-auth-card {
     grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .legal-auth-hero {
     display: none;
+  }
+
+  .legal-auth-page {
+    padding: 12px;
+    place-items: stretch;
+    align-content: center;
+  }
+
+  .legal-auth-forms {
+    padding: 18px 16px;
+  }
+
+  .legal-auth-brand {
+    font-size: 24px;
+    margin-bottom: 18px;
+  }
+
+  .legal-auth-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .legal-auth-forms button.primary,
+  .legal-auth-google .ghost {
+    width: 100%;
+    max-width: 100%;
   }
 
   .legal-workspace-shell.chat-active {

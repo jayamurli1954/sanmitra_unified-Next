@@ -283,13 +283,19 @@ async function ensureGoogleReady(renderButton = true) {
 
   if (renderButton && googleSigninHost) {
     googleSigninHost.innerHTML = "";
+    const hostWidth = Math.floor(
+      googleSigninHost.getBoundingClientRect().width
+      || googleSigninHost.parentElement?.getBoundingClientRect().width
+      || 280,
+    );
+    const buttonWidth = Math.max(220, Math.min(360, hostWidth || 280));
     window.google.accounts.id.renderButton(googleSigninHost, {
       type: "standard",
       theme: "outline",
       size: "large",
       text: "continue_with",
       shape: "rectangular",
-      width: 360,
+      width: buttonWidth,
     });
   }
   return { ok: true };
