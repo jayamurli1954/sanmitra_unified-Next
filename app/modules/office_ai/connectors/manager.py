@@ -31,16 +31,22 @@ async def _collect_mitrabooks(*, tenant_id: str, app_key: str, tenant: dict, ses
     return {"revenue": revenue, "overdue": overdue}
 
 
-async def _collect_legal(*, tenant_id: str, tenant: dict, **_kwargs) -> list:
-    return await legalmitra_connector.get_pending_documents(tenant_id=tenant_id, tenant=tenant)
+async def _collect_legal(*, tenant_id: str, tenant: dict, app_key: str = "", **_kwargs) -> list:
+    return await legalmitra_connector.get_pending_documents(
+        tenant_id=tenant_id, tenant=tenant, app_key=app_key
+    )
 
 
-async def _collect_housing(*, tenant_id: str, tenant: dict, **_kwargs) -> list:
-    return await gruhamitra_connector.get_open_maintenance_requests(tenant_id=tenant_id, tenant=tenant)
+async def _collect_housing(*, tenant_id: str, tenant: dict, app_key: str = "", **_kwargs) -> list:
+    return await gruhamitra_connector.get_open_maintenance_requests(
+        tenant_id=tenant_id, tenant=tenant, app_key=app_key
+    )
 
 
-async def _collect_temple(*, tenant_id: str, tenant: dict, **_kwargs) -> list:
-    return await mandirmitra_connector.get_upcoming_events_or_donations(tenant_id=tenant_id, tenant=tenant)
+async def _collect_temple(*, tenant_id: str, tenant: dict, app_key: str = "", session=None, **_kwargs) -> list:
+    return await mandirmitra_connector.get_upcoming_events_or_donations(
+        tenant_id=tenant_id, tenant=tenant, app_key=app_key, session=session
+    )
 
 
 # kind: internal = unified-backend module service interface; external = separate product contract

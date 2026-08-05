@@ -10,7 +10,12 @@ from app.modules.office_ai.ai import metrics as ai_metrics
 from app.modules.office_ai.ai.factory import get_ai_provider
 from app.modules.office_ai.ai.orchestrator import generate_tasks, load_prompt
 from app.modules.office_ai.ai.providers.null_provider import NullProvider
-from app.modules.office_ai.connectors import legalmitra_connector, mitrabooks_connector
+from app.modules.office_ai.connectors import (
+    gruhamitra_connector,
+    legalmitra_connector,
+    mandirmitra_connector,
+    mitrabooks_connector,
+)
 
 
 def test_office_ai_module_registered_and_gated():
@@ -168,24 +173,151 @@ async def test_connector_manager_standalone_when_no_companion_modules():
 
 
 @pytest.mark.asyncio
-async def test_legal_connector_stub_empty():
+async def test_legal_connector_skips_when_module_disabled():
     items = await legalmitra_connector.get_pending_documents(
         tenant_id="t1",
-        tenant={"enabled_modules": ["legal", "office_ai"]},
+        tenant={"enabled_modules": ["office_ai"]},
     )
     assert items == []
 
 
+@pytest.mark.asyncio
+async def test_legal_connector_maps_pending_matters(monkeypatch):
+    async def fake_list_matters(*, tenant_id, app_key, status=None, limit=50, **_kwargs):
+        assert tenant_id == "t-legal"
+        assert app_key == "legalmitra"
+        if status == "pending":
+            return [
+                {
+                    "matter_id": "m1",
+                    "title": "Contract review",
+                    "matter_number": "LM-1",
+                    "status": "pending",
+                    "next_deadline_date": "2026-08-10",
+                    "client_name": "Acme",
+                }
+            ]
+        if status == "draft":
+            return [{"matter_id": "m2", "title": "Draft brief", "status": "draft"}]
+        return []
+
+    import app.modules.legal.practice_service as practice_service
+
+    monkeypatch.setattr(practice_service, "list_matters", fake_list_matters)
+
+    items = await legalmitra_connector.get_pending_documents(
+        tenant_id="t-legal",
+        tenant={"enabled_modules": ["legal", "office_ai"]},
+    )
+    assert len(items) == 2
+    assert items[0]["id"] == "m1"
+    assert "Contract review" in items[0]["title"]
+    assert items[0]["due"] == "2026-08-10"
+    assert items[1]["id"] == "m2"
+
+
+@pytest.mark.asyncio
+async def test_gruhamitra_connector_skips_when_module_disabled():
+    items = await gruhamitra_connector.get_open_maintenance_requests(
+        tenant_id="t1",
+        tenant={"enabled_modules": ["office_ai"]},
+    )
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_gruhamitra_connector_maps_open_complaints(monkeypatch):
+    async def fake_list_open_complaints(*, tenant_id, app_key, limit=20):
+        assert tenant_id == "t-house"
+        assert app_key == "mitrabooks"
+        return [
+            {
+                "id": "c1",
+                "title": "Lift outage",
+                "status": "open",
+                "priority": "high",
+                "flat_number": "A-101",
+                "type": "maintenance",
+            }
+        ]
+
+    import app.modules.housing_compat.complaints_service as complaints_service
+
+    monkeypatch.setattr(complaints_service, "list_open_complaints", fake_list_open_complaints)
+
+    items = await gruhamitra_connector.get_open_maintenance_requests(
+        tenant_id="t-house",
+        tenant={"enabled_modules": ["housing", "office_ai"]},
+        app_key="mitrabooks",
+    )
+    assert len(items) == 1
+    assert items[0]["id"] == "c1"
+    assert items[0]["title"] == "Lift outage"
+
+
+@pytest.mark.asyncio
+async def test_mandirmitra_connector_skips_without_session():
+    items = await mandirmitra_connector.get_upcoming_events_or_donations(
+        tenant_id="t1",
+        tenant={"enabled_modules": ["temple", "office_ai"]},
+        session=None,
+    )
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_mandirmitra_connector_maps_seva_schedule(monkeypatch):
+    async def fake_seva_schedule_report(session, *, tenant_id, app_key, days):
+        assert tenant_id == "t-temple"
+        assert app_key == "mandirmitra"
+        assert days == 14
+        return {
+            "schedule": [
+                {
+                    "id": "s1",
+                    "seva_name": "Abhishekam",
+                    "status": "Today",
+                    "date": "2026-08-05",
+                    "time": "06:00",
+                    "devotee_name": "Devotee",
+                    "devotee_mobile": "9999999999",
+                    "amount": 501.0,
+                }
+            ]
+        }
+
+    import app.modules.mandir_compat.report_helpers as report_helpers
+
+    monkeypatch.setattr(report_helpers, "seva_schedule_report", fake_seva_schedule_report)
+
+    items = await mandirmitra_connector.get_upcoming_events_or_donations(
+        tenant_id="t-temple",
+        tenant={"enabled_modules": ["temple", "office_ai"]},
+        app_key="mandirmitra",
+        session=object(),
+    )
+    assert len(items) == 1
+    assert items[0]["id"] == "s1"
+    assert items[0]["title"] == "Abhishekam"
+    assert "devotee_mobile" not in items[0]
+
+
 def test_office_ai_source_has_no_direct_sqlalchemy_accounting_imports():
-    """Lightweight isolation guard: connector may import services, services must not raw-SQL."""
+    """Lightweight isolation guard: connector may import services, not raw SQL/Mongo of companions."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "app" / "modules" / "office_ai"
-    forbidden = ("from app.accounting.models", "select(Journal", "JournalEntry")
+    forbidden = (
+        "from app.accounting.models",
+        "select(Journal",
+        "JournalEntry",
+        'get_collection("housing_complaints")',
+        "get_collection('housing_complaints')",
+        'get_collection("mandir_seva_bookings")',
+        "LEGAL_MATTERS_COLLECTION",
+    )
     offenders: list[str] = []
     for path in root.rglob("*.py"):
-        if "connectors" in path.parts and path.name == "mitrabooks_connector.py":
-            continue  # connector may call services only
         text = path.read_text(encoding="utf-8")
         for needle in forbidden:
             if needle in text:

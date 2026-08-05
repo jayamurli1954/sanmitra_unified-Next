@@ -136,8 +136,8 @@ User → OfficeMitra UI → OfficeMitra service → Connector Manager → Produc
 | --- | --- | --- | --- |
 | **0** | Foundation | ADRs, AGENTS.md, registry, scaffold, ping route, shell nav stub | **Done** |
 | **1 / MVP** | Three features | Task Generator, Email Summary (paste), Daily Brief via Connector Manager (standalone-safe) | **Done** — staging smoke signed off on demo CA tenant |
-| **2** | Productivity depth | Calendar hooks (paste), meeting notes, in-app notifications | **Implemented locally** — use [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md) |
-| **3** | Ecosystem read | Replace stub connectors for LegalMitra, GruhaMitra, MandirMitra | Weeks 6–8 stretch / Phase 3 |
+| **2** | Productivity depth | Calendar hooks (paste), meeting notes, in-app notifications | **Done** — use [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md) |
+| **3** | Ecosystem read | Replace stub connectors for LegalMitra, GruhaMitra, MandirMitra | **Implemented locally** — use [`docs/operations/OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md) |
 | **4** | Approved automation | AI-proposed writes with **explicit user confirmation** + audit | Requires new ADR |
 | **5** | Experience expansion | Optional standalone OfficeMitra UI for non-ERP tenants; third-party integrations | Optional |
 
@@ -163,9 +163,9 @@ app/modules/office_ai/
   connectors/
     base.py                 # enabled_modules gate helper
     mitrabooks_connector.py
-    legalmitra_connector.py   # stub → []
-    mandirmitra_connector.py  # stub → []
-    gruhamitra_connector.py   # stub → []
+    legalmitra_connector.py   # live read: pending/draft matters
+    mandirmitra_connector.py  # live read: upcoming posted sevas
+    gruhamitra_connector.py   # live read: open housing complaints
   ai/
     orchestrator.py         # summarize_email, generate_tasks, build_daily_brief
     prompts/
@@ -292,9 +292,10 @@ def get_todays_revenue(tenant_id: str) -> dict: ...
 def get_overdue_invoices(tenant_id: str, limit: int = 20) -> list[dict]: ...
 def get_low_stock_alerts(tenant_id: str, limit: int = 20) -> list[dict]: ...  # optional MVP+
 
-# Others (stub until Phase 3)
-def get_pending_documents(tenant_id: str) -> list[dict]:
-    return []
+# Others (Phase 3 — live via product services; empty when module disabled)
+def get_pending_documents(tenant_id: str) -> list[dict]: ...
+def get_open_maintenance_requests(tenant_id: str) -> list[dict]: ...
+def get_upcoming_events_or_donations(tenant_id: str) -> list[dict]: ...
 
 def get_open_maintenance_requests(tenant_id: str) -> list[dict]:
     return []
@@ -461,13 +462,13 @@ Notes:
 
 ### Weeks 6–8 (stretch / Phase 3 — only after MVP live)
 
-| Week | Connector | Source facts (examples) |
-| --- | --- | --- |
-| 6 | LegalMitra | Documents/matters pending review (service-layer only) |
-| 7 | GruhaMitra | Open maintenance requests |
-| 8 | MandirMitra | Upcoming events / donations due |
+| Week | Connector | Source facts (examples) | Status |
+| --- | --- | --- | --- |
+| 6 | LegalMitra | Matters pending/draft review via `practice_service.list_matters` | **Done** |
+| 7 | GruhaMitra | Open maintenance/complaints via `housing_compat.complaints_service.list_open_complaints` | **Done** |
+| 8 | MandirMitra | Upcoming posted sevas via `seva_schedule_report` (donations are not due items) | **Done** |
 
-Each week is isolated **because** the connector pattern already exists.
+Each week is isolated **because** the connector pattern already exists. Smoke: [`OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md).
 
 ---
 
