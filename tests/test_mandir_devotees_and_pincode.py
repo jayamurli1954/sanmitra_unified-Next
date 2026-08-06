@@ -357,6 +357,53 @@ def test_pincode_lookup_uses_local_fallback_when_external_lookup_fails(mandir_cl
     assert payload["found"] is True
 
 
+def test_public_location_pincode_uses_shared_lookup(mandir_client, monkeypatch):
+    client, _collection = mandir_client
+
+    async def fake_lookup(pincode):
+        assert pincode == "560083"
+        return "Bengaluru", "Karnataka"
+
+    monkeypatch.setattr(mandir_router, "_lookup_pincode_city_state", fake_lookup)
+
+    response = client.get("/api/v1/public/location/pincode/560083")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "found": True,
+        "pincode": "560083",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "district": "Bengaluru",
+    }
+
+
+def test_public_location_pincode_falls_back_for_known_pin(mandir_client, monkeypatch):
+    client, _collection = mandir_client
+
+    async def fake_lookup(pincode):
+        return mandir_router.MANDIR_PINCODE_FALLBACKS.get(pincode, (None, None))
+
+    monkeypatch.setattr(mandir_router, "_lookup_pincode_city_state", fake_lookup)
+
+    response = client.get("/api/v1/public/location/pincode/560083")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["found"] is True
+    assert payload["district"] == "Bengaluru"
+    assert payload["state"] == "Karnataka"
+
+
+def test_public_location_pincode_rejects_invalid_pin(mandir_client):
+    client, _collection = mandir_client
+
+    response = client.get("/api/v1/public/location/pincode/56008")
+
+    assert response.status_code == 400
+
+
 def test_devotee_autofill_returns_found_payload(mandir_client):
     client, collection = mandir_client
 

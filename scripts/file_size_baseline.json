@@ -40,7 +40,7 @@
   "frontend/src/pages/SevaManagement.js": 972,
   "frontend/mitrabooks-erp/modules/events.js": 971,
   "app/modules/housing_compat/service.py": 953,
-  "app/modules/mandir_compat/routes/public.py": 951,
+  "app/modules/mandir_compat/routes/public.py": 946,
   "tests/test_mitrabooks_frontend_local_api.py": 937,
   "app/accounting/report_alias_router.py": 910,
   "frontend/mitrabooks-erp/modules/workspaces/mandir-create-forms.js": 904,
@@ -53,7 +53,7 @@
   "app/modules/mandir_compat/router.py": 823,
   "app/modules/legal/billing_service.py": 819,
   "frontend/src/pages/accounting/ChartOfAccounts.js": 812,
+  "app/core/onboarding/service.py": 809,
   "tests/test_mandir_app_key_isolation.py": 808,
-  "frontend/mitrabooks-erp/modules/workspaces/hr.js": 805,
-  "app/core/onboarding/service.py": 801
+  "frontend/mitrabooks-erp/modules/workspaces/hr.js": 805
 }

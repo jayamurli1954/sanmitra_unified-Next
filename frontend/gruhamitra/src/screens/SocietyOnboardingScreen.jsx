@@ -33,6 +33,7 @@ const SocietyOnboardingScreen = () => {
   });
   const [loading, setLoading] = useState(false);
   const [pincodeLookupBusy, setPincodeLookupBusy] = useState(false);
+  const [pincodeLookupHint, setPincodeLookupHint] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -46,24 +47,31 @@ const SocietyOnboardingScreen = () => {
       return;
     }
     setPincodeLookupBusy(true);
+    setPincodeLookupHint('');
     try {
       const response = await api.get(`/public/location/pincode/${pincode}`, {
         skipAuthRedirect: true,
       });
       const data = response?.data || {};
       if (!data.found) {
+        setPincodeLookupHint('Could not auto-fill from this PIN. Enter district and state manually.');
         return;
       }
       const matchedState = matchIndianState(data.state);
+      const district = String(data.district || data.city || '').trim();
       setFormData((prev) => ({
         ...prev,
-        district: String(data.district || data.city || prev.district || '').trim(),
+        district: district || prev.district,
         state: matchedState || prev.state,
         country: 'India',
       }));
+      if (!district || !matchedState) {
+        setPincodeLookupHint('PIN found, but please confirm district and state.');
+      }
     } catch (err) {
       // Keep manual district/state entry if lookup fails.
       console.warn('PIN code lookup failed', err);
+      setPincodeLookupHint('Could not auto-fill from this PIN. Enter district and state manually.');
     } finally {
       setPincodeLookupBusy(false);
     }
@@ -72,6 +80,7 @@ const SocietyOnboardingScreen = () => {
   const handlePincodeChange = (e) => {
     const digits = String(e.target.value || '').replace(/\D/g, '').slice(0, 6);
     setFormData((prev) => ({ ...prev, pincode: digits }));
+    setPincodeLookupHint('');
     if (digits.length === 6) {
       lookupPincode(digits);
     }
@@ -221,6 +230,11 @@ const SocietyOnboardingScreen = () => {
               {pincodeLookupBusy ? (
                 <span className="login-footer-text" style={{ display: 'block', marginTop: 4 }}>
                   Looking up district and state…
+                </span>
+              ) : null}
+              {!pincodeLookupBusy && pincodeLookupHint ? (
+                <span className="login-footer-text" style={{ display: 'block', marginTop: 4 }}>
+                  {pincodeLookupHint}
                 </span>
               ) : null}
             </div>

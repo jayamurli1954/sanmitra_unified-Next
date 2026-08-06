@@ -241,29 +241,24 @@ async def mandir_public_devotee_autofill(
 
 @router.get("/public/location/pincode/{pincode}")
 async def mandir_public_pincode_lookup(pincode: str):
-    if not pincode.isdigit() or len(pincode) != 6:
+    """Public PIN autofill for MandirMitra/GruhaMitra onboarding forms.
+
+    Uses the shared helper so slow/unreachable India Post responses still resolve
+    via local fallbacks (the previous inline 5s call returned found=false often).
+    """
+    normalized = mandir_router._normalize_pincode(pincode)
+    if len(normalized) != 6:
         raise HTTPException(status_code=400, detail="Invalid pincode. Must be 6 digits.")
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"https://api.postalpincode.in/pincode/{pincode}")
-        if resp.status_code == 200:
-            data = resp.json()
-            if data and data[0].get("Status") == "Success":
-                post_offices = data[0].get("PostOffice") or []
-                if post_offices:
-                    po = post_offices[0]
-                    return {
-                        "found": True,
-                        "pincode": pincode,
-                        "city": str(po.get("District") or po.get("Name") or ""),
-                        "state": str(po.get("State") or ""),
-                        "district": str(po.get("District") or ""),
-                    }
-    except Exception:
-        pass
-
-    return {"found": False, "pincode": pincode, "city": "", "state": "", "district": ""}
+    city, state = await mandir_router._lookup_pincode_city_state(normalized)
+    found = bool(city and state)
+    return {
+        "found": found,
+        "pincode": normalized,
+        "city": city or "",
+        "state": state or "",
+        "district": city or "",
+    }
 
 
 @router.get("/public/temples/{temple_id}/donation-categories")

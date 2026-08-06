@@ -23,13 +23,20 @@ MANDIR_PINCODE_FALLBACKS: dict[str, tuple[str, str]] = {
     "560004": ("Bengaluru", "Karnataka"),
     "560011": ("Bengaluru", "Karnataka"),
     "560019": ("Bengaluru", "Karnataka"),
+    "560034": ("Bengaluru", "Karnataka"),
+    "560068": ("Bengaluru", "Karnataka"),
     "560070": ("Bengaluru", "Karnataka"),
+    "560076": ("Bengaluru", "Karnataka"),
     "560078": ("Bengaluru", "Karnataka"),
+    "560083": ("Bengaluru", "Karnataka"),
+    "560095": ("Bengaluru", "Karnataka"),
+    "560102": ("Bengaluru", "Karnataka"),
     "575001": ("Mangaluru", "Karnataka"),
     "575002": ("Mangaluru", "Karnataka"),
     "575003": ("Mangaluru", "Karnataka"),
     "575004": ("Mangaluru", "Karnataka"),
     "575005": ("Mangaluru", "Karnataka"),
+    "600001": ("Chennai", "Tamil Nadu"),
     "600004": ("Chennai", "Tamil Nadu"),
     "600017": ("Chennai", "Tamil Nadu"),
     "600020": ("Chennai", "Tamil Nadu"),
@@ -39,10 +46,14 @@ MANDIR_PINCODE_FALLBACKS: dict[str, tuple[str, str]] = {
     "641002": ("Coimbatore", "Tamil Nadu"),
 }
 
+# India Post API is often slow from cloud hosts; keep timeout generous and always
+# fall back to the local map when the upstream call fails or returns empty.
+_PINCODE_UPSTREAM_TIMEOUT_SECONDS = 12.0
+
 
 async def _lookup_pincode_city_state(pincode: str) -> tuple[str | None, str | None]:
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=_PINCODE_UPSTREAM_TIMEOUT_SECONDS) as client:
             response = await client.get(f"https://api.postalpincode.in/pincode/{pincode}")
         response.raise_for_status()
         payload = response.json()
