@@ -13,7 +13,6 @@ let dashboardPreview;
 let entitlementDialog;
 let entitlementTenantId;
 let entitlementTenantLabel;
-let entitlementDisplayName;
 let entitlementOrgType;
 let entitlementAppKey;
 let entitlementPlan;
@@ -27,7 +26,6 @@ export function initPlatformOwnerOps(injected) {
   entitlementDialog = injected.entitlementDialog;
   entitlementTenantId = injected.entitlementTenantId;
   entitlementTenantLabel = injected.entitlementTenantLabel;
-  entitlementDisplayName = document.getElementById("entitlement-display-name");
   entitlementOrgType = document.getElementById("entitlement-org-type");
   entitlementAppKey = document.getElementById("entitlement-app-key");
   entitlementPlan = injected.entitlementPlan;
@@ -171,9 +169,6 @@ export function openTenantEntitlementsDialog(button) {
 
   entitlementTenantId.value = tenantId;
   entitlementTenantLabel.textContent = `${tenantLabel} (${organizationType || "tenant"})`;
-  if (entitlementDisplayName) {
-    entitlementDisplayName.value = tenantLabel;
-  }
   if (entitlementOrgType) {
     entitlementOrgType.value = organizationType;
   }
@@ -227,7 +222,6 @@ export async function submitTenantEntitlements() {
     body: JSON.stringify({
       subscription_plan: subscriptionPlan,
       enabled_modules: enabledModules,
-      display_name: entitlementDisplayName ? String(entitlementDisplayName.value || "").trim() : undefined,
       organization_type: entitlementOrgType ? String(entitlementOrgType.value || "").trim().toUpperCase() : undefined,
       app_keys: entitlementAppKey && entitlementAppKey.value
         ? [String(entitlementAppKey.value).trim().toLowerCase()]

@@ -175,7 +175,7 @@ async def test_update_tenant_entitlements_sets_plan_and_modules(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_tenant_entitlements_renames_and_sets_mandir_product(monkeypatch):
+async def test_update_tenant_entitlements_sets_mandir_product_without_rename(monkeypatch):
     fake = FakeCollection()
     monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
 
@@ -189,14 +189,14 @@ async def test_update_tenant_entitlements_renames_and_sets_mandir_product(monkey
 
     updated = await tenant_service.update_tenant_entitlements(
         tenant_id="tenant-kondappadi-wrong",
-        display_name="Parlathaya Prathishtana",
         organization_type="TEMPLE",
         app_keys=["mandirmitra"],
         enabled_modules=["temple", "accounting", "audit"],
         updated_by="platform-owner",
     )
 
-    assert updated["display_name"] == "Parlathaya Prathishtana"
+    # Display name stays unchanged — renames are ops-script only.
+    assert updated["display_name"] == "Kondappadi Shree Ananthapadmanabha Temple"
     assert updated["organization_type"] == "TEMPLE"
     assert updated["app_keys"] == ["mandirmitra"]
     assert updated["enabled_modules"] == ["temple", "accounting", "audit"]

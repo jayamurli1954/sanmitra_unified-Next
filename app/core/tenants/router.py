@@ -53,7 +53,6 @@ async def update_tenant_entitlements_endpoint(
             tenant_id=tenant_id,
             subscription_plan=payload.subscription_plan,
             enabled_modules=payload.enabled_modules,
-            display_name=payload.display_name,
             organization_type=payload.organization_type,
             app_keys=payload.app_keys,
             updated_by=str(current_user.get("sub") or "system"),

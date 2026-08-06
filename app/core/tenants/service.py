@@ -338,11 +338,13 @@ async def update_tenant_entitlements(
     tenant_id: str,
     subscription_plan: str | None = None,
     enabled_modules: list[str] | None = None,
-    display_name: str | None = None,
     organization_type: str | None = None,
     app_keys: list[str] | None = None,
     updated_by: str,
 ) -> dict:
+    """Update plan/modules/product profile. Display-name renames are intentionally
+    excluded — use a one-off ops script (e.g. repair_mandir_tenant_entitlements).
+    """
     normalized_tenant_id = _normalize_tenant_id(tenant_id)
     if not normalized_tenant_id:
         raise ValueError("tenant_id is required")
@@ -358,12 +360,6 @@ async def update_tenant_entitlements(
         "updated_at": datetime.now(timezone.utc),
         "updated_by": updated_by,
     }
-
-    if display_name is not None:
-        clean_name = str(display_name or "").strip()
-        if len(clean_name) < 2:
-            raise ValueError("display_name must be at least 2 characters")
-        update_fields["display_name"] = clean_name
 
     next_app_keys = serialized["app_keys"]
     if app_keys is not None:
