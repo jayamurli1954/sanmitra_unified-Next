@@ -397,6 +397,11 @@ export const authService = {
    * after platform approval, plan/payment completion, and activation.
    */
   async registerSociety(data) {
+    const addressLine1 = String(data?.address_line1 || '').trim();
+    const addressLine2 = String(data?.address_line2 || '').trim();
+    const composedAddress = [addressLine1, addressLine2].filter(Boolean).join(', ')
+      || String(data?.society_address || '').trim()
+      || undefined;
     const payload = {
       organization_name: data?.society_name,
       organization_type: 'HOUSING',
@@ -415,7 +420,13 @@ export const authService = {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 120),
-      address: data?.society_address || undefined,
+      address_line1: addressLine1 || undefined,
+      address_line2: addressLine2 || undefined,
+      address: composedAddress,
+      city: data?.district || data?.city || undefined,
+      state: data?.state || undefined,
+      pincode: data?.pincode || undefined,
+      country: data?.country || 'India',
       admin_full_name: data?.admin_name,
       admin_email: data?.admin_email,
       admin_phone: data?.admin_phone || undefined,

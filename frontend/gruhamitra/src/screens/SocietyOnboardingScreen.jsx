@@ -1,31 +1,80 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { INDIAN_STATES_AND_UTS, matchIndianState } from '../constants/indiaAddress';
+import api from '../services/api';
 import { authService } from '../services/authService';
+
+const EMPTY_FORM = {
+  society_name: '',
+  address_line1: '',
+  address_line2: '',
+  pincode: '',
+  district: '',
+  state: '',
+  country: 'India',
+  authority_designation: '',
+  authority_designation_other: '',
+  admin_name: '',
+  admin_email: '',
+  admin_phone: '',
+  request_intent: 'register',
+  selected_plan: 'Decide after demo',
+  plan_timing: 'After demo/discussion',
+  verification_channel: 'email',
+  terms_accepted: false,
+};
 
 const SocietyOnboardingScreen = () => {
   const location = useLocation();
   const initialIntent = new URLSearchParams(location.search || '').get('intent') === 'demo' ? 'demo' : 'register';
   const [formData, setFormData] = useState({
-    society_name: '',
-    society_address: '',
-    authority_designation: '',
-    authority_designation_other: '',
-    admin_name: '',
-    admin_email: '',
-    admin_phone: '',
+    ...EMPTY_FORM,
     request_intent: initialIntent,
-    selected_plan: 'Decide after demo',
-    plan_timing: 'After demo/discussion',
-    verification_channel: 'email',
-    terms_accepted: false,
   });
   const [loading, setLoading] = useState(false);
+  const [pincodeLookupBusy, setPincodeLookupBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const lookupPincode = async (pincode) => {
+    if (!/^\d{6}$/.test(pincode)) {
+      return;
+    }
+    setPincodeLookupBusy(true);
+    try {
+      const response = await api.get(`/public/location/pincode/${pincode}`, {
+        skipAuthRedirect: true,
+      });
+      const data = response?.data || {};
+      if (!data.found) {
+        return;
+      }
+      const matchedState = matchIndianState(data.state);
+      setFormData((prev) => ({
+        ...prev,
+        district: String(data.district || data.city || prev.district || '').trim(),
+        state: matchedState || prev.state,
+        country: 'India',
+      }));
+    } catch (err) {
+      // Keep manual district/state entry if lookup fails.
+      console.warn('PIN code lookup failed', err);
+    } finally {
+      setPincodeLookupBusy(false);
+    }
+  };
+
+  const handlePincodeChange = (e) => {
+    const digits = String(e.target.value || '').replace(/\D/g, '').slice(0, 6);
+    setFormData((prev) => ({ ...prev, pincode: digits }));
+    if (digits.length === 6) {
+      lookupPincode(digits);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -45,6 +94,10 @@ const SocietyOnboardingScreen = () => {
       setError('Please enter the designation or authority for Other');
       return;
     }
+    if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
+      setError('PIN code must be 6 digits');
+      return;
+    }
     if (!formData.terms_accepted) {
       setError('Please confirm authority and accept the Terms of Service and Privacy Policy');
       return;
@@ -54,7 +107,12 @@ const SocietyOnboardingScreen = () => {
     try {
       const payload = {
         society_name: formData.society_name,
-        society_address: formData.society_address || undefined,
+        address_line1: formData.address_line1 || undefined,
+        address_line2: formData.address_line2 || undefined,
+        pincode: formData.pincode || undefined,
+        district: formData.district || undefined,
+        state: formData.state || undefined,
+        country: formData.country || 'India',
         authority_designation: formData.authority_designation,
         authority_designation_other: formData.authority_designation === 'Other' ? formData.authority_designation_other : undefined,
         admin_name: formData.admin_name,
@@ -70,6 +128,7 @@ const SocietyOnboardingScreen = () => {
       await authService.registerSociety(payload);
       setError('');
       setSuccess('Request submitted. Contact verification, plan/payment approval, and activation are required before login access is enabled.');
+      setFormData({ ...EMPTY_FORM, request_intent: initialIntent, country: 'India' });
     } catch (err) {
       const detail = err?.response?.data?.detail || err?.message || 'Society onboarding failed';
       setError(detail);
@@ -80,7 +139,7 @@ const SocietyOnboardingScreen = () => {
 
   return (
     <div className="login-container">
-      <div className="login-card" style={{ maxWidth: '520px' }}>
+      <div className="login-card" style={{ maxWidth: '560px' }}>
         <div className="login-logo-container">
           <img
             src="/gruhamitra/GruhaMitra_Logo.png"
@@ -117,14 +176,100 @@ const SocietyOnboardingScreen = () => {
           </div>
 
           <div className="login-input-container">
-            <label className="login-label">Address</label>
+            <label className="login-label">Address Line 1</label>
             <input
               type="text"
-              name="society_address"
+              name="address_line1"
               className="login-input"
-              value={formData.society_address}
+              value={formData.address_line1}
               onChange={handleChange}
+              placeholder="Door no. / Apartment name"
+              maxLength={200}
             />
+          </div>
+
+          <div className="login-input-container">
+            <label className="login-label">Address Line 2</label>
+            <input
+              type="text"
+              name="address_line2"
+              className="login-input"
+              value={formData.address_line2}
+              onChange={handleChange}
+              placeholder="Complete address"
+              maxLength={500}
+            />
+          </div>
+
+          <div
+            className="login-input-container"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}
+          >
+            <div>
+              <label className="login-label">PIN Code</label>
+              <input
+                type="text"
+                name="pincode"
+                className="login-input"
+                value={formData.pincode}
+                onChange={handlePincodeChange}
+                inputMode="numeric"
+                autoComplete="postal-code"
+                placeholder="6-digit PIN"
+                maxLength={6}
+              />
+              {pincodeLookupBusy ? (
+                <span className="login-footer-text" style={{ display: 'block', marginTop: 4 }}>
+                  Looking up district and state…
+                </span>
+              ) : null}
+            </div>
+            <div>
+              <label className="login-label">District</label>
+              <input
+                type="text"
+                name="district"
+                className="login-input"
+                value={formData.district}
+                onChange={handleChange}
+                placeholder="District"
+                maxLength={120}
+              />
+            </div>
+          </div>
+
+          <div
+            className="login-input-container"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}
+          >
+            <div>
+              <label className="login-label">State</label>
+              <select
+                name="state"
+                className="login-input"
+                value={formData.state}
+                onChange={handleChange}
+              >
+                <option value="">Select state</option>
+                {INDIAN_STATES_AND_UTS.map((stateName) => (
+                  <option key={stateName} value={stateName}>
+                    {stateName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="login-label">Country</label>
+              <input
+                type="text"
+                name="country"
+                className="login-input"
+                value={formData.country}
+                onChange={handleChange}
+                placeholder="India"
+                maxLength={80}
+              />
+            </div>
           </div>
 
           <div className="login-input-container">

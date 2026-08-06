@@ -78,9 +78,12 @@ class OnboardingRequestCreate(BaseModel):
     temple_slug: str | None = Field(default=None, max_length=120)
     primary_deity: str | None = Field(default=None, max_length=120)
     address: str | None = Field(default=None, max_length=500)
+    address_line1: str | None = Field(default=None, max_length=200)
+    address_line2: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)
     pincode: str | None = Field(default=None, max_length=20)
+    country: str | None = Field(default=None, max_length=80)
     phone: str | None = Field(default=None, max_length=30)
     email: EmailStr | None = None
     admin_full_name: str = Field(min_length=2, max_length=160)
@@ -108,10 +111,16 @@ class OnboardingRequestCreate(BaseModel):
         self.trust_name = trust_name or None
         self.temple_slug = (self.temple_slug or "").strip().lower() or None
         self.primary_deity = (self.primary_deity or "").strip() or None
-        self.address = (self.address or "").strip() or None
+        self.address_line1 = (self.address_line1 or "").strip() or None
+        self.address_line2 = (self.address_line2 or "").strip() or None
+        composed_address = ", ".join(
+            part for part in [self.address_line1, self.address_line2] if part
+        ) or None
+        self.address = (self.address or "").strip() or composed_address
         self.city = (self.city or "").strip() or None
         self.state = (self.state or "").strip() or None
         self.pincode = (self.pincode or "").strip() or None
+        self.country = (self.country or "").strip() or "India"
         self.phone = (self.phone or "").strip() or None
         self.admin_full_name = self.admin_full_name.strip()
         self.admin_phone = (self.admin_phone or "").strip() or None
@@ -155,6 +164,11 @@ class OnboardingRequestItem(BaseModel):
     temple_slug: str | None = None
     city: str | None = None
     state: str | None = None
+    pincode: str | None = None
+    country: str | None = None
+    address: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
     created_at: datetime | None = None
     admin_full_name: str
     admin_email: EmailStr

@@ -112,6 +112,41 @@ async def test_create_onboarding_request_captures_authority_plan_and_terms(monke
     assert stored["terms_accepted"] is True
 
 
+@pytest.mark.asyncio
+async def test_create_onboarding_request_stores_structured_address(monkeypatch):
+    fake_requests = FakeOnboardingCollection()
+    monkeypatch.setattr(onboarding_service, "get_collection", lambda _name: fake_requests)
+
+    result = await onboarding_service.create_onboarding_request(
+        OnboardingRequestCreate(
+            organization_name="Sarvajit Heights Apartment",
+            organization_type="HOUSING",
+            authority_designation="Secretary",
+            request_intent="register",
+            address_line1="Tower A, Flat 101",
+            address_line2="S. No. 121/1 Vighneshwara Layout, Kembathalli Main Road",
+            city="Bengaluru Urban",
+            state="Karnataka",
+            pincode="560083",
+            country="India",
+            admin_full_name="Society Admin",
+            admin_email="society@example.com",
+            admin_phone="9000000002",
+            terms_accepted=True,
+        ),
+        app_key="gruhamitra",
+    )
+
+    stored = await fake_requests.find_one({"request_id": result["request_id"]})
+    assert stored["address_line1"] == "Tower A, Flat 101"
+    assert stored["address_line2"].startswith("S. No. 121/1")
+    assert stored["address"].startswith("Tower A, Flat 101, S. No. 121/1")
+    assert stored["city"] == "Bengaluru Urban"
+    assert stored["state"] == "Karnataka"
+    assert stored["pincode"] == "560083"
+    assert stored["country"] == "India"
+
+
 def test_public_onboarding_requires_valid_product_app_key():
     assert onboarding_service.normalize_public_onboarding_app_key("mandirmitra") == "mandirmitra"
     assert onboarding_service.normalize_public_onboarding_app_key("gharmitra") == "gruhamitra"
