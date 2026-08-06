@@ -37,6 +37,7 @@ export const entitlementModulesByOrgType = {
   HOUSING: ["housing", "accounting", "audit", "office_ai"],
   BUSINESS: ["business", "accounting", "gst", "inventory", "audit", "office_ai"],
   PROFESSIONAL: ["professional", "accounting", "billing", "audit", "office_ai"],
+  LEGAL: ["legal", "rag", "compliance", "audit", "office_ai"],
 };
 
 export const orgSelectorMeta = {

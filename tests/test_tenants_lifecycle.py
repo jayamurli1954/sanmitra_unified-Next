@@ -175,6 +175,34 @@ async def test_update_tenant_entitlements_sets_plan_and_modules(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_tenant_entitlements_renames_and_sets_mandir_product(monkeypatch):
+    fake = FakeCollection()
+    monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)
+
+    await tenant_service.ensure_tenant_exists(
+        "tenant-kondappadi-wrong",
+        display_name="Kondappadi Shree Ananthapadmanabha Temple",
+        organization_type="BUSINESS",
+        app_keys=["mitrabooks"],
+        enabled_modules=["business", "accounting", "gst", "inventory", "audit"],
+    )
+
+    updated = await tenant_service.update_tenant_entitlements(
+        tenant_id="tenant-kondappadi-wrong",
+        display_name="Parlathaya Prathishtana",
+        organization_type="TEMPLE",
+        app_keys=["mandirmitra"],
+        enabled_modules=["temple", "accounting", "audit"],
+        updated_by="platform-owner",
+    )
+
+    assert updated["display_name"] == "Parlathaya Prathishtana"
+    assert updated["organization_type"] == "TEMPLE"
+    assert updated["app_keys"] == ["mandirmitra"]
+    assert updated["enabled_modules"] == ["temple", "accounting", "audit"]
+
+
+@pytest.mark.asyncio
 async def test_update_tenant_entitlements_rejects_module_outside_org_type(monkeypatch):
     fake = FakeCollection()
     monkeypatch.setattr(tenant_service, "get_collection", lambda _name: fake)

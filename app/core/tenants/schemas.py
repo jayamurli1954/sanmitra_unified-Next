@@ -28,3 +28,6 @@ class TenantStatusUpdateRequest(BaseModel):
 class TenantEntitlementsUpdateRequest(BaseModel):
     subscription_plan: str | None = Field(default=None, min_length=2, max_length=40)
     enabled_modules: list[str] | None = None
+    display_name: str | None = Field(default=None, min_length=2, max_length=200)
+    organization_type: OrganizationType | None = None
+    app_keys: list[str] | None = None

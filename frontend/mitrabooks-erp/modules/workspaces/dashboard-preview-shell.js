@@ -58,6 +58,7 @@ export function renderRecentTenantsTable(rows) {
           ${rows.map((row) => {
             const tenantId = row.tenant_id || "";
             const modules = Array.isArray(row.enabled_modules) ? row.enabled_modules.join(",") : "";
+            const appKeys = Array.isArray(row.app_keys) ? row.app_keys.join(",") : "";
             return `
               <tr>
                 <td>${escapeHtml(row.display_name || tenantId)}</td>
@@ -75,6 +76,7 @@ export function renderRecentTenantsTable(rows) {
                     data-organization-type="${escapeHtml(row.organization_type)}"
                     data-subscription-plan="${escapeHtml(row.subscription_plan)}"
                     data-enabled-modules="${escapeHtml(modules)}"
+                    data-app-keys="${escapeHtml(appKeys)}"
                     data-hr-addon-available="${row.hr_addon_available ? "1" : "0"}"
                     data-cost-centre-addon-available="${row.cost_centre_addon_available ? "1" : "0"}"
                     data-manufacturing-addon-available="${row.manufacturing_addon_available ? "1" : "0"}"

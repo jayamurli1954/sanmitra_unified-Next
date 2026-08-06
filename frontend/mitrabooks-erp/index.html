@@ -382,6 +382,29 @@
         </div>
         <input id="entitlement-tenant-id" type="hidden">
         <div class="field">
+          <label for="entitlement-display-name">Display name</label>
+          <input id="entitlement-display-name" type="text" maxlength="200" placeholder="Tenant display name">
+        </div>
+        <div class="field">
+          <label for="entitlement-org-type">Organization type</label>
+          <select id="entitlement-org-type">
+            <option value="BUSINESS">BUSINESS (MitraBooks)</option>
+            <option value="PROFESSIONAL">PROFESSIONAL (MitraBooks CA)</option>
+            <option value="TEMPLE">TEMPLE (MandirMitra)</option>
+            <option value="HOUSING">HOUSING (GruhaMitra)</option>
+            <option value="LEGAL">LEGAL (LegalMitra)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="entitlement-app-key">Primary product (app key)</label>
+          <select id="entitlement-app-key">
+            <option value="mitrabooks">mitrabooks</option>
+            <option value="mandirmitra">mandirmitra</option>
+            <option value="gruhamitra">gruhamitra</option>
+            <option value="legalmitra">legalmitra</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="entitlement-plan">Subscription plan</label>
           <select id="entitlement-plan">
             <option value="free">Free</option>

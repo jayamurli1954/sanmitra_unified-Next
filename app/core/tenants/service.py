@@ -338,6 +338,9 @@ async def update_tenant_entitlements(
     tenant_id: str,
     subscription_plan: str | None = None,
     enabled_modules: list[str] | None = None,
+    display_name: str | None = None,
+    organization_type: str | None = None,
+    app_keys: list[str] | None = None,
     updated_by: str,
 ) -> dict:
     normalized_tenant_id = _normalize_tenant_id(tenant_id)
@@ -356,6 +359,27 @@ async def update_tenant_entitlements(
         "updated_by": updated_by,
     }
 
+    if display_name is not None:
+        clean_name = str(display_name or "").strip()
+        if len(clean_name) < 2:
+            raise ValueError("display_name must be at least 2 characters")
+        update_fields["display_name"] = clean_name
+
+    next_app_keys = serialized["app_keys"]
+    if app_keys is not None:
+        next_app_keys = [str(key or "").strip().lower() for key in app_keys if str(key or "").strip()]
+        if not next_app_keys:
+            raise ValueError("app_keys must not be empty")
+        update_fields["app_keys"] = next_app_keys
+
+    next_org_type = serialized["organization_type"]
+    if organization_type is not None:
+        next_org_type = normalize_organization_type(
+            organization_type,
+            app_key=(next_app_keys[0] if next_app_keys else None),
+        )
+        update_fields["organization_type"] = next_org_type
+
     if subscription_plan is not None:
         normalized_plan = str(subscription_plan or "").strip().lower()
         if normalized_plan not in VALID_SUBSCRIPTION_PLANS:
@@ -365,11 +389,18 @@ async def update_tenant_entitlements(
     if enabled_modules is not None:
         normalized_modules = _normalize_enabled_modules(enabled_modules)
         _validate_enabled_modules(
-            organization_type=serialized["organization_type"],
-            app_keys=serialized["app_keys"],
+            organization_type=next_org_type,
+            app_keys=next_app_keys,
             enabled_modules=normalized_modules,
         )
         update_fields["enabled_modules"] = normalized_modules
+    elif organization_type is not None or app_keys is not None:
+        # Org/product change must keep modules valid for the new profile.
+        _validate_enabled_modules(
+            organization_type=next_org_type,
+            app_keys=next_app_keys,
+            enabled_modules=serialized["enabled_modules"],
+        )
 
     if set(update_fields) == {"updated_at", "updated_by"}:
         raise ValueError("No entitlement changes provided")

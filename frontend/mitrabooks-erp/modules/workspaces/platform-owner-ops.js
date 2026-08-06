@@ -13,6 +13,9 @@ let dashboardPreview;
 let entitlementDialog;
 let entitlementTenantId;
 let entitlementTenantLabel;
+let entitlementDisplayName;
+let entitlementOrgType;
+let entitlementAppKey;
 let entitlementPlan;
 let entitlementStatus;
 let entitlementModules;
@@ -24,9 +27,72 @@ export function initPlatformOwnerOps(injected) {
   entitlementDialog = injected.entitlementDialog;
   entitlementTenantId = injected.entitlementTenantId;
   entitlementTenantLabel = injected.entitlementTenantLabel;
+  entitlementDisplayName = document.getElementById("entitlement-display-name");
+  entitlementOrgType = document.getElementById("entitlement-org-type");
+  entitlementAppKey = document.getElementById("entitlement-app-key");
   entitlementPlan = injected.entitlementPlan;
   entitlementStatus = injected.entitlementStatus;
   entitlementModules = injected.entitlementModules;
+  if (entitlementOrgType && !entitlementOrgType.dataset.bound) {
+    entitlementOrgType.dataset.bound = "1";
+    entitlementOrgType.addEventListener("change", () => {
+      const org = String(entitlementOrgType.value || "").toUpperCase();
+      if (entitlementAppKey) {
+        const defaults = {
+          TEMPLE: "mandirmitra",
+          HOUSING: "gruhamitra",
+          LEGAL: "legalmitra",
+          BUSINESS: "mitrabooks",
+          PROFESSIONAL: "mitrabooks",
+        };
+        entitlementAppKey.value = defaults[org] || "mitrabooks";
+      }
+      renderEntitlementModules(org, new Set());
+    });
+  }
+}
+
+const DEFAULT_MODULES_BY_ORG = {
+  TEMPLE: ["temple", "accounting", "audit", "office_ai"],
+  HOUSING: ["housing", "accounting", "audit", "office_ai"],
+  LEGAL: ["legal", "rag", "compliance", "audit", "office_ai"],
+  BUSINESS: ["business", "accounting", "gst", "inventory", "audit", "office_ai"],
+  PROFESSIONAL: ["professional", "accounting", "billing", "audit", "office_ai"],
+};
+
+function renderEntitlementModules(organizationType, currentModules) {
+  const org = String(organizationType || "").toUpperCase();
+  const availableModules = getEntitlementModulesByOrgType()[org]
+    || DEFAULT_MODULES_BY_ORG[org]
+    || Array.from(currentModules);
+  const selected = currentModules.size
+    ? currentModules
+    : new Set(DEFAULT_MODULES_BY_ORG[org] || availableModules);
+  const isBusiness = org === "BUSINESS";
+  const hrAddonAvailable = entitlementModules.dataset.hrInitial === "1";
+  const costCentreAddonAvailable = entitlementModules.dataset.costCentreInitial === "1";
+  const manufacturingAddonAvailable = entitlementModules.dataset.manufacturingInitial === "1";
+  const enterpriseAddonToggles = isBusiness ? `
+    <div class="enterprise-addon-toggles" style="margin-top:10px;border-top:1px solid var(--border,#333);padding-top:10px;display:grid;gap:8px;">
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-hr-addon" ${hrAddonAvailable ? "checked" : ""}>
+        <span><strong>HR &amp; Payroll add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-cost-centre-addon" ${costCentreAddonAvailable ? "checked" : ""}>
+        <span><strong>Cost-Centre Accounting add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+      <label class="checkbox-option">
+        <input type="checkbox" id="entitlement-manufacturing-addon" ${manufacturingAddonAvailable ? "checked" : ""}>
+        <span><strong>Manufacturing add-on</strong> (enterprise) — provision for this tenant</span>
+      </label>
+    </div>` : "";
+  entitlementModules.innerHTML = availableModules.map((moduleKey) => `
+    <label class="checkbox-option">
+      <input type="checkbox" value="${escapeHtml(moduleKey)}" ${selected.has(moduleKey) ? "checked" : ""}>
+      <span>${escapeHtml(moduleKey)}</span>
+    </label>
+  `).join("") + enterpriseAddonToggles;
 }
 
 function requireDeps() {
@@ -90,7 +156,7 @@ export function openTenantEntitlementsDialog(button) {
   }
   const tenantLabel = button.getAttribute("data-tenant-label") || tenantId;
   const currentStatus = button.getAttribute("data-tenant-status") || "active";
-  const organizationType = button.getAttribute("data-organization-type") || "";
+  const organizationType = String(button.getAttribute("data-organization-type") || "BUSINESS").toUpperCase();
   const currentPlan = button.getAttribute("data-subscription-plan") || "free";
   const currentModules = new Set(
     String(button.getAttribute("data-enabled-modules") || "")
@@ -98,42 +164,36 @@ export function openTenantEntitlementsDialog(button) {
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean)
   );
-  const availableModules = getEntitlementModulesByOrgType()[organizationType] || Array.from(currentModules);
+  const currentAppKey = String(button.getAttribute("data-app-keys") || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)[0] || "";
 
   entitlementTenantId.value = tenantId;
   entitlementTenantLabel.textContent = `${tenantLabel} (${organizationType || "tenant"})`;
+  if (entitlementDisplayName) {
+    entitlementDisplayName.value = tenantLabel;
+  }
+  if (entitlementOrgType) {
+    entitlementOrgType.value = organizationType;
+  }
+  if (entitlementAppKey) {
+    const defaults = {
+      TEMPLE: "mandirmitra",
+      HOUSING: "gruhamitra",
+      LEGAL: "legalmitra",
+      BUSINESS: "mitrabooks",
+      PROFESSIONAL: "mitrabooks",
+    };
+    entitlementAppKey.value = currentAppKey || defaults[organizationType] || "mitrabooks";
+  }
   entitlementPlan.value = currentPlan;
   entitlementStatus.value = currentStatus;
   entitlementStatus.dataset.currentStatus = currentStatus;
-  const hrAddonAvailable = button.getAttribute("data-hr-addon-available") === "1";
-  const costCentreAddonAvailable = button.getAttribute("data-cost-centre-addon-available") === "1";
-  const manufacturingAddonAvailable = button.getAttribute("data-manufacturing-addon-available") === "1";
-  // Enterprise add-on provisioning toggles — MitraBooks (business) tenants only.
-  const isBusiness = String(organizationType || "").toUpperCase() === "BUSINESS";
-  const enterpriseAddonToggles = isBusiness ? `
-    <div class="enterprise-addon-toggles" style="margin-top:10px;border-top:1px solid var(--border,#333);padding-top:10px;display:grid;gap:8px;">
-      <label class="checkbox-option">
-        <input type="checkbox" id="entitlement-hr-addon" ${hrAddonAvailable ? "checked" : ""}>
-        <span><strong>HR &amp; Payroll add-on</strong> (enterprise) — provision for this tenant</span>
-      </label>
-      <label class="checkbox-option">
-        <input type="checkbox" id="entitlement-cost-centre-addon" ${costCentreAddonAvailable ? "checked" : ""}>
-        <span><strong>Cost-Centre Accounting add-on</strong> (enterprise) — provision for this tenant</span>
-      </label>
-      <label class="checkbox-option">
-        <input type="checkbox" id="entitlement-manufacturing-addon" ${manufacturingAddonAvailable ? "checked" : ""}>
-        <span><strong>Manufacturing add-on</strong> (enterprise) — provision for this tenant</span>
-      </label>
-    </div>` : "";
-  entitlementModules.innerHTML = availableModules.map((moduleKey) => `
-    <label class="checkbox-option">
-      <input type="checkbox" value="${escapeHtml(moduleKey)}" ${currentModules.has(moduleKey) ? "checked" : ""}>
-      <span>${escapeHtml(moduleKey)}</span>
-    </label>
-  `).join("") + enterpriseAddonToggles;
-  entitlementModules.dataset.hrInitial = hrAddonAvailable ? "1" : "0";
-  entitlementModules.dataset.costCentreInitial = costCentreAddonAvailable ? "1" : "0";
-  entitlementModules.dataset.manufacturingInitial = manufacturingAddonAvailable ? "1" : "0";
+  entitlementModules.dataset.hrInitial = button.getAttribute("data-hr-addon-available") === "1" ? "1" : "0";
+  entitlementModules.dataset.costCentreInitial = button.getAttribute("data-cost-centre-addon-available") === "1" ? "1" : "0";
+  entitlementModules.dataset.manufacturingInitial = button.getAttribute("data-manufacturing-addon-available") === "1" ? "1" : "0";
+  renderEntitlementModules(organizationType, currentModules);
 
   entitlementDialog.showModal();
 }
@@ -167,6 +227,11 @@ export async function submitTenantEntitlements() {
     body: JSON.stringify({
       subscription_plan: subscriptionPlan,
       enabled_modules: enabledModules,
+      display_name: entitlementDisplayName ? String(entitlementDisplayName.value || "").trim() : undefined,
+      organization_type: entitlementOrgType ? String(entitlementOrgType.value || "").trim().toUpperCase() : undefined,
+      app_keys: entitlementAppKey && entitlementAppKey.value
+        ? [String(entitlementAppKey.value).trim().toLowerCase()]
+        : undefined,
     }),
   });
 
