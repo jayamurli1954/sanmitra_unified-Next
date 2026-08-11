@@ -13,6 +13,7 @@
 - Phase 5 standalone shell: [`docs/operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md)
 - Phase 6 workflows: [`docs/operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md)
 - Policy engine (ADR-012): [`docs/operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md)
+- Combined local/staging prep: [`docs/operations/OFFICEMITRA_SMOKE_PREP.md`](../operations/OFFICEMITRA_SMOKE_PREP.md)
 **Supersedes positioning in:** informal notes that framed OfficeMitra as the SanMitra “operating system”
 
 > **Success criteria:** A single tenant can securely create tasks, summarize pasted emails into actionable tasks, and generate a daily brief from OfficeMitra-native data and *any available* connectors (including zero connectors in standalone mode), without any direct cross-product database access, while remaining fully compliant with ADR-001 through ADR-007.
