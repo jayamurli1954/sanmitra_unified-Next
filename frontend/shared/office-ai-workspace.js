@@ -219,10 +219,10 @@ function renderMisAgeingBars(side, buckets) {
       const pct = Math.max(4, Math.round((amount / max) * 100));
       return `<div style="display:grid;grid-template-columns:4.5rem 1fr 6.5rem;gap:0.4rem;align-items:center;margin:0.25rem 0;">
         <span class="muted">${escapeHtml(bucket)}</span>
-        <div style="background:rgba(0,0,0,0.06);height:0.55rem;border-radius:999px;overflow:hidden;">
+        <div style="background:var(--bg-hover, rgba(255,255,255,0.08));height:0.55rem;border-radius:999px;overflow:hidden;">
           <div style="width:${pct}%;height:100%;background:${side === "AR" ? "#1f6feb" : "#0f766e"};"></div>
         </div>
-        <span style="text-align:right;">${escapeHtml(formatMisAmount(amount))}</span>
+        <span style="text-align:right;color:var(--text-primary, #f8fafc);">${escapeHtml(formatMisAmount(amount))}</span>
       </div>`;
     })
     .join("");
@@ -250,9 +250,9 @@ function renderMisDashboardStrip(facts) {
         ? formatMisAmount(item.value)
         : String(item.value ?? "—");
       const suffix = unit && unit !== "INR" ? ` ${unit}` : "";
-      return `<div style="min-width:7.5rem;padding:0.65rem 0.75rem;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:#fff;">
-        <div class="muted" style="font-size:0.8rem;">${escapeHtml(key)}</div>
-        <div style="font-size:1.1rem;font-weight:600;margin-top:0.15rem;">${escapeHtml(display)}${escapeHtml(suffix)}</div>
+      return `<div class="office-ai-mis-kpi" style="min-width:7.5rem;padding:0.65rem 0.75rem;border:1px solid var(--border-color, rgba(255,255,255,0.12));border-radius:8px;background:var(--bg-card, rgba(18,25,47,0.85));color:var(--text-primary, #f8fafc);">
+        <div class="muted" style="font-size:0.8rem;color:var(--text-secondary, #94a3b8);">${escapeHtml(key)}</div>
+        <div style="font-size:1.1rem;font-weight:600;margin-top:0.15rem;color:var(--text-primary, #f8fafc);">${escapeHtml(display)}${escapeHtml(suffix)}</div>
       </div>`;
     })
     .filter(Boolean)
