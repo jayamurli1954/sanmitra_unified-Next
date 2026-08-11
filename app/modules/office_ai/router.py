@@ -26,6 +26,7 @@ from app.modules.office_ai.services import (
     email_service,
     meeting_notes_service,
     mis_service,
+    mis_store,
     notification_service,
     proposal_service,
     task_service,
@@ -202,12 +203,12 @@ async def get_action_descriptor(
 
 @router.get("/mis/status")
 async def mis_status(ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis"))) -> dict:
-    """ADR-014 scaffold — MIS capability flags and pack catalog (no assembly yet)."""
+    """ADR-014 — MIS capability flags, catalog, and recent pack instances."""
     tenant = ctx.get("tenant") or {}
     enabled_modules = list(tenant.get("enabled_modules") or [])
     office_ai_features = _tenant_office_features(ctx)
     mis_flags = _mis_capability_flags(tenant)
-    return mis_service.get_mis_status(
+    return await mis_service.get_mis_status(
         tenant_id=_tenant_id(ctx),
         enabled_modules=enabled_modules,
         office_ai_features=office_ai_features,
@@ -216,14 +217,131 @@ async def mis_status(ctx: dict = Depends(require_enabled_module_feature("office_
     )
 
 
-@router.get("/mis/packs")
-async def list_mis_packs(ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis"))) -> dict:
-    """Metric pack catalog with per-tenant pack enablement (ADR-014)."""
+@router.get("/mis/pack-catalog")
+async def list_mis_pack_catalog(ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis"))) -> dict:
+    """Metric pack definitions with per-tenant pack enablement (ADR-014)."""
     tenant = ctx.get("tenant") or {}
     catalog = mis_service.list_pack_catalog()
     enabled = set(_enabled_mis_packs(tenant))
     items = [{**item, "enabled_for_tenant": item["pack_key"] in enabled} for item in catalog]
     return {"items": items, "count": len(items)}
+
+
+@router.get("/mis/packs")
+async def list_mis_packs(
+    period: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    """Tenant MIS pack instances (draft/reconciled/exported)."""
+    try:
+        items = await mis_store.list_packs(
+            tenant_id=_tenant_id(ctx),
+            period=period,
+            status=status,
+            limit=limit,
+        )
+    except mis_store.MISStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/mis/packs")
+async def create_mis_pack(
+    payload: schemas.MISPackCreateRequest,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    """Create a draft MIS pack for a period (ADR-014 step 2)."""
+    try:
+        item = await mis_store.create_pack_draft(
+            tenant_id=_tenant_id(ctx),
+            user=ctx["user"],
+            pack_key=payload.pack_key,
+            period=payload.period,
+            ingestion_path=payload.ingestion_path,
+            revision=payload.revision,
+            supersedes_pack_id=payload.supersedes_pack_id,
+        )
+    except mis_store.MISStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"item": item}
+
+
+@router.get("/mis/packs/{pack_id}")
+async def get_mis_pack(
+    pack_id: str,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    item = await mis_store.get_pack(tenant_id=_tenant_id(ctx), pack_id=pack_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="MIS pack not found")
+    return {"item": item}
+
+
+@router.get("/mis/packs/{pack_id}/facts")
+async def list_mis_pack_facts(
+    pack_id: str,
+    entity_type: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    try:
+        items = await mis_store.list_facts(
+            tenant_id=_tenant_id(ctx),
+            pack_id=pack_id,
+            entity_type=entity_type,
+            limit=limit,
+        )
+    except mis_store.MISPackNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except mis_store.MISStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/mis/packs/{pack_id}/facts")
+async def insert_mis_pack_facts(
+    pack_id: str,
+    payload: schemas.MISFactsInsertRequest,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    try:
+        result = await mis_store.insert_facts(
+            tenant_id=_tenant_id(ctx),
+            pack_id=pack_id,
+            user=ctx["user"],
+            facts=[fact.model_dump() for fact in payload.facts],
+        )
+    except mis_store.MISPackNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except mis_store.MISImmutableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except mis_store.MISStoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@router.post("/mis/packs/{pack_id}/reconcile")
+async def reconcile_mis_pack(
+    pack_id: str,
+    payload: schemas.MISPackReconcileRequest,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    """Lock pack and facts after human review (ADR-014 immutability)."""
+    try:
+        item = await mis_store.reconcile_pack(
+            tenant_id=_tenant_id(ctx),
+            pack_id=pack_id,
+            user=ctx["user"],
+            data_quality_score=payload.data_quality_score,
+            data_quality_breakdown=payload.data_quality_breakdown,
+        )
+    except mis_store.MISPackNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except mis_store.MISImmutableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"item": item}
 
 
 @router.get("/tasks")

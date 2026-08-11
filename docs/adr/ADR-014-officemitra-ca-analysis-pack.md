@@ -259,7 +259,26 @@ Parent `office_ai` alone does **not** enable MIS. Standalone CA tenants may enab
 
 One MIS pack draft feeds all three; export actions may be selective.
 
-### 12. Hard exclusions (remain forbidden unless a later ADR)
+### 12. Deployment personas (ingestion paths)
+
+OfficeMitra supports **two front doors** to the same MIS engine. The persona differs by who runs OfficeMitra and how data arrives; the **CEO/CFO/board artifacts** are the same pipeline after reconcile.
+
+| Persona | Typical org | Ingestion path | Who generates MIS | Who receives export |
+| --- | --- | --- | --- | --- |
+| **In-house accountant** | `BUSINESS` tenant on MitraBooks (or future Zoho connector) | **Path A — Connector read** (`office_ai.mis.live_mitrabooks` or external adapter) | Company accountant with `office_ai.mis` | CEO/CFO/internal board — PDF/Excel/PPT after accountant reconcile |
+| **CA firm staff** | `PROFESSIONAL` tenant (`officemitra` standalone or ERP shell) | **Path B — Excel upload** (client sends workbook) and/or **Path A** when client grants connector access per client entity | CA preparer with `office_ai.mis` + `ca_practice` pack | Client CEO/CFO — exports sent manually by CA (auto-send deferred) |
+| **Client upload-only** | Client does **not** use OfficeMitra | **Path B only** — client emails/exports Excel → CA uploads SanMitra template | CA firm only | Client leadership receives CA-delivered pack |
+| **Hybrid** | CA manages many clients | Per client: Path B until connector creds exist; Path A when live read enabled on that client's tenant/entity | CA or delegated client accountant if tenant access shared | Same as above |
+
+**Path A (connector):** OfficeMitra pulls read-only facts from the books system (MitraBooks report services, later Zoho/Tally). The **accountant or CA** with tenant access runs assemble → narrative → **reconcile → export**. The CEO/CFO does not need OfficeMitra login — they receive the artifact after human sign-off.
+
+**Path B (Excel):** Client downloads from Tally/legacy ERP or sends existing sheets; CA or in-house accountant maps to the **SanMitra CA import template** and uploads. Same MIS pack lifecycle as Path A.
+
+**Governance is identical for both paths:** no invented figures, `data_quality_score` on the pack, facts **immutable after reconcile**, PPT export defaults to maker-checker (HIGH risk). Connectors do **not** post journals or replace the books of record.
+
+**Multi-client CA note:** each client should remain a **separate tenant** (or explicitly scoped entity) — no cross-tenant fact sharing without admin action. `ca_practice` pack supports roll-up views only from tenant-scoped packs the CA is authorized to read.
+
+### 13. Hard exclusions (remain forbidden unless a later ADR)
 
 - Posting or editing journals, invoices, or payments in MitraBooks or external ERP from MIS flows.
 - GST/TDS **filing** or government portal submission.
@@ -294,8 +313,8 @@ External ERP **read** adapters and **allowlisted note/draft writes** remain gove
 
 ## Implementation sequencing
 
-1. **Registry + flags** — `office_ai.mis*` entries in module registry; routes stubbed behind module gate.
-2. **MIS fact schema + Mongo collections** — indexes on `tenant_id`, `pack_id`, `period`; immutability enforcement.
+1. **Registry + flags** — `office_ai.mis*` entries in module registry; routes stubbed behind module gate. — **Done**
+2. **MIS fact schema + Mongo collections** — indexes on `tenant_id`, `pack_id`, `period`; immutability enforcement. — **Done**
 3. **Excel template import + validation UI** — SanMitra template only; no AI until facts persist.
 4. **Pack `sme_general@1.0.0` + `ca_practice@1.0.0`** — deterministic KPI/variance assembly; `materiality_rule_version`.
 5. **Narrative with citations + fact citation UI** — orchestrator + tests for “no facts → no numbers.”

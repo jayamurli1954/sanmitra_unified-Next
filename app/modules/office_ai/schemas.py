@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -124,3 +124,35 @@ class WorkflowRunStartRequest(BaseModel):
     trigger_source: Literal["proposal", "manual", "scheduled", "api"] = "manual"
     idempotency_key: str | None = Field(default=None, max_length=200)
     proposal_id: str | None = Field(default=None, max_length=64)
+
+
+class MISPackCreateRequest(BaseModel):
+    pack_key: str = Field(min_length=1, max_length=80)
+    period: str = Field(min_length=1, max_length=32, description="e.g. 2026-07 or FY2025-26")
+    ingestion_path: Literal["excel_import", "mitrabooks", "zoho", "tally", "manual"] = "manual"
+    revision: int = Field(default=1, ge=1, le=999)
+    supersedes_pack_id: str | None = Field(default=None, max_length=64)
+
+
+class MISFactInput(BaseModel):
+    entity_type: Literal["pnl_line", "bs_line", "cash_summary", "aging_bucket", "kpi", "party"]
+    period: str | None = Field(default=None, max_length=32)
+    as_of: str | None = Field(default=None, max_length=32)
+    source_system: str = Field(default="manual", max_length=40)
+    source_id: str | None = Field(default=None, max_length=200)
+    source_ref: str | None = Field(default=None, max_length=500)
+    amount_decimal: str | None = Field(default=None, max_length=40)
+    amount_minor: int | None = None
+    currency: str = Field(default="INR", max_length=8)
+    value: str | float | int | bool | None = None
+    dimensions: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    fact_id: str | None = Field(default=None, max_length=64)
+
+
+class MISFactsInsertRequest(BaseModel):
+    facts: list[MISFactInput] = Field(min_length=1, max_length=500)
+
+
+class MISPackReconcileRequest(BaseModel):
+    data_quality_score: int | None = Field(default=None, ge=0, le=100)
+    data_quality_breakdown: dict[str, Any] | None = None

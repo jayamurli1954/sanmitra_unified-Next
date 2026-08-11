@@ -1,7 +1,10 @@
-"""OfficeMitra CA Analysis Pack (ADR-014) — module gates and MIS flag helpers."""
+"""OfficeMitra CA Analysis Pack (ADR-014) — module gates and MIS fact store."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
+from bson import ObjectId
 
 from app.core.modules.registry import (
     ModuleAccessError,
@@ -12,7 +15,8 @@ from app.core.modules.registry import (
     is_office_ai_mis_pack_enabled,
     require_module_feature,
 )
-from app.modules.office_ai.services import mis_service
+from app.modules.office_ai.models import MIS_FACTS_COLLECTION, MIS_PACKS_COLLECTION
+from app.modules.office_ai.services import mis_service, mis_store
 
 
 def test_mis_feature_is_opt_in_not_parent_default():
@@ -66,3 +70,191 @@ def test_mis_pack_catalog_lists_adr014_starter_packs():
     assert "sme_general" in keys
     assert "ca_practice" in keys
     assert all("pack_version" in item for item in catalog)
+
+
+class _FakeCursor:
+    def __init__(self, docs: list[dict]):
+        self._docs = list(docs)
+
+    def sort(self, *_args, **_kwargs):
+        return self
+
+    def limit(self, n: int):
+        self._docs = self._docs[:n]
+        return self
+
+    def __aiter__(self):
+        self._iter = iter(self._docs)
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iter)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
+class _FakeCollection:
+    def __init__(self):
+        self.docs: list[dict] = []
+
+    def find(self, query: dict | None = None):
+        query = query or {}
+        matched = [dict(doc) for doc in self.docs if _match(doc, query)]
+        return _FakeCursor(matched)
+
+    async def find_one(self, query: dict, *args, **kwargs):
+        for doc in self.docs:
+            if _match(doc, query):
+                return dict(doc)
+        return None
+
+    async def insert_one(self, doc: dict):
+        self.docs.append(dict(doc))
+        return type("R", (), {"inserted_id": doc.get("_id")})()
+
+    async def insert_many(self, docs: list[dict]):
+        for doc in docs:
+            self.docs.append(dict(doc))
+        return type("R", (), {"inserted_ids": [doc.get("_id") for doc in docs]})()
+
+    async def update_one(self, query: dict, update: dict):
+        for doc in self.docs:
+            if _match(doc, query):
+                if "$set" in update:
+                    doc.update(update["$set"])
+                return type("R", (), {"modified_count": 1})()
+        return type("R", (), {"modified_count": 0})()
+
+    async def update_many(self, query: dict, update: dict):
+        count = 0
+        for doc in self.docs:
+            if _match(doc, query):
+                if "$set" in update:
+                    doc.update(update["$set"])
+                count += 1
+        return type("R", (), {"modified_count": count})()
+
+    async def create_index(self, *_args, **_kwargs):
+        return True
+
+
+def _match(doc: dict, query: dict) -> bool:
+    for key, expected in query.items():
+        actual = doc.get(key)
+        if isinstance(expected, dict) and "$type" in expected:
+            continue
+        if actual != expected:
+            return False
+    return True
+
+
+@pytest.fixture
+def fake_mis_mongo(monkeypatch):
+    store = {
+        MIS_PACKS_COLLECTION: _FakeCollection(),
+        MIS_FACTS_COLLECTION: _FakeCollection(),
+    }
+
+    def _get(name: str):
+        return store.setdefault(name, _FakeCollection())
+
+    monkeypatch.setattr("app.modules.office_ai.services.mis_store.get_collection", _get)
+    monkeypatch.setattr("app.modules.office_ai.models.get_collection", _get)
+    return store
+
+
+@pytest.mark.asyncio
+async def test_create_pack_and_insert_facts(fake_mis_mongo):
+    user = {"sub": "acct-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+        ingestion_path="excel_import",
+    )
+    pack_id = pack["id"]
+    assert pack["status"] == "draft"
+    assert pack["pack_version"] == "1.0.0"
+    assert pack["immutable"] is False
+
+    result = await mis_store.insert_facts(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        facts=[
+            {
+                "entity_type": "pnl_line",
+                "amount_decimal": "125000.50",
+                "currency": "INR",
+                "source_system": "excel_import",
+                "source_ref": "PnL!B12",
+            }
+        ],
+    )
+    assert result["inserted"] == 1
+
+    facts = await mis_store.list_facts(tenant_id="tenant-a", pack_id=pack_id)
+    assert len(facts) == 1
+    assert facts[0]["amount_decimal"] == "125000.50"
+    assert facts[0]["immutable"] is False
+
+
+@pytest.mark.asyncio
+async def test_reconcile_locks_pack_and_facts(fake_mis_mongo):
+    user = {"sub": "reviewer-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="ca_practice",
+        period="2026-07",
+    )
+    pack_id = pack["id"]
+    await mis_store.insert_facts(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        facts=[{"entity_type": "kpi", "value": 42, "source_system": "manual"}],
+    )
+
+    reconciled = await mis_store.reconcile_pack(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        data_quality_score=92,
+        data_quality_breakdown={"mapped_rows_pct": 100},
+    )
+    assert reconciled["status"] == "reconciled"
+    assert reconciled["immutable"] is True
+    assert reconciled["data_quality_score"] == 92
+
+    facts = await mis_store.list_facts(tenant_id="tenant-a", pack_id=pack_id)
+    assert facts[0]["immutable"] is True
+    assert facts[0]["reconciled"] is True
+
+    with pytest.raises(mis_store.MISImmutableError):
+        await mis_store.insert_facts(
+            tenant_id="tenant-a",
+            pack_id=pack_id,
+            user=user,
+            facts=[{"entity_type": "kpi", "value": 99}],
+        )
+
+
+@pytest.mark.asyncio
+async def test_tenant_isolation_on_pack_read(fake_mis_mongo):
+    user = {"sub": "u1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+    )
+    assert await mis_store.get_pack(tenant_id="tenant-b", pack_id=pack["id"]) is None
+
+
+@pytest.mark.asyncio
+async def test_pack_is_editable_helper():
+    assert mis_store.pack_is_editable({"status": "draft", "immutable": False}) is True
+    assert mis_store.pack_is_editable({"status": "reconciled", "immutable": True}) is False

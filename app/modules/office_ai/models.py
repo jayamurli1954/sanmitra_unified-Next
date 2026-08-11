@@ -17,6 +17,24 @@ NOTIFICATIONS_COLLECTION = "officemitra_notifications"
 PROPOSALS_COLLECTION = "officemitra_proposals"
 WORKFLOW_TEMPLATES_COLLECTION = "officemitra_workflow_templates"
 WORKFLOW_RUNS_COLLECTION = "officemitra_workflow_runs"
+MIS_PACKS_COLLECTION = "officemitra_mis_packs"
+MIS_FACTS_COLLECTION = "officemitra_mis_facts"
+
+MIS_PACK_STATUSES = frozenset(
+    {"draft", "pending_reconcile", "reconciled", "pending_export", "exported", "failed"}
+)
+MIS_EDITABLE_PACK_STATUSES = frozenset({"draft", "pending_reconcile", "failed"})
+MIS_ENTITY_TYPES = frozenset(
+    {
+        "pnl_line",
+        "bs_line",
+        "cash_summary",
+        "aging_bucket",
+        "kpi",
+        "party",
+    }
+)
+MIS_INGESTION_PATHS = frozenset({"excel_import", "mitrabooks", "zoho", "tally", "manual"})
 
 TASK_STATUSES = frozenset({"open", "done", "cancelled"})
 TASK_SOURCES = frozenset({"manual", "ai"})
@@ -107,6 +125,19 @@ async def ensure_indexes() -> None:
             [("tenant_id", 1), ("idempotency_key", 1)],
             unique=True,
             partialFilterExpression={"idempotency_key": {"$type": "string"}},
+        )
+        await get_collection(MIS_PACKS_COLLECTION).create_index(
+            [("tenant_id", 1), ("period", 1), ("updated_at", -1)]
+        )
+        await get_collection(MIS_PACKS_COLLECTION).create_index(
+            [("tenant_id", 1), ("status", 1), ("updated_at", -1)]
+        )
+        await get_collection(MIS_FACTS_COLLECTION).create_index(
+            [("tenant_id", 1), ("pack_id", 1), ("entity_type", 1)]
+        )
+        await get_collection(MIS_FACTS_COLLECTION).create_index(
+            [("tenant_id", 1), ("pack_id", 1), ("fact_id", 1)],
+            unique=True,
         )
         _indexes_ready = True
     except Exception:
