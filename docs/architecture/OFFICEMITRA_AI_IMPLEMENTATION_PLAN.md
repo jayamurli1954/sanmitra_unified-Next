@@ -5,7 +5,7 @@
 **Status:** Phases 1–6 implemented locally — use phase smoke checklists for staging signoff  
 **Version:** 1.5  
 **Date:** 2026-08-11  
-**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-013  
+**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-014  
 **Smoke checklists:**  
 - Phase 1: [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)
 - Phase 2: [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md)
@@ -147,7 +147,8 @@ User → OfficeMitra UI → OfficeMitra service → Connector Manager → Produc
 | **5** | Experience expansion | Standalone OfficeMitra UI for non-ERP tenants; third-party integrations deferred | **Standalone shell implemented** — use [`docs/operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md) |
 | **6** | Workflow engine | Multi-step OfficeMitra-owned action chains on ADR-008 registry (template ≠ run) | **Implemented** behind `office_ai.workflows` — use [`docs/operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md) |
 | **7+** | Companion write-back | Confirmed connector writes into allowlisted product services + capability descriptors | **Planned / gated** — requires Accepted [ADR-010](../adr/ADR-010-officemitra-companion-writeback.md) |
-| **Platform** | Domain events / policy engine / template library | Async side effects; maker-checker policy; curated templates | Policy engine **Implemented** ([ADR-012](../adr/ADR-012-officemitra-policy-engine.md)); [ADR-011](../adr/ADR-011-officemitra-domain-events.md) Proposed; [ADR-013](../adr/ADR-013-officemitra-workflow-template-library.md) Future |
+| **7a** | CA Analysis Pack | Excel template → MIS facts → metric pack → attributed narrative → reconcile → export (Excel/PDF/PPT) | **Accepted** ([ADR-014](../adr/ADR-014-officemitra-ca-analysis-pack.md)) — implement behind `office_ai.mis*`; template Excel first |
+| **Platform** | Domain events / policy engine / template library | Async side effects; maker-checker policy; curated templates | Policy engine **Implemented** ([ADR-012](../adr/ADR-012-officemitra-policy-engine.md)); CA Analysis Pack **Accepted** ([ADR-014](../adr/ADR-014-officemitra-ca-analysis-pack.md)); [ADR-011](../adr/ADR-011-officemitra-domain-events.md) Proposed; [ADR-013](../adr/ADR-013-officemitra-workflow-template-library.md) Future | |
 
 **MVP ships Phase 0 + Phase 1 only.** Phases 2–5 are roadmap, not commitment inside the first PR series.
 

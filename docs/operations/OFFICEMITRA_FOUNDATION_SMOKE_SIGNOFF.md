@@ -50,4 +50,4 @@ Then complete checklists in order (see [OFFICEMITRA_SMOKE_PREP.md](OFFICEMITRA_S
 
 ## Next product planning (out of this signoff)
 
-- ADR-014 Proposed: OfficeMitra CA Analysis Pack (Excel → MIS draft → charts → slides) on top of confirm/policy/workflows.
+- [ADR-014 Accepted: OfficeMitra CA Analysis Pack](../adr/ADR-014-officemitra-ca-analysis-pack.md) — template Excel → MIS → narrative → export; implementation authorized behind `office_ai.mis*`.

@@ -28,6 +28,7 @@ Short, durable records of *why* foundational platform choices were made.
 | [ADR-011](ADR-011-officemitra-domain-events.md) | OfficeMitra domain events (event bus) | Proposed |
 | [ADR-012](ADR-012-officemitra-policy-engine.md) | OfficeMitra policy and authorization engine | Accepted |
 | [ADR-013](ADR-013-officemitra-workflow-template-library.md) | OfficeMitra workflow template library | Future |
+| [ADR-014](ADR-014-officemitra-ca-analysis-pack.md) | OfficeMitra CA Analysis Pack (MIS, narrative, export) | Accepted |
 
 ## Layered execution model (OfficeMitra)
 
@@ -41,6 +42,8 @@ AI → Proposal Engine → Confirmation / Policy (ADR-012)
 ```
 
 Domain events (ADR-011) fan out side effects after successful applies without replacing this path.
+
+MIS assembly (ADR-014) sits **above** read connectors: ingest/normalize facts → metric pack → narrative → policy-gated export. It does not replace the execution path for writes.
 
 ## Related
 

@@ -130,6 +130,8 @@ def test_officemitra_route_contracts_are_registered() -> None:
         ("POST", "/api/v1/officemitra/meeting-notes/summarize"),
         ("GET", "/api/v1/officemitra/notifications"),
         ("PATCH", "/api/v1/officemitra/notifications/{notification_id}/read"),
+        ("GET", "/api/v1/officemitra/mis/status"),
+        ("GET", "/api/v1/officemitra/mis/packs"),
     }
 
     assert expected <= routes

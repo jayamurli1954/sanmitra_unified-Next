@@ -213,7 +213,7 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         ),
         minimum_plan="pro",
         default_enabled=False,
-        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows"),
+        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows", "mis"),
     ),
 }
 
@@ -366,8 +366,8 @@ def require_module_feature(
     }
     explicit = [str(item or "").strip().lower() for item in (office_ai_features or ()) if str(item or "").strip()]
 
-    # Opt-in features never inherit from parent-only enablement (ADR-008 / ADR-009).
-    opt_in_features = frozenset({("office_ai", "writeback"), ("office_ai", "workflows")})
+    # Opt-in features never inherit from parent-only enablement (ADR-008 / ADR-009 / ADR-014).
+    opt_in_features = frozenset({("office_ai", "writeback"), ("office_ai", "workflows"), ("office_ai", "mis")})
     if (module_key, feature_key) in opt_in_features:
         if feature_key in explicit or feature_key in granular_flags:
             return definition
@@ -409,6 +409,119 @@ def is_office_ai_workflows_enabled(
         enabled_modules=enabled_modules,
         office_ai_features=office_ai_features,
     )
+
+
+def is_office_ai_mis_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Return True only when office_ai.mis is explicitly enabled (default off). ADR-014."""
+    return _is_office_ai_opt_in_feature_enabled(
+        "mis",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_mis_import_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Excel template import — requires parent office_ai.mis plus office_ai.mis.import."""
+    if not is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_mis_capability_enabled(
+        "import",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_mis_live_mitrabooks_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Live MitraBooks MIS reads — requires parent office_ai.mis plus office_ai.mis.live_mitrabooks."""
+    if not is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_mis_capability_enabled(
+        "live_mitrabooks",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_mis_export_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """MIS export actions — requires parent office_ai.mis plus office_ai.mis.export."""
+    if not is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_mis_capability_enabled(
+        "export",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_mis_pack_enabled(
+    pack_key: str,
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Per-pack enablement via office_ai.mis.pack.<key> in enabled_modules."""
+    if not is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    key = str(pack_key or "").strip().lower()
+    if not key:
+        return False
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    dotted = f"office_ai.mis.pack.{key}"
+    if dotted in normalized_modules:
+        return True
+    explicit = {
+        str(item or "").strip().lower()
+        for item in (office_ai_features or ())
+        if str(item or "").strip()
+    }
+    return f"mis.pack.{key}" in explicit or f"pack.{key}" in explicit
+
+
+def _is_office_ai_mis_capability_enabled(
+    capability: str,
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    cap = str(capability or "").strip().lower()
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    dotted = f"office_ai.mis.{cap}"
+    if dotted in normalized_modules:
+        return True
+    explicit = {
+        str(item or "").strip().lower()
+        for item in (office_ai_features or ())
+        if str(item or "").strip()
+    }
+    return cap in explicit or f"mis.{cap}" in explicit
 
 
 def _is_office_ai_opt_in_feature_enabled(

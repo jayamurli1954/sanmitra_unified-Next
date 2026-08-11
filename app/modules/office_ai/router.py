@@ -4,7 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.modules.dependencies import require_enabled_module, require_enabled_module_feature
-from app.core.modules.registry import is_office_ai_workflows_enabled, is_office_ai_writeback_enabled
+from app.core.modules.registry import (
+    is_office_ai_mis_enabled,
+    is_office_ai_mis_export_enabled,
+    is_office_ai_mis_import_enabled,
+    is_office_ai_mis_live_mitrabooks_enabled,
+    is_office_ai_mis_pack_enabled,
+    is_office_ai_workflows_enabled,
+    is_office_ai_writeback_enabled,
+)
 from app.db.postgres import get_async_session
 from app.modules.office_ai import schemas
 from app.modules.office_ai.actions import list_action_descriptors, list_registered_actions
@@ -17,6 +25,7 @@ from app.modules.office_ai.services import (
     calendar_service,
     email_service,
     meeting_notes_service,
+    mis_service,
     notification_service,
     proposal_service,
     task_service,
@@ -41,6 +50,43 @@ def _tenant_office_features(ctx: dict) -> list | None:
     return list(features) if features is not None else None
 
 
+def _mis_capability_flags(tenant: dict) -> dict[str, bool]:
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    return {
+        "mis": is_office_ai_mis_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        ),
+        "import": is_office_ai_mis_import_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        ),
+        "live_mitrabooks": is_office_ai_mis_live_mitrabooks_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        ),
+        "export": is_office_ai_mis_export_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        ),
+    }
+
+
+def _enabled_mis_packs(tenant: dict) -> list[str]:
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    return [
+        str(item["pack_key"])
+        for item in mis_service.list_pack_catalog()
+        if is_office_ai_mis_pack_enabled(
+            str(item["pack_key"]),
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+    ]
+
+
 def _actor_id(user: dict) -> str:
     return str(user.get("sub") or user.get("user_id") or user.get("id") or "").strip() or "unknown"
 
@@ -58,6 +104,7 @@ async def ping(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict
         enabled_modules=enabled_modules,
         office_ai_features=office_ai_features,
     )
+    mis_flags = _mis_capability_flags(tenant)
     show_actions = writeback or workflows
     return {
         "ok": True,
@@ -73,10 +120,18 @@ async def ping(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict
             "notifications",
             "writeback",
             "workflows",
+            "mis",
         ],
         "writeback_enabled": writeback,
         "workflows_enabled": workflows,
+        "mis_enabled": mis_flags["mis"],
+        "mis_capabilities": {
+            "import": mis_flags["import"],
+            "live_mitrabooks": mis_flags["live_mitrabooks"],
+            "export": mis_flags["export"],
+        },
         "policy_engine": True,
+        "adr_014": "accepted",
         "registered_actions": list_registered_actions() if show_actions else [],
         "action_descriptors": list_action_descriptors() if show_actions else [],
         "connectors": list_registered_connectors(),
@@ -143,6 +198,32 @@ async def get_action_descriptor(
                 "capabilities": caps,
             }
     raise HTTPException(status_code=404, detail=f"Unknown action_type: {action_type}")
+
+
+@router.get("/mis/status")
+async def mis_status(ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis"))) -> dict:
+    """ADR-014 scaffold — MIS capability flags and pack catalog (no assembly yet)."""
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = list(tenant.get("enabled_modules") or [])
+    office_ai_features = _tenant_office_features(ctx)
+    mis_flags = _mis_capability_flags(tenant)
+    return mis_service.get_mis_status(
+        tenant_id=_tenant_id(ctx),
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+        mis_flags=mis_flags,
+        enabled_packs=_enabled_mis_packs(tenant),
+    )
+
+
+@router.get("/mis/packs")
+async def list_mis_packs(ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis"))) -> dict:
+    """Metric pack catalog with per-tenant pack enablement (ADR-014)."""
+    tenant = ctx.get("tenant") or {}
+    catalog = mis_service.list_pack_catalog()
+    enabled = set(_enabled_mis_packs(tenant))
+    items = [{**item, "enabled_for_tenant": item["pack_key"] in enabled} for item in catalog]
+    return {"items": items, "count": len(items)}
 
 
 @router.get("/tasks")
