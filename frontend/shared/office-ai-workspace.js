@@ -16,6 +16,7 @@ const state = {
   workflowTemplates: [],
   workflowRuns: [],
   writebackEnabled: false,
+  misEnabled: false,
   workflowsEnabled: false,
   unreadCount: 0,
   error: "",
@@ -120,6 +121,7 @@ function advisoryBanner() {
 
 export function renderOfficeAiWorkspace() {
   const unread = Number(state.unreadCount || 0);
+  const proposalsEnabled = !!(state.writebackEnabled || state.misEnabled);
   const pendingProposals = (state.proposals || []).filter((p) => {
     const s = String(p.status || "");
     return s === "pending" || s === "awaiting_checker";
@@ -134,7 +136,7 @@ export function renderOfficeAiWorkspace() {
     ["notifications", notifLabel],
     ["brief", "Today Brief"],
   ];
-  if (state.writebackEnabled) {
+  if (proposalsEnabled) {
     tabs.splice(1, 0, ["proposals", proposalLabel]);
   }
   if (state.workflowsEnabled) {
@@ -469,15 +471,17 @@ async function refreshWritebackFlag() {
   try {
     const payload = unwrap(await apiRequest("/api/v1/officemitra/ping"));
     state.writebackEnabled = !!payload.writeback_enabled;
+    state.misEnabled = !!payload.mis_enabled;
     state.workflowsEnabled = !!payload.workflows_enabled;
   } catch (_err) {
     state.writebackEnabled = false;
+    state.misEnabled = false;
     state.workflowsEnabled = false;
   }
 }
 
 async function refreshProposals() {
-  if (!state.writebackEnabled) {
+  if (!(state.writebackEnabled || state.misEnabled)) {
     state.proposals = [];
     return;
   }
@@ -520,7 +524,7 @@ export async function loadOfficeAiWorkspace() {
     } catch (_e) {
       /* optional */
     }
-    if (state.writebackEnabled && state.tab !== "proposals") {
+    if ((state.writebackEnabled || state.misEnabled) && state.tab !== "proposals") {
       try {
         await refreshProposals();
       } catch (_e) {
