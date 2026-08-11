@@ -1,14 +1,15 @@
-"""MIS pack export scaffold (ADR-014 step 7).
+"""MIS pack export (ADR-014 step 7).
 
-Generates OfficeMitra-owned export artifact metadata after reconcile gate.
-Binary/template rendering is deferred; this module enforces governance only.
+Generates real Excel / PDF / PPT artifacts from imported facts, stores them
+tenant-scoped in Mongo, and marks the pack exported. No journal/GST writes.
 """
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from app.modules.office_ai.services import mis_store
 from app.modules.office_ai.models import utcnow
+from app.modules.office_ai.services import mis_store
+from app.modules.office_ai.services.mis_export_render import render_mis_export
 
 MISExportFormat = Literal["excel", "pdf_summary", "ppt"]
 
@@ -51,7 +52,7 @@ async def export_mis_pack(
     user: dict[str, Any],
     export_format: MISExportFormat | str,
 ) -> dict[str, Any]:
-    """Export a reconciled MIS pack (metadata scaffold until template engine ships)."""
+    """Export a reconciled MIS pack as a downloadable artifact."""
     fmt = str(export_format or "").strip().lower()
     if fmt not in MIS_EXPORT_FORMATS:
         raise MISExportError(f"Unsupported export format: {export_format}")
@@ -71,22 +72,23 @@ async def export_mis_pack(
                 f"PPT export blocked: data_quality_score {score} is below {PPT_MIN_DATA_QUALITY_SCORE}"
             )
 
-    now = utcnow()
-    artifact = {
-        "format": fmt,
-        "pack_id": pack_id,
-        "tenant_id": tenant_id,
-        "pack_key": pack.get("pack_key"),
-        "pack_version": pack.get("pack_version"),
-        "materiality_rule_version": pack.get("materiality_rule_version"),
-        "period": pack.get("period"),
-        "data_quality_score": pack.get("data_quality_score"),
-        "status": "generated",
-        "storage_ref": f"mis-exports/{tenant_id}/{pack_id}/{fmt}-scaffold.json",
-        "content_type": _content_type_for_format(fmt),
-        "generated_at": now.isoformat(),
-        "note": "Scaffold artifact — template rendering not yet implemented",
-    }
+    facts = await mis_store.list_facts(tenant_id=tenant_id, pack_id=pack_id, limit=2000)
+    content, filename, content_type = render_mis_export(pack=pack, facts=facts, export_format=fmt)
+    artifact = await mis_store.save_export_artifact(
+        tenant_id=tenant_id,
+        pack_id=pack_id,
+        user=user,
+        export_format=fmt,
+        filename=filename,
+        content_type=content_type,
+        content=content,
+    )
+    artifact["generated_at"] = utcnow().isoformat()
+    artifact["pack_key"] = pack.get("pack_key")
+    artifact["pack_version"] = pack.get("pack_version")
+    artifact["period"] = pack.get("period")
+    artifact["data_quality_score"] = pack.get("data_quality_score")
+    artifact["note"] = "Generated from imported MIS facts"
 
     updated_pack = await mis_store.mark_pack_exported(
         tenant_id=tenant_id,
@@ -96,7 +98,7 @@ async def export_mis_pack(
     return {"artifact": artifact, "pack": updated_pack}
 
 
-def _content_type_for_format(export_format: str) -> str:
+def content_type_for_format(export_format: str) -> str:
     if export_format == "excel":
         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     if export_format == "pdf_summary":

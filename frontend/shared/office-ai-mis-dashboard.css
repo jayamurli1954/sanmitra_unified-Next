@@ -1,0 +1,298 @@
+/* OfficeMitra MIS Pack dashboard — theme-aware KPI layout (ADR-014 facts only). */
+
+.mis-dash {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.mis-dash__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--text-primary, #f8fafc);
+}
+
+.mis-dash__sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.mis-dash__kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 960px) {
+  .mis-dash__kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .mis-dash__kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mis-kpi {
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  background: var(--bg-card, rgba(18, 25, 47, 0.92));
+  overflow: hidden;
+  min-width: 0;
+}
+
+.mis-kpi__bar {
+  height: 0.35rem;
+  width: 100%;
+}
+
+.mis-kpi__body {
+  padding: 0.75rem 0.9rem 0.9rem;
+}
+
+.mis-kpi__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.mis-kpi__value {
+  margin-top: 0.35rem;
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-primary, #f8fafc);
+  font-variant-numeric: tabular-nums;
+}
+
+.mis-kpi__unit {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+}
+
+.mis-kpi--revenue .mis-kpi__bar { background: #3b82f6; }
+.mis-kpi--pat .mis-kpi__bar { background: #10b981; }
+.mis-kpi--margin .mis-kpi__bar { background: #06b6d4; }
+.mis-kpi--cash .mis-kpi__bar { background: #f59e0b; }
+
+.mis-dash__chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mis-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 7rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  background: var(--bg-secondary, rgba(15, 20, 36, 0.9));
+}
+
+.mis-chip__label {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mis-chip__value {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--text-primary, #f8fafc);
+  font-variant-numeric: tabular-nums;
+}
+
+.mis-dash__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+@media (max-width: 640px) {
+  .mis-dash__summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mis-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.mis-summary__label {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.mis-summary__value {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text-primary, #f8fafc);
+  font-variant-numeric: tabular-nums;
+}
+
+.mis-dash__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .mis-dash__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mis-panel {
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  background: var(--bg-card, rgba(18, 25, 47, 0.92));
+  padding: 0.85rem 1rem 1rem;
+  min-width: 0;
+}
+
+.mis-panel__title {
+  margin: 0 0 0.65rem;
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--text-primary, #f8fafc);
+}
+
+.mis-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  height: 8.5rem;
+  padding-top: 0.35rem;
+}
+
+.mis-bars__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  height: 100%;
+}
+
+.mis-bars__track {
+  flex: 1;
+  width: 100%;
+  max-width: 2.4rem;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  overflow: hidden;
+}
+
+.mis-bars__fill {
+  width: 100%;
+  border-radius: 6px 6px 2px 2px;
+  min-height: 4%;
+}
+
+.mis-bars__fill--ar { background: #3b82f6; }
+.mis-bars__fill--ap { background: #0d9488; }
+
+.mis-bars__amt {
+  font-size: 0.68rem;
+  color: var(--text-secondary, #94a3b8);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mis-bars__label {
+  font-size: 0.68rem;
+  color: var(--text-muted, #64748b);
+  text-align: center;
+}
+
+.mis-trend {
+  width: 100%;
+  height: 7.5rem;
+}
+
+.mis-trend__line {
+  fill: none;
+  stroke: #10b981;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mis-trend__area {
+  fill: rgba(16, 185, 129, 0.15);
+  stroke: none;
+}
+
+.mis-trend__point {
+  fill: #10b981;
+}
+
+.mis-trend__axis {
+  font-size: 10px;
+  fill: var(--text-muted, #64748b);
+}
+
+.mis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.mis-table th,
+.mis-table td {
+  padding: 0.4rem 0.35rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+}
+
+.mis-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 600;
+}
+
+.mis-table td {
+  color: var(--text-primary, #f8fafc);
+  font-variant-numeric: tabular-nums;
+}
+
+.mis-table td.num {
+  text-align: right;
+}
+
+.mis-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mis-table .emphasis td {
+  font-weight: 650;
+}

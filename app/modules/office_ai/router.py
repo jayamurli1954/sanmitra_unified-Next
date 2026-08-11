@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.modules.dependencies import require_enabled_module, require_enabled_module_feature
@@ -492,6 +493,39 @@ async def export_mis_pack(
         office_ai_features=office_ai_features,
     )
     return confirm_res or {"proposal_id": proposal_id, "export_format": payload.format}
+
+
+@router.get("/mis/exports/{artifact_id}/download")
+async def download_mis_export_artifact(
+    artifact_id: str,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> Response:
+    """Download a generated MIS export artifact (tenant-scoped)."""
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    if not is_office_ai_mis_export_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        raise HTTPException(status_code=403, detail="Enable office_ai.mis.export for MIS exports")
+
+    artifact = await mis_store.get_export_artifact(
+        tenant_id=_tenant_id(ctx),
+        artifact_id=artifact_id,
+        include_content=True,
+    )
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Export artifact not found")
+
+    filename = str(artifact.get("filename") or "mis-export.bin")
+    content_type = str(artifact.get("content_type") or "application/octet-stream")
+    content = artifact.get("content") or b""
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/tasks")

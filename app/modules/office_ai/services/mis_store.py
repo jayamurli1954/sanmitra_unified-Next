@@ -9,6 +9,7 @@ from app.db.mongo import get_collection
 from app.modules.office_ai.models import (
     MIS_EDITABLE_PACK_STATUSES,
     MIS_ENTITY_TYPES,
+    MIS_EXPORTS_COLLECTION,
     MIS_FACTS_COLLECTION,
     MIS_INGESTION_PATHS,
     MIS_PACKS_COLLECTION,
@@ -345,3 +346,68 @@ async def mark_pack_exported(*, tenant_id: str, pack_id: str, user: dict[str, An
     )
     updated = await get_pack(tenant_id=tenant_id, pack_id=pack_id)
     return updated or {}
+
+
+async def save_export_artifact(
+    *,
+    tenant_id: str,
+    pack_id: str,
+    user: dict[str, Any],
+    export_format: str,
+    filename: str,
+    content_type: str,
+    content: bytes,
+) -> dict[str, Any]:
+    """Persist generated export bytes (tenant-scoped). Content excluded from serialized meta."""
+    from bson.binary import Binary
+
+    await ensure_indexes()
+    pack = await get_pack(tenant_id=tenant_id, pack_id=pack_id)
+    if pack is None:
+        raise MISPackNotFoundError(f"MIS pack not found: {pack_id}")
+
+    now = utcnow()
+    actor = _actor_id(user)
+    payload = content if isinstance(content, (bytes, bytearray)) else bytes(content or b"")
+    doc = {
+        "_id": new_object_id(),
+        "tenant_id": tenant_id,
+        "pack_id": pack_id,
+        "format": str(export_format or "").strip().lower(),
+        "filename": str(filename or "mis-export.bin"),
+        "content_type": str(content_type or "application/octet-stream"),
+        "byte_size": len(payload),
+        "content": Binary(payload),
+        "created_at": now,
+        "created_by": actor,
+        "status": "generated",
+    }
+    await get_collection(MIS_EXPORTS_COLLECTION).insert_one(doc)
+    meta = serialize_doc({k: v for k, v in doc.items() if k != "content"}) or {}
+    meta["download_path"] = f"/api/v1/officemitra/mis/exports/{meta['id']}/download"
+    return meta
+
+
+async def get_export_artifact(
+    *,
+    tenant_id: str,
+    artifact_id: str,
+    include_content: bool = False,
+) -> dict[str, Any] | None:
+    await ensure_indexes()
+    if not ObjectId.is_valid(artifact_id):
+        return None
+    doc = await get_collection(MIS_EXPORTS_COLLECTION).find_one(
+        {"_id": ObjectId(artifact_id), "tenant_id": tenant_id}
+    )
+    if not doc:
+        return None
+    if include_content:
+        out = dict(doc)
+        content = out.pop("content", b"")
+        meta = serialize_doc(out) or {}
+        meta["content"] = bytes(content) if content is not None else b""
+        return meta
+    meta = serialize_doc({k: v for k, v in doc.items() if k != "content"}) or {}
+    meta["download_path"] = f"/api/v1/officemitra/mis/exports/{meta['id']}/download"
+    return meta

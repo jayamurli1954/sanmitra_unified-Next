@@ -19,6 +19,7 @@ WORKFLOW_TEMPLATES_COLLECTION = "officemitra_workflow_templates"
 WORKFLOW_RUNS_COLLECTION = "officemitra_workflow_runs"
 MIS_PACKS_COLLECTION = "officemitra_mis_packs"
 MIS_FACTS_COLLECTION = "officemitra_mis_facts"
+MIS_EXPORTS_COLLECTION = "officemitra_mis_exports"
 
 MIS_PACK_STATUSES = frozenset(
     {"draft", "pending_reconcile", "reconciled", "pending_export", "exported", "failed"}
@@ -138,6 +139,9 @@ async def ensure_indexes() -> None:
         await get_collection(MIS_FACTS_COLLECTION).create_index(
             [("tenant_id", 1), ("pack_id", 1), ("fact_id", 1)],
             unique=True,
+        )
+        await get_collection(MIS_EXPORTS_COLLECTION).create_index(
+            [("tenant_id", 1), ("pack_id", 1), ("created_at", -1)]
         )
         _indexes_ready = True
     except Exception:

@@ -92,6 +92,8 @@ class Settings:
         "http://127.0.0.1:3300",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
         "null",
     ]))
     GOOGLE_OAUTH_CLIENT_IDS = [

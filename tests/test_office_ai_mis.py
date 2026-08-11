@@ -351,6 +351,44 @@ async def test_export_excel_marks_pack_exported(fake_mis_mongo):
     )
     assert result["artifact"]["format"] == "excel"
     assert result["pack"]["status"] == "exported"
+    assert result["artifact"].get("id")
+    assert result["artifact"].get("byte_size", 0) > 100
+    assert result["artifact"]["download_path"].endswith("/download")
+    assert "scaffold" not in str(result["artifact"].get("note") or "").lower()
+
+
+def test_mis_export_renderers_produce_real_bytes() -> None:
+    from app.modules.office_ai.services.mis_export_render import render_mis_export
+
+    pack = {"pack_key": "sme_general", "period": "2026-07", "status": "reconciled"}
+    facts = [
+        {
+            "entity_type": "kpi",
+            "value": 42,
+            "dimensions": {"kpi": "DSO", "unit": "days"},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": 1000,
+            "dimensions": {"line": "Revenue"},
+            "period": "2026-07",
+        },
+        {
+            "entity_type": "aging_bucket",
+            "amount_decimal": 250,
+            "dimensions": {"side": "AR", "bucket": "Current"},
+        },
+    ]
+    for fmt, magic in (
+        ("excel", b"PK"),
+        ("pdf_summary", b"%PDF"),
+        ("ppt", b"PK"),
+    ):
+        content, filename, content_type = render_mis_export(pack=pack, facts=facts, export_format=fmt)
+        assert content.startswith(magic)
+        assert filename.endswith({"excel": ".xlsx", "pdf_summary": ".pdf", "ppt": ".pptx"}[fmt])
+        assert content_type
+        assert len(content) > 50
 
 
 def test_shared_workspace_has_mis_tab_and_actions() -> None:
@@ -367,6 +405,11 @@ def test_shared_workspace_has_mis_tab_and_actions() -> None:
     assert "export_mis_" in shared
     assert "Pack dashboard" in shared
     assert "buildMisDashboard" in shared
+    assert "mis-dash__kpi-row" in shared
+    assert "office-ai-mis-dashboard.css" in shared
+    assert (Path("frontend/shared/office-ai-mis-dashboard.css")).is_file()
+    assert "downloadMisArtifact" in shared
+    assert "/mis/exports/" in shared
 
 
 def test_mis_demo_firm_seed_facts_cover_dashboard_entities() -> None:
