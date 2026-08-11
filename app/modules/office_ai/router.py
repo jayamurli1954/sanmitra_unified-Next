@@ -84,6 +84,67 @@ async def ping(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict
     }
 
 
+@router.get("/actions")
+async def list_actions(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict:
+    """Action Registry health probe (ADR-008). Full descriptors when writeback or workflows is on."""
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    writeback = is_office_ai_writeback_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    workflows = is_office_ai_workflows_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    show = writeback or workflows
+    return {
+        "registered_actions": list_registered_actions() if show else [],
+        "action_descriptors": list_action_descriptors() if show else [],
+        "writeback_enabled": writeback,
+        "workflows_enabled": workflows,
+    }
+
+
+@router.get("/actions/{action_type}")
+async def get_action_descriptor(
+    action_type: str,
+    ctx: dict = Depends(require_enabled_module("office_ai")),
+) -> dict:
+    """Capability Descriptor probe for one registered action (ADR-008 → ADR-012)."""
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    writeback = is_office_ai_writeback_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    workflows = is_office_ai_workflows_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    if not (writeback or workflows):
+        raise HTTPException(
+            status_code=403,
+            detail="Enable office_ai.writeback or office_ai.workflows to inspect action descriptors",
+        )
+    key = str(action_type or "").strip().lower()
+    for item in list_action_descriptors():
+        if str(item.get("action_type") or "").strip().lower() == key:
+            caps = item.get("capabilities") or {}
+            return {
+                "action_type": item.get("action_type"),
+                "target_module": item.get("target_module"),
+                "description": item.get("description"),
+                "requires_confirmation": caps.get("requires_confirmation"),
+                "requires_maker_checker": caps.get("requires_maker_checker"),
+                "risk_level": caps.get("risk_level"),
+                "capabilities": caps,
+            }
+    raise HTTPException(status_code=404, detail=f"Unknown action_type: {action_type}")
+
+
 @router.get("/tasks")
 async def list_tasks(
     status: str | None = Query(default=None),

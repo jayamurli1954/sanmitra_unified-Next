@@ -48,6 +48,12 @@ Default: **stop-on-failure** (remaining steps → `skipped`).
 - [ ] Force a step failure → run `failed`, later steps `skipped` when `continue_on_failure=false`
 - [ ] No silent partial success
 
+### Diagnostics (mandatory — ADR-009)
+
+- [ ] Each `step_results[]` entry includes `duration_ms`, `retry_count`, `executor_version`
+- [ ] Failed steps include `error_message`; skipped steps remain `skipped` after stop-on-failure
+- [ ] Missing diagnostics ⇒ **fail smoke** even if overall status looks applied
+
 ### Safety
 
 - [ ] No journal / invoice / legal / housing / temple writes from workflow steps

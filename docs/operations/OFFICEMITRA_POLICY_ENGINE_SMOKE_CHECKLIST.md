@@ -16,7 +16,13 @@
 
 - [ ] `POST /api/v1/officemitra/policy/evaluate` returns structured `{allowed, execution_mode, decision, rule_id, reason, approval_expiry_hours}`
 - [ ] `GET /officemitra/ping` includes `policy_engine: true`
-- [ ] Flag off → `rule_id=POL-002` DENY for writeback/workflows intents
+- [ ] `GET /officemitra/actions` and `GET /officemitra/actions/create_task` expose registry + capability descriptors when writeback/workflows on
+
+### Negative policy cases (required)
+
+- [ ] Flag off (`office_ai.writeback` absent) → `DENY` / `POL-002`
+- [ ] Same maker/checker with self-approval disabled → `DENY` / `POL-021`
+- [ ] Expired approval → `DENY` / `POL-020` or proposal `expired`
 
 ### Confirmation path (LOW risk)
 

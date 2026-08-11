@@ -354,3 +354,14 @@ def test_shared_workspace_mentions_policy_and_approve():
     shared = Path("frontend/shared/office-ai-workspace.js").read_text(encoding="utf-8")
     assert "approve-proposal" in shared
     assert "ADR-008/012" in shared or "ADR-012" in shared
+
+
+def test_list_action_descriptors_expose_create_task_capabilities():
+    from app.modules.office_ai.actions import list_action_descriptors, list_registered_actions
+
+    assert "create_task" in list_registered_actions()
+    assert "create_notification" in list_registered_actions()
+    descriptors = {d["action_type"]: d for d in list_action_descriptors()}
+    caps = descriptors["create_task"]["capabilities"]
+    assert caps["requires_confirmation"] is True
+    assert caps["risk_level"] == "LOW"
