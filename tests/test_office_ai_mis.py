@@ -351,3 +351,17 @@ async def test_export_excel_marks_pack_exported(fake_mis_mongo):
     )
     assert result["artifact"]["format"] == "excel"
     assert result["pack"]["status"] == "exported"
+
+
+def test_shared_workspace_has_mis_tab_and_actions() -> None:
+    from pathlib import Path
+
+    shared = Path("frontend/shared/office-ai-workspace.js").read_text(encoding="utf-8")
+    assert '["mis", "MIS Packs"]' in shared
+    assert 'data-office-ai-action="mis-create-pack"' in shared
+    assert 'data-office-ai-action="mis-import-excel"' in shared
+    assert 'data-office-ai-action="mis-reconcile"' in shared
+    assert 'data-office-ai-action="mis-export-ppt"' in shared
+    assert "/api/v1/officemitra/mis/packs" in shared
+    assert "reconcile_mis_pack" in shared
+    assert "export_mis_" in shared

@@ -5,7 +5,7 @@
 let deps = null;
 
 const state = {
-  tab: "tasks", // tasks | email | brief | calendar | notes | notifications | proposals | workflows
+  tab: "tasks", // tasks | email | brief | calendar | notes | notifications | proposals | mis | workflows
   tasks: [],
   emails: [],
   brief: null,
@@ -17,6 +17,17 @@ const state = {
   workflowRuns: [],
   writebackEnabled: false,
   misEnabled: false,
+  misImportEnabled: false,
+  misExportEnabled: false,
+  misPacks: [],
+  misCatalog: [],
+  misSelectedPackId: "",
+  misNewPackKey: "sme_general",
+  misNewPeriod: "",
+  misImportPersist: true,
+  misReconcileScore: "",
+  misLastImportReport: null,
+  misPackFacts: [],
   workflowsEnabled: false,
   unreadCount: 0,
   error: "",
@@ -107,12 +118,48 @@ function syncPasteFields(el) {
   const notes = root.querySelector("[data-office-ai-field='notesText']");
   const workflowName = root.querySelector("[data-office-ai-field='workflowName']");
   const workflowKey = root.querySelector("[data-office-ai-field='workflowIdempotencyKey']");
+  const misPeriod = root.querySelector("[data-office-ai-field='misNewPeriod']");
+  const misPackKey = root.querySelector("[data-office-ai-field='misNewPackKey']");
+  const misScore = root.querySelector("[data-office-ai-field='misReconcileScore']");
+  const misPersist = root.querySelector("[data-office-ai-field='misImportPersist']");
   if (draft) state.draftText = draft.value || "";
   if (email) state.emailText = email.value || "";
   if (calendar) state.calendarText = calendar.value || "";
   if (notes) state.notesText = notes.value || "";
   if (workflowName) state.workflowName = workflowName.value || "";
   if (workflowKey) state.workflowIdempotencyKey = workflowKey.value || "";
+  if (misPeriod) state.misNewPeriod = misPeriod.value || "";
+  if (misPackKey) state.misNewPackKey = misPackKey.value || "sme_general";
+  if (misScore) state.misReconcileScore = misScore.value || "";
+  if (misPersist) state.misImportPersist = misPersist.checked !== false;
+}
+
+function proposalSummary(proposal) {
+  const action = String(proposal?.action_type || "").trim().toLowerCase();
+  const payload = proposal?.payload && typeof proposal.payload === "object" ? proposal.payload : {};
+  if (action === "reconcile_mis_pack") {
+    const packId = String(payload.pack_id || "").trim();
+    return packId ? `Reconcile MIS pack ${packId}` : "Reconcile MIS pack";
+  }
+  if (action.startsWith("export_mis_")) {
+    const fmt = String(payload.export_format || action.replace("export_mis_", "")).trim();
+    const packId = String(payload.pack_id || "").trim();
+    return packId ? `Export ${fmt} — pack ${packId}` : `Export ${fmt}`;
+  }
+  return String(payload.title || proposal?.action_type || "(proposal)");
+}
+
+function formatMisPackStatus(status) {
+  const key = String(status || "draft").toLowerCase();
+  if (key === "pending_reconcile") return "Pending reconcile";
+  if (key === "reconciled") return "Reconciled";
+  if (key === "exported") return "Exported";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function misPackById(packId) {
+  const id = String(packId || "").trim();
+  return (state.misPacks || []).find((p) => String(p.id || "").trim() === id) || null;
 }
 
 function advisoryBanner() {
@@ -139,9 +186,13 @@ export function renderOfficeAiWorkspace() {
   if (proposalsEnabled) {
     tabs.splice(1, 0, ["proposals", proposalLabel]);
   }
+  let featureInsertAt = proposalsEnabled ? 2 : 1;
+  if (state.misEnabled) {
+    tabs.splice(featureInsertAt, 0, ["mis", "MIS Packs"]);
+    featureInsertAt += 1;
+  }
   if (state.workflowsEnabled) {
-    const insertAt = state.writebackEnabled ? 2 : 1;
-    tabs.splice(insertAt, 0, ["workflows", "Workflows"]);
+    tabs.splice(featureInsertAt, 0, ["workflows", "Workflows"]);
   }
   const tabButtons = tabs
     .map(([id, label]) => {
@@ -153,6 +204,7 @@ export function renderOfficeAiWorkspace() {
   let body = "";
   if (state.tab === "tasks") body = renderTasksPanel();
   else if (state.tab === "proposals") body = renderProposalsPanel();
+  else if (state.tab === "mis") body = renderMisPanel();
   else if (state.tab === "workflows") body = renderWorkflowsPanel();
   else if (state.tab === "email") body = renderEmailPanel();
   else if (state.tab === "calendar") body = renderCalendarPanel();
@@ -169,6 +221,9 @@ export function renderOfficeAiWorkspace() {
           ${advisoryBanner()}
           ${state.writebackEnabled
             ? `<p class="muted" style="margin:0.35rem 0 0;">Write-back enabled: AI suggestions become proposals until you confirm.</p>`
+            : ""}
+          ${state.misEnabled
+            ? `<p class="muted" style="margin:0.35rem 0 0;">CA Analysis Pack (MIS) enabled: import Excel facts, reconcile with maker/checker, export when ready (ADR-014).</p>`
             : ""}
           ${state.workflowsEnabled
             ? `<p class="muted" style="margin:0.35rem 0 0;">Workflows enabled: multi-step OfficeMitra actions via Action Executor (ADR-009).</p>`
@@ -224,7 +279,7 @@ function renderProposalsPanel() {
     .map((proposal) => {
       const id = String(proposal.id || "").trim();
       const status = String(proposal.status || "pending").toLowerCase();
-      const title = proposal?.payload?.title || proposal?.action_type || "(proposal)";
+      const title = proposalSummary(proposal);
       const confidence = proposal.confidence == null ? "—" : String(proposal.confidence);
       let actions = `<span class="muted">${escapeHtml(status)}</span>`;
       if (status === "pending" && id) {
@@ -249,8 +304,143 @@ function renderProposalsPanel() {
       <button class="secondary" type="button" data-office-ai-action="refresh-proposals">Refresh proposals</button>
       <table class="data-table">
         <thead><tr><th>Summary</th><th>Action</th><th>Confidence</th><th>Status</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="5" class="muted">No proposals yet. Generate tasks with write-back enabled.</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="5" class="muted">No proposals yet. Generate tasks with write-back enabled, or submit MIS reconcile/export actions.</td></tr>`}</tbody>
       </table>
+    </div>
+  `;
+}
+
+function renderMisPanel() {
+  const catalogOptions = (state.misCatalog || [])
+    .map((entry) => {
+      const key = String(entry.pack_key || "").trim();
+      const label = String(entry.display_name || key);
+      const enabled = entry.enabled_for_tenant !== false;
+      const suffix = enabled ? "" : " (not enabled)";
+      const selected = key === state.misNewPackKey ? " selected" : "";
+      return `<option value="${escapeHtml(key)}"${selected}${enabled ? "" : " disabled"}>${escapeHtml(label)}${escapeHtml(suffix)}</option>`;
+    })
+    .join("");
+
+  const packRows = (state.misPacks || [])
+    .map((pack) => {
+      const id = String(pack.id || "").trim();
+      const selected = id === state.misSelectedPackId;
+      const quality = pack.data_quality_score == null ? "—" : String(pack.data_quality_score);
+      const rowClass = selected ? ' style="background:rgba(0,0,0,0.04)"' : "";
+      return `<tr${rowClass}>
+        <td>${escapeHtml(pack.display_name || pack.pack_key || "")}</td>
+        <td>${escapeHtml(String(pack.period || ""))}</td>
+        <td>${escapeHtml(formatMisPackStatus(pack.status))}</td>
+        <td>${escapeHtml(quality)}</td>
+        <td>
+          <button class="${selected ? "primary" : "secondary"}" type="button" data-office-ai-action="mis-select-pack" data-pack-id="${escapeHtml(id)}">${selected ? "Selected" : "Select"}</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  const selected = misPackById(state.misSelectedPackId);
+  const selectedStatus = selected ? formatMisPackStatus(selected.status) : "";
+  const editableStatuses = ["draft", "pending_reconcile", "failed"];
+  const selectedStatusKey = String(selected?.status || "draft").toLowerCase();
+  const canEdit = selected && !selected.immutable && editableStatuses.includes(selectedStatusKey);
+  const canReconcile = selected && !selected.immutable && !["reconciled", "exported"].includes(selectedStatusKey);
+  const canExport = selected && ["reconciled", "exported"].includes(String(selected.status || "").toLowerCase());
+
+  const factRows = (state.misPackFacts || [])
+    .slice(0, 15)
+    .map((fact) => `<tr>
+      <td>${escapeHtml(String(fact.entity_type || ""))}</td>
+      <td>${escapeHtml(String(fact.period || fact.as_of || ""))}</td>
+      <td>${escapeHtml(String(fact.amount_decimal ?? fact.value ?? ""))}</td>
+      <td>${escapeHtml(String(fact.source_system || ""))}</td>
+    </tr>`)
+    .join("");
+
+  const report = state.misLastImportReport;
+  const reportHtml = report
+    ? `<div class="muted" style="margin-top:0.5rem;">
+        Last import: ${escapeHtml(String(report.facts_previewed ?? 0))} valid row(s),
+        ${escapeHtml(String((report.errors || []).length))} error(s),
+        ${escapeHtml(String((report.warnings || []).length))} warning(s).
+      </div>`
+    : "";
+
+  const importSection = state.misImportEnabled
+    ? `<div class="stack-form" style="margin-top:1rem;">
+        <h5>Import Excel</h5>
+        <p class="muted">Upload SanMitra CA MIS template (.xlsx). Preview validates only; persist inserts valid facts.</p>
+        <label style="display:block;">
+          Excel file
+          <input type="file" accept=".xlsx,.xls" data-office-ai-field="misImportFile" ${canEdit ? "" : "disabled"} />
+        </label>
+        <label style="display:flex;align-items:center;gap:0.35rem;">
+          <input type="checkbox" data-office-ai-field="misImportPersist" ${state.misImportPersist ? "checked" : ""} ${canEdit ? "" : "disabled"} />
+          Persist valid rows after validation
+        </label>
+        <button class="primary" type="button" data-office-ai-action="mis-import-excel" ${canEdit ? "" : "disabled"}>Import</button>
+        ${reportHtml}
+      </div>`
+    : `<p class="muted" style="margin-top:1rem;">Excel import requires <code>office_ai.mis.import</code>.</p>`;
+
+  const reconcileSection = canReconcile
+    ? `<div class="stack-form" style="margin-top:1rem;">
+        <h5>Reconcile (maker)</h5>
+        <p class="muted">Locks the pack after checker approval. Optional quality score (0–100) for export gates.</p>
+        <label>Data quality score (optional)
+          <input type="number" min="0" max="100" data-office-ai-field="misReconcileScore" value="${escapeHtml(state.misReconcileScore || "")}" placeholder="e.g. 85" />
+        </label>
+        <button class="primary" type="button" data-office-ai-action="mis-reconcile">Submit reconcile</button>
+      </div>`
+    : selected
+      ? `<p class="muted" style="margin-top:1rem;">Reconcile not available (status: ${escapeHtml(selectedStatus)}).</p>`
+      : "";
+
+  const exportSection = state.misExportEnabled && canExport
+    ? `<div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="secondary" type="button" data-office-ai-action="mis-export-excel">Export Excel</button>
+        <button class="secondary" type="button" data-office-ai-action="mis-export-pdf">Export PDF summary</button>
+        <button class="primary" type="button" data-office-ai-action="mis-export-ppt">Export PPT (checker)</button>
+      </div>`
+    : state.misExportEnabled && selected
+      ? `<p class="muted" style="margin-top:1rem;">Export unlocks after reconcile. PPT requires quality score ≥ 70.</p>`
+      : `<p class="muted" style="margin-top:1rem;">Export requires <code>office_ai.mis.export</code>.</p>`;
+
+  return `
+    <div class="stack-form">
+      <p class="muted">CA Analysis Pack workflow: create pack → import facts → reconcile (maker/checker) → export. No journal or GST writes from MIS (ADR-014).</p>
+      <button class="secondary" type="button" data-office-ai-action="mis-refresh">Refresh packs</button>
+
+      <div class="stack-form" style="margin-top:1rem;">
+        <h5>Create pack</h5>
+        <label>Metric pack
+          <select data-office-ai-field="misNewPackKey">${catalogOptions || `<option value="sme_general">SME General</option>`}</select>
+        </label>
+        <label>Period
+          <input type="text" data-office-ai-field="misNewPeriod" value="${escapeHtml(state.misNewPeriod || "")}" placeholder="2026-07 or FY2025-26" />
+        </label>
+        <button class="primary" type="button" data-office-ai-action="mis-create-pack">Create draft pack</button>
+      </div>
+
+      <table class="data-table" style="margin-top:1rem;">
+        <thead><tr><th>Pack</th><th>Period</th><th>Status</th><th>Quality</th><th></th></tr></thead>
+        <tbody>${packRows || `<tr><td colspan="5" class="muted">No MIS packs yet.</td></tr>`}</tbody>
+      </table>
+
+      ${selected
+        ? `<div style="margin-top:1rem;padding:0.75rem;border:1px solid rgba(0,0,0,0.08);border-radius:6px;">
+            <h5>Selected: ${escapeHtml(selected.display_name || selected.pack_key || "")} — ${escapeHtml(String(selected.period || ""))}</h5>
+            <p class="muted">Status: ${escapeHtml(selectedStatus)} · ID: ${escapeHtml(state.misSelectedPackId)}</p>
+            ${importSection}
+            ${reconcileSection}
+            ${exportSection}
+            <table class="data-table" style="margin-top:1rem;">
+              <thead><tr><th>Entity</th><th>Period</th><th>Amount / value</th><th>Source</th></tr></thead>
+              <tbody>${factRows || `<tr><td colspan="4" class="muted">No facts loaded.</td></tr>`}</tbody>
+            </table>
+          </div>`
+        : `<p class="muted" style="margin-top:1rem;">Select a pack to import, reconcile, or export.</p>`}
     </div>
   `;
 }
@@ -472,11 +662,50 @@ async function refreshWritebackFlag() {
     const payload = unwrap(await apiRequest("/api/v1/officemitra/ping"));
     state.writebackEnabled = !!payload.writeback_enabled;
     state.misEnabled = !!payload.mis_enabled;
+    state.misImportEnabled = !!payload.mis_capabilities?.import;
+    state.misExportEnabled = !!payload.mis_capabilities?.export;
     state.workflowsEnabled = !!payload.workflows_enabled;
   } catch (_err) {
     state.writebackEnabled = false;
     state.misEnabled = false;
+    state.misImportEnabled = false;
+    state.misExportEnabled = false;
     state.workflowsEnabled = false;
+  }
+}
+
+async function refreshMisFacts(packId) {
+  const id = String(packId || "").trim();
+  if (!id) {
+    state.misPackFacts = [];
+    return;
+  }
+  const payload = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(id)}/facts?limit=20`));
+  state.misPackFacts = payload.items || [];
+}
+
+async function refreshMisData() {
+  if (!state.misEnabled) {
+    state.misPacks = [];
+    state.misCatalog = [];
+    state.misPackFacts = [];
+    return;
+  }
+  const [catalogRes, packsRes] = await Promise.all([
+    unwrap(await apiRequest("/api/v1/officemitra/mis/pack-catalog")),
+    unwrap(await apiRequest("/api/v1/officemitra/mis/packs?limit=50")),
+  ]);
+  state.misCatalog = catalogRes.items || [];
+  state.misPacks = packsRes.items || [];
+  if (state.misSelectedPackId && !misPackById(state.misSelectedPackId)) {
+    state.misSelectedPackId = "";
+    state.misPackFacts = [];
+  }
+  if (!state.misSelectedPackId && state.misPacks.length) {
+    state.misSelectedPackId = String(state.misPacks[0]?.id || "").trim();
+  }
+  if (state.misSelectedPackId) {
+    await refreshMisFacts(state.misSelectedPackId);
   }
 }
 
@@ -511,6 +740,7 @@ export async function loadOfficeAiWorkspace() {
     await refreshWritebackFlag();
     if (state.tab === "tasks") await refreshTasks();
     else if (state.tab === "proposals") await refreshProposals();
+    else if (state.tab === "mis") await refreshMisData();
     else if (state.tab === "workflows") await refreshWorkflows();
     else if (state.tab === "email") await refreshEmails();
     else if (state.tab === "calendar") await refreshCalendar();
@@ -555,6 +785,9 @@ export async function handleOfficeAiAction(action, el) {
     : "";
   const templateId = action === "start-workflow"
     ? String(el?.getAttribute("data-template-id") || el?.dataset?.templateId || "").trim()
+    : "";
+  const misSelectPackId = action === "mis-select-pack"
+    ? String(el?.getAttribute("data-pack-id") || el?.dataset?.packId || "").trim()
     : "";
   try {
     if (action === "tab") {
@@ -614,6 +847,13 @@ export async function handleOfficeAiAction(action, el) {
           : "Proposal updated.";
       await refreshProposals();
       await refreshTasks();
+      if (state.misEnabled) {
+        try {
+          await refreshMisData();
+        } catch (_e) {
+          /* optional */
+        }
+      }
     } else if (action === "dismiss-proposal") {
       if (!proposalId) throw new Error("Missing proposal id");
       unwrap(await apiRequest(`/api/v1/officemitra/proposals/${encodeURIComponent(proposalId)}/dismiss`, {
@@ -638,6 +878,13 @@ export async function handleOfficeAiAction(action, el) {
           : "Proposal updated.";
       await refreshProposals();
       await refreshTasks();
+      if (state.misEnabled) {
+        try {
+          await refreshMisData();
+        } catch (_e) {
+          /* optional */
+        }
+      }
     } else if (action === "refresh-workflows") {
       await refreshWorkflows();
     } else if (action === "create-workflow-template") {
@@ -773,6 +1020,103 @@ export async function handleOfficeAiAction(action, el) {
       await refreshNotifications();
     } else if (action === "refresh-brief") {
       await refreshBrief();
+    } else if (action === "mis-refresh") {
+      await refreshMisData();
+    } else if (action === "mis-select-pack") {
+      if (!misSelectPackId) throw new Error("Missing pack id");
+      state.misSelectedPackId = misSelectPackId;
+      state.misLastImportReport = null;
+      await refreshMisFacts(misSelectPackId);
+    } else if (action === "mis-create-pack") {
+      const period = (state.misNewPeriod || "").trim();
+      if (!period) throw new Error("Enter a period (e.g. 2026-07)");
+      const result = unwrap(await apiRequest("/api/v1/officemitra/mis/packs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pack_key: state.misNewPackKey || "sme_general",
+          period,
+          ingestion_path: "excel_import",
+        }),
+      }));
+      state.misSelectedPackId = String(result?.item?.id || "").trim();
+      state.notice = "MIS pack created.";
+      await refreshMisData();
+    } else if (action === "mis-import-excel") {
+      const packId = state.misSelectedPackId;
+      if (!packId) throw new Error("Select a pack first");
+      const root = el?.closest?.("[data-office-ai-root]");
+      const fileInput = root?.querySelector("[data-office-ai-field='misImportFile']");
+      const file = fileInput?.files?.[0];
+      if (!file) throw new Error("Choose an Excel file first");
+      const formData = new FormData();
+      formData.append("file", file);
+      const persist = state.misImportPersist ? "true" : "false";
+      const result = unwrap(await apiRequest(
+        `/api/v1/officemitra/mis/packs/${encodeURIComponent(packId)}/import/excel?persist=${persist}`,
+        { method: "POST", body: formData },
+      ));
+      state.misLastImportReport = result?.validation_report || null;
+      const inserted = Number(result?.inserted || 0);
+      const previewed = Number(result?.facts_previewed || 0);
+      state.notice = state.misImportPersist
+        ? `Import complete: ${inserted} fact(s) inserted (${previewed} previewed).`
+        : `Validation only: ${previewed} row(s) previewed.`;
+      await refreshMisFacts(packId);
+      await refreshMisData();
+    } else if (action === "mis-reconcile") {
+      const packId = state.misSelectedPackId;
+      if (!packId) throw new Error("Select a pack first");
+      const body = {};
+      const scoreRaw = (state.misReconcileScore || "").trim();
+      if (scoreRaw) {
+        const score = Number(scoreRaw);
+        if (!Number.isFinite(score) || score < 0 || score > 100) {
+          throw new Error("Quality score must be between 0 and 100");
+        }
+        body.data_quality_score = Math.round(score);
+      }
+      const result = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(packId)}/reconcile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }));
+      const status = result?.proposal?.status || "";
+      state.notice = status === "awaiting_checker"
+        ? "Reconcile submitted — checker must approve in Proposals tab."
+        : status === "applied"
+          ? "Pack reconciled."
+          : status === "failed"
+            ? `Reconcile failed: ${result?.error || result?.proposal?.error_message || "unknown error"}`
+            : "Reconcile proposal updated.";
+      if (status === "awaiting_checker") state.tab = "proposals";
+      await refreshMisData();
+      await refreshProposals();
+    } else if (action === "mis-export-excel" || action === "mis-export-pdf" || action === "mis-export-ppt") {
+      const packId = state.misSelectedPackId;
+      if (!packId) throw new Error("Select a pack first");
+      const fmt = action === "mis-export-excel"
+        ? "excel"
+        : action === "mis-export-pdf"
+          ? "pdf_summary"
+          : "ppt";
+      const result = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(packId)}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: fmt }),
+      }));
+      const status = result?.proposal?.status || "";
+      const fmtLabel = fmt === "pdf_summary" ? "PDF summary" : fmt.toUpperCase();
+      state.notice = status === "awaiting_checker"
+        ? `${fmtLabel} export submitted — checker must approve in Proposals tab.`
+        : status === "applied"
+          ? `${fmtLabel} export completed.`
+          : status === "failed"
+            ? `Export failed: ${result?.error || result?.proposal?.error_message || "unknown error"}`
+            : `${fmtLabel} export proposal updated.`;
+      if (status === "awaiting_checker") state.tab = "proposals";
+      await refreshMisData();
+      await refreshProposals();
     }
   } catch (err) {
     state.error = err?.message || "OfficeMitra AI action failed";

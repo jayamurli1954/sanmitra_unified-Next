@@ -219,12 +219,15 @@ function _silentRefresh(appKey) {
   return _refreshInFlight;
 }
 
-export function buildHeaders(appKey, extraHeaders = {}) {
+export function buildHeaders(appKey, extraHeaders = {}, opts = {}) {
+  const skipJsonContentType = !!opts.skipJsonContentType;
   const headers = {
-    "Content-Type": "application/json",
     "X-App-Key": appKey,
     ...extraHeaders,
   };
+  if (!skipJsonContentType && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const token = getAccessToken();
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`;
@@ -239,11 +242,12 @@ export async function apiRequest(appKey, path, options = {}) {
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, _isRetry, ...fetchOptions } = options;
+  const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
   try {
     const response = await fetch(requestUrl, {
       ...fetchOptions,
       signal: fetchOptions.signal || controller.signal,
-      headers: buildHeaders(appKey, fetchOptions.headers || {}),
+      headers: buildHeaders(appKey, fetchOptions.headers || {}, { skipJsonContentType: isFormData }),
     });
 
     const contentType = response.headers.get("content-type") || "";
