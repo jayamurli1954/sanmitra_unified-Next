@@ -8,6 +8,10 @@ from app.core.audit.service import log_audit_event
 from app.core.modules.registry import (
     is_office_ai_workflows_enabled,
     is_office_ai_writeback_enabled,
+    is_office_ai_mis_enabled,
+    is_office_ai_mis_export_enabled,
+    is_office_ai_mis_import_enabled,
+    is_office_ai_mis_live_mitrabooks_enabled,
     registry_module_keys,
 )
 from app.modules.office_ai.actions.registry import ensure_default_actions_registered, get_action
@@ -56,6 +60,26 @@ def _feature_enabled(ctx: PolicyContext, feature: str | None) -> bool:
             enabled_modules=ctx.enabled_modules,
             office_ai_features=ctx.office_ai_features,
         )
+    if key == "mis":
+        return is_office_ai_mis_enabled(
+            enabled_modules=ctx.enabled_modules,
+            office_ai_features=ctx.office_ai_features,
+        )
+    if key == "mis.import":
+        return is_office_ai_mis_import_enabled(
+            enabled_modules=ctx.enabled_modules,
+            office_ai_features=ctx.office_ai_features,
+        )
+    if key == "mis.live_mitrabooks":
+        return is_office_ai_mis_live_mitrabooks_enabled(
+            enabled_modules=ctx.enabled_modules,
+            office_ai_features=ctx.office_ai_features,
+        )
+    if key == "mis.export":
+        return is_office_ai_mis_export_enabled(
+            enabled_modules=ctx.enabled_modules,
+            office_ai_features=ctx.office_ai_features,
+        )
     if key == "companion_writeback":
         # ADR-010 not Accepted — always false until implemented.
         normalized = {str(item or "").strip().lower() for item in (ctx.enabled_modules or [])}
@@ -73,6 +97,9 @@ def _infer_required_feature(ctx: PolicyContext) -> str | None:
     if target != "office_ai":
         return "companion_writeback"
     if ctx.intent in {"propose", "confirm", "approve", "execute"}:
+        action = str(ctx.action_type or "").strip().lower()
+        if action == "reconcile_mis_pack":
+            return "mis"
         return "writeback"
     return None
 

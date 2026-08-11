@@ -390,20 +390,52 @@ async def reconcile_mis_pack(
     payload: schemas.MISPackReconcileRequest,
     ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
 ) -> dict:
-    """Lock pack and facts after human review (ADR-014 immutability)."""
+    """
+    Maker-submit reconcile request for ADR-014 immutability.
+
+    This routes through Proposal → Confirm/Policy → (optional checker approval) → Action Executor,
+    so "who reviews" and "when" are enforced by ADR-012 maker-checker policy.
+    """
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+
     try:
-        item = await mis_store.reconcile_pack(
+        proposals = await proposal_service.create_proposals(
             tenant_id=_tenant_id(ctx),
-            pack_id=pack_id,
             user=ctx["user"],
-            data_quality_score=payload.data_quality_score,
-            data_quality_breakdown=payload.data_quality_breakdown,
+            action_type="reconcile_mis_pack",
+            items=[
+                {
+                    "payload": {
+                        "pack_id": pack_id,
+                        "data_quality_score": payload.data_quality_score,
+                        "data_quality_breakdown": payload.data_quality_breakdown,
+                    }
+                }
+            ],
+            source_feature="mis.reconcile",
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+            prompt_version=None,
         )
-    except mis_store.MISPackNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except mis_store.MISImmutableError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"item": item}
+    except PolicyDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not create reconcile proposal: {type(exc).__name__}") from exc
+
+    proposal_id = str((proposals[0] or {}).get("id") or "").strip()
+    if not proposal_id:
+        raise HTTPException(status_code=500, detail="Proposal id missing after reconcile proposal creation")
+
+    confirm_res = await proposal_service.confirm_proposal(
+        tenant_id=_tenant_id(ctx),
+        user=ctx["user"],
+        proposal_id=proposal_id,
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    return confirm_res or {"proposal_id": proposal_id}
 
 
 @router.get("/tasks")

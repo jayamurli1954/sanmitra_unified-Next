@@ -220,6 +220,37 @@ def test_policy_approval_expiry():
     assert decision.rule_id == "POL-020"
 
 
+def test_policy_requires_mis_flag_for_reconcile_mis_pack():
+    decision = evaluate_policy(
+        PolicyContext(
+            tenant_id="t1",
+            actor_id="u1",
+            action_type="reconcile_mis_pack",
+            intent="propose",
+            enabled_modules=["office_ai"],
+        )
+    )
+    assert decision.allowed is False
+    assert decision.decision == "DENY"
+    assert decision.rule_id == "POL-002"
+    assert "mis" in decision.reason.lower()
+
+
+def test_policy_allows_maker_checker_when_mis_enabled():
+    decision = evaluate_policy(
+        PolicyContext(
+            tenant_id="t1",
+            actor_id="maker",
+            action_type="reconcile_mis_pack",
+            intent="propose",
+            enabled_modules=["office_ai", "office_ai.mis"],
+        )
+    )
+    assert decision.allowed is True
+    assert decision.execution_mode == "maker_checker"
+    assert decision.rule_id == "POL-011"
+
+
 def test_compute_approval_expires_at():
     start = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
     ends = compute_approval_expires_at(from_time=start, hours=72)

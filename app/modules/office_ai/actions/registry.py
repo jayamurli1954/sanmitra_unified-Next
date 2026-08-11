@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from app.modules.office_ai.services import notification_service, task_service
+from app.modules.office_ai.services import mis_store, notification_service, task_service
 
 ActionHandler = Callable[..., Awaitable[dict[str, Any]]]
 RiskLevel = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -103,6 +103,39 @@ async def _handle_create_notification(
     }
 
 
+async def _handle_reconcile_mis_pack(
+    *,
+    tenant_id: str,
+    user: dict,
+    payload: dict[str, Any],
+    prompt_version: str | None = None,
+    ai_telemetry_id: str | None = None,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    """Lock MIS pack + facts after human review (ADR-014 immutability)."""
+    pack_id = str(payload.get("pack_id") or "").strip()
+    if not pack_id:
+        raise ValueError("pack_id is required for reconcile_mis_pack")
+
+    try:
+        item = await mis_store.reconcile_pack(
+            tenant_id=tenant_id,
+            pack_id=pack_id,
+            user=user,
+            data_quality_score=payload.get("data_quality_score"),
+            data_quality_breakdown=payload.get("data_quality_breakdown"),
+        )
+    except Exception as exc:
+        raise RuntimeError(f"reconcile_mis_pack failed: {type(exc).__name__}: {exc}") from exc
+
+    return {
+        "entity_type": "officemitra_mis_pack",
+        "entity_id": (item or {}).get("id") if isinstance(item, dict) else pack_id,
+        "pack": item,
+        "proposal_id": proposal_id,
+    }
+
+
 _ACTION_REGISTRY: dict[str, ActionSpec] = {}
 
 
@@ -174,6 +207,24 @@ def ensure_default_actions_registered() -> None:
                     idempotent=True,
                     rollback_supported=False,
                     audit_level="BASIC",
+                ),
+            )
+        )
+
+    if "reconcile_mis_pack" not in _ACTION_REGISTRY:
+        register_action(
+            ActionSpec(
+                action_type="reconcile_mis_pack",
+                target_module="office_ai",
+                description="Lock MIS pack + facts after human review (ADR-014).",
+                handler=_handle_reconcile_mis_pack,
+                capabilities=ActionCapabilityDescriptor(
+                    requires_confirmation=True,
+                    requires_maker_checker=True,
+                    risk_level="HIGH",
+                    idempotent=True,
+                    rollback_supported=False,
+                    audit_level="FULL",
                 ),
             )
         )

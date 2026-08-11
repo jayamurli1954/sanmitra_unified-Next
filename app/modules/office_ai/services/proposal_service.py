@@ -82,7 +82,7 @@ def _policy_ctx(
     approval_expires_at: Any = None,
     allow_self_approval: bool = False,
     approval_expiry_hours: int = DEFAULT_APPROVAL_EXPIRY_HOURS,
-    required_feature: str = "writeback",
+    required_feature: str | None = None,
 ) -> PolicyContext:
     return PolicyContext(
         tenant_id=tenant_id,

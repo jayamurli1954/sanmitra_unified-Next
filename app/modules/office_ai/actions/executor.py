@@ -34,14 +34,20 @@ async def execute_action(
             f"Action target {spec.target_module} is not allowed under ADR-008/009",
             code="forbidden_target",
         )
-    result = await spec.handler(
-        tenant_id=tenant_id,
-        user=user,
-        payload=payload or {},
-        prompt_version=prompt_version,
-        ai_telemetry_id=ai_telemetry_id,
-        proposal_id=proposal_id,
-    )
+    try:
+        result = await spec.handler(
+            tenant_id=tenant_id,
+            user=user,
+            payload=payload or {},
+            prompt_version=prompt_version,
+            ai_telemetry_id=ai_telemetry_id,
+            proposal_id=proposal_id,
+        )
+    except ActionExecutionError:
+        raise
+    except Exception as exc:
+        # Ensure any handler exception is surfaced in the same ActionExecutionError contract.
+        raise ActionExecutionError(str(exc), code="action_handler_failed") from exc
     if isinstance(result, dict):
         return {**result, "executor_version": EXECUTOR_VERSION}
     return {"result": result, "executor_version": EXECUTOR_VERSION}
