@@ -127,20 +127,38 @@ async def generate_and_optionally_persist(
     user: dict,
     text: str,
     persist: bool = False,
+    writeback_enabled: bool = False,
+    enabled_modules: list | None = None,
+    office_ai_features: list | None = None,
 ) -> dict:
     ai_result = await orchestrator.generate_tasks(tenant_id=tenant_id, text=text, user_id=_user_id(user))
     saved: list[dict] = []
+    proposals: list[dict] = []
     if persist and ai_result.get("ai_available"):
-        for item in ai_result.get("tasks") or []:
-            saved.append(
-                await create_task(
-                    tenant_id=tenant_id,
-                    user=user,
-                    title=item["title"],
-                    due_date=item.get("due_date"),
-                    source="ai",
-                    prompt_version=ai_result.get("prompt_version"),
-                    ai_telemetry_id=ai_result.get("telemetry_id"),
-                )
+        if writeback_enabled:
+            from app.modules.office_ai.services import proposal_service
+
+            proposals = await proposal_service.create_task_proposals(
+                tenant_id=tenant_id,
+                user=user,
+                tasks=list(ai_result.get("tasks") or []),
+                source_feature="tasks.generate",
+                prompt_version=ai_result.get("prompt_version"),
+                ai_telemetry_id=ai_result.get("telemetry_id"),
+                enabled_modules=enabled_modules or ["office_ai", "office_ai.writeback"],
+                office_ai_features=office_ai_features,
             )
-    return {**ai_result, "saved_tasks": saved}
+        else:
+            for item in ai_result.get("tasks") or []:
+                saved.append(
+                    await create_task(
+                        tenant_id=tenant_id,
+                        user=user,
+                        title=item["title"],
+                        due_date=item.get("due_date"),
+                        source="ai",
+                        prompt_version=ai_result.get("prompt_version"),
+                        ai_telemetry_id=ai_result.get("telemetry_id"),
+                    )
+                )
+    return {**ai_result, "saved_tasks": saved, "proposals": proposals, "writeback_enabled": writeback_enabled}

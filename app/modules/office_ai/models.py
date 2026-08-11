@@ -14,12 +14,30 @@ TELEMETRY_COLLECTION = "officemitra_ai_telemetry"
 CALENDAR_EVENTS_COLLECTION = "officemitra_calendar_events"
 MEETING_NOTES_COLLECTION = "officemitra_meeting_notes"
 NOTIFICATIONS_COLLECTION = "officemitra_notifications"
+PROPOSALS_COLLECTION = "officemitra_proposals"
+WORKFLOW_TEMPLATES_COLLECTION = "officemitra_workflow_templates"
+WORKFLOW_RUNS_COLLECTION = "officemitra_workflow_runs"
 
 TASK_STATUSES = frozenset({"open", "done", "cancelled"})
 TASK_SOURCES = frozenset({"manual", "ai"})
+PROPOSAL_STATUSES = frozenset(
+    {"draft", "pending", "confirmed", "awaiting_checker", "applied", "failed", "dismissed", "expired"}
+)
+PROPOSAL_ACTION_TYPES = frozenset({"create_task"})  # kept for docs; runtime source is action registry
+WORKFLOW_RUN_STATUSES = frozenset({"pending", "running", "applied", "failed", "skipped", "cancelled"})
+WORKFLOW_STEP_STATUSES = frozenset({"pending", "running", "applied", "failed", "skipped", "cancelled"})
+WORKFLOW_TRIGGER_SOURCES = frozenset({"proposal", "manual", "scheduled", "api"})
 CALENDAR_SOURCES = frozenset({"manual", "paste", "ai"})
 NOTIFICATION_KINDS = frozenset(
-    {"calendar_due", "note_processed", "task_due", "calendar_parsed", "brief_ready"}
+    {
+        "calendar_due",
+        "note_processed",
+        "task_due",
+        "calendar_parsed",
+        "brief_ready",
+        "proposal_ready",
+        "workflow_ready",
+    }
 )
 
 _indexes_ready = False
@@ -75,6 +93,20 @@ async def ensure_indexes() -> None:
         )
         await get_collection(NOTIFICATIONS_COLLECTION).create_index(
             [("tenant_id", 1), ("dedupe_key", 1)]
+        )
+        await get_collection(PROPOSALS_COLLECTION).create_index(
+            [("tenant_id", 1), ("status", 1), ("created_at", -1)]
+        )
+        await get_collection(WORKFLOW_TEMPLATES_COLLECTION).create_index(
+            [("tenant_id", 1), ("template_key", 1), ("version", -1)]
+        )
+        await get_collection(WORKFLOW_RUNS_COLLECTION).create_index(
+            [("tenant_id", 1), ("created_at", -1)]
+        )
+        await get_collection(WORKFLOW_RUNS_COLLECTION).create_index(
+            [("tenant_id", 1), ("idempotency_key", 1)],
+            unique=True,
+            partialFilterExpression={"idempotency_key": {"$type": "string"}},
         )
         _indexes_ready = True
     except Exception:

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>OfficeMitra AI — Login</title>
+    <meta name="sanmitra-api-base-url" content="/api">
+    <link rel="stylesheet" href="../shared/app-shell.css">
+    <link rel="stylesheet" href="./officemitra.css">
+  </head>
+  <body class="om-auth-page">
+    <main class="om-auth-card">
+      <header class="om-auth-hero">
+        <p class="om-eyebrow">SanMitra</p>
+        <h1>OfficeMitra AI</h1>
+        <p>Standalone productivity shell — tasks, email paste, calendar, notes, and daily brief.</p>
+      </header>
+
+      <div id="login-status" class="om-status" role="status"></div>
+
+      <form id="login-form" class="om-auth-form">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required placeholder="you@example.com">
+
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required placeholder="Enter password">
+
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+
+      <p class="om-muted">Uses unified SanMitra auth with <code>X-App-Key: officemitra</code>. Demo tenants need only <code>office_ai</code> enabled.</p>
+    </main>
+    <script type="module" src="./login.js"></script>
+  </body>
+</html>

@@ -436,9 +436,9 @@ Architecture authority: `docs/architecture/OFFICEMITRA_AI_IMPLEMENTATION_PLAN.md
 
 ### Current vs target (discipline)
 
-- Current: OfficeMitra AI Phase 1 (tasks/email/brief) plus Phase 2 productivity (paste-in calendar, meeting notes, in-app notifications) under module `office_ai` with modular deployment (ADR-007).
-- Target: Productivity depth without OAuth mailboxes/calendars; optional connectors enrich the brief when companion modules are enabled.
-- Deferred: Gmail/Outlook/Google Calendar OAuth, multi-model routing marketplace, WhatsApp/agents/vector DB, write-back automation, InvestMitra.
+- Current: OfficeMitra AI Phase 1 (tasks/email/brief) plus Phase 2 productivity (paste-in calendar, meeting notes, in-app notifications), Phase 3 live read connectors, Phase 5 standalone shell, Phase 4 confirmed OfficeMitra-owned write-back behind `office_ai.writeback` (ADR-008), Phase 6 workflow engine behind `office_ai.workflows` (ADR-009), and ADR-012 Policy Engine (shared confirm/approve/execute decisions) under module `office_ai` with modular deployment (ADR-007).
+- Target: Productivity depth without OAuth mailboxes/calendars; optional connectors enrich the brief when companion modules are enabled; action-based proposals for owned writes; multi-step owned workflows reuse the Action Executor; one policy API for UI/executor/workflows.
+- Deferred: Gmail/Outlook/Google Calendar OAuth, multi-model routing marketplace, WhatsApp/agents/vector DB, companion-product write-back (journals/GST/legal/housing) until [ADR-010](docs/adr/ADR-010-officemitra-companion-writeback.md) is Accepted, InvestMitra. Domain events / template library remain [ADR-011](docs/adr/ADR-011-officemitra-domain-events.md) / [ADR-013](docs/adr/ADR-013-officemitra-workflow-template-library.md).
 
 ### Modular deployment (ADR-007)
 
@@ -451,9 +451,9 @@ Architecture authority: `docs/architecture/OFFICEMITRA_AI_IMPLEMENTATION_PLAN.md
 
 - Communicate with companion products **only through connectors** / the Connector Manager that call existing product service layers. Never query another product’s Mongo collections or Postgres tables from OfficeMitra code.
 - Use `tenant_id` only (no parallel `organization_id` tenancy model). Never trust `tenant_id` from the request body.
-- Gate routes on module `office_ai` plus sub-feature flags `office_ai.tasks`, `office_ai.email`, `office_ai.brief`, `office_ai.calendar`, `office_ai.meeting_notes`, `office_ai.notifications`.
+- Gate routes on module `office_ai` plus sub-feature flags `office_ai.tasks`, `office_ai.email`, `office_ai.brief`, `office_ai.calendar`, `office_ai.meeting_notes`, `office_ai.notifications`, and opt-in `office_ai.writeback` / `office_ai.workflows` (ADR-008/009; default off).
 - Calendar and meeting notes are **paste-in only** in Phase 2 (no Google/Outlook OAuth). Notifications are OfficeMitra-owned inbox records — not LegalMitra or housing Web Push.
-- MVP connectors are **read-only**. Never post journals, create invoices, file GST, or send legal notices from OfficeMitra without a superseding ADR and explicit user confirmation.
+- MVP connectors are **read-only**. Never post journals, create invoices, file GST, or send legal notices from OfficeMitra without a superseding ADR and explicit user confirmation. Confirmed writes to OfficeMitra-owned collections only are allowed under ADR-008 when `office_ai.writeback` is explicitly enabled. Multi-step orchestration of those owned actions is allowed under ADR-009 when `office_ai.workflows` is explicitly enabled.
 - AI-generated tasks must be flagged `source=ai`. Persist `prompt_version`, `updated_by`/`updated_at`, and AI telemetry (provider, model, tokens, latency, cost, success).
 - Call AI only through the replaceable provider interface (ADR-006). Fail soft when the provider is missing or errors — do not invent revenue or legal facts.
 - Never present OfficeMitra AI output as final legal or financial advice.

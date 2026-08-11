@@ -213,7 +213,7 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         ),
         minimum_plan="pro",
         default_enabled=False,
-        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications"),
+        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows"),
     ),
 }
 
@@ -365,6 +365,14 @@ def require_module_feature(
         if is_module_feature_flag(item) and item.startswith(f"{module_key}.")
     }
     explicit = [str(item or "").strip().lower() for item in (office_ai_features or ()) if str(item or "").strip()]
+
+    # Opt-in features never inherit from parent-only enablement (ADR-008 / ADR-009).
+    opt_in_features = frozenset({("office_ai", "writeback"), ("office_ai", "workflows")})
+    if (module_key, feature_key) in opt_in_features:
+        if feature_key in explicit or feature_key in granular_flags:
+            return definition
+        raise ModuleAccessError(f"Feature {dotted} is not enabled for this tenant")
+
     if module_key == "office_ai" and explicit:
         if feature_key not in explicit:
             raise ModuleAccessError(f"Feature {dotted} is not enabled for this tenant")
@@ -373,8 +381,57 @@ def require_module_feature(
         if feature_key not in granular_flags:
             raise ModuleAccessError(f"Feature {dotted} is not enabled for this tenant")
         return definition
-    # Parent module alone enables all declared features.
+    # Parent module alone enables all declared features (except opt-in above).
     return definition
+
+
+def is_office_ai_writeback_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Return True only when office_ai.writeback is explicitly enabled (default off)."""
+    return _is_office_ai_opt_in_feature_enabled(
+        "writeback",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_workflows_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Return True only when office_ai.workflows is explicitly enabled (default off)."""
+    return _is_office_ai_opt_in_feature_enabled(
+        "workflows",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def _is_office_ai_opt_in_feature_enabled(
+    feature_key: str,
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    if "office_ai" not in set(registry_module_keys(enabled_modules)):
+        return False
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    granular_flags = {
+        item.partition(".")[2]
+        for item in normalized_modules
+        if is_module_feature_flag(item) and item.startswith("office_ai.")
+    }
+    explicit = {
+        str(item or "").strip().lower()
+        for item in (office_ai_features or ())
+        if str(item or "").strip()
+    }
+    key = str(feature_key or "").strip().lower()
+    return key in granular_flags or key in explicit
 
 
 def serialize_module_definition(module_key: str, *, enabled: bool) -> dict:

@@ -325,10 +325,8 @@ def test_office_ai_ui_has_phase2_tabs() -> None:
     source = (
         Path(__file__).resolve().parents[1]
         / "frontend"
-        / "mitrabooks-erp"
-        / "modules"
-        / "workspaces"
-        / "office-ai.js"
+        / "shared"
+        / "office-ai-workspace.js"
     ).read_text(encoding="utf-8")
     assert '["calendar", "Calendar"]' in source
     assert '["notes", "Meeting Notes"]' in source
@@ -339,3 +337,4 @@ def test_office_ai_ui_has_phase2_tabs() -> None:
     assert 'data-office-ai-action="parse-calendar"' in source
     assert 'data-office-ai-action="summarize-notes"' in source
     assert 'data-office-ai-action="mark-notification-read"' in source
+    assert "confirm-proposal" in source

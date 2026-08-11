@@ -2,13 +2,17 @@
 
 **Document type:** Implementation plan (architecture + delivery sequence)  
 **Product:** OfficeMitra AI  
-**Status:** Phase 2 (Productivity depth) implemented locally — use Phase 2 smoke checklist for staging signoff  
-**Version:** 1.4  
-**Date:** 2026-08-05  
-**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-007  
+**Status:** Phases 1–6 implemented locally — use phase smoke checklists for staging signoff  
+**Version:** 1.5  
+**Date:** 2026-08-11  
+**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-013  
 **Smoke checklists:**  
-- Phase 1: [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)  
-- Phase 2: [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md)  
+- Phase 1: [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)
+- Phase 2: [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md)
+- Phase 4 write-back: [`docs/operations/OFFICEMITRA_PHASE4_WRITEBACK_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE4_WRITEBACK_SMOKE_CHECKLIST.md)
+- Phase 5 standalone shell: [`docs/operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md)
+- Phase 6 workflows: [`docs/operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md)
+- Policy engine (ADR-012): [`docs/operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md)
 **Supersedes positioning in:** informal notes that framed OfficeMitra as the SanMitra “operating system”
 
 > **Success criteria:** A single tenant can securely create tasks, summarize pasted emails into actionable tasks, and generate a daily brief from OfficeMitra-native data and *any available* connectors (including zero connectors in standalone mode), without any direct cross-product database access, while remaining fully compliant with ADR-001 through ADR-007.
@@ -138,8 +142,11 @@ User → OfficeMitra UI → OfficeMitra service → Connector Manager → Produc
 | **1 / MVP** | Three features | Task Generator, Email Summary (paste), Daily Brief via Connector Manager (standalone-safe) | **Done** — staging smoke signed off on demo CA tenant |
 | **2** | Productivity depth | Calendar hooks (paste), meeting notes, in-app notifications | **Done** — use [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md) |
 | **3** | Ecosystem read | Replace stub connectors for LegalMitra, GruhaMitra, MandirMitra | **Implemented locally** — use [`docs/operations/OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE3_SMOKE_CHECKLIST.md) |
-| **4** | Approved automation | AI-proposed writes with **explicit user confirmation** + audit | Requires new ADR |
-| **5** | Experience expansion | Optional standalone OfficeMitra UI for non-ERP tenants; third-party integrations | Optional |
+| **4** | Approved automation | AI-proposed writes with **explicit user confirmation** + audit via Action Registry/Executor | **Implemented** behind `office_ai.writeback` — use [`docs/operations/OFFICEMITRA_PHASE4_WRITEBACK_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE4_WRITEBACK_SMOKE_CHECKLIST.md) |
+| **5** | Experience expansion | Standalone OfficeMitra UI for non-ERP tenants; third-party integrations deferred | **Standalone shell implemented** — use [`docs/operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE5_STANDALONE_SHELL_SMOKE_CHECKLIST.md) |
+| **6** | Workflow engine | Multi-step OfficeMitra-owned action chains on ADR-008 registry (template ≠ run) | **Implemented** behind `office_ai.workflows` — use [`docs/operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md) |
+| **7+** | Companion write-back | Confirmed connector writes into allowlisted product services + capability descriptors | **Planned / gated** — requires Accepted [ADR-010](../adr/ADR-010-officemitra-companion-writeback.md) |
+| **Platform** | Domain events / policy engine / template library | Async side effects; maker-checker policy; curated templates | Policy engine **Implemented** ([ADR-012](../adr/ADR-012-officemitra-policy-engine.md)); [ADR-011](../adr/ADR-011-officemitra-domain-events.md) Proposed; [ADR-013](../adr/ADR-013-officemitra-workflow-template-library.md) Future |
 
 **MVP ships Phase 0 + Phase 1 only.** Phases 2–5 are roadmap, not commitment inside the first PR series.
 

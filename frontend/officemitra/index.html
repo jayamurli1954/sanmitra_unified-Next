@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>OfficeMitra AI</title>
+    <meta name="sanmitra-api-base-url" content="/api">
+    <link rel="stylesheet" href="../shared/app-shell.css">
+    <link rel="stylesheet" href="./officemitra.css">
+  </head>
+  <body class="om-app-page">
+    <header class="om-topbar">
+      <div>
+        <p class="om-eyebrow">OfficeMitra AI</p>
+        <h1>Productivity workspace</h1>
+      </div>
+      <div class="om-topbar-actions">
+        <span id="session-label" class="om-muted"></span>
+        <button id="logout-btn" class="secondary" type="button">Logout</button>
+      </div>
+    </header>
+    <main id="officemitra-root" class="om-main" aria-live="polite"></main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

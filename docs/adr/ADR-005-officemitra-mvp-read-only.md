@@ -18,8 +18,9 @@ For MVP (Phases 0–1):
 
 OfficeMitra may write to its **own** Mongo collections (`officemitra_tasks`, `officemitra_emails`, `officemitra_briefs`).
 
-## Consequences
+**Consequences**
 
 - AI outputs are advisory; UI must not present them as final legal or financial advice.
 - Provider failure must fall back safely (no crash, clear user message).
-- Phase 4+ write automation requires user confirmation, audit events, and product-owner approval before implementation.
+- Phase 4 confirmed writes to OfficeMitra-owned collections are governed by [ADR-008](ADR-008-officemitra-confirmed-writeback.md) (`office_ai.writeback`, human confirmation, audit).
+- Companion-product write automation still requires a dedicated later ADR + human confirmation UX — see Proposed [ADR-010](ADR-010-officemitra-companion-writeback.md).

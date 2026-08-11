@@ -73,3 +73,54 @@ class MeetingNoteSummarizeRequest(BaseModel):
     persist: bool = True
     create_tasks: bool = True
     linked_event_id: str | None = None
+
+
+class ProposalListQuery(BaseModel):
+    status: (
+        Literal[
+            "draft",
+            "pending",
+            "confirmed",
+            "awaiting_checker",
+            "applied",
+            "failed",
+            "dismissed",
+            "expired",
+            "open",
+        ]
+        | None
+    ) = "pending"
+    limit: int = Field(default=50, ge=1, le=100)
+
+
+class PolicyEvaluateRequest(BaseModel):
+    action_type: str = Field(min_length=1, max_length=80)
+    target_module: str = Field(default="office_ai", max_length=80)
+    intent: Literal["propose", "confirm", "approve", "execute", "start_workflow"] = "confirm"
+    required_feature: str | None = Field(default=None, max_length=80)
+    proposal_id: str | None = Field(default=None, max_length=64)
+    maker_id: str | None = Field(default=None, max_length=120)
+    checker_id: str | None = Field(default=None, max_length=120)
+    allow_self_approval: bool = False
+    approval_expiry_hours: int = Field(default=72, ge=1, le=720)
+
+
+class WorkflowStepInput(BaseModel):
+    step_id: str | None = Field(default=None, max_length=80)
+    action_type: str = Field(min_length=1, max_length=80)
+    payload: dict = Field(default_factory=dict)
+
+
+class WorkflowTemplateCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    template_key: str | None = Field(default=None, max_length=120)
+    continue_on_failure: bool = False
+    steps: list[WorkflowStepInput] = Field(min_length=1, max_length=50)
+
+
+class WorkflowRunStartRequest(BaseModel):
+    template_id: str = Field(min_length=1, max_length=64)
+    trigger_source: Literal["proposal", "manual", "scheduled", "api"] = "manual"
+    idempotency_key: str | None = Field(default=None, max_length=200)
+    proposal_id: str | None = Field(default=None, max_length=64)

@@ -346,6 +346,9 @@ def test_office_ai_tasks_done_action_uses_task_id_attribute() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
     office_ai_source = (
+        repo_root / "frontend" / "shared" / "office-ai-workspace.js"
+    ).read_text(encoding="utf-8")
+    erp_shim = (
         repo_root / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "office-ai.js"
     ).read_text(encoding="utf-8")
 
@@ -354,3 +357,4 @@ def test_office_ai_tasks_done_action_uses_task_id_attribute() -> None:
     assert 'status: "done"' in office_ai_source
     assert "Task marked done." in office_ai_source
     assert "missing task id" in office_ai_source
+    assert "office-ai-workspace.js" in erp_shim
