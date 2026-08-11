@@ -156,3 +156,9 @@ class MISFactsInsertRequest(BaseModel):
 class MISPackReconcileRequest(BaseModel):
     data_quality_score: int | None = Field(default=None, ge=0, le=100)
     data_quality_breakdown: dict[str, Any] | None = None
+
+
+class MISPackExportRequest(BaseModel):
+    format: Literal["excel", "pdf_summary", "ppt"] = Field(
+        description="CFO Excel, CEO PDF summary, or board PPT (ADR-014)."
+    )

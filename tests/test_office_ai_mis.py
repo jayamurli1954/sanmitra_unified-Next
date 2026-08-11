@@ -258,3 +258,96 @@ async def test_tenant_isolation_on_pack_read(fake_mis_mongo):
 async def test_pack_is_editable_helper():
     assert mis_store.pack_is_editable({"status": "draft", "immutable": False}) is True
     assert mis_store.pack_is_editable({"status": "reconciled", "immutable": True}) is False
+
+
+def test_mis_export_actions_registered_with_adr014_risk_tiers():
+    from app.modules.office_ai.actions.registry import ensure_default_actions_registered, get_action
+
+    ensure_default_actions_registered()
+    excel = get_action("export_mis_excel")
+    pdf = get_action("export_mis_pdf_summary")
+    ppt = get_action("export_mis_ppt")
+    assert excel is not None
+    assert pdf is not None
+    assert ppt is not None
+    assert excel.capabilities.risk_level == "MEDIUM"
+    assert pdf.capabilities.risk_level == "MEDIUM"
+    assert ppt.capabilities.risk_level == "HIGH"
+    assert ppt.capabilities.requires_maker_checker is True
+    assert excel.capabilities.requires_maker_checker is False
+
+
+@pytest.mark.asyncio
+async def test_export_rejects_unreconciled_pack(fake_mis_mongo):
+    from app.modules.office_ai.services import mis_export
+
+    user = {"sub": "acct-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+    )
+    with pytest.raises(mis_export.MISExportNotReconciledError):
+        await mis_export.export_mis_pack(
+            tenant_id="tenant-a",
+            pack_id=pack["id"],
+            user=user,
+            export_format="excel",
+        )
+
+
+@pytest.mark.asyncio
+async def test_export_blocks_ppt_when_data_quality_low(fake_mis_mongo):
+    from app.modules.office_ai.services import mis_export
+
+    user = {"sub": "reviewer-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+    )
+    pack_id = pack["id"]
+    await mis_store.reconcile_pack(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        data_quality_score=65,
+    )
+    with pytest.raises(mis_export.MISExportQualityBlockedError):
+        await mis_export.export_mis_pack(
+            tenant_id="tenant-a",
+            pack_id=pack_id,
+            user=user,
+            export_format="ppt",
+        )
+
+
+@pytest.mark.asyncio
+async def test_export_excel_marks_pack_exported(fake_mis_mongo):
+    from app.modules.office_ai.services import mis_export
+
+    user = {"sub": "reviewer-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+    )
+    pack_id = pack["id"]
+    await mis_store.reconcile_pack(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        data_quality_score=88,
+    )
+
+    result = await mis_export.export_mis_pack(
+        tenant_id="tenant-a",
+        pack_id=pack_id,
+        user=user,
+        export_format="excel",
+    )
+    assert result["artifact"]["format"] == "excel"
+    assert result["pack"]["status"] == "exported"

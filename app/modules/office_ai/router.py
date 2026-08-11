@@ -25,6 +25,7 @@ from app.modules.office_ai.services import (
     calendar_service,
     email_service,
     meeting_notes_service,
+    mis_export,
     mis_service,
     mis_store,
     notification_service,
@@ -436,6 +437,61 @@ async def reconcile_mis_pack(
         office_ai_features=office_ai_features,
     )
     return confirm_res or {"proposal_id": proposal_id}
+
+
+@router.post("/mis/packs/{pack_id}/export")
+async def export_mis_pack(
+    pack_id: str,
+    payload: schemas.MISPackExportRequest,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    """
+    Request MIS export for a reconciled pack (ADR-014).
+
+    Routes through Proposal → Confirm/Policy → (PPT: checker approval) → Action Executor.
+    Requires office_ai.mis.export in addition to office_ai.mis.
+    """
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    if not is_office_ai_mis_export_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        raise HTTPException(status_code=403, detail="Enable office_ai.mis.export for MIS exports")
+
+    try:
+        action_type = mis_export.action_type_for_format(payload.format)
+    except mis_export.MISExportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        proposals = await proposal_service.create_proposals(
+            tenant_id=_tenant_id(ctx),
+            user=ctx["user"],
+            action_type=action_type,
+            items=[{"payload": {"pack_id": pack_id, "export_format": payload.format}}],
+            source_feature="mis.export",
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+    except PolicyDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not create export proposal: {type(exc).__name__}") from exc
+
+    proposal_id = str((proposals[0] or {}).get("id") or "").strip()
+    if not proposal_id:
+        raise HTTPException(status_code=500, detail="Proposal id missing after export proposal creation")
+
+    confirm_res = await proposal_service.confirm_proposal(
+        tenant_id=_tenant_id(ctx),
+        user=ctx["user"],
+        proposal_id=proposal_id,
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    return confirm_res or {"proposal_id": proposal_id, "export_format": payload.format}
 
 
 @router.get("/tasks")

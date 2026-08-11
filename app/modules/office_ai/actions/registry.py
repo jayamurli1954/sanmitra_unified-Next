@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from app.modules.office_ai.services import mis_store, notification_service, task_service
+from app.modules.office_ai.services import mis_export, mis_store, notification_service, task_service
 
 ActionHandler = Callable[..., Awaitable[dict[str, Any]]]
 RiskLevel = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -136,6 +136,103 @@ async def _handle_reconcile_mis_pack(
     }
 
 
+async def _handle_export_mis(
+    *,
+    tenant_id: str,
+    user: dict,
+    payload: dict[str, Any],
+    export_format: str,
+    prompt_version: str | None = None,
+    ai_telemetry_id: str | None = None,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    """Generate MIS export artifact metadata for a reconciled pack (ADR-014)."""
+    pack_id = str(payload.get("pack_id") or "").strip()
+    if not pack_id:
+        raise ValueError("pack_id is required for MIS export actions")
+
+    try:
+        result = await mis_export.export_mis_pack(
+            tenant_id=tenant_id,
+            pack_id=pack_id,
+            user=user,
+            export_format=export_format,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"MIS export failed: {type(exc).__name__}: {exc}") from exc
+
+    artifact = result.get("artifact") if isinstance(result, dict) else {}
+    pack = result.get("pack") if isinstance(result, dict) else None
+    return {
+        "entity_type": "officemitra_mis_export",
+        "entity_id": pack_id,
+        "export_format": export_format,
+        "artifact": artifact,
+        "pack": pack,
+        "proposal_id": proposal_id,
+    }
+
+
+async def _handle_export_mis_excel(
+    *,
+    tenant_id: str,
+    user: dict,
+    payload: dict[str, Any],
+    prompt_version: str | None = None,
+    ai_telemetry_id: str | None = None,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    return await _handle_export_mis(
+        tenant_id=tenant_id,
+        user=user,
+        payload=payload,
+        export_format="excel",
+        prompt_version=prompt_version,
+        ai_telemetry_id=ai_telemetry_id,
+        proposal_id=proposal_id,
+    )
+
+
+async def _handle_export_mis_pdf_summary(
+    *,
+    tenant_id: str,
+    user: dict,
+    payload: dict[str, Any],
+    prompt_version: str | None = None,
+    ai_telemetry_id: str | None = None,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    return await _handle_export_mis(
+        tenant_id=tenant_id,
+        user=user,
+        payload=payload,
+        export_format="pdf_summary",
+        prompt_version=prompt_version,
+        ai_telemetry_id=ai_telemetry_id,
+        proposal_id=proposal_id,
+    )
+
+
+async def _handle_export_mis_ppt(
+    *,
+    tenant_id: str,
+    user: dict,
+    payload: dict[str, Any],
+    prompt_version: str | None = None,
+    ai_telemetry_id: str | None = None,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    return await _handle_export_mis(
+        tenant_id=tenant_id,
+        user=user,
+        payload=payload,
+        export_format="ppt",
+        prompt_version=prompt_version,
+        ai_telemetry_id=ai_telemetry_id,
+        proposal_id=proposal_id,
+    )
+
+
 _ACTION_REGISTRY: dict[str, ActionSpec] = {}
 
 
@@ -218,6 +315,58 @@ def ensure_default_actions_registered() -> None:
                 target_module="office_ai",
                 description="Lock MIS pack + facts after human review (ADR-014).",
                 handler=_handle_reconcile_mis_pack,
+                capabilities=ActionCapabilityDescriptor(
+                    requires_confirmation=True,
+                    requires_maker_checker=True,
+                    risk_level="HIGH",
+                    idempotent=True,
+                    rollback_supported=False,
+                    audit_level="FULL",
+                ),
+            )
+        )
+
+    if "export_mis_excel" not in _ACTION_REGISTRY:
+        register_action(
+            ActionSpec(
+                action_type="export_mis_excel",
+                target_module="office_ai",
+                description="Export reconciled MIS pack as CFO Excel workbook (ADR-014).",
+                handler=_handle_export_mis_excel,
+                capabilities=ActionCapabilityDescriptor(
+                    requires_confirmation=True,
+                    requires_maker_checker=False,
+                    risk_level="MEDIUM",
+                    idempotent=True,
+                    rollback_supported=False,
+                    audit_level="FULL",
+                ),
+            )
+        )
+    if "export_mis_pdf_summary" not in _ACTION_REGISTRY:
+        register_action(
+            ActionSpec(
+                action_type="export_mis_pdf_summary",
+                target_module="office_ai",
+                description="Export reconciled MIS pack as CEO PDF summary (ADR-014).",
+                handler=_handle_export_mis_pdf_summary,
+                capabilities=ActionCapabilityDescriptor(
+                    requires_confirmation=True,
+                    requires_maker_checker=False,
+                    risk_level="MEDIUM",
+                    idempotent=True,
+                    rollback_supported=False,
+                    audit_level="FULL",
+                ),
+            )
+        )
+    if "export_mis_ppt" not in _ACTION_REGISTRY:
+        register_action(
+            ActionSpec(
+                action_type="export_mis_ppt",
+                target_module="office_ai",
+                description="Export reconciled MIS pack as board PPT deck (ADR-014).",
+                handler=_handle_export_mis_ppt,
                 capabilities=ActionCapabilityDescriptor(
                     requires_confirmation=True,
                     requires_maker_checker=True,

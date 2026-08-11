@@ -100,6 +100,8 @@ def _infer_required_feature(ctx: PolicyContext) -> str | None:
         action = str(ctx.action_type or "").strip().lower()
         if action == "reconcile_mis_pack":
             return "mis"
+        if action in {"export_mis_excel", "export_mis_pdf_summary", "export_mis_ppt"}:
+            return "mis.export"
         return "writeback"
     return None
 
