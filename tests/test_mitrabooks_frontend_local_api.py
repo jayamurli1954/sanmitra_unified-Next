@@ -5,6 +5,13 @@ import subprocess
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+def _mitrabooks_css() -> str:
+    d = REPO_ROOT / "frontend" / "mitrabooks-erp" / "styles"
+    return "\n".join(
+        (d / n).read_text(encoding="utf-8")
+        for n in "index-theme.css index-shell.css index-platform.css index-dashboard-widgets.css index-business-dashboard.css index-auth-profile.css index-forms-reports.css".split()
+    )
+
 
 def test_static_frontend_prefers_local_backend_before_staging_meta() -> None:
     api_client = REPO_ROOT / "frontend" / "shared" / "api-client.js"
@@ -24,11 +31,11 @@ def test_mitrabooks_shell_uses_current_asset_cache_version() -> None:
     worker_source = service_worker.read_text(encoding="utf-8")
 
     assert "app.js?v=mitrabooks-erp-v114" in index_source
-    assert "pwa-shell.js?v=mitrabooks-erp-v11" in index_source
-    assert "app-shell.css?v=mitrabooks-erp-v10" in index_source
-    assert "CACHE_NAME = 'mitrabooks-erp-v18'" in worker_source
-    assert "'/mitrabooks-erp/index.html'" not in worker_source
-    assert "'/mitrabooks-erp/login.html'" not in worker_source
+    assert "index.css?v=mitrabooks-erp-v40" in index_source
+    assert "CACHE_NAME = 'mitrabooks-erp-v19'" in worker_source
+    assert "'/mitrabooks-erp/styles/index-theme.css'" in worker_source
+    assert '@import url("./styles/index-theme.css");' in (REPO_ROOT / "frontend/mitrabooks-erp/index.css").read_text(encoding="utf-8")
+    assert "max-width: 420px" in _mitrabooks_css()
 
 
 def test_mitrabooks_login_page_redirects_to_main_erp_shell() -> None:
@@ -510,7 +517,7 @@ def test_mitrabooks_phase_1c_ui_polish_is_scoped_to_business_shell() -> None:
         REPO_ROOT / "frontend" / "mitrabooks-erp" / "modules" / "workspaces" / "business-list-tables.js"
     ).read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    index_css_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.css").read_text(encoding="utf-8")
+    index_css_source = _mitrabooks_css()
     shell_modules = f"{workspace_source}\n{voucher_form_source}\n{vouchers_source}\n{sales_source}\n{tables_source}"
 
     assert "erp-workspace-panel" in shell_modules
@@ -569,7 +576,7 @@ def test_mitrabooks_shell_loads_source_backed_data_health_score() -> None:
 def test_mitrabooks_shell_has_global_logout_and_reachable_login() -> None:
     app_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "app.js").read_text(encoding="utf-8")
     css_source = (REPO_ROOT / "frontend" / "shared" / "app-shell.css").read_text(encoding="utf-8")
-    mitrabooks_css_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.css").read_text(encoding="utf-8")
+    mitrabooks_css_source = _mitrabooks_css()
     index_source = (REPO_ROOT / "frontend" / "mitrabooks-erp" / "index.html").read_text(encoding="utf-8")
 
     assert 'id="topbar-logout"' in index_source

@@ -1,0 +1,946 @@
+/*
+  MitraBooks ERP — Account selector, vouchers, reports, settings
+  Extracted from index.css (lines 4134-5073) without rule reordering.
+  Loaded via index.css @import; do not link this file alone unless load order is preserved.
+*/
+
+/* ============================================
+   ACCOUNT SELECTOR COMPONENT (SEARCHABLE)
+   ============================================ */
+
+.account-selector-component {
+  position: relative;
+  width: 100%;
+}
+
+.account-selector-caption {
+  color: #93c5fd;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.account-selector-note {
+  color: #fbbf24;
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.account-input-wrapper {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.account-search-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.account-picker-select {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+#business-voucher-create-dialog .account-picker-select {
+  background: #11182d;
+  border-color: rgba(148, 163, 184, 0.26);
+  color: #f8fafc;
+  font-weight: 700;
+  min-height: 46px;
+}
+
+.voucher-posting-map {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 16px;
+}
+
+.voucher-posting-map > div {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.voucher-posting-map span {
+  color: #93c5fd;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.voucher-posting-map strong {
+  color: #f8fafc;
+  display: block;
+  font-size: 13px;
+}
+
+.voucher-entry-lines {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.voucher-entry-line {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.voucher-entry-line > div:first-child {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.voucher-entry-line span {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.voucher-entry-line strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.voucher-entry-line.debit-line {
+  border-left: 4px solid #22c55e;
+}
+
+.voucher-entry-line.debit-line span {
+  color: #86efac;
+}
+
+.voucher-entry-line.credit-line {
+  border-left: 4px solid #60a5fa;
+}
+
+.voucher-entry-line.credit-line span {
+  color: #93c5fd;
+}
+
+.voucher-balance-panel {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: space-between;
+  margin: 8px 0 16px;
+  padding: 12px;
+}
+
+.voucher-balance-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.voucher-balance-status span {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.voucher-balance-status strong {
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.voucher-balance-status.balanced strong {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.voucher-balance-status.imbalanced strong {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+@media (max-width: 640px) {
+  .voucher-posting-map {
+    grid-template-columns: 1fr;
+  }
+
+  .voucher-balance-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+html[data-theme="dark"] .account-search-input {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="light"] .account-search-input {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.account-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.account-id-input {
+  display: none;
+}
+
+.account-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  list-style: none;
+  margin: 4px 0 0 0;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+html[data-theme="dark"] .account-suggestions {
+  background: #1a2332;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme="light"] .account-suggestions {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.account-suggestions[hidden] {
+  display: none;
+}
+
+.account-suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  transition: background-color 0.15s ease;
+}
+
+html[data-theme="dark"] .account-suggestion-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="light"] .account-suggestion-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.account-suggestion-item strong {
+  color: var(--accent);
+  min-width: 60px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.account-suggestion-item span {
+  flex: 1;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-suggestion-empty {
+  color: #fbbf24;
+  font-size: 13px;
+  padding: 9px 12px;
+}
+
+.account-suggestion-item:hover span {
+  color: var(--text);
+}
+
+/* ============================================
+   VOUCHER LINE ITEMS LAYOUT
+   ============================================ */
+
+.voucher-line-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+
+.voucher-account-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.voucher-amount-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.voucher-action-field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.voucher-account-field label,
+.voucher-amount-field label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.voucher-line-grid input[type="number"] {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-family: monospace;
+  text-align: right;
+}
+
+.voucher-line-grid input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+@media (max-width: 768px) {
+  .voucher-line-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .voucher-action-field {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1260px) {
+  .ceo-insight-row {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+
+  .ceo-ask-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final MitraBooks shell guard: keep workspaces dark even when the light toggle is active. */
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) {
+  --bg: #090c14;
+  --panel: #0f1424;
+  --panel-2: rgba(18, 25, 47, 0.72);
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --border: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .content,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .main,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-topbar,
+.app.signed-in:not(.mandir-domain) .verification-panel,
+.app.signed-in:not(.mandir-domain) .erp-workspace-panel {
+  background: #090c14 !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-topbar,
+.app.signed-in:not(.mandir-domain) .verification-panel,
+.app.signed-in:not(.mandir-domain) .erp-workspace-panel {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.active,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button.active,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link.active,
+.app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.erp-nav-link.active {
+  background: rgba(59, 130, 246, 0.16) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.active .nav-icon,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .nav button.active .nav-icon,
+html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-nav-link.active .nav-icon,
+.app.signed-in:not(.mandir-domain) .erp-sidebar .nav a.erp-nav-link.active .nav-icon {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(96, 165, 250, 0.36) !important;
+  color: #93c5fd !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview,
+.app.signed-in:not(.mandir-domain) .erp-table,
+.app.signed-in:not(.mandir-domain) .audit-table,
+.app.signed-in:not(.mandir-domain) .empty-state {
+  background: rgba(18, 25, 47, 0.92) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview table,
+.app.signed-in:not(.mandir-domain) .erp-table table,
+.app.signed-in:not(.mandir-domain) .audit-table table,
+.app.signed-in:not(.mandir-domain) .table-preview thead,
+.app.signed-in:not(.mandir-domain) .erp-table thead,
+.app.signed-in:not(.mandir-domain) .audit-table thead,
+.app.signed-in:not(.mandir-domain) .table-preview tbody,
+.app.signed-in:not(.mandir-domain) .erp-table tbody,
+.app.signed-in:not(.mandir-domain) .audit-table tbody,
+.app.signed-in:not(.mandir-domain) .table-preview tr,
+.app.signed-in:not(.mandir-domain) .erp-table tr,
+.app.signed-in:not(.mandir-domain) .audit-table tr {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview th,
+.app.signed-in:not(.mandir-domain) .erp-table th,
+.app.signed-in:not(.mandir-domain) .audit-table th {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+  color: #cbd5e1 !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview td,
+.app.signed-in:not(.mandir-domain) .erp-table td,
+.app.signed-in:not(.mandir-domain) .audit-table td {
+  background: rgba(15, 20, 36, 0.54) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.app.signed-in:not(.mandir-domain) .table-preview button,
+.app.signed-in:not(.mandir-domain) .erp-table button,
+.app.signed-in:not(.mandir-domain) .audit-table button {
+  color: #cbd5e1 !important;
+}
+
+/* Financial Reports workspace */
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  border-bottom: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  padding-bottom: 12px;
+}
+
+.report-tab {
+  background: transparent;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.report-tab:hover {
+  border-color: var(--accent, #3b82f6);
+  color: var(--text, #e2e8f0);
+}
+
+.report-tab.active {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+  color: #ffffff;
+}
+
+.report-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.report-date-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.report-date-controls input,
+.report-date-controls select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  background: var(--surface, rgba(15, 23, 42, 0.6));
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+  min-width: 180px;
+}
+
+/* Keep report metric tiles and section cards on the dark surface (override the
+   light-card defaults from .verification-panel .metric-tile and
+   .dashboard-main-grid > article so reports match the rest of the workspace). */
+.app:not(.mandir-domain) .erp-workspace-panel .metric-tile,
+.app:not(.mandir-domain) .erp-workspace-panel .dashboard-main-grid > article,
+.app:not(.mandir-domain) .executive-dashboard .dashboard-main-grid > article {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #f8fafc);
+  box-shadow: none;
+}
+
+/* Sales invoice form */
+.invoice-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.invoice-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-form-grid input,
+.invoice-form-grid select,
+.invoice-notes textarea,
+.invoice-lines input,
+.invoice-lines select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.3));
+  background: var(--surface, rgba(15, 23, 42, 0.6));
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+}
+
+.invoice-form-grid .invoice-inter-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  align-self: end;
+}
+
+.invoice-form-grid .invoice-inter-toggle input {
+  width: auto;
+  padding: 0;
+}
+
+.invoice-lines input[type="number"] {
+  width: 90px;
+}
+
+.invoice-lines input[name="description"] {
+  min-width: 160px;
+  width: 100%;
+}
+
+.invoice-lines .line-dimensions {
+  min-width: 150px;
+}
+
+.invoice-lines .line-dimensions select {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.invoice-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-notes textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.invoice-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+  margin-left: auto;
+  max-width: 360px;
+}
+
+.invoice-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.invoice-totals .invoice-grand {
+  border-top: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  padding-top: 8px;
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--text, #e2e8f0);
+}
+
+.invoice-totals .invoice-grand strong {
+  color: var(--accent, #3b82f6);
+}
+
+.invoice-form-actions,
+.invoice-detail-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.invoice-form-actions {
+  margin-top: 16px;
+}
+
+.settings-section-title {
+  margin: 20px 0 4px;
+  font-size: 14px;
+  color: var(--text, #e2e8f0);
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+}
+
+.inline-check input {
+  width: auto;
+}
+
+.settings-coming-soon {
+  margin-top: 20px;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.mitrabooks-settings-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-visibility-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-roadmap-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.settings-roadmap-strip article {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-roadmap-strip strong {
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+}
+
+.settings-roadmap-strip span {
+  color: var(--accent, #60a5fa);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-roadmap-strip small {
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.4;
+}
+
+.settings-visibility-strip span,
+.settings-boundary-note {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+  color: var(--text-muted, #94a3b8);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.settings-visibility-strip strong,
+.settings-boundary-note strong {
+  color: var(--text, #e2e8f0);
+}
+
+.settings-menu-section {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-section-heading h5 {
+  margin: 0;
+  color: var(--text, #e2e8f0);
+  font-size: 16px;
+}
+
+.settings-section-heading p {
+  margin: 4px 0 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+}
+
+.settings-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.settings-menu-card {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.2);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  min-height: 190px;
+}
+
+.settings-card-head,
+.settings-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-card-head h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text, #e2e8f0);
+}
+
+.settings-menu-card p {
+  margin: 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-card-meta {
+  margin-top: auto;
+}
+
+.settings-card-meta span {
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+}
+
+.settings-detail-panel {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.settings-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.settings-detail-grid article {
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+  padding: 12px;
+}
+
+.settings-detail-grid strong {
+  display: block;
+  color: var(--text, #e2e8f0);
+  margin-bottom: 6px;
+}
+
+.settings-detail-grid p {
+  margin: 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pill.neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted, #94a3b8);
+}
+
+@media (max-width: 760px) {
+  .settings-visibility-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-card-head,
+  .settings-card-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.erp-workspace-panel code {
+  background: rgba(148, 163, 184, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Platform Owner uses the MitraBooks dark operations shell even when the
+   global theme toggle is light. Keep this block last so generic card/table
+   rules cannot wash out the dashboard text. */
+.app .platform-dashboard {
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .preview-heading {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.90));
+  border-color: rgba(96, 165, 250, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app .platform-dashboard .preview-heading h3,
+.app .platform-dashboard h4,
+.app .platform-dashboard .metric-tile strong,
+.app .platform-dashboard .metric-value,
+.app .platform-dashboard .status-list strong {
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .preview-heading p,
+.app .platform-dashboard .metric-tile span,
+.app .platform-dashboard .metric-tile small,
+.app .platform-dashboard .metric-label,
+.app .platform-dashboard .metric-sub,
+.app .platform-dashboard .muted,
+.app .platform-dashboard .status-list span {
+  color: #94a3b8;
+}
+
+.app .platform-dashboard .metric-tile,
+.app .platform-dashboard .metric-card,
+.app .platform-dashboard .dashboard-main-grid > article,
+.app .platform-dashboard > article {
+  background: rgba(18, 25, 47, 0.86);
+  border-color: rgba(148, 163, 184, 0.14);
+  color: #f8fafc;
+}
+
+.app .platform-dashboard .metric-tile strong,
+.app .platform-dashboard .metric-card .metric-value {
+  color: #60a5fa;
+}
+
+.app .platform-dashboard .table-preview {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.app .platform-dashboard .table-preview table,
+.app .platform-dashboard .table-preview td {
+  color: #e2e8f0;
+}
+
+.app .platform-dashboard .table-preview th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+.app .platform-dashboard .table-preview tbody tr {
+  background: #0f172a;
+}
+
+.app .platform-dashboard .table-preview tbody tr:hover {
+  background: rgba(59, 130, 246, 0.10);
+}
+
+.app .platform-dashboard .status-list li {
+  background: rgba(30, 41, 59, 0.84);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+
+
+

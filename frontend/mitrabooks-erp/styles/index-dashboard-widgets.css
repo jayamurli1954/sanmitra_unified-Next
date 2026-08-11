@@ -1,0 +1,694 @@
+/*
+  MitraBooks ERP — Dashboard widget controls and chrome
+  Extracted from index.css (lines 1918-2605) without rule reordering.
+  Loaded via index.css @import; do not link this file alone unless load order is preserved.
+*/
+
+/* ============================================
+   DASHBOARD WIDGET CONTROLS (Phase 2C.2-2C.3)
+   Collapsible and Customizable Widgets
+   ============================================ */
+
+.dashboard-widget {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.widget-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.widget-header h4 {
+  color: var(--text-primary, #f8fafc);
+  font-size: 18px;
+  line-height: 1.25;
+  margin: 0;
+  padding: 0;
+}
+
+.widget-header-controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.widget-collapse-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  font-size: 16px;
+  min-width: 36px;
+  padding: 6px 8px;
+  transition: all 0.2s ease;
+}
+
+.widget-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--text-secondary, #94a3b8);
+  color: var(--text-primary, #f8fafc);
+}
+
+.widget-content {
+  max-height: 999px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+/* Collapsed state: hide content with smooth animation */
+.dashboard-widget.collapsed .widget-content {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Hidden widgets (Phase 2C.3) */
+.dashboard-widget.hidden {
+  display: none;
+}
+
+/* Dashboard toolbar (Phase 2C.3) */
+.dashboard-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.dashboard-customize-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 5px 11px;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.dashboard-customize-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary, #fff);
+}
+
+/* Widget settings overlay (Phase 2C.3) */
+.widget-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 60px 24px 0;
+  pointer-events: none;
+}
+
+.widget-settings-panel {
+  background: var(--bg-card, #141c35);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  min-width: 280px;
+  max-width: 340px;
+  pointer-events: all;
+  width: 100%;
+}
+
+.widget-settings-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.widget-settings-header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.widget-settings-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  transition: color 0.15s;
+}
+
+.widget-settings-close:hover {
+  color: var(--text-primary, #fff);
+}
+
+.widget-settings-hint {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  font-size: 11px;
+  margin: 0;
+  padding: 10px 16px 6px;
+}
+
+.widget-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 16px 10px;
+}
+
+.widget-settings-row {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+}
+
+.widget-settings-row:last-child {
+  border-bottom: none;
+}
+
+.widget-settings-label {
+  color: var(--text-primary, rgba(255, 255, 255, 0.85));
+  font-size: 12px;
+  flex: 1;
+}
+
+/* Toggle switch (Phase 2C.3) */
+.widget-settings-toggle {
+  display: none;
+}
+
+.widget-settings-switch {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 20px;
+  position: relative;
+  transition: background 0.2s;
+  width: 36px;
+}
+
+.widget-settings-switch::after {
+  background: #fff;
+  border-radius: 50%;
+  content: "";
+  height: 14px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left 0.2s;
+  width: 14px;
+}
+
+.widget-settings-toggle:checked + .widget-settings-switch {
+  background: #4f7cff;
+}
+
+.widget-settings-toggle:checked + .widget-settings-switch::after {
+  left: 19px;
+}
+
+.widget-settings-footer {
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  padding: 12px 16px;
+}
+
+.widget-settings-footer .secondary {
+  font-size: 12px;
+  width: 100%;
+}
+
+/* Grid wrapper for side-by-side widgets */
+.finance-dashboard-grid-wrapper {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  grid-template-columns: minmax(460px, 1.3fr) minmax(320px, 0.7fr);
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 1024px) {
+  .finance-dashboard-grid-wrapper {
+    grid-template-columns: 1fr;
+  }
+
+  .widget-header {
+    flex-wrap: wrap;
+  }
+
+  .widget-header h4 {
+    flex: 1;
+    min-width: 200px;
+  }
+}
+
+.business-overview-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+}
+
+.business-overview-main,
+.business-overview-side {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.business-overview-side {
+  align-content: start;
+}
+
+.business-recent-table table td strong {
+  color: var(--text-primary, #f8fafc);
+  display: block;
+  font-size: 13px;
+}
+
+.business-recent-table .row-subtext {
+  color: var(--text-secondary, #94a3b8);
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.business-quick-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.business-focus-list {
+  grid-template-columns: 1fr;
+}
+
+.business-overview-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.inline-summary {
+  color: var(--text-secondary, #94a3b8);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.inline-summary strong {
+  color: var(--text-primary, #f8fafc);
+  margin-right: 4px;
+}
+
+.workbench-kicker {
+  color: var(--accent-color, #3b82f6);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-tile,
+.dashboard-main-grid > article,
+.verification-panel,
+.erp-health-panel,
+.accounting-drilldown-panel,
+.trend-panel,
+.table-preview,
+.entry-panel {
+  border-radius: 8px;
+}
+
+.app:not(.mandir-domain) .erp-workspace-panel,
+.app:not(.mandir-domain) .verification-panel {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .erp-table {
+  background: var(--bg-card, rgba(18, 25, 47, 0.72));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.app:not(.mandir-domain) .erp-table table {
+  color: var(--text-primary, #f8fafc);
+  min-width: 760px;
+}
+
+.app:not(.mandir-domain) .erp-table th,
+.app:not(.mandir-domain) .erp-table td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 12px 14px;
+}
+
+.app:not(.mandir-domain) .erp-table th {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.app:not(.mandir-domain) .erp-table td {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .erp-table tbody tr {
+  background: rgba(15, 20, 36, 0.74);
+}
+
+.app:not(.mandir-domain) .erp-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.app:not(.mandir-domain) .table-preview {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: var(--text-primary, #f8fafc) !important;
+  overflow-x: auto;
+}
+
+.app:not(.mandir-domain) .table-preview table {
+  background: transparent !important;
+  color: var(--text-primary, #f8fafc) !important;
+}
+
+.app:not(.mandir-domain) .table-preview th,
+.app:not(.mandir-domain) .table-preview td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+}
+
+.app:not(.mandir-domain) .table-preview th {
+  background: rgba(148, 163, 184, 0.1) !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.app:not(.mandir-domain) .table-preview td {
+  background: transparent !important;
+  color: var(--text-primary, #f8fafc) !important;
+}
+
+.app:not(.mandir-domain) .table-preview tbody tr {
+  background: rgba(15, 20, 36, 0.74) !important;
+}
+
+.app:not(.mandir-domain) .table-preview tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+.app:not(.mandir-domain) .erp-workspace-panel .table-preview,
+.app:not(.mandir-domain) .verification-panel .table-preview {
+  box-shadow: none !important;
+}
+
+.app:not(.mandir-domain) .table-preview button.secondary,
+.app:not(.mandir-domain) .table-preview a,
+.app:not(.mandir-domain) .table-preview [data-business-action] {
+  color: #cbd5e1 !important;
+}
+
+.erp-workspace-panel .table-preview,
+.verification-panel .table-preview {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview table,
+.verification-panel .table-preview table,
+.erp-workspace-panel .erp-table table,
+.verification-panel .erp-table table {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview thead,
+.verification-panel .table-preview thead,
+.erp-workspace-panel .erp-table thead,
+.verification-panel .erp-table thead {
+  background: transparent !important;
+}
+
+.erp-workspace-panel .table-preview th,
+.verification-panel .table-preview th,
+.erp-workspace-panel .erp-table th,
+.verification-panel .erp-table th {
+  background: rgba(148, 163, 184, 0.1) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  color: #94a3b8 !important;
+}
+
+.erp-workspace-panel .table-preview tbody,
+.verification-panel .table-preview tbody,
+.erp-workspace-panel .erp-table tbody,
+.verification-panel .erp-table tbody {
+  background: rgba(15, 20, 36, 0.74) !important;
+}
+
+.erp-workspace-panel .table-preview tr,
+.verification-panel .table-preview tr,
+.erp-workspace-panel .erp-table tr,
+.verification-panel .erp-table tr {
+  background: rgba(15, 20, 36, 0.74) !important;
+}
+
+.erp-workspace-panel .table-preview td,
+.verification-panel .table-preview td,
+.erp-workspace-panel .erp-table td,
+.verification-panel .erp-table td {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  color: #f8fafc !important;
+}
+
+.erp-workspace-panel .table-preview button,
+.verification-panel .table-preview button,
+.erp-workspace-panel .erp-table button,
+.verification-panel .erp-table button {
+  color: #cbd5e1 !important;
+}
+
+.erp-workspace-panel .empty-state,
+.verification-panel .empty-state {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px dashed rgba(148, 163, 184, 0.28) !important;
+  color: #94a3b8 !important;
+}
+
+.app:not(.mandir-domain) .empty-state {
+  background: rgba(18, 25, 47, 0.72) !important;
+  border: 1px dashed rgba(148, 163, 184, 0.28) !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  min-height: 96px;
+  padding: 22px;
+}
+
+.app:not(.mandir-domain) .empty-state strong {
+  color: var(--text-primary, #f8fafc) !important;
+}
+
+.app:not(.mandir-domain) .empty-state span,
+.app:not(.mandir-domain) .empty-state p {
+  color: var(--text-secondary, #94a3b8) !important;
+}
+
+.app:not(.mandir-domain) .list-filter-panel {
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .list-filter-panel .field span {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.app:not(.mandir-domain) .list-filter-panel input,
+.app:not(.mandir-domain) .list-filter-panel select {
+  background: #11182d;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  color: #f8fafc;
+}
+
+.app:not(.mandir-domain) .list-filter-panel input::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.app:not(.mandir-domain) .list-filter-panel input:focus,
+.app:not(.mandir-domain) .list-filter-panel select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  outline: none;
+}
+
+.app:not(.mandir-domain) .erp-table td strong {
+  color: var(--text-primary, #f8fafc);
+  display: block;
+  font-weight: 800;
+}
+
+.app:not(.mandir-domain) .erp-table .row-subtext {
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 4px;
+}
+
+.app:not(.mandir-domain) .erp-table .type-chip {
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  color: #93c5fd;
+}
+
+.app:not(.mandir-domain) .erp-table .pill.ok {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+}
+
+.app:not(.mandir-domain) .erp-table .action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.app:not(.mandir-domain) .erp-table .action-row button {
+  min-height: 34px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.app:not(.mandir-domain) .audit-table {
+  background: rgba(18, 25, 47, 0.72);
+  box-shadow: none;
+}
+
+.app:not(.mandir-domain) .audit-table table {
+  min-width: 860px;
+}
+
+.app:not(.mandir-domain) .audit-table .pill {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  color: #93c5fd;
+}
+
+.app:not(.mandir-domain) .audit-table .secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] {
+  background: transparent;
+  color: var(--text-primary, #f8fafc);
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] .field span {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] input,
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] select {
+  background: #11182d;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  color: #f8fafc;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] input:focus,
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  outline: none;
+}
+
+.app:not(.mandir-domain) .list-filter-panel[data-business-list="audit"] button {
+  min-height: 42px;
+}
+
+html[data-theme="light"] .erp-sidebar .brand-text h1,
+html[data-theme="light"] .erp-sidebar .brand-text p,
+html[data-theme="light"] .erp-sidebar .context-copy span,
+html[data-theme="light"] .erp-sidebar .user-details strong,
+html[data-theme="light"] .erp-sidebar .pwa-details strong {
+  color: var(--text-primary, #0f172a);
+}
+
+html[data-theme="light"] .erp-sidebar .context-copy small,
+html[data-theme="light"] .erp-sidebar .user-details span,
+html[data-theme="light"] .erp-sidebar .pwa-details span,
+html[data-theme="light"] .fy-selector {
+  color: var(--text-secondary, #475569);
+}
+
+html[data-theme="light"] .erp-sidebar {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .erp-sidebar .nav-group-title,
+html[data-theme="light"] .erp-sidebar .nav-section-title,
+html[data-theme="light"] .erp-sidebar .nav-group-toggle,
+html[data-theme="light"] .erp-sidebar .nav a,
+html[data-theme="light"] .erp-sidebar .nav button,
+html[data-theme="light"] .erp-sidebar .erp-nav-link {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .erp-sidebar .nav a:hover,
+html[data-theme="light"] .erp-sidebar .nav button:hover,
+html[data-theme="light"] .erp-sidebar .erp-nav-link:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .erp-sidebar .nav a.active,
+html[data-theme="light"] .erp-sidebar .nav button.active,
+html[data-theme="light"] .erp-sidebar .erp-nav-link.active {
+  background: #eff6ff !important;
+  color: #1e3a8a !important;
+}
+
+html[data-theme="light"] .erp-sidebar .erp-nav-link[aria-disabled="true"],
+html[data-theme="light"] .erp-sidebar .nav a[aria-disabled="true"],
+html[data-theme="light"] .erp-sidebar .nav button[aria-disabled="true"] {
+  color: #64748b !important;
+  opacity: 0.72;
+}
+
+html[data-theme="light"] .erp-sidebar .context-card,
+html[data-theme="light"] .erp-sidebar .fy-selector,
+html[data-theme="light"] .erp-sidebar .pwa-card,
+html[data-theme="light"] .erp-sidebar .sidebar-user-card,
+html[data-theme="light"] .erp-sidebar .theme-btn {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+

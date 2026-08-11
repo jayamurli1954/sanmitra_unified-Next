@@ -125,6 +125,11 @@ def _to_datetime(value: str | datetime | None) -> datetime | None:
         return None
 
 
+def _utc_today() -> date:
+    """Calendar day boundaries use UTC to match stored starts_at (UTC)."""
+    return datetime.now(timezone.utc).date()
+
+
 async def list_events(
     *,
     tenant_id: str,
@@ -137,7 +142,7 @@ async def list_events(
         try:
             d = date.fromisoformat(day)
         except ValueError:
-            d = date.today()
+            d = _utc_today()
         start = datetime.combine(d, time.min, tzinfo=timezone.utc)
         end = datetime.combine(d, time.max, tzinfo=timezone.utc)
         query["starts_at"] = {"$gte": start, "$lte": end}
@@ -151,7 +156,7 @@ async def list_events(
 
 
 async def list_today_events(*, tenant_id: str, limit: int = 50) -> list[dict]:
-    return await list_events(tenant_id=tenant_id, day=date.today().isoformat(), limit=limit)
+    return await list_events(tenant_id=tenant_id, day=_utc_today().isoformat(), limit=limit)
 
 
 async def create_event(
@@ -193,7 +198,7 @@ async def create_event(
     }
     await get_collection(CALENDAR_EVENTS_COLLECTION).insert_one(doc)
     item = serialize_doc(doc)
-    if notify and starts.date() == date.today():
+    if notify and starts.astimezone(timezone.utc).date() == _utc_today():
         await notification_service.create_notification(
             tenant_id=tenant_id,
             user=user,
@@ -280,7 +285,7 @@ async def parse_and_optionally_persist(
                 body="Parsed from pasted calendar text.",
                 kind="calendar_parsed",
                 href="/business/office-ai",
-                dedupe_key=f"calendar_parsed:{date.today().isoformat()}:{len(saved)}:{_user_id(user)}",
+                dedupe_key=f"calendar_parsed:{_utc_today().isoformat()}:{len(saved)}:{_user_id(user)}",
             )
     return {
         "suggested_events": suggested,
