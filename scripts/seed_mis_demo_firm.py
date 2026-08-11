@@ -8,9 +8,10 @@ Creates:
   Checker: checker@demo-mfg-mis.local  (tenant_admin, different user for maker-checker)
 
 Enables office_ai + office_ai.mis and nested MIS import/export/pack flags, then
-loads a generated MIS_FACTS pack for period 2026-07 (draft, not reconciled).
+loads a fixed manufacturing MIS fact pack for period 2026-07 (draft, not reconciled).
 
-Does NOT write into customer tenants. Safe to re-run (upsert).
+MIS Excel / synthetic ERP generation stays outside this repository.
+This script only seeds a demo tenant + a small inlined fact snapshot for UI testing.
 
 Usage:
   python scripts/seed_mis_demo_firm.py --password "ChangeMe123!"
@@ -25,10 +26,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import os
 import sys
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -38,6 +39,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.core.auth.security import hash_password
+from app.core.tenants.context import resolve_app_key
 from app.core.tenants.service import TENANTS_COLLECTION, ensure_tenant_exists
 from app.core.users.service import (
     USERS_COLLECTION,
@@ -45,7 +47,6 @@ from app.core.users.service import (
     ensure_demo_mitrabooks_user,
     ensure_users_indexes,
 )
-from app.core.tenants.context import resolve_app_key
 from app.db.mongo import close_mongo, get_collection, init_mongo
 from app.modules.office_ai.services import mis_store
 
@@ -55,8 +56,8 @@ DEMO_MAKER_EMAIL = "admin@demo-mfg-mis.local"
 DEMO_CHECKER_EMAIL = "checker@demo-mfg-mis.local"
 DEMO_PERIOD = "2026-07"
 DEMO_PACK_KEY = "manufacturing"
+DEMO_COMPANY = "SanMitra Demo Manufacturing Pvt Ltd"
 
-# Validated via ensure_tenant_exists (single-dot feature flags only).
 BASE_ENABLED_MODULES = [
     "business",
     "accounting",
@@ -67,8 +68,6 @@ BASE_ENABLED_MODULES = [
     "office_ai.mis",
 ]
 
-# Nested MIS capabilities accepted at runtime but rejected by entitlement validator —
-# appended with a direct Mongo $set after ensure_tenant_exists.
 NESTED_MIS_FLAGS = [
     "office_ai.mis.import",
     "office_ai.mis.export",
@@ -76,14 +75,187 @@ NESTED_MIS_FLAGS = [
 ]
 
 
-def _load_generator():
-    gen_path = REPO_ROOT / "tools" / "sanmitra-demo-data-generator" / "generate_mis_pack.py"
-    spec = importlib.util.spec_from_file_location("generate_mis_pack", gen_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load MIS generator at {gen_path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+def _money(value: Decimal | float | int) -> str:
+    return format(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f")
+
+
+def _fact(
+    *,
+    entity_type: str,
+    source_ref: str,
+    source_id: str,
+    amount: Decimal | float | int | None = None,
+    value: Any = None,
+    dimensions: dict[str, Any] | None = None,
+    period: str = DEMO_PERIOD,
+    as_of: str | None = None,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "entity_type": entity_type,
+        "period": period,
+        "as_of": as_of or f"{DEMO_PERIOD}-28",
+        "source_system": "demo_seed",
+        "source_id": source_id,
+        "source_ref": source_ref,
+        "currency": "INR",
+        "dimensions": dict(dimensions or {}),
+    }
+    if amount is not None:
+        row["amount_decimal"] = _money(amount)
+    if value is not None:
+        row["value"] = value
+    return row
+
+
+def build_demo_manufacturing_facts() -> list[dict[str, Any]]:
+    """Small fixed MIS snapshot for demo-mfg-mis (not a general data generator)."""
+    revenue = Decimal("18500000.00")
+    cogs = Decimal("11470000.00")
+    gp = revenue - cogs
+    opex = Decimal("3330000.00")
+    ebit = gp - opex
+    tax = (ebit * Decimal("0.25")).quantize(Decimal("0.01"))
+    pat = ebit - tax
+    cash = Decimal("1480000.00")
+    bank = Decimal("2620000.00")
+    ar = Decimal("3330000.00")
+    inventory = Decimal("2035000.00")
+    ap = Decimal("2523400.00")
+    equity = cash + bank + ar + inventory - ap + Decimal("4200000.00")
+
+    ar_buckets = {
+        "Current": Decimal("1598400.00"),
+        "1-30": Decimal("732600.00"),
+        "31-60": Decimal("466200.00"),
+        "61-90": Decimal("299700.00"),
+        "90+": Decimal("233100.00"),
+    }
+    ap_buckets = {
+        "Current": Decimal("1387870.00"),
+        "1-30": Decimal("504680.00"),
+        "31-60": Decimal("302808.00"),
+        "61-90": Decimal("201872.00"),
+        "90+": Decimal("126170.00"),
+    }
+
+    facts: list[dict[str, Any]] = []
+    for line, amount, code in [
+        ("Revenue", revenue, "REV"),
+        ("COGS", cogs, "COGS"),
+        ("Gross Profit", gp, "GP"),
+        ("Operating Expenses", opex, "OPEX"),
+        ("EBIT", ebit, "EBIT"),
+        ("Tax", tax, "TAX"),
+        ("PAT", pat, "PAT"),
+    ]:
+        facts.append(
+            _fact(
+                entity_type="pnl_line",
+                source_ref=f"PnL!{code}",
+                source_id=f"pnl-{code.lower()}",
+                amount=amount,
+                dimensions={"line": line, "company": DEMO_COMPANY, "industry": "manufacturing"},
+            )
+        )
+
+    for line, amount, code in [
+        ("Cash", cash, "CASH"),
+        ("Bank", bank, "BANK"),
+        ("Accounts Receivable", ar, "AR"),
+        ("Inventory", inventory, "INV"),
+        ("Accounts Payable", ap, "AP"),
+        ("Equity", equity, "EQ"),
+    ]:
+        facts.append(
+            _fact(
+                entity_type="bs_line",
+                source_ref=f"BS!{code}",
+                source_id=f"bs-{code.lower()}",
+                amount=amount,
+                dimensions={"line": line, "company": DEMO_COMPANY},
+            )
+        )
+
+    ops = Decimal("4200000.00")
+    investing = Decimal("-250000.00")
+    financing = Decimal("80000.00")
+    for line, amount, code in [
+        ("Operating", ops, "CFO"),
+        ("Investing", investing, "CFI"),
+        ("Financing", financing, "CFF"),
+        ("Net Change", ops + investing + financing, "NET"),
+    ]:
+        facts.append(
+            _fact(
+                entity_type="cash_summary",
+                source_ref=f"CF!{code}",
+                source_id=f"cf-{code.lower()}",
+                amount=amount,
+                dimensions={"line": line, "company": DEMO_COMPANY},
+            )
+        )
+
+    for bucket, amount in ar_buckets.items():
+        facts.append(
+            _fact(
+                entity_type="aging_bucket",
+                source_ref=f"AR!{bucket}",
+                source_id=f"ar-{bucket.lower().replace('+', 'plus')}",
+                amount=amount,
+                dimensions={"side": "AR", "bucket": bucket, "company": DEMO_COMPANY},
+            )
+        )
+    for bucket, amount in ap_buckets.items():
+        facts.append(
+            _fact(
+                entity_type="aging_bucket",
+                source_ref=f"AP!{bucket}",
+                source_id=f"ap-{bucket.lower().replace('+', 'plus')}",
+                amount=amount,
+                dimensions={"side": "AP", "bucket": bucket, "company": DEMO_COMPANY},
+            )
+        )
+
+    dso = round(float((ar / revenue) * Decimal("360")), 1)
+    dpo = round(float((ap / cogs) * Decimal("360")), 1)
+    gp_pct = round(float((gp / revenue) * Decimal("100")), 1)
+    current_ratio = round(float((cash + bank + ar + inventory) / ap), 2)
+    cash_runway = round(float((cash + bank) / (opex / Decimal("12"))), 1)
+    for name, value, unit in [
+        ("DSO", dso, "days"),
+        ("DPO", dpo, "days"),
+        ("GrossMarginPct", gp_pct, "percent"),
+        ("CurrentRatio", current_ratio, "ratio"),
+        ("CashRunwayMonths", cash_runway, "months"),
+        ("Revenue", float(revenue), "INR"),
+        ("PAT", float(pat), "INR"),
+        ("CashAndBank", float(cash + bank), "INR"),
+    ]:
+        facts.append(
+            _fact(
+                entity_type="kpi",
+                source_ref=f"KPI!{name}",
+                source_id=f"kpi-{name.lower()}",
+                value=value,
+                dimensions={"kpi": name, "unit": unit, "company": DEMO_COMPANY},
+            )
+        )
+
+    # Short trend for dashboard (prior months).
+    for month, rev in [("2026-06", "15200000"), ("2026-05", "14850000"), ("2026-04", "14100000")]:
+        facts.append(
+            _fact(
+                entity_type="pnl_line",
+                period=month,
+                as_of=f"{month}-28",
+                source_ref=f"PnLTrend!REV!{month}",
+                source_id=f"pnl-trend-rev-{month}",
+                amount=Decimal(rev),
+                dimensions={"line": "Revenue", "company": DEMO_COMPANY, "trend": True},
+            )
+        )
+
+    return facts
 
 
 async def _ensure_password_user(
@@ -130,7 +302,6 @@ async def _apply_mis_entitlements(tenant_id: str) -> list[str]:
     for flag in NESTED_MIS_FLAGS:
         if flag not in modules:
             modules.append(flag)
-    # Keep parent flags present.
     for required in BASE_ENABLED_MODULES:
         if required not in modules:
             modules.append(required)
@@ -148,16 +319,9 @@ async def _apply_mis_entitlements(tenant_id: str) -> list[str]:
     return modules
 
 
-async def _seed_mis_pack(*, tenant_id: str, maker_user_id: str, size: str, seed: int) -> dict[str, Any]:
-    gen = _load_generator()
-    facts, meta = gen.build_mis_facts(
-        industry="manufacturing",
-        period=DEMO_PERIOD,
-        size=size,
-        seed=seed,
-    )
+async def _seed_mis_pack(*, tenant_id: str, maker_user_id: str) -> dict[str, Any]:
+    facts = build_demo_manufacturing_facts()
 
-    # Prefer one draft pack per period for this demo tenant.
     existing = await mis_store.list_packs(tenant_id=tenant_id, period=DEMO_PERIOD, limit=20)
     pack = None
     for item in existing:
@@ -180,7 +344,6 @@ async def _seed_mis_pack(*, tenant_id: str, maker_user_id: str, size: str, seed:
     if pack.get("immutable"):
         return {"pack_id": pack_id, "status": pack.get("status"), "inserted": 0, "skipped": "immutable"}
 
-    # Replace facts on draft packs so re-seed is deterministic.
     from app.modules.office_ai.models import MIS_FACTS_COLLECTION
 
     await get_collection(MIS_FACTS_COLLECTION).delete_many({"tenant_id": tenant_id, "pack_id": pack_id})
@@ -190,19 +353,11 @@ async def _seed_mis_pack(*, tenant_id: str, maker_user_id: str, size: str, seed:
         user={"sub": maker_user_id},
         facts=facts,
     )
-
-    out_dir = REPO_ROOT / "tools" / "sanmitra-demo-data-generator" / "output"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    xlsx_path = out_dir / f"mis_manufacturing_{DEMO_PERIOD}_{size}.xlsx"
-    gen.write_xlsx(facts, xlsx_path)
-
     return {
         "pack_id": pack_id,
         "status": "draft",
         "inserted": int(insert_res.get("inserted") or 0),
-        "fact_count": meta["fact_count"],
-        "xlsx": str(xlsx_path),
-        "kpis": meta.get("kpis") or {},
+        "fact_count": len(facts),
     }
 
 
@@ -229,7 +384,6 @@ async def seed(args: argparse.Namespace) -> None:
         if maker is None:
             raise SystemExit("Failed to create maker admin user")
 
-        # Re-apply full module set (ensure_demo_mitrabooks_user only sets business core).
         await ensure_tenant_exists(
             DEMO_TENANT_ID,
             display_name=DEMO_DISPLAY_NAME,
@@ -241,7 +395,7 @@ async def seed(args: argparse.Namespace) -> None:
         )
         modules = await _apply_mis_entitlements(DEMO_TENANT_ID)
 
-        checker = await _ensure_password_user(
+        await _ensure_password_user(
             email=DEMO_CHECKER_EMAIL,
             password=password,
             full_name="Demo MFG MIS Checker",
@@ -253,8 +407,6 @@ async def seed(args: argparse.Namespace) -> None:
             mis_result = await _seed_mis_pack(
                 tenant_id=DEMO_TENANT_ID,
                 maker_user_id=str(maker["user_id"]),
-                size=args.size,
-                seed=args.seed,
             )
     finally:
         await close_mongo()
@@ -269,8 +421,6 @@ async def seed(args: argparse.Namespace) -> None:
             f"  MIS pack:  {mis_result['pack_id']} status={mis_result['status']} "
             f"facts={mis_result.get('inserted') or mis_result.get('fact_count')}"
         )
-        if mis_result.get("xlsx"):
-            print(f"  Excel:     {mis_result['xlsx']}")
         print("  Next: login as maker -> OfficeMitra AI -> MIS Packs -> reconcile -> checker approves in Proposals.")
     else:
         print("  MIS data:  skipped (--skip-mis-data)")
@@ -278,10 +428,8 @@ async def seed(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Seed SanMitra Demo Manufacturing firm for OfficeMitra MIS.")
-    p.add_argument("--password", default="", help="Shared password for maker and checker (≥6 chars)")
+    p.add_argument("--password", default="", help="Shared password for maker and checker (>=6 chars)")
     p.add_argument("--use-env-password", action="store_true", help="Read DEMO_MIS_MFG_ADMIN_PASSWORD")
-    p.add_argument("--size", default="medium", choices=("small", "medium", "large"))
-    p.add_argument("--seed", type=int, default=42)
     p.add_argument("--skip-mis-data", action="store_true", help="Create firm/users only; do not load MIS facts")
     return p.parse_args()
 
