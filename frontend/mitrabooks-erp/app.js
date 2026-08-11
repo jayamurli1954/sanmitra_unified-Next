@@ -1310,13 +1310,7 @@ initHrWorkspace({
     }
   },
 });
-initOfficeAiWorkspace({
-  escapeHtml,
-  apiRequest,
-  dashboardPreview,
-  appKey: "mitrabooks",
-  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
-});
+initOfficeAiWorkspace({ escapeHtml, apiRequest, dashboardPreview, appKey: "mitrabooks", getActiveBusinessWorkspace: () => activeBusinessWorkspace });
 // Wire Mandir financial report renderers (avoids import cycle with app.js)
 initMandirFinancialReports({
   escapeHtml,
