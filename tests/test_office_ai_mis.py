@@ -365,3 +365,42 @@ def test_shared_workspace_has_mis_tab_and_actions() -> None:
     assert "/api/v1/officemitra/mis/packs" in shared
     assert "reconcile_mis_pack" in shared
     assert "export_mis_" in shared
+    assert "Pack dashboard" in shared
+    assert "buildMisDashboard" in shared
+
+
+def test_demo_mis_generator_excel_parses_for_import(tmp_path) -> None:
+    """Outside-ERP generator must emit Excel accepted by ADR-014 import parser."""
+    import importlib.util
+    from io import BytesIO
+    from pathlib import Path
+
+    from fastapi import UploadFile
+
+    from app.modules.office_ai.services.mis_excel_import import parse_mis_excel
+
+    gen_path = Path("tools/sanmitra-demo-data-generator/generate_mis_pack.py")
+    spec = importlib.util.spec_from_file_location("generate_mis_pack", gen_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(mod)
+
+    facts, meta = mod.build_mis_facts(
+        industry="manufacturing",
+        period="2026-07",
+        size="small",
+        seed=7,
+    )
+    assert meta["fact_count"] >= 30
+    assert meta["kpis"]["DSO"] > 0
+
+    xlsx_path = tmp_path / "mis_demo.xlsx"
+    mod.write_xlsx(facts, xlsx_path)
+    content = xlsx_path.read_bytes()
+    upload = UploadFile(filename="mis_demo.xlsx", file=BytesIO(content))
+
+    preview, report = parse_mis_excel(file=upload, sheet_name=None)
+    assert report["errors"] == []
+    assert len(preview) == len(facts)
+    entity_types = {f["entity_type"] for f in preview}
+    assert {"pnl_line", "bs_line", "cash_summary", "aging_bucket", "kpi", "party"} <= entity_types

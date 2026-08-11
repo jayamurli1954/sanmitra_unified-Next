@@ -162,6 +162,122 @@ function misPackById(packId) {
   return (state.misPacks || []).find((p) => String(p.id || "").trim() === id) || null;
 }
 
+function factDimensions(fact) {
+  const dims = fact?.dimensions;
+  return dims && typeof dims === "object" ? dims : {};
+}
+
+function formatMisAmount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? "—");
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+function buildMisDashboard(facts) {
+  const items = Array.isArray(facts) ? facts : [];
+  const kpis = {};
+  for (const fact of items) {
+    if (String(fact.entity_type || "").toLowerCase() !== "kpi") continue;
+    const name = String(factDimensions(fact).kpi || fact.source_id || "").trim();
+    if (!name) continue;
+    kpis[name] = {
+      value: fact.value,
+      unit: String(factDimensions(fact).unit || ""),
+    };
+  }
+
+  const ageing = { AR: {}, AP: {} };
+  for (const fact of items) {
+    if (String(fact.entity_type || "").toLowerCase() !== "aging_bucket") continue;
+    const dims = factDimensions(fact);
+    const side = String(dims.side || "").toUpperCase();
+    const bucket = String(dims.bucket || "").trim();
+    if ((side !== "AR" && side !== "AP") || !bucket) continue;
+    ageing[side][bucket] = Number(fact.amount_decimal || 0);
+  }
+
+  const pnl = {};
+  for (const fact of items) {
+    if (String(fact.entity_type || "").toLowerCase() !== "pnl_line") continue;
+    const dims = factDimensions(fact);
+    if (dims.trend) continue;
+    const line = String(dims.line || "").trim();
+    if (!line) continue;
+    pnl[line] = Number(fact.amount_decimal || 0);
+  }
+
+  return { kpis, ageing, pnl };
+}
+
+function renderMisAgeingBars(side, buckets) {
+  const order = ["Current", "1-30", "31-60", "61-90", "90+"];
+  const values = order.map((b) => Number(buckets[b] || 0));
+  const max = Math.max(...values, 1);
+  const rows = order
+    .map((bucket, idx) => {
+      const amount = values[idx];
+      const pct = Math.max(4, Math.round((amount / max) * 100));
+      return `<div style="display:grid;grid-template-columns:4.5rem 1fr 6.5rem;gap:0.4rem;align-items:center;margin:0.25rem 0;">
+        <span class="muted">${escapeHtml(bucket)}</span>
+        <div style="background:rgba(0,0,0,0.06);height:0.55rem;border-radius:999px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${side === "AR" ? "#1f6feb" : "#0f766e"};"></div>
+        </div>
+        <span style="text-align:right;">${escapeHtml(formatMisAmount(amount))}</span>
+      </div>`;
+    })
+    .join("");
+  return `<div><h5 style="margin:0 0 0.35rem;">${side} ageing</h5>${rows}</div>`;
+}
+
+function renderMisDashboardStrip(facts) {
+  const dash = buildMisDashboard(facts);
+  const kpiOrder = [
+    ["Revenue", "INR"],
+    ["PAT", "INR"],
+    ["GrossMarginPct", "%"],
+    ["DSO", "days"],
+    ["DPO", "days"],
+    ["CurrentRatio", "x"],
+    ["CashAndBank", "INR"],
+    ["CashRunwayMonths", "mo"],
+  ];
+  const tiles = kpiOrder
+    .map(([key, fallbackUnit]) => {
+      const item = dash.kpis[key];
+      if (!item) return "";
+      const unit = item.unit === "percent" ? "%" : item.unit === "ratio" ? "x" : item.unit || fallbackUnit;
+      const display = unit === "INR" || unit === "percent" || unit === "%"
+        ? formatMisAmount(item.value)
+        : String(item.value ?? "—");
+      const suffix = unit && unit !== "INR" ? ` ${unit}` : "";
+      return `<div style="min-width:7.5rem;padding:0.65rem 0.75rem;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:#fff;">
+        <div class="muted" style="font-size:0.8rem;">${escapeHtml(key)}</div>
+        <div style="font-size:1.1rem;font-weight:600;margin-top:0.15rem;">${escapeHtml(display)}${escapeHtml(suffix)}</div>
+      </div>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  const hasAgeing = Object.keys(dash.ageing.AR).length || Object.keys(dash.ageing.AP).length;
+  if (!tiles && !hasAgeing) {
+    return `<p class="muted" style="margin-top:0.75rem;">Dashboard widgets appear after KPI / ageing facts are imported.</p>`;
+  }
+
+  return `
+    <div style="margin-top:1rem;">
+      <h5 style="margin:0 0 0.5rem;">Pack dashboard</h5>
+      <p class="muted" style="margin:0 0 0.65rem;">Derived from imported MIS facts (not AI estimates).</p>
+      ${tiles ? `<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">${tiles}</div>` : ""}
+      ${hasAgeing
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;margin-top:0.85rem;">
+            ${renderMisAgeingBars("AR", dash.ageing.AR)}
+            ${renderMisAgeingBars("AP", dash.ageing.AP)}
+          </div>`
+        : ""}
+    </div>
+  `;
+}
+
 function advisoryBanner() {
   return `<p class="muted" style="margin:0.5rem 0 0;">Advisory only — not final legal or financial advice. Review before acting.</p>`;
 }
@@ -432,6 +548,7 @@ function renderMisPanel() {
         ? `<div style="margin-top:1rem;padding:0.75rem;border:1px solid rgba(0,0,0,0.08);border-radius:6px;">
             <h5>Selected: ${escapeHtml(selected.display_name || selected.pack_key || "")} — ${escapeHtml(String(selected.period || ""))}</h5>
             <p class="muted">Status: ${escapeHtml(selectedStatus)} · ID: ${escapeHtml(state.misSelectedPackId)}</p>
+            ${renderMisDashboardStrip(state.misPackFacts)}
             ${importSection}
             ${reconcileSection}
             ${exportSection}
@@ -680,7 +797,7 @@ async function refreshMisFacts(packId) {
     state.misPackFacts = [];
     return;
   }
-  const payload = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(id)}/facts?limit=20`));
+  const payload = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(id)}/facts?limit=500`));
   state.misPackFacts = payload.items || [];
 }
 
