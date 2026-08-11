@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.modules.dependencies import require_enabled_module, require_enabled_module_feature
@@ -32,6 +32,7 @@ from app.modules.office_ai.services import (
     task_service,
     workflow_service,
 )
+from app.modules.office_ai.services.mis_excel_import import parse_mis_excel
 
 router = APIRouter(prefix="/officemitra", tags=["officemitra"])
 
@@ -320,6 +321,67 @@ async def insert_mis_pack_facts(
     except mis_store.MISStoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
+
+
+@router.post("/mis/packs/{pack_id}/import/excel")
+async def import_mis_pack_excel(
+    pack_id: str,
+    file: UploadFile = File(...),
+    persist: bool = Query(default=False),
+    sheet_name: str | None = Query(default=None),
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "mis")),
+) -> dict:
+    """
+    Step 3: import & validate SanMitra CA MIS template Excel.
+
+    - Always returns `validation_report`.
+    - If `persist=true`, inserts only valid rows (partial success allowed).
+    """
+    tenant = ctx.get("tenant") or {}
+    if not is_office_ai_mis_import_enabled(
+        enabled_modules=tenant.get("enabled_modules") or [],
+        office_ai_features=tenant.get("office_ai_features"),
+    ):
+        raise HTTPException(status_code=403, detail="Enable office_ai.mis.import for Excel import")
+
+    tenant_id = _tenant_id(ctx)
+    user = ctx["user"]
+
+    # Parse + validate (does not touch Mongo).
+    try:
+        facts_preview, validation_report = parse_mis_excel(
+            file=file,
+            sheet_name=sheet_name,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Excel parse failed: {type(exc).__name__}") from exc
+
+    inserted = 0
+    if persist:
+        try:
+            insert_res = await mis_store.insert_facts(
+                tenant_id=tenant_id,
+                pack_id=pack_id,
+                user=user,
+                facts=facts_preview,
+            )
+            inserted = int(insert_res.get("inserted") or 0)
+        except mis_store.MISImmutableError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except mis_store.MISPackNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except mis_store.MISStoreError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "pack_id": pack_id,
+        "persist": persist,
+        "validation_report": validation_report,
+        "facts_previewed": len(facts_preview),
+        "inserted": inserted,
+    }
 
 
 @router.post("/mis/packs/{pack_id}/reconcile")

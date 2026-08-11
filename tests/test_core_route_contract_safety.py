@@ -137,6 +137,7 @@ def test_officemitra_route_contracts_are_registered() -> None:
         ("GET", "/api/v1/officemitra/mis/packs/{pack_id}"),
         ("GET", "/api/v1/officemitra/mis/packs/{pack_id}/facts"),
         ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/facts"),
+        ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/import/excel"),
         ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/reconcile"),
     }
 
