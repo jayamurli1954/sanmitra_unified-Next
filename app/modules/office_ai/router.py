@@ -510,8 +510,21 @@ async def generate_tasks(
 async def list_proposals(
     status: str | None = Query(default="pending"),
     limit: int = Query(default=50, ge=1, le=100),
-    ctx: dict = Depends(require_enabled_module_feature("office_ai", "writeback")),
+    ctx: dict = Depends(require_enabled_module("office_ai")),
 ) -> dict:
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    writeback = is_office_ai_writeback_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    mis = is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    if not (writeback or mis):
+        raise HTTPException(status_code=403, detail="Enable office_ai.writeback or office_ai.mis to use proposals")
     items = await proposal_service.list_proposals(
         tenant_id=_tenant_id(ctx),
         status=status,
@@ -523,9 +536,23 @@ async def list_proposals(
 @router.post("/proposals/{proposal_id}/confirm")
 async def confirm_proposal(
     proposal_id: str,
-    ctx: dict = Depends(require_enabled_module_feature("office_ai", "writeback")),
+    ctx: dict = Depends(require_enabled_module("office_ai")),
 ) -> dict:
     try:
+        tenant = ctx.get("tenant") or {}
+        enabled_modules = tenant.get("enabled_modules") or []
+        office_ai_features = tenant.get("office_ai_features")
+        writeback = is_office_ai_writeback_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+        mis = is_office_ai_mis_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+        if not (writeback or mis):
+            raise HTTPException(status_code=403, detail="Enable office_ai.writeback or office_ai.mis to confirm proposals")
+
         result = await proposal_service.confirm_proposal(
             tenant_id=_tenant_id(ctx),
             user=ctx["user"],
@@ -543,9 +570,23 @@ async def confirm_proposal(
 @router.post("/proposals/{proposal_id}/approve")
 async def approve_proposal(
     proposal_id: str,
-    ctx: dict = Depends(require_enabled_module_feature("office_ai", "writeback")),
+    ctx: dict = Depends(require_enabled_module("office_ai")),
 ) -> dict:
     try:
+        tenant = ctx.get("tenant") or {}
+        enabled_modules = tenant.get("enabled_modules") or []
+        office_ai_features = tenant.get("office_ai_features")
+        writeback = is_office_ai_writeback_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+        mis = is_office_ai_mis_enabled(
+            enabled_modules=enabled_modules,
+            office_ai_features=office_ai_features,
+        )
+        if not (writeback or mis):
+            raise HTTPException(status_code=403, detail="Enable office_ai.writeback or office_ai.mis to approve proposals")
+
         result = await proposal_service.approve_proposal(
             tenant_id=_tenant_id(ctx),
             user=ctx["user"],
@@ -563,8 +604,21 @@ async def approve_proposal(
 @router.post("/proposals/{proposal_id}/dismiss")
 async def dismiss_proposal(
     proposal_id: str,
-    ctx: dict = Depends(require_enabled_module_feature("office_ai", "writeback")),
+    ctx: dict = Depends(require_enabled_module("office_ai")),
 ) -> dict:
+    tenant = ctx.get("tenant") or {}
+    enabled_modules = tenant.get("enabled_modules") or []
+    office_ai_features = tenant.get("office_ai_features")
+    writeback = is_office_ai_writeback_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    mis = is_office_ai_mis_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+    if not (writeback or mis):
+        raise HTTPException(status_code=403, detail="Enable office_ai.writeback or office_ai.mis to dismiss proposals")
     item = await proposal_service.dismiss_proposal(
         tenant_id=_tenant_id(ctx),
         user=ctx["user"],
