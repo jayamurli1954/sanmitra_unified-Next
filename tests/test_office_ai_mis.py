@@ -404,3 +404,36 @@ def test_demo_mis_generator_excel_parses_for_import(tmp_path) -> None:
     assert len(preview) == len(facts)
     entity_types = {f["entity_type"] for f in preview}
     assert {"pnl_line", "bs_line", "cash_summary", "aging_bucket", "kpi", "party"} <= entity_types
+
+
+def test_mis_demo_firm_seed_script_entitlements_match_gates() -> None:
+    """Demo firm base modules must validate; nested MIS flags must unlock import/export."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.core.modules.registry import (
+        is_office_ai_mis_enabled,
+        is_office_ai_mis_export_enabled,
+        is_office_ai_mis_import_enabled,
+        is_office_ai_mis_pack_enabled,
+    )
+    from app.core.tenants.service import _validate_enabled_modules
+
+    path = Path("scripts/seed_mis_demo_firm.py")
+    spec = importlib.util.spec_from_file_location("seed_mis_demo_firm", path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(mod)
+
+    assert mod.DEMO_TENANT_ID == "demo-mfg-mis"
+    assert "SanMitra Demo Manufacturing" in mod.DEMO_DISPLAY_NAME
+    _validate_enabled_modules(
+        organization_type="BUSINESS",
+        app_keys=["mitrabooks"],
+        enabled_modules=list(mod.BASE_ENABLED_MODULES),
+    )
+    full = list(mod.BASE_ENABLED_MODULES) + list(mod.NESTED_MIS_FLAGS)
+    assert is_office_ai_mis_enabled(enabled_modules=full) is True
+    assert is_office_ai_mis_import_enabled(enabled_modules=full) is True
+    assert is_office_ai_mis_export_enabled(enabled_modules=full) is True
+    assert is_office_ai_mis_pack_enabled("manufacturing", enabled_modules=full) is True

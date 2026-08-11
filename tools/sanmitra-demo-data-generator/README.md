@@ -38,11 +38,22 @@ python tools/sanmitra-demo-data-generator/generate_mis_pack.py --industry ca_pra
 
 ## Import path (current)
 
-1. Enable `office_ai.mis` (+ `.import` / `.export` as needed) on a demo tenant.
-2. OfficeMitra AI → **MIS Packs** → create pack for the same period.
-3. Upload the generated `.xlsx` with **Persist valid rows**.
-4. Submit reconcile → checker approves in **Proposals**.
-5. Dashboard strip on the MIS tab shows KPI tiles + AR/AP ageing from imported facts.
+1. Seed the dedicated demo firm (local Mongo):
+
+```powershell
+python scripts/seed_mis_demo_firm.py --password "ChangeMe123!"
+```
+
+Creates tenant `demo-mfg-mis` ("SanMitra Demo Manufacturing Pvt Ltd"), maker + checker users,
+enables MIS flags, and loads a draft manufacturing pack for `2026-07`.
+
+2. Or generate Excel only, then import manually in OfficeMitra:
+
+```powershell
+python tools/sanmitra-demo-data-generator/generate_mis_pack.py --industry manufacturing --period 2026-07 --size medium
+```
+
+3. OfficeMitra AI → **MIS Packs** → select pack → review dashboard → reconcile → checker approves in **Proposals**.
 
 ## Not yet included
 
