@@ -152,6 +152,8 @@ Expect on ping when flags are on: `writeback_enabled`, `workflows_enabled`, `pol
 
 ## 4. Exit criteria — Smoke Prep Complete
 
+Local foundation signoff record: [OFFICEMITRA_FOUNDATION_SMOKE_SIGNOFF.md](OFFICEMITRA_FOUNDATION_SMOKE_SIGNOFF.md)
+
 - [ ] Local pytest suite green (§0)  
 - [ ] Demo tenant configured with explicit flags (§1)  
 - [ ] Standalone shell accessible (Phase 5 checklist)  
