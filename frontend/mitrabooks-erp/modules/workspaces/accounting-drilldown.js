@@ -173,6 +173,67 @@ export function renderAccountingVoucherDetail(detail = lastAccountingVoucherDeta
   `;
 }
 
+export function renderAccountingDrilldownBreadcrumbs(state = accountingDrilldownState) {
+  const level = state.level || "month";
+  const month = state.month;
+  const week = state.week_start;
+  const day = state.day;
+
+  const crumbs = [
+    `<button class="breadcrumb-item ${level === "month" ? "active" : ""}" type="button" data-accounting-action="reset-drilldown">All Months</button>`
+  ];
+
+  if (month || level === "week" || level === "day" || level === "voucher") {
+    crumbs.push(`<span class="breadcrumb-separator">›</span>`);
+    crumbs.push(`<button class="breadcrumb-item ${level === "week" ? "active" : ""}" type="button" data-accounting-action="drill" data-next-level="week" data-month="${escapeHtml(month || "")}">Month (${escapeHtml(month || "Active")})</button>`);
+  }
+
+  if (week || level === "day" || level === "voucher") {
+    crumbs.push(`<span class="breadcrumb-separator">›</span>`);
+    crumbs.push(`<button class="breadcrumb-item ${level === "day" ? "active" : ""}" type="button" data-accounting-action="drill" data-next-level="day" data-month="${escapeHtml(month || "")}" data-week-start="${escapeHtml(week || "")}">Week (${escapeHtml(week || "Active")})</button>`);
+  }
+
+  if (day || level === "voucher") {
+    crumbs.push(`<span class="breadcrumb-separator">›</span>`);
+    crumbs.push(`<button class="breadcrumb-item ${level === "voucher" ? "active" : ""}" type="button" data-accounting-action="drill" data-next-level="voucher" data-month="${escapeHtml(month || "")}" data-week-start="${escapeHtml(week || "")}" data-day="${escapeHtml(day || "")}">Day (${escapeHtml(day || "Active")})</button>`);
+  }
+
+  return `<nav class="accounting-breadcrumbs" aria-label="Drilldown breadcrumbs">${crumbs.join("")}</nav>`;
+}
+
+export function renderAccountingDrilldownSummaryCards(payload = lastAccountingDrilldown) {
+  const summary = payload?.summary || {};
+  const count = Number(summary.voucher_count || (Array.isArray(payload?.items) ? payload.items.length : 0));
+  const debit = Number(summary.total_debit || 0);
+  const credit = Number(summary.total_credit || 0);
+  const net = debit - credit;
+
+  return `
+    <div class="drilldown-summary-grid">
+      <article class="drilldown-summary-card">
+        <span>Vouchers Count</span>
+        <strong>${escapeHtml(String(count))}</strong>
+        <small>Posted entries in period</small>
+      </article>
+      <article class="drilldown-summary-card">
+        <span>Total Debits</span>
+        <strong>${escapeHtml(formatCurrency(debit))}</strong>
+        <small>Inflow / Account Debits</small>
+      </article>
+      <article class="drilldown-summary-card">
+        <span>Total Credits</span>
+        <strong>${escapeHtml(formatCurrency(credit))}</strong>
+        <small>Outflow / Account Credits</small>
+      </article>
+      <article class="drilldown-summary-card">
+        <span>Net Movement</span>
+        <strong class="${net >= 0 ? 'text-good' : 'text-warn'}">${escapeHtml(formatCurrency(net))}</strong>
+        <small>Debits − Credits</small>
+      </article>
+    </div>
+  `;
+}
+
 export function renderAccountingDrilldownPanel(payload = lastAccountingDrilldown) {
   const state = accountingDrilldownState;
   const summary = payload?.summary || {};
@@ -185,6 +246,8 @@ export function renderAccountingDrilldownPanel(payload = lastAccountingDrilldown
         </div>
         <span class="pill">${escapeHtml(summary.voucher_count || 0)} vouchers</span>
       </div>
+      ${renderAccountingDrilldownBreadcrumbs(state)}
+      ${renderAccountingDrilldownSummaryCards(payload)}
       <div class="list-filter-panel" data-accounting-drilldown>
         <div class="list-filter-bar">
           <label class="field">

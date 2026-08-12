@@ -941,6 +941,118 @@ html[data-theme="light"] .app.signed-in:not(.mandir-domain) .erp-sidebar .erp-na
   border-color: rgba(148, 163, 184, 0.14);
 }
 
+/* ============================================
+   ACCOUNTING DRILLDOWN & REPORTS HUB ENHANCEMENTS
+   ============================================ */
+
+/* Drilldown Breadcrumbs */
+.accounting-breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: rgba(18, 25, 47, 0.6);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+
+.breadcrumb-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.breadcrumb-item:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-color, #3b82f6);
+}
+
+.breadcrumb-item.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.breadcrumb-separator {
+  color: var(--text-secondary, #64748b);
+  font-size: 14px;
+}
+
+/* Drilldown Summary Grid */
+.drilldown-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 840px) {
+  .drilldown-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.drilldown-summary-card {
+  background: var(--bg-card, rgba(18, 25, 47, 0.65));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.drilldown-summary-card span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.drilldown-summary-card strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary, #f8fafc);
+}
+
+.drilldown-summary-card small {
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.text-good { color: #34d399 !important; }
+.text-warn { color: #f87171 !important; }
+
+/* Light Theme Overrides */
+html[data-theme="light"] .accounting-breadcrumbs {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="light"] .breadcrumb-item {
+  color: #475569;
+}
+
+html[data-theme="light"] .breadcrumb-item.active {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+html[data-theme="light"] .drilldown-summary-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+
 
 
 

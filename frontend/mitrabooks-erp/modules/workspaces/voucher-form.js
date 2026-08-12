@@ -124,7 +124,7 @@ export function updateVoucherBalance() {
     balanceEl.innerHTML = `
       <span>Debit: ${formatCurrency(totalDebit)}</span>
       <span>Credit: ${formatCurrency(totalCredit)}</span>
-      <strong>${isBalanced ? "Debit = Credit" : "Debit must equal Credit"}</strong>
+      <strong>${isBalanced ? "✓ Balanced" : "⚠️ Debit must equal Credit"}</strong>
     `;
   }
 
@@ -135,32 +135,7 @@ export function updateVoucherBalance() {
 }
 
 export function updateVoucherBalanceState() {
-  let totalDebit = 0;
-  let totalCredit = 0;
-
-  document.querySelectorAll(".voucher-debit").forEach((input) => {
-    totalDebit += Number(input.value) || 0;
-  });
-  document.querySelectorAll(".voucher-credit").forEach((input) => {
-    totalCredit += Number(input.value) || 0;
-  });
-
-  const hasAmount = totalDebit > 0 || totalCredit > 0;
-  const isBalanced = hasAmount && Math.abs(totalDebit - totalCredit) < 0.01;
-  const balanceEl = document.getElementById("business-voucher-balance");
-  if (balanceEl) {
-    balanceEl.className = isBalanced ? "voucher-balance-status balanced" : "voucher-balance-status imbalanced";
-    balanceEl.innerHTML = `
-      <span>Debit: ${formatCurrency(totalDebit)}</span>
-      <span>Credit: ${formatCurrency(totalCredit)}</span>
-      <strong>${isBalanced ? "Balanced" : "Imbalanced"}</strong>
-    `;
-  }
-
-  const submitBtn = document.getElementById("business-voucher-submit");
-  if (submitBtn) {
-    submitBtn.disabled = !isBalanced;
-  }
+  updateVoucherBalance();
 }
 
 export function addVoucherLine() {

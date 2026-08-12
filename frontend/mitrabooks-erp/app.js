@@ -2561,6 +2561,7 @@ initExecutiveDashboard({
   getLastBusinessAccounts: () => lastBusinessAccounts,
   getLastBusinessDashboardStats: () => lastBusinessDashboardStats,
   getLastBusinessMisKpis: () => lastBusinessMisKpis,
+  getLastVoucherApprovalQueue: () => lastVoucherApprovalQueue,
   getBusinessDashboardLoadInFlight: () => businessDashboardLoadInFlight,
   getBusinessMisLoadInFlight: () => businessMisLoadInFlight,
   loadBusinessDashboardStats,

@@ -2936,4 +2936,44 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.mandir-dashboard')).toContainText('Rs. 666.65');
     await expect(page.getByRole('heading', { name: 'Inventory Audit Trail' })).toBeVisible();
   });
+
+  test('mitrabooks executive dashboard renders enhanced UI, quick execution bar, SVG sparklines, and OfficeMitra AI brief', async ({ page }) => {
+    await mockVerifiedMitraBooksSession(page);
+    await page.goto('/mitrabooks-erp/index.html');
+    await page.waitForFunction(
+      () => {
+        const root = document.documentElement;
+        return root.dataset.mitrabooksShellHandlersReady === '1'
+          || root.dataset.mitrabooksShellReady === '1';
+      },
+      null,
+      { timeout: 90000 }
+    );
+
+    // Verify Executive Dashboard elements
+    await expect(page.locator('.dashboard-quick-execution-bar')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.quick-action-chip', { hasText: '+ New Voucher' })).toBeVisible();
+    await expect(page.locator('.quick-action-chip', { hasText: '+ New Party' })).toBeVisible();
+    await expect(page.locator('.quick-action-chip', { hasText: 'OfficeMitra AI' })).toBeVisible();
+
+    // Verify Enhanced KPI Cards & Sparklines
+    await expect(page.locator('.executive-kpi-grid-enhanced')).toBeVisible();
+    await expect(page.locator('.kpi-card-enhanced')).toHaveCount(4);
+    await expect(page.locator('.kpi-sparkline svg')).toHaveCount(4);
+
+    // Verify OfficeMitra AI Briefing Widget
+    await expect(page.locator('.office-ai-brief-card')).toBeVisible();
+    await expect(page.locator('.ai-badge')).toContainText('OfficeMitra AI Brief');
+
+    // Test Quick Execution shortcut button launch
+    await page.locator('.quick-action-chip', { hasText: '+ New Voucher' }).click();
+    await expect(page.locator('#business-voucher-create-dialog')).toBeVisible();
+
+    // Test navigation to Accounting Drill-Down workspace
+    await page.locator('nav#nav a[data-business-workspace="accounting"]').click();
+    await expect(page.locator('.accounting-drilldown-panel')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.accounting-breadcrumbs')).toBeVisible();
+    await expect(page.locator('.drilldown-summary-grid')).toBeVisible();
+  });
 });
+
