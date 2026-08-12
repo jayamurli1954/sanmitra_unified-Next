@@ -57,13 +57,17 @@ async def _handle_create_task(
     ai_telemetry_id: str | None = None,
     proposal_id: str | None = None,
 ) -> dict[str, Any]:
+    from app.modules.office_ai.models import TASK_SOURCES
+
+    raw_source = str(payload.get("source") or "ai").strip().lower()
+    source = raw_source if raw_source in TASK_SOURCES else "ai"
     task = await task_service.create_task(
         tenant_id=tenant_id,
         user=user,
         title=str(payload.get("title") or "Untitled"),
         notes=payload.get("notes"),
         due_date=payload.get("due_date"),
-        source="ai",
+        source=source,
         prompt_version=prompt_version,
         ai_telemetry_id=ai_telemetry_id,
     )

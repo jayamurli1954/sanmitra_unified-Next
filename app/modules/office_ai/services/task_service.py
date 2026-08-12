@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from bson import ObjectId
@@ -15,9 +16,33 @@ from app.modules.office_ai.models import (
     utcnow,
 )
 
+_SOFT_FAIL_LINE = re.compile(r"^(?:[\d]+[.)]\s*|[-*•]\s*)")
+
 
 def _user_id(user: dict) -> str:
     return str(user.get("sub") or user.get("user_id") or user.get("id") or "").strip() or "unknown"
+
+
+def deterministic_task_drafts_from_text(text: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    """Build reviewable task drafts when the AI provider is unavailable.
+
+    Used only for writeback soft-fail proposals so confirm/dismiss remains
+    testable and useful without inventing ERP/legal facts.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+    drafts: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        cleaned = _SOFT_FAIL_LINE.sub("", line.strip()).strip()
+        if not cleaned:
+            continue
+        drafts.append({"title": cleaned[:500], "due_date": None, "source": "manual"})
+        if len(drafts) >= max(1, min(limit, 10)):
+            break
+    if not drafts:
+        drafts.append({"title": raw[:500], "due_date": None, "source": "manual"})
+    return drafts
 
 
 async def list_tasks(*, tenant_id: str, status: str | None = None, limit: int = 100) -> list[dict]:
@@ -134,22 +159,41 @@ async def generate_and_optionally_persist(
     ai_result = await orchestrator.generate_tasks(tenant_id=tenant_id, text=text, user_id=_user_id(user))
     saved: list[dict] = []
     proposals: list[dict] = []
-    if persist and ai_result.get("ai_available"):
+    soft_fail_proposals = False
+    tasks = list(ai_result.get("tasks") or [])
+
+    # Soft-fail writeback path: when AI is down, still open confirmable proposals from
+    # the user's pasted text so Phase 4 / ops smoke is not blocked by missing API keys.
+    if (
+        persist
+        and writeback_enabled
+        and not ai_result.get("ai_available")
+        and not tasks
+        and str(text or "").strip()
+    ):
+        tasks = deterministic_task_drafts_from_text(text)
+        soft_fail_proposals = bool(tasks)
+
+    if persist and tasks and (ai_result.get("ai_available") or soft_fail_proposals):
         if writeback_enabled:
             from app.modules.office_ai.services import proposal_service
 
             proposals = await proposal_service.create_task_proposals(
                 tenant_id=tenant_id,
                 user=user,
-                tasks=list(ai_result.get("tasks") or []),
-                source_feature="tasks.generate",
-                prompt_version=ai_result.get("prompt_version"),
-                ai_telemetry_id=ai_result.get("telemetry_id"),
+                tasks=tasks,
+                source_feature=(
+                    "tasks.generate.soft_fail" if soft_fail_proposals else "tasks.generate"
+                ),
+                prompt_version=(
+                    "soft_fail_v1" if soft_fail_proposals else ai_result.get("prompt_version")
+                ),
+                ai_telemetry_id=None if soft_fail_proposals else ai_result.get("telemetry_id"),
                 enabled_modules=enabled_modules or ["office_ai", "office_ai.writeback"],
                 office_ai_features=office_ai_features,
             )
-        else:
-            for item in ai_result.get("tasks") or []:
+        elif ai_result.get("ai_available"):
+            for item in tasks:
                 saved.append(
                     await create_task(
                         tenant_id=tenant_id,
@@ -161,4 +205,11 @@ async def generate_and_optionally_persist(
                         ai_telemetry_id=ai_result.get("telemetry_id"),
                     )
                 )
-    return {**ai_result, "saved_tasks": saved, "proposals": proposals, "writeback_enabled": writeback_enabled}
+    return {
+        **ai_result,
+        "tasks": tasks if soft_fail_proposals else ai_result.get("tasks") or [],
+        "saved_tasks": saved,
+        "proposals": proposals,
+        "writeback_enabled": writeback_enabled,
+        "soft_fail_proposals": soft_fail_proposals,
+    }

@@ -174,11 +174,14 @@ async def create_proposals(
             title = str(payload.get("title") or "").strip()
             if not title:
                 continue
+            raw_source = str(payload.get("source") or "").strip().lower()
             payload = {
                 "title": title[:500],
                 "notes": (str(payload.get("notes") or "").strip()[:4000] or None),
                 "due_date": payload.get("due_date"),
             }
+            if raw_source in {"manual", "ai"}:
+                payload["source"] = raw_source
         doc = {
             "_id": new_object_id(),
             "tenant_id": tenant_id,

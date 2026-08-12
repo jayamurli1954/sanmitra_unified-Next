@@ -165,6 +165,70 @@ async def test_generate_with_writeback_creates_proposals_not_tasks(fake_mongo, m
 
 
 @pytest.mark.asyncio
+async def test_generate_soft_fail_creates_proposals_when_ai_unavailable(fake_mongo, monkeypatch):
+    async def fake_generate(*, tenant_id, text, user_id):
+        return {
+            "ai_available": False,
+            "tasks": [],
+            "prompt_version": "generate_tasks_v1",
+            "telemetry_id": None,
+            "provider": "null",
+            "error_code": "missing_api_key",
+        }
+
+    monkeypatch.setattr(
+        "app.modules.office_ai.services.task_service.orchestrator.generate_tasks",
+        fake_generate,
+    )
+    user = {"sub": "user-1"}
+    result = await task_service.generate_and_optionally_persist(
+        tenant_id="tenant-a",
+        user=user,
+        text="1) Call vendor tomorrow\n2) Send finance reminder",
+        persist=True,
+        writeback_enabled=True,
+    )
+    assert result["ai_available"] is False
+    assert result["soft_fail_proposals"] is True
+    assert result["saved_tasks"] == []
+    assert len(result["proposals"]) == 2
+    assert result["proposals"][0]["source_feature"] == "tasks.generate.soft_fail"
+    assert result["proposals"][0]["prompt_version"] == "soft_fail_v1"
+    assert result["proposals"][0]["payload"]["title"] == "Call vendor tomorrow"
+    assert result["proposals"][0]["payload"]["source"] == "manual"
+    assert result["proposals"][1]["payload"]["title"] == "Send finance reminder"
+    assert fake_mongo[TASKS_COLLECTION].docs == []
+
+
+@pytest.mark.asyncio
+async def test_generate_soft_fail_does_not_persist_without_writeback(fake_mongo, monkeypatch):
+    async def fake_generate(*, tenant_id, text, user_id):
+        return {
+            "ai_available": False,
+            "tasks": [],
+            "prompt_version": "generate_tasks_v1",
+            "error_code": "missing_api_key",
+        }
+
+    monkeypatch.setattr(
+        "app.modules.office_ai.services.task_service.orchestrator.generate_tasks",
+        fake_generate,
+    )
+    result = await task_service.generate_and_optionally_persist(
+        tenant_id="tenant-a",
+        user={"sub": "user-1"},
+        text="Call vendor tomorrow",
+        persist=True,
+        writeback_enabled=False,
+    )
+    assert result["soft_fail_proposals"] is False
+    assert result["proposals"] == []
+    assert result["saved_tasks"] == []
+    assert fake_mongo[TASKS_COLLECTION].docs == []
+    assert fake_mongo[PROPOSALS_COLLECTION].docs == []
+
+
+@pytest.mark.asyncio
 async def test_confirm_applies_via_executor_and_dismiss_is_noop(fake_mongo):
     user = {"sub": "user-1"}
     proposals = await proposal_service.create_task_proposals(
