@@ -2782,6 +2782,7 @@ if (currentExperience === "mitrabooks" && getAccessToken()) {
   });
 }
 
+window.setBusinessWorkspace = (ws) => setBusinessWorkspace(ws);
 renderModuleState(moduleState);
 document.documentElement.dataset.mitrabooksShellHandlersReady = "1";
 void (async () => {

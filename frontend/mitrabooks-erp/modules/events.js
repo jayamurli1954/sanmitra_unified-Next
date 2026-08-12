@@ -28,7 +28,7 @@ function installEventHandlers() {
   // ══════════════════════════════════════════════════════════════════════
 
   deps.nav.addEventListener("click", (event) => {
-    const link = event.target.closest("a[data-platform-workspace]");
+    const link = event.target.closest("a[data-platform-workspace], a[data-business-workspace], a[data-mandir-workspace], a[data-gruha-workspace]");
     if (!link) {
       return;
     }
@@ -36,7 +36,15 @@ function installEventHandlers() {
     if (link.getAttribute("aria-disabled") === "true") {
       return;
     }
-    deps.setPlatformWorkspace(link.dataset.platformWorkspace || "dashboard");
+    if (link.dataset.businessWorkspace) {
+      deps.setBusinessWorkspace(link.dataset.businessWorkspace);
+    } else if (link.dataset.mandirWorkspace) {
+      deps.setMandirWorkspace(link.dataset.mandirWorkspace);
+    } else if (link.dataset.gruhaWorkspace) {
+      deps.setGruhaWorkspace(link.dataset.gruhaWorkspace);
+    } else if (link.dataset.platformWorkspace) {
+      deps.setPlatformWorkspace(link.dataset.platformWorkspace);
+    }
   });
 
   deps.dashboardPreview.addEventListener("click", async (event) => {

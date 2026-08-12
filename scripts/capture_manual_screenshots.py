@@ -11,44 +11,100 @@ IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 URL = "http://127.0.0.1:3300/mitrabooks-erp/index.html"
 
-def mock_routes(page):
-    # Mock OfficeMitra AI Brief endpoint
-    page.route("**/api/v1/officemitra/brief**", lambda route: route.fulfill(
+def json_res(route, data):
+    route.fulfill(
         status=200,
         content_type="application/json",
-        body=json.dumps({
-            "success": True,
-            "brief": {
-                "summary": "AI-curated operational highlights & priority digests.",
-                "pending_tasks": 3,
-                "unread_emails": 2,
-                "high_priority_items": ["GST Filing due in 4 days", "Vendor Payment pending approval"]
-            }
-        })
-    ))
+        body=json.dumps(data)
+    )
+
+def mock_routes(page):
+    # Mock Auth & Tenant session
+    page.route("**/api/v1/auth/session**", lambda r: json_res(r, {
+        "authenticated": True,
+        "user": {"email": "businessadmin@sanmitra.local", "name": "Business Admin", "role": "tenant_admin"},
+        "tenant": {"id": "demo-mitrabooks-business", "name": "Demo Business Tenant", "app_key": "mitrabooks"}
+    }))
+
+    page.route("**/api/v1/tenants/current**", lambda r: json_res(r, {
+        "tenant_id": "demo-mitrabooks-business",
+        "name": "Demo Business Tenant",
+        "organization_type": "BUSINESS",
+        "enabled_modules": ["mitrabooks", "office_ai", "hr", "manufacturing"]
+    }))
+
+    # Mock OfficeMitra AI Brief endpoint
+    page.route("**/api/v1/officemitra/brief**", lambda r: json_res(r, {
+        "success": True,
+        "brief": {
+            "summary": "AI-curated operational highlights & priority digests.",
+            "pending_tasks": 3,
+            "unread_emails": 2,
+            "high_priority_items": ["GST Filing due in 4 days", "Vendor Payment pending approval"]
+        }
+    }))
+
+    # Mock Chart of Accounts (COA) / Core Ledger
+    page.route("**/api/v1/accounting/accounts**", lambda r: json_res(r, [
+        {"account_id": 101, "code": "11001", "name": "Cash in Hand", "type": "Asset", "balance": "1400.00"},
+        {"account_id": 102, "code": "11010", "name": "HDFC Bank Account", "type": "Asset", "balance": "587770.00"},
+        {"account_id": 103, "code": "12001", "name": "Sundry Debtors", "type": "Asset", "balance": "313970.00"},
+        {"account_id": 104, "code": "21001", "name": "Sundry Creditors", "type": "Liability", "balance": "176440.00"},
+        {"account_id": 105, "code": "41001", "name": "Sales Revenue", "type": "Revenue", "balance": "381500.00"},
+        {"account_id": 106, "code": "51001", "name": "Purchase Expenses", "type": "Expense", "balance": "236350.00"}
+    ]))
 
     # Mock Accounting Drilldown endpoint
-    page.route("**/api/v1/accounting/reports/drilldown**", lambda route: route.fulfill(
-        status=200,
-        content_type="application/json",
-        body=json.dumps({
-            "success": True,
-            "period": "FY 2026-27",
-            "level": "month",
-            "breadcrumbs": ["All Months", "June 2026"],
-            "summary": {
-                "total_debit": 381500.00,
-                "total_credit": 381500.00,
-                "net_balance": 0.00,
-                "voucher_count": 14
-            },
-            "items": [
-                {"date": "2026-06-01", "voucher_no": "PV-2026-001", "particulars": "Office Rent Payment", "debit": 45000, "credit": 0},
-                {"date": "2026-06-05", "voucher_no": "RV-2026-008", "particulars": "Customer Receipt - Zenith", "debit": 0, "credit": 125000},
-                {"date": "2026-06-12", "voucher_no": "JV-2026-012", "particulars": "Depreciation Adjustment", "debit": 12000, "credit": 12000}
-            ]
-        })
-    ))
+    page.route("**/api/v1/accounting/reports/drilldown**", lambda r: json_res(r, {
+        "success": True,
+        "period": "FY 2026-27",
+        "level": "month",
+        "breadcrumbs": ["All Months", "June 2026"],
+        "summary": {
+            "total_debit": 381500.00,
+            "total_credit": 381500.00,
+            "net_balance": 0.00,
+            "voucher_count": 14
+        },
+        "items": [
+            {"date": "2026-06-01", "voucher_no": "PV-2026-001", "particulars": "Office Rent Payment", "debit": 45000, "credit": 0},
+            {"date": "2026-06-05", "voucher_no": "RV-2026-008", "particulars": "Customer Receipt - Zenith", "debit": 0, "credit": 125000},
+            {"date": "2026-06-12", "voucher_no": "JV-2026-012", "particulars": "Depreciation Adjustment", "debit": 12000, "credit": 12000}
+        ]
+    }))
+
+    # Mock Parties Master
+    page.route("**/api/v1/parties**", lambda r: json_res(r, [
+        {"party_id": "P001", "name": "Zenith Manufacturing Ltd", "party_type": "customer", "gstin": "29ABCDE1234F1Z5", "city": "Bengaluru", "outstanding": "125000.00"},
+        {"party_id": "P002", "name": "Blue Ocean Exports Pvt Ltd", "party_type": "customer", "gstin": "29BCDEF2345G2Z6", "city": "Mumbai", "outstanding": "85000.00"},
+        {"party_id": "P003", "name": "Bengaluru Electronics Hub", "party_type": "vendor", "gstin": "29CDEFG3456H3Z7", "city": "Bengaluru", "outstanding": "66080.00"}
+    ]))
+
+    # Mock Sales Invoices
+    page.route("**/api/v1/business/sales/invoices**", lambda r: json_res(r, [
+        {"invoice_id": "INV-001", "invoice_number": "INV-2026-001", "party_name": "Zenith Manufacturing Ltd", "date": "2026-06-10", "total_amount": "125000.00", "status": "posted"},
+        {"invoice_id": "INV-002", "invoice_number": "INV-2026-002", "party_name": "Blue Ocean Exports Pvt Ltd", "date": "2026-06-12", "total_amount": "85000.00", "status": "posted"}
+    ]))
+
+    # Mock Vouchers List
+    page.route("**/api/v1/vouchers**", lambda r: json_res(r, [
+        {"voucher_id": "V001", "voucher_number": "PV-2026-001", "voucher_type": "payment", "date": "2026-06-01", "amount": "45000.00", "status": "posted"},
+        {"voucher_id": "V002", "voucher_number": "RV-2026-008", "voucher_type": "receipt", "date": "2026-06-05", "amount": "125000.00", "status": "posted"}
+    ]))
+
+    # Mock Trial Balance / Financial Reports
+    page.route("**/api/v1/accounting/reports/trial-balance**", lambda r: json_res(r, {
+        "as_of": "2026-06-30",
+        "balanced": True,
+        "lines": [
+            {"account_code": "11001", "account_name": "Cash in Hand", "debit_total": "1400.00", "credit_total": "0.00", "net_balance": "1400.00"},
+            {"account_code": "11010", "account_name": "HDFC Bank Account", "debit_total": "587770.00", "credit_total": "0.00", "net_balance": "587770.00"},
+            {"account_code": "12001", "account_name": "Sundry Debtors", "debit_total": "313970.00", "credit_total": "0.00", "net_balance": "313970.00"},
+            {"account_code": "21001", "account_name": "Sundry Creditors", "debit_total": "0.00", "credit_total": "176440.00", "net_balance": "-176440.00"},
+            {"account_code": "41001", "account_name": "Sales Revenue", "debit_total": "0.00", "credit_total": "381500.00", "net_balance": "-381500.00"},
+            {"account_code": "51001", "account_name": "Purchase Expenses", "debit_total": "236350.00", "credit_total": "0.00", "net_balance": "236350.00"}
+        ]
+    }))
 
 def capture_screenshots():
     with sync_playwright() as p:
@@ -110,7 +166,6 @@ def capture_screenshots():
         time.sleep(1)
         page.select_option("#business-voucher-type-select", "payment")
         time.sleep(0.5)
-        # Fill payment fields to trigger double-entry balance check
         if page.locator("#voucher-pv-amount").is_visible():
             page.fill("#voucher-pv-amount", "50000")
             page.dispatch_event("#voucher-pv-amount", "input")
