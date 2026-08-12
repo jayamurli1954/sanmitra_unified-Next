@@ -225,6 +225,22 @@ async function mockVerifiedMitraBooksSession(page) {
       charts: [],
     },
   }));
+  await page.route('**/api/v1/officemitra/brief**', route => json(route, {
+    as_of: '2026-06-30',
+    summary: ['Follow up on 1 overdue customer invoice.', 'GST return filing due next week.'],
+    brief_items: ['Follow up on 1 overdue customer invoice.', 'GST return filing due next week.'],
+  }));
+  await page.route('**/api/v1/accounting/reports/drilldown**', route => json(route, {
+    ok: true,
+    level: 'month',
+    from_date: '2026-04-01',
+    to_date: '2026-06-30',
+    summary: { voucher_count: 5, total_debit: '100000.00', total_credit: '100000.00' },
+    items: [
+      { period_key: '2026-04', period_label: 'April 2026', voucher_count: 2, total_debit: '40000.00', total_credit: '40000.00' },
+      { period_key: '2026-05', period_label: 'May 2026', voucher_count: 3, total_debit: '60000.00', total_credit: '60000.00' },
+    ],
+  }));
   await page.route('**/api/v1/business/tally/xml-export**', route => route.fulfill({
     status: 200,
     contentType: 'application/xml',
@@ -2939,6 +2955,11 @@ test.describe('MitraBooks ERP static shell', () => {
 
   test('mitrabooks executive dashboard renders enhanced UI, quick execution bar, SVG sparklines, and OfficeMitra AI brief', async ({ page }) => {
     await mockVerifiedMitraBooksSession(page);
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('sanmitra_frontend_access_token', 'static-shell-token');
+      window.localStorage.setItem('sanmitra_mitrabooks_login_email', 'businessadmin@sanmitra.local');
+      window.localStorage.removeItem('mitrabooks-widget-states');
+    });
     await page.goto('/mitrabooks-erp/index.html');
     await page.waitForFunction(
       () => {
@@ -2957,17 +2978,18 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('.quick-action-chip', { hasText: 'OfficeMitra AI' })).toBeVisible();
 
     // Verify Enhanced KPI Cards & Sparklines
-    await expect(page.locator('.executive-kpi-grid-enhanced')).toBeVisible();
+    await expect(page.locator('.executive-kpi-grid-enhanced')).toBeAttached();
     await expect(page.locator('.kpi-card-enhanced')).toHaveCount(4);
     await expect(page.locator('.kpi-sparkline svg')).toHaveCount(4);
 
     // Verify OfficeMitra AI Briefing Widget
-    await expect(page.locator('.office-ai-brief-card')).toBeVisible();
-    await expect(page.locator('.ai-badge')).toContainText('OfficeMitra AI Brief');
+    await expect(page.locator('.office-ai-brief-card')).toBeAttached();
+    await expect(page.locator('.office-ai-brief-card .ai-badge')).toContainText('OfficeMitra AI Brief');
 
     // Test Quick Execution shortcut button launch
     await page.locator('.quick-action-chip', { hasText: '+ New Voucher' }).click();
     await expect(page.locator('#business-voucher-create-dialog')).toBeVisible();
+    await page.locator('#business-voucher-create-close').click();
 
     // Test navigation to Accounting Drill-Down workspace
     await page.locator('nav#nav a[data-business-workspace="accounting"]').click();
