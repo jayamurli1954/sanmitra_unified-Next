@@ -3,7 +3,7 @@ import {
   initOfficeAiWorkspace,
   loadOfficeAiWorkspace,
   renderOfficeAiWorkspace,
-} from "../shared/office-ai-workspace.js";
+} from "../shared/office-ai-workspace.js?v=mis-narrative-1";
 
 const APP_KEY = "officemitra";
 const SESSION_KEY = "OFFICEMITRA_AUTH_SESSION";

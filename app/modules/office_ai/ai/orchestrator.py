@@ -16,6 +16,7 @@ PROMPT_GENERATE_TASKS = "generate_tasks_v1"
 PROMPT_SUMMARIZE_EMAIL = "summarize_email_v1"
 PROMPT_SUMMARIZE_MEETING_NOTES = "summarize_meeting_notes_v1"
 PROMPT_DAILY_BRIEF = "daily_brief_v1"
+PROMPT_MIS_NARRATIVE = "mis_narrative_v1"
 
 
 def load_prompt(version_id: str) -> str:
@@ -224,4 +225,41 @@ async def build_daily_brief(
         "model": result.model,
         "error_code": result.error_code,
         "advisory": "Briefs are advisory. Figures come from connectors; confirm in MitraBooks before acting.",
+    }
+
+
+async def build_mis_narrative(
+    *,
+    tenant_id: str,
+    facts: list[dict[str, Any]],
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    """Attributed MIS narrative. Never invent numbers; empty facts → insufficient-data bullets."""
+    prompt_version = PROMPT_MIS_NARRATIVE
+    system = load_prompt(prompt_version)
+    payload = json.dumps({"facts": facts}, ensure_ascii=False, default=str)
+    result, telemetry_id = await _complete(
+        tenant_id=tenant_id,
+        feature="mis_narrative",
+        prompt_version=prompt_version,
+        system=system,
+        user=payload,
+        user_id=user_id,
+    )
+    bullets: list[dict[str, Any]] = []
+    if result.success:
+        parsed = _extract_json(result.text)
+        if isinstance(parsed, dict):
+            raw = parsed.get("bullets") or []
+            if isinstance(raw, list):
+                bullets = [item for item in raw if isinstance(item, dict)]
+    return {
+        "ai_available": bool(result.success),
+        "bullets": bullets,
+        "prompt_version": prompt_version,
+        "telemetry_id": telemetry_id,
+        "provider": result.provider,
+        "model": result.model,
+        "error_code": result.error_code,
+        "advisory": "Draft for review — not final financial advice or a statutory filing.",
     }

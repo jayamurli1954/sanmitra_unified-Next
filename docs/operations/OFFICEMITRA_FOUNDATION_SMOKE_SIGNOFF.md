@@ -73,4 +73,4 @@ office_ai.workflows
 
 ## Next product planning (out of this signoff)
 
-- Continue ADR-014 CA Analysis Pack gaps (narrative + live MitraBooks reads) behind `office_ai.mis*`.
+- Continue ADR-014 CA Analysis Pack remaining gaps (live MitraBooks MIS reads; demo CA/MIS staging smoke) behind `office_ai.mis*`. Attributed narrative + fact-citation UI is in code.

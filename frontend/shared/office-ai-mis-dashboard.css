@@ -296,3 +296,54 @@
 .mis-table .emphasis td {
   font-weight: 650;
 }
+
+.mis-narrative__list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.mis-narrative__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.mis-narrative__cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.mis-cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.16));
+  background: var(--bg-card, rgba(18, 25, 47, 0.92));
+  color: var(--accent, #38bdf8);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+}
+
+.mis-cite:hover {
+  filter: brightness(1.12);
+}
+
+.mis-cite-callout {
+  margin: 0.75rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid var(--accent, #38bdf8);
+  background: var(--bg-card, rgba(18, 25, 47, 0.55));
+  color: var(--text-primary, #f8fafc);
+  font-size: 0.85rem;
+}
+
+.mis-fact-cited {
+  outline: 2px solid var(--accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+}

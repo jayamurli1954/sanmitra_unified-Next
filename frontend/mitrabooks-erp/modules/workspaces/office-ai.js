@@ -6,4 +6,4 @@ export {
   renderOfficeAiWorkspace,
   loadOfficeAiWorkspace,
   handleOfficeAiAction,
-} from "../../../shared/office-ai-workspace.js?v=mis-export-download-1";
+} from "../../../shared/office-ai-workspace.js?v=mis-narrative-1";

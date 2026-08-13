@@ -317,7 +317,7 @@ External ERP **read** adapters and **allowlisted note/draft writes** remain gove
 2. **MIS fact schema + Mongo collections** — indexes on `tenant_id`, `pack_id`, `period`; immutability enforcement. — **Done**
 3. **Excel template import + validation UI** — SanMitra template only; no AI until facts persist.
 4. **Pack `sme_general@1.0.0` + `ca_practice@1.0.0`** — deterministic KPI/variance assembly; `materiality_rule_version`.
-5. **Narrative with citations + fact citation UI** — orchestrator + tests for “no facts → no numbers.”
+5. **Narrative with citations + fact citation UI** — orchestrator + tests for “no facts → no numbers.” — **Done** (UI: Generate narrative + clickable `fact_id` chips on MIS Packs)
 6. **`data_quality_score` computation** — deterministic breakdown; PPT block when &lt; 70.
 7. **Reconcile + export actions** — differentiated risk tiers; maker-checker default for PPT.
 8. **MitraBooks MIS read connector** — report services only (ADR-002).

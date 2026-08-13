@@ -391,22 +391,165 @@ def test_mis_export_renderers_produce_real_bytes() -> None:
         assert len(content) > 50
 
 
+def test_narrative_no_facts_has_no_numbers():
+    bullets = mis_service.sanitize_narrative_bullets(
+        [{"text": "Revenue is 999999", "fact_ids": ["invented"]}],
+        facts=[],
+    )
+    assert bullets == [
+        {"text": mis_service.INSUFFICIENT_DATA_TEXT, "fact_ids": [], "source": "deterministic"}
+    ]
+    assert not any(ch.isdigit() for ch in bullets[0]["text"])
+
+
+def test_narrative_drops_unknown_fact_ids_and_ungrounded_numbers():
+    facts = [
+        {
+            "fact_id": "f-rev",
+            "entity_type": "pnl_line",
+            "amount_decimal": "125000.50",
+            "currency": "INR",
+            "period": "2026-07",
+            "dimensions": {"line": "Revenue"},
+        }
+    ]
+    bullets = mis_service.sanitize_narrative_bullets(
+        [
+            {"text": "Revenue exploded to 999999999", "fact_ids": ["f-rev"]},
+            {"text": "Secret extra", "fact_ids": ["not-a-fact"]},
+            {"text": "Revenue · 2026-07 · 125000.50 INR", "fact_ids": ["f-rev"]},
+        ],
+        facts=facts,
+    )
+    assert all(set(item["fact_ids"]).issubset({"f-rev"}) for item in bullets)
+    assert bullets[0]["source"] == "deterministic"
+    assert "999999999" not in bullets[0]["text"]
+    assert "125000.50" in bullets[0]["text"]
+    grounded = [item for item in bullets if item["source"] == "ai"]
+    assert grounded
+    assert grounded[0]["text"].startswith("Revenue")
+
+
+@pytest.mark.asyncio
+async def test_generate_pack_narrative_persists_citations(fake_mis_mongo, monkeypatch):
+    async def fake_build(*, tenant_id, facts, user_id=None):
+        return {
+            "ai_available": True,
+            "bullets": [
+                {
+                    "text": "Revenue · 2026-07 · 125000.50 INR",
+                    "fact_ids": [facts[0]["fact_id"]],
+                }
+            ],
+            "prompt_version": "mis_narrative_v1",
+            "telemetry_id": None,
+            "provider": "test",
+            "model": "test",
+            "error_code": None,
+            "advisory": "Draft for review — not final financial advice or a statutory filing.",
+        }
+
+    monkeypatch.setattr(
+        "app.modules.office_ai.services.mis_service.orchestrator.build_mis_narrative",
+        fake_build,
+    )
+    user = {"sub": "acct-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+        ingestion_path="excel_import",
+    )
+    inserted = await mis_store.insert_facts(
+        tenant_id="tenant-a",
+        pack_id=pack["id"],
+        user=user,
+        facts=[
+            {
+                "fact_id": "f-rev",
+                "entity_type": "pnl_line",
+                "amount_decimal": "125000.50",
+                "period": "2026-07",
+                "dimensions": {"line": "Revenue"},
+            }
+        ],
+    )
+    assert inserted["fact_ids"] == ["f-rev"]
+    result = await mis_service.generate_pack_narrative(
+        tenant_id="tenant-a",
+        pack_id=pack["id"],
+        user=user,
+    )
+    narrative = result["narrative"]
+    assert narrative["prompt_version"] == "mis_narrative_v1"
+    assert narrative["bullets"][0]["fact_ids"] == ["f-rev"]
+    stored = await mis_store.get_pack(tenant_id="tenant-a", pack_id=pack["id"])
+    assert stored["narrative"]["bullets"][0]["fact_ids"] == ["f-rev"]
+
+
+@pytest.mark.asyncio
+async def test_generate_pack_narrative_blocked_after_export(fake_mis_mongo, monkeypatch):
+    async def fake_build(*, tenant_id, facts, user_id=None):
+        return {
+            "ai_available": False,
+            "bullets": [],
+            "prompt_version": "mis_narrative_v1",
+            "telemetry_id": None,
+            "provider": None,
+            "model": None,
+            "error_code": "missing_api_key",
+            "advisory": "Draft for review — not final financial advice or a statutory filing.",
+        }
+
+    monkeypatch.setattr(
+        "app.modules.office_ai.services.mis_service.orchestrator.build_mis_narrative",
+        fake_build,
+    )
+    user = {"sub": "acct-1"}
+    pack = await mis_store.create_pack_draft(
+        tenant_id="tenant-a",
+        user=user,
+        pack_key="sme_general",
+        period="2026-07",
+        ingestion_path="excel_import",
+    )
+    await mis_store.reconcile_pack(
+        tenant_id="tenant-a",
+        pack_id=pack["id"],
+        user=user,
+        data_quality_score=90,
+    )
+    await mis_store.mark_pack_exported(tenant_id="tenant-a", pack_id=pack["id"], user=user)
+    with pytest.raises(mis_store.MISImmutableError, match="after export"):
+        await mis_service.generate_pack_narrative(
+            tenant_id="tenant-a",
+            pack_id=pack["id"],
+            user=user,
+        )
+
+
 def test_shared_workspace_has_mis_tab_and_actions() -> None:
     from pathlib import Path
 
     shared = Path("frontend/shared/office-ai-workspace.js").read_text(encoding="utf-8")
+    dashboard = Path("frontend/shared/office-ai-mis-dashboard.js").read_text(encoding="utf-8")
     assert '["mis", "MIS Packs"]' in shared
     assert 'data-office-ai-action="mis-create-pack"' in shared
     assert 'data-office-ai-action="mis-import-excel"' in shared
     assert 'data-office-ai-action="mis-reconcile"' in shared
     assert 'data-office-ai-action="mis-export-ppt"' in shared
+    assert 'data-office-ai-action="mis-generate-narrative"' in dashboard
+    assert 'data-office-ai-action="mis-cite-fact"' in dashboard
     assert "/api/v1/officemitra/mis/packs" in shared
+    assert "/narrative" in shared
     assert "reconcile_mis_pack" in shared
     assert "export_mis_" in shared
-    assert "Pack dashboard" in shared
-    assert "buildMisDashboard" in shared
-    assert "mis-dash__kpi-row" in shared
-    assert "office-ai-mis-dashboard.css" in shared
+    assert "renderMisDashboardStrip" in shared
+    assert "renderMisNarrativeSection" in shared
+    assert "buildMisDashboard" in dashboard
+    assert "mis-dash__kpi-row" in dashboard
+    assert "office-ai-mis-dashboard.css" in dashboard
     assert (Path("frontend/shared/office-ai-mis-dashboard.css")).is_file()
     assert "downloadMisArtifact" in shared
     assert "/mis/exports/" in shared

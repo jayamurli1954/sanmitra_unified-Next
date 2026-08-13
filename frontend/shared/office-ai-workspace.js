@@ -1,4 +1,5 @@
 // OfficeMitra AI workspace — Phase 1 + Phase 2 productivity tabs.
+import { renderMisDashboardStrip, renderMisNarrativeSection } from "./office-ai-mis-dashboard.js";
 // Advisory AI only; figures come from connectors / user paste.
 
 /** @type {Record<string, any> | null} */
@@ -28,6 +29,7 @@ const state = {
   misReconcileScore: "",
   misLastImportReport: null,
   misPackFacts: [],
+  misCitedFactId: "",
   workflowsEnabled: false,
   unreadCount: 0,
   error: "",
@@ -208,299 +210,6 @@ function formatMisPackStatus(status) {
 function misPackById(packId) {
   const id = String(packId || "").trim();
   return (state.misPacks || []).find((p) => String(p.id || "").trim() === id) || null;
-}
-
-function factDimensions(fact) {
-  const dims = fact?.dimensions;
-  return dims && typeof dims === "object" ? dims : {};
-}
-
-function formatMisAmount(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value ?? "—");
-  return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
-}
-
-function formatMisMoney(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value ?? "—");
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Cr`;
-  if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toLocaleString("en-IN", { maximumFractionDigits: 2 })} L`;
-  return `${sign}₹${abs.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
-function resolveMisKpiUnit(item, fallbackUnit) {
-  const raw = String(item?.unit || fallbackUnit || "");
-  if (raw === "percent" || raw === "%") return "%";
-  if (raw === "ratio") return "x";
-  if (raw === "months") return "mo";
-  return raw || fallbackUnit || "";
-}
-
-function formatMisKpiDisplay(item, fallbackUnit) {
-  const unit = resolveMisKpiUnit(item, fallbackUnit);
-  if (unit === "INR" || unit === "₹") return { display: formatMisMoney(item.value), unitLabel: "INR" };
-  if (unit === "%") return { display: `${formatMisAmount(item.value)}%`, unitLabel: "percent" };
-  if (unit === "x") return { display: formatMisAmount(item.value), unitLabel: "ratio" };
-  if (unit === "days") return { display: formatMisAmount(item.value), unitLabel: "days" };
-  if (unit === "mo") return { display: formatMisAmount(item.value), unitLabel: "months" };
-  return { display: formatMisAmount(item.value), unitLabel: unit || "" };
-}
-
-function ensureMisDashboardStyles() {
-  if (typeof document === "undefined") return;
-  if (document.getElementById("office-ai-mis-dashboard-css")) return;
-  const link = document.createElement("link");
-  link.id = "office-ai-mis-dashboard-css";
-  link.rel = "stylesheet";
-  link.href = new URL("./office-ai-mis-dashboard.css", import.meta.url).href;
-  document.head.appendChild(link);
-}
-
-function buildMisDashboard(facts) {
-  const items = Array.isArray(facts) ? facts : [];
-  const kpis = {};
-  for (const fact of items) {
-    if (String(fact.entity_type || "").toLowerCase() !== "kpi") continue;
-    const name = String(factDimensions(fact).kpi || fact.source_id || "").trim();
-    if (!name) continue;
-    kpis[name] = {
-      value: fact.value,
-      unit: String(factDimensions(fact).unit || ""),
-    };
-  }
-
-  const ageing = { AR: {}, AP: {} };
-  for (const fact of items) {
-    if (String(fact.entity_type || "").toLowerCase() !== "aging_bucket") continue;
-    const dims = factDimensions(fact);
-    const side = String(dims.side || "").toUpperCase();
-    const bucket = String(dims.bucket || "").trim();
-    if ((side !== "AR" && side !== "AP") || !bucket) continue;
-    ageing[side][bucket] = Number(fact.amount_decimal || 0);
-  }
-
-  const pnl = {};
-  const revenueTrend = [];
-  for (const fact of items) {
-    if (String(fact.entity_type || "").toLowerCase() !== "pnl_line") continue;
-    const dims = factDimensions(fact);
-    const line = String(dims.line || "").trim();
-    if (!line) continue;
-    if (dims.trend) {
-      if (line === "Revenue") {
-        revenueTrend.push({
-          period: String(fact.period || fact.as_of || ""),
-          amount: Number(fact.amount_decimal || 0),
-        });
-      }
-      continue;
-    }
-    pnl[line] = Number(fact.amount_decimal || 0);
-  }
-  revenueTrend.sort((a, b) => String(a.period).localeCompare(String(b.period)));
-
-  const bs = {};
-  for (const fact of items) {
-    if (String(fact.entity_type || "").toLowerCase() !== "bs_line") continue;
-    const line = String(factDimensions(fact).line || "").trim();
-    if (!line) continue;
-    bs[line] = Number(fact.amount_decimal || 0);
-  }
-
-  const cash = {};
-  for (const fact of items) {
-    if (String(fact.entity_type || "").toLowerCase() !== "cash_summary") continue;
-    const line = String(factDimensions(fact).line || "").trim();
-    if (!line) continue;
-    cash[line] = Number(fact.amount_decimal || 0);
-  }
-
-  return { kpis, ageing, pnl, bs, cash, revenueTrend };
-}
-
-function renderMisAgeingColumnChart(side, buckets) {
-  const order = ["Current", "1-30", "31-60", "61-90", "90+"];
-  const values = order.map((b) => Number(buckets[b] || 0));
-  const max = Math.max(...values, 1);
-  const fillClass = side === "AR" ? "mis-bars__fill--ar" : "mis-bars__fill--ap";
-  const cols = order
-    .map((bucket, idx) => {
-      const amount = values[idx];
-      const pct = Math.max(4, Math.round((amount / max) * 100));
-      return `<div class="mis-bars__col">
-        <span class="mis-bars__amt" title="${escapeHtml(formatMisAmount(amount))}">${escapeHtml(formatMisMoney(amount))}</span>
-        <div class="mis-bars__track"><div class="mis-bars__fill ${fillClass}" style="height:${pct}%;"></div></div>
-        <span class="mis-bars__label">${escapeHtml(bucket)}</span>
-      </div>`;
-    })
-    .join("");
-  return `<article class="mis-panel">
-    <h5 class="mis-panel__title">${side === "AR" ? "Receivables ageing" : "Payables ageing"}</h5>
-    <div class="mis-bars">${cols}</div>
-  </article>`;
-}
-
-function renderMisRevenueTrend(points) {
-  if (!points.length) return "";
-  const current = points[points.length - 1];
-  const w = 320;
-  const h = 120;
-  const padX = 16;
-  const padY = 18;
-  const amounts = points.map((p) => Number(p.amount || 0));
-  const min = Math.min(...amounts);
-  const max = Math.max(...amounts);
-  const span = Math.max(max - min, 1);
-  const coords = points.map((p, i) => {
-    const x = padX + (i / Math.max(points.length - 1, 1)) * (w - padX * 2);
-    const y = h - padY - ((Number(p.amount) - min) / span) * (h - padY * 2);
-    return { x, y, label: String(p.period || "").slice(0, 7), amount: p.amount };
-  });
-  const line = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const area = `${line} L${coords[coords.length - 1].x.toFixed(1)},${(h - padY).toFixed(1)} L${coords[0].x.toFixed(1)},${(h - padY).toFixed(1)} Z`;
-  const dots = coords
-    .map((c) => `<circle class="mis-trend__point" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5"></circle>`)
-    .join("");
-  const labels = coords
-    .map((c) => `<text class="mis-trend__axis" x="${c.x.toFixed(1)}" y="${h - 4}" text-anchor="middle">${escapeHtml(c.label)}</text>`)
-    .join("");
-  return `<article class="mis-panel">
-    <h5 class="mis-panel__title">Revenue trend</h5>
-    <svg class="mis-trend" viewBox="0 0 ${w} ${h}" role="img" aria-label="Revenue trend ${escapeHtml(formatMisMoney(current.amount))}">
-      <path class="mis-trend__area" d="${area}"></path>
-      <path class="mis-trend__line" d="${line}"></path>
-      ${dots}
-      ${labels}
-    </svg>
-  </article>`;
-}
-
-function renderMisPnlTable(pnl) {
-  const order = ["Revenue", "COGS", "Gross Profit", "Operating Expenses", "EBIT", "Tax", "PAT"];
-  const rows = order
-    .filter((line) => pnl[line] != null)
-    .map((line) => {
-      const emph = line === "Revenue" || line === "Gross Profit" || line === "PAT" ? " emphasis" : "";
-      return `<tr class="${emph}"><td>${escapeHtml(line)}</td><td class="num">${escapeHtml(formatMisMoney(pnl[line]))}</td></tr>`;
-    })
-    .join("");
-  if (!rows) return "";
-  return `<article class="mis-panel">
-    <h5 class="mis-panel__title">P&amp;L snapshot</h5>
-    <table class="mis-table">
-      <thead><tr><th>Line</th><th style="text-align:right;">Amount</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </article>`;
-}
-
-function renderMisCashTable(cash) {
-  const order = ["Operating", "Investing", "Financing", "Net Change"];
-  const rows = order
-    .filter((line) => cash[line] != null)
-    .map((line) => {
-      const emph = line === "Net Change" ? " emphasis" : "";
-      return `<tr class="${emph}"><td>${escapeHtml(line)}</td><td class="num">${escapeHtml(formatMisMoney(cash[line]))}</td></tr>`;
-    })
-    .join("");
-  if (!rows) return "";
-  return `<article class="mis-panel">
-    <h5 class="mis-panel__title">Cash flow summary</h5>
-    <table class="mis-table">
-      <thead><tr><th>Activity</th><th style="text-align:right;">Amount</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </article>`;
-}
-
-function renderMisPrimaryKpi(key, item, fallbackUnit, variant, label) {
-  if (!item) return "";
-  const { display, unitLabel } = formatMisKpiDisplay(item, fallbackUnit);
-  return `<article class="mis-kpi mis-kpi--${escapeHtml(variant)}">
-    <div class="mis-kpi__bar" aria-hidden="true"></div>
-    <div class="mis-kpi__body">
-      <div class="mis-kpi__label">${escapeHtml(label || key)}</div>
-      <div class="mis-kpi__value">${escapeHtml(display)}</div>
-      ${unitLabel ? `<div class="mis-kpi__unit">${escapeHtml(unitLabel)}</div>` : ""}
-    </div>
-  </article>`;
-}
-
-function renderMisChip(key, item, fallbackUnit, label) {
-  if (!item) return "";
-  const { display, unitLabel } = formatMisKpiDisplay(item, fallbackUnit);
-  const suffix = unitLabel && unitLabel !== "INR" && unitLabel !== "percent" ? ` ${unitLabel}` : "";
-  return `<div class="mis-chip">
-    <span class="mis-chip__label">${escapeHtml(label || key)}</span>
-    <span class="mis-chip__value">${escapeHtml(display)}${escapeHtml(suffix)}</span>
-  </div>`;
-}
-
-function renderMisDashboardStrip(facts) {
-  ensureMisDashboardStyles();
-  const dash = buildMisDashboard(facts);
-
-  const primary = [
-    renderMisPrimaryKpi("Revenue", dash.kpis.Revenue, "INR", "revenue", "Revenue"),
-    renderMisPrimaryKpi("PAT", dash.kpis.PAT, "INR", "pat", "PAT"),
-    renderMisPrimaryKpi("GrossMarginPct", dash.kpis.GrossMarginPct, "%", "margin", "Gross margin"),
-    renderMisPrimaryKpi("CashAndBank", dash.kpis.CashAndBank, "INR", "cash", "Cash & bank"),
-  ].filter(Boolean).join("");
-
-  const chips = [
-    renderMisChip("DSO", dash.kpis.DSO, "days", "DSO"),
-    renderMisChip("DPO", dash.kpis.DPO, "days", "DPO"),
-    renderMisChip("CurrentRatio", dash.kpis.CurrentRatio, "x", "Current ratio"),
-    renderMisChip("CashRunwayMonths", dash.kpis.CashRunwayMonths, "mo", "Cash runway"),
-  ].filter(Boolean).join("");
-
-  const summaryParts = [];
-  if (dash.pnl.Revenue != null) {
-    summaryParts.push(`<div class="mis-summary__item"><span class="mis-summary__label">Total revenue</span><span class="mis-summary__value">${escapeHtml(formatMisMoney(dash.pnl.Revenue))}</span></div>`);
-  }
-  if (dash.pnl["Gross Profit"] != null) {
-    summaryParts.push(`<div class="mis-summary__item"><span class="mis-summary__label">Gross profit</span><span class="mis-summary__value">${escapeHtml(formatMisMoney(dash.pnl["Gross Profit"]))}</span></div>`);
-  }
-  if (dash.pnl.PAT != null) {
-    summaryParts.push(`<div class="mis-summary__item"><span class="mis-summary__label">PAT</span><span class="mis-summary__value">${escapeHtml(formatMisMoney(dash.pnl.PAT))}</span></div>`);
-  }
-
-  const hasAgeing = Object.keys(dash.ageing.AR).length || Object.keys(dash.ageing.AP).length;
-  const trendPanel = renderMisRevenueTrend(
-    [
-      ...dash.revenueTrend,
-      dash.pnl.Revenue != null
-        ? { period: "Current", amount: dash.pnl.Revenue }
-        : null,
-    ].filter(Boolean),
-  );
-  const pnlPanel = renderMisPnlTable(dash.pnl);
-  const cashPanel = renderMisCashTable(dash.cash);
-  const bodyPanels = [
-    hasAgeing ? renderMisAgeingColumnChart("AR", dash.ageing.AR) : "",
-    hasAgeing ? renderMisAgeingColumnChart("AP", dash.ageing.AP) : "",
-    trendPanel,
-    pnlPanel,
-    cashPanel,
-  ].filter(Boolean).join("");
-
-  if (!primary && !chips && !bodyPanels) {
-    return `<p class="muted" style="margin-top:0.75rem;">Dashboard widgets appear after KPI / ageing facts are imported.</p>`;
-  }
-
-  return `
-    <section class="mis-dash" aria-label="Pack dashboard">
-      <h5 class="mis-dash__title">Pack dashboard</h5>
-      <p class="mis-dash__sub">Derived from imported MIS facts (not AI estimates).</p>
-      ${primary ? `<div class="mis-dash__kpi-row">${primary}</div>` : ""}
-      ${chips ? `<div class="mis-dash__chip-row">${chips}</div>` : ""}
-      ${summaryParts.length ? `<div class="mis-dash__summary">${summaryParts.join("")}</div>` : ""}
-      ${bodyPanels ? `<div class="mis-dash__grid">${bodyPanels}</div>` : ""}
-    </section>
-  `;
 }
 
 function advisoryBanner() {
@@ -689,15 +398,34 @@ function renderMisPanel() {
   const canReconcile = selected && !selected.immutable && !["reconciled", "exported"].includes(selectedStatusKey);
   const canExport = selected && ["reconciled", "exported"].includes(String(selected.status || "").toLowerCase());
 
-  const factRows = (state.misPackFacts || [])
-    .slice(0, 15)
-    .map((fact) => `<tr>
+  const citedFactId = String(state.misCitedFactId || "").trim();
+  const factList = Array.isArray(state.misPackFacts) ? state.misPackFacts : [];
+  let shownFacts = factList.slice(0, 15);
+  if (citedFactId && !shownFacts.some((fact) => String(fact.fact_id || "") === citedFactId)) {
+    const extra = factList.find((fact) => String(fact.fact_id || "") === citedFactId);
+    if (extra) shownFacts = shownFacts.concat(extra);
+  }
+  const factRows = shownFacts
+    .map((fact) => {
+      const factId = String(fact.fact_id || "");
+      const cited = factId && factId === citedFactId;
+      return `<tr${cited ? ' class="mis-fact-cited"' : ""} id="mis-fact-${escapeHtml(factId)}">
+      <td><code>${escapeHtml(factId || "—")}</code></td>
       <td>${escapeHtml(String(fact.entity_type || ""))}</td>
       <td>${escapeHtml(String(fact.period || fact.as_of || ""))}</td>
       <td>${escapeHtml(String(fact.amount_decimal ?? fact.value ?? ""))}</td>
       <td>${escapeHtml(String(fact.source_system || ""))}</td>
-    </tr>`)
+    </tr>`;
+    })
     .join("");
+  const citedFact = citedFactId
+    ? factList.find((fact) => String(fact.fact_id || "") === citedFactId)
+    : null;
+  const citedCallout = citedFact
+    ? `<p class="mis-cite-callout">Cited <code>${escapeHtml(citedFactId)}</code>: ${escapeHtml(String(citedFact.entity_type || "fact"))} · ${escapeHtml(String(citedFact.period || citedFact.as_of || ""))} · ${escapeHtml(String(citedFact.amount_decimal ?? citedFact.value ?? "—"))}</p>`
+    : citedFactId
+      ? `<p class="mis-cite-callout">Cited fact <code>${escapeHtml(citedFactId)}</code> is not in the loaded fact list.</p>`
+      : "";
 
   const report = state.misLastImportReport;
   const reportHtml = report
@@ -750,7 +478,7 @@ function renderMisPanel() {
 
   return `
     <div class="stack-form">
-      <p class="muted">CA Analysis Pack workflow: create pack → import facts → reconcile (maker/checker) → export. No journal or GST writes from MIS (ADR-014).</p>
+      <p class="muted">CA Analysis Pack workflow: create pack → import facts → generate cited narrative → reconcile (maker/checker) → export. No journal or GST writes from MIS (ADR-014).</p>
       <button class="secondary" type="button" data-office-ai-action="mis-refresh">Refresh packs</button>
 
       <div class="stack-form" style="margin-top:1rem;">
@@ -774,12 +502,14 @@ function renderMisPanel() {
             <h5>Selected: ${escapeHtml(selected.display_name || selected.pack_key || "")} — ${escapeHtml(String(selected.period || ""))}</h5>
             <p class="muted">Status: ${escapeHtml(selectedStatus)} · ID: ${escapeHtml(state.misSelectedPackId)}</p>
             ${renderMisDashboardStrip(state.misPackFacts)}
+            ${renderMisNarrativeSection(selected)}
             ${importSection}
             ${reconcileSection}
             ${exportSection}
+            ${citedCallout}
             <table class="data-table" style="margin-top:1rem;">
-              <thead><tr><th>Entity</th><th>Period</th><th>Amount / value</th><th>Source</th></tr></thead>
-              <tbody>${factRows || `<tr><td colspan="4" class="muted">No facts loaded.</td></tr>`}</tbody>
+              <thead><tr><th>Fact id</th><th>Entity</th><th>Period</th><th>Amount / value</th><th>Source</th></tr></thead>
+              <tbody>${factRows || `<tr><td colspan="5" class="muted">No facts loaded.</td></tr>`}</tbody>
             </table>
           </div>`
         : `<p class="muted" style="margin-top:1rem;">Select a pack to import, reconcile, or export.</p>`}
@@ -1131,6 +861,9 @@ export async function handleOfficeAiAction(action, el) {
   const misSelectPackId = action === "mis-select-pack"
     ? String(el?.getAttribute("data-pack-id") || el?.dataset?.packId || "").trim()
     : "";
+  const citeFactId = action === "mis-cite-fact"
+    ? String(el?.getAttribute("data-fact-id") || el?.dataset?.factId || "").trim()
+    : "";
   try {
     if (action === "tab") {
       state.tab = el?.dataset?.tab || "tasks";
@@ -1387,6 +1120,7 @@ export async function handleOfficeAiAction(action, el) {
       if (!misSelectPackId) throw new Error("Missing pack id");
       state.misSelectedPackId = misSelectPackId;
       state.misLastImportReport = null;
+      state.misCitedFactId = "";
       await refreshMisFacts(misSelectPackId);
     } else if (action === "mis-create-pack") {
       const period = (state.misNewPeriod || "").trim();
@@ -1453,6 +1187,26 @@ export async function handleOfficeAiAction(action, el) {
       if (status === "awaiting_checker") state.tab = "proposals";
       await refreshMisData();
       await refreshProposals();
+    } else if (action === "mis-generate-narrative") {
+      const packId = state.misSelectedPackId;
+      if (!packId) throw new Error("Select a pack first");
+      const result = unwrap(await apiRequest(`/api/v1/officemitra/mis/packs/${encodeURIComponent(packId)}/narrative`, {
+        method: "POST",
+      }));
+      const count = Array.isArray(result?.narrative?.bullets) ? result.narrative.bullets.length : 0;
+      state.notice = result?.ai_available
+        ? `Narrative generated from AI (${count} bullet(s)). Review citations before acting.`
+        : `Deterministic narrative generated (${count} bullet(s)). Review citations before acting.`;
+      await refreshMisData();
+    } else if (action === "mis-cite-fact") {
+      if (!citeFactId) throw new Error("Missing fact id");
+      state.misCitedFactId = citeFactId;
+      const fact = (state.misPackFacts || []).find((item) => String(item.fact_id || "") === citeFactId);
+      if (!fact) {
+        state.notice = `Cited fact ${citeFactId} is not in the loaded fact list.`;
+      } else {
+        state.notice = `Cited ${citeFactId}: ${fact.entity_type || "fact"} · ${fact.period || fact.as_of || ""} · ${fact.amount_decimal ?? fact.value ?? "—"}`;
+      }
     } else if (action === "mis-export-excel" || action === "mis-export-pdf" || action === "mis-export-ppt") {
       const packId = state.misSelectedPackId;
       if (!packId) throw new Error("Select a pack first");

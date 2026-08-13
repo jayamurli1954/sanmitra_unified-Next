@@ -348,6 +348,39 @@ async def mark_pack_exported(*, tenant_id: str, pack_id: str, user: dict[str, An
     return updated or {}
 
 
+async def save_narrative(
+    *,
+    tenant_id: str,
+    pack_id: str,
+    user: dict[str, Any],
+    narrative: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist attributed narrative on the pack. Does not mutate facts."""
+    pack = await get_pack(tenant_id=tenant_id, pack_id=pack_id)
+    if pack is None:
+        raise MISPackNotFoundError(f"MIS pack not found: {pack_id}")
+    if str(pack.get("status") or "").strip().lower() == "exported":
+        raise MISImmutableError("Narrative cannot change after export; create a new pack revision")
+
+    now = utcnow()
+    actor = _actor_id(user)
+    payload = dict(narrative or {})
+    payload["generated_at"] = now
+    payload["generated_by"] = actor
+    await get_collection(MIS_PACKS_COLLECTION).update_one(
+        {"_id": _pack_oid(pack_id), "tenant_id": tenant_id},
+        {
+            "$set": {
+                "narrative": payload,
+                "updated_at": now,
+                "updated_by": actor,
+            }
+        },
+    )
+    updated = await get_pack(tenant_id=tenant_id, pack_id=pack_id)
+    return updated or {}
+
+
 async def save_export_artifact(
     *,
     tenant_id: str,
