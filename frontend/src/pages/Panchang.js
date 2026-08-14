@@ -22,6 +22,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import Layout from '../components/Layout';
 import PanchangDisplay from '../components/PanchangDisplay';
 import api from '../services/api';
+import { localISODate } from '../utils/panchangTime';
 
 function Panchang() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ function Panchang() {
   const [settings, setSettings] = useState(null);
   const [panchangData, setPanchangData] = useState(null);
   const [selectedNakshatra, setSelectedNakshatra] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => localISODate());
   const [nakshatraMatches, setNakshatraMatches] = useState([]);
   const [dateLookup, setDateLookup] = useState(null);
   const [wizardError, setWizardError] = useState('');
@@ -59,13 +60,26 @@ function Panchang() {
 
   // Fetch panchang whenever selectedDate changes
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localISODate();
     if (selectedDate && selectedDate !== today) {
       fetchPanchangForDate(selectedDate);
     } else if (selectedDate === today) {
       fetchPanchangData();
     }
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const today = localISODate();
+    if (selectedDate !== today) return undefined;
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPanchangData(selectedCity, { silent: true });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [selectedDate, selectedCity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedLocationParams = (city = selectedCity) => {
     if (!city) return {};
@@ -87,10 +101,12 @@ function Panchang() {
     }
   };
 
-  const fetchPanchangData = async (city = selectedCity) => {
+  const fetchPanchangData = async (city = selectedCity, { silent = false } = {}) => {
     try {
-      setLoading(true);
-      setError('');
+      if (!silent) {
+        setLoading(true);
+        setError('');
+      }
 
       // Fetch panchang display settings and data
       const [settingsRes, panchangRes] = await Promise.allSettled([
@@ -122,10 +138,15 @@ function Panchang() {
         }
 
         console.error('Panchang API error:', error);
-        setError(`Failed to load panchang data: ${errorMsg}`);
+        if (!silent) {
+          setError(`Failed to load panchang data: ${errorMsg}`);
+        }
       }
     } catch (err) {
       console.error('Error fetching panchang data:', err);
+      if (silent) {
+        return;
+      }
       let errorMsg = 'Unknown error';
 
       if (err?.response?.data?.detail) {
@@ -141,7 +162,9 @@ function Panchang() {
 
       setError(`Failed to load panchang data: ${errorMsg}`);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -176,7 +199,7 @@ function Panchang() {
 
   const handleCityChange = (_event, city) => {
     setSelectedCity(city);
-    const today = new Date().toISOString().split('T')[0];
+    const today = localISODate();
     if (selectedDate && selectedDate !== today) {
       fetchPanchangForDate(selectedDate, city);
     } else {
@@ -244,7 +267,7 @@ function Panchang() {
             Panchang Viewer
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {selectedDate === new Date().toISOString().split('T')[0] ? "Today's Panchang" : `Panchang for ${selectedDate}`}
+            {selectedDate === localISODate() ? "Today's Panchang" : `Panchang for ${selectedDate}`}
           </Typography>
         </Box>
         <Button
@@ -422,6 +445,7 @@ function Panchang() {
         compact={false}
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
+        onLimbExpired={() => fetchPanchangData(selectedCity, { silent: true })}
       />
     </Layout>
   );

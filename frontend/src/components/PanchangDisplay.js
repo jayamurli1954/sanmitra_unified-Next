@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Paper,
@@ -24,58 +24,33 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PrintIcon from '@mui/icons-material/Print';
 import ShareIcon from '@mui/icons-material/Share';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
-
-const TITHI_NAMES = [
-  'Pratipada',
-  'Dwitiya',
-  'Tritiya',
-  'Chaturthi',
-  'Panchami',
-  'Shashthi',
-  'Saptami',
-  'Ashtami',
-  'Navami',
-  'Dashami',
-  'Ekadashi',
-  'Dwadashi',
-  'Trayodashi',
-  'Chaturdashi',
-];
-
-const getNextTithiName = (tithi = {}) => {
-  const number = Number(tithi.number);
-  const paksha = tithi.paksha || '';
-  if (!number || number < 1 || number > 15) return 'Next tithi';
-  if (number < 14) return `${paksha} ${TITHI_NAMES[number]}`.trim();
-  if (number === 14) return paksha === 'Shukla' ? 'Shukla Purnima' : 'Krishna Amavasya';
-  return paksha === 'Shukla' ? 'Krishna Pratipada' : 'Shukla Pratipada';
-};
-
-const formatTransitionTime = (value, fallback) => {
-  if (fallback) return fallback;
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-IN', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-};
-
-const formatCountdown = (diff) => {
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-  return `${hours}h ${minutes}m ${seconds}s`;
-};
+import usePanchangLiveLimbs from '../hooks/usePanchangLiveLimbs';
+import { isPanchangLimbEnded, localISODate } from '../utils/panchangTime';
 
 /**
  * Enhanced Panchang Display Component
  * Features: Verification badges, live countdown, quality indicators, 8-period breakdown, print support
  */
-function PanchangDisplay({ data, settings, compact = false, selectedDate, onDateChange }) {
-  const [timeLeft, setTimeLeft] = useState({});
+function PanchangDisplay({
+  data,
+  settings,
+  compact = false,
+  selectedDate,
+  onDateChange,
+  onLimbExpired,
+}) {
+  const {
+    timeLeft,
+    isLiveToday,
+    tithi,
+    nakshatra,
+    nextTithiName,
+    liveTithiName,
+    liveNakshatraName,
+    tithiUntil,
+    nakshatraUntil,
+    asOfIst,
+  } = usePanchangLiveLimbs({ data, compact, selectedDate, onLimbExpired });
 
   // Default settings
   const defaultSettings = {
@@ -109,52 +84,6 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
   const varjyamPreviewOnly =
     data?.calculation_metadata?.varjyam_verified !== true
     && data?.calculation_metadata?.varjyam_preview === true;
-
-  // Live countdown timer for tithi/nakshatra transitions
-  useEffect(() => {
-    if (!data || compact) return;
-
-    const updateCountdown = () => {
-      const now = new Date();
-      const calculations = {};
-
-      // Tithi countdown
-      if (data.panchang?.tithi?.end_time) {
-        const tithi = data.panchang.tithi;
-        const tithiEnd = new Date(tithi.end_time);
-        const diff = tithiEnd - now;
-        const endTime = formatTransitionTime(tithi.end_time, tithi.end_time_formatted);
-        const nextTithi = getNextTithiName(tithi);
-
-        if (diff > 0) {
-          calculations.tithi = `Ends ${endTime} -> ${nextTithi} (${formatCountdown(diff)})`;
-        } else {
-          calculations.tithi = `Ended ${endTime}; ${nextTithi} active now`;
-        }
-      }
-
-      // Nakshatra countdown
-      if (data.panchang?.nakshatra?.end_time) {
-        const nakshatra = data.panchang.nakshatra;
-        const nakshatraEnd = new Date(nakshatra.end_time);
-        const diff = nakshatraEnd - now;
-        const endTime = formatTransitionTime(nakshatra.end_time, nakshatra.end_time_formatted);
-
-        if (diff > 0) {
-          calculations.nakshatra = `Ends ${endTime} (${formatCountdown(diff)})`;
-        } else {
-          calculations.nakshatra = `Ended ${endTime}`;
-        }
-      }
-
-      setTimeLeft(calculations);
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [data, compact]);
 
   if (!data) {
     return (
@@ -293,24 +222,24 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
         </Typography>
 
         <Box sx={{ mt: 2 }}>
-          {displaySettings.show_tithi && data.panchang?.tithi && (
+          {displaySettings.show_tithi && tithi && (
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                 Tithi:
               </Typography>
               <Typography variant="body2">
-                {data.panchang.tithi.full_name || data.panchang.tithi.name}
+                {liveTithiName}
               </Typography>
             </Box>
           )}
 
-          {settings?.show_nakshatra && data.panchang?.nakshatra && (
+          {settings?.show_nakshatra && nakshatra && (
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                 Nakshatra:
               </Typography>
               <Chip
-                label={data.panchang.nakshatra.name}
+                label={liveNakshatraName}
                 size="small"
                 sx={{ bgcolor: '#E3F2FD', color: '#1565C0', fontWeight: 'bold' }}
               />
@@ -369,7 +298,7 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
                 sx={{ bgcolor: '#2196F3', color: '#fff', fontWeight: 600 }}
               />
               <Chip
-                label={`⏱️ Calculated: ${data.calculation_metadata?.generated_at ? getTimeAgo(data.calculation_metadata.generated_at) : 'recently'}`}
+                label={`⏱️ Calculated: ${data.calculation_metadata?.generated_at ? getTimeAgo(data.calculation_metadata.generated_at) : 'recently'}${asOfIst ? ` (limbs as of ${asOfIst} IST)` : ''}`}
                 size="small"
                 sx={{ bgcolor: '#FF9800', color: '#fff', fontWeight: 600 }}
               />
@@ -466,7 +395,7 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
                 </Typography>
                 <input
                   type="date"
-                  value={selectedDate || new Date().toISOString().split('T')[0]}
+                  value={selectedDate || localISODate()}
                   onChange={(e) => onDateChange(e.target.value)}
                   style={{
                     padding: '6px 10px',
@@ -481,10 +410,10 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
                     colorScheme: 'dark',
                   }}
                 />
-                {selectedDate !== new Date().toISOString().split('T')[0] && (
+                {selectedDate !== localISODate() && (
                   <Box
                     component="button"
-                    onClick={() => onDateChange(new Date().toISOString().split('T')[0])}
+                    onClick={() => onDateChange(localISODate())}
                     sx={{
                       background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.6)',
                       borderRadius: 1, color: '#fff', fontSize: 11, fontWeight: 600,
@@ -508,7 +437,7 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
               <Grid item xs={12} sm={6}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    ⏱️ Tithi changes in:
+                    {timeLeft.tithiEnded ? '⏱️ Tithi changed at:' : '⏱️ Tithi changes in:'}
                   </Typography>
                   <Chip
                     label={timeLeft.tithi}
@@ -522,7 +451,7 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
               <Grid item xs={12} sm={6}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    ⏱️ Nakshatra changes in:
+                    {timeLeft.nakshatraEnded ? '⏱️ Nakshatra changed at:' : '⏱️ Nakshatra changes in:'}
                   </Typography>
                   <Chip
                     label={timeLeft.nakshatra}
@@ -678,12 +607,19 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
                       🌙 TITHI (तिथि)
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: data.panchang.tithi.quality?.color || '#2E7D32' }}>
-                      {data.panchang.tithi.full_name || data.panchang.tithi.name}
+                      {liveTithiName}
                     </Typography>
+                    {tithiUntil && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        {isLiveToday && isPanchangLimbEnded(tithi?.end_time)
+                          ? `Since ${tithiUntil}`
+                          : `Until ${tithiUntil} → ${nextTithiName}`}
+                      </Typography>
+                    )}
 
-                    <QualityIndicator quality={data.panchang.tithi.quality} />
+                    <QualityIndicator quality={liveTithiName === (tithi?.full_name || tithi?.name) ? data.panchang.tithi.quality : null} />
 
-                    {data.panchang.tithi.quality && (
+                    {liveTithiName === (tithi?.full_name || tithi?.name) && data.panchang.tithi.quality && (
                       <Box sx={{ mt: 1.5 }}>
                         {data.panchang.tithi.quality.good_for && data.panchang.tithi.quality.good_for.length > 0 && (
                           <Box sx={{ mb: 1 }}>
@@ -742,15 +678,24 @@ function PanchangDisplay({ data, settings, compact = false, selectedDate, onDate
                       ⭐ NAKSHATRA (नक्षत्र)
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: data.panchang.nakshatra.quality?.color || '#1565C0' }}>
-                      {data.panchang.nakshatra.name}
+                      {liveNakshatraName}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Pada {data.panchang.nakshatra.pada || 1}
-                    </Typography>
+                    {!(isLiveToday && isPanchangLimbEnded(nakshatra?.end_time)) && (
+                      <Typography variant="caption" color="text.secondary">
+                        Pada {nakshatra?.pada || 1}
+                      </Typography>
+                    )}
+                    {nakshatraUntil && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {isLiveToday && isPanchangLimbEnded(nakshatra?.end_time)
+                          ? `Since ${nakshatraUntil}`
+                          : `Until ${nakshatraUntil} → ${nakshatra?.next_nakshatra || 'next nakshatra'}`}
+                      </Typography>
+                    )}
 
-                    <QualityIndicator quality={data.panchang.nakshatra.quality} />
+                    <QualityIndicator quality={liveNakshatraName === nakshatra?.name ? data.panchang.nakshatra.quality : null} />
 
-                    {data.panchang.nakshatra.quality && (
+                    {liveNakshatraName === nakshatra?.name && data.panchang.nakshatra.quality && (
                       <Box sx={{ mt: 1.5 }}>
                         <Grid container spacing={1} sx={{ fontSize: '0.75rem' }}>
                           {data.panchang.nakshatra.quality.deity && (

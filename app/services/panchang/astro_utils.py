@@ -2,11 +2,48 @@
 Astronomical utility functions for Panchang calculations
 """
 
+from __future__ import annotations
+
 import swisseph as swe
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 import logging
 
 logger = logging.getLogger(__name__)
+
+IST_ZONE = ZoneInfo("Asia/Kolkata")
+
+
+def ist_now() -> datetime:
+    """Naive Asia/Kolkata wall-clock time.
+
+    ``get_julian_day`` treats naive datetimes as IST. Production hosts often
+    run in UTC, so ``datetime.now()`` would evaluate the Moon several hours
+    early and leave overnight nakshatra/tithi transitions stuck on the previous
+    limb until late morning.
+    """
+    return datetime.now(IST_ZONE).replace(tzinfo=None)
+
+
+def panchang_datetime_for_date(target_date: date | datetime | str, now: datetime | None = None) -> datetime:
+    """Choose the instant used to evaluate tithi/nakshatra for a civil date.
+
+    Today uses the current IST clock so Five Limbs follow live transitions.
+    Other dates use local noon so a midnight snapshot cannot hide a pre-dawn
+    nakshatra change that applies for most of the waking day.
+    """
+    if isinstance(target_date, str):
+        target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+    elif isinstance(target_date, datetime):
+        target_date = target_date.date()
+
+    current = now or ist_now()
+    if current.tzinfo is not None:
+        current = current.replace(tzinfo=None)
+    if target_date == current.date():
+        return current
+    return datetime(target_date.year, target_date.month, target_date.day, 12, 0, 0)
+
 
 def get_julian_day(dt: datetime) -> float:
     """Convert datetime (Assumed IST) to Julian Day (UT)"""

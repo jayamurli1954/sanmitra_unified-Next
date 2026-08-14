@@ -727,6 +727,7 @@ class PanchangService:
             "calculation_metadata": {
                 "ayanamsa_value": ayanamsa,
                 "generated_at": datetime.utcnow().isoformat() + "Z",
+                "as_of_ist": dt.strftime("%Y-%m-%d %H:%M:%S"),
                 "verified_against": "Swiss Ephemeris 2.10 (Lahiri Ayanamsa)",
                 "ayanamsa_name": "Lahiri",
                 # Timing confidence flags: hide experimental values in strict display mode

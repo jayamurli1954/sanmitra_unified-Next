@@ -7,8 +7,6 @@ Panchang location helpers remain on router.py for settings routes.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-
 from fastapi import Depends, Header, HTTPException, Query
 
 from app.core.auth.dependencies import get_current_user
@@ -16,6 +14,7 @@ from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.modules.mandir_compat import router as mandir_router
 from app.modules.mandir_compat.router import router
 from app.services.panchang import PanchangService
+from app.services.panchang.astro_utils import ist_now
 
 _logger = logging.getLogger(__name__)
 
@@ -56,10 +55,10 @@ async def panchang_today(
             longitude=longitude,
         )
 
-        # Calculate panchang using Swiss Ephemeris
+        # Calculate panchang using Swiss Ephemeris at the current IST clock,
+        # not the host timezone (UTC on Render would lag overnight limb changes).
         panchang_service = PanchangService()
-        now = datetime.now()
-        panchang_data = panchang_service.calculate_panchang(now, latitude, longitude, city)
+        panchang_data = panchang_service.calculate_panchang(ist_now(), latitude, longitude, city)
 
         return panchang_data
     except Exception as e:

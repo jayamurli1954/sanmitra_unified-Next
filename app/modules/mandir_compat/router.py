@@ -18,6 +18,7 @@ from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.services.panchang import PanchangService
+from app.services.panchang.astro_utils import panchang_datetime_for_date
 
 router = APIRouter(tags=["mandir-compat"])
 _MANDIR_WRITE_ROUTE_DEPS = [
@@ -204,8 +205,7 @@ async def mandir_panchang_on_date(
 ):
     """Get panchang for a specific date for Nakshatra lookup."""
     try:
-        # Parse the target date
-        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        target_dt = panchang_datetime_for_date(target_date)
 
         tenant_id = resolve_tenant_id(current_user, x_tenant_id)
         app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
@@ -264,8 +264,7 @@ async def mandir_panchang_on_date_full(
 ):
     """Get complete panchang for any date (past/future). Returns full panchang data with all limbs and muhurtas."""
     try:
-        # Parse the target date
-        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        target_dt = panchang_datetime_for_date(target_date)
 
         tenant_id = resolve_tenant_id(current_user, x_tenant_id)
         app_key = resolve_app_key((x_app_key or current_user.get("app_key") or "mandirmitra").strip())
