@@ -1,0 +1,65 @@
+{
+  "id": "judgment_hussainara_khatoon_1979",
+  "type": "landmark_judgment",
+  "title": "Hussainara Khatoon v. Home Secretary, State of Bihar",
+  "citation": "(1980) 1 SCC 81",
+  "alternative_citations": [
+    "AIR 1979 SC 1360"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "2-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1979,
+  "doc_date": "1979-02-12",
+  "practice_area": "Constitutional Law / Criminal Procedure",
+  "matter_type": "Speedy Trial / Undertrial Prisoners / Article 21",
+  "petitioner": "Hussainara Khatoon & Ors.",
+  "respondent": "Home Secretary, State of Bihar",
+  "outcome": "The Court treated the right to a speedy trial as part of Article 21. Undertrial prisoners who had been detained longer than the maximum sentence for the charged offence were directed to be released. The State was required to provide legal aid to indigent accused.",
+  "ratio": [
+    "The right to life under Article 21 includes the right to a reasonably speedy trial.",
+    "Prolonged undertrial detention, especially beyond the maximum possible sentence, is unconstitutional.",
+    "Free legal aid for the poor accused is implicit in a fair procedure under Article 21."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Speedy trial recognised as part of Article 21",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Directions for release of long-detained undertrials and legal aid",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Article 21 fair procedure (Maneka lineage)",
+    "Legal aid",
+    "Public interest litigation / epistolary jurisdiction"
+  ],
+  "related_articles": [
+    "Article 21",
+    "Article 14",
+    "Article 39A"
+  ],
+  "overruled_or_modified": [],
+  "followed_by": [
+    "Subsequent speedy-trial and legal-aid cases, including Kadra Pahadiya and Hussainara follow-on orders"
+  ],
+  "summary": "A series of 1979 orders, commonly cited as (1980) 1 SCC 81, established speedy trial and legal aid as Article 21 requirements and directed mass release of forgotten undertrials in Bihar.",
+  "content_for_rag": "Hussainara Khatoon v. Home Secretary, State of Bihar, commonly cited as (1980) 1 SCC 81; AIR 1979 SC 1360, is a series of Supreme Court orders beginning 12 February 1979. A newspaper report on undertrial prisoners in Bihar jails was treated as a writ petition. Many prisoners had been detained for years without trial, some for longer than the maximum sentence for the alleged offence.\n\nJustice Bhagwati held that Article 21, after Maneka Gandhi, includes a reasonably speedy trial. Procedure that keeps the poor in jail because they cannot furnish bail or obtain a lawyer is not fair, just or reasonable. The Court directed release of undertrials who had already suffered detention beyond the maximum punishment, and emphasised free legal aid as an integral part of fair procedure.\n\nHussainara is foundational PIL and prison-justice authority. Later CrPC/BNSS provisions on default bail and legal aid should be checked for current procedure; the constitutional holding that liberty cannot be lost to delay and poverty remains the starting point.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/1007347/",
+  "language": "en",
+  "tags": [
+    "hussainara khatoon",
+    "speedy trial",
+    "undertrial",
+    "legal aid",
+    "article 21",
+    "pil",
+    "1979"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

@@ -32,8 +32,11 @@ used only as secondary review lenses.
   with a tenant-admin summary endpoint.
 - Stage 2 GST refund / CGST Section 54 family has an authorized offline slice
   and seed corpus under `data/legal_seed/cgst_section_54_family.md`.
-- Tier-1 constitutional doctrine and landmark-judgment **summaries** live under
-  `data/legal_seed/constitutional/` (not auto-ingested). Operator ingest:
+- Tier-1 constitutional doctrine and landmark-judgment **summaries**, plus
+  Tier-2 landmark-judgment summaries from the Priority-A list (Golaknath,
+  Indira Gandhi, Puttaswamy, Navtej, Shreya Singhal, Vishaka, Indra Sawhney,
+  Hussainara, Olga Tellis), live under `data/legal_seed/constitutional/`
+  (not auto-ingested). Operator ingest:
   `scripts/ingest_legal_constitutional_seed.py`. These are advisory seed notes,
   not a full SC/HC judgment corpus.
 - Relevance gates exist for low-score or low-overlap local matches.
@@ -210,8 +213,8 @@ Minimum LegalMitra RAG contract tests:
 This design note does not itself implement:
 
 - Full Bare Act PDF corpus expansion beyond the Stage 2 GST Section 54 seed/offline slice.
-- Full Supreme Court / High Court judgment corpus (Tier-1 constitutional files
-  are curated summaries only).
+- Full Supreme Court / High Court judgment corpus (Tier-1 and Tier-2
+  constitutional files are curated summaries only).
 - Provider selection productization / production enablement.
 - Live legal research integration beyond authorized hybrid paths.
 - Legal document drafting workflow changes.

@@ -1,6 +1,6 @@
-"""Load Tier-1 constitutional doctrine/judgment seed JSON for RAG ingest.
+"""Load constitutional doctrine/judgment seed JSON for RAG ingest.
 
-Current state: curated summaries with citations live under
+Current state: curated Tier-1 and Tier-2 summaries with citations live under
 ``data/legal_seed/constitutional/``. They are not full judgments and are not
 auto-ingested into ``rag_documents``.
 
@@ -135,7 +135,8 @@ def to_ingest_request(record: dict[str, Any]) -> RagIngestRequest:
     court_name = str(record.get("court_name") or origin.get("court") or "").strip() or None
     bench = str(record.get("bench") or origin.get("bench") or "").strip() or None
     tags = [str(tag).strip().lower() for tag in (record.get("tags") or []) if str(tag).strip()]
-    tags.extend(["india", "constitutional", source_type, "tier-1-seed"])
+    tier = record.get("tier") or (record.get("_index_entry") or {}).get("tier") or 1
+    tags.extend(["india", "constitutional", source_type, f"tier-{tier}-seed"])
     related = [str(item).strip().lower() for item in (record.get("related_articles") or []) if str(item).strip()]
     tags.extend(related)
 
@@ -160,7 +161,8 @@ def to_ingest_request(record: dict[str, Any]) -> RagIngestRequest:
             doc_date=_parse_date(record.get("doc_date")),
         ),
         metadata={
-            "seed_package": "constitutional_tier1",
+            "seed_package": "constitutional",
+            "seed_tier": tier,
             "seed_file": record.get("_seed_file"),
             "seed_id": record.get("id"),
             "advisory": True,

@@ -1,6 +1,7 @@
-"""Ingest Tier-1 constitutional doctrine/judgment seed JSON into LegalMitra RAG.
+"""Ingest constitutional doctrine/judgment seed JSON into LegalMitra RAG.
 
-Dry-run (no Mongo writes):
+Covers Tier-1 (critical doctrines + four landmark judgments) and Tier-2
+(Priority-A landmark judgments). Dry-run (no Mongo writes):
 
   python scripts/ingest_legal_constitutional_seed.py --dry-run
 
@@ -82,7 +83,7 @@ async def _ingest(*, tenant_id: str, app_key: str, dry_run: bool) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest LegalMitra Tier-1 constitutional seed JSON into RAG."
+        description="Ingest LegalMitra constitutional seed JSON (Tier-1 and Tier-2) into RAG."
     )
     parser.add_argument(
         "--dry-run",

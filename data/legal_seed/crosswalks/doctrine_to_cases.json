@@ -1,9 +1,11 @@
 {
-  "version": "1.0",
-  "description": "Many-to-many mapping between Tier-1 constitutional doctrines and landmark judgments",
+  "version": "1.1",
+  "description": "Many-to-many mapping between constitutional doctrines and landmark judgments in the seed package",
   "mappings": {
     "doctrine_basic_structure": [
+      "judgment_golaknath_1967",
       "judgment_kesavananda_bharati_1973",
+      "judgment_indira_nehru_gandhi_1975",
       "judgment_minerva_mills_1980",
       "judgment_sr_bommai_1994"
     ],
@@ -11,16 +13,20 @@
       "judgment_kesavananda_bharati_1973",
       "judgment_minerva_mills_1980",
       "judgment_maneka_gandhi_1978",
-      "judgment_sr_bommai_1994"
+      "judgment_sr_bommai_1994",
+      "judgment_vishaka_1997",
+      "judgment_shreya_singhal_2015"
     ],
     "doctrine_ultra_vires": [],
-    "doctrine_severability": [],
+    "doctrine_severability": [
+      "judgment_shreya_singhal_2015"
+    ],
     "doctrine_eclipse": []
   },
   "notes": [
-    "Basic Structure is primarily anchored by Kesavananda and Minerva Mills.",
-    "S.R. Bommai applied Basic Structure to secularism and federalism.",
-    "Maneka Gandhi is the foundational expansion of Article 21 and is linked to reasonableness / due process rather than pure Basic Structure.",
-    "Ultra Vires, Severability and Eclipse are primarily statutory/constitutional construction doctrines and are less case-specific in the Tier-1 set."
+    "Basic Structure lineage: Golaknath (absolute bar) → Kesavananda (basic structure) → Indira Gandhi (elections) → Minerva Mills (limited amending power) → Bommai (secularism/federalism).",
+    "Maneka Gandhi expanded Article 21; Hussainara, Olga Tellis, Puttaswamy and Navtej continue that liberty/dignity line (linked by tags, not only this crosswalk).",
+    "Vishaka is an Article 141 law-declaring decision; Shreya Singhal is the leading free-speech vagueness case and also illustrates striking an entire provision.",
+    "Ultra Vires and Eclipse remain primarily statutory/constitutional construction doctrines in this seed set."
   ]
 }

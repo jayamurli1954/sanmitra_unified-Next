@@ -1,4 +1,4 @@
-"""Validate Tier-1 constitutional doctrine/judgment seed JSON."""
+"""Validate constitutional doctrine/judgment seed JSON."""
 from __future__ import annotations
 
 from app.modules.legal_compat.constitutional_seed import (
@@ -9,12 +9,30 @@ from app.modules.legal_compat.constitutional_seed import (
     validate_seed_package,
 )
 
+_TIER1_JUDGMENTS = {
+    "judgment_kesavananda_bharati_1973",
+    "judgment_minerva_mills_1980",
+    "judgment_maneka_gandhi_1978",
+    "judgment_sr_bommai_1994",
+}
+_TIER2_JUDGMENTS = {
+    "judgment_golaknath_1967",
+    "judgment_indira_nehru_gandhi_1975",
+    "judgment_puttaswamy_2017",
+    "judgment_navtej_singh_johar_2018",
+    "judgment_shreya_singhal_2015",
+    "judgment_vishaka_1997",
+    "judgment_indra_sawhney_1992",
+    "judgment_hussainara_khatoon_1979",
+    "judgment_olga_tellis_1985",
+}
+
 
 def test_constitutional_seed_package_is_ingest_ready():
     assert validate_seed_package() == []
 
 
-def test_tier1_counts_and_source_types():
+def test_seed_counts_and_source_types():
     doctrines = list(iter_doctrine_records())
     judgments = list(iter_judgment_records())
     assert {item["id"] for item in doctrines} == {
@@ -24,12 +42,7 @@ def test_tier1_counts_and_source_types():
         "doctrine_severability",
         "doctrine_eclipse",
     }
-    assert {item["id"] for item in judgments} == {
-        "judgment_kesavananda_bharati_1973",
-        "judgment_minerva_mills_1980",
-        "judgment_maneka_gandhi_1978",
-        "judgment_sr_bommai_1994",
-    }
+    assert {item["id"] for item in judgments} == _TIER1_JUDGMENTS | _TIER2_JUDGMENTS
     assert all(item["source_type"] == "doctrine" for item in doctrines)
     assert all(item["source_type"] == "judgment" for item in judgments)
     assert all(item["jurisdiction"] == "India" for item in doctrines + judgments)
@@ -37,7 +50,7 @@ def test_tier1_counts_and_source_types():
 
 def test_ingest_payloads_are_advisory_and_cited():
     payloads = list(iter_ingest_requests())
-    assert len(payloads) == 9
+    assert len(payloads) == 18
     for payload in payloads:
         assert payload.language == "en"
         assert payload.legal_metadata is not None
@@ -59,6 +72,13 @@ def test_judgment_payloads_keep_source_uri_and_citation():
     assert kesavananda.legal_metadata.citation == "(1973) 4 SCC 225"
     assert kesavananda.legal_metadata.court_name == "Supreme Court of India"
     assert kesavananda.source_uri and kesavananda.source_uri.startswith("https://indiankanoon.org/")
+    puttaswamy = by_id["judgment_puttaswamy_2017"]
+    assert puttaswamy.legal_metadata.citation == "(2017) 10 SCC 1"
+    assert puttaswamy.source_uri and "91938676" in puttaswamy.source_uri
+    assert puttaswamy.metadata["seed_tier"] == 2
+    assert "tier-2-seed" in puttaswamy.tags
+    kesavananda_tags = by_id["judgment_kesavananda_bharati_1973"].tags
+    assert "tier-1-seed" in kesavananda_tags
 
 
 def test_doctrine_crosswalk_only_references_known_ids():
@@ -68,3 +88,5 @@ def test_doctrine_crosswalk_only_references_known_ids():
     assert set(mappings) <= doctrine_ids
     for case_ids in mappings.values():
         assert set(case_ids) <= judgment_ids
+    assert "judgment_golaknath_1967" in mappings["doctrine_basic_structure"]
+    assert "judgment_indira_nehru_gandhi_1975" in mappings["doctrine_basic_structure"]

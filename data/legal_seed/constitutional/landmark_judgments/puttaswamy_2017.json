@@ -1,0 +1,76 @@
+{
+  "id": "judgment_puttaswamy_2017",
+  "type": "landmark_judgment",
+  "title": "Justice K.S. Puttaswamy (Retd.) v. Union of India",
+  "citation": "(2017) 10 SCC 1",
+  "alternative_citations": [
+    "AIR 2017 SC 4161",
+    "2017 INSC 894"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "9-Judge Bench",
+  "jurisdiction": "India",
+  "year": 2017,
+  "doc_date": "2017-08-24",
+  "practice_area": "Constitutional Law / Fundamental Rights",
+  "matter_type": "Right to Privacy / Article 21",
+  "petitioner": "Justice K.S. Puttaswamy (Retd.) & Anr.",
+  "respondent": "Union of India & Ors.",
+  "outcome": "The right to privacy is a constitutionally protected fundamental right, intrinsic to life and personal liberty under Article 21 and to the freedoms in Part III. Observations in M.P. Sharma and Kharak Singh to the contrary were overruled. ADM Jabalpur's approach to liberty was also rejected.",
+  "ratio": [
+    "Privacy is a fundamental right; it is not a gift of statute.",
+    "Privacy protects bodily integrity, informational self-determination, and the privacy of choice, including intimate personal decisions.",
+    "Any restriction on privacy must satisfy legality, legitimate aim, and proportionality.",
+    "Dignity, liberty and autonomy under Articles 14, 19 and 21 inform the content of privacy."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Right to privacy recognised as a fundamental right",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "M.P. Sharma and Kharak Singh overruled on the 'no privacy right' point",
+      "importance": "High"
+    },
+    {
+      "holding": "Proportionality standard for privacy-limiting measures",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Privacy as a Fundamental Right",
+    "Proportionality",
+    "Dignity and Autonomy",
+    "Golden Triangle of Articles 14, 19 and 21"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 19",
+    "Article 21"
+  ],
+  "overruled_or_modified": [
+    "Overruled M.P. Sharma v. Satish Chandra (1954) and Kharak Singh v. State of U.P. (1963) insofar as they held there is no fundamental right to privacy",
+    "Rejected the majority approach in ADM Jabalpur v. Shivkant Shukla (1976) on the suspension of liberty"
+  ],
+  "followed_by": [
+    "Navtej Singh Johar v. Union of India (2018)",
+    "Subsequent Aadhaar, data-protection and surveillance cases applying Puttaswamy"
+  ],
+  "summary": "A nine-judge bench unanimously held that privacy is a fundamental right. The decision is the modern foundation for informational privacy, dignity, and proportionality review of State surveillance and data-processing measures.",
+  "content_for_rag": "Justice K.S. Puttaswamy (Retd.) v. Union of India (2017) 10 SCC 1, decided on 24 August 2017 by a nine-judge bench, is the leading Indian authority on the right to privacy. The reference arose from challenges to the Aadhaar programme. The Attorney General had relied on M.P. Sharma (1954) and Kharak Singh (1963) for the proposition that the Constitution does not confer a fundamental right to privacy.\n\nThe Court unanimously held that privacy is a constitutionally protected right. It is intrinsic to life and personal liberty under Article 21 and to the liberties in Part III. Privacy includes bodily privacy, informational privacy, and the privacy of choice. The Court overruled M.P. Sharma and Kharak Singh on the 'no privacy right' point and rejected the majority reasoning in ADM Jabalpur (1976) that liberty could be reduced to a mere statutory residue during Emergency.\n\nA privacy-limiting law must satisfy legality (a valid law), legitimate aim, and proportionality. Puttaswamy is the bridge from Maneka Gandhi's expansion of Article 21 to later holdings on sexual orientation, data protection, and surveillance. It is advisory seed text only; the original nine opinions must be read before relying on any particular formulation of the test.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/91938676/",
+  "language": "en",
+  "tags": [
+    "puttaswamy",
+    "privacy",
+    "article 21",
+    "proportionality",
+    "aadhaar",
+    "dignity",
+    "2017"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

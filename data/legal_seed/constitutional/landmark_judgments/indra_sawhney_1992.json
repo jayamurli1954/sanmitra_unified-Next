@@ -1,0 +1,70 @@
+{
+  "id": "judgment_indra_sawhney_1992",
+  "type": "landmark_judgment",
+  "title": "Indra Sawhney v. Union of India",
+  "citation": "1992 Supp (3) SCC 217",
+  "alternative_citations": [
+    "AIR 1993 SC 477"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "9-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1992,
+  "doc_date": "1992-11-16",
+  "practice_area": "Constitutional Law / Equality and Reservations",
+  "matter_type": "Articles 15 and 16 / OBC Reservation",
+  "petitioner": "Indra Sawhney & Ors.",
+  "respondent": "Union of India & Ors.",
+  "outcome": "Caste can be a relevant indicator of social and educational backwardness. Reservations under Article 16(4) were upheld for Other Backward Classes, subject to a 50% ceiling in ordinary circumstances, exclusion of the creamy layer, and no reservation in promotions (as then held).",
+  "ratio": [
+    "Article 16(4) is a facet of equality, not an exception that destroys equality of opportunity.",
+    "Caste may be used as a starting point for identifying backward classes, but the class must be both socially and educationally backward.",
+    "The creamy layer of socially advanced persons must be excluded from OBC reservation.",
+    "Reservations should not exceed 50% except in extraordinary situations.",
+    "As held in 1992, Article 16(4) did not permit reservation in promotions (later modified by constitutional amendment and subsequent cases)."
+  ],
+  "key_holdings": [
+    {
+      "holding": "OBC reservation upheld with creamy-layer exclusion",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "50% ceiling as a general rule",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Substantive Equality",
+    "Creamy Layer",
+    "Backward Classes identification"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 15",
+    "Article 16"
+  ],
+  "overruled_or_modified": [
+    "The bar on reservation in promotions was later addressed by the 77th, 81st, 82nd and 85th Amendments and cases such as M. Nagaraj (2006) and Jarnail Singh (2018); verify current promotion-reservation law separately"
+  ],
+  "followed_by": [
+    "M. Nagaraj v. Union of India (2006)",
+    "Janhit Abhiyan v. Union of India (2022) (EWS)"
+  ],
+  "summary": "Indra Sawhney is the principal authority on OBC reservation, creamy layer, and the 50% ceiling. Later amendments changed the promotions question; the identification and creamy-layer holdings remain central.",
+  "content_for_rag": "Indra Sawhney v. Union of India 1992 Supp (3) SCC 217; AIR 1993 SC 477, decided on 16 November 1992 by a nine-judge bench, is the Mandal Commission case. It examined the validity of reservations for Other Backward Classes in Central Government employment under Article 16(4).\n\nThe Court held that caste can be a relevant indicator of social and educational backwardness, but the beneficiary class must actually be backward. The creamy layer — the socially advanced among a backward class — must be excluded. Reservations should ordinarily not exceed 50%, save extraordinary situations. Article 16(4) was read as a facet of equality of opportunity, not a rival to Article 16(1).\n\nThe 1992 holding that Article 16(4) did not permit reservation in promotions was later overtaken by constitutional amendments and a distinct line of cases (Nagaraj, Jarnail Singh). For current advice, separate the still-binding identification/creamy-layer/50% discussion from the later promotions and EWS jurisprudence. This seed note is not a complete gazette of reservation law.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/1363234/",
+  "language": "en",
+  "tags": [
+    "indra sawhney",
+    "mandal",
+    "obc",
+    "creamy layer",
+    "article 16",
+    "reservation",
+    "1992"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

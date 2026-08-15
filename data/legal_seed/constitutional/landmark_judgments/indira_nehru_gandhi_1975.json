@@ -1,0 +1,66 @@
+{
+  "id": "judgment_indira_nehru_gandhi_1975",
+  "type": "landmark_judgment",
+  "title": "Indira Nehru Gandhi v. Raj Narain",
+  "citation": "(1975) Supp SCC 1",
+  "alternative_citations": [
+    "AIR 1975 SC 2299"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "5-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1975,
+  "doc_date": "1975-11-07",
+  "practice_area": "Constitutional Law / Election Law",
+  "matter_type": "Basic Structure / Free and Fair Elections",
+  "petitioner": "Indira Nehru Gandhi",
+  "respondent": "Raj Narain & Anr.",
+  "outcome": "Clauses (4) and (5) of Article 329A, inserted by the 39th Amendment, were struck down. Free and fair elections were treated as part of the basic structure. The election appeal was decided on the merits after the unconstitutional clauses fell.",
+  "ratio": [
+    "Parliament cannot use the amending power to place a particular election beyond judicial review.",
+    "Free and fair elections are part of the basic structure of the Constitution.",
+    "Democracy and the rule of law are damaged if election disputes of high constitutional office are immunised from the courts."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Article 329A(4) and (5) struck down as violating basic structure",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Free and fair elections recognised as a basic feature",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Basic Structure",
+    "Judicial Review",
+    "Democracy / Free and Fair Elections"
+  ],
+  "related_articles": [
+    "Article 329A",
+    "Article 14",
+    "Article 368"
+  ],
+  "overruled_or_modified": [],
+  "followed_by": [
+    "Minerva Mills Ltd. v. Union of India (1980)",
+    "Subsequent basic-structure cases on electoral integrity"
+  ],
+  "summary": "This is the first major application of Kesavananda after 1973. The Court refused to allow the 39th Amendment to validate the Prime Minister's election by excluding judicial review, and treated free and fair elections as a basic feature.",
+  "content_for_rag": "Indira Nehru Gandhi v. Raj Narain (1975) Supp SCC 1; AIR 1975 SC 2299, decided on 7 November 1975 by a five-judge bench, applied the Basic Structure Doctrine to electoral democracy. The Allahabad High Court had set aside the Prime Minister's 1971 election. During the appeal, the Constitution (Thirty-ninth Amendment) Act, 1975 inserted Article 329A, including clauses that sought to place the election of the Prime Minister and Speaker beyond judicial scrutiny and to validate the disputed election.\n\nThe Supreme Court struck down clauses (4) and (5) of Article 329A. It held that Parliament cannot, in the name of amendment, destroy judicial review of election disputes or validate a void election by legislative fiat. Free and fair elections, equality, and the rule of law were treated as part of the Constitution's basic structure.\n\nThe decision is the bridge between Kesavananda (1973) and Minerva Mills (1980). It shows that basic structure is not confined to federalism or Fundamental Rights in the abstract; it also protects the democratic process itself.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/936707/",
+  "language": "en",
+  "tags": [
+    "indira gandhi",
+    "raj narain",
+    "39th amendment",
+    "article 329a",
+    "free and fair elections",
+    "basic structure",
+    "1975"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

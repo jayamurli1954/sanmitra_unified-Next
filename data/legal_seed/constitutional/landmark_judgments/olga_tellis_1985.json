@@ -1,0 +1,66 @@
+{
+  "id": "judgment_olga_tellis_1985",
+  "type": "landmark_judgment",
+  "title": "Olga Tellis v. Bombay Municipal Corporation",
+  "citation": "(1985) 3 SCC 545",
+  "alternative_citations": [
+    "AIR 1986 SC 180"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "5-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1985,
+  "doc_date": "1985-07-10",
+  "practice_area": "Constitutional Law / Fundamental Rights",
+  "matter_type": "Right to Livelihood / Article 21",
+  "petitioner": "Olga Tellis & Ors.",
+  "respondent": "Bombay Municipal Corporation & Ors.",
+  "outcome": "The right to life under Article 21 includes the right to livelihood. Pavement and slum dwellers could not be evicted without a fair procedure. The municipal power to remove encroachments was not struck down, but eviction without notice and hearing was held to be unfair.",
+  "ratio": [
+    "The right to life includes the right to livelihood; deprivation of livelihood may deprive life itself.",
+    "A person cannot be deprived of this right except by a fair, just and reasonable procedure established by law.",
+    "Municipal statutory power to remove encroachments stands, but must be exercised with notice and hearing except in true emergency.",
+    "The Court did not create an absolute right to occupy public pavements."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Livelihood included within Article 21",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Eviction of pavement dwellers requires fair procedure",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Article 21 expanded liberty (Maneka lineage)",
+    "Audi alteram partem / fair procedure"
+  ],
+  "related_articles": [
+    "Article 21",
+    "Article 19(1)(e)",
+    "Article 19(1)(g)",
+    "Article 14"
+  ],
+  "overruled_or_modified": [],
+  "followed_by": [
+    "Subsequent housing, eviction, and livelihood cases reading Olga Tellis with later rehabilitation jurisprudence"
+  ],
+  "summary": "A Constitution Bench held that life includes livelihood. Pavement dwellers facing eviction are entitled to notice and hearing. The judgment does not freeze an illegal occupation into a title; it constitutionalises fair procedure before deprivation of livelihood.",
+  "content_for_rag": "Olga Tellis v. Bombay Municipal Corporation (1985) 3 SCC 545; AIR 1986 SC 180, decided on 10 July 1985 by a five-judge bench, is the leading authority on livelihood as part of Article 21. Journalists and pavement dwellers in Bombay challenged a proposed demolition and eviction drive.\n\nThe Court held that the right to life is not the right to a mere animal existence. It includes the right to livelihood, because no person can live without the means of living. If the State deprives a person of livelihood, it may deprive the person of life, and that can be done only by a procedure that is fair, just and reasonable — the Maneka standard.\n\nThe municipal power under the Bombay Municipal Corporation Act to remove encroachments was not declared unconstitutional. What the Court required was notice, hearing, and (in the circumstances of the case) a humane process. Olga Tellis is often misread as creating a fundamental right to squat on public streets. The holding is narrower: livelihood is protected, and eviction that destroys livelihood must follow fair procedure. Later rehabilitation and slum statutes should be checked for current operational rules.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/709776/",
+  "language": "en",
+  "tags": [
+    "olga tellis",
+    "livelihood",
+    "article 21",
+    "pavement dwellers",
+    "eviction",
+    "bombay municipal corporation",
+    "1985"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

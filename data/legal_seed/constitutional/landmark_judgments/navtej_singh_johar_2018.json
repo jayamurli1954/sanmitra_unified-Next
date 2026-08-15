@@ -1,0 +1,70 @@
+{
+  "id": "judgment_navtej_singh_johar_2018",
+  "type": "landmark_judgment",
+  "title": "Navtej Singh Johar v. Union of India",
+  "citation": "(2018) 10 SCC 1",
+  "alternative_citations": [
+    "AIR 2018 SC 4321"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "5-Judge Bench",
+  "jurisdiction": "India",
+  "year": 2018,
+  "doc_date": "2018-09-06",
+  "practice_area": "Constitutional Law / Fundamental Rights",
+  "matter_type": "Equality / Dignity / Section 377",
+  "petitioner": "Navtej Singh Johar & Ors.",
+  "respondent": "Union of India & Ors.",
+  "outcome": "Section 377 of the Indian Penal Code was read down. Consensual sexual conduct between adults in private is not an offence. Suresh Kumar Koushal was overruled. Non-consensual acts, acts involving minors, and bestiality remain punishable.",
+  "ratio": [
+    "Sexual orientation is an essential attribute of identity, dignity, and privacy.",
+    "Section 377, insofar as it criminalised consensual adult private sexual conduct, violated Articles 14, 15, 19 and 21.",
+    "Constitutional morality, not majoritarian morality, governs fundamental rights.",
+    "Suresh Kumar Koushal v. Naz Foundation (2013) was wrongly decided and is overruled."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Consensual adult same-sex relations decriminalised",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Suresh Kumar Koushal overruled",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Dignity and Autonomy",
+    "Privacy (Puttaswamy)",
+    "Equality and Non-discrimination",
+    "Constitutional Morality"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 15",
+    "Article 19",
+    "Article 21"
+  ],
+  "overruled_or_modified": [
+    "Overruled Suresh Kumar Koushal v. Naz Foundation (2014) 1 SCC 1"
+  ],
+  "followed_by": [
+    "Subsequent LGBTQ+ equality and anti-discrimination litigation, including marriage-equality petitions"
+  ],
+  "summary": "A five-judge bench read down Section 377 so that consensual adult private sexual conduct is not criminal. The Court anchored the holding in equality, dignity, privacy, and constitutional morality, expressly overruling Koushal.",
+  "content_for_rag": "Navtej Singh Johar v. Union of India (2018) 10 SCC 1; AIR 2018 SC 4321, decided on 6 September 2018 by a five-judge bench, is the leading authority on Section 377 of the Indian Penal Code. The petitioners sought a declaration that consensual sexual orientation and conduct of adults in private is protected by Part III.\n\nThe Court read down Section 377. Consensual sexual conduct between adults in private is not an offence. The provision continues to apply to non-consensual acts, sexual acts involving minors, and bestiality. Suresh Kumar Koushal v. Naz Foundation, which had restored the criminalisation of consensual homosexual acts, was overruled.\n\nThe opinions rely on Puttaswamy (privacy and dignity), Articles 14 and 15 (equality and non-discrimination, including sexual orientation), and Article 19. Constitutional morality, not popular morality, is the measure of fundamental rights. This seed summary is not a substitute for the four concurring opinions or for later statutory change (BNS) when advising on current criminal-law text.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/12376270/",
+  "language": "en",
+  "tags": [
+    "navtej singh johar",
+    "section 377",
+    "lgbtq",
+    "privacy",
+    "dignity",
+    "koushal",
+    "2018"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

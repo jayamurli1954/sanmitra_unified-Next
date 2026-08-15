@@ -1,0 +1,68 @@
+{
+  "id": "judgment_shreya_singhal_2015",
+  "type": "landmark_judgment",
+  "title": "Shreya Singhal v. Union of India",
+  "citation": "(2015) 5 SCC 1",
+  "alternative_citations": [
+    "AIR 2015 SC 1523",
+    "2015 INSC 257"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "2-Judge Bench",
+  "jurisdiction": "India",
+  "year": 2015,
+  "doc_date": "2015-03-24",
+  "practice_area": "Constitutional Law / Free Speech",
+  "matter_type": "Article 19 / Information Technology Act",
+  "petitioner": "Shreya Singhal",
+  "respondent": "Union of India",
+  "outcome": "Section 66A of the Information Technology Act, 2000 was struck down in its entirety as violative of Article 19(1)(a) and not saved by Article 19(2). Section 69A and the Blocking Rules were upheld. Section 79 was read with procedural safeguards.",
+  "ratio": [
+    "Section 66A used vague expressions such as 'grossly offensive' and 'annoyance' without reasonably clear standards, producing a chilling effect on speech.",
+    "The provision was not saved by Article 19(2); overbreadth and vagueness made it unconstitutional.",
+    "Discussion, advocacy, and incitement must be distinguished; only incitement that meets Article 19(2) grounds may be restricted.",
+    "Section 69A blocking, with the 2009 Rules, was held to be a narrowly drawn scheme with safeguards and was upheld."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Section 66A IT Act struck down in entirety",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Section 69A and Blocking Rules upheld",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Freedom of Speech and Expression",
+    "Vagueness and Overbreadth",
+    "Chilling Effect",
+    "Reasonable Restrictions under Article 19(2)"
+  ],
+  "related_articles": [
+    "Article 19(1)(a)",
+    "Article 19(2)",
+    "Article 14"
+  ],
+  "overruled_or_modified": [],
+  "followed_by": [
+    "Subsequent internet-speech, intermediary, and blocking litigation applying Shreya Singhal"
+  ],
+  "summary": "The Court invalidated Section 66A because vague online-speech offences chilled protected expression. It remains the leading Indian authority on vagueness, overbreadth, and the distinction between discussion, advocacy, and incitement.",
+  "content_for_rag": "Shreya Singhal v. Union of India (2015) 5 SCC 1; AIR 2015 SC 1523, decided on 24 March 2015, is the leading Indian judgment on criminalisation of online speech. Writ petitions under Article 32 challenged Section 66A of the Information Technology Act, 2000 (inserted in 2009), as well as related blocking and intermediary provisions.\n\nThe Court struck down Section 66A in its entirety. The section used open-ended terms such as 'grossly offensive', 'inconvenience', and 'annoyance' without reasonably precise standards. That vagueness invited arbitrary enforcement and a chilling effect on protected speech. Section 66A was not a reasonable restriction under Article 19(2). The Court distinguished discussion, advocacy, and incitement, and held that only speech amounting to incitement within Article 19(2) grounds may be punished.\n\nSection 69A and the Information Technology (Procedure and Safeguards for Blocking for Access of Information by Public) Rules, 2009 were upheld as a narrowly drawn blocking scheme with safeguards. Section 79 intermediary immunity was read with notice-and-takedown procedure. Always verify later statutory amendments (including the IT Rules) before advising on current intermediary or blocking practice.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/110813550/",
+  "language": "en",
+  "tags": [
+    "shreya singhal",
+    "section 66a",
+    "information technology act",
+    "article 19",
+    "free speech",
+    "chilling effect",
+    "2015"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

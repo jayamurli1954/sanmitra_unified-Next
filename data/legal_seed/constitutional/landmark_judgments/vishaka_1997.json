@@ -1,0 +1,71 @@
+{
+  "id": "judgment_vishaka_1997",
+  "type": "landmark_judgment",
+  "title": "Vishaka v. State of Rajasthan",
+  "citation": "(1997) 6 SCC 241",
+  "alternative_citations": [
+    "AIR 1997 SC 3011"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "3-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1997,
+  "doc_date": "1997-08-13",
+  "practice_area": "Constitutional Law / Gender Equality",
+  "matter_type": "Workplace Sexual Harassment / Articles 14, 15, 19 and 21",
+  "petitioner": "Vishaka & Ors.",
+  "respondent": "State of Rajasthan & Ors.",
+  "outcome": "In the absence of enacted law, the Court laid down binding Vishaka Guidelines for prevention of sexual harassment of women at workplaces, to operate as law under Article 141 until legislation was enacted. Those guidelines were later given statutory form in the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013.",
+  "ratio": [
+    "Sexual harassment at the workplace violates gender equality and the right to life with dignity under Articles 14, 15, 19 and 21.",
+    "International conventions (CEDAW) may be read to fill a legislative vacuum so long as they are not inconsistent with domestic law.",
+    "Guidelines issued under Article 32, treated as law declared under Article 141, bind employers until Parliament legislates."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Binding workplace sexual-harassment guidelines issued",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "International human-rights norms used to fill a legislative vacuum",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Gender Equality",
+    "Article 141 law-declaring power",
+    "Reading international conventions into domestic rights"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 15",
+    "Article 19",
+    "Article 21",
+    "Article 32",
+    "Article 141"
+  ],
+  "overruled_or_modified": [
+    "Guidelines were superseded for most workplaces by the Sexual Harassment of Women at Workplace Act, 2013; the constitutional holdings remain relevant"
+  ],
+  "followed_by": [
+    "Medha Kotwal Lele v. Union of India (2013)",
+    "POSH Act, 2013 implementation litigation"
+  ],
+  "summary": "Vishaka filled a legislative vacuum by issuing binding workplace sexual-harassment guidelines. The 2013 POSH Act later occupied much of that field; the equality and dignity holdings remain foundational.",
+  "content_for_rag": "Vishaka v. State of Rajasthan (1997) 6 SCC 241; AIR 1997 SC 3011, decided on 13 August 1997 by a three-judge bench (Chief Justice Verma, Justices Sujata V. Manohar and B.N. Kirpal), is the leading pre-statute authority on sexual harassment of women at the workplace. The petition was brought as a class action after the alleged gang rape of a social worker in Rajasthan, to enforce gender equality under Articles 14, 15, 19 and 21.\n\nFinding a legislative vacuum, the Court laid down the Vishaka Guidelines: definition of sexual harassment; employer duties; complaints committee; awareness; and disciplinary consequences. The Court treated the guidelines as law declared under Article 141, binding all workplaces until suitable legislation was enacted. It also drew on CEDAW and other international instruments, so far as consistent with the Constitution.\n\nParliament later enacted the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013. For current compliance, the statute and rules are primary. Vishaka remains the constitutional foundation: sexual harassment is a violation of equality and dignity, not merely a disciplinary lapse.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/1031794/",
+  "language": "en",
+  "tags": [
+    "vishaka",
+    "sexual harassment",
+    "posh",
+    "gender equality",
+    "article 141",
+    "workplace",
+    "1997"
+  ],
+  "version": "1.0",
+  "priority": "high",
+  "tier": 2
+}

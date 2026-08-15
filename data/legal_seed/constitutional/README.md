@@ -1,7 +1,7 @@
-# LegalMitra Tier-1 Constitutional Seed Data
+# LegalMitra Constitutional Seed Data
 
 **Generated for**: LegalMitra (SanMitra Unified Platform)  
-**Version**: 1.0  
+**Version**: 1.1  
 **Date**: 2026-08-15  
 **Purpose**: High-quality seed corpus for constitutional doctrines and landmark judgments to power RAG-based legal research.
 
@@ -20,23 +20,32 @@ python scripts/ingest_legal_constitutional_seed.py --dry-run
 ## Contents
 
 ### Doctrines (`constitutional/doctrines/`)
-| File | Doctrine | Priority |
-|------|----------|----------|
-| `basic_structure.json` | Basic Structure Doctrine | Critical |
-| `stare_decisis.json` | Doctrine of Stare Decisis / Precedent (Art. 141) | Critical |
-| `ultra_vires.json` | Doctrine of Ultra Vires | Critical |
-| `severability.json` | Doctrine of Severability | Critical |
-| `eclipse.json` | Doctrine of Eclipse | Critical |
-| `doctrine_index.json` | Master index of all doctrines | — |
+| File | Doctrine | Priority | Tier |
+|------|----------|----------|------|
+| `basic_structure.json` | Basic Structure Doctrine | Critical | 1 |
+| `stare_decisis.json` | Doctrine of Stare Decisis / Precedent (Art. 141) | Critical | 1 |
+| `ultra_vires.json` | Doctrine of Ultra Vires | Critical | 1 |
+| `severability.json` | Doctrine of Severability | Critical | 1 |
+| `eclipse.json` | Doctrine of Eclipse | Critical | 1 |
+| `doctrine_index.json` | Master index of all doctrines | — | — |
 
 ### Landmark Judgments (`constitutional/landmark_judgments/`)
-| File | Case | Citation | Year |
-|------|------|----------|------|
-| `kesavananda_bharati_1973.json` | Kesavananda Bharati v. State of Kerala | (1973) 4 SCC 225 | 1973 |
-| `minerva_mills_1980.json` | Minerva Mills Ltd. v. Union of India | (1980) 3 SCC 625 | 1980 |
-| `maneka_gandhi_1978.json` | Maneka Gandhi v. Union of India | (1978) 1 SCC 248 | 1978 |
-| `sr_bommai_1994.json` | S.R. Bommai v. Union of India | (1994) 3 SCC 1 | 1994 |
-| `landmark_index.json` | Master index of all judgments | — | — |
+| File | Case | Citation | Year | Tier |
+|------|------|----------|------|------|
+| `kesavananda_bharati_1973.json` | Kesavananda Bharati v. State of Kerala | (1973) 4 SCC 225 | 1973 | 1 |
+| `minerva_mills_1980.json` | Minerva Mills Ltd. v. Union of India | (1980) 3 SCC 625 | 1980 | 1 |
+| `maneka_gandhi_1978.json` | Maneka Gandhi v. Union of India | (1978) 1 SCC 248 | 1978 | 1 |
+| `sr_bommai_1994.json` | S.R. Bommai v. Union of India | (1994) 3 SCC 1 | 1994 | 1 |
+| `golaknath_1967.json` | I.C. Golaknath v. State of Punjab | AIR 1967 SC 1643 | 1967 | 2 |
+| `indira_nehru_gandhi_1975.json` | Indira Nehru Gandhi v. Raj Narain | (1975) Supp SCC 1 | 1975 | 2 |
+| `puttaswamy_2017.json` | K.S. Puttaswamy v. Union of India | (2017) 10 SCC 1 | 2017 | 2 |
+| `navtej_singh_johar_2018.json` | Navtej Singh Johar v. Union of India | (2018) 10 SCC 1 | 2018 | 2 |
+| `shreya_singhal_2015.json` | Shreya Singhal v. Union of India | (2015) 5 SCC 1 | 2015 | 2 |
+| `vishaka_1997.json` | Vishaka v. State of Rajasthan | (1997) 6 SCC 241 | 1997 | 2 |
+| `indra_sawhney_1992.json` | Indra Sawhney v. Union of India | 1992 Supp (3) SCC 217 | 1992 | 2 |
+| `hussainara_khatoon_1979.json` | Hussainara Khatoon v. State of Bihar | (1980) 1 SCC 81 | 1979 | 2 |
+| `olga_tellis_1985.json` | Olga Tellis v. Bombay Municipal Corporation | (1985) 3 SCC 545 | 1985 | 2 |
+| `landmark_index.json` | Master index of all judgments | — | — | — |
 
 ### Crosswalks (`crosswalks/`)
 - `doctrine_to_cases.json` — Mapping between doctrines and supporting judgments
@@ -59,13 +68,11 @@ When ingesting into `rag_documents` / `rag_chunks`:
 3. Prefer section-level or paragraph-level chunking of `content_for_rag`
 4. Preserve `tags` and citation metadata for filtering and citation generation
 
-## Next Recommended Additions (Tier-2)
+## Next recommended additions (deferred)
 
-- Proportionality doctrine + Modern Dental College / Om Kumar
+- Proportionality doctrine (Om Kumar / Modern Dental College) as a structured doctrine file
 - I.R. Coelho (2007)
-- K.S. Puttaswamy (2017) – Privacy
-- Golaknath (1967)
-- Colourable Legislation, Pith & Substance, Occupied Field
+- Colourable legislation, pith and substance, occupied field
 - More High Court landmark decisions of pan-India importance
 
 ---

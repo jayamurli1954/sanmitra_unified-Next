@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "generated_for": "LegalMitra / SanMitra Unified Platform",
-  "description": "Master index of Tier-1 Landmark Judgments for RAG seed data",
+  "description": "Master index of landmark judgments for RAG seed data (Tier-1 critical + Tier-2 high)",
   "judgments": [
     {
       "id": "judgment_kesavananda_bharati_1973",
@@ -10,6 +10,7 @@
       "year": 1973,
       "file": "kesavananda_bharati_1973.json",
       "priority": "critical",
+      "tier": 1,
       "primary_doctrine": "Basic Structure"
     },
     {
@@ -19,6 +20,7 @@
       "year": 1980,
       "file": "minerva_mills_1980.json",
       "priority": "critical",
+      "tier": 1,
       "primary_doctrine": "Basic Structure"
     },
     {
@@ -28,6 +30,7 @@
       "year": 1978,
       "file": "maneka_gandhi_1978.json",
       "priority": "critical",
+      "tier": 1,
       "primary_doctrine": "Article 21 / Due Process"
     },
     {
@@ -37,7 +40,98 @@
       "year": 1994,
       "file": "sr_bommai_1994.json",
       "priority": "critical",
+      "tier": 1,
       "primary_doctrine": "Federalism / Secularism / Article 356"
+    },
+    {
+      "id": "judgment_golaknath_1967",
+      "title": "I.C. Golaknath v. State of Punjab",
+      "citation": "AIR 1967 SC 1643",
+      "year": 1967,
+      "file": "golaknath_1967.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Amending power / Fundamental Rights"
+    },
+    {
+      "id": "judgment_indira_nehru_gandhi_1975",
+      "title": "Indira Nehru Gandhi v. Raj Narain",
+      "citation": "(1975) Supp SCC 1",
+      "year": 1975,
+      "file": "indira_nehru_gandhi_1975.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Basic Structure / Free and Fair Elections"
+    },
+    {
+      "id": "judgment_puttaswamy_2017",
+      "title": "Justice K.S. Puttaswamy (Retd.) v. Union of India",
+      "citation": "(2017) 10 SCC 1",
+      "year": 2017,
+      "file": "puttaswamy_2017.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Privacy / Article 21"
+    },
+    {
+      "id": "judgment_navtej_singh_johar_2018",
+      "title": "Navtej Singh Johar v. Union of India",
+      "citation": "(2018) 10 SCC 1",
+      "year": 2018,
+      "file": "navtej_singh_johar_2018.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Equality / Dignity / Section 377"
+    },
+    {
+      "id": "judgment_shreya_singhal_2015",
+      "title": "Shreya Singhal v. Union of India",
+      "citation": "(2015) 5 SCC 1",
+      "year": 2015,
+      "file": "shreya_singhal_2015.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Free speech / Article 19"
+    },
+    {
+      "id": "judgment_vishaka_1997",
+      "title": "Vishaka v. State of Rajasthan",
+      "citation": "(1997) 6 SCC 241",
+      "year": 1997,
+      "file": "vishaka_1997.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Gender equality / Article 141 guidelines"
+    },
+    {
+      "id": "judgment_indra_sawhney_1992",
+      "title": "Indra Sawhney v. Union of India",
+      "citation": "1992 Supp (3) SCC 217",
+      "year": 1992,
+      "file": "indra_sawhney_1992.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Reservations / Articles 15 and 16"
+    },
+    {
+      "id": "judgment_hussainara_khatoon_1979",
+      "title": "Hussainara Khatoon v. Home Secretary, State of Bihar",
+      "citation": "(1980) 1 SCC 81",
+      "year": 1979,
+      "file": "hussainara_khatoon_1979.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Speedy trial / Article 21"
+    },
+    {
+      "id": "judgment_olga_tellis_1985",
+      "title": "Olga Tellis v. Bombay Municipal Corporation",
+      "citation": "(1985) 3 SCC 545",
+      "year": 1985,
+      "file": "olga_tellis_1985.json",
+      "priority": "high",
+      "tier": 2,
+      "primary_doctrine": "Livelihood / Article 21"
     }
   ]
 }
