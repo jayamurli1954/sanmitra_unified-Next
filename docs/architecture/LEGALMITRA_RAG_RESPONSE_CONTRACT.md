@@ -24,10 +24,18 @@ used only as secondary review lenses.
   `retrieval_strategy`/`strategy`, `missing_jurisdiction`, and `generated_at`.
 - Uncited model generation is refused (`insufficient_sources`) when no relevant
   retrieved or authorized offline sources exist.
+- `/rag/query` uncited Gemini fallback is **opt-in**
+  (`LEGAL_HYBRID_AI_FALLBACK_ENABLED`, default `false`). When enabled, the
+  answer is labeled `knowledge_kind=general_knowledge` and is not source-backed
+  research. Hybrid `/legal-research` still refuses uncited generation.
 - Answer feedback is persisted via `POST /api/v1/legalmitra/answer-feedback`
   with a tenant-admin summary endpoint.
 - Stage 2 GST refund / CGST Section 54 family has an authorized offline slice
   and seed corpus under `data/legal_seed/cgst_section_54_family.md`.
+- Tier-1 constitutional doctrine and landmark-judgment **summaries** live under
+  `data/legal_seed/constitutional/` (not auto-ingested). Operator ingest:
+  `scripts/ingest_legal_constitutional_seed.py`. These are advisory seed notes,
+  not a full SC/HC judgment corpus.
 - Relevance gates exist for low-score or low-overlap local matches.
 
 ## Target State
@@ -99,6 +107,8 @@ Fallback behavior must fail safely:
   confidentiality flags.
 - If a model provider is used without source-backed retrieval, the response
   must not fabricate case numbers, statute sections, court names, or citations.
+  The `/rag/query` general-knowledge path is opt-in, labeled, and must not be
+  presented as research.
 - Provider failure must not silently degrade into uncited legal advice.
 - Confidential tenant documents must not be sent to external providers unless
   tenant policy and user authorization allow it.
@@ -200,6 +210,8 @@ Minimum LegalMitra RAG contract tests:
 This design note does not itself implement:
 
 - Full Bare Act PDF corpus expansion beyond the Stage 2 GST Section 54 seed/offline slice.
+- Full Supreme Court / High Court judgment corpus (Tier-1 constitutional files
+  are curated summaries only).
 - Provider selection productization / production enablement.
 - Live legal research integration beyond authorized hybrid paths.
 - Legal document drafting workflow changes.

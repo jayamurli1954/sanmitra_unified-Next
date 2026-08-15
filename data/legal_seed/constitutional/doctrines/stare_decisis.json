@@ -1,0 +1,77 @@
+{
+  "id": "doctrine_stare_decisis",
+  "type": "constitutional_doctrine",
+  "name": "Doctrine of Stare Decisis (Precedent)",
+  "aliases": [
+    "Stare Decisis",
+    "Doctrine of Precedent",
+    "Binding Precedent",
+    "Article 141 Doctrine"
+  ],
+  "jurisdiction": "India",
+  "practice_area": "Constitutional Law / Jurisprudence",
+  "matter_type": "Doctrine",
+  "summary": "Courts are bound to follow the law declared by higher courts. The law declared by the Supreme Court is binding on all courts within the territory of India under Article 141 of the Constitution.",
+  "core_proposition": "The law declared by the Supreme Court shall be binding on all courts within the territory of India (Article 141). High Courts bind subordinate courts within their jurisdiction. A coordinate bench of the same court is generally bound by earlier decisions of another coordinate bench.",
+  "origin_case": {
+    "name": "Constitutional provision (Article 141)",
+    "citation": "Article 141, Constitution of India",
+    "year": 1950,
+    "court": "Supreme Court of India"
+  },
+  "key_elements": [
+    "Vertical stare decisis: Higher courts bind lower courts",
+    "Article 141 makes Supreme Court declarations of law binding nationwide",
+    "High Court decisions bind courts subordinate to it",
+    "Coordinate bench discipline: A bench of equal strength should normally follow an earlier decision of another bench of equal strength",
+    "Larger bench can overrule a smaller bench",
+    "Obiter dicta are persuasive but not binding",
+    "Ratio decidendi is the binding part of a judgment"
+  ],
+  "supporting_cases": [
+    {
+      "name": "Bengal Immunity Co. Ltd. v. State of Bihar",
+      "citation": "(1955) 2 SCR 603",
+      "year": 1955,
+      "contribution": "Early affirmation of the binding nature of Supreme Court decisions and discussion on overruling."
+    },
+    {
+      "name": "Union of India v. Raghubir Singh",
+      "citation": "(1989) 2 SCC 754",
+      "year": 1989,
+      "contribution": "Clarified principles governing when a larger bench may overrule an earlier decision."
+    },
+    {
+      "name": "Central Board of Dawoodi Bohra Community v. State of Maharashtra",
+      "citation": "(2005) 2 SCC 673",
+      "year": 2005,
+      "contribution": "Laid down the rule that a coordinate bench cannot overrule another coordinate bench; the matter must be referred to a larger bench."
+    }
+  ],
+  "related_articles": [
+    "Article 141",
+    "Article 142",
+    "Article 144"
+  ],
+  "limitations": [
+    "Only the ratio decidendi is binding; obiter dicta have persuasive value only.",
+    "A decision given per incuriam (in ignorance of a binding authority or statute) may not be followed.",
+    "The Supreme Court can overrule its own earlier decisions, preferably through a larger bench.",
+    "Distinguishing on facts is always open to a later court."
+  ],
+  "content_for_rag": "The doctrine of stare decisis (to stand by decided cases) is a foundational principle of the Indian legal system. Article 141 of the Constitution expressly provides that the law declared by the Supreme Court shall be binding on all courts within the territory of India. This creates a hierarchical system of precedent.\n\nDecisions of the Supreme Court bind all High Courts and subordinate courts. Decisions of a High Court bind all courts and tribunals subordinate to it within the State. A Bench of the Supreme Court of a particular strength is bound by earlier decisions of a Bench of equal or greater strength, subject to the power of a larger Bench to overrule.\n\nThe binding portion of a judgment is its ratio decidendi — the principle or rule of law on which the decision is based. Observations that are not necessary for the decision (obiter dicta) are persuasive but not binding. Courts may distinguish earlier cases on facts. A judgment delivered per incuriam (through inadvertence or ignorance of a binding statute or earlier decision) may be disregarded.\n\nThis doctrine ensures consistency, predictability and equality before the law. It also promotes judicial economy by preventing the same questions of law from being re-agitated repeatedly.",
+  "source_type": "doctrine",
+  "language": "en",
+  "tags": [
+    "stare decisis",
+    "precedent",
+    "article 141",
+    "binding authority",
+    "ratio decidendi",
+    "obiter dicta",
+    "judicial discipline"
+  ],
+  "doc_date": "1950-01-26",
+  "version": "1.0",
+  "priority": "critical"
+}

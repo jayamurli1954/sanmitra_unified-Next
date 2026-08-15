@@ -1,0 +1,77 @@
+{
+  "id": "judgment_sr_bommai_1994",
+  "type": "landmark_judgment",
+  "title": "S.R. Bommai v. Union of India",
+  "citation": "(1994) 3 SCC 1",
+  "alternative_citations": [
+    "AIR 1994 SC 1918"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "9-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1994,
+  "doc_date": "1994-03-11",
+  "practice_area": "Constitutional Law / Federalism",
+  "matter_type": "President's Rule / Article 356",
+  "petitioner": "S.R. Bommai & Ors.",
+  "respondent": "Union of India & Ors.",
+  "outcome": "The proclamation of President's Rule under Article 356 is justiciable. Secularism is part of the basic structure. The Court laid down strict guidelines for the exercise of power under Article 356.",
+  "ratio": [
+    "A proclamation under Article 356 is amenable to judicial review.",
+    "Secularism is a basic feature of the Constitution.",
+    "The power under Article 356 is exceptional and must be used sparingly; the Court can examine whether the material on which the President acted was relevant.",
+    "Floor test in the Legislative Assembly is the appropriate method to test majority support, not the subjective satisfaction of the Governor alone."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Judicial review of Article 356 proclamations permitted",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Secularism is part of the basic structure",
+      "importance": "High"
+    },
+    {
+      "holding": "Strict limitations on the use of President's Rule",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Basic Structure",
+    "Federalism",
+    "Secularism",
+    "Judicial Review",
+    "Constitutionalism"
+  ],
+  "related_articles": [
+    "Article 356",
+    "Article 355",
+    "Article 365",
+    "Article 74",
+    "Article 163"
+  ],
+  "overruled_or_modified": [
+    "Significantly narrowed the scope of State of Rajasthan v. Union of India (1977) on the justiciability of Article 356"
+  ],
+  "followed_by": [
+    "Rameshwar Prasad v. Union of India (2006)",
+    "Subsequent decisions on President's Rule and federalism"
+  ],
+  "summary": "S.R. Bommai is the leading authority on the scope of Article 356 and the federal character of the Indian Constitution. A nine-judge bench held that proclamations of President's Rule are justiciable, that secularism is part of the basic structure, and that the power to dismiss State governments must be exercised with extreme caution.",
+  "content_for_rag": "S.R. Bommai v. Union of India (1994) 3 SCC 1 is a landmark nine-judge bench decision that redefined the contours of federalism and the use of President's Rule under Article 356 of the Constitution.\n\nThe case arose out of the dismissal of several State governments between 1989 and 1991. The principal questions before the Court were whether a proclamation under Article 356 was justiciable and what were the limitations on the President's power to impose President's Rule.\n\nThe Court held that the power under Article 356 is not absolute. A proclamation is open to judicial review on grounds of illegality, malafides, and relevance of the material on which it is based. The Court emphasised that the satisfaction of the President (based on the Governor's report) is not beyond scrutiny. It further held that the proper method to determine whether a government has lost majority is a floor test on the floor of the Legislative Assembly, not the personal opinion of the Governor.\n\nCrucially, the Court declared that secularism is a basic feature of the Constitution. A State government that acts against the constitutional principle of secularism can be legitimately dismissed under Article 356. The decision significantly curtailed the frequent and often political use of President's Rule and strengthened the federal structure of the Indian Constitution.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/911868/",
+  "language": "en",
+  "tags": [
+    "sr bommai",
+    "article 356",
+    "presidents rule",
+    "federalism",
+    "secularism",
+    "basic structure",
+    "judicial review",
+    "1994"
+  ],
+  "version": "1.0",
+  "priority": "critical"
+}

@@ -1,0 +1,72 @@
+{
+  "id": "doctrine_eclipse",
+  "type": "constitutional_doctrine",
+  "name": "Doctrine of Eclipse",
+  "aliases": [
+    "Eclipse Doctrine",
+    "Doctrine of Shadow"
+  ],
+  "jurisdiction": "India",
+  "practice_area": "Constitutional Law",
+  "matter_type": "Doctrine",
+  "summary": "A pre-Constitutional law that is inconsistent with Fundamental Rights is not void ab initio but becomes inoperative (eclipsed) to the extent of the inconsistency. It remains in a dormant state and can revive if the inconsistency is removed by constitutional amendment.",
+  "core_proposition": "Pre-Constitutional laws that conflict with Fundamental Rights are not dead; they are merely eclipsed and remain dormant. If the eclipsing Fundamental Right is later amended or removed, the law can become operative again.",
+  "origin_case": {
+    "name": "Bhikaji Narain Dhakras v. State of Madhya Pradesh",
+    "citation": "(1955) 2 SCR 589",
+    "year": 1955,
+    "court": "Supreme Court of India"
+  },
+  "key_elements": [
+    "Applies only to pre-Constitutional laws (laws existing before 26 January 1950)",
+    "The law is not void from the beginning; it is only overshadowed by the Fundamental Right",
+    "The shadow (eclipse) can be removed by constitutional amendment",
+    "Once the inconsistency disappears, the law automatically revives without re-enactment",
+    "Post-Constitutional laws that violate Fundamental Rights are void ab initio and cannot be revived by the doctrine of eclipse"
+  ],
+  "supporting_cases": [
+    {
+      "name": "Bhikaji Narain Dhakras v. State of Madhya Pradesh",
+      "citation": "(1955) 2 SCR 589",
+      "year": 1955,
+      "contribution": "Leading case that crystallised the doctrine of eclipse in Indian constitutional law."
+    },
+    {
+      "name": "Keshavan Madhava Menon v. State of Bombay",
+      "citation": "1951 SCR 228",
+      "year": 1951,
+      "contribution": "Early discussion on the effect of Article 13 on pre-Constitutional laws."
+    },
+    {
+      "name": "Deep Chand v. State of Uttar Pradesh",
+      "citation": "1959 SCR 8",
+      "year": 1959,
+      "contribution": "Clarified that the doctrine of eclipse does not apply to post-Constitutional laws."
+    }
+  ],
+  "related_articles": [
+    "Article 13",
+    "Article 13(1)",
+    "Article 372"
+  ],
+  "limitations": [
+    "The doctrine applies exclusively to pre-Constitutional laws.",
+    "Post-Constitutional laws inconsistent with Fundamental Rights are void from their inception and cannot be revived by later constitutional amendments under this doctrine.",
+    "The law remains eclipsed only to the extent of the inconsistency."
+  ],
+  "content_for_rag": "The Doctrine of Eclipse is a unique feature of Indian constitutional law that deals with the fate of pre-Constitutional laws which are inconsistent with Fundamental Rights. Under Article 13(1), all laws in force immediately before the commencement of the Constitution, in so far as they are inconsistent with the provisions of Part III, shall be void to the extent of such inconsistency.\n\nThe Supreme Court in Bhikaji Narain Dhakras v. State of Madhya Pradesh (1955) explained that such inconsistent pre-Constitutional laws are not obliterated from the statute book. They are merely eclipsed or overshadowed by the Fundamental Rights. The law continues to exist but remains inoperative against citizens to the extent of the inconsistency. If the relevant Fundamental Right is later amended so that the inconsistency disappears, the eclipse is removed and the law automatically becomes operative again without any need for re-enactment.\n\nImportantly, the doctrine does not apply to laws enacted after the Constitution came into force. Post-Constitutional laws that violate Fundamental Rights are void ab initio and remain dead; they cannot be revived by a subsequent constitutional amendment under the doctrine of eclipse. This distinction was clearly drawn in Deep Chand v. State of Uttar Pradesh (1959).",
+  "source_type": "doctrine",
+  "language": "en",
+  "tags": [
+    "eclipse",
+    "doctrine of eclipse",
+    "pre-constitutional law",
+    "article 13",
+    "fundamental rights",
+    "bhikaji narain",
+    "dormant law"
+  ],
+  "doc_date": "1955-01-01",
+  "version": "1.0",
+  "priority": "critical"
+}

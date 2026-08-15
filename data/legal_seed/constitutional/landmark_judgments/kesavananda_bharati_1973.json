@@ -1,0 +1,73 @@
+{
+  "id": "judgment_kesavananda_bharati_1973",
+  "type": "landmark_judgment",
+  "title": "Kesavananda Bharati v. State of Kerala",
+  "citation": "(1973) 4 SCC 225",
+  "alternative_citations": [
+    "AIR 1973 SC 1461"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "13-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1973,
+  "doc_date": "1973-04-24",
+  "practice_area": "Constitutional Law",
+  "matter_type": "Constitutional Amendment / Judicial Review",
+  "petitioner": "His Holiness Kesavananda Bharati Sripadagalvaru & Ors.",
+  "respondent": "State of Kerala & Anr.",
+  "outcome": "Parliament's power to amend the Constitution under Article 368 is wide but not unlimited. It cannot damage or destroy the basic structure of the Constitution.",
+  "ratio": [
+    "Parliament can amend any provision of the Constitution, including Fundamental Rights, but cannot abrogate the basic structure or essential features of the Constitution.",
+    "The power of amendment under Article 368 does not include the power to destroy the Constitution's identity.",
+    "Judicial review is part of the basic structure of the Constitution."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Basic Structure Doctrine established as a limitation on amending power",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Article 368 does not confer unlimited amending power",
+      "importance": "High"
+    },
+    {
+      "holding": "Judicial review forms part of the basic structure",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Basic Structure",
+    "Judicial Review",
+    "Limited Government",
+    "Supremacy of the Constitution"
+  ],
+  "related_articles": [
+    "Article 13",
+    "Article 32",
+    "Article 368"
+  ],
+  "overruled_or_modified": [
+    "Partially overruled Golaknath v. State of Punjab (1967) on the point that Fundamental Rights cannot be amended"
+  ],
+  "followed_by": [
+    "Minerva Mills Ltd. v. Union of India (1980)",
+    "Waman Rao v. Union of India (1981)",
+    "I.R. Coelho v. State of Tamil Nadu (2007)"
+  ],
+  "summary": "In this historic 13-judge bench decision, the Supreme Court by a narrow 7:6 majority propounded the Basic Structure Doctrine. The Court held that while Parliament has extensive power to amend the Constitution, it cannot destroy or damage its basic structure. The decision is regarded as the high-water mark of judicial protection of the Constitution's core identity.",
+  "content_for_rag": "Kesavananda Bharati v. State of Kerala (1973) 4 SCC 225 is the most celebrated decision in Indian constitutional history. A 13-judge bench of the Supreme Court, by a majority of 7:6, held that Parliament's power to amend the Constitution under Article 368 is not absolute. Although Parliament can amend any provision, including the chapter on Fundamental Rights, it cannot alter or destroy the basic structure or essential features of the Constitution.\n\nThe majority view, articulated principally through the opinions of Chief Justice Sikri and Justices Shelat, Hegde, Grover, Jaganmohan Reddy and Khanna, established that the Constitution has a core identity which is beyond the reach of the amending power. Features such as the supremacy of the Constitution, the republican and democratic form of government, the secular character, separation of powers, federalism, and judicial review were identified as part of this basic structure.\n\nThe decision effectively overruled the earlier holding in Golaknath (1967) that Fundamental Rights were beyond the amending power, while simultaneously imposing a more sophisticated and enduring limitation on Parliament. Kesavananda remains the foundation of the Basic Structure Doctrine and continues to govern all subsequent challenges to constitutional amendments.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/257876/",
+  "language": "en",
+  "tags": [
+    "kesavananda bharati",
+    "basic structure",
+    "article 368",
+    "13 judge bench",
+    "constitutional amendment",
+    "judicial review",
+    "1973"
+  ],
+  "version": "1.0",
+  "priority": "critical"
+}

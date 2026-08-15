@@ -95,7 +95,7 @@ services:
       - key: RAG_EMBEDDING_PROVIDER
         value: hash
       - key: LEGAL_HYBRID_AI_FALLBACK_ENABLED
-        value: "true"
+        value: "false"
       - key: LEGAL_RAG_ENABLED
         value: "false"
       - key: RAG_AUTO_SYNC_ENABLED

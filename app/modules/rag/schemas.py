@@ -163,3 +163,9 @@ class RagQueryResponse(BaseModel):
     strategy: str
     candidate_count: int
     context: list[str] | None = None
+    is_fallback: bool = False
+    knowledge_kind: str = "source_backed_research"
+    is_source_backed_research: bool = True
+    human_review_required: bool = True
+    advisory_notice: str | None = None
+    rejection_reason: str | None = None

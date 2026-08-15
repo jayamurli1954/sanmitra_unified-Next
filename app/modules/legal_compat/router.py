@@ -1452,10 +1452,8 @@ async def legal_research(
                 "context": None,
             }
     else:
-        # RAG disabled — go straight to the Gemini Senior Counsel pipeline.
-        # The knowledge base uses hash embeddings and sparse content; bypassing
-        # RAG removes irrelevant-citation noise until a proper semantic corpus
-        # is ready.
+        # RAG disabled — skip local knowledge-base lookup. Hybrid research still
+        # refuses uncited generation unless an authorized offline slice matches.
         result = {
             "answer": "",
             "citations": [],

@@ -1,0 +1,72 @@
+{
+  "id": "doctrine_severability",
+  "type": "constitutional_doctrine",
+  "name": "Doctrine of Severability (Separability)",
+  "aliases": [
+    "Severability",
+    "Doctrine of Separability",
+    "Blue Pencil Doctrine (related)"
+  ],
+  "jurisdiction": "India",
+  "practice_area": "Constitutional Law",
+  "matter_type": "Doctrine",
+  "summary": "When a statute is found to be partly unconstitutional, the court will sever and strike down only the offending portion if the valid and invalid parts can be separated, leaving the rest of the statute intact and operative.",
+  "core_proposition": "If an offending provision can be severed from the rest of the statute without doing violence to the legislative intent, only the offending part is declared void and the remainder continues to operate.",
+  "origin_case": {
+    "name": "R.M.D. Chamarbaugwala v. Union of India",
+    "citation": "1957 SCR 930",
+    "year": 1957,
+    "court": "Supreme Court of India"
+  },
+  "key_elements": [
+    "The valid and invalid portions must be separable in substance and form",
+    "After severance, the remaining statute must still be workable and reflect the legislative intent",
+    "If the valid and invalid parts are inextricably mixed, the entire provision or statute may fall",
+    "Article 13 declares laws inconsistent with Fundamental Rights void 'to the extent of such inconsistency'",
+    "Severability is a rule of construction as well as a constitutional doctrine"
+  ],
+  "supporting_cases": [
+    {
+      "name": "R.M.D. Chamarbaugwala v. Union of India",
+      "citation": "1957 SCR 930",
+      "year": 1957,
+      "contribution": "Classic exposition of the doctrine. The Court held that the principles of severability apply to constitutional challenges under Article 13."
+    },
+    {
+      "name": "State of Bombay v. F.N. Balsara",
+      "citation": "1951 SCR 682",
+      "year": 1951,
+      "contribution": "Early application of severability to a State prohibition law."
+    },
+    {
+      "name": "A.K. Gopalan v. State of Madras",
+      "citation": "1950 SCR 88",
+      "year": 1950,
+      "contribution": "Discussed severability in the context of preventive detention provisions (though later partly overruled on other grounds)."
+    }
+  ],
+  "related_articles": [
+    "Article 13",
+    "Article 245",
+    "Article 246"
+  ],
+  "limitations": [
+    "Severance is not permitted if it would alter the essential nature or policy of the remaining statute.",
+    "Courts will not rewrite the statute under the guise of severability.",
+    "If the legislature would not have enacted the valid part without the invalid part, the whole may be struck down."
+  ],
+  "content_for_rag": "The doctrine of severability (also called separability) is a well-established principle of Indian constitutional law. It flows from the language of Article 13, which declares that laws inconsistent with Fundamental Rights shall be void 'to the extent of such inconsistency'. The doctrine permits a court to strike down only the unconstitutional portion of a statute while preserving the remainder, provided the two parts are capable of separation.\n\nThe leading authority is R.M.D. Chamarbaugwala v. Union of India (1957). The Supreme Court laid down that the court must examine whether the valid and invalid portions are so inextricably mixed that they cannot be separated without altering the legislative scheme. If separation is possible and the remaining provisions can stand independently and still give effect to the legislative intent, only the offending part is declared void.\n\nSeverability serves two important purposes: it respects the will of the legislature by saving as much of the statute as possible, and it prevents the entire law from being invalidated because of a single unconstitutional provision. The doctrine applies both to primary legislation and to subordinate legislation. Courts, however, will not use severability as a tool to rewrite legislation or to create a new law that the legislature never intended.",
+  "source_type": "doctrine",
+  "language": "en",
+  "tags": [
+    "severability",
+    "separability",
+    "article 13",
+    "partial invalidity",
+    "constitutional law",
+    "chamarbaugwala"
+  ],
+  "doc_date": "1957-04-09",
+  "version": "1.0",
+  "priority": "critical"
+}

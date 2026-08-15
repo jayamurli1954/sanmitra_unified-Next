@@ -1,0 +1,76 @@
+{
+  "id": "doctrine_ultra_vires",
+  "type": "constitutional_doctrine",
+  "name": "Doctrine of Ultra Vires",
+  "aliases": [
+    "Ultra Vires",
+    "Beyond Powers",
+    "Doctrine of Excess of Jurisdiction"
+  ],
+  "jurisdiction": "India",
+  "practice_area": "Constitutional Law / Administrative Law",
+  "matter_type": "Doctrine",
+  "summary": "Any act, order, rule or legislation that exceeds the legal power or authority conferred on the person or body performing it is ultra vires and therefore void.",
+  "core_proposition": "When a legislature, executive authority or statutory body acts beyond the powers conferred upon it by the Constitution or the parent statute, such action is ultra vires and of no legal effect.",
+  "origin_case": {
+    "name": "Developed through common law and adopted in Indian constitutional jurisprudence",
+    "citation": "Multiple foundational decisions",
+    "year": null,
+    "court": "Supreme Court of India / High Courts"
+  },
+  "key_elements": [
+    "Substantive ultra vires: the act is outside the scope of the conferred power",
+    "Procedural ultra vires: the act is within the power but the prescribed procedure is not followed",
+    "Constitutional ultra vires: legislation violates constitutional limitations (fundamental rights, distribution of legislative powers, etc.)",
+    "Delegated legislation can be struck down if it exceeds the parent Act",
+    "Administrative actions can be quashed if they exceed statutory authority"
+  ],
+  "supporting_cases": [
+    {
+      "name": "R.M.D. Chamarbaugwala v. Union of India",
+      "citation": "1957 SCR 930",
+      "year": 1957,
+      "contribution": "Classic application of ultra vires and severability principles to legislation."
+    },
+    {
+      "name": "State of Rajasthan v. G. Chawla",
+      "citation": "1959 SCR 904",
+      "year": 1959,
+      "contribution": "Discussed the scope of legislative competence and ultra vires legislation."
+    },
+    {
+      "name": "In re Delhi Laws Act",
+      "citation": "1951 SCR 747",
+      "year": 1951,
+      "contribution": "Early and important discussion on the limits of delegated legislation and ultra vires."
+    }
+  ],
+  "related_articles": [
+    "Article 13",
+    "Article 245",
+    "Article 246",
+    "Seventh Schedule",
+    "Article 32",
+    "Article 226"
+  ],
+  "limitations": [
+    "Courts are generally reluctant to interfere with policy decisions if they are within the four corners of the statute.",
+    "The doctrine does not permit courts to sit in appeal over the wisdom of the legislature or executive.",
+    "Severability may save the valid portion of an otherwise ultra vires instrument."
+  ],
+  "content_for_rag": "The doctrine of ultra vires is a fundamental principle of both constitutional and administrative law in India. It means 'beyond the powers'. Any action — legislative, executive or quasi-judicial — that exceeds the authority conferred by the Constitution or the relevant statute is ultra vires and void.\n\nThere are two broad categories. Substantive ultra vires occurs when the authority acts outside the scope of the power granted to it. Procedural ultra vires occurs when the authority has the power but fails to follow the mandatory procedure prescribed by law. In the constitutional sphere, a law may be ultra vires if it violates Fundamental Rights, trespasses into a legislative field reserved for another legislature, or contravenes any express constitutional limitation.\n\nDelegated legislation is particularly susceptible to ultra vires challenge. Rules, regulations and notifications must remain within the confines of the parent Act. Administrative orders can be quashed by High Courts under Article 226 or by the Supreme Court under Article 32 if they are ultra vires the governing statute. The doctrine is a primary tool for controlling excess of power and maintaining the rule of law.",
+  "source_type": "doctrine",
+  "language": "en",
+  "tags": [
+    "ultra vires",
+    "beyond powers",
+    "delegated legislation",
+    "administrative law",
+    "legislative competence",
+    "article 13",
+    "judicial review"
+  ],
+  "doc_date": "1950-01-26",
+  "version": "1.0",
+  "priority": "critical"
+}

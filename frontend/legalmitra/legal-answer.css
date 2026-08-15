@@ -10,7 +10,14 @@
   max-width: 760px;
 }
 
-.legal-answer-advisory {
+.legal-answer-mode {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.legal-answer-mode.warn {
+  color: #f3e6c2;
+}
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(231, 199, 124, 0.28);

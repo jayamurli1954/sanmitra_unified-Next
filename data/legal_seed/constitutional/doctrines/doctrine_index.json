@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "generated_for": "LegalMitra / SanMitra Unified Platform",
+  "description": "Master index of Tier-1 Constitutional Doctrines for RAG seed data",
+  "doctrines": [
+    {
+      "id": "doctrine_basic_structure",
+      "name": "Basic Structure Doctrine",
+      "file": "basic_structure.json",
+      "origin_year": 1973,
+      "priority": "critical",
+      "origin_case": "Kesavananda Bharati v. State of Kerala"
+    },
+    {
+      "id": "doctrine_stare_decisis",
+      "name": "Doctrine of Stare Decisis (Precedent)",
+      "file": "stare_decisis.json",
+      "origin_year": 1950,
+      "priority": "critical",
+      "origin_case": "Article 141, Constitution of India"
+    },
+    {
+      "id": "doctrine_ultra_vires",
+      "name": "Doctrine of Ultra Vires",
+      "file": "ultra_vires.json",
+      "origin_year": null,
+      "priority": "critical",
+      "origin_case": "Common law principle adopted in Indian jurisprudence"
+    },
+    {
+      "id": "doctrine_severability",
+      "name": "Doctrine of Severability (Separability)",
+      "file": "severability.json",
+      "origin_year": 1957,
+      "priority": "critical",
+      "origin_case": "R.M.D. Chamarbaugwala v. Union of India"
+    },
+    {
+      "id": "doctrine_eclipse",
+      "name": "Doctrine of Eclipse",
+      "file": "eclipse.json",
+      "origin_year": 1955,
+      "priority": "critical",
+      "origin_case": "Bhikaji Narain Dhakras v. State of Madhya Pradesh"
+    }
+  ]
+}

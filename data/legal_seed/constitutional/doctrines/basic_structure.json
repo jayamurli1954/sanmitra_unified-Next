@@ -1,0 +1,92 @@
+{
+  "id": "doctrine_basic_structure",
+  "type": "constitutional_doctrine",
+  "name": "Basic Structure Doctrine",
+  "aliases": [
+    "Basic Structure",
+    "Basic Features Doctrine",
+    "Kesavananda Doctrine",
+    "Doctrine of Basic Structure"
+  ],
+  "jurisdiction": "India",
+  "practice_area": "Constitutional Law",
+  "matter_type": "Doctrine",
+  "summary": "The Parliament of India cannot amend the Constitution in a manner that destroys or damages its basic structure or essential features. The doctrine acts as a substantive limitation on the amending power under Article 368.",
+  "core_proposition": "While Parliament has wide power to amend any part of the Constitution (including Fundamental Rights) under Article 368, it cannot alter, damage or destroy the basic structure of the Constitution.",
+  "origin_case": {
+    "name": "Kesavananda Bharati v. State of Kerala",
+    "citation": "(1973) 4 SCC 225",
+    "year": 1973,
+    "court": "Supreme Court of India",
+    "bench": "13-Judge Bench"
+  },
+  "key_elements": [
+    "Supremacy of the Constitution",
+    "Republican and democratic form of government",
+    "Secular character of the Constitution",
+    "Separation of powers between the legislature, executive and judiciary",
+    "Federal character of the Constitution",
+    "Unity and integrity of the nation",
+    "Judicial review",
+    "Rule of law",
+    "Harmony and balance between Fundamental Rights and Directive Principles",
+    "Free and fair elections",
+    "Independence of the judiciary",
+    "Limited power of Parliament to amend the Constitution"
+  ],
+  "supporting_cases": [
+    {
+      "name": "Minerva Mills Ltd. v. Union of India",
+      "citation": "(1980) 3 SCC 625",
+      "year": 1980,
+      "contribution": "Held that limited amending power is itself a basic feature. Struck down sections of the 42nd Amendment that sought to exclude judicial review of constitutional amendments and give primacy to Directive Principles over Fundamental Rights."
+    },
+    {
+      "name": "Indira Nehru Gandhi v. Raj Narain",
+      "citation": "(1975) Supp SCC 1",
+      "year": 1975,
+      "contribution": "Applied the basic structure doctrine to free and fair elections. Struck down the 39th Amendment which sought to place the election of the Prime Minister beyond judicial scrutiny."
+    },
+    {
+      "name": "Waman Rao v. Union of India",
+      "citation": "(1981) 2 SCC 362",
+      "year": 1981,
+      "contribution": "Clarified that the basic structure doctrine applies prospectively from 24 April 1973 (the date of the Kesavananda judgment). Amendments made before that date were saved."
+    },
+    {
+      "name": "I.R. Coelho v. State of Tamil Nadu",
+      "citation": "(2007) 2 SCC 1",
+      "year": 2007,
+      "contribution": "Held that laws placed in the Ninth Schedule after 24 April 1973 are open to challenge on the ground that they damage or destroy the basic structure."
+    }
+  ],
+  "related_articles": [
+    "Article 368",
+    "Article 13",
+    "Article 14",
+    "Article 19",
+    "Article 21",
+    "Article 32",
+    "Article 226"
+  ],
+  "limitations": [
+    "The Supreme Court has deliberately refrained from providing an exhaustive or rigid list of basic features.",
+    "What constitutes the basic structure is determined on a case-by-case basis.",
+    "The doctrine does not prevent Parliament from amending the Constitution; it only prevents destruction of its identity."
+  ],
+  "content_for_rag": "The Basic Structure Doctrine is one of the most significant contributions of the Indian judiciary to constitutional theory. Propounded by the Supreme Court in Kesavananda Bharati v. State of Kerala (1973) 4 SCC 225 by a narrow 7:6 majority of a 13-judge bench, the doctrine holds that although Parliament has the power to amend the Constitution under Article 368, this power is not unlimited. Parliament cannot amend the Constitution in a manner that destroys or damages its basic structure or essential features.\n\nThe Court observed that the Constitution has certain fundamental features which form its core identity. These features cannot be abrogated even by a constitutional amendment. While the Court did not provide an exhaustive list, subsequent decisions have recognised supremacy of the Constitution, republican and democratic form of government, secularism, separation of powers, federalism, judicial review, rule of law, and the harmony between Fundamental Rights and Directive Principles as part of the basic structure.\n\nIn Minerva Mills Ltd. v. Union of India (1980) 3 SCC 625, the Court further held that the limited nature of the amending power is itself a basic feature. Any attempt to confer unlimited amending power on Parliament would destroy the Constitution's identity. The doctrine has since been applied in numerous cases involving electoral laws, emergency powers, federalism, and the protection of Fundamental Rights. It remains the principal judicial check on constitutional amendments in India.",
+  "source_type": "doctrine",
+  "language": "en",
+  "tags": [
+    "basic structure",
+    "kesavananda",
+    "article 368",
+    "constitutional amendment",
+    "judicial review",
+    "fundamental features",
+    "minerva mills"
+  ],
+  "doc_date": "1973-04-24",
+  "version": "1.0",
+  "priority": "critical"
+}

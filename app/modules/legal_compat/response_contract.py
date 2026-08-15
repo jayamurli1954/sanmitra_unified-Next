@@ -222,6 +222,17 @@ def finalize_research_response(
         "note": note,
         "dropped_citation_count": int(dropped_citation_count or 0),
         "generated_at": _now_utc_iso(),
+        "is_source_backed_research": bool(enriched)
+        and strategy not in {"insufficient_sources", "missing_jurisdiction"},
+        "knowledge_kind": (
+            "insufficient_sources"
+            if strategy == "insufficient_sources"
+            else "missing_jurisdiction"
+            if missing_jurisdiction or strategy == "missing_jurisdiction"
+            else "source_backed_research"
+            if enriched
+            else "uncited"
+        ),
     }
     return payload
 

@@ -34,6 +34,8 @@ def test_finalize_research_response_always_requires_human_review() -> None:
     assert payload["generated_at"]
     assert payload["citations"][0]["retrieved_at"]
     assert payload["citations"][0]["staleness_status"]
+    assert payload["knowledge_kind"] == "source_backed_research"
+    assert payload["is_source_backed_research"] is True
 
 
 def test_resolve_jurisdiction_infers_india_central_for_gst() -> None:
@@ -77,6 +79,8 @@ async def test_hybrid_refuses_when_no_relevant_sources(
 
     assert result["confidence"] == "insufficient_sources"
     assert result["strategy"] == "insufficient_sources"
+    assert result["knowledge_kind"] == "insufficient_sources"
+    assert result["is_source_backed_research"] is False
     assert result["human_review_required"] is True
     assert called["gemini"] is False
     assert called["claude"] is False

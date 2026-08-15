@@ -1313,7 +1313,8 @@ function renderLegalAnswer(result) {
   const answerId = result.payload?.answer_id || result.payload?.response_id || result.payload?.history_record_id || hashText(`${queryInput.value}|${provider}|${strategy}|${lastAnswerText}`);
   lastAnswerMeta = { id: answerId, query: queryInput.value, provider, strategy, confidence, historyRecordId: result.payload?.history_record_id || null };
   const storedFeedback = loadAnswerFeedback()[answerId] || {};
-  const citations = Array.isArray(result.payload?.citations) ? result.payload.citations : [];
+  const citations = Array.isArray(result.payload?.citations) ? result.payload.citations : []; const knowledgeKind = result.payload?.knowledge_kind || (citations.length ? "source_backed_research" : (String(strategy).includes("llm_fallback") ? "general_knowledge" : ""));
+  const isSourceBacked = result.payload?.is_source_backed_research === true || (knowledgeKind === "source_backed_research" && citations.length > 0); const researchMode = knowledgeKind === "general_knowledge" || String(strategy).includes("llm_fallback") ? "General knowledge (no citations)" : knowledgeKind === "web_search_unverified" || String(strategy).includes("web_search") ? "Unverified web search" : confidence === "insufficient_sources" || knowledgeKind === "insufficient_sources" ? "Source-backed research unavailable" : isSourceBacked ? "Source-backed research" : "Advisory output";
   const followUps = buildFollowUps(queryInput.value, response);
   const citationHtml = citations.length
     ? `<div class="legal-answer-citations"><strong>Sources</strong>${citations.slice(0, 4).map((citation, index) => {
@@ -1326,12 +1327,11 @@ function renderLegalAnswer(result) {
   const limitationsHtml = limitations.length
     ? `<div class="legal-answer-limitations"><strong>Limitations</strong><ul>${limitations.slice(0, 4).map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul></div>`
     : "";
-
   answerPanel.innerHTML = `
     <div class="legal-answer-card">
       <div class="legal-answer-topline">
         <div class="legal-answer-meta">
-          <span>${escapeHtml(provider)}</span>
+          <span class="legal-answer-mode ${isSourceBacked ? "ok" : "warn"}">${escapeHtml(researchMode)}</span><span>${escapeHtml(provider)}</span>
           <span>${escapeHtml(strategy)}</span>
           <span>confidence: ${escapeHtml(confidence)}</span>
           ${result.payload?.human_review_required === false ? "" : "<span>human review required</span>"}

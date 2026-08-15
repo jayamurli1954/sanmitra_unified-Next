@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "description": "Many-to-many mapping between Tier-1 constitutional doctrines and landmark judgments",
+  "mappings": {
+    "doctrine_basic_structure": [
+      "judgment_kesavananda_bharati_1973",
+      "judgment_minerva_mills_1980",
+      "judgment_sr_bommai_1994"
+    ],
+    "doctrine_stare_decisis": [
+      "judgment_kesavananda_bharati_1973",
+      "judgment_minerva_mills_1980",
+      "judgment_maneka_gandhi_1978",
+      "judgment_sr_bommai_1994"
+    ],
+    "doctrine_ultra_vires": [],
+    "doctrine_severability": [],
+    "doctrine_eclipse": []
+  },
+  "notes": [
+    "Basic Structure is primarily anchored by Kesavananda and Minerva Mills.",
+    "S.R. Bommai applied Basic Structure to secularism and federalism.",
+    "Maneka Gandhi is the foundational expansion of Article 21 and is linked to reasonableness / due process rather than pure Basic Structure.",
+    "Ultra Vires, Severability and Eclipse are primarily statutory/constitutional construction doctrines and are less case-specific in the Tier-1 set."
+  ]
+}

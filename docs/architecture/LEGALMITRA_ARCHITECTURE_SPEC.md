@@ -107,6 +107,9 @@ Enforce `LEGALMITRA_RAG_RESPONSE_CONTRACT.md` end-to-end (API + UI).
 Answer feedback is wired to `POST /api/v1/legalmitra/answer-feedback` (summary for admins).  
 First corpus slice: GST + Income Tax; prove on GST refund / Section 54 and IT Section 139 families.  
 Authorized Stage 2 offline slices + seed text live under `data/legal_seed/` and `offline_fallbacks.py`.  
+Tier-1 constitutional doctrine/judgment **summaries** are in
+`data/legal_seed/constitutional/` and are not ingested until
+`scripts/ingest_legal_constitutional_seed.py` is run.  
 Statute PDF ingest (read-only source `D:\sanmitra-backend\data\legal_acts`) is documented in
 `docs/operations/LEGALMITRA_STAGE2_STATUTE_INGEST.md`.
 

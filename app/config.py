@@ -172,12 +172,15 @@ class Settings:
     RAG_GEMINI_TASK_TYPE = os.getenv("RAG_GEMINI_TASK_TYPE", "RETRIEVAL_DOCUMENT").strip().upper()
     RAG_GEMINI_API_BASE = os.getenv("RAG_GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta").strip()
 
-    # Hybrid legal response behavior
-    LEGAL_HYBRID_AI_FALLBACK_ENABLED = os.getenv("LEGAL_HYBRID_AI_FALLBACK_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-    # Set LEGAL_RAG_ENABLED=false to bypass the RAG knowledge-base lookup and send
-    # queries directly to the Gemini Senior Counsel pipeline.  Use this in production
-    # while the RAG corpus (semantic embeddings + authoritative legal documents) is
-    # being rebuilt locally.  Re-enable once local RAG testing is satisfactory.
+    # Uncited Gemini "general knowledge" answers for /rag/query. Default off.
+    # If enabled, responses must be labeled general-knowledge and must not be
+    # treated as source-backed legal research. Hybrid /legal-research still
+    # refuses uncited generation unless an authorized offline slice matches.
+    LEGAL_HYBRID_AI_FALLBACK_ENABLED = os.getenv(
+        "LEGAL_HYBRID_AI_FALLBACK_ENABLED", "false"
+    ).lower() in {"1", "true", "yes", "on"}
+    # Set LEGAL_RAG_ENABLED=false to skip local RAG lookup. Hybrid research
+    # still refuses uncited generation unless an authorized offline slice matches.
     LEGAL_RAG_ENABLED = os.getenv("LEGAL_RAG_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     CLAUDE_LEGAL_COUNSEL_ENABLED = os.getenv("CLAUDE_LEGAL_COUNSEL_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()

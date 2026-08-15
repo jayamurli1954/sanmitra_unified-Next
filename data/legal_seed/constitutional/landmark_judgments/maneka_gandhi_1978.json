@@ -1,0 +1,75 @@
+{
+  "id": "judgment_maneka_gandhi_1978",
+  "type": "landmark_judgment",
+  "title": "Maneka Gandhi v. Union of India",
+  "citation": "(1978) 1 SCC 248",
+  "alternative_citations": [
+    "AIR 1978 SC 597"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "7-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1978,
+  "doc_date": "1978-01-25",
+  "practice_area": "Constitutional Law / Fundamental Rights",
+  "matter_type": "Personal Liberty / Article 21",
+  "petitioner": "Maneka Gandhi",
+  "respondent": "Union of India & Anr.",
+  "outcome": "Article 21 was given an expansive interpretation. The procedure established by law must be fair, just and reasonable. The 'golden triangle' of Articles 14, 19 and 21 was recognised.",
+  "ratio": [
+    "The expression 'personal liberty' in Article 21 is of the widest amplitude and covers a variety of rights.",
+    "The procedure established by law under Article 21 must be fair, just and reasonable; it cannot be arbitrary, fanciful or oppressive.",
+    "Articles 14, 19 and 21 form a golden triangle; any law interfering with personal liberty must satisfy the requirements of all three articles.",
+    "A law that is arbitrary violates Article 14 and consequently cannot be 'procedure established by law' under Article 21."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Expansive interpretation of 'personal liberty' under Article 21",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Procedure under Article 21 must be fair, just and reasonable",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Articles 14, 19 and 21 are interlinked (golden triangle)",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Due Process (substantive aspect)",
+    "Reasonableness",
+    "Inter-relationship of Fundamental Rights"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 19",
+    "Article 21",
+    "Article 32"
+  ],
+  "overruled_or_modified": [
+    "Effectively overruled the narrow interpretation of Article 21 in A.K. Gopalan v. State of Madras (1950)"
+  ],
+  "followed_by": [
+    "Francis Coralie Mullin v. Administrator, Union Territory of Delhi (1981)",
+    "Olga Tellis v. Bombay Municipal Corporation (1985)",
+    "K.S. Puttaswamy v. Union of India (2017)"
+  ],
+  "summary": "Maneka Gandhi is the watershed decision that transformed Article 21 from a narrow guarantee against executive action into a robust source of substantive rights. The Supreme Court held that the procedure under Article 21 must be fair, just and reasonable and that Articles 14, 19 and 21 must be read together.",
+  "content_for_rag": "Maneka Gandhi v. Union of India (1978) 1 SCC 248 is a transformative decision in Indian constitutional law. A seven-judge bench of the Supreme Court fundamentally reinterpreted Article 21 of the Constitution.\n\nThe petitioner's passport had been impounded by the Central Government without giving her a hearing. The Government relied on the earlier decision in A.K. Gopalan (1950), which had held that 'procedure established by law' meant any procedure laid down by a validly enacted law, and that Article 21 was mutually exclusive from Articles 14 and 19.\n\nThe Court rejected this narrow view. It held that 'personal liberty' in Article 21 has the widest possible amplitude. More importantly, the Court ruled that the procedure established by law must be fair, just and reasonable — not arbitrary, fanciful or oppressive. A law that is arbitrary would violate Article 14 and therefore could not be regarded as 'procedure established by law' under Article 21.\n\nThe Court also propounded the concept of the 'golden triangle' of Articles 14, 19 and 21, holding that these three articles are interlinked and must be read together. Any law that interferes with personal liberty must satisfy the requirements of all three provisions. Maneka Gandhi opened the door for the subsequent expansion of Article 21 into a repository of numerous unenumerated rights, including the right to privacy, livelihood, health, education and clean environment.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/1766147/",
+  "language": "en",
+  "tags": [
+    "maneka gandhi",
+    "article 21",
+    "personal liberty",
+    "due process",
+    "golden triangle",
+    "article 14",
+    "article 19",
+    "1978"
+  ],
+  "version": "1.0",
+  "priority": "critical"
+}

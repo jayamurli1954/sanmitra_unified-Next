@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "generated_for": "LegalMitra / SanMitra Unified Platform",
+  "description": "Master index of Tier-1 Landmark Judgments for RAG seed data",
+  "judgments": [
+    {
+      "id": "judgment_kesavananda_bharati_1973",
+      "title": "Kesavananda Bharati v. State of Kerala",
+      "citation": "(1973) 4 SCC 225",
+      "year": 1973,
+      "file": "kesavananda_bharati_1973.json",
+      "priority": "critical",
+      "primary_doctrine": "Basic Structure"
+    },
+    {
+      "id": "judgment_minerva_mills_1980",
+      "title": "Minerva Mills Ltd. v. Union of India",
+      "citation": "(1980) 3 SCC 625",
+      "year": 1980,
+      "file": "minerva_mills_1980.json",
+      "priority": "critical",
+      "primary_doctrine": "Basic Structure"
+    },
+    {
+      "id": "judgment_maneka_gandhi_1978",
+      "title": "Maneka Gandhi v. Union of India",
+      "citation": "(1978) 1 SCC 248",
+      "year": 1978,
+      "file": "maneka_gandhi_1978.json",
+      "priority": "critical",
+      "primary_doctrine": "Article 21 / Due Process"
+    },
+    {
+      "id": "judgment_sr_bommai_1994",
+      "title": "S.R. Bommai v. Union of India",
+      "citation": "(1994) 3 SCC 1",
+      "year": 1994,
+      "file": "sr_bommai_1994.json",
+      "priority": "critical",
+      "primary_doctrine": "Federalism / Secularism / Article 356"
+    }
+  ]
+}

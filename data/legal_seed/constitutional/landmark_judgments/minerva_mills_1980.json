@@ -1,0 +1,70 @@
+{
+  "id": "judgment_minerva_mills_1980",
+  "type": "landmark_judgment",
+  "title": "Minerva Mills Ltd. v. Union of India",
+  "citation": "(1980) 3 SCC 625",
+  "alternative_citations": [
+    "AIR 1980 SC 1789"
+  ],
+  "court_name": "Supreme Court of India",
+  "bench": "5-Judge Bench",
+  "jurisdiction": "India",
+  "year": 1980,
+  "doc_date": "1980-07-31",
+  "practice_area": "Constitutional Law",
+  "matter_type": "Constitutional Amendment / Basic Structure",
+  "petitioner": "Minerva Mills Ltd. & Ors.",
+  "respondent": "Union of India & Ors.",
+  "outcome": "Sections 4 and 55 of the Constitution (42nd Amendment) Act, 1976 were struck down as violating the basic structure. Limited amending power and judicial review were reaffirmed as basic features.",
+  "ratio": [
+    "The limited nature of the amending power under Article 368 is itself a basic feature of the Constitution.",
+    "Clauses that sought to exclude judicial review of constitutional amendments and to give Directive Principles absolute primacy over Fundamental Rights damaged the basic structure.",
+    "Harmony between Fundamental Rights and Directive Principles is part of the basic structure."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Limited amending power is a basic feature",
+      "importance": "Foundational"
+    },
+    {
+      "holding": "Judicial review of constitutional amendments cannot be excluded",
+      "importance": "High"
+    },
+    {
+      "holding": "Sections 4 and 55 of the 42nd Amendment struck down",
+      "importance": "High"
+    }
+  ],
+  "doctrines_applied": [
+    "Basic Structure",
+    "Judicial Review",
+    "Harmony between Fundamental Rights and Directive Principles"
+  ],
+  "related_articles": [
+    "Article 14",
+    "Article 19",
+    "Article 31C",
+    "Article 368"
+  ],
+  "overruled_or_modified": [],
+  "followed_by": [
+    "Waman Rao v. Union of India (1981)",
+    "I.R. Coelho v. State of Tamil Nadu (2007)"
+  ],
+  "summary": "Minerva Mills is the most important decision after Kesavananda on the Basic Structure Doctrine. The Supreme Court struck down key provisions of the 42nd Amendment that attempted to enlarge Parliament's amending power and to immunise amendments from judicial review. The Court held that limited amending power and judicial review are themselves basic features.",
+  "content_for_rag": "Minerva Mills Ltd. v. Union of India (1980) 3 SCC 625 is a landmark decision that fortified the Basic Structure Doctrine laid down in Kesavananda Bharati. A five-judge bench of the Supreme Court examined the validity of certain provisions of the Constitution (42nd Amendment) Act, 1976.\n\nSection 4 of the 42nd Amendment had expanded Article 31C so that any law giving effect to any of the Directive Principles would be immune from challenge under Articles 14 and 19. Section 55 had inserted clauses in Article 368 declaring that there would be no limitation on Parliament's amending power and that no amendment could be questioned in any court.\n\nThe majority (Chief Justice Chandrachud, Justices Bhagwati, Gupta and Tulzapurkar) held that both provisions damaged the basic structure. The Court ruled that the limited nature of the amending power is itself a basic feature of the Constitution. Any attempt to confer unlimited power on Parliament or to exclude judicial review of constitutional amendments would destroy the Constitution's identity. The decision also emphasised that the harmony and balance between Fundamental Rights and Directive Principles is an essential feature of the basic structure.\n\nMinerva Mills remains a cornerstone authority on the limits of constitutional amendment and the inviolability of judicial review.",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/1939993/",
+  "language": "en",
+  "tags": [
+    "minerva mills",
+    "basic structure",
+    "42nd amendment",
+    "article 368",
+    "judicial review",
+    "directive principles",
+    "1980"
+  ],
+  "version": "1.0",
+  "priority": "critical"
+}

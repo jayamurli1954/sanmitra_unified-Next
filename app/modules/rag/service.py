@@ -10,6 +10,13 @@ from fastapi import HTTPException
 from app.core.audit.service import log_audit_event
 from app.core.decorators import limit_concurrency
 from app.db.mongo import get_collection
+from app.modules.rag.fallback import (
+    WEB_SEARCH_BANNER,
+    insufficient_index_payload,
+    labeled_non_research_payload,
+    log_rag_refusal,
+    try_general_knowledge_llm,
+)
 from app.modules.rag.legal_act_registry import (
     detect_legal_act,
     legal_act_metadata_filter,
@@ -598,65 +605,39 @@ async def query_knowledge(
         web_context = legal_web_search.enrich_rag_context(payload.query)
 
         if web_context.get("success"):
-            return {
-                "answer": f"I couldn't find this in my local database, so I've searched the live legal web:\n\n{web_context['context']}",
-                "citations": [],
-                "strategy": "web_search_jit_fallback",
-                "candidate_count": 0,
-                "context": None,
-                "is_fallback": True
-            }
+            return labeled_non_research_payload(
+                answer=(
+                    "I couldn't find this in my local database, so I've searched "
+                    "the live legal web:\n\n"
+                    f"{web_context['context']}"
+                ),
+                strategy="web_search_jit_fallback",
+                candidate_count=0,
+                knowledge_kind="web_search_unverified",
+                banner=WEB_SEARCH_BANNER,
+            )
 
-        from app.config import get_settings
-        settings = get_settings()
+        llm_fallback = try_general_knowledge_llm(
+            query=payload.query,
+            strategy="llm_fallback_empty_db",
+            candidate_count=0,
+        )
+        if llm_fallback:
+            return llm_fallback
 
-        if settings.LEGAL_HYBRID_AI_FALLBACK_ENABLED and settings.GEMINI_API_KEY:
-            try:
-                import httpx
-                model = settings.LEGAL_FALLBACK_GEMINI_MODEL or "gemini-2.0-flash"
-                api_key = settings.GEMINI_API_KEY
-                api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-                prompt = (
-                    "You are LegalMitra, an expert AI legal assistant specializing in Indian Law. "
-                    "A user has asked a question, but our local database of case laws and statutes is currently empty. "
-                    "Please answer the user's question based on your general knowledge of Indian Law. "
-                    "Maintain a formal, professional tone and cite relevant sections or acts where possible. "
-                    "Clarify that this answer is based on general legal knowledge as specific case documents were not found in the local repository.\n\n"
-                    f"User Question: {payload.query}"
-                )
-
-                body = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": settings.LEGAL_FALLBACK_MAX_TOKENS or 1000,
-                        "temperature": 0.2
-                    }
-                }
-
-                with httpx.Client(timeout=30) as client:
-                    resp = client.post(api_url, json=body)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        answer = data["candidates"][0]["content"]["parts"][0]["text"]
-                        return {
-                            "answer": answer,
-                            "citations": [],
-                            "strategy": f"llm_fallback_empty_db_{model}",
-                            "candidate_count": 0,
-                            "context": None,
-                            "is_fallback": True
-                        }
-            except Exception as e:
-                print(f"Fallback empty DB error: {e}")
-
-        return {
-            "answer": "I do not have enough indexed content to answer this question yet. Please ingest relevant documents first.",
-            "citations": [],
-            "strategy": effective_strategy,
-            "candidate_count": 0,
-            "context": [] if payload.include_context else None,
-        }
+        log_rag_refusal(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            query=payload.query,
+            reason="empty_index",
+            strategy=effective_strategy,
+        )
+        return insufficient_index_payload(
+            strategy=effective_strategy,
+            candidate_count=0,
+            include_context=payload.include_context,
+            reason="empty_index",
+        )
 
     meaningful_tokens = _meaningful_query_tokens(query_tokens)
 
@@ -701,58 +682,27 @@ async def query_knowledge(
 
     top = deduped
     if not top:
-        from app.config import get_settings
-        settings = get_settings()
+        llm_fallback = try_general_knowledge_llm(
+            query=payload.query,
+            strategy="llm_fallback",
+            candidate_count=len(scored),
+        )
+        if llm_fallback:
+            return llm_fallback
 
-        if settings.LEGAL_HYBRID_AI_FALLBACK_ENABLED and settings.GEMINI_API_KEY:
-            # Fallback to Gemini LLM if enabled and API key is present
-            try:
-                import httpx
-                model = settings.LEGAL_FALLBACK_GEMINI_MODEL or "gemini-2.0-flash"
-                api_key = settings.GEMINI_API_KEY
-                api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-                prompt = (
-                    "You are LegalMitra, an expert AI legal assistant specializing in Indian Law. "
-                    "A user has asked a question, but our local database of case laws and statutes is currently empty or does not have specific matches. "
-                    "Please answer the user's question based on your general knowledge of Indian Law. "
-                    "Maintain a formal, professional tone and cite relevant sections or acts where possible. "
-                    "Clarify that this answer is based on general legal knowledge as specific case documents were not found in the local repository.\n\n"
-                    f"User Question: {payload.query}"
-                )
-
-                body = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": settings.LEGAL_FALLBACK_MAX_TOKENS or 1000,
-                        "temperature": 0.2
-                    }
-                }
-
-                with httpx.Client(timeout=30) as client:
-                    resp = client.post(api_url, json=body)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        answer = data["candidates"][0]["content"]["parts"][0]["text"]
-                        return {
-                            "answer": answer,
-                            "citations": [],
-                            "strategy": f"llm_fallback_{model}",
-                            "candidate_count": len(scored),
-                            "context": None,
-                            "is_fallback": True
-                        }
-            except Exception as e:
-                # Log error and continue to return standard empty message
-                print(f"Fallback error: {e}")
-
-        return {
-            "answer": "I do not have enough indexed content to answer this question yet. Please ingest relevant documents first.",
-            "citations": [],
-            "strategy": effective_strategy,
-            "candidate_count": len(scored),
-            "context": [] if payload.include_context else None,
-        }
+        log_rag_refusal(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            query=payload.query,
+            reason="no_deduped_matches",
+            strategy=effective_strategy,
+        )
+        return insufficient_index_payload(
+            strategy=effective_strategy,
+            candidate_count=len(scored),
+            include_context=payload.include_context,
+            reason="no_deduped_matches",
+        )
 
     top_score = float(top[0].get("score") or 0.0)
     top_text = top[0].get("text") or ""
@@ -774,18 +724,24 @@ async def query_knowledge(
         overlap_insufficient = False
 
     if score_too_low or overlap_insufficient:
-        return {
-            "answer": "I do not have enough indexed content matching this question yet. Please ingest relevant documents for this topic.",
-            "citations": [],
-            "strategy": effective_strategy,
-            "candidate_count": len(scored),
-            "context": [] if payload.include_context else None,
-            "rejection_reason": (
-                "low_score" if score_too_low else "insufficient_term_overlap"
-            ),
-            "top_score": round(top_score, 4),
-            "overlap_ratio": round(overlap_ratio, 4),
-        }
+        reason = "low_score" if score_too_low else "insufficient_term_overlap"
+        log_rag_refusal(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            query=payload.query,
+            reason=reason,
+            strategy=effective_strategy,
+        )
+        return insufficient_index_payload(
+            strategy=effective_strategy,
+            candidate_count=len(scored),
+            include_context=payload.include_context,
+            reason=reason,
+            extra={
+                "top_score": round(top_score, 4),
+                "overlap_ratio": round(overlap_ratio, 4),
+            },
+        )
 
     # Per-item relevance filter: drop individual chunks whose text doesn't share
     # enough meaningful query tokens. Keeps answer lines and citation list in
@@ -805,60 +761,32 @@ async def query_knowledge(
         top = filtered_top
 
         if not top:
-            from app.config import get_settings
-            settings = get_settings()
+            llm_fallback = try_general_knowledge_llm(
+                query=payload.query,
+                strategy="llm_fallback_relevance_low",
+                candidate_count=len(scored),
+            )
+            if llm_fallback:
+                return llm_fallback
 
-            if settings.LEGAL_HYBRID_AI_FALLBACK_ENABLED and settings.GEMINI_API_KEY:
-                try:
-                    import httpx
-                    model = settings.LEGAL_FALLBACK_GEMINI_MODEL or "gemini-2.0-flash"
-                    api_key = settings.GEMINI_API_KEY
-                    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-                    prompt = (
-                        "You are LegalMitra, an expert AI legal assistant specializing in Indian Law. "
-                        "A user has asked a question, and while we found some documents, they did not have enough relevance overlap. "
-                        "Please answer the user's question based on your general knowledge of Indian Law. "
-                        "Maintain a formal, professional tone and cite relevant sections or acts where possible. "
-                        "Clarify that this answer is based on general legal knowledge as specific highly-relevant documents were not found in the local repository.\n\n"
-                        f"User Question: {payload.query}"
-                    )
-
-                    body = {
-                        "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {
-                            "maxOutputTokens": settings.LEGAL_FALLBACK_MAX_TOKENS or 1000,
-                            "temperature": 0.2
-                        }
-                    }
-
-                    with httpx.Client(timeout=30) as client:
-                        resp = client.post(api_url, json=body)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            answer = data["candidates"][0]["content"]["parts"][0]["text"]
-                            return {
-                                "answer": answer,
-                                "citations": [],
-                                "strategy": f"llm_fallback_relevance_low_{model}",
-                                "candidate_count": len(scored),
-                                "context": None,
-                                "is_fallback": True
-                            }
-                except Exception as e:
-                    print(f"Fallback relevance error: {e}")
-
-            return {
-                "answer": "I do not have enough indexed content matching this question yet. Please ingest relevant documents for this topic.",
-                "citations": [],
-                "strategy": effective_strategy,
-                "candidate_count": len(scored),
-                "context": [] if payload.include_context else None,
-                "rejection_reason": "all_items_filtered_low_overlap",
-                "top_score": round(top_score, 4),
-                "overlap_ratio": round(overlap_ratio, 4),
-                "dropped_for_relevance": dropped_for_relevance,
-            }
+            log_rag_refusal(
+                tenant_id=tenant_id,
+                app_key=app_key,
+                query=payload.query,
+                reason="all_items_filtered_low_overlap",
+                strategy=effective_strategy,
+            )
+            return insufficient_index_payload(
+                strategy=effective_strategy,
+                candidate_count=len(scored),
+                include_context=payload.include_context,
+                reason="all_items_filtered_low_overlap",
+                extra={
+                    "top_score": round(top_score, 4),
+                    "overlap_ratio": round(overlap_ratio, 4),
+                    "dropped_for_relevance": dropped_for_relevance,
+                },
+            )
 
     answer_lines = ["Based on the indexed legal knowledge base:"]
     for idx, item in enumerate(top, start=1):
@@ -895,5 +823,12 @@ async def query_knowledge(
         "strategy": effective_strategy,
         "candidate_count": len(scored),
         "context": context if payload.include_context else None,
+        "is_fallback": False,
+        "knowledge_kind": "source_backed_research",
+        "is_source_backed_research": True,
+        "human_review_required": True,
+        "advisory_notice": (
+            "This output is draft/advisory only. Verify citations against the original source."
+        ),
     }
 
