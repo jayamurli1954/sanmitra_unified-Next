@@ -26,9 +26,10 @@ from app.modules.legal_compat.constitutional_seed import (
     iter_ingest_requests,
     validate_seed_package,
 )
+from app.modules.legal_compat.tenancy import legalmitra_corpus_tenant_id, require_legalmitra_ingest_tenant
 from app.modules.rag.service import ensure_rag_indexes, ingest_document
 
-TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "seed-tenant-1").strip() or "seed-tenant-1"
+TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "").strip()
 APP_KEY = os.getenv("LEGAL_INGEST_APP_KEY", "legalmitra").strip() or "legalmitra"
 CREATED_BY = "constitutional-seed-ingest"
 
@@ -93,7 +94,7 @@ def main() -> None:
     parser.add_argument(
         "--tenant-id",
         default=TENANT_ID,
-        help="Target tenant_id (default seed-tenant-1 or LEGAL_INGEST_TENANT_ID).",
+        help="Target tenant_id (default DEMO_LEGAL_TENANT_ID or LEGAL_INGEST_TENANT_ID).",
     )
     parser.add_argument(
         "--app-key",
@@ -103,10 +104,13 @@ def main() -> None:
     args = parser.parse_args()
     if args.app_key.strip().lower() != "legalmitra":
         raise SystemExit("constitutional seed ingest is LegalMitra-only (app_key=legalmitra)")
+    tenant_id = require_legalmitra_ingest_tenant(
+        args.tenant_id.strip() or legalmitra_corpus_tenant_id()
+    )
     raise SystemExit(
         asyncio.run(
             _ingest(
-                tenant_id=args.tenant_id.strip(),
+                tenant_id=tenant_id,
                 app_key="legalmitra",
                 dry_run=bool(args.dry_run),
             )

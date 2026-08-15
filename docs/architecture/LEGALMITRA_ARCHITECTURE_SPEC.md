@@ -112,6 +112,9 @@ Tier-1 and Tier-2 constitutional doctrine/judgment **summaries** are in
 `scripts/ingest_legal_constitutional_seed.py` is run.  
 Statute PDF ingest (read-only source `D:\sanmitra-backend\data\legal_acts`) is documented in
 `docs/operations/LEGALMITRA_STAGE2_STATUTE_INGEST.md`.
+LegalMitra RAG ingest and the public acts catalog use `DEMO_LEGAL_TENANT_ID`
+(LEGAL org). They must not write to `seed-tenant-1` (MandirMitra temple seed).
+Local corpus rehome: `scripts/rehome_legalmitra_rag_corpus.py`.
 
 ---
 

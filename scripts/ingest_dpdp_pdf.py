@@ -7,11 +7,12 @@ import os
 sys.path.append(os.getcwd())
 
 from app.db.mongo import init_mongo, close_mongo
+from app.modules.legal_compat.tenancy import legalmitra_corpus_tenant_id
 from app.modules.rag.service import ingest_document, ensure_rag_indexes
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
 
 PDF_PATH = "d:/Documents/DPDP_Act.pdf"
-TENANT_ID = "seed-tenant-1"
+TENANT_ID = legalmitra_corpus_tenant_id()
 APP_KEY = "legalmitra"
 
 async def ingest_pdf():

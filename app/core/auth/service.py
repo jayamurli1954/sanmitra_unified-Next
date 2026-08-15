@@ -483,6 +483,7 @@ async def verify_mobile_otp(
     resolved_tenant = await resolve_self_service_tenant_id(
         requested_tenant_id=requested_tenant_id or None,
         onboarding_request_id=onboarding_request_id,
+        app_key=app_key,
     )
     await ensure_tenant_is_active(resolved_tenant)
 
@@ -682,6 +683,7 @@ async def login_google_user(
         requested_tenant_id=requested_tenant_id or None,
         onboarding_request_id=onboarding_request_id,
         email=email,
+        app_key=app_key,
     )
     await ensure_tenant_is_active(resolved_tenant)
 

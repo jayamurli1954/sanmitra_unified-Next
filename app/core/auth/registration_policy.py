@@ -9,6 +9,21 @@ from app.core.onboarding.service import get_onboarding_request
 
 PUBLIC_SELF_SERVICE_ROLES = frozenset({"operator", "viewer"})
 DEV_OPEN_REGISTRATION_TENANT_ID = "seed-tenant-1"
+LEGALMITRA_APP_KEY = "legalmitra"
+
+
+def open_registration_tenant_id(*, app_key: str | None, settings: Settings) -> str:
+    """Dev open-registration tenant depends on product app key.
+
+    MandirMitra keeps the temple seed tenant. LegalMitra must not.
+    """
+    key = str(app_key or "").strip().lower()
+    if key == LEGALMITRA_APP_KEY:
+        return (
+            str(getattr(settings, "DEMO_LEGAL_TENANT_ID", "") or "demo-legal-firm").strip()
+            or "demo-legal-firm"
+        )
+    return DEV_OPEN_REGISTRATION_TENANT_ID
 
 
 def assert_open_registration_allowed(settings: Settings | None = None) -> None:
@@ -59,6 +74,7 @@ async def resolve_self_service_tenant_id(
     onboarding_request_id: str | None = None,
     email: str | None = None,
     settings: Settings | None = None,
+    app_key: str | None = None,
 ) -> str:
     """Resolve tenant for public signup flows without client-controlled escalation."""
     settings = settings or get_settings()
@@ -69,11 +85,22 @@ async def resolve_self_service_tenant_id(
             email=email,
         )
 
-    requested = str(requested_tenant_id or "").strip()
-    if settings.ALLOW_OPEN_REGISTRATION and requested == DEV_OPEN_REGISTRATION_TENANT_ID:
-        return DEV_OPEN_REGISTRATION_TENANT_ID
+    if not settings.ALLOW_OPEN_REGISTRATION:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant assignment requires an approved onboarding request",
+        )
 
-    if settings.ALLOW_OPEN_REGISTRATION and not requested:
+    requested = str(requested_tenant_id or "").strip()
+    open_tenant = open_registration_tenant_id(app_key=app_key, settings=settings)
+    key = str(app_key or "").strip().lower()
+    if not requested or requested == open_tenant:
+        return open_tenant
+    # Older LegalMitra shells sent the temple seed tenant. Remap; do not assign
+    # LegalMitra signups onto MandirMitra.
+    if key == LEGALMITRA_APP_KEY and requested == DEV_OPEN_REGISTRATION_TENANT_ID:
+        return open_tenant
+    if requested == DEV_OPEN_REGISTRATION_TENANT_ID and key != LEGALMITRA_APP_KEY:
         return DEV_OPEN_REGISTRATION_TENANT_ID
 
     raise HTTPException(

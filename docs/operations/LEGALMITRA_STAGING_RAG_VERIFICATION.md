@@ -42,10 +42,12 @@ resume the same command (upserts are safe to re-run).
 RAG rows are **tenant-scoped**. Ingest must use the same `tenant_id` as the
 LegalMitra staging login that will run research.
 
-Default local ingest tenant is `seed-tenant-1`. On staging:
+Default local ingest tenant is `DEMO_LEGAL_TENANT_ID` (`demo-legal-firm`). On staging:
 
-- `seed-tenant-1` is the MandirMitra **TEMPLE** seed — do **not** convert it to LEGAL.
-- Prefer a dedicated LEGAL demo tenant (e.g. `demo-legalmitra`) with modules
+- `seed-tenant-1` is the MandirMitra **TEMPLE** seed — do **not** convert it to LEGAL
+  and do **not** ingest LegalMitra RAG into it.
+- Use the dedicated LEGAL demo tenant (`demo-legal-firm`, or `demo-legalmitra` if
+  that is the staging LegalMitra login tenant) with modules
   `legal`, `rag`, `compliance`, `audit` and app key `legalmitra`.
 - Platform owner (`tenant_id=platform`, `organization_type=BUSINESS`) cannot call
   `/api/v1/rag/query` — module gate returns 403.
@@ -80,13 +82,13 @@ $env:MONGO_DB_NAME = "<staging db name>"
 
 python scripts/verify_legalmitra_staging_rag.py `
   --mode corpus `
-  --tenant-id seed-tenant-1
+  --tenant-id demo-legal-firm
 ```
 
 **Pass:** `cgst` ≥ 150, `cgst_rules` ≥ 100, `income_tax_1961` ≥ 400 sections  
 **Fail / zeros:** continue to Step 2.
 
-Use the real staging LegalMitra `tenant_id` instead of `seed-tenant-1` when known.
+Use the real staging LegalMitra `tenant_id` (`demo-legal-firm` unless `/api/v1/auth/me` shows otherwise).
 
 ---
 
@@ -98,7 +100,7 @@ Point env at staging Mongo only for this session. Ingest one act at a time:
 $env:MONGODB_URI = "<staging Mongo URI>"
 $env:MONGO_DB_NAME = "<staging db name>"
 
-$tenant = "seed-tenant-1"   # replace with staging LegalMitra tenant_id
+$tenant = "demo-legal-firm"   # confirm against the LegalMitra staging login tenant_id
 $pdfDir = "D:\sanmitra-backend\data\legal_acts"
 
 # Part A first (most valuable for GST refund procedure)

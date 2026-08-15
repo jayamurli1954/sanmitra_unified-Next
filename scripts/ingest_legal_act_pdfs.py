@@ -11,11 +11,12 @@ import fitz  # PyMuPDF
 sys.path.append(os.getcwd())
 
 from app.db.mongo import close_mongo, init_mongo
+from app.modules.legal_compat.tenancy import legalmitra_corpus_tenant_id, require_legalmitra_ingest_tenant
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
 from app.modules.rag.service import ensure_rag_indexes, ingest_document
 
 
-TENANT_ID = "seed-tenant-1"
+TENANT_ID = require_legalmitra_ingest_tenant(legalmitra_corpus_tenant_id())
 APP_KEY = "legalmitra"
 CREATED_BY = "manual-act-ingest"
 PDF_DIR = Path("data/legal_acts")

@@ -11,6 +11,7 @@ from app.modules.rag.schemas import (
     RagQueryRequest,
     RagQueryResponse,
 )
+from app.modules.legal_compat.tenancy import LEGALMITRA_APP_KEY, legalmitra_corpus_tenant_id
 from app.modules.rag.service import ingest_document, list_documents, query_knowledge
 
 
@@ -64,10 +65,10 @@ async def get_ingested_acts_public(
     Perfect for carousel badges and public-facing act lists.
     Returns only act name and year for each ingested document.
     """
-    # For public endpoints, use the default tenant for the app_key
-    # LegalMitra uses tenant_id "seed-tenant-1"
-    tenant_id = "seed-tenant-1"
-    items = await list_documents(tenant_id=tenant_id, app_key=app_key, limit=200)
+    if str(app_key or "").strip().lower() != LEGALMITRA_APP_KEY:
+        return IngestedActsListResponse(acts=[], count=0)
+    tenant_id = legalmitra_corpus_tenant_id()
+    items = await list_documents(tenant_id=tenant_id, app_key=LEGALMITRA_APP_KEY, limit=200)
 
     # Extract unique acts from documents
     acts_dict = {}

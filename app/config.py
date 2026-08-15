@@ -355,6 +355,9 @@ class Settings:
         "on",
     }
     DEMO_LEGAL_TENANT_ID = os.getenv("DEMO_LEGAL_TENANT_ID", "demo-legal-firm")
+    # Optional ingest override. Empty falls back to DEMO_LEGAL_TENANT_ID.
+    # Must not be the MandirMitra temple seed (seed-tenant-1).
+    LEGAL_INGEST_TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "").strip()
     DEMO_LEGAL_ADMIN_EMAIL = os.getenv("DEMO_LEGAL_ADMIN_EMAIL", "legal.demo@sanmitra.local")
     # No default password — must be set explicitly when DEMO_LEGAL_BOOTSTRAP=true.
     DEMO_LEGAL_ADMIN_PASSWORD = os.getenv("DEMO_LEGAL_ADMIN_PASSWORD", "")

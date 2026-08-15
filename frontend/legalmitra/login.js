@@ -2,7 +2,6 @@ import { apiRequest, clearAccessToken, getAccessToken, setAccessToken } from "..
 
 const APP_KEY = "legalmitra";
 const SESSION_KEY = "LEGALMITRA_AUTH_SESSION";
-const DEFAULT_TENANT_ID = "seed-tenant-1";
 
 const statusNode = document.getElementById("login-status");
 const loginPanel = document.getElementById("login-panel");
@@ -157,7 +156,6 @@ async function registerUser() {
     const data = await postJson("/api/v1/auth/register-request", {
       full_name: fullName,
       email,
-      tenant_id: DEFAULT_TENANT_ID,
       role: "operator",
     });
     let message = "Activation link sent. Please check your email inbox.";

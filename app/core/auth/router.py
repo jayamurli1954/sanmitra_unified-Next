@@ -41,7 +41,7 @@ from app.core.auth.service import (
     send_mobile_otp,
     verify_mobile_otp,
 )
-from app.core.tenants.context import inject_app_key
+from app.core.tenants.context import get_app_key, inject_app_key
 from app.core.users.service import create_user, get_user_by_email
 from app.db.mongo import get_collection
 
@@ -329,6 +329,7 @@ async def register(payload: dict, request: Request):
         requested_tenant_id=payload.get("tenant_id"),
         onboarding_request_id=onboarding_request_id,
         email=email,
+        app_key=get_app_key(),
     )
 
     if not email or "@" not in email:
@@ -354,6 +355,7 @@ async def register_request(payload: dict, request: Request):
         requested_tenant_id=payload.get("tenant_id"),
         onboarding_request_id=onboarding_request_id,
         email=email,
+        app_key=get_app_key(),
     )
 
     if not email or "@" not in email:
@@ -365,7 +367,12 @@ async def register_request(payload: dict, request: Request):
         raise HTTPException(status_code=409, detail="User with this email already exists")
 
     settings = get_settings()
-    activation_meta = {"full_name": full_name, "tenant_id": tenant_id, "role": role}
+    activation_meta = {
+        "full_name": full_name,
+        "tenant_id": tenant_id,
+        "role": role,
+        "app_key": get_app_key(),
+    }
     if onboarding_request_id:
         activation_meta["onboarding_request_id"] = onboarding_request_id
     token = await _create_email_action_token(
@@ -439,6 +446,7 @@ async def activate_account(payload: dict, request: Request):
         requested_tenant_id=meta.get("tenant_id"),
         onboarding_request_id=meta.get("onboarding_request_id"),
         email=email,
+        app_key=str(meta.get("app_key") or get_app_key() or "").strip() or None,
     )
     role = normalize_public_self_service_role(meta.get("role"))
 

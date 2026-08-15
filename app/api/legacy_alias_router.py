@@ -12,7 +12,7 @@ from app.core.auth.schemas import LoginRequest, LogoutRequest, RefreshRequest, T
 from app.core.auth.service import login_user, logout_refresh_token, rotate_refresh_token
 from app.core.rate_limiting import limiter
 from app.core.users.service import create_user
-from app.core.tenants.context import resolve_app_key, resolve_tenant_id
+from app.core.tenants.context import get_app_key, resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 
@@ -281,6 +281,7 @@ async def legacy_auth_register(payload: dict, request: Request):
         requested_tenant_id=payload.get("tenant_id"),
         onboarding_request_id=onboarding_request_id,
         email=email,
+        app_key=get_app_key(),
     )
 
     if not email or "@" not in email:

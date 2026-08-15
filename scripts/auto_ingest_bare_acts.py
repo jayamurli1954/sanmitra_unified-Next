@@ -11,6 +11,7 @@ sys.path.append(os.getcwd())
 
 from app.config import get_settings
 from app.db.mongo import init_mongo, close_mongo
+from app.modules.legal_compat.tenancy import legalmitra_corpus_tenant_id
 from app.services.legal_web_search import legal_web_search
 from app.modules.rag.service import ingest_document, ensure_rag_indexes
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
@@ -103,7 +104,7 @@ async def ingest_act(act_name: str):
 
     try:
         result = await ingest_document(
-            tenant_id="seed-tenant-1",
+            tenant_id=legalmitra_corpus_tenant_id(),
             app_key="legalmitra",
             created_by="auto-sync-bot",
             payload=payload

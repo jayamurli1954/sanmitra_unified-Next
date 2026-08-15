@@ -8,7 +8,7 @@ Examples:
   # Corpus counts only (point MONGODB_URI at staging Atlas temporarily)
   $env:MONGODB_URI="..."
   $env:MONGO_DB_NAME="..."
-  python scripts/verify_legalmitra_staging_rag.py --mode corpus --tenant-id seed-tenant-1
+  python scripts/verify_legalmitra_staging_rag.py --mode corpus --tenant-id demo-legal-firm
 
   # API retrieval checks against staging (LEGAL_RAG may still be false; uses /rag/query)
   $env:STAGING_API_BASE_URL="https://sanmitra-unified-next-staging-sg.onrender.com"
@@ -212,7 +212,10 @@ def verify_api(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify LegalMitra staging RAG corpus/retrieval.")
     parser.add_argument("--mode", choices=("corpus", "api", "both"), default="both")
-    parser.add_argument("--tenant-id", default=os.getenv("LEGAL_INGEST_TENANT_ID", "seed-tenant-1"))
+    parser.add_argument(
+        "--tenant-id",
+        default=os.getenv("LEGAL_INGEST_TENANT_ID") or os.getenv("DEMO_LEGAL_TENANT_ID") or "demo-legal-firm",
+    )
     parser.add_argument("--app-key", default="legalmitra")
     parser.add_argument("--acts", nargs="+", default=list(DEFAULT_ACTS))
     parser.add_argument(
@@ -229,6 +232,11 @@ def main() -> int:
     )
     parser.add_argument("--json-out", default="", help="Optional path to write full JSON report.")
     args = parser.parse_args()
+    if str(args.tenant_id or "").strip() == "seed-tenant-1":
+        raise SystemExit(
+            "seed-tenant-1 is the MandirMitra temple seed. "
+            "Pass DEMO_LEGAL_TENANT_ID (demo-legal-firm)."
+        )
 
     report: dict[str, Any] = {"ok": True, "mode": args.mode}
 

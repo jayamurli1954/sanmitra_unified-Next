@@ -64,7 +64,6 @@ from app.core.billing.usage import check_and_increment_usage, ensure_terms_accep
 
 router = APIRouter(tags=["legal-compat"])
 
-_DEFAULT_TENANT_ID = "seed-tenant-1"
 _DEFAULT_APP_KEY = "legalmitra"
 
 # In-process live-intel pool + display history (refreshed every LIVE_INTEL_CACHE_TTL_HOURS).
@@ -142,11 +141,6 @@ class LegacyTemplateRenderRequest(BaseModel):
 
 class OfficialFormRenderRequest(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
-
-def _resolve_compat_tenant_id(x_tenant_id: str | None) -> str:
-    tenant_id = (x_tenant_id or "").strip()
-    return tenant_id or _DEFAULT_TENANT_ID
-
 
 def _resolve_compat_app_key(x_app_key: str | None) -> str:
     return resolve_app_key((x_app_key or _DEFAULT_APP_KEY).strip())

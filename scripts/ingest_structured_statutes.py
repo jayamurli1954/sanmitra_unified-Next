@@ -13,12 +13,14 @@ from uuid import uuid4
 sys.path.append(os.getcwd())
 
 from app.db.mongo import close_mongo, get_collection, init_mongo
+from app.modules.legal_compat.tenancy import legalmitra_corpus_tenant_id, require_legalmitra_ingest_tenant
 from app.modules.rag.providers import get_embedding_provider, get_embedding_strategy_name
 from app.modules.rag.service import _chunk_text, _tokenize, ensure_rag_indexes
 
 
 # Defaults; override via CLI --tenant-id / --app-key for staging demo tenants.
-TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "seed-tenant-1").strip() or "seed-tenant-1"
+# Must be a LEGAL tenant. Never the MandirMitra temple seed.
+TENANT_ID = os.getenv("LEGAL_INGEST_TENANT_ID", "").strip()
 APP_KEY = os.getenv("LEGAL_INGEST_APP_KEY", "legalmitra").strip() or "legalmitra"
 CREATED_BY = "manual-structured-statute-ingest"
 PDF_DIR = Path("data/legal_acts")
@@ -506,7 +508,7 @@ async def main() -> None:
     parser.add_argument(
         "--tenant-id",
         default=TENANT_ID,
-        help="Tenant that will own ingested statute rows (must match LegalMitra login tenant on staging).",
+        help="Tenant that will own ingested statute rows (default DEMO_LEGAL_TENANT_ID, not the temple seed).",
     )
     parser.add_argument("--app-key", default=APP_KEY, help="App key for ingested rows (default: legalmitra).")
     parser.add_argument(
@@ -534,7 +536,9 @@ async def main() -> None:
     if args.sleep_ms < 0 or args.pause_every < 0 or args.pause_seconds < 0:
         raise SystemExit("Throttle args must be >= 0")
 
-    TENANT_ID = str(args.tenant_id or "").strip() or "seed-tenant-1"
+    TENANT_ID = require_legalmitra_ingest_tenant(
+        str(args.tenant_id or "").strip() or legalmitra_corpus_tenant_id()
+    )
     APP_KEY = str(args.app_key or "").strip().lower() or "legalmitra"
 
     entries = _selected_entries(args)

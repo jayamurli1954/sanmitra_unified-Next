@@ -54,8 +54,9 @@ python scripts/ingest_structured_statutes.py --pdf-dir "D:\sanmitra-backend\data
 
 ## Safety
 
-- Tenant/app for ingest defaults to `seed-tenant-1` / `legalmitra`.
-  Override with `--tenant-id` / `--app-key` so staging demo users can retrieve rows.
+- Tenant/app for ingest defaults to `DEMO_LEGAL_TENANT_ID` (`demo-legal-firm`) /
+  `legalmitra`. Override with `--tenant-id` / `--app-key` or `LEGAL_INGEST_TENANT_ID`.
+  Never ingest LegalMitra RAG into `seed-tenant-1` (MandirMitra temple seed).
 - No writes to `D:\sanmitra-backend`.
 - No PostgreSQL / accounting changes.
 

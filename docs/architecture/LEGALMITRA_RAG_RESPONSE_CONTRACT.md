@@ -14,10 +14,9 @@ used only as secondary review lenses.
 
 - LegalMitra has RAG document ingest and query APIs under `/api/v1/rag`.
 - RAG documents and chunks are tenant-scoped by `tenant_id` and `app_key`.
-- Tenant-private document, chunk, and query paths must remain authenticated and
-  tenant/app scoped. Public metadata endpoints, such as an ingested-acts catalog,
-  may expose only non-confidential source metadata and must not expose
-  tenant-private chunks, prompts, matter data, or document content.
+- Public `/api/v1/rag/acts` reads the LegalMitra demo corpus tenant
+  (`DEMO_LEGAL_TENANT_ID`, default `demo-legal-firm`), not the MandirMitra
+  temple seed. Authenticated `/rag/query` uses the logged-in user's tenant.
 - `/api/v1/legal-research` hybrid responses now emit Stage 2 contract fields:
   `question`, `jurisdiction`, `answer_summary`, `citations`, `confidence`,
   `limitations`, `human_review_required`, `advisory_notice`,
