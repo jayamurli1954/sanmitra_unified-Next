@@ -26,9 +26,10 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
     q = _normalize_query(query)
 
     # Stage 2 GST refund / Section 54 family — authorized offline slice.
-    # Senior-counsel spine: Executive view → Direct answer → Relevant dates →
-    # Authorities → Risk areas → Practical note → Recommended next steps →
-    # Related provisions → Limitations → Disclaimer. No invented judgments.
+    # Senior-counsel spine: Executive view → Direct answer → Why it matters →
+    # Relevant dates → Authorities → Risk areas → Practical note →
+    # Professional insight → Recommended next steps → Related provisions →
+    # Limitations → Disclaimer. No invented judgments.
     if (
         ("section 54" in q or "s.54" in q or "s 54" in q)
         and ("gst" in q or "cgst" in q or "igst" in q or "refund" in q or "interest" in q)
@@ -72,6 +73,11 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "Tax Act, 2017, a refund application for tax, interest, or any other amount "
             "must ordinarily be filed within **two years from the relevant date** in the "
             "prescribed form and manner.\n\n"
+            "**Why this matters:** A refund claim filed even one day beyond the statutory "
+            "limitation period may be rejected as time-barred unless protected by a "
+            "specific statutory provision, judicial direction, or valid exclusion of "
+            "time. Accordingly, identifying the correct **relevant date** is usually "
+            "more important than merely confirming that the window is two years.\n\n"
             "**Relevant date (illustrative categories from the Explanation to Section 54)**\n\n"
             "| Refund / claim situation | Relevant date (statutory concept) |\n"
             "| --- | --- |\n"
@@ -124,6 +130,10 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "- Electronic cash-ledger refund situations and any special exclusion "
             "periods (if claimed) must be checked against current circulars / "
             "orders; this package does not invent those authorities.\n\n"
+            "**Professional insight:** In practice, most refund disputes do not arise "
+            "because taxpayers misunderstand the two-year rule. They arise because the "
+            "wrong refund category is selected, the wrong relevant date is assumed, or "
+            "supporting records do not establish the limitation computation.\n\n"
             "**Recommended next steps**\n"
             "1. Identify the exact refund category for the client's claim.\n"
             "2. Determine the applicable Explanation clause to Section 54.\n"

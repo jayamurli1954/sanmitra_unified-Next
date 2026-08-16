@@ -120,9 +120,11 @@ async def test_hybrid_refuses_fabricated_section_not_in_citations(
     assert "section 54" in body
     assert "direct answer" in body
     assert "executive view" in body
+    assert "why this matters" in body
     assert "authorities retrieved" in body
     assert "relevant date" in body
     assert "risk areas" in body
+    assert "professional insight" in body
     assert "recommended next steps" in body
     assert "two years" in body
 

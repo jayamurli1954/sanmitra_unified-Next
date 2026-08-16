@@ -118,8 +118,10 @@ async def test_hybrid_gst_section_54_offline_slice_is_citation_backed(
     assert "relevant date" in body
     assert "direct answer" in body
     assert "executive view" in body
+    assert "why this matters" in body
     assert "authorities retrieved" in body
     assert "practical note" in body
+    assert "professional insight" in body
     assert "related provisions" in body
     assert "risk areas" in body
     assert "recommended next steps" in body
