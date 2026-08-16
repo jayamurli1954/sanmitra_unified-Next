@@ -164,6 +164,10 @@ Remaining gaps after Stage 2 / 2.1 engineering exit:
   still incomplete for some external-provider paths.
 - Indian case-law citators and automatic judgment retrieval for
   “referred cases” (deferred; trust discipline preserved).
+  **Partial (2026-08-16):** starter curated §54 judgment digests
+  (`data/legal_seed/gst_section_54_judgments/`) retrieve-or-refuse via
+  `judgment_retrieval.py` when the offline §54 package is asked for cases.
+  Broad citators / limitation-specific corpus expansion remain deferred.
 - Broader claim segmentation beyond statute section numbers.
 - Deeper workspace UI beyond the research answer card trust affordances
   (Sources checked line is present when audit ran).

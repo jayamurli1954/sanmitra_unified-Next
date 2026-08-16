@@ -32,7 +32,9 @@ This is an **engineering** sign-off. The PRD commercial adoption gate (paying us
 ## 3. Explicitly deferred (not Stage 2/2.1 blockers)
 
 - Indian case-law existence / proposition citators  
-- Automatic judgment retrieval for “referred cases” queries (corpus ingest + retrieval depth)  
+- Automatic judgment retrieval for “referred cases” queries (corpus ingest + retrieval depth)
+  — **partial:** starter CGST §54 curated digests (VKC Footsteps) retrieve-or-refuse in the
+  offline package when cases are requested; broad corpus / citators still deferred  
 - Multi-sentence claim segmentation beyond statute section numbers  
 - Mismatch → safe rewrite loop (current policy: refuse or authorized offline fallthrough)  
 - Full Bare Act / judgment corpus expansion beyond GST/IT Stage 2 depth  

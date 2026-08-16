@@ -4,6 +4,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from app.modules.legal_compat.judgment_retrieval import (
+    citations_from_hits,
+    format_judgments_block,
+    query_wants_judgments,
+    retrieve_judgments,
+)
+
 _CLOSING_DISCLAIMER = (
     "\n\n---\n"
     "*Disclaimer: This note is prepared for the use of the instructing advocate only. "
@@ -36,30 +43,14 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
     ) or (
         "refund" in q and ("gst" in q or "cgst" in q or "igst" in q or "tax refund" in q)
     ):
-        wants_cases = any(
-            token in q
-            for token in (
-                "case",
-                "cases",
-                "judgment",
-                "judgement",
-                "judgments",
-                "judgements",
-                "precedent",
-                "referred",
-                "citation",
-                "authorities",
-            )
-        )
-        judgments_block = (
-            "**Judgments**\n"
-            "- No matching judgments retrieved from the current corpus for this query. "
-            "LegalMitra will not invent case names. Ingest or sync refund/limitation "
-            "judgments for this tenant, then retry with an explicit case-search request."
+        wants_cases = query_wants_judgments(q)
+        judgment_hits = (
+            retrieve_judgments(q, corpus_key="cgst_section_54", limit=3)
             if wants_cases
-            else "**Judgments**\n"
-            "- Not searched for this query. Ask for referred cases / judgments if you "
-            "need corpus-backed authorities."
+            else []
+        )
+        judgments_block = format_judgments_block(
+            judgment_hits, wants_cases=wants_cases
         )
         response = (
             "**Time Limit — CGST Act Section 54 Refund Claims**\n\n"
@@ -160,9 +151,7 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "CGST Act, CGST Rules, and circulars for the claim period."
         )
         now = _now_utc().isoformat()
-        return {
-            "response": response + _CLOSING_DISCLAIMER,
-            "citations": [
+        citations = [
                 {
                     "title": "Central Goods and Services Tax Act, 2017 - Section 54",
                     "source": "India Code / Central Act",
@@ -255,14 +244,20 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
                     "source_date": "2017-07-01",
                     "staleness_status": "possibly_stale",
                 },
-            ],
+            ]
+        if judgment_hits:
+            citations.extend(citations_from_hits(judgment_hits, retrieved_at=now))
+        return {
+            "response": response + _CLOSING_DISCLAIMER,
+            "citations": citations,
             "strategy": "offline_cgst_section_54_refund_fallback",
             "note": (
                 "Authorized Stage 2 GST Section 54 senior-counsel package "
                 "(executive view, relevant-date table, risk areas, next steps). "
-                "No invented judgments or circular numbers."
+                "Judgments only from curated corpus when requested; never invented."
             ),
             "dropped_citation_count": 0,
+            "judgment_hits": len(judgment_hits),
         }
 
     # Stage 2 Income-tax Act — Section 139 return-of-income family.

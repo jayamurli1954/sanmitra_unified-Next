@@ -1,0 +1,81 @@
+{
+  "id": "judgment_uoi_v_vkc_footsteps_2021",
+  "type": "curated_judgment_digest",
+  "corpus_key": "cgst_section_54",
+  "title": "Union of India & Ors. v. VKC Footsteps India Pvt. Ltd.",
+  "citation": "2021 INSC 469",
+  "alternative_citations": [
+    "[2021] 15 S.C.R. 169",
+    "AIR 2021 SC 4407",
+    "2022 (2) SCC 603",
+    "Civil Appeal No. 4810 of 2021 (lead)"
+  ],
+  "court_name": "Supreme Court of India",
+  "jurisdiction": "India (Central)",
+  "year": 2021,
+  "doc_date": "2021-09-13",
+  "practice_area": "Indirect Tax / GST",
+  "matter_type": "Refund of unutilised ITC — inverted duty structure",
+  "petitioner": "Union of India & Ors.",
+  "respondent": "VKC Footsteps India Pvt. Ltd.",
+  "topic_focus": "Section 54(3) inverted-duty refund and Rule 89(5) — not a Section 54(1) limitation holding",
+  "outcome": "Supreme Court upheld the statutory framework for inverted-duty refund of unutilised ITC under Section 54(3) and affirmed that Rule 89(5) is not ultra vires Section 54(3) in the manner contended; the Madras High Court view was affirmed and the contrary Gujarat High Court approach was not sustained.",
+  "ratio": [
+    "Refund of unutilised ITC under Section 54(3) is a matter of statutory prescription, not an open-ended constitutional entitlement to rewrite the refund scheme.",
+    "Clause (ii) of the first proviso to Section 54(3) operates as a substantive restriction for inverted-duty accumulation cases.",
+    "Rule 89(5) of the CGST Rules was upheld as consistent with Section 54(3) for the inverted-duty refund formula dispute before the Court (verify the precise formula and subsequent amendments for the claim period)."
+  ],
+  "key_holdings": [
+    {
+      "holding": "Section 54(3) inverted-duty refund regime interpreted with Rule 89(5); Rule 89(5) not struck down as ultra vires Section 54(3).",
+      "importance": "High"
+    },
+    {
+      "holding": "Does not decide the ordinary two-year limitation clock under Section 54(1) / Explanation relevant-date mapping.",
+      "importance": "Scope note"
+    }
+  ],
+  "related_provisions": [
+    "CGST Act s.54(3)",
+    "CGST Rules r.89(5)",
+    "CGST Act s.16",
+    "CGST Act s.49"
+  ],
+  "summary": "Leading Supreme Court decision on inverted-duty structure refund of unutilised ITC under Section 54(3) and the validity of Rule 89(5). Practitioners citing Section 54 refund authorities often start here for inverted-duty / formula disputes. It is not authority for computing the Section 54(1) two-year limitation period.",
+  "content_for_rag": "Union of India v. VKC Footsteps India Pvt. Ltd., decided 13 September 2021 (Civil Appeal No. 4810 of 2021 and connected matters; neutral citation 2021 INSC 469), concerns refund of unutilised input tax credit under Section 54(3) of the CGST Act, 2017 in inverted duty structure situations and the validity of Rule 89(5) of the CGST Rules. The Supreme Court treated refund under Section 54(3) as governed by statutory conditions and restrictions, including the proviso to Section 54(3). The Court upheld Rule 89(5) against the ultra vires challenge framed around exclusion of input services from the inverted-duty refund formula, affirming the Madras High Court approach and rejecting the contrary Gujarat High Court approach. This digest is advisory seed text for LegalMitra retrieval. It is not the full judgment. Verify holdings and any later amendments or clarifications before filing or advising. This decision is not a holding on the ordinary two-year limitation under Section 54(1).",
+  "source_type": "judgment",
+  "source_uri": "https://indiankanoon.org/doc/92024267/",
+  "language": "en",
+  "tags": [
+    "gst",
+    "cgst",
+    "section 54",
+    "section 54(3)",
+    "refund",
+    "inverted duty",
+    "unutilised itc",
+    "rule 89(5)",
+    "supreme court",
+    "vkc footsteps",
+    "referred cases",
+    "judgment"
+  ],
+  "match_tokens": [
+    "section 54",
+    "s.54",
+    "gst",
+    "cgst",
+    "refund",
+    "inverted",
+    "duty",
+    "itc",
+    "rule 89",
+    "89(5)",
+    "vkc",
+    "footsteps",
+    "unutilised",
+    "unutilized"
+  ],
+  "version": "1.0",
+  "priority": "high"
+}

@@ -1,0 +1,14 @@
+{
+  "corpus_key": "cgst_section_54",
+  "version": "1.0",
+  "title": "CGST Act Section 54 — curated judgment digests (starter)",
+  "advisory": "Curated digests only — not full judgments. Verify against the original reported decision before filing or advising. Expand this index deliberately; never invent case names.",
+  "judgments": [
+    {
+      "file": "union_of_india_v_vkc_footsteps_2021.json",
+      "id": "judgment_uoi_v_vkc_footsteps_2021",
+      "title": "Union of India v. VKC Footsteps India Pvt. Ltd.",
+      "year": 2021
+    }
+  ]
+}

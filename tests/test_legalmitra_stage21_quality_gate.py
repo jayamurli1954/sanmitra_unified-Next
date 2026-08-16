@@ -130,7 +130,7 @@ async def test_hybrid_refuses_fabricated_section_not_in_citations(
 
 
 @pytest.mark.asyncio
-async def test_offline_section_54_case_request_states_no_invented_judgments(
+async def test_offline_section_54_case_request_retrieves_corpus_judgments(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _mock_provider(**_kwargs):
@@ -148,6 +148,40 @@ async def test_offline_section_54_case_request_states_no_invented_judgments(
     )
 
     assert result["strategy"] == "offline_cgst_section_54_refund_fallback"
+    body = str(result.get("response") or "").lower()
+    assert "vkc footsteps" in body
+    assert "corpus-backed" in body
+    assert "will not invent" not in body  # hit path — refuse text not used
+    assert any(
+        (c.get("source_type") == "judgment")
+        and "vkc" in str(c.get("title") or "").lower()
+        for c in (result.get("citations") or [])
+    )
+    assert result["citation_audit"]["mismatch_count"] == 0
+    assert result["quality_gate"]["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_offline_section_54_case_request_refuses_when_corpus_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _mock_provider(**_kwargs):
+        raise AssertionError("Provider must not run for authorized GST offline slice")
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_provider)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_provider)
+    monkeypatch.setattr(
+        "app.modules.legal_compat.offline_fallbacks.retrieve_judgments",
+        lambda *_a, **_k: [],
+    )
+
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="CGST Section 54 GST refund referred cases",
+        rag_result={"answer": "", "strategy": "hybrid_hash", "citations": []},
+        background_tasks=None,
+    )
     body = str(result.get("response") or "").lower()
     assert "no matching judgments retrieved" in body
     assert "will not invent" in body
