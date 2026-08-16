@@ -27,6 +27,7 @@ import {
   readCourtFeeIntake,
 } from "./legal-tools-court-fee.js";
 import { createHistoryPanel } from "./history-panel.js";
+import { formatCitationAuditLine } from "./answer-trust.js";
 
 const APP_KEY = "legalmitra";
 const IS_CHAT_PAGE = document.body?.dataset?.legalPage === "chat";
@@ -323,16 +324,8 @@ function escapeHtml(value) {
 }
 
 const historyPanel = createHistoryPanel({
-  appKey: APP_KEY,
-  historyList,
-  historyStatus,
-  uploadHistoryList,
-  uploadHistoryStatus,
-  refreshButton: refreshHistoryButton,
-  queryInput,
-  answerPanel,
-  escapeHtml,
-  renderLegalAnswer: (...args) => renderLegalAnswer(...args),
+  appKey: APP_KEY, historyList, historyStatus, uploadHistoryList, uploadHistoryStatus,
+  refreshButton: refreshHistoryButton, queryInput, answerPanel, escapeHtml, renderLegalAnswer,
 });
 const { loadPersonalHistory, renderPersonalHistory, renderPersonalUploads } = historyPanel;
 
@@ -1244,6 +1237,7 @@ function renderLegalAnswer(result) {
   const limitationsHtml = limitations.length
     ? `<div class="legal-answer-limitations"><strong>Limitations</strong><ul>${limitations.slice(0, 4).map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul></div>`
     : "";
+  const auditHtml = formatCitationAuditLine(result.payload, escapeHtml);
   answerPanel.innerHTML = `
     <div class="legal-answer-card">
       <div class="legal-answer-topline">
@@ -1267,6 +1261,7 @@ function renderLegalAnswer(result) {
       </div>
       <div class="legal-answer-status" id="answer-action-status" aria-live="polite"></div>
       <div class="legal-answer-advisory">${escapeHtml(advisoryNotice)}</div>
+      ${auditHtml}
       <div class="legal-answer-body">${renderLegalMarkdown(response)}</div>
       ${citationHtml}
       ${limitationsHtml}

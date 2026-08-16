@@ -105,3 +105,13 @@ body[data-legal-page="chat"] .legal-query-box {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+.legal-answer-audit {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.4;
+}

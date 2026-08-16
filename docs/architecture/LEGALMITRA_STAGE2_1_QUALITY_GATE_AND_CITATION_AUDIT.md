@@ -2,8 +2,8 @@
 
 **Document type:** Architecture / foundation design note  
 **Product:** LegalMitra  
-**Status:** Stage 2.1 — statute-first Citation Audit + Quality Gate **implemented in code** (2026-08-01); case-law citator and claim rewriting remain planned  
-**Date:** 2026-08-01  
+**Status:** Stage 2.1 — statute-first Citation Audit + Quality Gate **complete for engineering exit** (2026-08-16); case-law citator and multi-claim rewriting remain deferred  
+**Date:** 2026-08-16  
 **Workspace:** `D:\sanmitra_unified-Next`
 
 This note turns two external *patterns* into a SanMitra-native Stage 2.1 plan:
@@ -137,9 +137,8 @@ Extend answer-feedback / ops metrics (no PII in aggregates):
 
 | Gap | Notes |
 | --- | --- |
-| No named Quality Gate module | Checks are scattered across hybrid path + response_contract |
-| No claim segmentation | BNSS verifier is special-case, not general claim audit |
-| No mismatch → rewrite loop | Failures should prefer refuse over silent rewrite of legal meaning |
+| Multi-sentence claim segmentation | Statute section audit shipped; broader legal-rule claims deferred |
+| Mismatch → rewrite loop | Failures prefer refuse or authorized offline fallthrough |
 | Case-law citator for India | Deferred; statute-section audit first (GST/IT) |
 | Provider-path audit evidence | External counsel still needs stronger `source_backed` audit fields (existing contract gap) |
 
@@ -175,7 +174,7 @@ Keep this **narrow**. Do not expand into LexEdge-style multi-agent product UI.
 | Criminal code registry | `data/legal_seed/india_criminal_code_crosswalk_v1.json` + `code_crosswalk.py` + `/legalmitra/code-crosswalk` API (**implemented**; curated seed) |
 | Wire-up | `app/modules/legal_compat/service.py` (`apply_research_trust_layers`) |
 | Tests | `tests/test_legalmitra_stage21_quality_gate.py`, statute verification tests |
-| Eval fixtures | `tests/fixtures/legalmitra_citation_mismatch_eval.json` (**planned**) |
+| Eval fixtures | `tests/fixtures/legalmitra_citation_mismatch_eval.json` + `scripts/run_legalmitra_stage21_mismatch_eval.py` (**implemented**) |
 
 ---
 
@@ -186,11 +185,14 @@ Stage 2.1 is **done** when:
 - Every research response either passes Quality Gate or is an explicit
   insufficient-sources / missing-jurisdiction refusal.
 - On the GST/IT eval set, fabricated section numbers in model output are
-  caught as `mismatch` ≥ **95%** of injected-fault cases (new fault fixtures).
+  caught as `mismatch` ≥ **95%** of injected-fault cases (fault fixtures).
 - Existing Stage 2 grounding bar remains ≥ **95%** (no regression).
 - `human_review_required` and advisory notice remain mandatory.
 - No third-party legal-agent repo is added as a dependency or submodule.
 - Staging RAG verification runbook still passes when RAG is enabled.
+
+**Engineering exit:** Accepted 2026-08-16 — see
+`docs/operations/LEGALMITRA_STAGE2_EXIT_SIGNOFF.md`.
 
 ---
 

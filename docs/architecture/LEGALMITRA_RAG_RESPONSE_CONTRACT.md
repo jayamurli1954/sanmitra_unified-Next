@@ -156,20 +156,21 @@ Use concise source-backed reasoning or rationale only.
 
 ## Gap
 
-Remaining gaps after Stage 2 foundation work:
+Remaining gaps after Stage 2 / 2.1 engineering exit:
 
-- Full CGST/IT PDF corpus ingest and section-primary chunking at production depth
-  (seed + authorized offline slice exist; broad Bare Act coverage does not).
+- Full CGST/IT PDF corpus depth and embeddings at production scale
+  (seed + authorized offline + staging ingest exist; expand continuously).
 - Citation `source_backed` / provider authorization audit evidence fields are
-  still incomplete for external-provider paths.
-- Dedicated prompt-regression suite coverage is partial (fixture eval exists for
-  GST Section 54 family; expand to Income Tax slice next).
-- UI affordances for confidence/limitations/human-review are present on the
-  research answer card; deeper workspace surfaces still pending.
-- Named **Quality Gate** + statute-first **Citation Audit** (claim ↔ source
-  tri-state outcomes) are planned as Stage 2.1 — see
-  `docs/architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md`.
-  Not yet implemented.
+  still incomplete for some external-provider paths.
+- Indian case-law citators and automatic judgment retrieval for
+  “referred cases” (deferred; trust discipline preserved).
+- Broader claim segmentation beyond statute section numbers.
+- Deeper workspace UI beyond the research answer card trust affordances
+  (Sources checked line is present when audit ran).
+
+Stage 2.1 Quality Gate + statute Citation Audit are **implemented** — see
+`docs/architecture/LEGALMITRA_STAGE2_1_QUALITY_GATE_AND_CITATION_AUDIT.md`
+and `docs/operations/LEGALMITRA_STAGE2_EXIT_SIGNOFF.md`.
 
 ## Implementation Sequence
 
