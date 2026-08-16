@@ -108,17 +108,19 @@ async def test_hybrid_refuses_fabricated_section_not_in_citations(
         background_tasks=None,
     )
 
-    # Hallucinated Section 999 must not ship. With RAG citations already present,
-    # do not paper over the audit refusal with a canned offline package — that
-    # hid corpus utilization when providers failed or fabricated under
-    # LEGAL_RAG_ENABLED=true. Prefer the Stage 2.1 insufficient_sources refusal.
-    assert result["strategy"] == "insufficient_sources"
-    assert result["confidence"] == "insufficient_sources"
+    # Hallucinated Section 999 must not ship. After audit refuse, authorized
+    # Stage 2 GST §54 offline is the last-resort grounded answer (weak RAG hits
+    # must not strand the researcher on bare insufficient_sources).
+    assert result["strategy"] == "offline_cgst_section_54_refund_fallback"
+    assert result["confidence"] != "insufficient_sources"
+    assert result["citation_audit"]["mismatch_count"] == 0
+    assert result["quality_gate"]["passed"] is True
     assert result["human_review_required"] is True
     body = str(result.get("response") or "").lower()
     assert "section 999" not in body
     assert "automatic refund" not in body
-    assert "file the claim under section 999" not in body
+    assert "section 54" in body
+    assert "two years" in body
 
 
 @pytest.mark.asyncio

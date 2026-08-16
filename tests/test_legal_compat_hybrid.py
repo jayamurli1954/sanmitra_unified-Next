@@ -424,6 +424,45 @@ async def test_hybrid_prefers_rag_extractive_over_offline_when_providers_fail(
 
 
 @pytest.mark.asyncio
+async def test_hybrid_uses_authorized_offline_when_rag_generation_fails_for_section_139(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Weak RAG hits must not block the authorized IT §139 who-must-file package."""
+
+    async def _mock_none(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+        return None
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_none)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_none)
+
+    # Citation passes relevance but has no usable extractive answer body.
+    citation = {
+        "index": 1,
+        "title": "Income-tax Act Section 139 fragment",
+        "snippet": "Section 139 return of income filing duties under the Income-tax Act.",
+        "reference": "[1] it act",
+        "legal_metadata": {"act": "Income-tax Act, 1961", "section": "139"},
+    }
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="Who must file a return of income under Income-tax Act Section 139?",
+        rag_result={
+            "answer": "",
+            "citations": [citation],
+            "strategy": "hybrid_hash",
+        },
+        background_tasks=None,
+    )
+
+    assert result["strategy"] == "offline_it_section_139_return_fallback"
+    body = result["response"].lower()
+    assert "who must file" in body or "every company or firm" in body
+    assert "section 139" in body
+    assert "insufficient sources" not in body
+
+
+@pytest.mark.asyncio
 async def test_hybrid_recovers_section_matched_citations_when_term_filter_drops(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

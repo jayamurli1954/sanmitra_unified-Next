@@ -737,3 +737,27 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
     }
 
 
+_AUTHORIZED_OFFLINE_LAST_RESORT = frozenset(
+    {
+        "offline_cgst_section_54_refund_fallback",
+        "offline_it_section_139_return_fallback",
+    }
+)
+
+
+def authorized_offline_after_generation_failure(
+    query: str, query_type: str
+) -> dict[str, Any] | None:
+    """Stage 2 §54/§139 packages only after RAG generation paths fail.
+
+    Weak RAG hits must not strand researchers on bare insufficient_sources when
+    an authorized offline slice exists.
+    """
+    offline = offline_legal_fallback(query, query_type)
+    if not offline:
+        return None
+    if offline.get("strategy") not in _AUTHORIZED_OFFLINE_LAST_RESORT:
+        return None
+    return offline
+
+

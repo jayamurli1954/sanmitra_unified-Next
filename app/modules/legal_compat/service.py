@@ -13,7 +13,10 @@ from app.modules.legal_compat.citation_relevance import (
     filter_citations_by_relevance as _filter_citations_by_relevance,
     rag_extractive_answer_usable as _rag_extractive_answer_usable,
 )
-from app.modules.legal_compat.offline_fallbacks import offline_legal_fallback as _offline_legal_fallback
+from app.modules.legal_compat.offline_fallbacks import (
+    authorized_offline_after_generation_failure as _authorized_offline_after_generation_failure,
+    offline_legal_fallback as _offline_legal_fallback,
+)
 from app.modules.legal_compat.quality_gate import (
     accept_or_record_audit_refusal,
     apply_research_trust_layers,
@@ -900,7 +903,40 @@ async def build_hybrid_legal_response(
             return apply_research_trust_layers(accepted_extractive)
 
     if audit_refusals:
+        authorized = _authorized_offline_after_generation_failure(
+            current_query, query_type
+        )
+        if authorized is not None:
+            _logger.warning(
+                "hybrid_response path=authorized_offline_after_audit_refuse "
+                "tenant=%s app=%s strategy=%s",
+                tenant_id,
+                app_key,
+                authorized["strategy"],
+            )
+            return _finalize_offline_or_payload(
+                question=current_query,
+                payload=authorized,
+                jurisdiction=jurisdiction or "India (Central)",
+            )
         return audit_refusals[-1]
+
+    authorized = _authorized_offline_after_generation_failure(
+        current_query, query_type
+    )
+    if authorized is not None:
+        _logger.warning(
+            "hybrid_response path=authorized_offline_after_provider_fail "
+            "tenant=%s app=%s strategy=%s",
+            tenant_id,
+            app_key,
+            authorized["strategy"],
+        )
+        return _finalize_offline_or_payload(
+            question=current_query,
+            payload=authorized,
+            jurisdiction=jurisdiction or "India (Central)",
+        )
 
     _logger.warning(
         "hybrid_response path=provider_unavailable tenant=%s app=%s (no API key or empty response)",
