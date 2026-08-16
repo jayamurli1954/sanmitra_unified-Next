@@ -9,6 +9,10 @@ import httpx
 from fastapi import BackgroundTasks
 
 from app.config import get_settings
+from app.modules.legal_compat.citation_relevance import (
+    filter_citations_by_relevance as _filter_citations_by_relevance,
+    rag_extractive_answer_usable as _rag_extractive_answer_usable,
+)
 from app.modules.legal_compat.offline_fallbacks import offline_legal_fallback as _offline_legal_fallback
 from app.modules.legal_compat.quality_gate import (
     accept_or_record_audit_refusal,
@@ -471,84 +475,6 @@ def _build_senior_counsel_prompt(
     return "\n\n".join(sections)
 
 
-# ─── Citation Relevance Filter ────────────────────────────────────────────────
-
-_LEGAL_QUERY_WORD_RE = re.compile(r"[a-z0-9]+")
-_LEGAL_QUERY_STOPWORDS = {
-    "what", "which", "when", "where", "who", "whom", "whose",
-    "why", "how", "is", "are", "was", "were", "do", "does",
-    "did", "can", "could", "should", "would", "please", "explain",
-    "briefly", "about", "tell", "me", "the", "for", "and", "with",
-    "a", "an", "of", "in", "on", "to", "by", "as", "or", "if",
-    "this", "that", "these", "those", "be", "been", "being",
-    "have", "has", "had", "from", "any", "all", "there", "here",
-    "under", "over", "into", "per", "via", "than", "then",
-}
-
-
-def _extract_meaningful_query_terms(query: str) -> set[str]:
-    tokens = set(_LEGAL_QUERY_WORD_RE.findall((query or "").lower()))
-    return {t for t in tokens if len(t) >= 4 and t not in _LEGAL_QUERY_STOPWORDS}
-
-
-def _citation_is_relevant(citation: dict[str, Any], query_terms: set[str]) -> tuple[bool, int, float]:
-    """Return (relevant, overlap_count, overlap_ratio) for a single citation.
-
-    Relevance rule: at least 2 meaningful query terms must appear in the citation's
-    snippet/title/legal-metadata/reference, OR at least 30% of meaningful terms
-    overlap.
-
-    If the citation exposes no inspectable content, treat as relevant (stubs in tests).
-    """
-    if not query_terms:
-        return (True, 0, 1.0)
-
-    haystack_parts: list[str] = []
-    for key in ("snippet", "title"):
-        val = citation.get(key)
-        if val:
-            haystack_parts.append(str(val))
-    legal_meta = citation.get("legal_metadata") or {}
-    if isinstance(legal_meta, dict):
-        for val in legal_meta.values():
-            if val:
-                haystack_parts.append(str(val))
-
-    haystack = " ".join(haystack_parts).lower().strip()
-    if not haystack:
-        return (True, 0, 1.0)
-
-    haystack_tokens = set(_LEGAL_QUERY_WORD_RE.findall(haystack))
-    hits = query_terms.intersection(haystack_tokens)
-    ratio = len(hits) / max(len(query_terms), 1)
-
-    relevant = len(hits) >= 2 or ratio >= 0.30
-    return (relevant, len(hits), ratio)
-
-
-def _filter_citations_by_relevance(
-    citations: list[dict[str, Any]], query: str
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Split citations into (relevant, dropped)."""
-    query_terms = _extract_meaningful_query_terms(query)
-    if not query_terms:
-        return (list(citations), [])
-
-    relevant: list[dict[str, Any]] = []
-    dropped: list[dict[str, Any]] = []
-    for c in citations:
-        is_rel, hits, ratio = _citation_is_relevant(c, query_terms)
-        if is_rel:
-            relevant.append(c)
-        else:
-            _logger.debug(
-                "citation_dropped title=%r hits=%d ratio=%.2f",
-                c.get("title") or c.get("reference") or "?", hits, ratio,
-            )
-            dropped.append(c)
-    return (relevant, dropped)
-
-
 # ─── Gemini API Call ──────────────────────────────────────────────────────────
 
 async def _call_gemini_text(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
@@ -934,18 +860,44 @@ async def build_hybrid_legal_response(
     if accepted is not None:
         return accepted
 
-    # Providers unavailable or Stage 2.1 audit refused — use authorized offline fallback.
-    offline_fallback = _offline_legal_fallback(current_query, query_type)
-    if offline_fallback:
+    # Providers unavailable or Stage 2.1 audit refused.
+    # When RAG already returned grounded citations, never replace them with canned
+    # offline packages (that hid corpus utilization even with LEGAL_RAG_ENABLED=true).
+    extractive = _rag_extractive_answer_usable(rag_result)
+    if extractive:
+        response_text = validate_legal_hallucinations(extractive)
+        response_text = normalize_verified_statute_mappings(response_text, current_query)
+        response_text += _CLOSING_DISCLAIMER
         _logger.warning(
-            "hybrid_response path=offline_fallback tenant=%s app=%s strategy=%s",
-            tenant_id, app_key, offline_fallback["strategy"],
+            "hybrid_response path=rag_extractive tenant=%s app=%s strategy=%s citations=%d",
+            tenant_id,
+            app_key,
+            rag_strategy,
+            len(relevant_citations),
         )
-        return _finalize_offline_or_payload(
-            question=current_query,
-            payload=offline_fallback,
-            jurisdiction=jurisdiction,
+        accepted_extractive = accept_or_record_audit_refusal(
+            finalize_research_response(
+                question=current_query,
+                response=response_text,
+                citations=relevant_citations,
+                strategy=f"{rag_strategy}_extractive",
+                provider=None,
+                note=(
+                    "Generation providers were unavailable; showing retrieved "
+                    "knowledge-base excerpts. Verify against the original statute text."
+                ),
+                dropped_citation_count=len(dropped_citations),
+                jurisdiction=jurisdiction,
+                confidence="medium",
+                limitations=[
+                    "Answer is extractive from indexed chunks, not a full counsel memo.",
+                    "Manual review of retrieved citations is required.",
+                ],
+            ),
+            last_refused=audit_refusals,
         )
+        if accepted_extractive is not None:
+            return apply_research_trust_layers(accepted_extractive)
 
     if audit_refusals:
         return audit_refusals[-1]

@@ -38,6 +38,7 @@ from app.config import get_settings
 from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
+from app.modules.legal_compat.citation_relevance import query_rag_for_legal_research
 from app.modules.legal_compat.service import build_hybrid_legal_response, extract_current_legal_query
 from app.modules.legal_compat.sync_queue import list_sync_queue
 from app.modules.legal_compat.template_catalog import get_template_library
@@ -1429,33 +1430,12 @@ async def legal_research(
 
     current_query = extract_current_legal_query(payload.query)
 
-    if settings.LEGAL_RAG_ENABLED:
-        rag_payload = RagQueryRequest(
-            query=current_query,
-            top_k=5,
-            max_candidates=300,
-            include_context=False,
-        )
-        try:
-            result = await query_knowledge(tenant_id=tenant_id, app_key=app_key, payload=rag_payload)
-        except Exception:
-            result = {
-                "answer": "",
-                "citations": [],
-                "strategy": "rag_unavailable",
-                "candidate_count": 0,
-                "context": None,
-            }
-    else:
-        # RAG disabled — skip local knowledge-base lookup. Hybrid research still
-        # refuses uncited generation unless an authorized offline slice matches.
-        result = {
-            "answer": "",
-            "citations": [],
-            "strategy": "rag_disabled",
-            "candidate_count": 0,
-            "context": None,
-        }
+    result = await query_rag_for_legal_research(
+        tenant_id=tenant_id,
+        app_key=app_key,
+        query=current_query,
+        enabled=settings.LEGAL_RAG_ENABLED,
+    )
 
     response = await build_hybrid_legal_response(
         tenant_id=tenant_id,

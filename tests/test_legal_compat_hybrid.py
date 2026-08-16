@@ -378,6 +378,90 @@ async def test_hybrid_returns_indian_acts_list_fallback_when_gemini_unavailable(
 
 
 @pytest.mark.asyncio
+async def test_hybrid_prefers_rag_extractive_over_offline_when_providers_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With RAG hits, provider failure must not swap in canned §54 offline packages."""
+
+    async def _mock_none(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+        return None
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_none)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_none)
+
+    citation = {
+        "index": 1,
+        "title": "CGST Act, 2017 — Section 54",
+        "snippet": (
+            "Section 54 provides for refund of tax. An application for refund "
+            "shall be made before the expiry of two years from the relevant date."
+        ),
+        "reference": "[1] CGST Act s.54",
+        "legal_metadata": {"act": "CGST Act, 2017", "section": "54"},
+    }
+    rag_result = {
+        "answer": (
+            "Based on the indexed legal knowledge base:\n"
+            "1. Refund applications under Section 54 must be filed within two years [1]"
+        ),
+        "citations": [citation],
+        "strategy": "hybrid_hash",
+    }
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="What is the time limit under CGST Section 54 for claiming a refund?",
+        rag_result=rag_result,
+        background_tasks=None,
+    )
+
+    assert result["strategy"] == "hybrid_hash_extractive"
+    assert result["strategy"] != "offline_cgst_section_54_refund_fallback"
+    assert "this offline package" not in result["response"].lower()
+    assert "two years" in result["response"].lower()
+    assert len(result["citations"]) == 1
+    assert result["citations"][0]["title"] == citation["title"]
+
+
+@pytest.mark.asyncio
+async def test_hybrid_recovers_section_matched_citations_when_term_filter_drops(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Section-number recovery keeps statute chunks when loose term overlap fails."""
+
+    async def _mock_gemini(*, prompt: str, max_tokens: int, temperature: float = 0.2) -> str | None:
+        return "Counsel memo grounded on recovered Section 54 chunk."
+
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_gemini)
+
+    citation = {
+        "index": 1,
+        "title": "Central Goods and Services Tax Act",
+        "snippet": "Section 54. Procedure as may be prescribed by rules.",
+        "reference": "[1] statute",
+        "legal_metadata": {"act": "CGST Act", "section": "54"},
+    }
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query=(
+            "What is the statutory limitation period for inverted duty "
+            "structure ITC claims under CGST Act Section 54"
+        ),
+        rag_result=_make_rag_result(
+            "Based on the indexed legal knowledge base:\n1. Section 54 procedure [1]",
+            [citation],
+        ),
+        background_tasks=None,
+    )
+
+    assert "Counsel memo grounded" in result["response"]
+    assert len(result["citations"]) >= 1
+    assert result["strategy"] != "insufficient_sources"
+
+
+@pytest.mark.asyncio
 async def test_hybrid_uses_deterministic_indian_acts_list_before_gemini(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

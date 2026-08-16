@@ -213,7 +213,7 @@ def accept_or_record_audit_refusal(
 ) -> dict[str, Any] | None:
     """Return trusted payload, or None when Stage 2.1 audit refuses generation.
 
-    Callers can then try the next provider / authorized offline slice instead of
+    Callers can then try the next provider / RAG extractive answer instead of
     short-circuiting on insufficient_sources (important when LEGAL_RAG_ENABLED=true).
     """
     trusted = apply_research_trust_layers(payload)
