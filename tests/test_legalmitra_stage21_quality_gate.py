@@ -108,11 +108,84 @@ async def test_hybrid_refuses_fabricated_section_not_in_citations(
         background_tasks=None,
     )
 
-    assert result["strategy"] == "insufficient_sources"
-    assert result["confidence"] == "insufficient_sources"
-    assert result["citation_audit"]["mismatch_count"] >= 1
+    # Hallucinated Section 999 must not ship. When an authorized Stage 2 offline
+    # slice exists (GST §54), fall through to that instead of leaving the user
+    # with a bare insufficient_sources refusal after LEGAL_RAG_ENABLED=true.
+    assert result["strategy"] == "offline_cgst_section_54_refund_fallback"
+    assert result["confidence"] != "insufficient_sources"
+    assert result["citation_audit"]["mismatch_count"] == 0
     assert result["quality_gate"]["passed"] is True
     assert result["human_review_required"] is True
+    body = str(result.get("response") or "").lower()
+    assert "section 54" in body
+    assert "direct answer" in body
+    assert "authorities retrieved" in body
+    assert "relevant date" in body
+    assert "two years" in body
+
+
+@pytest.mark.asyncio
+async def test_offline_section_54_case_request_states_no_invented_judgments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _mock_provider(**_kwargs):
+        raise AssertionError("Provider must not run for authorized GST offline slice")
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_provider)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_provider)
+
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="CGST Section 54 GST refund time limit and referred cases / judgments",
+        rag_result={"answer": "", "strategy": "hybrid_hash", "citations": []},
+        background_tasks=None,
+    )
+
+    assert result["strategy"] == "offline_cgst_section_54_refund_fallback"
+    body = str(result.get("response") or "").lower()
+    assert "no matching judgments retrieved" in body
+    assert "will not invent" in body
+    assert result["citation_audit"]["mismatch_count"] == 0
+    assert result["quality_gate"]["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_hybrid_audit_mismatch_without_offline_slice_still_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When no authorized offline slice matches, audit refusal must remain."""
+
+    async def _mock_claude(**_kwargs):
+        return None
+
+    async def _mock_gemini(**_kwargs):
+        return "Apply Section 777 of the mythical Compliance Act immediately."
+
+    monkeypatch.setattr(service, "_call_claude_legal_counsel_text", _mock_claude)
+    monkeypatch.setattr(service, "_call_gemini_text", _mock_gemini)
+
+    result = await service.build_hybrid_legal_response(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        query="Explain vakalatnama drafting etiquette for chamber practice in India",
+        rag_result={
+            "answer": "",
+            "strategy": "hybrid_hash",
+            "citations": [
+                {
+                    "title": "Advocate chamber practice note",
+                    "snippet": "Vakalatnama etiquette and client communication norms.",
+                    "score": 0.9,
+                }
+            ],
+        },
+        background_tasks=None,
+    )
+
+    assert result["strategy"] == "insufficient_sources"
+    assert result["confidence"] == "insufficient_sources"
+    assert int((result.get("citation_audit") or {}).get("mismatch_count") or 0) >= 1
 
 
 @pytest.mark.asyncio

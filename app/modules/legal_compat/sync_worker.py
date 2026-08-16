@@ -18,7 +18,7 @@ from pymongo import ReturnDocument
 
 from app.config import get_settings
 from app.db.mongo import get_collection, get_mongo_client
-from app.modules.legal_compat.service import RAG_SYNC_QUEUE_COLLECTION
+from app.modules.legal_compat.sync_queue import RAG_SYNC_QUEUE_COLLECTION
 from app.modules.rag.schemas import RagIngestRequest, RagLegalMetadata
 from app.modules.rag.service import ingest_document
 

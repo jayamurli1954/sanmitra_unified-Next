@@ -37,7 +37,7 @@ from app.modules.hr.service import ensure_hr_indexes
 from app.modules.housing.service import ensure_maintenance_indexes
 from app.modules.housing_compat.service import ensure_housing_compat_indexes
 from app.modules.legal.service import ensure_legal_indexes
-from app.modules.legal_compat.service import ensure_legal_compat_indexes
+from app.modules.legal_compat.sync_queue import ensure_legal_compat_indexes
 from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
 from app.modules.legal_compat.sync_worker import start_legal_sync_worker, stop_legal_sync_worker
 from app.modules.mandir_compat.reminder_worker import start_seva_reminder_worker, stop_seva_reminder_worker

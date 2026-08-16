@@ -204,3 +204,21 @@ def apply_research_trust_layers(payload: dict[str, Any]) -> dict[str, Any]:
         return enforce_quality_gate(refused, citation_audit=audit, skip_citation_presence=True)
 
     return enforce_quality_gate(payload, citation_audit=audit)
+
+
+def accept_or_record_audit_refusal(
+    payload: dict[str, Any],
+    *,
+    last_refused: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Return trusted payload, or None when Stage 2.1 audit refuses generation.
+
+    Callers can then try the next provider / authorized offline slice instead of
+    short-circuiting on insufficient_sources (important when LEGAL_RAG_ENABLED=true).
+    """
+    trusted = apply_research_trust_layers(payload)
+    if str(trusted.get("strategy") or "") != "insufficient_sources":
+        return trusted
+    last_refused.clear()
+    last_refused.append(trusted)
+    return None

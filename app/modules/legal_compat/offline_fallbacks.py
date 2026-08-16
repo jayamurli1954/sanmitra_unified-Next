@@ -26,36 +26,110 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
     q = _normalize_query(query)
 
     # Stage 2 GST refund / Section 54 family — authorized offline slice.
+    # Practitioner spine: Direct answer → Relevant dates → Authorities →
+    # Practice note → Related provisions → Disclaimer. No invented judgments.
     if (
         ("section 54" in q or "s.54" in q or "s 54" in q)
         and ("gst" in q or "cgst" in q or "igst" in q or "refund" in q or "interest" in q)
     ) or (
         "refund" in q and ("gst" in q or "cgst" in q or "igst" in q or "tax refund" in q)
     ):
-        response = (
-            "**GST Refund Under CGST Act, 2017 — Section 54 Family**\n\n"
-            "**Core provision:** Section 54 of the Central Goods and Services Tax Act, 2017 "
-            "governs refund of tax, interest, or other amounts.\n\n"
-            "**Key rules (verify current text/notifications before advising):**\n"
-            "1. **Application window:** A refund claim is ordinarily made within **two years** "
-            "from the relevant date (Section 54(1)).\n"
-            "2. **Form / process:** Refund applications are filed in the prescribed manner "
-            "(commonly through GST portal processes under the CGST Rules).\n"
-            "3. **Inverted duty structure:** Section **54(3)** addresses refund of unutilised "
-            "input tax credit in specified cases, including inverted duty structure, subject "
-            "to conditions, notifications, and exclusions.\n"
-            "4. **Unjust enrichment:** Refund is generally not paid to the applicant where "
-            "the incidence of tax has been passed on; Section **54(5)** and Section **54(8)** "
-            "and related rules address unjust enrichment and credit to the Consumer Welfare Fund "
-            "where applicable.\n"
-            "5. **Provisional refund:** Section **54(6)** provides for provisional refund in "
-            "eligible zero-rated supply cases, subject to conditions.\n"
-            "6. **Interest / withholding:** Related provisions and rules govern interest on "
-            "delayed refunds and circumstances where refund may be withheld.\n\n"
-            "**Limitations:** Exact eligibility, documentary checklist, notification carve-outs, "
-            "and portal procedure must be verified against the current CGST Act, CGST Rules, "
-            "and circulars for the claim period."
+        wants_cases = any(
+            token in q
+            for token in (
+                "case",
+                "cases",
+                "judgment",
+                "judgement",
+                "judgments",
+                "judgements",
+                "precedent",
+                "referred",
+                "citation",
+                "authorities",
+            )
         )
+        judgments_block = (
+            "**Judgments**\n"
+            "- No matching judgments retrieved from the current corpus for this query. "
+            "LegalMitra will not invent case names. Ingest or sync refund/limitation "
+            "judgments for this tenant, then retry with an explicit case-search request."
+            if wants_cases
+            else "**Judgments**\n"
+            "- Not searched for this query. Ask for referred cases / judgments if you "
+            "need corpus-backed authorities."
+        )
+        response = (
+            "**Time Limit — CGST Act Section 54 Refund Claims**\n\n"
+            "**Direct answer:** Under **Section 54(1)** of the Central Goods and Services "
+            "Tax Act, 2017, a refund application for tax, interest, or any other amount "
+            "must ordinarily be filed within **two years from the relevant date** in the "
+            "prescribed form and manner.\n\n"
+            "The limitation clock is only as useful as the correct **relevant date**. "
+            "That date is defined in the Explanation to Section 54 and varies by refund "
+            "category (verify the current statutory text before advising).\n\n"
+            "**Relevant date (illustrative categories from the Explanation to Section 54)**\n\n"
+            "| Refund / claim situation | Relevant date (statutory concept) |\n"
+            "| --- | --- |\n"
+            "| Excess tax / amount paid | Date of payment of such tax / amount |\n"
+            "| Export of goods | Date on which the ship / aircraft leaves India "
+            "(or goods leave India, for land/postal situations as specified) |\n"
+            "| Export of services | Date of receipt of payment in convertible foreign "
+            "exchange / permitted currency (or invoice-linked rule where advance is "
+            "received, as specified) |\n"
+            "| Supplies to SEZ / related zero-rated situations | As specified in the "
+            "Explanation for the relevant zero-rated supply class |\n"
+            "| Deemed exports | Date on which the return relating to such deemed "
+            "exports is furnished |\n"
+            "| Unutilised ITC refund under Section 54(3) | Due date for furnishing the "
+            "return under Section 39 for the period to which the claim relates "
+            "(as specified) |\n"
+            "| Finalisation of provisional assessment | Date of adjustment of tax after "
+            "the final assessment |\n"
+            "| Refund arising from judgment / decree / order / appeal | Date of "
+            "communication of such judgment / decree / order |\n\n"
+            "Treat the table as a **navigation aid** to the Explanation — confirm the "
+            "exact clause that applies to the claim type and period.\n\n"
+            "**Authorities Retrieved**\n\n"
+            "**Statute**\n"
+            "- Central Goods and Services Tax Act, 2017 — Section 54 (including "
+            "Section 54(1) limitation and the Explanation defining relevant date)\n\n"
+            "**Rules**\n"
+            "- Central Goods and Services Tax Rules, 2017 — refund procedure "
+            "(including Rule 89 family for applications / documentation; verify the "
+            "current rule text for the claim period)\n\n"
+            "**Circulars**\n"
+            "- None retrieved from the current corpus for this offline package.\n\n"
+            f"{judgments_block}\n\n"
+            "**Practical note**\n"
+            "- Compute limitation only after locking the refund category and the "
+            "matching Explanation clause.\n"
+            "- Confirm returns / tax payment trails that support the claim are on "
+            "record before counting the two-year window as closed.\n"
+            "- Portal / form defects and notification carve-outs can affect "
+            "eligibility and process even when limitation appears open — verify "
+            "current CGST Rules and CBIC guidance for the claim period.\n"
+            "- Electronic cash-ledger refund situations and any special exclusion "
+            "periods (if claimed) must be checked against current circulars / "
+            "orders; this package does not invent those authorities.\n\n"
+            "**Related provisions (secondary)**\n"
+            "- **Section 54(3)** — refund of unutilised input tax credit (ITC) in "
+            "specified cases (including inverted duty structure), subject to "
+            "conditions and notifications.\n"
+            "- **Section 54(5)** / **Section 54(8)** — unjust enrichment: where the "
+            "incidence of tax has been passed on, refund is generally not paid to "
+            "the applicant and may be credited to the Consumer Welfare Fund; "
+            "Section 54(8) lists situations where refund may still be paid to the "
+            "applicant (verify current text).\n"
+            "- **Section 54(6)** — provisional refund in eligible zero-rated "
+            "supply cases, subject to conditions.\n"
+            "- Interest / withholding — related statutory and rule provisions "
+            "govern delayed refunds and withholding situations.\n\n"
+            "**Limitations:** Exact eligibility, documentary checklist, notification "
+            "carve-outs, and portal procedure must be verified against the current "
+            "CGST Act, CGST Rules, and circulars for the claim period."
+        )
+        now = _now_utc().isoformat()
         return {
             "response": response + _CLOSING_DISCLAIMER,
             "citations": [
@@ -63,14 +137,74 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
                     "title": "Central Goods and Services Tax Act, 2017 - Section 54",
                     "source": "India Code / Central Act",
                     "source_type": "statute",
-                    "snippet": "Refund of tax and related amounts; two-year claim window from relevant date.",
+                    "snippet": (
+                        "Section 54(1): refund application ordinarily within two years "
+                        "from the relevant date. Explanation to Section 54 defines "
+                        "relevant date by claim category (exports, excess payment, "
+                        "deemed exports, provisional assessment, appellate orders, "
+                        "unutilised ITC under Section 54(3), and related classes)."
+                    ),
                     "legal_metadata": {
                         "jurisdiction": "India (Central)",
                         "act": "Central Goods and Services Tax Act, 2017",
                         "section": "54",
                         "citation": "CGST Act s.54",
                     },
-                    "retrieved_at": _now_utc().isoformat(),
+                    "retrieved_at": now,
+                    "source_date": "2017-07-01",
+                    "staleness_status": "possibly_stale",
+                },
+                {
+                    "title": "CGST Act, 2017 - Section 54(1) and Explanation (relevant date)",
+                    "source": "India Code / Central Act",
+                    "source_type": "statute",
+                    "snippet": (
+                        "Two-year limitation from relevant date; Explanation maps "
+                        "refund situations to the applicable relevant date."
+                    ),
+                    "legal_metadata": {
+                        "jurisdiction": "India (Central)",
+                        "act": "Central Goods and Services Tax Act, 2017",
+                        "section": "54",
+                        "citation": "CGST Act s.54(1) / Explanation",
+                    },
+                    "retrieved_at": now,
+                    "source_date": "2017-07-01",
+                    "staleness_status": "possibly_stale",
+                },
+                {
+                    "title": "CGST Rules, 2017 - Rule 89 (refund application)",
+                    "source": "CGST Rules",
+                    "source_type": "rule",
+                    "snippet": (
+                        "Prescribed manner, form, and documentary process for GST "
+                        "refund applications under the CGST Rules (Rule 89 family)."
+                    ),
+                    "legal_metadata": {
+                        "jurisdiction": "India (Central)",
+                        "act": "Central Goods and Services Tax Rules, 2017",
+                        "section": "89",
+                        "citation": "CGST Rules r.89",
+                    },
+                    "retrieved_at": now,
+                    "source_date": "2017-07-01",
+                    "staleness_status": "possibly_stale",
+                },
+                {
+                    "title": "CGST Act, 2017 - Section 39 (return due date reference for certain ITC refunds)",
+                    "source": "India Code / Central Act",
+                    "source_type": "statute",
+                    "snippet": (
+                        "Section 39 return due dates are referenced by the Explanation "
+                        "to Section 54 for certain unutilised ITC refund situations."
+                    ),
+                    "legal_metadata": {
+                        "jurisdiction": "India (Central)",
+                        "act": "Central Goods and Services Tax Act, 2017",
+                        "section": "39",
+                        "citation": "CGST Act s.39",
+                    },
+                    "retrieved_at": now,
                     "source_date": "2017-07-01",
                     "staleness_status": "possibly_stale",
                 },
@@ -85,28 +219,38 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
                         "section": "54(3)",
                         "citation": "CGST Act s.54(3)",
                     },
-                    "retrieved_at": _now_utc().isoformat(),
+                    "retrieved_at": now,
                     "source_date": "2017-07-01",
                     "staleness_status": "possibly_stale",
                 },
                 {
-                    "title": "CGST Act, 2017 - Section 54(5)/(8)",
+                    "title": "CGST Act, 2017 - Section 54(5)/(6)/(8)",
                     "source": "India Code / Central Act",
                     "source_type": "statute",
-                    "snippet": "Unjust enrichment / Consumer Welfare Fund treatment for certain refunds.",
+                    "snippet": (
+                        "Unjust enrichment: where tax incidence has been passed on, "
+                        "refund is generally not paid to the applicant; Section 54(8) "
+                        "lists situations where refund may be paid to the applicant; "
+                        "provisional refund for eligible zero-rated supplies under "
+                        "Section 54(6)."
+                    ),
                     "legal_metadata": {
                         "jurisdiction": "India (Central)",
                         "act": "Central Goods and Services Tax Act, 2017",
-                        "section": "54(5)/(8)",
-                        "citation": "CGST Act s.54(5)/(8)",
+                        "section": "54(5)/(6)/(8)",
+                        "citation": "CGST Act s.54(5)/(6)/(8)",
                     },
-                    "retrieved_at": _now_utc().isoformat(),
+                    "retrieved_at": now,
                     "source_date": "2017-07-01",
                     "staleness_status": "possibly_stale",
                 },
             ],
             "strategy": "offline_cgst_section_54_refund_fallback",
-            "note": "Authorized Stage 2 GST Section 54 family offline fallback; verify current amendments.",
+            "note": (
+                "Authorized Stage 2 GST Section 54 practitioner package "
+                "(direct answer + relevant-date table + authorities). "
+                "No invented judgments or circular numbers."
+            ),
             "dropped_citation_count": 0,
         }
 

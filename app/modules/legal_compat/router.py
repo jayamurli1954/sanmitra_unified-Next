@@ -38,7 +38,8 @@ from app.config import get_settings
 from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
 from app.db.mongo import get_collection
-from app.modules.legal_compat.service import build_hybrid_legal_response, extract_current_legal_query, list_sync_queue
+from app.modules.legal_compat.service import build_hybrid_legal_response, extract_current_legal_query
+from app.modules.legal_compat.sync_queue import list_sync_queue
 from app.modules.legal_compat.template_catalog import get_template_library
 from app.modules.legal_compat.template_drafting import render_guided_document_draft, render_template_document
 from app.modules.legal_compat.sync_worker import run_legal_sync_once

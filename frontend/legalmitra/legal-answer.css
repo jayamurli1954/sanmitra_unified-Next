@@ -18,6 +18,8 @@
 .legal-answer-mode.warn {
   color: #f3e6c2;
 }
+
+.legal-answer-advisory {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(231, 199, 124, 0.28);
@@ -48,4 +50,34 @@
   color: #cbd5e1;
   font-size: 13px;
   line-height: 1.45;
+}
+
+/* Chat workspace: keep Ask + follow-up visible; give the answer room to scroll. */
+body[data-legal-page="chat"] .legal-chat-panel {
+  min-height: calc(100dvh - 120px);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+body[data-legal-page="chat"] .legal-chat-panel .legal-answer-panel,
+body[data-legal-page="chat"] .legal-answer-panel {
+  max-height: none;
+  min-height: 280px;
+  height: min(62dvh, 720px);
+}
+
+body[data-legal-page="chat"] .legal-followup-box {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+}
+
+body[data-legal-page="chat"] .legal-query-box {
+  position: sticky;
+  top: 72px;
+  z-index: 4;
+  background: rgba(9, 15, 28, 0.92);
+  backdrop-filter: blur(8px);
+  padding-top: 6px;
+  padding-bottom: 6px;
 }

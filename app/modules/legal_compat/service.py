@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from uuid import uuid4
 
 import httpx
 from fastapi import BackgroundTasks
 
 from app.config import get_settings
-from app.db.mongo import get_collection
 from app.modules.legal_compat.offline_fallbacks import offline_legal_fallback as _offline_legal_fallback
-from app.modules.legal_compat.quality_gate import apply_research_trust_layers
+from app.modules.legal_compat.quality_gate import (
+    accept_or_record_audit_refusal,
+    apply_research_trust_layers,
+)
 from app.modules.legal_compat.response_contract import (
     finalize_research_response,
     insufficient_sources_response,
@@ -24,6 +24,7 @@ from app.modules.legal_compat.statute_normalize import (
     CANONICAL_STATUTE_CROSSWALK as _CANONICAL_STATUTE_CROSSWALK,
     normalize_verified_statute_mappings,
 )
+from app.modules.legal_compat.sync_queue import enqueue_auto_sync_query
 
 _logger = logging.getLogger(__name__)
 
@@ -31,8 +32,6 @@ _FABRICATION_REQUEST_RE = re.compile(
     r"\b(invent|fabricate|make up|hallucinate|fake citation|secretly|unpublished)\b",
     re.IGNORECASE,
 )
-
-RAG_SYNC_QUEUE_COLLECTION = "rag_sync_queue"
 
 _CLOSING_DISCLAIMER = (
     "\n\n---\n"
@@ -108,10 +107,6 @@ def extract_current_legal_query(query: str) -> str:
         return " ".join(question_lines[-1].split())
 
     return " ".join(value.split())
-
-
-def _query_hash(query: str) -> str:
-    return hashlib.sha256(_normalize_query(query).encode("utf-8")).hexdigest()
 
 
 def _rag_answer_insufficient(answer: str) -> bool:
@@ -871,55 +866,75 @@ async def build_hybrid_legal_response(
         temperature=0.12,
     )
 
-    if claude_answer and claude_answer.strip():
-        response_text = validate_legal_hallucinations(claude_answer.strip())
+    audit_refusals: list[dict[str, Any]] = []
+    rag_strategy = str(rag_result.get("strategy") or "rag")
+
+    def _try_model_answer(
+        *,
+        path: str,
+        answer: str | None,
+        provider: str,
+        strategy_suffix: str,
+    ) -> dict[str, Any] | None:
+        if not answer or not answer.strip():
+            return None
+        response_text = validate_legal_hallucinations(answer.strip())
         response_text = normalize_verified_statute_mappings(response_text, current_query)
         response_text += _CLOSING_DISCLAIMER
         _logger.info(
-            "hybrid_response path=claude_legal_counsel tenant=%s app=%s format=%s response_len=%d",
-            tenant_id, app_key, format_mode, len(response_text),
+            "hybrid_response path=%s tenant=%s app=%s format=%s response_len=%d",
+            path,
+            tenant_id,
+            app_key,
+            format_mode,
+            len(response_text),
         )
-        return apply_research_trust_layers(
+        accepted = accept_or_record_audit_refusal(
             finalize_research_response(
                 question=current_query,
                 response=response_text,
                 citations=relevant_citations,
-                strategy=f"{str(rag_result.get('strategy') or 'rag')}_claude_legal_counsel",
-                provider="claude_legal_counsel",
+                strategy=f"{rag_strategy}_{strategy_suffix}",
+                provider=provider,
                 note=None,
                 dropped_citation_count=len(dropped_citations),
                 jurisdiction=jurisdiction,
-            )
+            ),
+            last_refused=audit_refusals,
         )
+        if accepted is None:
+            _logger.warning(
+                "hybrid_response path=%s_audit_refused tenant=%s app=%s; trying next fallback",
+                path,
+                tenant_id,
+                app_key,
+            )
+        return accepted
+
+    accepted = _try_model_answer(
+        path="claude_legal_counsel",
+        answer=claude_answer,
+        provider="claude_legal_counsel",
+        strategy_suffix="claude_legal_counsel",
+    )
+    if accepted is not None:
+        return accepted
 
     gemini_answer = await _call_gemini_text(
         prompt=prompt,
         max_tokens=max(settings.LEGAL_FALLBACK_MAX_TOKENS, 4000),
         temperature=0.15,
     )
+    accepted = _try_model_answer(
+        path="gemini",
+        answer=gemini_answer,
+        provider="gemini",
+        strategy_suffix="gemini",
+    )
+    if accepted is not None:
+        return accepted
 
-    if gemini_answer and gemini_answer.strip():
-        response_text = validate_legal_hallucinations(gemini_answer.strip())
-        response_text = normalize_verified_statute_mappings(response_text, current_query)
-        response_text += _CLOSING_DISCLAIMER
-        _logger.info(
-            "hybrid_response path=gemini tenant=%s app=%s format=%s response_len=%d",
-            tenant_id, app_key, format_mode, len(response_text),
-        )
-        return apply_research_trust_layers(
-            finalize_research_response(
-                question=current_query,
-                response=response_text,
-                citations=relevant_citations,
-                strategy=f"{str(rag_result.get('strategy') or 'rag')}_gemini",
-                provider="gemini",
-                note=None,
-                dropped_citation_count=len(dropped_citations),
-                jurisdiction=jurisdiction,
-            )
-        )
-
-    # Providers unavailable — use authorized offline fallback when available.
+    # Providers unavailable or Stage 2.1 audit refused — use authorized offline fallback.
     offline_fallback = _offline_legal_fallback(current_query, query_type)
     if offline_fallback:
         _logger.warning(
@@ -932,12 +947,15 @@ async def build_hybrid_legal_response(
             jurisdiction=jurisdiction,
         )
 
+    if audit_refusals:
+        return audit_refusals[-1]
+
     _logger.warning(
         "hybrid_response path=provider_unavailable tenant=%s app=%s (no API key or empty response)",
         tenant_id, app_key,
     )
     return apply_research_trust_layers(
-    finalize_research_response(
+        finalize_research_response(
             question=current_query,
             response=(
                 "**Advisory Unavailable**\n\n"
@@ -959,86 +977,3 @@ async def build_hybrid_legal_response(
             ],
         )
     )
-
-
-# ─── Index & Queue Management ─────────────────────────────────────────────────
-
-async def ensure_legal_compat_indexes() -> None:
-    queue = get_collection(RAG_SYNC_QUEUE_COLLECTION)
-    await queue.create_index([("tenant_id", 1), ("app_key", 1), ("status", 1), ("created_at", -1)])
-    await queue.create_index([("status", 1), ("updated_at", 1)])
-    await queue.create_index(
-        [("tenant_id", 1), ("app_key", 1), ("query_hash", 1), ("status", 1)],
-        unique=True,
-        partialFilterExpression={"status": "pending"},
-    )
-
-
-async def enqueue_auto_sync_query(*, tenant_id: str, app_key: str, query: str, reason: str) -> None:
-    settings = get_settings()
-    if not settings.RAG_AUTO_SYNC_ENABLED:
-        return
-
-    normalized_query = _normalize_query(query)
-    if not normalized_query:
-        return
-
-    queue = get_collection(RAG_SYNC_QUEUE_COLLECTION)
-    now = _now_utc()
-    doc = {
-        "job_id": str(uuid4()),
-        "tenant_id": tenant_id,
-        "app_key": app_key,
-        "query": query.strip(),
-        "normalized_query": normalized_query,
-        "query_hash": _query_hash(query),
-        "reason": reason,
-        "status": "pending",
-        "attempt_count": 0,
-        "last_error": None,
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    await queue.update_one(
-        {
-            "tenant_id": tenant_id,
-            "app_key": app_key,
-            "query_hash": doc["query_hash"],
-            "status": "pending",
-        },
-        {
-            "$setOnInsert": doc,
-            "$set": {"last_seen_at": now},
-        },
-        upsert=True,
-    )
-
-
-async def list_sync_queue(
-    *, tenant_id: str, app_key: str, status: str = "pending", limit: int = 50
-) -> list[dict[str, Any]]:
-    queue = get_collection(RAG_SYNC_QUEUE_COLLECTION)
-    status_value = (status or "pending").strip().lower()
-    cursor = (
-        queue.find({"tenant_id": tenant_id, "app_key": app_key, "status": status_value})
-        .sort("updated_at", -1)
-        .limit(limit)
-    )
-
-    items: list[dict[str, Any]] = []
-    async for doc in cursor:
-        items.append(
-            {
-                "job_id": str(doc.get("job_id") or ""),
-                "query": str(doc.get("query") or ""),
-                "reason": str(doc.get("reason") or ""),
-                "status": str(doc.get("status") or "pending"),
-                "attempt_count": int(doc.get("attempt_count") or 0),
-                "last_error": doc.get("last_error"),
-                "created_at": doc.get("created_at"),
-                "updated_at": doc.get("updated_at"),
-            }
-        )
-
-    return items
