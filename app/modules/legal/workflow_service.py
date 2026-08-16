@@ -104,7 +104,7 @@ def _scope(*, tenant_id: str, app_key: str) -> dict[str, str]:
 
 
 def _require_enabled() -> None:
-    if not getattr(get_settings(), "LEGALMITRA_AGENTIC_ENABLED", True):
+    if not getattr(get_settings(), "LEGALMITRA_AGENTIC_ENABLED", False):
         raise WorkflowDisabledError("LegalMitra agentic workflows are disabled")
 
 

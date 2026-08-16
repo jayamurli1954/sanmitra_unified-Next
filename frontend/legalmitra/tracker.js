@@ -463,25 +463,29 @@ function renderWorkflowRun() {
     stepsEl.appendChild(li);
   });
 
+  const addBtn = (label, onClick) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", onClick);
+    actionsEl.appendChild(btn);
+  };
   const awaiting = steps.find((s) => s.status === "awaiting_human");
   if (awaiting) {
-    const approve = document.createElement("button");
-    approve.type = "button";
-    approve.textContent = `Approve ${awaiting.step_key}`;
-    approve.addEventListener("click", () => approveWorkflowStep(run.run_id, awaiting.step_id));
-    const reject = document.createElement("button");
-    reject.type = "button";
-    reject.textContent = `Reject ${awaiting.step_key}`;
-    reject.addEventListener("click", () => rejectWorkflowStep(run.run_id, awaiting.step_id));
-    actionsEl.append(approve, reject);
+    addBtn(`Approve ${awaiting.step_key}`, () => approveWorkflowStep(run.run_id, awaiting.step_id));
+    addBtn(`Reject ${awaiting.step_key}`, () => rejectWorkflowStep(run.run_id, awaiting.step_id));
   }
-
+  const retryable = steps.find(
+    (s) =>
+      s.status === "rejected" ||
+      s.status === "failed" ||
+      (s.status === "awaiting_human" && s.failure_class === "requires_human"),
+  );
+  const open = run.status !== "cancelled" && run.status !== "completed";
+  if (retryable && open) addBtn(`Retry ${retryable.step_key}`, () => retryWorkflowStep(run.run_id, retryable.step_id));
+  if (open) addBtn("Cancel run", () => cancelWorkflowRun(run.run_id));
   if (run.status === "completed" && !run.ready_to_file) {
-    const mark = document.createElement("button");
-    mark.type = "button";
-    mark.textContent = "Mark ready to file (does not file)";
-    mark.addEventListener("click", () => markReadyToFile(run.run_id));
-    actionsEl.appendChild(mark);
+    addBtn("Mark ready to file (does not file)", () => markReadyToFile(run.run_id));
   }
 }
 
@@ -549,9 +553,7 @@ async function startRecommendedWorkflow(item, triggerButton = null) {
   renderWorkflowRun();
   document.getElementById("workflow-run-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-
 function workflowErrorDetail(result) {
-  let detail = `HTTP ${result?.status || 0}`;
   const payload = result?.payload;
   if (typeof payload === "string" && payload.trim()) return payload;
   if (payload && typeof payload === "object") {
@@ -564,71 +566,69 @@ function workflowErrorDetail(result) {
     if (payload.message) return String(payload.message);
     return JSON.stringify(payload);
   }
-  return detail;
+  return `HTTP ${result?.status || 0}`;
 }
 
-async function approveWorkflowStep(runId, stepId) {
+function workflowStepUrl(runId, stepId, action) {
+  return `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/${action}`;
+}
+
+async function runWorkflowMutation(busyText, failText, path, opts = {}) {
   const statusEl = document.getElementById("workflow-run-status");
-  if (statusEl) statusEl.textContent = "Approving step…";
-  const result = await apiRequest(
-    APP_KEY,
-    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/approve`,
-    { method: "POST", timeoutMs: 45000 },
-  );
+  if (statusEl) statusEl.textContent = busyText;
+  const result = await apiRequest(APP_KEY, path, { method: "POST", timeoutMs: 45000, ...opts });
   if (!result?.ok) {
-    if (statusEl) {
-      statusEl.textContent = `Could not approve step: ${workflowErrorDetail(result)}`;
-    }
+    if (statusEl) statusEl.textContent = `${failText}: ${workflowErrorDetail(result)}`;
     return;
   }
   activeWorkflowRun = result.payload;
   renderWorkflowRun();
+}
+
+async function approveWorkflowStep(runId, stepId) {
+  await runWorkflowMutation(
+    "Approving step…",
+    "Could not approve step",
+    workflowStepUrl(runId, stepId, "approve"),
+  );
 }
 
 async function rejectWorkflowStep(runId, stepId) {
   const reason = window.prompt("Rejection reason (required for audit):", "Needs revision");
   if (!reason || reason.trim().length < 2) return;
-  const statusEl = document.getElementById("workflow-run-status");
-  if (statusEl) statusEl.textContent = "Rejecting step…";
-  const result = await apiRequest(
-    APP_KEY,
-    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/reject`,
-    {
-      method: "POST",
-      timeoutMs: 20000,
-      body: JSON.stringify({ reason: reason.trim() }),
-    },
+  await runWorkflowMutation(
+    "Rejecting step…",
+    "Could not reject step",
+    workflowStepUrl(runId, stepId, "reject"),
+    { timeoutMs: 20000, body: JSON.stringify({ reason: reason.trim() }) },
   );
-  if (!result?.ok) {
-    if (statusEl) {
-      statusEl.textContent = `Could not reject step: ${workflowErrorDetail(result)}`;
-    }
-    return;
-  }
-  activeWorkflowRun = result.payload;
-  renderWorkflowRun();
+}
+
+async function retryWorkflowStep(runId, stepId) {
+  await runWorkflowMutation(
+    "Retrying step…",
+    "Could not retry step",
+    workflowStepUrl(runId, stepId, "retry"),
+    { body: JSON.stringify({}) },
+  );
+}
+
+async function cancelWorkflowRun(runId) {
+  await runWorkflowMutation(
+    "Cancelling run…",
+    "Could not cancel run",
+    `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/cancel`,
+    { timeoutMs: 15000, body: JSON.stringify({}) },
+  );
 }
 
 async function markReadyToFile(runId) {
-  const statusEl = document.getElementById("workflow-run-status");
-  if (statusEl) statusEl.textContent = "Marking ready to file…";
-  const result = await apiRequest(
-    APP_KEY,
+  await runWorkflowMutation(
+    "Marking ready to file…",
+    "Could not mark ready to file",
     `/api/v1/legal/workflows/runs/${encodeURIComponent(runId)}/ready-to-file`,
-    {
-      method: "POST",
-      timeoutMs: 15000,
-      body: JSON.stringify({ ready_to_file: true, confirm: true }),
-    },
+    { timeoutMs: 15000, body: JSON.stringify({ ready_to_file: true, confirm: true }) },
   );
-  if (!result?.ok) {
-    if (statusEl) {
-      statusEl.textContent = `Could not mark ready to file: ${workflowErrorDetail(result)}`;
-    }
-    return;
-  }
-  activeWorkflowRun = result.payload;
-  renderWorkflowRun();
 }
 
 async function loadMorningBrief(forceRefresh) {

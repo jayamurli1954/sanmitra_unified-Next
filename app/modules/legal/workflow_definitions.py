@@ -104,9 +104,18 @@ WORKFLOW_DEFINITIONS: dict[str, dict[str, Any]] = {
 }
 
 TEMPLATE_QUERY_SEEDS: dict[str, str] = {
-    "general": "Summarize applicable Indian legal issues and next procedural steps for this matter.",
-    "gst_notice": "GST show-cause or demand notice response issues under CGST Act with citations.",
-    "income_tax_notice": "Income-tax notice response issues under Income Tax Act 1961 section 139 family.",
+    "general": (
+        "Summarize applicable Indian legal issues and next procedural steps "
+        "for this matter under Indian law with citations where available."
+    ),
+    "gst_notice": (
+        "CGST Act Section 54 GST refund time limit and GST show-cause or demand "
+        "notice response issues under CGST Act for India with citations."
+    ),
+    "income_tax_notice": (
+        "Income Tax Act 1961 Section 139 return filing and notice response "
+        "issues for India with citations."
+    ),
 }
 
 TEMPLATE_DOC_CHECKLIST: dict[str, list[str]] = {

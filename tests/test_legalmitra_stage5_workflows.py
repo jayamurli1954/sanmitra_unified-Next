@@ -225,9 +225,13 @@ async def test_prepare_matter_response_e2e_with_human_gates(fake_db):
     research_art = next(
         a for a in arts["items"] if a["artifact_type"] == "research_response"
     )
-    assert research_art["payload"].get("citations") == []
+    assert research_art["payload"].get("stage2_contract") is True
+    assert research_art["payload"].get("human_review_required") is True
     limitations = " ".join(research_art["payload"].get("limitations") or []).lower()
-    assert "fabricated" in limitations or "invent" in limitations
+    assert "stage 2" in limitations or "cite" in limitations or "fabricat" in limitations
+    # Stage 2 may return authorized offline citations; never invent empty "fake" cites.
+    citations = research_art["payload"].get("citations") or []
+    assert isinstance(citations, list)
 
     run = await workflows.approve_workflow_step(
         tenant_id="tenant-a",
@@ -335,6 +339,48 @@ async def test_reject_and_retry_creates_new_attempt(fake_db):
     assert research2["attempt"] == 2
     assert research2["status"] == "awaiting_human"
     assert run["retry_count"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_permanent_failure_cannot_be_retried(fake_db, monkeypatch):
+    async def _permanent(**_kwargs):
+        return {
+            "artifact_type": "research_response",
+            "payload": {
+                "strategy": "insufficient_sources",
+                "answer": "Permanent research failure for test",
+                "citations": [],
+                "human_review_required": True,
+                "stage2_contract": True,
+            },
+            "sources": [],
+            "confidence": 0.1,
+            "human_review_required": True,
+            "failure_class": "permanent",
+            "error": "permanent test failure",
+            "force_awaiting_human": False,
+        }
+
+    monkeypatch.setitem(workflows.ADAPTER_MAP, "legal_research", _permanent)
+    matter = await _seed_matter()
+    run = await workflows.create_workflow_run(
+        tenant_id="tenant-a",
+        app_key="legalmitra",
+        actor_id="user-1",
+        payload=WorkflowRunCreateRequest(matter_id=matter["matter_id"]),
+        auto_advance=True,
+    )
+    research = _latest(run["steps"], "RESEARCH")
+    assert research["failure_class"] == "permanent"
+    assert research["status"] == "failed"
+    with pytest.raises(workflows.WorkflowConflictError):
+        await workflows.retry_workflow_step(
+            tenant_id="tenant-a",
+            app_key="legalmitra",
+            actor_id="user-1",
+            run_id=run["run_id"],
+            step_id=research["step_id"],
+        )
 
 
 @pytest.mark.asyncio

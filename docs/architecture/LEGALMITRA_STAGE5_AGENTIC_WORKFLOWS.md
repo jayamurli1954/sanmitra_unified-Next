@@ -354,16 +354,18 @@ Module gate: `legal` (+ `legal_ai` only if provider used). Audit create / advanc
 
 ### Workflow exit
 
-- [ ] One E2E `prepare_matter_response` completes with audit + timeline  
-- [ ] RESEARCH and DRAFT cannot complete without human approve  
-- [ ] Failed research refuses safely (no fabricated citations)  
-- [ ] Retryable vs requires_human vs permanent failures behave correctly  
-- [ ] Per-step confidence and estimated_minutes present on definitions/steps  
-- [ ] Morning Brief can start a recommended workflow in one click  
-- [ ] No API path files or sends client communications  
-- [ ] Tenant isolation verified  
-- [ ] Feature flag disables agentic routes in production  
-- [ ] Stage 2, 3, and 4 tests still pass  
+- [x] One E2E `prepare_matter_response` completes with audit + timeline  
+- [x] RESEARCH and DRAFT cannot complete without human approve  
+- [x] Failed research refuses safely (no fabricated citations)  
+- [x] Retryable vs requires_human vs permanent failures behave correctly  
+- [x] Per-step confidence and estimated_minutes present on definitions/steps  
+- [x] Morning Brief can start a recommended workflow in one click  
+- [x] No API path files or sends client communications  
+- [x] Tenant isolation verified  
+- [x] Feature flag disables agentic routes in production  
+- [x] Stage 2, 3, and 4 tests still pass  
+
+**Frontend / contract hardening (2026-08-16):** RESEARCH bridges Stage 2 hybrid cite-or-refuse; tracker Retry/Cancel; HTTP suite; prod flag default off. Sign-off: [`docs/operations/LEGALMITRA_STAGE5_HARDENING_SIGNOFF.md`](../operations/LEGALMITRA_STAGE5_HARDENING_SIGNOFF.md). Judgment retrieval for referred cases remains a **separate research-depth track**.
 
 ### Knowledge-graph MVP exit
 
@@ -399,6 +401,7 @@ Module gate: `legal` (+ `legal_ai` only if provider used). Audit create / advanc
 | Agent-to-agent / autonomous planners | Much later (if ever) |
 | Broad case-law graph | After statute-family MVP |
 | Shared SanMitra agent bus / MitraBooks posting | Stage 6 |
+| Automatic judgment retrieval for “referred cases” | Research-depth track after Stage 5 hardening |
 
 ---
 
@@ -409,3 +412,4 @@ Module gate: `legal` (+ `legal_ai` only if provider used). Audit create / advanc
 | 1.0 | 2026-08-02 | Initial Stage 5 plan |
 | 1.1 | 2026-08-02 | Review: templates, catalog, timeline, estimates, per-step confidence, retry classes, recommended workflow CTA, analytics, KG enrichment order, ban autonomous agent loops |
 | 1.2 | 2026-08-02 | MVP implemented: prepare_matter_response engine, human gates, Morning Brief recommended_workflow, tracker run panel |
+| 1.3 | 2026-08-16 | Hardening: Stage 2 RESEARCH bridge, Retry/Cancel UI, HTTP tests, prod agentic default off, ops sign-off |

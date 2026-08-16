@@ -208,8 +208,16 @@ class Settings:
     LEGALMITRA_STALE_REVIEW_DAYS = int(os.getenv("LEGALMITRA_STALE_REVIEW_DAYS", "7"))
 
     # LegalMitra Stage 5 — Agentic Workflows (guided, human-gated).
-    # Default on for local/dev testability; keep false in production until owner enablement.
-    LEGALMITRA_AGENTIC_ENABLED = os.getenv("LEGALMITRA_AGENTIC_ENABLED", "true").lower() in {
+    # Production defaults OFF unless explicitly enabled. Local/dev defaults ON for tests.
+    _agentic_default = (
+        "false"
+        if str(os.getenv("ENVIRONMENT", os.getenv("APP_ENV", ""))).strip().lower()
+        in {"production", "prod"}
+        else "true"
+    )
+    LEGALMITRA_AGENTIC_ENABLED = os.getenv(
+        "LEGALMITRA_AGENTIC_ENABLED", _agentic_default
+    ).lower() in {
         "1",
         "true",
         "yes",

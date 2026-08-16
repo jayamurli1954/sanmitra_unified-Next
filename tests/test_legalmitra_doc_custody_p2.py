@@ -367,9 +367,12 @@ async def test_stage5_research_uses_approved_chunks(fake_db, monkeypatch):
         matter_id="m-1",
         workflow_template="writ_petition",
     )
+    assert result["payload"]["stage2_contract"] is True
     assert result["payload"]["matter_paper_chunk_count"] >= 1
     assert any(s.get("source_type") == "matter_paper_chunk" for s in result["sources"])
-    assert any("Approved extract" in f for f in result["payload"]["key_facts"])
+    assert any(
+        "Matter-paper extracts" in line for line in (result["payload"].get("limitations") or [])
+    )
 
 
 @pytest.mark.asyncio

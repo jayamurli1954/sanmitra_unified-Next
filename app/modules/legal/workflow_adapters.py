@@ -78,14 +78,17 @@ async def adapter_legal_research(
     matter_id: str,
     workflow_template: str,
 ) -> dict[str, Any]:
-    """Grounded research pack from matter context — does not invent citations."""
+    """Stage 2 hybrid research as a workflow step — never invents citations."""
+    from app.modules.legal_compat.service import build_hybrid_legal_response
+
     matter = await get_matter(tenant_id=tenant_id, app_key=app_key, matter_id=matter_id)
     template = resolve_template(workflow_template)
     seed = TEMPLATE_QUERY_SEEDS.get(template, TEMPLATE_QUERY_SEEDS["general"])
+    jurisdiction = matter.get("jurisdiction")
     query = (
-        f"{seed} Matter: {matter.get('matter_number')} — {matter.get('title')}. "
-        f"Practice area: {matter.get('practice_area') or 'general'}. "
-        f"Jurisdiction: {matter.get('jurisdiction') or 'not specified'}."
+        f"{seed} Jurisdiction: {jurisdiction or 'not specified'}. "
+        f"Matter: {matter.get('matter_number')} — {matter.get('title')}. "
+        f"Practice area: {matter.get('practice_area') or 'general'}."
     )
     sources: list[dict[str, Any]] = [
         {"source_type": "matter_record", "matter_id": matter_id}
@@ -119,9 +122,6 @@ async def adapter_legal_research(
             }
         )
 
-    # Stage 5 MVP: matter-grounded research brief. No fabricated statute citations.
-    # Optional KG enrichment hook reserved — graph miss degrades to this path.
-    jurisdiction = matter.get("jurisdiction")
     if not jurisdiction:
         payload = {
             "strategy": "insufficient_sources",
@@ -141,6 +141,7 @@ async def adapter_legal_research(
             ],
             "suggested_research_query": query,
             "kg_enrichment_used": False,
+            "stage2_contract": True,
         }
         return {
             "artifact_type": "research_response",
@@ -153,58 +154,112 @@ async def adapter_legal_research(
             "force_awaiting_human": True,
         }
 
-    extract_facts = [
-        f"Approved extract ({c.get('document_id')}): {str(c.get('text') or '')[:220]}"
-        for c in chunks[:5]
-        if c.get("text")
-    ]
+    try:
+        hybrid = await build_hybrid_legal_response(
+            tenant_id=tenant_id,
+            app_key=app_key,
+            query=query,
+            query_type="research",
+            rag_result={
+                "strategy": "workflow_stage2_bridge",
+                "citations": [],
+                "candidate_count": 0,
+                "context": None,
+            },
+            background_tasks=None,
+        )
+    except Exception as exc:
+        return {
+            "artifact_type": "research_response",
+            "payload": {
+                "strategy": "insufficient_sources",
+                "question": query,
+                "answer": (
+                    "Research step failed safely without fabricating authorities. "
+                    "Retry after confirming Stage 2 research availability."
+                ),
+                "citations": [],
+                "confidence": 0.15,
+                "human_review_required": True,
+                "advisory_notice": ADVISORY,
+                "limitations": [
+                    "Stage 2 hybrid research raised an error; no citations invented.",
+                    str(exc)[:240],
+                ],
+                "suggested_research_query": query,
+                "kg_enrichment_used": False,
+                "stage2_contract": True,
+            },
+            "sources": sources,
+            "confidence": 0.15,
+            "human_review_required": True,
+            "failure_class": "retryable",
+            "error": "Stage 2 hybrid research failed",
+            "force_awaiting_human": True,
+        }
+
+    strategy = str(hybrid.get("strategy") or "")
+    citations = list(hybrid.get("citations") or [])
+    confidence = hybrid.get("confidence")
+    if isinstance(confidence, (int, float)):
+        confidence_f = float(confidence)
+    elif isinstance(confidence, str) and confidence.replace(".", "", 1).isdigit():
+        confidence_f = float(confidence)
+    else:
+        confidence_f = {"low": 0.35, "medium": 0.55, "high": 0.75}.get(
+            str(confidence).lower(), 0.45
+        )
+
     payload = {
-        "strategy": "grounded_matter_research_brief",
+        "strategy": strategy or "stage2_hybrid",
         "question": query,
-        "answer": (
-            f"Working research brief for {matter.get('matter_number')}: {matter.get('title')}. "
-            f"Grounded on case card"
-            + (f" and {len(chunks)} approved matter-paper chunk(s)" if chunks else "")
-            + ". Use LegalMitra hybrid research on the suggested query to obtain statute/case "
-            "citations. This Stage 5 step does not invent legal authorities."
-        ),
-        "key_facts": [
-            f"Matter number: {matter.get('matter_number')}",
-            f"Status: {matter.get('status')}",
-            f"Practice area: {matter.get('practice_area') or 'general'}",
-            f"Jurisdiction: {jurisdiction}",
-            *extract_facts,
-        ],
-        "citations": [],
-        "confidence": 0.65 if chunks else (0.55 if docs else 0.45),
+        "answer": hybrid.get("answer") or hybrid.get("response") or "",
+        "citations": citations,
+        "confidence": confidence_f,
         "human_review_required": True,
-        "advisory_notice": ADVISORY,
-        "limitations": [
-            "No statute or case citations were fabricated in this step.",
-            "Run LegalMitra research (Stage 2) for grounded citations before filing.",
-            "Knowledge graph enrichment is optional and was not required for this brief.",
+        "advisory_notice": hybrid.get("advisory_notice") or ADVISORY,
+        "limitations": list(hybrid.get("limitations") or [])
+        + [
+            "Workflow RESEARCH uses the Stage 2 hybrid contract (cite-or-refuse).",
+            "Knowledge graph enrichment is optional and was not required for this step.",
             (
-                "Matter-paper extracts were used with document attribution."
+                "Matter-paper extracts are attached as practice sources for human review."
                 if chunks
-                else "No approved matter-paper extracts yet — research is case-card/filename grounded only."
+                else "No approved matter-paper extracts yet."
             ),
         ],
         "suggested_research_query": query,
         "suggested_next_actions": [
-            "Run hybrid legal research with the suggested query",
+            "Approve only after verifying statute/case citations",
             "Attach any missing source documents",
-            "Approve this research step only after verifying authorities",
+            "Reject and retry if jurisdiction or facts are incomplete",
         ],
         "kg_enrichment_used": False,
+        "stage2_contract": True,
         "matter_paper_chunk_count": len(chunks),
+        "refusal_or_insufficient": strategy
+        in {"insufficient_sources", "missing_jurisdiction", "rag_disabled"},
     }
+    for key in ("sources_checked", "quality_gate", "citation_audit", "sections"):
+        if hybrid.get(key) is not None:
+            payload[key] = hybrid.get(key)
+
+    failure_class = None
+    error = None
+    if payload["refusal_or_insufficient"] and not citations:
+        failure_class = "requires_human"
+        error = "Stage 2 research refused or lacked citeable sources"
+
     return {
         "artifact_type": "research_response",
         "payload": payload,
-        "sources": sources,
-        "confidence": payload["confidence"],
+        "sources": sources
+        + [{"source_type": "stage2_hybrid", "strategy": strategy}],
+        "confidence": min(max(confidence_f, 0.0), 1.0),
         "human_review_required": True,
-        "failure_class": None,
+        "failure_class": failure_class,
+        "error": error,
+        "force_awaiting_human": True,
     }
 
 
