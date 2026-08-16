@@ -16,13 +16,13 @@ It incorporates the approved implementation plan plus review additions (status l
 
 | Layer | Current state | Target (Stage 3) | Gap |
 | --- | --- | --- | --- |
-| Clients | Free-text `client_name` on `legal_cases` | Tenant-scoped Client CRUD in MongoDB | New `legal_clients` collection + APIs |
-| Matters | Thin `legal_cases` CRUD | Matters/engagements with lifecycle, numbers, reserved fields | New `legal_matters` (+ keep legacy cases read path) |
-| Documents | Upload review not matter-linked | Matter-attached document metadata | `legal_matter_documents` |
-| Timeline | Tracker localStorage / diary stub | Chronological matter activity stream | `legal_matter_timeline` |
-| Intelligence | Hybrid research only | Structured Matter Intelligence Briefs | Brief generate + persist |
-| Tracker UI | Browser-only demo metrics | Live widgets from practice APIs | Frontend wiring |
-| Stage 4 | Not started | Morning Brief / alerts | **Deferred** — do not build here |
+| Clients | Tenant-scoped Client CRUD in MongoDB + tracker create form | Same | Harden empty-state UX; optional soft-archive parity |
+| Matters | Lifecycle + auto numbers + tracker create form | Same | Matter status editor in UI (create supports draft/active/pending) |
+| Documents | Matter-attached metadata + register UI | Same | Binary storage deferred |
+| Timeline | Append-only API + auto events | Tracker chronology UI | Optional timeline panel |
+| Intelligence | Structured Matter Intelligence Brief API + tracker brief panel | Same | Hybrid research into brief deferred |
+| Tracker UI | Live dashboard when authenticated; preview only when signed out | Persona-filtered live board | Done for Stage 3 exit path |
+| Stage 4 | Morning Brief / alerts (flagged) | — | **Deferred** from Stage 3 exit |
 
 **Non-goals (Stage 3):** Full Legalit-style practice OS, cause-list sync, fee posting to MitraBooks, agentic multi-step workflows, production Claude enablement by default.
 
@@ -144,14 +144,16 @@ Fee ledger is implemented in Stage 6 (live summary on tracker when billing is en
 
 Stage 3 is complete only if:
 
-- [ ] Client CRUD works  
-- [ ] Matter CRUD works (lifecycle + auto matter numbers)  
-- [ ] Tenant isolation verified  
-- [ ] Matter documents attached successfully  
-- [ ] Matter Brief generated from real matter data (structured sections)  
-- [ ] Dashboard displays live matter/client information when authenticated  
-- [ ] Audit logging verified  
-- [ ] All Stage 2 LegalMitra tests continue to pass  
+- [x] Client CRUD works  
+- [x] Matter CRUD works (lifecycle + auto matter numbers)  
+- [x] Tenant isolation verified  
+- [x] Matter documents attached successfully  
+- [x] Matter Brief generated from real matter data (structured sections)  
+- [x] Dashboard displays live matter/client information when authenticated  
+- [x] Audit logging verified  
+- [x] All Stage 2 LegalMitra tests continue to pass  
+
+**Frontend hardening (2026-08-16):** Tracker signed-in path uses API-only practice SoR (no demo/localStorage fallback), client/matter create forms, Matter Intelligence Brief panel, persona-filtered live board, and HTTP Stage 3 route tests (`tests/test_legalmitra_stage3_http.py`).
 
 ---
 

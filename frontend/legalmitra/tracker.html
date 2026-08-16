@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./legal-answer.css?v=legalmitra-stage2">
     <link rel="stylesheet" href="./tracker-custody.css?v=legalmitra-custody-p0">
     <link rel="stylesheet" href="./tracker-register.css?v=legalmitra-custody-p1">
+    <link rel="stylesheet" href="./tracker-practice.css?v=legalmitra-stage3-harden">
   </head>
   <body class="legal-editorial-page">
     <header class="legal-navbar">
@@ -179,6 +180,120 @@
         <article><span id="metric-label-4">Fees outstanding</span><strong id="metric-value-4">—</strong></article>
       </section>
 
+      <section class="legal-practice-live-widgets" id="practice-live-widgets" hidden aria-label="Live practice widgets"></section>
+
+      <section class="legal-diary-panel legal-practice-ops" id="practice-ops-panel" hidden aria-label="Clients and matters">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Practice data</span>
+            <h2>Clients and matters</h2>
+            <p>Tenant-backed records are the system of record. Browser preview rows are only used when signed out.</p>
+          </div>
+        </div>
+        <div class="legal-practice-ops-grid">
+          <form id="practice-client-form" class="legal-practice-ops-form">
+            <h3>Add client</h3>
+            <label>
+              <span>Display name</span>
+              <input name="display_name" required maxlength="200" placeholder="Acme Traders Pvt Ltd">
+            </label>
+            <label>
+              <span>Type</span>
+              <select name="client_type">
+                <option value="organization">Organization</option>
+                <option value="individual">Individual</option>
+              </select>
+            </label>
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" maxlength="200" placeholder="accounts@example.com">
+            </label>
+            <label>
+              <span>Phone</span>
+              <input name="phone" maxlength="40" placeholder="+91…">
+            </label>
+            <label>
+              <span>PAN</span>
+              <input name="pan" maxlength="10" placeholder="ABCDE1234F">
+            </label>
+            <label>
+              <span>GSTIN</span>
+              <input name="gstin" maxlength="15" placeholder="27ABCDE1234F1Z5">
+            </label>
+            <button type="submit">Save client</button>
+          </form>
+          <form id="practice-matter-form" class="legal-practice-ops-form">
+            <h3>Add matter / engagement</h3>
+            <label>
+              <span>Client</span>
+              <select id="practice-matter-client" name="client_id" required></select>
+            </label>
+            <label>
+              <span>Title</span>
+              <input name="title" required maxlength="200" placeholder="GST SCN reply — FY 2024-25">
+            </label>
+            <label>
+              <span>Practice area</span>
+              <select name="practice_area">
+                <option value="litigation">Litigation</option>
+                <option value="gst">GST</option>
+                <option value="income_tax">Income tax</option>
+                <option value="secretarial">Secretarial</option>
+                <option value="contract">Contract</option>
+                <option value="advisory">Advisory</option>
+                <option value="compliance">Compliance</option>
+                <option value="general">General</option>
+              </select>
+            </label>
+            <label>
+              <span>Matter type</span>
+              <input name="matter_type" maxlength="60" value="engagement">
+            </label>
+            <label>
+              <span>Status</span>
+              <select name="status">
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+              </select>
+            </label>
+            <label>
+              <span>Court / forum</span>
+              <input name="court" maxlength="200" placeholder="GST Dept, Mumbai">
+            </label>
+            <label>
+              <span>Next hearing</span>
+              <input name="next_hearing_date" type="date">
+            </label>
+            <label>
+              <span>Next deadline</span>
+              <input name="next_deadline_date" type="date">
+            </label>
+            <button type="submit">Save matter</button>
+          </form>
+        </div>
+        <p class="legal-custody-status" id="practice-ops-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="legal-diary-panel legal-matter-brief" id="matter-brief-panel" hidden aria-label="Matter Intelligence Brief">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Matter Intelligence</span>
+            <h2 id="matter-brief-title">Matter Intelligence Brief</h2>
+            <p id="matter-brief-meta">Open a matter to generate or load a grounded brief with sources and limitations.</p>
+          </div>
+        </div>
+        <div class="legal-matter-brief-toolbar">
+          <label>
+            <span>Matter</span>
+            <select id="matter-brief-matter"></select>
+          </label>
+          <button type="button" id="matter-brief-generate">Generate / refresh brief</button>
+        </div>
+        <p class="legal-morning-brief-advisory" id="matter-brief-status" role="status" aria-live="polite"></p>
+        <div class="legal-matter-brief-body" id="matter-brief-body"></div>
+      </section>
+
       <section class="legal-diary-panel legal-morning-brief" id="morning-brief-panel" hidden aria-label="Morning Brief">
         <div class="legal-diary-panel-head">
           <div>
@@ -320,6 +435,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-custody-p1"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-stage3-harden"></script>
   </body>
 </html>

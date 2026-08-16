@@ -1,85 +1,23 @@
 import { apiRequest, getAccessToken } from "../shared/api-client.js";
 import { createCustodyController } from "./tracker-custody.js";
 import { createDocumentRegisterController } from "./tracker-register.js";
+import {
+  createPracticeWorkspaceController,
+  filterDashboardByPersona,
+} from "./tracker-practice.js";
+import {
+  fieldValueFor,
+  sanitizeSavedValues,
+  trackerProfiles,
+} from "./tracker-preview.js";
 
 const APP_KEY = "legalmitra";
-
-const trackerProfiles = {
-  advocate: {
-    metrics: [
-      ["Urgent items", "0"],
-      ["Open items", "0"],
-      ["Logged items", "0"],
-      ["Fees outstanding", "—"],
-    ],
-    rows: [
-      ["15 May 2024", "NI-138/Client-A", "JMFC Court", "Complaint limitation check", "urgent"],
-      ["18 May 2024", "WP-226/2024", "High Court", "Affidavit and annexure review", "review"],
-      ["22 May 2024", "CS-42/2024", "Civil Court", "Interim application filing", "pending"],
-    ],
-    registers: [
-      ["Case and matter register", "Maintain case number, client, court, next date, filing stage, limitation status, documents, and responsible owner."],
-      ["Client follow-up register", "Track client instructions, affidavit status, missing documents, settlement discussions, and last communication."],
-      ["Fees and receivables", "Record retainers, appearance fees, drafting fees, filing expenses, collections, pending dues, and matter-wise billing notes."],
-    ],
-    details: {
-      "case-master": ["Matter number", "Client name", "Court / forum", "Next date", "Filing stage", "Limitation status"],
-      clients: ["Client contact", "Instruction status", "Documents pending", "Last follow-up", "Next reminder", "Escalation owner"],
-      "fee-ledger": ["Retainer", "Drafting fee", "Appearance fee", "Expenses", "Amount received", "Balance due"],
-    },
-  },
-  ca: {
-    metrics: [
-      ["Urgent items", "0"],
-      ["Open items", "0"],
-      ["Logged items", "0"],
-      ["Fees outstanding", "—"],
-    ],
-    rows: [
-      ["15 May 2024", "GST-SCN-2024-08", "GST Dept, Mumbai", "Notice reply filing", "urgent"],
-      ["20 May 2024", "ITR-Client-32", "Income Tax Portal", "AIS/TIS reconciliation", "review"],
-      ["30 May 2024", "GSTR-9C-Client-14", "GST Portal", "Annual return working papers", "pending"],
-    ],
-    registers: [
-      ["Tax compliance register", "Track GST notices, income tax tasks, audit workings, return status, portal acknowledgements, and responsible staff."],
-      ["Client document follow-up", "Monitor books, bank statements, invoices, reconciliations, DSC availability, and management approvals."],
-      ["Professional fee ledger", "Record retainers, filing fees, audit fees, advisory invoices, collections, write-offs, and client-wise dues."],
-    ],
-    details: {
-      "case-master": ["GSTIN / PAN", "Notice reference", "Assessment year", "Portal status", "Working paper owner", "Due date"],
-      clients: ["Books received", "Bank statements", "Invoice dump", "DSC status", "Approval pending", "Reminder date"],
-      "fee-ledger": ["Monthly retainer", "Return filing fee", "Audit fee", "Advisory fee", "Collections", "Outstanding"],
-    },
-  },
-  cs: {
-    metrics: [
-      ["Urgent items", "0"],
-      ["Open items", "0"],
-      ["Logged items", "0"],
-      ["Fees outstanding", "—"],
-    ],
-    rows: [
-      ["16 May 2024", "LLP-F11-2026", "MCA Portal", "Partner data confirmation", "urgent"],
-      ["24 May 2024", "DIR-3-KYC", "MCA Portal", "Director KYC follow-up", "pending"],
-      ["30 May 2024", "BM-Notice-Client-9", "Board Secretariat", "Board notice and agenda circulation", "review"],
-    ],
-    registers: [
-      ["Entity compliance register", "Track companies, LLPs, annual filings, board actions, registers, resolutions, and statutory due dates."],
-      ["Director and partner follow-up", "Monitor KYC, DSC, DIN, contribution, shareholding, approvals, and pending confirmations."],
-      ["Secretarial fee ledger", "Record annual retainers, form filing fees, certification fees, event-based billing, collections, and dues."],
-    ],
-    details: {
-      "case-master": ["Entity name", "CIN / LLPIN", "Filing event", "Board action", "MCA form", "Due date"],
-      clients: ["Director / partner", "DIN / DPIN", "DSC expiry", "KYC status", "Approval pending", "Escalation note"],
-      "fee-ledger": ["Annual retainer", "Form filing fee", "Certification fee", "Event billing", "Collections", "Outstanding"],
-    },
-  },
-};
 
 let currentRole = "advocate";
 let currentCard = "case-master";
 let editingRowIndex = null;
 let livePractice = null;
+let livePracticeLoadError = false;
 let morningBrief = null;
 let activeWorkflowRun = null;
 let feeSummary = null;
@@ -105,6 +43,17 @@ const documentRegister = createDocumentRegisterController({
   getCustodyMode: () =>
     livePractice?.doc_custody?.doc_custody_mode ||
     "cloud_minimized",
+});
+
+const practiceWorkspace = createPracticeWorkspaceController({
+  apiRequest,
+  getAccessToken,
+  appKey: APP_KEY,
+  getLivePractice: () => livePractice,
+  getCurrentRole: () => currentRole,
+  onPracticeMutated: async () => {
+    await loadLivePractice();
+  },
 });
 
 const rowEditor = document.getElementById("tracker-row-editor");
@@ -133,6 +82,8 @@ function normalizeRow(row) {
       authority: row[2] || "",
       purpose: row[3] || "",
       status: row[4] || "pending",
+      matter_id: "",
+      practice_area: "",
     };
   }
   return {
@@ -141,6 +92,8 @@ function normalizeRow(row) {
     authority: String(row?.authority || ""),
     purpose: String(row?.purpose || ""),
     status: String(row?.status || "pending").toLowerCase(),
+    matter_id: String(row?.matter_id || ""),
+    practice_area: String(row?.practice_area || ""),
   };
 }
 
@@ -200,21 +153,30 @@ function renderRows(rows = getRoleRows()) {
     const actions = document.createElement("div");
     actions.className = "legal-diary-row-actions";
 
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.dataset.rowAction = "edit";
-    editButton.dataset.rowIndex = String(index);
-    editButton.setAttribute("aria-label", "Edit work item");
-    editButton.textContent = "Edit";
+    if (row.matter_id && getAccessToken()) {
+      const openBrief = document.createElement("button");
+      openBrief.type = "button";
+      openBrief.dataset.rowAction = "brief";
+      openBrief.dataset.matterId = row.matter_id;
+      openBrief.setAttribute("aria-label", "Open matter brief");
+      openBrief.textContent = "Open brief";
+      actions.append(openBrief);
+    } else {
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.dataset.rowAction = "edit";
+      editButton.dataset.rowIndex = String(index);
+      editButton.setAttribute("aria-label", "Edit work item");
+      editButton.textContent = "Edit";
 
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.dataset.rowAction = "delete";
-    deleteButton.dataset.rowIndex = String(index);
-    deleteButton.setAttribute("aria-label", "Delete work item");
-    deleteButton.textContent = "Delete";
-
-    actions.append(editButton, deleteButton);
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.dataset.rowAction = "delete";
+      deleteButton.dataset.rowIndex = String(index);
+      deleteButton.setAttribute("aria-label", "Delete work item");
+      deleteButton.textContent = "Delete";
+      actions.append(editButton, deleteButton);
+    }
     actionsTd.appendChild(actions);
     tr.appendChild(actionsTd);
 
@@ -263,28 +225,35 @@ function formatPracticeDate(value) {
   return text.length >= 10 ? text.slice(0, 10) : text;
 }
 
-function liveMatterRows() {
+function liveMatterRows(role = currentRole) {
   if (!livePractice) return null;
-  const hearings = (livePractice.upcoming_hearings || []).map((item) => ({
+  const filtered = filterDashboardByPersona(livePractice, role) || livePractice;
+  const hearings = (filtered.upcoming_hearings || []).map((item) => ({
     date: formatPracticeDate(item.next_hearing_date),
     reference: item.matter_number || item.matter_id || "",
     authority: item.court || "—",
     purpose: item.title || "Hearing",
     status: item.status || "pending",
+    matter_id: item.matter_id || "",
+    practice_area: item.practice_area || "",
   }));
-  const deadlines = (livePractice.upcoming_deadlines || []).map((item) => ({
+  const deadlines = (filtered.upcoming_deadlines || []).map((item) => ({
     date: formatPracticeDate(item.next_deadline_date),
     reference: item.matter_number || item.matter_id || "",
     authority: "Compliance deadline",
     purpose: item.title || "Deadline",
     status: item.status || "pending",
+    matter_id: item.matter_id || "",
+    practice_area: item.practice_area || "",
   }));
   return [...hearings, ...deadlines];
 }
 
 function getRoleRows(role = currentRole) {
-  const liveRows = liveMatterRows();
-  if (liveRows !== null) return liveRows.map(normalizeRow);
+  if (getAccessToken()) {
+    if (livePractice) return liveMatterRows(role).map(normalizeRow);
+    return [];
+  }
   const stored = getStoredRows();
   const savedRows = Array.isArray(stored[role]) ? stored[role].map(normalizeRow) : [];
   if (savedRows.length) return savedRows;
@@ -295,11 +264,19 @@ function updatePracticeBanner() {
   const banner = document.querySelector(".legal-tracker-preview-banner");
   if (!banner) return;
   if (livePractice) {
-    banner.textContent =
-      "Live practice workspace — metrics and boards below come from your tenant clients and matters. Morning Brief, guided workflows, and the fee ledger load when practice data is available.";
+    const hearings = (livePractice.upcoming_hearings || []).length;
+    const deadlines = (livePractice.upcoming_deadlines || []).length;
+    if (!hearings && !deadlines && !(livePractice.active_matters || livePractice.pending_matters)) {
+      banner.textContent =
+        "Live practice workspace — no hearings or deadlines yet. Add a client and matter below; browser preview rows are disabled while signed in.";
+    } else {
+      banner.textContent =
+        "Live practice workspace — metrics and boards come from your tenant clients and matters. Persona switch filters the board by practice area.";
+    }
   } else if (getAccessToken()) {
-    banner.textContent =
-      "Signed in, but live practice data could not be loaded. Showing browser preview rows until the practice API responds.";
+    banner.textContent = livePracticeLoadError
+      ? "Signed in, but the practice API did not respond. The board stays empty so browser demo rows are never mistaken for live records."
+      : "Signed in — loading live practice data…";
   } else {
     banner.textContent =
       "Preview workspace — sign in to load tenant-backed clients, matters, hearings, Morning Brief, and fee records. Browser-only rows are not the system of record.";
@@ -309,12 +286,18 @@ function updatePracticeBanner() {
 async function loadLivePractice() {
   if (!getAccessToken()) {
     livePractice = null;
+    livePracticeLoadError = false;
     morningBrief = null;
     custody.clearCustodySettings();
+    practiceWorkspace.showSignedInPanels(false);
     updatePracticeBanner();
     renderMorningBrief();
+    renderRows(getRoleRows());
+    updateMetricsForRows();
+    practiceWorkspace.renderLiveWidgets();
     return;
   }
+  livePracticeLoadError = false;
   try {
     const result = await apiRequest(APP_KEY, "/api/v1/legal/practice/dashboard?limit=8", {
       method: "GET",
@@ -324,9 +307,11 @@ async function loadLivePractice() {
       livePractice = result.payload;
     } else {
       livePractice = null;
+      livePracticeLoadError = true;
     }
   } catch (_error) {
     livePractice = null;
+    livePracticeLoadError = true;
   }
   updatePracticeBanner();
   updateMetricsForRows();
@@ -336,7 +321,9 @@ async function loadLivePractice() {
     loadFeeLedger(),
     custody.loadCustodySettings(livePractice),
     documentRegister.loadMatters(),
+    practiceWorkspace.refreshClientsAndMatters(),
   ]);
+  practiceWorkspace.renderLiveWidgets();
 }
 
 async function loadFeeLedger() {
@@ -715,12 +702,18 @@ function setRole(role) {
 
   renderRows(getRoleRows(role));
   renderDetail(currentCard);
+  practiceWorkspace.renderLiveWidgets();
+  practiceWorkspace.refreshClientsAndMatters();
 
   document.querySelectorAll("[data-tracker-role]").forEach((button) => {
     const active = button.getAttribute("data-tracker-role") === role;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   });
+
+  if (getAccessToken()) {
+    loadMorningBrief(false);
+  }
 }
 
 function renderDetail(card, options = {}) {
@@ -796,88 +789,18 @@ function getSavedValues(role, card) {
   return getDrafts()?.[role]?.[card] || {};
 }
 
-function isCorruptedSample(value) {
-  const text = String(value || "").trim();
-  if (!text) return false;
-  // Known mangled preview drafts from typing inside "Structured field" / bad caps.
-  if (/structured field/i.test(text)) return true;
-  if (/stru.*ctured/i.test(text)) return true;
-  if (/^doen$/i.test(text)) return true;
-  if (/ramkumar/i.test(text) && text !== "Ramkumar") return true;
-  if (/high\s*c\s*ourt|banglaore|banglalore|banglaore/i.test(text)) return true;
-  // Mixed-case gibberish like rAMKUMAR / cOURT
-  if (/[a-z][A-Z]{2,}/.test(text) && /[A-Z][a-z][A-Z]/.test(text)) return true;
-  return false;
-}
-
-function sanitizeSavedValues(saved) {
-  const cleaned = {};
-  Object.entries(saved || {}).forEach(([label, value]) => {
-    if (!isCorruptedSample(value)) {
-      cleaned[label] = value;
-    }
-  });
-  return cleaned;
-}
-
-function sampleValue(label) {
-  const key = String(label || "").trim().toLowerCase();
-  const samples = {
-    "matter number": "OS/219-2024-25",
-    "client name": "Ramkumar",
-    "court / forum": "High Court, Bengaluru",
-    "next date": "23-05-2026",
-    "filing stage": "Done",
-    "limitation status": "Within limitation",
-    "client contact": "Client desk / mobile",
-    "instruction status": "Awaiting affidavit",
-    "documents pending": "Vakalatnama, annexures",
-    "last follow-up": "15-05-2026",
-    "next reminder": "20-05-2026",
-    "escalation owner": "Chamber clerk",
-    retainer: "Rs. 25,000",
-    "drafting fee": "Rs. 7,500",
-    "appearance fee": "Rs. 5,000",
-    expenses: "Rs. 1,200",
-    "amount received": "Rs. 20,000",
-    "balance due": "Rs. 18,700",
-    "gstin / pan": "29ABCDE1234F1Z5",
-    "notice reference": "SCN/GST/2024/081",
-    "assessment year": "2024-25",
-    "portal status": "Reply pending",
-    "working paper owner": "Tax manager",
-    "due date": "30-05-2026",
-    "entity name": "Acme Services LLP",
-    "cin / llpin": "AAB-1234",
-    "filing event": "Form 11 annual return",
-    "board action": "Circulation approved",
-    "mca form": "Form 11",
-  };
-  if (samples[key]) return samples[key];
-  if (/date|due|reminder/i.test(label)) return "30-05-2026";
-  if (/fee|retainer|received|balance|outstanding|collections|expenses/i.test(label)) {
-    return "Rs. 0";
-  }
-  if (/status|stage|approval|pending/i.test(label)) return "Pending";
-  if (/owner|contact|client|director|partner/i.test(label)) return "Assigned person";
-  if (/court|forum|authority/i.test(label)) return "High Court, Bengaluru";
-  return "";
-}
-
-function fieldValueFor(label, saved) {
-  const raw = saved?.[label];
-  if (raw == null || String(raw).trim() === "" || isCorruptedSample(raw)) {
-    return sampleValue(label);
-  }
-  return String(raw);
-}
-
 function setSaveStatus(message) {
   const target = document.getElementById("tracker-save-status");
   if (target) target.textContent = message;
 }
 
 function saveCurrentDetail() {
+  if (getAccessToken()) {
+    setSaveStatus(
+      "Signed in — practice clients and matters are saved through the live forms above, not browser draft fields.",
+    );
+    return;
+  }
   const drafts = getDrafts();
   drafts[currentRole] = drafts[currentRole] || {};
   drafts[currentRole][currentCard] = {};
@@ -887,7 +810,7 @@ function saveCurrentDetail() {
   });
 
   localStorage.setItem(storageKey, JSON.stringify(drafts));
-  setSaveStatus("Saved in this browser for this signed-in workspace preview. Backend sync will be enabled in the tracker persistence phase.");
+  setSaveStatus("Saved in this browser for preview only. Sign in to use tenant-backed clients and matters.");
 }
 
 function setRowEditorVisible(visible) {
@@ -903,8 +826,9 @@ function todayIso() {
 }
 
 function openRowEditor(rowIndex = null) {
-  if (livePractice) {
-    setSaveStatus("Live matter board is read-only here. Create or update matters through the practice APIs (Stage 3 foundation).");
+  if (getAccessToken()) {
+    practiceWorkspace.openNewMatterForm();
+    setSaveStatus("Use New matter to create a tenant-backed engagement. Preview work-item edits stay available only when signed out.");
     return;
   }
   const rows = getRoleRows();
@@ -957,8 +881,8 @@ function saveRowFromEditor(event) {
 }
 
 function deleteRow(rowIndex) {
-  if (livePractice) {
-    setSaveStatus("Live matter board is read-only here.");
+  if (getAccessToken()) {
+    setSaveStatus("Signed-in boards are live practice data — delete preview rows only when signed out.");
     return;
   }
   const rows = getRoleRows();
@@ -972,6 +896,11 @@ function deleteRow(rowIndex) {
 }
 
 function resetCurrentDetail() {
+  if (getAccessToken()) {
+    setSaveStatus("Signed in — register sample fields are presentation labels only. Use Clients and matters above for real records.");
+    renderDetail(currentCard, { scroll: false, syncTab: false });
+    return;
+  }
   const drafts = getDrafts();
   if (drafts[currentRole]) {
     delete drafts[currentRole][currentCard];
@@ -1003,9 +932,17 @@ rowEditor?.addEventListener("submit", saveRowFromEditor);
 document.getElementById("tracker-rows")?.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest("[data-row-action]") : null;
   if (!(target instanceof HTMLElement)) return;
+  const action = target.getAttribute("data-row-action");
+  if (action === "brief") {
+    const matterId = target.getAttribute("data-matter-id");
+    if (matterId) {
+      document.getElementById("matter-brief-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      practiceWorkspace.loadBriefForMatter(matterId, { generate: false });
+    }
+    return;
+  }
   const index = Number(target.getAttribute("data-row-index"));
   if (!Number.isInteger(index)) return;
-  const action = target.getAttribute("data-row-action");
   if (action === "edit") {
     openRowEditor(index);
   } else if (action === "delete") {
@@ -1025,6 +962,7 @@ document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
   });
 });
 
+practiceWorkspace.bindEvents();
 setRole("advocate");
 updateActiveTab("daily-board");
 updatePracticeBanner();
