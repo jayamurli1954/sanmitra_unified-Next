@@ -9,6 +9,7 @@ import {
   createProactiveController,
   parsePracticeDeepLink,
 } from "./tracker-proactive.js";
+import { createFeeLedgerController } from "./tracker-fee-ledger.js";
 import {
   fieldValueFor,
   sanitizeSavedValues,
@@ -24,11 +25,17 @@ let livePractice = null;
 let livePracticeLoadError = false;
 let morningBrief = null;
 let activeWorkflowRun = null;
-let feeSummary = null;
-let feeInvoices = [];
 const storageKey = "legalmitra-tracker-drafts-v2";
 const rowStorageKey = "legalmitra-tracker-work-items-v2";
 const registerCardOrder = ["case-master", "clients", "fee-ledger"];
+
+const feeLedger = createFeeLedgerController({
+  apiRequest,
+  getAccessToken,
+  appKey: APP_KEY,
+  getLivePractice: () => livePractice,
+  onSummaryLoaded: () => updateMetricsForRows(),
+});
 
 const custody = createCustodyController({
   apiRequest,
@@ -319,7 +326,10 @@ async function loadLivePractice(options = {}) {
     livePracticeLoadError = false;
     morningBrief = null;
     custody.clearCustodySettings();
+    feeLedger.clear();
     practiceWorkspace.showSignedInPanels(false);
+    const feePanel = document.getElementById("fee-ledger-live");
+    if (feePanel) feePanel.hidden = true;
     updatePracticeBanner();
     renderMorningBrief();
     renderRows(getRoleRows());
@@ -349,69 +359,12 @@ async function loadLivePractice(options = {}) {
   renderRows(getRoleRows());
   await Promise.all([
     skipProactive ? Promise.resolve() : proactive.refreshAll(),
-    loadFeeLedger(),
+    feeLedger.loadFeeLedger(),
     custody.loadCustodySettings(livePractice),
     documentRegister.loadMatters(),
     practiceWorkspace.refreshClientsAndMatters(),
   ]);
   practiceWorkspace.renderLiveWidgets();
-}
-
-async function loadFeeLedger() {
-  const panel = document.getElementById("fee-ledger-live");
-  const listEl = document.getElementById("fee-ledger-live-list");
-  const summaryEl = document.getElementById("fee-ledger-live-summary");
-  if (!getAccessToken()) {
-    feeSummary = null;
-    feeInvoices = [];
-    if (panel) panel.hidden = true;
-    return;
-  }
-  try {
-    const [summaryRes, invoicesRes] = await Promise.all([
-      apiRequest(APP_KEY, "/api/v1/legal/practice/fees/summary", {
-        method: "GET",
-        timeoutMs: 12000,
-      }),
-      apiRequest(APP_KEY, "/api/v1/legal/practice/fees/invoices?limit=20", {
-        method: "GET",
-        timeoutMs: 12000,
-      }),
-    ]);
-    feeSummary = summaryRes?.ok ? summaryRes.payload : null;
-    feeInvoices = invoicesRes?.ok ? (invoicesRes.payload.items || []) : [];
-  } catch (_error) {
-    feeSummary = null;
-    feeInvoices = [];
-  }
-
-  if (!panel || !listEl || !summaryEl) return;
-  panel.hidden = false;
-  if (feeSummary) {
-    summaryEl.textContent =
-      `Outstanding ${feeSummary.fees_outstanding_display || "₹0.00"} · ` +
-      `billed ${feeSummary.total_billed ?? 0} · collected ${feeSummary.total_collected ?? 0}`;
-    if (livePractice) {
-      livePractice.fees_outstanding = feeSummary.fees_outstanding_display || livePractice.fees_outstanding;
-      updateMetricsForRows();
-    }
-  } else {
-    summaryEl.textContent = "Fee ledger unavailable.";
-  }
-  listEl.textContent = "";
-  if (!feeInvoices.length) {
-    const li = document.createElement("li");
-    li.textContent = "No fee notes yet. Create an invoice via the practice fees API.";
-    listEl.appendChild(li);
-    return;
-  }
-  feeInvoices.slice(0, 12).forEach((inv) => {
-    const li = document.createElement("li");
-    li.textContent =
-      `${inv.invoice_number || inv.invoice_id} · ${inv.status} · ` +
-      `due ${inv.amount_outstanding ?? "—"} / total ${inv.grand_total ?? "—"}`;
-    listEl.appendChild(li);
-  });
 }
 
 function renderMorningBrief() {

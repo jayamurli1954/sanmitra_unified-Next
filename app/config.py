@@ -225,8 +225,17 @@ class Settings:
     }
 
     # LegalMitra Stage 6 — Practice billing (+ optional MitraBooks posting).
-    # Billing default on for local/dev; MitraBooks posting stays off until owner enablement.
-    LEGALMITRA_BILLING_ENABLED = os.getenv("LEGALMITRA_BILLING_ENABLED", "true").lower() in {
+    # Production defaults billing OFF unless explicitly enabled. Local/dev defaults ON.
+    # MitraBooks posting stays off until owner enablement in all environments.
+    _billing_default = (
+        "false"
+        if str(os.getenv("ENVIRONMENT", os.getenv("APP_ENV", ""))).strip().lower()
+        in {"production", "prod"}
+        else "true"
+    )
+    LEGALMITRA_BILLING_ENABLED = os.getenv(
+        "LEGALMITRA_BILLING_ENABLED", _billing_default
+    ).lower() in {
         "1",
         "true",
         "yes",

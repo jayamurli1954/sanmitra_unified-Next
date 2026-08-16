@@ -66,6 +66,19 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def get_optional_async_session() -> AsyncGenerator[AsyncSession | None, None]:
+    """Yield a Postgres session when initialized; otherwise None.
+
+    Use for routes that only need SQL when an optional feature (e.g. LegalMitra
+    MitraBooks fee posting) is requested. Mongo-only paths must not require PG.
+    """
+    if _session_factory is None:
+        yield None
+        return
+    async with _session_factory() as session:
+        yield session
+
+
 async def create_postgres_tables(metadata: sa.MetaData) -> None:
     if _engine is None:
         return

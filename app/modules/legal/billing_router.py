@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.context import resolve_app_key, resolve_tenant_id
-from app.db.postgres import get_async_session
+from app.db.postgres import get_optional_async_session
 from app.modules.legal import billing_service
 from app.modules.legal.billing_schemas import (
     FeeCollectionCreateRequest,
@@ -240,7 +240,7 @@ async def record_collection(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession | None = Depends(get_optional_async_session),
 ):
     tenant_id = resolve_tenant_id(current_user, x_tenant_id)
     app_key = _resolve_legal_app_key(x_app_key)

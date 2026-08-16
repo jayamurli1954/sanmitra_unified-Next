@@ -211,12 +211,14 @@ Audit issue / collect / void / post / reverse.
 
 ### Billing MVP exit
 
-- [ ] Create → issue → collect fee note for a matter with audit trail  
-- [ ] Tracker fee metric shows live summary for signed-in tenants  
-- [ ] Partial payment and void behave correctly  
-- [ ] Feature flag disables billing routes in production when off  
-- [ ] Tenant isolation verified  
-- [ ] Stages 2–5 tests still pass  
+- [x] Create → issue → collect fee note for a matter with audit trail  
+- [x] Tracker fee metric shows live summary for signed-in tenants  
+- [x] Partial payment and void behave correctly  
+- [x] Feature flag disables billing routes in production when off  
+- [x] Tenant isolation verified  
+- [x] Stages 2–5 tests still pass  
+
+**Frontend / contract hardening (2026-08-16):** prod billing default off; tracker Issue/Collect/Void; HTTP isolation suite. Sign-off: [`docs/operations/LEGALMITRA_STAGE6_HARDENING_SIGNOFF.md`](../operations/LEGALMITRA_STAGE6_HARDENING_SIGNOFF.md). MitraBooks posting remains flagged off by default.
 
 ### MitraBooks posting exit (optional slice)
 
@@ -267,3 +269,4 @@ Audit issue / collect / void / post / reverse.
 | --- | --- | --- |
 | 1.0 | 2026-08-02 | Initial Stage 6 plan: native fee ledger, optional MitraBooks posting, selective shared patterns, LegalMitra remains separate |
 | 1.1 | 2026-08-02 | MVP implemented: fee invoices/collections/time entries/summary, GL map + optional posting adapter, tracker fee panel |
+| 1.2 | 2026-08-16 | Hardening: prod billing default off, tracker Issue/Collect/Void, HTTP tests, ops sign-off |

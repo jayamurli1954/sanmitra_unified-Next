@@ -372,7 +372,7 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Shared SanMitra intelligence/document/notification patterns where justified; optional MitraBooks fee posting; selective practice-OS parity only where it serves the north star.
 
-**Planned engineering status (2026-08-02):** MVP implemented behind `LEGALMITRA_BILLING_ENABLED` / `LEGALMITRA_MITRABOOKS_POSTING_ENABLED` — see [`docs/architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md`](../architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md). LegalMitra-native fee ledger (issue/collect/void/summary/time entries); optional MitraBooks GL posting only through shared accounting with explicit confirm. LegalMitra remains a separate product experience.
+**Current engineering status (2026-08-16):** Stage 6 native fee ledger is hardened behind `LEGALMITRA_BILLING_ENABLED` (off by default in production): issue/collect/void, tracker fee actions, HTTP isolation tests. Optional MitraBooks posting stays behind `LEGALMITRA_MITRABOOKS_POSTING_ENABLED` + explicit confirm. Spec: [`docs/architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md`](../architecture/LEGALMITRA_STAGE6_PLATFORM_ECOSYSTEM.md). Sign-off: [`docs/operations/LEGALMITRA_STAGE6_HARDENING_SIGNOFF.md`](../operations/LEGALMITRA_STAGE6_HARDENING_SIGNOFF.md). LegalMitra remains a separate product experience.
 
 **Stage 6 is complete when:**
 
