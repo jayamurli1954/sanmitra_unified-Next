@@ -8,6 +8,13 @@ they are green.** A green local run = a green push, and fewer wasted Actions run
 > One command does Tier 1: **`python scripts/preflight.py`** (see [scripts/preflight.py](../scripts/preflight.py)).
 > This is mandated by [AGENTS.md](../AGENTS.md) §28 — do not bypass it.
 
+Local Python for this repo is **`D:\sanmitra_unified-Next\.venv`**, not global
+`Python311`. Create it once with `python -m venv .venv` then
+`.venv\Scripts\python.exe -m pip install -r requirements-dev.txt`. Preflight
+switches to that venv automatically and exits if pytest does not match
+`requirements-dev.txt`. Never `pip install` into global site-packages; other
+D: projects must use their own `.venv`.
+
 ---
 
 ## Agent destructive command guardrails

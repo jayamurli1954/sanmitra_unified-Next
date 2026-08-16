@@ -26,6 +26,10 @@ Usage
     python scripts/preflight.py --security    # Tier 1 + local scanners (best-effort)
     python scripts/preflight.py --all         # everything
 
+When ``.venv`` exists at the repo root, this script re-execs with that
+interpreter so global site-packages (for example a pytest 9 install) cannot
+break the CI-pinned pytest 7.4.4 gate.
+
 Exit code is non-zero if any executed check failed, so it is safe to chain before
 a commit (e.g. `python scripts/preflight.py && git commit ...`).
 """
@@ -40,7 +44,65 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _repo_venv_python() -> Path | None:
+    if os.name == "nt":
+        candidate = ROOT / ".venv" / "Scripts" / "python.exe"
+    else:
+        candidate = ROOT / ".venv" / "bin" / "python"
+    return candidate if candidate.is_file() else None
+
+
+def _ensure_repo_interpreter() -> None:
+    """Prefer the repo .venv so a global pytest upgrade cannot break local CI."""
+    venv_python = _repo_venv_python()
+    if venv_python is None:
+        return
+    current = Path(sys.executable).resolve()
+    wanted = venv_python.resolve()
+    if current == wanted or current.parent == wanted.parent:
+        return
+    print(f"preflight: switching to repo venv ({wanted})", flush=True)
+    raise SystemExit(subprocess.call([str(wanted), *sys.argv], cwd=ROOT))
+
+
+_ensure_repo_interpreter()
 PY = sys.executable
+
+
+def _pinned_pytest_version() -> str:
+    for line in (ROOT / "requirements-dev.txt").read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("pytest=="):
+            return stripped.split("==", 1)[1].strip()
+    raise RuntimeError("requirements-dev.txt has no pytest== pin")
+
+
+def _assert_pytest_pin() -> None:
+    """Fail fast if this interpreter's pytest does not match the CI pin."""
+    import importlib.metadata
+
+    pinned = _pinned_pytest_version()
+    try:
+        installed = importlib.metadata.version("pytest")
+    except importlib.metadata.PackageNotFoundError:
+        installed = None
+    if installed == pinned:
+        return
+    venv_py = _repo_venv_python()
+    print("preflight: pytest pin mismatch — refusing to run the suite.", flush=True)
+    print(f"  interpreter: {PY}", flush=True)
+    print(f"  installed:   {installed or 'not installed'}", flush=True)
+    print(f"  pinned:      {pinned}  (requirements-dev.txt)", flush=True)
+    print("This is the SSDV-style global pip failure mode. Fix with the repo venv:", flush=True)
+    if venv_py is None:
+        print(r"  python -m venv .venv", flush=True)
+        print(r"  .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt", flush=True)
+    else:
+        print(rf"  {venv_py} -m pip install -r requirements-dev.txt", flush=True)
+    print(r"  .\.venv\Scripts\python.exe scripts/preflight.py", flush=True)
+    raise SystemExit(2)
 
 # Tier 1: name -> command. Exactly mirrors the backend-ci / accounting-gate steps.
 TIER1 = [
@@ -144,6 +206,7 @@ def main() -> int:
     parser.add_argument("--security", action="store_true", help="Also run local security scanners (best-effort).")
     parser.add_argument("--all", action="store_true", help="Run Tier 1 + frontend + security.")
     args = parser.parse_args()
+    _assert_pytest_pin()
 
     results = run_tier1(args.quick)
     if args.frontend or args.all:

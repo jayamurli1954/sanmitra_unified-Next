@@ -168,6 +168,20 @@ command.
 - `git stash` / `git stash pop` when work must be preserved (prefer over hard reset).
 - Normal `git commit` and non-force `git push` only when the user explicitly asked.
 
+#### Python / pip — blocked without explicit user request
+
+- `pip install`, `python -m pip install`, or `pip install -U` into the **global**
+  interpreter (for example `Python311\python.exe`).
+- Upgrading or replacing the `pytest==` / `pytest-asyncio==` pins in
+  `requirements-dev.txt` just to match a broken global install.
+
+Allowed:
+
+- `D:\sanmitra_unified-Next\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt`
+- Creating or repairing that `.venv` on D: (never on `C:\`).
+- Other D: Python projects (SSDV, RagaAware, and similar) must use **that
+  project's** `.venv`. Never share global site-packages across projects.
+
 #### Filesystem — blocked
 
 - Recursive delete on project paths: `rm -rf`, `del /s`, `rd /s`,
@@ -803,6 +817,7 @@ The `scripts/check_agents_compliance.py` CI guard ensures this checklist remains
 | 1.4 | 2026-06-23 | Marked master planning references as non-negotiable and reinforced InvestMitra unified-scope exclusion |
 | 1.5 | 2026-06-24 | Added §28 mandatory local preflight (`scripts/preflight.py`) + local CI/security SOP, wired into validation and PR checklist |
 | 1.6 | 2026-07-14 | Added §5 Agent Shell Command Guardrails (policy-first substitute for external dcg) and PR checklist item |
+| 1.7 | 2026-08-16 | Added §5 Python/pip venv rule and §28 pytest-pin preflight guard after a global pytest 9 install broke local CI |
 
 ## 27. CI/CD and Release Discipline
 
@@ -835,6 +850,12 @@ Single command (Tier 1 — always required, zero install):
 ```bash
 python scripts/preflight.py
 ```
+
+Use this repo's `.venv` at `D:\sanmitra_unified-Next\.venv` (create with
+`python -m venv .venv`, then `.venv\Scripts\python.exe -m pip install -r requirements-dev.txt`).
+`scripts/preflight.py` re-execs into that venv when present and **fails** if installed
+pytest does not match the `pytest==` pin in `requirements-dev.txt`. Do not install
+packages into global Python 3.11.
 
 It reproduces `backend-ci` and `accounting-stability-gate` exactly: repository safety,
 AGENTS compliance, `compileall`, text integrity, frontend/backend route contract, and

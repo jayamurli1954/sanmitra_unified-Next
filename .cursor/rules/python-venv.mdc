@@ -1,0 +1,12 @@
+---
+description: Never pip-install into global Python; use this repo's D: .venv
+alwaysApply: true
+---
+
+# Python environment
+
+- SanMitra local Python is `D:\sanmitra_unified-Next\.venv`. Do not `pip install` into global `Python311`.
+- Allowed: `.venv\Scripts\python.exe -m pip install -r requirements-dev.txt`
+- Blocked: `python -m pip install …` using the global interpreter; upgrading pytest to match a broken global install; creating this venv on `C:\`.
+- Other D: projects (SSDV, RagaAware, Flutter helpers) must use **that project's** `.venv`. A global pip install there breaks SanMitra preflight.
+- Run `python scripts/preflight.py` before commit/push. It re-execs into `.venv` and fails if pytest ≠ the `requirements-dev.txt` pin.
