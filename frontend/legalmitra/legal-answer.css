@@ -81,3 +81,27 @@ body[data-legal-page="chat"] .legal-query-box {
   padding-top: 6px;
   padding-bottom: 6px;
 }
+
+/* History sidebar: always show a readable title, not only the expiry line. */
+.legal-history-list .history-title {
+  display: block;
+  min-height: 1.2em;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legal-history-list .history-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

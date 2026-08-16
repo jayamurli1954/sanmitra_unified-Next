@@ -26,6 +26,7 @@ import {
   loadCourtFeeRules,
   readCourtFeeIntake,
 } from "./legal-tools-court-fee.js";
+import { createHistoryPanel } from "./history-panel.js";
 
 const APP_KEY = "legalmitra";
 const IS_CHAT_PAGE = document.body?.dataset?.legalPage === "chat";
@@ -320,6 +321,20 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+const historyPanel = createHistoryPanel({
+  appKey: APP_KEY,
+  historyList,
+  historyStatus,
+  uploadHistoryList,
+  uploadHistoryStatus,
+  refreshButton: refreshHistoryButton,
+  queryInput,
+  answerPanel,
+  escapeHtml,
+  renderLegalAnswer: (...args) => renderLegalAnswer(...args),
+});
+const { loadPersonalHistory, renderPersonalHistory, renderPersonalUploads } = historyPanel;
 
 function formatInline(value) {
   return escapeHtml(value)
@@ -1071,104 +1086,6 @@ function renderTemplateList(templates) {
   }
 }
 
-function formatHistoryDate(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) {
-    return "Saved chat";
-  }
-  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function renderPersonalHistory(items) {
-  if (!historyList || !historyStatus) {
-    return;
-  }
-  if (!items.length) {
-    historyStatus.textContent = getAccessToken()
-      ? "No saved LegalMitra chats yet. Your new questions will appear here."
-      : "Sign in to load your personal chat history.";
-    historyList.innerHTML = "";
-    return;
-  }
-  historyStatus.textContent = `${items.length} personal chat(s). Only your own history is shown.`;
-  historyList.innerHTML = items.map((item) => `
-    <button type="button" data-history-id="${escapeHtml(item.record_id || "")}">
-      <strong>${escapeHtml(item.query || "LegalMitra chat")}</strong>
-      <span>${escapeHtml(formatHistoryDate(item.created_at))} - expires in ${escapeHtml(String(item.retention_days || ""))} days</span>
-    </button>
-  `).join("");
-  historyList.querySelectorAll("[data-history-id]").forEach((button) => {
-    const row = items.find((item) => item.record_id === button.getAttribute("data-history-id"));
-    button.addEventListener("click", () => {
-      if (!row) return;
-      queryInput.value = row.query || "";
-      renderLegalAnswer({
-        ok: true,
-        status: 200,
-        payload: {
-          response: row.response || "",
-          provider: row.provider || "legalmitra_history",
-          strategy: row.strategy || "saved_history",
-          citations: row.citations || [],
-          answer_id: row.record_id,
-        },
-      });
-    });
-  });
-}
-
-function renderPersonalUploads(items) {
-  if (!uploadHistoryList || !uploadHistoryStatus) {
-    return;
-  }
-  if (!items.length) {
-    uploadHistoryStatus.textContent = getAccessToken()
-      ? "No retained uploaded documents yet."
-      : "Sign in to load your uploaded documents.";
-    uploadHistoryList.innerHTML = "";
-    return;
-  }
-  uploadHistoryStatus.textContent = `${items.length} personal upload(s). Only your own uploads are shown.`;
-  uploadHistoryList.innerHTML = items.map((item) => `
-    <button type="button" data-upload-id="${escapeHtml(item.upload_id || "")}">
-      <strong>${escapeHtml(item.source_filename || "Uploaded document")}</strong>
-      <span>${escapeHtml(formatHistoryDate(item.created_at))} - ${(Number(item.file_size_bytes || 0) / 1024 / 1024).toFixed(2)} MB - retention ${escapeHtml(String(item.retention_days || ""))} days</span>
-    </button>
-  `).join("");
-}
-
-async function loadPersonalHistory() {
-  if (!historyList || !historyStatus) {
-    return;
-  }
-  if (!getAccessToken()) {
-    renderPersonalHistory([]);
-    renderPersonalUploads([]);
-    return;
-  }
-  historyStatus.textContent = "Loading your personal chat history...";
-  uploadHistoryStatus.textContent = "Loading your uploaded documents...";
-  const result = await apiRequest(APP_KEY, "/api/v1/legalmitra/history?limit=50", { method: "GET" });
-  const uploadsResult = await apiRequest(APP_KEY, "/api/v1/legalmitra/uploads?limit=50", { method: "GET" });
-  if (!result.ok) {
-    historyStatus.textContent = result.status === 401
-      ? "Sign in to load your personal chat history."
-      : "Could not load chat history.";
-    historyList.innerHTML = "";
-  } else {
-    renderPersonalHistory(Array.isArray(result.payload?.items) ? result.payload.items : []);
-  }
-
-  if (!uploadsResult.ok) {
-    uploadHistoryStatus.textContent = uploadsResult.status === 401
-      ? "Sign in to load your uploaded documents."
-      : "Could not load uploaded documents.";
-    uploadHistoryList.innerHTML = "";
-  } else {
-    renderPersonalUploads(Array.isArray(uploadsResult.payload?.items) ? uploadsResult.payload.items : []);
-  }
-}
-
 async function loadTemplateLibrary() {
   if (!templateList || !templateLibraryStatus) return;
   templateLibraryStatus.textContent = "Loading templates from backend...";
@@ -1553,8 +1470,6 @@ logoutButton?.addEventListener("click", () => {
   renderPersonalHistory([]);
   renderPersonalUploads([]);
 });
-
-refreshHistoryButton?.addEventListener("click", loadPersonalHistory);
 
 document.querySelectorAll("[data-query]").forEach((button) => {
   button.addEventListener("click", () => {

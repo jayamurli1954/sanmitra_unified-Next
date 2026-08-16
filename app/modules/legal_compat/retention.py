@@ -193,6 +193,59 @@ async def save_review_upload_record(
     return doc
 
 
+def _as_iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+def _history_title(query: str, response_text: str) -> str:
+    cleaned = " ".join((query or "").split())
+    if cleaned:
+        return cleaned[:140]
+    for line in str(response_text or "").splitlines():
+        candidate = " ".join(line.replace("#", " ").replace("*", " ").split()).strip()
+        if len(candidate) >= 12:
+            return candidate[:140]
+    return "LegalMitra chat"
+
+
+def _history_preview(response_text: str) -> str:
+    cleaned = " ".join(str(response_text or "").replace("#", " ").replace("*", " ").split())
+    if not cleaned:
+        return ""
+    return cleaned[:180]
+
+
+def serialize_legal_chat_history_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-safe history row with a stable visible title for the sidebar."""
+    query = str(row.get("query") or "").strip()
+    response_text = str(row.get("response") or row.get("answer") or "")
+    title = _history_title(query, response_text)
+    return {
+        "record_id": str(row.get("record_id") or ""),
+        "query": query or title,
+        "title": title,
+        "preview": _history_preview(response_text),
+        "response": response_text,
+        "provider": row.get("provider"),
+        "strategy": row.get("strategy") or row.get("retrieval_strategy"),
+        "citations": list(row.get("citations") or []) if isinstance(row.get("citations"), list) else [],
+        "confidence": row.get("confidence"),
+        "human_review_required": bool(row.get("human_review_required", True)),
+        "jurisdiction": row.get("jurisdiction"),
+        "query_type": row.get("query_type"),
+        "retention_days": int(row.get("retention_days") or 0) or None,
+        "created_at": _as_iso(row.get("created_at")),
+        "expires_at": _as_iso(row.get("expires_at")),
+    }
+
+
 async def list_legal_chat_history(
     *,
     tenant_id: str,
@@ -208,9 +261,7 @@ async def list_legal_chat_history(
         .limit(max(1, min(limit, 100)))
     )
     rows = await cursor.to_list(length=max(1, min(limit, 100)))
-    for row in rows:
-        row.pop("_id", None)
-    return rows
+    return [serialize_legal_chat_history_row(row) for row in rows]
 
 
 async def list_legal_upload_records(

@@ -26,8 +26,9 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
     q = _normalize_query(query)
 
     # Stage 2 GST refund / Section 54 family — authorized offline slice.
-    # Practitioner spine: Direct answer → Relevant dates → Authorities →
-    # Practice note → Related provisions → Disclaimer. No invented judgments.
+    # Senior-counsel spine: Executive view → Direct answer → Relevant dates →
+    # Authorities → Risk areas → Practical note → Recommended next steps →
+    # Related provisions → Limitations → Disclaimer. No invented judgments.
     if (
         ("section 54" in q or "s.54" in q or "s 54" in q)
         and ("gst" in q or "cgst" in q or "igst" in q or "refund" in q or "interest" in q)
@@ -61,13 +62,16 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
         )
         response = (
             "**Time Limit — CGST Act Section 54 Refund Claims**\n\n"
+            "**Executive view:** My preliminary view is that most refund limitation "
+            "disputes under Section 54 arise from an incorrect determination of the "
+            "**relevant date**, rather than disagreement about the two-year period "
+            "itself. Before advising a client, identify the refund category and map "
+            "it to the applicable clause of the Explanation to Section 54 "
+            "(verify the current statutory text).\n\n"
             "**Direct answer:** Under **Section 54(1)** of the Central Goods and Services "
             "Tax Act, 2017, a refund application for tax, interest, or any other amount "
             "must ordinarily be filed within **two years from the relevant date** in the "
             "prescribed form and manner.\n\n"
-            "The limitation clock is only as useful as the correct **relevant date**. "
-            "That date is defined in the Explanation to Section 54 and varies by refund "
-            "category (verify the current statutory text before advising).\n\n"
             "**Relevant date (illustrative categories from the Explanation to Section 54)**\n\n"
             "| Refund / claim situation | Relevant date (statutory concept) |\n"
             "| --- | --- |\n"
@@ -81,9 +85,9 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "Explanation for the relevant zero-rated supply class |\n"
             "| Deemed exports | Date on which the return relating to such deemed "
             "exports is furnished |\n"
-            "| Unutilised ITC refund under Section 54(3) | Due date for furnishing the "
-            "return under Section 39 for the period to which the claim relates "
-            "(as specified) |\n"
+            "| Unutilised ITC refund under Section 54(3) | Refer to the specific "
+            "Explanation clause applicable to refunds under Section 54(3) for the "
+            "claim period (do not assume a single clock without the current text) |\n"
             "| Finalisation of provisional assessment | Date of adjustment of tax after "
             "the final assessment |\n"
             "| Refund arising from judgment / decree / order / appeal | Date of "
@@ -101,6 +105,14 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "**Circulars**\n"
             "- None retrieved from the current corpus for this offline package.\n\n"
             f"{judgments_block}\n\n"
+            "**Risk areas**\n"
+            "- Wrong determination of the relevant date\n"
+            "- Incorrect refund category mapping\n"
+            "- Incomplete supporting documentation\n"
+            "- Mismatch with GST returns / tax payment trails\n"
+            "- Failure to comply with Rule 89 procedural requirements\n"
+            "- Delayed filing attributed to portal / form defects without checking "
+            "carve-outs and current circulars\n\n"
             "**Practical note**\n"
             "- Compute limitation only after locking the refund category and the "
             "matching Explanation clause.\n"
@@ -112,6 +124,14 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             "- Electronic cash-ledger refund situations and any special exclusion "
             "periods (if claimed) must be checked against current circulars / "
             "orders; this package does not invent those authorities.\n\n"
+            "**Recommended next steps**\n"
+            "1. Identify the exact refund category for the client's claim.\n"
+            "2. Determine the applicable Explanation clause to Section 54.\n"
+            "3. Compute the two-year limitation from that relevant date.\n"
+            "4. Verify Rule 89 form / documentary compliance for the claim period.\n"
+            "5. Review any retrieved CBIC circulars / notifications for that period "
+            "(none are included in this offline package).\n"
+            "6. Only then prepare or review the refund application.\n\n"
             "**Related provisions (secondary)**\n"
             "- **Section 54(3)** — refund of unutilised input tax credit (ITC) in "
             "specified cases (including inverted duty structure), subject to "
@@ -140,9 +160,8 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
                     "snippet": (
                         "Section 54(1): refund application ordinarily within two years "
                         "from the relevant date. Explanation to Section 54 defines "
-                        "relevant date by claim category (exports, excess payment, "
-                        "deemed exports, provisional assessment, appellate orders, "
-                        "unutilised ITC under Section 54(3), and related classes)."
+                        "relevant date by claim category; confirm the exact clause "
+                        "for Section 54(3) and other classes from the current text."
                     ),
                     "legal_metadata": {
                         "jurisdiction": "India (Central)",
@@ -191,24 +210,6 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
                     "staleness_status": "possibly_stale",
                 },
                 {
-                    "title": "CGST Act, 2017 - Section 39 (return due date reference for certain ITC refunds)",
-                    "source": "India Code / Central Act",
-                    "source_type": "statute",
-                    "snippet": (
-                        "Section 39 return due dates are referenced by the Explanation "
-                        "to Section 54 for certain unutilised ITC refund situations."
-                    ),
-                    "legal_metadata": {
-                        "jurisdiction": "India (Central)",
-                        "act": "Central Goods and Services Tax Act, 2017",
-                        "section": "39",
-                        "citation": "CGST Act s.39",
-                    },
-                    "retrieved_at": now,
-                    "source_date": "2017-07-01",
-                    "staleness_status": "possibly_stale",
-                },
-                {
                     "title": "CGST Act, 2017 - Section 54(3)",
                     "source": "India Code / Central Act",
                     "source_type": "statute",
@@ -247,8 +248,8 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
             ],
             "strategy": "offline_cgst_section_54_refund_fallback",
             "note": (
-                "Authorized Stage 2 GST Section 54 practitioner package "
-                "(direct answer + relevant-date table + authorities). "
+                "Authorized Stage 2 GST Section 54 senior-counsel package "
+                "(executive view, relevant-date table, risk areas, next steps). "
                 "No invented judgments or circular numbers."
             ),
             "dropped_citation_count": 0,

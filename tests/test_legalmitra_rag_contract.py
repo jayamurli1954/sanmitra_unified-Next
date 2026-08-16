@@ -117,9 +117,12 @@ async def test_hybrid_gst_section_54_offline_slice_is_citation_backed(
     assert "two years" in body
     assert "relevant date" in body
     assert "direct answer" in body
+    assert "executive view" in body
     assert "authorities retrieved" in body
     assert "practical note" in body
     assert "related provisions" in body
+    assert "risk areas" in body
+    assert "recommended next steps" in body
     assert "| refund / claim situation |" in body
     assert "no matching judgments" not in body  # cases not requested
     assert result.get("citation_audit", {}).get("mismatch_count", 0) == 0

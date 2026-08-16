@@ -35,7 +35,21 @@ class _FakeCollection:
 
 @pytest.mark.asyncio
 async def test_chat_history_list_is_scoped_to_logged_in_user(monkeypatch: pytest.MonkeyPatch) -> None:
-    collection = _FakeCollection([{"_id": "mongo-id", "record_id": "row-1", "user_id": "user-a"}])
+    collection = _FakeCollection(
+        [
+            {
+                "_id": "mongo-id",
+                "record_id": "row-1",
+                "user_id": "user-a",
+                "query": "BNSS FIR quash checklist",
+                "response": "Direct answer about quashing.",
+                "strategy": "offline_bnss_fir_quashing_fallback",
+                "retention_days": 30,
+                "created_at": datetime(2026, 8, 16, tzinfo=timezone.utc),
+                "expires_at": datetime(2026, 9, 15, tzinfo=timezone.utc),
+            }
+        ]
+    )
     monkeypatch.setattr(retention, "get_collection", lambda name: collection)
 
     rows = await retention.list_legal_chat_history(
@@ -48,7 +62,37 @@ async def test_chat_history_list_is_scoped_to_logged_in_user(monkeypatch: pytest
     assert collection.find_query["app_key"] == "legalmitra"
     assert collection.find_query["user_id"] == "user-a"
     assert collection.find_query["expires_at"]["$gt"] <= datetime.now(timezone.utc)
-    assert rows == [{"record_id": "row-1", "user_id": "user-a"}]
+    assert rows[0]["record_id"] == "row-1"
+    assert rows[0]["title"] == "BNSS FIR quash checklist"
+    assert rows[0]["query"] == "BNSS FIR quash checklist"
+    assert "Direct answer" in rows[0]["preview"]
+    assert rows[0]["created_at"].startswith("2026-08-16")
+
+
+@pytest.mark.asyncio
+async def test_chat_history_title_falls_back_when_query_blank(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection = _FakeCollection(
+        [
+            {
+                "record_id": "row-blank",
+                "user_id": "user-a",
+                "query": "   ",
+                "response": "## Quash FIR under BNSS\n\nPractice note follows.",
+                "retention_days": 30,
+                "created_at": datetime(2026, 8, 16, tzinfo=timezone.utc),
+            }
+        ]
+    )
+    monkeypatch.setattr(retention, "get_collection", lambda name: collection)
+
+    rows = await retention.list_legal_chat_history(
+        tenant_id="tenant-1",
+        app_key="legalmitra",
+        user_id="user-a",
+    )
+
+    assert rows[0]["title"] == "Quash FIR under BNSS"
+    assert rows[0]["query"] == "Quash FIR under BNSS"
 
 
 @pytest.mark.asyncio
