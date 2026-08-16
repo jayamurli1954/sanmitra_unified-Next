@@ -6,6 +6,10 @@ import {
   filterDashboardByPersona,
 } from "./tracker-practice.js";
 import {
+  createProactiveController,
+  parsePracticeDeepLink,
+} from "./tracker-proactive.js";
+import {
   fieldValueFor,
   sanitizeSavedValues,
   trackerProfiles,
@@ -53,6 +57,31 @@ const practiceWorkspace = createPracticeWorkspaceController({
   getCurrentRole: () => currentRole,
   onPracticeMutated: async () => {
     await loadLivePractice();
+  },
+});
+
+async function openMatterActInPlace(matterId, focus = "matter-brief") {
+  if (!matterId || !getAccessToken()) return;
+  if (focus === "document-register") {
+    await documentRegister.selectMatter(matterId);
+    return;
+  }
+  await practiceWorkspace.openMatterActInPlace(matterId, focus || "matter-brief");
+}
+
+const proactive = createProactiveController({
+  apiRequest,
+  getAccessToken,
+  appKey: APP_KEY,
+  getCurrentRole: () => currentRole,
+  getMorningBrief: () => morningBrief,
+  setMorningBrief: (value) => {
+    morningBrief = value;
+  },
+  onStartWorkflow: (item, button) => startRecommendedWorkflow(item, button),
+  onOpenMatter: openMatterActInPlace,
+  onPracticeMutated: async () => {
+    await loadLivePractice({ skipProactive: true });
   },
 });
 
@@ -283,7 +312,8 @@ function updatePracticeBanner() {
   }
 }
 
-async function loadLivePractice() {
+async function loadLivePractice(options = {}) {
+  const { skipProactive = false } = options;
   if (!getAccessToken()) {
     livePractice = null;
     livePracticeLoadError = false;
@@ -295,6 +325,7 @@ async function loadLivePractice() {
     renderRows(getRoleRows());
     updateMetricsForRows();
     practiceWorkspace.renderLiveWidgets();
+    await proactive.refreshAll();
     return;
   }
   livePracticeLoadError = false;
@@ -317,7 +348,7 @@ async function loadLivePractice() {
   updateMetricsForRows();
   renderRows(getRoleRows());
   await Promise.all([
-    loadMorningBrief(false),
+    skipProactive ? Promise.resolve() : proactive.refreshAll(),
     loadFeeLedger(),
     custody.loadCustodySettings(livePractice),
     documentRegister.loadMatters(),
@@ -384,71 +415,7 @@ async function loadFeeLedger() {
 }
 
 function renderMorningBrief() {
-  const panel = document.getElementById("morning-brief-panel");
-  const healthEl = document.getElementById("morning-brief-health");
-  const advisoryEl = document.getElementById("morning-brief-advisory");
-  const actionsEl = document.getElementById("morning-brief-actions");
-  if (!panel || !healthEl || !actionsEl) return;
-
-  if (!getAccessToken()) {
-    panel.hidden = true;
-    return;
-  }
-  panel.hidden = false;
-  actionsEl.textContent = "";
-
-  if (!morningBrief) {
-    healthEl.textContent = "Morning Brief unavailable. Refresh after practice data is loaded.";
-    if (advisoryEl) advisoryEl.hidden = true;
-    return;
-  }
-
-  const score = morningBrief.practice_health_score;
-  const label = morningBrief.practice_health_label || "";
-  healthEl.textContent = `Practice Health ${score}/100 — ${label}`;
-  if (advisoryEl) {
-    advisoryEl.hidden = false;
-    advisoryEl.textContent = morningBrief.advisory_notice
-      || "Advisory — human review required. Never invent hearings, statutes, or court dates.";
-  }
-
-  const actions = morningBrief.sections?.priority_actions || [];
-  if (!actions.length) {
-    const li = document.createElement("li");
-    li.textContent = morningBrief.empty_practice
-      ? "No practice data yet. Create a client and matter to activate Priority Actions."
-      : "No open priority alerts for today.";
-    actionsEl.appendChild(li);
-    return;
-  }
-
-  actions.slice(0, 8).forEach((item) => {
-    const li = document.createElement("li");
-    const link = document.createElement("a");
-    link.href = item.action_href || "./tracker.html#daily-board";
-    link.textContent = item.title || item.summary || "Open matter";
-    const meta = document.createElement("span");
-    meta.textContent = ` · ${item.severity || "normal"} · score ${item.priority_score ?? "—"}`;
-    const tip = document.createElement("div");
-    tip.textContent = (item.suggested_actions || []).slice(0, 2).join(" · ");
-    li.append(link, meta);
-    if (tip.textContent) li.appendChild(tip);
-
-    const wf = item.recommended_workflow;
-    if (wf && item.matter_id) {
-      const start = document.createElement("button");
-      start.type = "button";
-      start.className = "legal-workflow-start";
-      start.textContent = `Start: ${wf.display_name || "Prepare Matter Response"}`;
-      start.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        startRecommendedWorkflow(item, start);
-      });
-      li.appendChild(start);
-    }
-    actionsEl.appendChild(li);
-  });
+  proactive.renderMorningBrief();
 }
 
 function latestStepByKey(steps) {
@@ -665,28 +632,7 @@ async function markReadyToFile(runId) {
 }
 
 async function loadMorningBrief(forceRefresh) {
-  if (!getAccessToken()) {
-    morningBrief = null;
-    renderMorningBrief();
-    return;
-  }
-  const persona = currentRole === "ca" || currentRole === "cs" ? currentRole : "advocate";
-  try {
-    const path = forceRefresh
-      ? "/api/v1/legal/practice/morning-brief"
-      : `/api/v1/legal/practice/morning-brief?persona=${encodeURIComponent(persona)}&window=daily`;
-    const result = await apiRequest(APP_KEY, path, {
-      method: forceRefresh ? "POST" : "GET",
-      timeoutMs: 20000,
-      body: forceRefresh
-        ? JSON.stringify({ persona, window: "daily", force_refresh: true })
-        : undefined,
-    });
-    morningBrief = result?.ok ? result.payload : null;
-  } catch (_error) {
-    morningBrief = null;
-  }
-  renderMorningBrief();
+  await proactive.loadMorningBrief(forceRefresh);
 }
 
 function setRole(role) {
@@ -713,6 +659,7 @@ function setRole(role) {
 
   if (getAccessToken()) {
     loadMorningBrief(false);
+    proactive.loadAlerts();
   }
 }
 
@@ -963,12 +910,18 @@ document.querySelectorAll("[data-tracker-tab]").forEach((button) => {
 });
 
 practiceWorkspace.bindEvents();
+proactive.bindEvents();
 setRole("advocate");
 updateActiveTab("daily-board");
 updatePracticeBanner();
 custody.renderCustodyPanel();
 documentRegister.bindEvents();
-loadLivePractice();
+loadLivePractice().then(async () => {
+  const deep = parsePracticeDeepLink();
+  if (deep.matterId && getAccessToken()) {
+    await openMatterActInPlace(deep.matterId, deep.focus || "matter-brief");
+  }
+});
 document.getElementById("morning-brief-refresh")?.addEventListener("click", () => {
   loadMorningBrief(true);
 });

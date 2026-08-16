@@ -380,5 +380,20 @@ export function createPracticeWorkspaceController({
     openNewMatterForm,
     showSignedInPanels,
     getMattersCache: () => mattersCache,
+    openMatterActInPlace: async (matterId, focus = "matter-brief") => {
+      if (!matterId || !getAccessToken()) return;
+      selectedMatterId = matterId;
+      const { briefPanel, briefMatterSelect } = els();
+      if (briefMatterSelect) briefMatterSelect.value = matterId;
+      if (focus === "document-register") {
+        // Document register selection is handled by caller via selectMatter.
+        return;
+      }
+      if (briefPanel) {
+        briefPanel.hidden = false;
+        briefPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      await loadBriefForMatter(matterId, { generate: false });
+    },
   };
 }

@@ -348,7 +348,7 @@ Near-term stages matter more than decade vision. **Do not start Stage 3+ until S
 
 **Build:** Production Morning Brief; deadline/limitation/filing watches; compliance-gap and practice-area notification alerts.
 
-**Planned engineering status (2026-08-02):** Implementation plan and foundation code in [`docs/architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md`](../architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md) — deterministic alerts, Practice Health Score, Morning Brief, in-app notifications, tracker panel. Feature-flagged via `LEGALMITRA_PROACTIVE_ENABLED`.
+**Current engineering status (2026-08-16):** Stage 4 Proactive Assistant is hardened for product use behind `LEGALMITRA_PROACTIVE_ENABLED`: deterministic alerts, Practice Health Score, Morning Brief sections, in-app notifications, tracker act-in-place (`matter_id` deep links), snooze/dismiss, and HTTP isolation tests. Spec: [`docs/architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md`](../architecture/LEGALMITRA_STAGE4_PROACTIVE_ASSISTANT.md). Sign-off: [`docs/operations/LEGALMITRA_STAGE4_HARDENING_SIGNOFF.md`](../operations/LEGALMITRA_STAGE4_HARDENING_SIGNOFF.md).
 
 **Stage 4 is complete when:**
 

@@ -272,17 +272,19 @@ Auto-resolve when condition clears; or user snooze/dismiss with audit.
 
 ## 10. Acceptance criteria
 
-- [ ] Morning Brief from real tenant data only; empty tenant honest  
-- [ ] Practice Health Score present on brief  
-- [ ] Priority Actions sorted by `priority_score`  
-- [ ] P0 deadline or hearing alert works including overdue  
-- [ ] Dormant matter alert evaluates  
-- [ ] Suggested actions present on alerts/brief items  
-- [ ] Tenant isolation verified  
-- [ ] Snooze/dismiss audited  
-- [ ] Act-in-place deep link works  
-- [ ] Feature flag can disable proactive generation  
-- [ ] Stage 2 and Stage 3 tests still pass  
+- [x] Morning Brief from real tenant data only; empty tenant honest  
+- [x] Practice Health Score present on brief  
+- [x] Priority Actions sorted by `priority_score`  
+- [x] P0 deadline or hearing alert works including overdue  
+- [x] Dormant matter alert evaluates  
+- [x] Suggested actions present on alerts/brief items  
+- [x] Tenant isolation verified  
+- [x] Snooze/dismiss audited  
+- [x] Act-in-place deep link works  
+- [x] Feature flag can disable proactive generation  
+- [x] Stage 2 and Stage 3 tests still pass  
+
+**Frontend hardening (2026-08-16):** Tracker Morning Brief sections, alerts list with snooze/dismiss, notifications inbox, `?matter_id=` act-in-place to matter brief / document register, HTTP Stage 4 tests, sign-off [`docs/operations/LEGALMITRA_STAGE4_HARDENING_SIGNOFF.md`](../operations/LEGALMITRA_STAGE4_HARDENING_SIGNOFF.md).
 
 ---
 

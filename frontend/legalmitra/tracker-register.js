@@ -418,5 +418,14 @@ export function createDocumentRegisterController({
     loadMatters,
     renderEmptyCopy,
     bindEvents,
+    selectMatter: async (matterId) => {
+      if (!matterId) return;
+      selectedMatterId = matterId;
+      const { matterSelect, panel } = panelEls();
+      if (panel) panel.hidden = !getAccessToken();
+      if (matterSelect) matterSelect.value = matterId;
+      await loadDocumentsForMatter(matterId);
+      panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
   };
 }

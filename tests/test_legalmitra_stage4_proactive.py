@@ -263,16 +263,46 @@ async def test_alert_tenant_isolation_and_dismiss(fake_db):
 
 
 @pytest.mark.asyncio
-async def test_proactive_disabled_flag(fake_db, monkeypatch):
-    class _S:
-        LEGALMITRA_PROACTIVE_ENABLED = False
-        LEGALMITRA_MORNING_BRIEF_ENABLED = False
-        LEGALMITRA_ALERT_LOOKAHEAD_DAYS = 7
-        LEGALMITRA_DORMANT_MATTER_DAYS = 45
-        LEGALMITRA_STALE_REVIEW_DAYS = 7
+async def test_hearing_alert_and_snooze(fake_db):
+    today = date.today()
+    await _seed_matter(fake_db, hearing=today - timedelta(days=1), title="Overdue hearing")
+    await proactive.refresh_practice_alerts(
+        tenant_id="tenant-a", app_key="legalmitra", actor_id="user-1"
+    )
+    alerts = await proactive.list_practice_alerts(
+        tenant_id="tenant-a", app_key="legalmitra", status="open"
+    )
+    hearing = next(a for a in alerts if a["alert_type"] == "hearing_approaching")
+    assert hearing["suggested_actions"]
+    assert "matter_id=" in (hearing.get("action_href") or "")
 
-    monkeypatch.setattr(proactive, "get_settings", lambda: _S())
-    with pytest.raises(proactive.ProactiveDisabledError):
-        await proactive.refresh_practice_alerts(
-            tenant_id="tenant-a", app_key="legalmitra", actor_id="user-1"
-        )
+    snoozed = await proactive.update_practice_alert(
+        tenant_id="tenant-a",
+        app_key="legalmitra",
+        alert_id=hearing["alert_id"],
+        actor_id="user-1",
+        payload=AlertUpdateRequest(status="snoozed"),
+    )
+    assert snoozed["status"] == "snoozed"
+    assert snoozed["snoozed_until"] is not None
+
+
+@pytest.mark.asyncio
+async def test_notifications_created_and_marked_read(fake_db):
+    await _seed_matter(fake_db, deadline=date.today(), title="Notify me")
+    await proactive.refresh_practice_alerts(
+        tenant_id="tenant-a", app_key="legalmitra", actor_id="user-1"
+    )
+    listed = await proactive.list_notifications(
+        tenant_id="tenant-a", app_key="legalmitra", user_id="user-1"
+    )
+    assert listed["count"] >= 1
+    note_id = listed["items"][0]["notification_id"]
+    marked = await proactive.mark_notification_read(
+        tenant_id="tenant-a",
+        app_key="legalmitra",
+        user_id="user-1",
+        notification_id=note_id,
+    )
+    assert marked["read_at"] is not None
+

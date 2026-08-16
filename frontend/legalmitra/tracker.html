@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="./tracker-custody.css?v=legalmitra-custody-p0">
     <link rel="stylesheet" href="./tracker-register.css?v=legalmitra-custody-p1">
     <link rel="stylesheet" href="./tracker-practice.css?v=legalmitra-stage3-harden">
+    <link rel="stylesheet" href="./tracker-proactive.css?v=legalmitra-stage4-harden">
   </head>
   <body class="legal-editorial-page">
     <header class="legal-navbar">
@@ -305,6 +306,32 @@
         </div>
         <p class="legal-morning-brief-advisory" id="morning-brief-advisory" hidden></p>
         <ol class="legal-morning-brief-actions" id="morning-brief-actions"></ol>
+        <div class="legal-morning-brief-sections" id="morning-brief-sections"></div>
+      </section>
+
+      <section class="legal-diary-panel" id="practice-alerts-panel" hidden aria-label="Practice alerts">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Practice alerts</span>
+            <h2>Deadlines, hearings, and gaps</h2>
+            <p>Deterministic watches from your tenant matters. Snooze or dismiss with audit — never invents court dates.</p>
+          </div>
+          <button type="button" id="practice-alerts-refresh">Refresh alerts</button>
+        </div>
+        <p class="legal-custody-status" id="practice-alerts-status" role="status" aria-live="polite"></p>
+        <ol class="legal-practice-alerts-list" id="practice-alerts-list"></ol>
+      </section>
+
+      <section class="legal-diary-panel" id="practice-notifications-panel" hidden aria-label="Practice notifications">
+        <div class="legal-diary-panel-head">
+          <div>
+            <span>Inbox</span>
+            <h2>Practice notifications</h2>
+            <p>In-app notices from new alerts. Open a matter without leaving this workspace.</p>
+          </div>
+        </div>
+        <p class="legal-custody-status" id="practice-notifications-status" role="status" aria-live="polite"></p>
+        <ol class="legal-practice-notifications-list" id="practice-notifications-list"></ol>
       </section>
 
       <section class="legal-diary-panel legal-workflow-panel" id="workflow-run-panel" hidden aria-label="Prepare Matter Response">
@@ -435,6 +462,6 @@
         <div class="legal-diary-detail-list" id="tracker-detail-list"></div>
       </section>
     </main>
-    <script type="module" src="./tracker.js?v=legalmitra-stage3-harden"></script>
+    <script type="module" src="./tracker.js?v=legalmitra-stage4-harden"></script>
   </body>
 </html>

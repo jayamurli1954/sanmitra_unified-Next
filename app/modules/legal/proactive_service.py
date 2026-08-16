@@ -18,6 +18,8 @@ from app.modules.legal.practice_service import (
     LEGAL_MATTER_TIMELINE_COLLECTION,
     LEGAL_MATTERS_COLLECTION,
 )
+from app.modules.legal.proactive_actions import action_href as _action_href
+from app.modules.legal.proactive_actions import suggested_actions_for as _suggested_actions_for
 from app.modules.legal.proactive_schemas import (
     AlertUpdateRequest,
     MorningBriefGenerateRequest,
@@ -137,12 +139,6 @@ def _health_label(score: int) -> str:
     return "Strong"
 
 
-def _action_href(matter_id: str | None) -> str:
-    if matter_id:
-        return f"./tracker.html?matter_id={matter_id}#daily-board"
-    return "./tracker.html#daily-board"
-
-
 async def ensure_proactive_indexes() -> None:
     alerts = get_collection(LEGAL_PRACTICE_ALERTS_COLLECTION)
     await alerts.create_index(
@@ -237,46 +233,6 @@ def compute_priority_score(
     if alert_type == "dormant_matter":
         score += 15
     return int(score)
-
-
-def _suggested_actions_for(*, alert_type: str, matter: dict) -> list[str]:
-    number = matter.get("matter_number") or matter.get("matter_id")
-    actions: list[str] = []
-    if alert_type == "hearing_approaching":
-        actions = [
-            f"Prepare for hearing on matter {number}",
-            "Review last order / timeline entry",
-            "Confirm client instructions",
-            "Generate Matter Intelligence Brief",
-        ]
-    elif alert_type == "deadline_approaching":
-        actions = [
-            f"Prepare filing / response for deadline on {number}",
-            "Check required documents are attached",
-            "Review applicable law with citations before filing",
-            "Generate Matter Intelligence Brief",
-        ]
-    elif alert_type == "compliance_gap_missing_documents":
-        actions = [
-            "Attach source documents to the matter file",
-            "Request missing papers from the client",
-            "Update matter timeline after receipt",
-        ]
-    elif alert_type == "matter_awaiting_review":
-        actions = [
-            "Move matter forward or update status",
-            "Generate or review Matter Intelligence Brief",
-            "Record next hearing/deadline if known",
-        ]
-    elif alert_type == "dormant_matter":
-        actions = [
-            "Confirm whether the matter is waiting on client, court, or internal work",
-            "Add a timeline note with current status",
-            "Set next deadline or place on hold if paused",
-        ]
-    else:
-        actions = ["Open matter and review timeline"]
-    return actions
 
 
 def _severity_for_days(days_until: int | None) -> str:
@@ -557,10 +513,15 @@ async def refresh_practice_alerts(
     upserted = 0
     for cand in candidates:
         existing = await alerts.find_one({**scope, "dedupe_key": cand["dedupe_key"]})
+        focus = (
+            "document-register"
+            if cand.get("alert_type") == "compliance_gap_missing_documents"
+            else "matter-brief"
+        )
         fields = {
             **cand,
             "updated_at": now,
-            "action_href": _action_href(cand.get("matter_id")),
+            "action_href": _action_href(cand.get("matter_id"), focus=focus),
         }
         if existing is None:
             doc = {

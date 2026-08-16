@@ -1,0 +1,77 @@
+/* LegalMitra Tracker — Stage 4 proactive panels */
+
+.legal-proactive-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.legal-proactive-open,
+.legal-proactive-item-actions button,
+.legal-workflow-start {
+  cursor: pointer;
+}
+
+.legal-morning-brief-sections {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.legal-morning-brief-sections section {
+  padding: 12px 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.legal-morning-brief-sections h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.legal-morning-brief-sections p,
+.legal-morning-brief-sections li,
+.legal-morning-brief-sections em {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.legal-morning-brief-sections ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.legal-practice-alerts-list,
+.legal-practice-notifications-list {
+  margin: 10px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.legal-practice-alerts-list li,
+.legal-practice-notifications-list li {
+  padding: 12px 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.legal-practice-notifications-list li.is-read {
+  opacity: 0.72;
+}
+
+#morning-brief-actions .legal-proactive-open {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+}
