@@ -186,6 +186,12 @@ async def test_hybrid_it_section_139_offline_slice_is_citation_backed(
     body = result["response"].lower()
     assert "section 139" in body
     assert "return of income" in body
+    assert "direct answer" in body
+    assert "company" in body and "firm" in body
+    assert "maximum amount not chargeable" in body
+    assert "who must file" in body
+    assert result.get("citation_audit", {}).get("mismatch_count", 0) == 0
+    assert result.get("quality_gate", {}).get("passed") is True
 
 
 @pytest.mark.asyncio

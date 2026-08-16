@@ -261,6 +261,9 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
         }
 
     # Stage 2 Income-tax Act — Section 139 return-of-income family.
+    # Senior-counsel spine for the common "who must file" question:
+    # Executive view → Direct answer → Why it matters → Who must file →
+    # Related filing mechanisms → Risk areas → Next steps → Limitations.
     if (
         ("section 139" in q or "s.139" in q or "s 139" in q or "return of income" in q)
         and (
@@ -273,75 +276,139 @@ def offline_legal_fallback(query: str, query_type: str) -> dict[str, Any] | None
         )
     ):
         response = (
-            "**Return of Income Under the Income-tax Act, 1961 — Section 139 Family**\n\n"
-            "**Core provision:** Section 139 of the Income-tax Act, 1961 governs filing of "
-            "return of income.\n\n"
-            "**Key rules (verify current Finance Act amendments before advising):**\n"
-            "1. **Who must file:** Section **139(1)** requires specified persons to furnish a "
-            "return of income for the previous year on or before the due date.\n"
-            "2. **Belated return:** Section **139(4)** permits a belated return within the "
-            "prescribed window after the end of the relevant assessment year (subject to "
-            "current statutory cut-off).\n"
-            "3. **Revised return:** Section **139(5)** permits revision of a return already "
-            "furnished, within the prescribed time, on discovering omission or wrong statement.\n"
-            "4. **Updated return:** Later amendments introduced an updated-return mechanism "
-            "(verify the current Section **139(8A)** / related provisions for the relevant year).\n"
-            "5. **Defective return:** Section **139(9)** addresses defective returns and the "
-            "opportunity to rectify defects.\n\n"
-            "**Limitations:** Due dates, forms, e-filing mandates, and Finance Act changes "
-            "vary by assessment year. Confirm the year-specific position before client advice."
+            "**Return of Income — Income-tax Act, 1961 Section 139**\n\n"
+            "**Executive view:** My preliminary view is that Section **139(1)** answers "
+            "*who must file* by person class, not by a single universal income figure. "
+            "Companies and firms file in every previous year; other persons file when "
+            "total income crosses the year-specific maximum amount not chargeable to "
+            "income-tax, subject to important provisos that can compel filing even "
+            "below that threshold.\n\n"
+            "**Direct answer:** Under **Section 139(1)** of the Income-tax Act, 1961, "
+            "a return of income for the previous year must ordinarily be furnished "
+            "on or before the due date by:\n"
+            "1. **Every company or firm** — compulsory for every previous year "
+            "(including where there is loss / nil income; verify the current text of "
+            "the proviso requiring company/firm returns each year); and\n"
+            "2. **Every other person** (individual, HUF, AOP/BOI, artificial juridical "
+            "person, etc.), if total income (or income of any other person for whom "
+            "he is assessable) during the previous year **exceeded the maximum amount "
+            "not chargeable to income-tax** for that year — subject to the provisos "
+            "noted below.\n\n"
+            "**Why this matters:** Advising “income is below the exemption limit, so "
+            "no return” is often incomplete. Provisos to Section 139(1) can still "
+            "require a return (for example where income *before* certain deductions / "
+            "exemptions exceeds the maximum non-chargeable amount, specified "
+            "high-value transactions apply, or foreign-asset / foreign-account "
+            "situations apply for residents). Wrong non-filing advice creates late-fee "
+            "and compliance exposure.\n\n"
+            "**Who must file (Section 139(1) map — verify current text for the AY)**\n\n"
+            "| Person class | Core rule |\n"
+            "| --- | --- |\n"
+            "| Company / firm | File every previous year (profit, loss, or nil) |\n"
+            "| Individual / HUF / AOP / BOI / artificial juridical person | File if total "
+            "income exceeds the maximum amount not chargeable to income-tax for that year |\n"
+            "| Resident (other than not ordinarily resident) with foreign asset / "
+            "signing authority (as specified) | Filing duty may arise even where income "
+            "is otherwise below the threshold — verify the current foreign-asset proviso "
+            "language |\n"
+            "| Person otherwise below threshold but covered by high-value transaction "
+            "proviso (commonly discussed as the seventh proviso to s.139(1)) | Must file "
+            "if prescribed transactions occurred in the previous year (current-account "
+            "deposits, foreign travel spend, electricity spend, and other notified "
+            "conditions — confirm monetary limits and notifications for that year) |\n"
+            "| Sixth-proviso style computation (where applicable) | Filing may be tested "
+            "on income **before** giving effect to specified Chapter VI-A deductions / "
+            "certain capital-gains exemptions — confirm the current proviso text |\n\n"
+            "**Related filing mechanisms (secondary — not the “who” question)**\n"
+            "- **Section 139(4)** — belated return within the prescribed post-AY window.\n"
+            "- **Section 139(5)** — revised return within the prescribed time on "
+            "discovering omission or wrong statement.\n"
+            "- **Section 139(8A)** / updated-return mechanism — verify the current "
+            "updated-return provisions for the relevant year.\n"
+            "- **Section 139(9)** — defective return and opportunity to cure defects.\n\n"
+            "**Risk areas**\n"
+            "- Treating “below exemption limit” as automatic non-filing\n"
+            "- Ignoring company/firm compulsory filing\n"
+            "- Missing high-value transaction / foreign-asset triggers\n"
+            "- Using the wrong assessment year’s exemption / due-date position\n"
+            "- Confusing voluntary filing with compulsory filing duties\n\n"
+            "**Recommended next steps**\n"
+            "1. Identify the person class (company / firm / individual / HUF / other).\n"
+            "2. Compute total income for the previous year against that year’s maximum "
+            "amount not chargeable to income-tax.\n"
+            "3. Check whether any proviso still compels filing despite low taxable income.\n"
+            "4. Confirm the due date, form, and e-filing mandate for that assessment year.\n"
+            "5. Only then advise file / not-file.\n\n"
+            "**Limitations:** Exact exemption amounts, due dates, ITR forms, e-filing "
+            "rules, and Finance Act amendments vary by assessment year. Monetary "
+            "thresholds under high-value transaction conditions must be verified from "
+            "the current statutory text and CBDT notifications for the claim year. "
+            "This note does not invent year-specific rupee figures."
         )
+        now = _now_utc().isoformat()
         return {
             "response": response + _CLOSING_DISCLAIMER,
             "citations": [
                 {
+                    "title": "Income-tax Act, 1961 - Section 139(1)",
+                    "source": "India Code / Central Act",
+                    "source_type": "statute",
+                    "snippet": (
+                        "Every company or firm must furnish a return; every other person "
+                        "must furnish a return if total income exceeds the maximum amount "
+                        "not chargeable to income-tax, subject to provisos (including "
+                        "compulsory company/firm filing and high-value / foreign-asset "
+                        "triggers where applicable)."
+                    ),
+                    "legal_metadata": {
+                        "jurisdiction": "India (Central)",
+                        "act": "Income-tax Act, 1961",
+                        "section": "139(1)",
+                        "citation": "IT Act s.139(1)",
+                    },
+                    "retrieved_at": now,
+                    "source_date": "1962-04-01",
+                    "staleness_status": "possibly_stale",
+                },
+                {
                     "title": "Income-tax Act, 1961 - Section 139",
                     "source": "India Code / Central Act",
                     "source_type": "statute",
-                    "snippet": "Return of income — who must file and related filing duties.",
+                    "snippet": "Return of income — filing duties and related mechanisms.",
                     "legal_metadata": {
                         "jurisdiction": "India (Central)",
                         "act": "Income-tax Act, 1961",
                         "section": "139",
                         "citation": "IT Act s.139",
                     },
-                    "retrieved_at": _now_utc().isoformat(),
+                    "retrieved_at": now,
                     "source_date": "1962-04-01",
                     "staleness_status": "possibly_stale",
                 },
                 {
-                    "title": "Income-tax Act, 1961 - Section 139(4)/(5)",
+                    "title": "Income-tax Act, 1961 - Section 139(4)/(5)/(8A)/(9)",
                     "source": "India Code / Central Act",
                     "source_type": "statute",
-                    "snippet": "Belated and revised returns within prescribed statutory windows.",
+                    "snippet": (
+                        "Belated, revised, updated (where applicable), and defective "
+                        "return mechanisms — secondary to the who-must-file rule."
+                    ),
                     "legal_metadata": {
                         "jurisdiction": "India (Central)",
                         "act": "Income-tax Act, 1961",
-                        "section": "139(4)/(5)",
-                        "citation": "IT Act s.139(4)/(5)",
+                        "section": "139(4)/(5)/(8A)/(9)",
+                        "citation": "IT Act s.139(4)/(5)/(8A)/(9)",
                     },
-                    "retrieved_at": _now_utc().isoformat(),
-                    "source_date": "1962-04-01",
-                    "staleness_status": "possibly_stale",
-                },
-                {
-                    "title": "Income-tax Act, 1961 - Section 139(9)",
-                    "source": "India Code / Central Act",
-                    "source_type": "statute",
-                    "snippet": "Defective return and rectification opportunity.",
-                    "legal_metadata": {
-                        "jurisdiction": "India (Central)",
-                        "act": "Income-tax Act, 1961",
-                        "section": "139(9)",
-                        "citation": "IT Act s.139(9)",
-                    },
-                    "retrieved_at": _now_utc().isoformat(),
+                    "retrieved_at": now,
                     "source_date": "1962-04-01",
                     "staleness_status": "possibly_stale",
                 },
             ],
             "strategy": "offline_it_section_139_return_fallback",
-            "note": "Authorized Stage 2 Income-tax Section 139 family offline fallback; verify current Finance Act.",
+            "note": (
+                "Authorized Stage 2 Income-tax Section 139 who-must-file package. "
+                "Verify current Finance Act / AY-specific exemption and due dates."
+            ),
             "dropped_citation_count": 0,
         }
 

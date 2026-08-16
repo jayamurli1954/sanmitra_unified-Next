@@ -196,7 +196,7 @@
 
       "expect": {
 
-        "must_include_terms": ["139", "return of income"],
+        "must_include_terms": ["139", "return of income", "company", "firm", "maximum amount"],
 
         "allow_strategies": ["offline_it_section_139_return_fallback", "rag", "hybrid"],
 

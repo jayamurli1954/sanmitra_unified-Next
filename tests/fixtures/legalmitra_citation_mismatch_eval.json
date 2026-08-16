@@ -44,7 +44,7 @@
       "expect": {
         "strategy": "offline_it_section_139_return_fallback",
         "require_quality_gate_pass": true,
-        "must_include_terms": ["139"],
+        "must_include_terms": ["139", "company", "firm", "maximum amount"],
         "forbid_uncited_generation": true
       }
     }
