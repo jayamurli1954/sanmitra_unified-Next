@@ -1,0 +1,48 @@
+name: SanMitra CI Red Alert
+
+# Email when critical workflows on main conclude as failure.
+# Separate from the daily digest so CI breaks are noticed within minutes.
+
+on:
+  workflow_run:
+    workflows:
+      - backend-ci
+      - accounting-stability-gate
+      - SanMitra Daily Ops Check
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  notify-on-failure:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r ops-agents/requirements.txt
+
+      - name: Email CI failure alert
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+          ALERT_RECIPIENT_EMAIL: ${{ secrets.ALERT_RECIPIENT_EMAIL }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name || 'manual' }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'manual' }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url || github.server_url }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: python ops-agents/scripts/ci_red_alert.py

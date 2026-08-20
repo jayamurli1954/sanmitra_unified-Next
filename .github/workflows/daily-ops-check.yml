@@ -35,6 +35,8 @@ jobs:
           ALERT_RECIPIENT_EMAIL: ${{ secrets.ALERT_RECIPIENT_EMAIL }}
           # Optional — enables Vercel deployment status in report:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Optional — separate production Render /health URL:
+          PRODUCTION_BACKEND_HEALTH_URL: ${{ secrets.PRODUCTION_BACKEND_HEALTH_URL }}
           # Built-in token — enables consecutive-failure detection via GitHub API:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}

@@ -1,0 +1,37 @@
+name: SanMitra LegalMitra Weekly Smoke
+
+# Mondays 02:00 UTC. Separate from daily digest (needs demo login secrets).
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legalmitra-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r ops-agents/requirements.txt
+
+      - name: Run LegalMitra research smoke
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+          ALERT_RECIPIENT_EMAIL: ${{ secrets.ALERT_RECIPIENT_EMAIL }}
+          LEGALMITRA_SMOKE_EMAIL: ${{ secrets.LEGALMITRA_SMOKE_EMAIL }}
+          LEGALMITRA_SMOKE_PASSWORD: ${{ secrets.LEGALMITRA_SMOKE_PASSWORD }}
+          LEGALMITRA_SMOKE_API_BASE: ${{ vars.LEGALMITRA_SMOKE_API_BASE }}
+          LEGALMITRA_SMOKE_APP_KEY: legalmitra
+        run: python ops-agents/scripts/legalmitra_weekly_smoke.py

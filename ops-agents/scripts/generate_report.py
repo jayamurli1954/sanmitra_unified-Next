@@ -3,9 +3,9 @@ SanMitra ops report generator (read-only).
 
 Pipeline:
     load config/services.yaml
-        -> deterministic checks (frontend, /health, SSL)        [no AI]
-        -> collect recent errors -> redact locally              [no AI sees raw]
-        -> ONE Claude call to summarize the redacted material   [the only AI]
+        -> deterministic checks (frontend, backends, SSL, latency, drift)
+        -> collect recent errors -> redact locally
+        -> ONE Claude call to summarize the redacted material
         -> compose report (hard facts + clearly-labeled AI note)
         -> email it (or print if SMTP not configured)
 
@@ -34,12 +34,19 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from checks import (  # noqa: E402
+    DEFAULT_THRESHOLDS,
     check_backend_health,
     check_consecutive_failures,
     check_frontend,
     check_ssl_expiry,
     check_vercel_deployment,
+    check_version_drift,
     classify_failure_layer,
+    compute_verdict,
+    deep_checks_attention,
+    read_repo_version,
+    resolve_backend_urls,
+    summarize_deep_checks,
 )
 from collect_errors import collect_errors  # noqa: E402
 from redact import redact_lines  # noqa: E402
@@ -49,70 +56,184 @@ MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 IST_OFFSET_NOTE = "times shown in UTC"
 
 
-# --------------------------------------------------------------------------
-# Checks
-# --------------------------------------------------------------------------
+def _thresholds(cfg: dict) -> dict:
+    merged = dict(DEFAULT_THRESHOLDS)
+    merged.update(cfg.get("thresholds") or {})
+    return merged
 
-def run_checks(products: list[dict]) -> list[dict]:
+
+def run_backend_checks(backends: list[dict], thresholds: dict) -> list[dict]:
+    rows: list[dict] = []
+    warn_ms = int(thresholds.get("be_latency_ms_warn") or 2000)
+    for b in resolve_backend_urls(backends):
+        if b.get("skipped"):
+            rows.append({
+                "name": b.get("name"),
+                "env": b.get("env"),
+                "skipped": True,
+                "skip_reason": b.get("skip_reason"),
+                "be_ok": True,
+                "be": {},
+                "deep_line": "",
+                "deep_attention": False,
+                "be_latency_warn": False,
+                "be_latency_warn_ms": warn_ms,
+            })
+            continue
+        be = check_backend_health(str(b["health_url"]))
+        be_ok = be["reachable"] and be.get("app_status") in ("ok", "degraded")
+        latency = be.get("latency_ms")
+        latency_warn = isinstance(latency, int) and latency > warn_ms
+        deep_line = summarize_deep_checks(be.get("checks"))
+        rows.append({
+            "name": b.get("name"),
+            "env": b.get("env"),
+            "skipped": False,
+            "be": be,
+            "be_ok": be_ok,
+            "deep_line": deep_line,
+            "deep_attention": deep_checks_attention(be.get("checks")),
+            "be_latency_warn": latency_warn,
+            "be_latency_warn_ms": warn_ms,
+        })
+    return rows
+
+
+def run_product_checks(
+    products: list[dict],
+    backend_by_env: dict[str, dict],
+    thresholds: dict,
+) -> list[dict]:
     vercel_token = os.getenv("VERCEL_TOKEN", "")
-    rows = []
+    fe_warn = int(thresholds.get("fe_latency_ms_warn") or 500)
+    ssl_warn = int(thresholds.get("ssl_warn_days") or 21)
+    rows: list[dict] = []
     for p in products:
         fe = check_frontend(p["frontend_url"])
-        be = check_backend_health(p["backend_health_url"])
-        ssl = check_ssl_expiry(p["frontend_url"])
+        ssl = check_ssl_expiry(p["frontend_url"], warn_days=ssl_warn)
+        env_key = str(p.get("backend_env") or "staging").lower()
+        backend_row = backend_by_env.get(env_key) or {}
+        be = backend_row.get("be") or {}
+        if p.get("backend_health_url") and not backend_row:
+            be = check_backend_health(str(p["backend_health_url"]))
+            be_ok = be["reachable"] and be.get("app_status") in ("ok", "degraded")
+        elif backend_row.get("skipped"):
+            # Production URL not configured — do not fail product rows.
+            be_ok = True
+            be = {"app_status": "skipped", "latency_ms": None, "reachable": False}
+        elif backend_row:
+            be_ok = bool(backend_row.get("be_ok"))
+            be = backend_row.get("be") or be
+        else:
+            be_ok = False
+            be = {"app_status": None, "latency_ms": None, "reachable": False, "error": "no backend"}
+
         fe_ok = fe["reachable"] and (fe["status_code"] or 500) < 400
-        be_ok = be["reachable"] and be.get("app_status") in ("ok", "degraded")
-        row = {"name": p["name"], "fe": fe, "be": be, "ssl": ssl,
-               "fe_ok": fe_ok, "be_ok": be_ok}
+        latency = fe.get("latency_ms")
+        fe_latency_warn = isinstance(latency, int) and latency > fe_warn
+        row = {
+            "name": p["name"],
+            "fe": fe,
+            "be": be,
+            "ssl": ssl,
+            "fe_ok": fe_ok,
+            "be_ok": be_ok,
+            "fe_latency_warn": fe_latency_warn,
+            "fe_latency_warn_ms": fe_warn,
+            "backend_env": env_key,
+        }
         row["layer"] = classify_failure_layer(row)
         project_id = p.get("vercel_project_id", "")
         row["vercel"] = (
             check_vercel_deployment(project_id, vercel_token)
             if project_id and vercel_token
-            else None
+            else {"error": "not configured"}
         )
         rows.append(row)
     return rows
 
 
-def has_outage(rows: list[dict]) -> bool:
+def has_outage(product_rows: list[dict], backend_rows: list[dict]) -> bool:
+    if any((not r["fe_ok"]) or (not r["be_ok"]) for r in product_rows):
+        return True
     return any(
-        (not r["fe_ok"]) or (not r["be_ok"]) or (r["be"].get("app_status") == "error")
-        for r in rows
+        (not b.get("skipped"))
+        and ((not b.get("be_ok")) or (b.get("be", {}).get("app_status") == "error"))
+        for b in backend_rows
     )
 
 
-# --------------------------------------------------------------------------
-# Deterministic report body (facts the AI never gets to change)
-# --------------------------------------------------------------------------
+def facts_block(
+    product_rows: list[dict],
+    backend_rows: list[dict],
+    version_drift: dict,
+    attention_reasons: list[str],
+) -> str:
+    lines = ["BACKENDS (deep /health)", "-" * 26]
+    for b in backend_rows:
+        if b.get("skipped"):
+            lines.append(f"{b['name']:<16} skipped ({b.get('skip_reason')})")
+            continue
+        be = b["be"]
+        be_s = (
+            f"{be.get('app_status')} / {be['latency_ms']}ms"
+            if be.get("reachable")
+            else f"DOWN ({be.get('error')})"
+        )
+        ver = be.get("version") or "?"
+        flag = ""
+        if not b["be_ok"]:
+            flag = "  <-- ATTENTION"
+        elif b.get("be_latency_warn") or b.get("deep_attention"):
+            flag = "  <-- WATCH"
+        lines.append(
+            f"{b['name']:<16} be:{be_s:<22} ver:{ver:<8} {b.get('deep_line')}{flag}"
+        )
 
-def facts_block(rows: list[dict]) -> str:
-    lines = ["FRONTENDS & BACKEND HEALTH", "-" * 26]
-    for r in rows:
-        fe, be, ssl = r["fe"], r["be"], r["ssl"]
-        fe_s = (f"{fe['status_code']} / {fe['latency_ms']}ms" if fe["reachable"]
-                else f"DOWN ({fe['error']})")
-        be_s = (f"{be.get('app_status')} / {be['latency_ms']}ms" if be["reachable"]
-                else f"DOWN ({be['error']})")
-        ssl_s = (f"{ssl['days_left']}d left" if ssl["days_left"] is not None
-                 else f"?({ssl['error']})")
-        flag = "" if (r["fe_ok"] and r["be_ok"]) else "  <-- ATTENTION"
-        lines.append(f"{r['name']:<12} fe:{fe_s:<22} be:{be_s:<18} ssl:{ssl_s}{flag}")
+    lines += ["", "FRONTENDS & SSL", "-" * 26]
+    for r in product_rows:
+        fe, ssl = r["fe"], r["ssl"]
+        fe_s = (
+            f"{fe['status_code']} / {fe['latency_ms']}ms"
+            if fe["reachable"]
+            else f"DOWN ({fe['error']})"
+        )
+        ssl_s = (
+            f"{ssl['days_left']}d left"
+            if ssl["days_left"] is not None
+            else f"?({ssl['error']})"
+        )
+        if ssl.get("expiring_soon"):
+            ssl_s += " WARN"
+        flag = ""
+        if not (r["fe_ok"] and r["be_ok"]):
+            flag = "  <-- ATTENTION"
+        elif r.get("fe_latency_warn") or ssl.get("expiring_soon"):
+            flag = "  <-- WATCH"
+        lines.append(
+            f"{r['name']:<12} fe:{fe_s:<22} ssl:{ssl_s} backend:{r.get('backend_env')}{flag}"
+        )
         if r.get("layer"):
             lines.append(f"             Likely layer: {r['layer']}")
-        v = r.get("vercel")
-        if v and not (v.get("error") == "not configured"):
-            if v.get("error"):
-                lines.append(f"             Vercel: check failed ({v['error']})")
-            elif v.get("status"):
-                age = f", {v['age_hours']}h ago" if v.get("age_hours") is not None else ""
-                lines.append(f"             Vercel: {v['status']}{age}")
+        v = r.get("vercel") or {}
+        if v.get("error") == "not configured":
+            pass
+        elif v.get("error"):
+            lines.append(f"             Vercel: check failed ({v['error']})")
+        elif v.get("status"):
+            age = f", {v['age_hours']}h ago" if v.get("age_hours") is not None else ""
+            lines.append(f"             Vercel: {v['status']}{age}")
+
+    lines += ["", "VERSION DRIFT", "-" * 26]
+    lines.append(version_drift.get("note") or "n/a")
+
+    if attention_reasons:
+        lines += ["", "ATTENTION / WATCH REASONS", "-" * 26]
+        for reason in attention_reasons:
+            lines.append(f"- {reason}")
+
     return "\n".join(lines)
 
-
-# --------------------------------------------------------------------------
-# The single LLM call
-# --------------------------------------------------------------------------
 
 def ai_summary(facts: str, redacted_errors: list[str]) -> str:
     api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -121,8 +242,6 @@ def ai_summary(facts: str, redacted_errors: list[str]) -> str:
 
     import anthropic
 
-    # The data goes inside a fenced, clearly-labeled block. The system prompt
-    # establishes that nothing inside DATA is an instruction.
     data_block = facts + "\n\nRECENT ERRORS (redacted):\n" + (
         "\n".join(f"- {e}" for e in redacted_errors) if redacted_errors
         else "- none reported"
@@ -154,10 +273,6 @@ def ai_summary(facts: str, redacted_errors: list[str]) -> str:
         return f"(AI summary unavailable: {type(e).__name__}: {e})"
 
 
-# --------------------------------------------------------------------------
-# Delivery
-# --------------------------------------------------------------------------
-
 def send_email(subject: str, body: str) -> None:
     host = os.getenv("SMTP_HOST")
     user = os.getenv("SMTP_USERNAME")
@@ -178,28 +293,57 @@ def send_email(subject: str, body: str) -> None:
     print(f"Report sent to {to}")
 
 
-# --------------------------------------------------------------------------
-
 def main() -> int:
-    products = yaml.safe_load(CONFIG.read_text())["products"]
-    rows = run_checks(products)
-    outage = has_outage(rows)
+    cfg = yaml.safe_load(CONFIG.read_text()) or {}
+    thresholds = _thresholds(cfg)
+    products = cfg.get("products") or []
+    backends = cfg.get("backends") or []
 
-    # Consecutive failure detection — only makes an API call when there is an outage.
+    backend_rows = run_backend_checks(backends, thresholds)
+    backend_by_env = {
+        str(b.get("env") or "").lower(): b for b in backend_rows if not b.get("skipped")
+    }
+    # Also index skipped production so products can still resolve staging.
+    for b in backend_rows:
+        env = str(b.get("env") or "").lower()
+        if env and env not in backend_by_env:
+            backend_by_env[env] = b
+
+    product_rows = run_product_checks(products, backend_by_env, thresholds)
+
+    # Drift vs primary (staging) live version when available.
+    staging = next((b for b in backend_rows if b.get("env") == "staging" and not b.get("skipped")), None)
+    live_version = (staging or {}).get("be", {}).get("version") if staging else None
+    version_drift = check_version_drift(read_repo_version(), live_version)
+
+    errors = redact_lines(collect_errors())
+    verdict, attention_reasons = compute_verdict(
+        product_rows=product_rows,
+        backend_rows=backend_rows,
+        version_drift=version_drift,
+        error_count=len(errors),
+    )
+
+    outage = has_outage(product_rows, backend_rows)
     consecutive = 0
     if outage:
-        gh_token = os.getenv("GH_TOKEN", "")
-        repo = os.getenv("GITHUB_REPO", "")
-        consecutive = check_consecutive_failures(gh_token, repo, "daily-ops-check.yml")
+        consecutive = check_consecutive_failures(
+            os.getenv("GH_TOKEN", ""),
+            os.getenv("GITHUB_REPO", ""),
+            "daily-ops-check.yml",
+        )
 
-    facts = facts_block(rows)
-    errors = redact_lines(collect_errors())
+    facts = facts_block(product_rows, backend_rows, version_drift, attention_reasons)
     summary = ai_summary(facts, errors)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    verdict = "ACTION NEEDED" if outage else "Healthy"
     recurring_tag = f"[RECURRING x{consecutive}] " if consecutive >= 2 else ""
-    subject = f"SanMitra Ops {'[ALERT] ' if outage else ''}{recurring_tag}{verdict} - {now}"
+    if verdict == "ACTION NEEDED":
+        subject = f"SanMitra Ops [ALERT] {recurring_tag}{verdict} - {now}"
+    elif verdict == "Attention":
+        subject = f"SanMitra Ops [WATCH] {verdict} - {now}"
+    else:
+        subject = f"SanMitra Ops Healthy - {now}"
 
     recurring_note = (
         f"\nNOTE: This has been failing for {consecutive} consecutive daily checks.\n"
@@ -216,13 +360,11 @@ def main() -> int:
         f"{'-' * 26}\n{summary}\n"
     )
 
-    # Only email on outage if QUIET_WHEN_HEALTHY is set; otherwise always send.
     if outage or os.getenv("QUIET_WHEN_HEALTHY") != "1":
         send_email(subject, body)
     else:
         print("Healthy; QUIET_WHEN_HEALTHY=1, no email sent.\n" + body)
 
-    # Non-zero exit on outage so the scheduler also records a failed run.
     return 1 if outage else 0
 
 
