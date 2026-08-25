@@ -21,6 +21,7 @@ import {
 import SettingsIcon from '@mui/icons-material/Settings';
 import Layout from '../components/Layout';
 import PanchangDisplay from '../components/PanchangDisplay';
+import PanchangWhatsAppCard from '../components/PanchangWhatsAppCard';
 import api from '../services/api';
 import { localISODate } from '../utils/panchangTime';
 
@@ -437,6 +438,9 @@ function Panchang() {
           </Grid>
         </CardContent>
       </Card>
+
+      {/* WhatsApp one-page card — same day data; full display below unchanged */}
+      {panchangData && <PanchangWhatsAppCard data={panchangData} />}
 
       {/* Full Panchang Display */}
       <PanchangDisplay

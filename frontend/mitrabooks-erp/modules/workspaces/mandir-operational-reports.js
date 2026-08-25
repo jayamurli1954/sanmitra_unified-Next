@@ -6,6 +6,10 @@
 
 import { accountingDrilldownState } from "./accounting-drilldown.js";
 import { formatCountLabel } from "./shared-render-utils.js";
+import {
+  buildWhatsAppShareUrl,
+  formatPanchangWhatsAppMessage,
+} from "../../../shared/panchang-whatsapp-message.js";
 
 /** @type {Record<string, Function> | null} */
 let deps = null;
@@ -91,6 +95,8 @@ export function renderMandirPanchang(payload = getLastMandirPanchang()) {
     ["Gulika", panchangTimeRange(kaala.gulika), "Abhijit", panchangTimeRange(muhurat.abhijit || muhurat.abhijit_muhurat)],
     ["Brahma Muhurat", panchangTimeRange(muhurat.brahma || muhurat.brahma_muhurat), "Amrita Kalam", panchangTimeRange(kaala.amrita || muhurat.amrita_kalam)],
   ];
+  const whatsappMessage = formatPanchangWhatsAppMessage(payload);
+  const whatsappUrl = buildWhatsAppShareUrl(whatsappMessage);
 
   return `
     <div class="verification-panel" id="mandir-panchang-panel">
@@ -100,6 +106,19 @@ export function renderMandirPanchang(payload = getLastMandirPanchang()) {
           <p>${escapeHtml(gregorianDate.formatted || gregorianDate.date || "")} | ${escapeHtml(location.city || "Temple location")}</p>
         </div>
         <span class="pill ok">${escapeHtml(vara.name || gregorianDate.day || "Today")}</span>
+      </div>
+      <div class="verification-panel" style="max-width:420px;margin:0 auto 1rem;background:#f7fbf4;border:1px solid #c8e6c9;">
+        <div class="preview-heading compact">
+          <div>
+            <h4>WhatsApp message card</h4>
+            <p class="muted">One-page EN / ಕನ್ನಡ / संस्कृत card for vertical phone share. Full table below is unchanged.</p>
+          </div>
+        </div>
+        <pre id="mandir-panchang-whatsapp-text" style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.45;max-height:360px;overflow:auto;background:#fff;padding:0.75rem;border:1px solid #e0e0e0;border-radius:8px;margin:0;">${escapeHtml(whatsappMessage)}</pre>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;align-items:center;">
+          <a class="button" href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
+          <span class="muted">Or select the card text and copy.</span>
+        </div>
       </div>
       <div class="metric-grid four">${renderStatCards(limbCards)}</div>
       <div class="table-preview compact-table">
