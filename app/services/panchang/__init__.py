@@ -135,11 +135,23 @@ class PanchangService:
 
         return get_varjyam_impl_data(sunrise, sunset, nakshatra_data, is_amrita)
 
-    def detect_special_days(self, tithi_data: Dict, vara: Dict, nakshatra: Dict) -> List[Dict]:
+    def _is_malayalam_chingam(self, jd: float) -> bool:
+        """Chingam (Malayalam) ≈ sidereal Sun in Simha (Leo), 120°–150°."""
+        sun_long = get_sidereal_position(jd, swe.SUN) % 360
+        return 120.0 <= sun_long < 150.0
+
+    def detect_special_days(
+        self,
+        tithi_data: Dict,
+        vara: Dict,
+        nakshatra: Dict,
+        jd: float | None = None,
+    ) -> List[Dict]:
         """Detect day-level observances used by the display layer."""
-        del vara, nakshatra  # Reserved for richer festival rules
+        del vara  # Reserved for weekday-specific festival rules
         special_days: List[Dict] = []
         tithi_name = tithi_data.get("name", "")
+        nakshatra_name = str(nakshatra.get("name") or "").strip()
 
         if tithi_name == "Ekadashi":
             special_days.append(
@@ -217,6 +229,32 @@ class PanchangService:
                     "description": "New Moon day, sacred for ancestor worship",
                     "observances": ["Perform Tarpanam", "Offer food to ancestors"],
                     "benefits": ["Blessings of ancestors", "Family harmony"],
+                }
+            )
+
+        # Onam / Thiruvonam: Chingam month + Thiruvonam nakshatra (Shravana).
+        # Malayali harvest festival honouring Mahabali / Vamana.
+        if jd is not None and nakshatra_name == "Shravana" and self._is_malayalam_chingam(jd):
+            special_days.append(
+                {
+                    "name": "Onam",
+                    "type": "festival",
+                    "importance": "major",
+                    "description": (
+                        "Thiruvonam (Onam) — Kerala’s major Malayali harvest festival "
+                        "celebrating King Mahabali’s homecoming and Lord Vishnu’s Vamana avatar"
+                    ),
+                    "observances": [
+                        "Offer prayers and welcome Mahabali (Onathappan)",
+                        "Prepare Onasadya feast and share with family/community",
+                        "Draw floral Pookkalam / Athapookkalam",
+                        "Temple visits, charity, and cultural gatherings",
+                    ],
+                    "benefits": [
+                        "Prosperity and gratitude for the harvest",
+                        "Family harmony and community bonding",
+                        "Devotion to Vishnu / Vamana tradition",
+                    ],
                 }
             )
 
@@ -316,6 +354,11 @@ class PanchangService:
                 "ಅಮಾವಾಸ್ಯೆ ಆಚರಣೆ",
                 "अमावास्या पालनम्",
             ),
+            "Onam": (
+                "Onam (Thiruvonam)",
+                "ಓಣಂ (ತಿರುವೋಣಂ)",
+                "ओणम् (तिरुवोणम्)",
+            ),
         }
 
         entries: List[Dict] = []
@@ -381,10 +424,20 @@ class PanchangService:
 
         return entries
 
-    def _build_special_notes(self, tithi: Dict, nakshatra: Dict, yoga: Dict) -> Dict:
+    def _build_special_notes(
+        self,
+        tithi: Dict,
+        nakshatra: Dict,
+        yoga: Dict,
+        festivals: List[Dict] | None = None,
+    ) -> Dict:
         """Compose summary/recommendation text for today's display."""
         recommendations: List[str] = []
         avoid: List[str] = []
+        festivals = festivals or []
+
+        festival_names = [str(item.get("name") or "").strip() for item in festivals if item.get("name")]
+        festival_names = [name for name in festival_names if name]
 
         tithi_quality = tithi.get("quality", {})
         nak_quality = nakshatra.get("quality", {})
@@ -394,6 +447,11 @@ class PanchangService:
         avoid.extend(nak_quality.get("avoid", [])[:3])
         if yoga.get("is_inauspicious"):
             avoid.append(f"Avoid major new ventures during {yoga.get('name', 'this')} Yoga")
+
+        for fest in festivals:
+            for obs in (fest.get("observances") or [])[:2]:
+                if obs:
+                    recommendations.append(str(obs))
 
         # De-duplicate while preserving order
         recommendations = list(dict.fromkeys([x for x in recommendations if x]))
@@ -405,6 +463,13 @@ class PanchangService:
             else "Waning Moon supports completion, reflection, and discipline"
         )
         summary = moon_note + "."
+        if festival_names:
+            summary = f"Today's festival: {', '.join(festival_names)}. " + summary
+            for fest in festivals:
+                desc = str(fest.get("description") or "").strip()
+                if desc:
+                    summary += f" {desc}."
+                    break
         if yoga.get("is_inauspicious"):
             summary += f" Avoid high-risk starts during {yoga.get('name')} Yoga."
 
@@ -412,6 +477,7 @@ class PanchangService:
             "summary": summary,
             "recommendations": recommendations,
             "avoid": avoid,
+            "festivals": festival_names,
         }
 
     def _get_neighbor_nakshatras(self, nakshatra: Dict) -> List[Dict]:
@@ -636,10 +702,10 @@ class PanchangService:
         tithi["quality"] = self.get_tithi_quality(tithi["name"])
         nakshatra["quality"] = self.get_nakshatra_quality(nakshatra["name"])
 
-        festivals = self.detect_special_days(tithi, vara, nakshatra)
+        festivals = self.detect_special_days(tithi, vara, nakshatra, jd=jd)
         day_periods = self.get_day_periods(sun_times["sunrise"], sun_times["sunset"], day_of_week)
         south_india_special = self._build_south_india_special(festivals, karana, yoga, nakshatra)
-        special_notes = self._build_special_notes(tithi, nakshatra, yoga)
+        special_notes = self._build_special_notes(tithi, nakshatra, yoga, festivals=festivals)
 
         # Metadata
         swe.set_sid_mode(swe.SIDM_LAHIRI)
