@@ -125,12 +125,10 @@ function installEventHandlers() {
       deps.dashboardPreview.innerHTML = deps.renderBusinessWorkspace();
     } else if (businessAction === "save-settings-section") {
       deps.saveBusinessAdminSettingsSection(button.getAttribute("data-settings-section") || "");
-    } else if (businessAction === "ca-client-filter") {
-      deps.caPracticeFilters = { ...deps.caPracticeFilters, client_name: button.getAttribute("data-client-name") || "" };
-      deps.loadCaPracticeDocuments();
-    } else if (businessAction === "ca-client-filter-clear") {
-      deps.caPracticeFilters = { ...deps.caPracticeFilters, client_name: "" };
-      deps.loadCaPracticeDocuments();
+    } else if (businessAction === "ca-book-switch") {
+      deps.switchCaClientBook({ bookId: button.getAttribute("data-book-id") || "", clientId: button.getAttribute("data-client-id") || "", clientName: button.getAttribute("data-client-name") || "" });
+    } else if (businessAction === "ca-book-switch-clear") {
+      deps.switchCaClientBook({ bookId: "", clientId: "", clientName: "" });
     } else if (businessAction === "ca-client-refresh") {
       deps.loadCaClients();
     } else if (businessAction === "hr-refresh") {

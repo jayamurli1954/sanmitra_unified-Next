@@ -1,14 +1,20 @@
 """CA client and CA document metadata routes.
 
-Registered on the shared ``router`` from ``app.modules.business.router``.
-Moved verbatim per docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md; paths and
-handler behaviour are unchanged.
+Practice roster is tenant-scoped. Each client owns a distinct accounting_entity_id
+(client book). Book switch uses X-Accounting-Entity-ID; tenant_id still comes from JWT.
 """
 from fastapi import Depends, Header, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounting.service import AccountingValidationError
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
-from app.core.tenants.app_resolvers import resolve_business_app_tenant
+from app.core.tenants.app_resolvers import (
+    accounting_entity_allowlist,
+    apply_header_accounting_entity,
+    resolve_business_app_tenant,
+)
+from app.db.postgres import get_optional_async_session
 from app.modules.business.schemas import (
     CaClientCreateRequest,
     CaClientListResponse,
@@ -35,6 +41,7 @@ async def create_ca_client_record(
     payload: CaClientCreateRequest,
     _module_context: dict = Depends(require_enabled_module("business")),
     current_user: dict = Depends(get_current_user),
+    session: AsyncSession | None = Depends(get_optional_async_session),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
@@ -47,25 +54,36 @@ async def create_ca_client_record(
         operation="CA client creation",
         x_accounting_entity_id=x_accounting_entity_id,
     )
-    return await create_ca_client(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
-        created_by=_created_by(current_user),
-        payload=payload,
-    )
+    organization_type = str(
+        ((_module_context or {}).get("tenant") or {}).get("organization_type")
+        or current_user.get("organization_type")
+        or "BUSINESS"
+    ).strip() or "BUSINESS"
+    try:
+        return await create_ca_client(
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            created_by=_created_by(current_user),
+            payload=payload,
+            session=session,
+            organization_type=organization_type,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/ca-clients", response_model=CaClientListResponse)
 async def list_ca_client_records(
     q: str | None = Query(default=None, min_length=1, max_length=160),
     active_only: bool = Query(default=True),
-    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    accounting_entity_id: str | None = Query(default=None, min_length=1, max_length=80),
     limit: int = Query(default=100, ge=1, le=500),
     _module_context: dict = Depends(require_enabled_module("business")),
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
     context = resolve_business_app_tenant(
         current_user=current_user,
@@ -73,12 +91,14 @@ async def list_ca_client_records(
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA client listing",
-        x_accounting_entity_id=accounting_entity_id,
+        x_accounting_entity_id=x_accounting_entity_id,
+        enforce_entity_allowlist=False,
     )
     return await list_ca_clients(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id,
+        accounting_entity_id=accounting_entity_id,
+        allowed_entity_ids=accounting_entity_allowlist(current_user),
         q=q,
         active_only=active_only,
         limit=limit,
@@ -93,6 +113,7 @@ async def update_ca_client_record(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
     context = resolve_business_app_tenant(
         current_user=current_user,
@@ -100,7 +121,8 @@ async def update_ca_client_record(
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA client update",
-        x_accounting_entity_id=payload.accounting_entity_id,
+        x_accounting_entity_id=x_accounting_entity_id or payload.accounting_entity_id,
+        enforce_entity_allowlist=False,
     )
     result = await update_ca_client(
         tenant_id=context.tenant_id,
@@ -109,6 +131,7 @@ async def update_ca_client_record(
         client_id=client_id,
         updated_by=_created_by(current_user),
         payload=payload,
+        allowed_entity_ids=accounting_entity_allowlist(current_user),
     )
     if result is None:
         raise HTTPException(status_code=404, detail="CA client not found")
@@ -124,6 +147,7 @@ async def create_ca_document(
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
+    payload = apply_header_accounting_entity(payload, x_accounting_entity_id=x_accounting_entity_id)
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
@@ -132,13 +156,16 @@ async def create_ca_document(
         operation="CA document metadata creation",
         x_accounting_entity_id=x_accounting_entity_id,
     )
-    return await create_ca_document_metadata(
-        tenant_id=context.tenant_id,
-        app_key=context.app_key,
-        accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
-        created_by=_created_by(current_user),
-        payload=payload,
-    )
+    try:
+        return await create_ca_document_metadata(
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id or payload.accounting_entity_id,
+            created_by=_created_by(current_user),
+            payload=payload,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/ca-documents", response_model=CaDocumentListResponse)
@@ -153,6 +180,7 @@ async def list_ca_documents(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
     context = resolve_business_app_tenant(
         current_user=current_user,
@@ -160,11 +188,12 @@ async def list_ca_documents(
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA document metadata listing",
+        x_accounting_entity_id=x_accounting_entity_id or accounting_entity_id,
     )
     return await list_ca_document_metadata(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
-        accounting_entity_id=accounting_entity_id,
+        accounting_entity_id=context.accounting_entity_id,
         status=status,
         client_name=client_name,
         assigned_to=assigned_to,
@@ -181,18 +210,21 @@ async def update_ca_document(
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
+    payload = apply_header_accounting_entity(payload, x_accounting_entity_id=x_accounting_entity_id)
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="CA document metadata update",
+        x_accounting_entity_id=x_accounting_entity_id or payload.accounting_entity_id,
     )
     result = await update_ca_document_metadata(
         tenant_id=context.tenant_id,
         app_key=context.app_key,
-        accounting_entity_id=payload.accounting_entity_id,
+        accounting_entity_id=context.accounting_entity_id,
         document_id=document_id,
         updated_by=_created_by(current_user),
         payload=payload,

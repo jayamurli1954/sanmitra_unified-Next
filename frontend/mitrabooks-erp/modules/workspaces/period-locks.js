@@ -5,7 +5,7 @@
 // NOTE: rerenderBusinessReportsIfActive stays in app.js (shared helper).
 // ====================================================================
 
-import { apiRequest, renderJson } from "../../../shared/api-client.js";
+import { apiRequest, renderJson, resolveAccountingEntityId } from "../../../shared/api-client.js";
 
 export let lastPeriodLocks = [];
 
@@ -52,7 +52,7 @@ export async function setGstPeriodLock(period, locked) {
   }
   const result = await apiRequest("mitrabooks", "/api/v1/business/gst-period-locks", {
     method: "PUT",
-    body: JSON.stringify({ period, locked, accounting_entity_id: "primary" }),
+    body: JSON.stringify({ period, locked, accounting_entity_id: resolveAccountingEntityId() }),
   });
   if (result.ok) {
     setLoginStatus("ok", locked ? "Period locked" : "Period unlocked", `${period} is now ${locked ? "finalised" : "open"}.`);

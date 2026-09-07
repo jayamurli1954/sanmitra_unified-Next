@@ -62,10 +62,12 @@ def _thresholds(cfg: dict) -> dict:
     return merged
 
 
-def run_backend_checks(backends: list[dict], thresholds: dict) -> list[dict]:
+def run_backend_checks(backends: list[dict], thresholds: dict, *, live_default: str | None = None) -> list[dict]:
     rows: list[dict] = []
     warn_ms = int(thresholds.get("be_latency_ms_warn") or 2000)
-    for b in resolve_backend_urls(backends):
+    health_cache: dict[str, dict] = {}
+    first_name_for_url: dict[str, str] = {}
+    for b in resolve_backend_urls(backends, live_default=live_default):
         if b.get("skipped"):
             rows.append({
                 "name": b.get("name"),
@@ -78,13 +80,21 @@ def run_backend_checks(backends: list[dict], thresholds: dict) -> list[dict]:
                 "deep_attention": False,
                 "be_latency_warn": False,
                 "be_latency_warn_ms": warn_ms,
+                "shared_with": None,
             })
             continue
-        be = check_backend_health(str(b["health_url"]))
+        url = str(b["health_url"])
+        if url not in health_cache:
+            health_cache[url] = check_backend_health(url)
+            first_name_for_url[url] = str(b.get("name") or "backend")
+        be = health_cache[url]
         be_ok = be["reachable"] and be.get("app_status") in ("ok", "degraded")
         latency = be.get("latency_ms")
         latency_warn = isinstance(latency, int) and latency > warn_ms
         deep_line = summarize_deep_checks(be.get("checks"))
+        shared_with = None
+        if first_name_for_url.get(url) != str(b.get("name") or ""):
+            shared_with = f"same host as {first_name_for_url[url]}"
         rows.append({
             "name": b.get("name"),
             "env": b.get("env"),
@@ -95,6 +105,7 @@ def run_backend_checks(backends: list[dict], thresholds: dict) -> list[dict]:
             "deep_attention": deep_checks_attention(be.get("checks")),
             "be_latency_warn": latency_warn,
             "be_latency_warn_ms": warn_ms,
+            "shared_with": shared_with,
         })
     return rows
 
@@ -186,8 +197,10 @@ def facts_block(
             flag = "  <-- ATTENTION"
         elif b.get("be_latency_warn") or b.get("deep_attention"):
             flag = "  <-- WATCH"
+        shared = b.get("shared_with")
+        shared_note = f" ({shared})" if shared else ""
         lines.append(
-            f"{b['name']:<16} be:{be_s:<22} ver:{ver:<8} {b.get('deep_line')}{flag}"
+            f"{b['name']:<16} be:{be_s:<22} ver:{ver:<8} {b.get('deep_line')}{flag}{shared_note}"
         )
 
     lines += ["", "FRONTENDS & SSL", "-" * 26]
@@ -298,8 +311,9 @@ def main() -> int:
     thresholds = _thresholds(cfg)
     products = cfg.get("products") or []
     backends = cfg.get("backends") or []
+    live_default = str(cfg.get("live_backend_health_url") or "").strip() or None
 
-    backend_rows = run_backend_checks(backends, thresholds)
+    backend_rows = run_backend_checks(backends, thresholds, live_default=live_default)
     backend_by_env = {
         str(b.get("env") or "").lower(): b for b in backend_rows if not b.get("skipped")
     }

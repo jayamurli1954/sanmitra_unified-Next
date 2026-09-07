@@ -775,7 +775,7 @@ def test_business_voucher_review_and_queue_use_business_routes() -> None:
     assert 'document_type: "voucher"' in queue_block
     assert "lastVoucherApprovalQueue = items;" in queue_block or "setLastVoucherApprovalQueue" in queue_block or "lastVoucherApprovalQueue =" in queue_block
     assert "/api/v1/business/vouchers/${encodeURIComponent(voucherId)}/review" in review_block
-    assert 'accounting_entity_id: "primary"' in review_block
+    assert "resolveAccountingEntityId()" in review_block
     assert 'data-business-action="review-voucher-approve"' in tables_source
     assert 'data-business-action="review-voucher-reject"' in tables_source
     assert 'data-business-action="voucher-queue-refresh"' in tables_source
@@ -842,9 +842,9 @@ def test_ca_practice_documents_use_attachment_api_routes() -> None:
     assert 'label: "CA Practice Portal"' in nav_source
     assert 'businessWorkspace: "ca-access"' in nav_source
     assert 'getActiveBusinessWorkspace() === "ca-access"' in workspace_source
-    assert 'data-business-action="ca-client-filter"' in combined
-    assert 'businessAction === "ca-client-filter"' in events_source
-    assert 'businessAction === "ca-client-filter-clear"' in events_source
+    assert 'data-business-action="ca-book-switch"' in combined and 'businessAction === "ca-book-switch"' in events_source
+    assert 'businessAction === "ca-book-switch-clear"' in events_source and "Company switch" not in ca_source
+    assert "setActiveAccountingEntityId" in ca_source
     assert 'businessAction === "ca-client-refresh"' in events_source
     assert 'module_key: "ca_access"' in nav_source
     nav_start = nav_source.index('businessWorkspace: "ca-access"')

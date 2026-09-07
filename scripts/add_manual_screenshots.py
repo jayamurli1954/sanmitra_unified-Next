@@ -88,6 +88,12 @@ MAPPING = [
     ("23.5", "23-5-pl.png", "Figure 23.5 — Cost-Centre P&L report"),
     ("23.6", "23-6-bom.png", "Figure 23.6 — Creating a BOM"),
     ("23.7", "23-7-work-orders.png", "Figure 23.7 — Work Orders and completion"),
+    # OfficeMitra AI
+    ("24.", "24-office-ai-workspace.png", "Figure 24 — OfficeMitra AI workspace (Tasks)"),
+    ("24.3", "24-3-email-summary.png", "Figure 24.3 — Email Summary"),
+    ("24.7", "24-7-brief.png", "Figure 24.7 — Today Brief"),
+    ("24.8", "24-8-proposals.png", "Figure 24.8 — Proposals queue"),
+    ("24.9", "24-9-mis-packs.png", "Figure 24.9 — MIS Packs (CA Analysis Pack)"),
 ]
 
 

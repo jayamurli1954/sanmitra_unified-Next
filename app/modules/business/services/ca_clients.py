@@ -1,12 +1,17 @@
 """CA client and CA document-metadata service functions.
 
-Extracted verbatim from app/modules/business/service.py per
-docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
-Imported via the service.py facade (which re-exports the public functions).
+Practice roster lives on the practice tenant. Each CA client gets its own
+accounting_entity_id (client book) under that tenant — not a second tenant.
 """
+from __future__ import annotations
+
+import re
 from uuid import uuid4
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.accounting.service import AccountingValidationError
+from app.core.tenants.app_resolvers import DEFAULT_ACCOUNTING_ENTITY_ID
 from app.db.mongo import get_collection  # noqa: F401 - test monkeypatch surface
 from app.modules.business import service as business_service
 from app.modules.business.schemas import (
@@ -24,25 +29,38 @@ from app.modules.business.service import (
     _now,
 )
 
+_CLIENT_BOOK_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
-async def _get_ca_client_in_scope(
+
+def allocate_client_book_id(client_name: str) -> str:
+    """Stable unique client book id. Never reuses the practice `primary` book."""
+    slug = _CLIENT_BOOK_SLUG_RE.sub("-", (client_name or "").strip().lower()).strip("-")[:24]
+    suffix = uuid4().hex[:10]
+    if slug:
+        return f"client-{slug}-{suffix}"
+    return f"client-{suffix}"
+
+
+async def _get_ca_client_for_practice(
     *,
     tenant_id: str,
     app_key: str,
-    accounting_entity_id: str,
     client_id: str,
+    allowed_entity_ids: set[str] | None = None,
 ) -> dict:
     client = await business_service.get_collection(CA_CLIENTS_COLLECTION).find_one(
         {
             "tenant_id": tenant_id,
             "app_key": app_key,
-            "accounting_entity_id": accounting_entity_id,
             "client_id": client_id,
             "active": True,
         }
     )
     if client is None:
-        raise AccountingValidationError("CA client is not active in this tenant book")
+        raise AccountingValidationError("CA client is not active in this practice")
+    book_id = str(client.get("accounting_entity_id") or "").strip()
+    if allowed_entity_ids is not None and book_id not in allowed_entity_ids:
+        raise AccountingValidationError("CA client book access denied")
     return client
 
 
@@ -82,6 +100,7 @@ def _ca_client_response_doc(doc: dict) -> dict:
     result.setdefault("compliance_tracks", [])
     result.setdefault("notes", None)
     result.setdefault("active", True)
+    result.setdefault("book_id", result.get("accounting_entity_id") or DEFAULT_ACCOUNTING_ENTITY_ID)
     return result
 
 
@@ -92,14 +111,26 @@ async def create_ca_client(
     accounting_entity_id: str,
     created_by: str,
     payload: CaClientCreateRequest,
+    session: AsyncSession | None = None,
+    organization_type: str | None = None,
 ) -> dict:
     client_id = str(uuid4())
     now = _now()
+    client_book_id = allocate_client_book_id(payload.client_name)
+    if session is not None:
+        await business_service.initialize_default_chart_of_accounts(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=client_book_id,
+            organization_type=organization_type or "BUSINESS",
+        )
     doc = {
         "client_id": client_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
+        "accounting_entity_id": client_book_id,
+        "book_id": client_book_id,
         "client_name": payload.client_name.strip(),
         "gstin": payload.gstin.strip() if payload.gstin else None,
         "pan": payload.pan.strip() if payload.pan else None,
@@ -135,7 +166,8 @@ async def list_ca_clients(
     *,
     tenant_id: str,
     app_key: str,
-    accounting_entity_id: str,
+    accounting_entity_id: str | None = None,
+    allowed_entity_ids: set[str] | None = None,
     q: str | None = None,
     active_only: bool = True,
     limit: int = 100,
@@ -143,8 +175,9 @@ async def list_ca_clients(
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
     }
+    if accounting_entity_id:
+        filters["accounting_entity_id"] = accounting_entity_id
     if active_only:
         filters["active"] = True
     safe_limit = max(1, min(int(limit or 100), 500))
@@ -163,6 +196,11 @@ async def list_ca_clients(
             or needle in str(row.get("gstin") or "").lower()
             or needle in str(row.get("contact_person") or "").lower()
         ]
+    if allowed_entity_ids is not None:
+        rows = [
+            row for row in rows
+            if str(row.get("accounting_entity_id") or "") in allowed_entity_ids
+        ]
     return {"items": [_ca_client_response_doc(row) for row in rows], "total": len(rows)}
 
 
@@ -174,16 +212,19 @@ async def update_ca_client(
     client_id: str,
     updated_by: str,
     payload: CaClientUpdateRequest,
+    allowed_entity_ids: set[str] | None = None,
 ) -> dict | None:
     filters = {
         "tenant_id": tenant_id,
         "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
         "client_id": client_id,
     }
     collection = business_service.get_collection(CA_CLIENTS_COLLECTION)
     existing = await collection.find_one(filters)
     if existing is None:
+        return None
+    book_id = str(existing.get("accounting_entity_id") or "")
+    if allowed_entity_ids is not None and book_id not in allowed_entity_ids:
         return None
     patch = payload.model_dump(exclude_unset=True)
     patch.pop("accounting_entity_id", None)
@@ -222,20 +263,22 @@ async def create_ca_document_metadata(
     now = _now()
     client = None
     client_id = str(payload.client_id or "").strip() or None
+    document_book_id = accounting_entity_id
     if client_id:
-        client = await _get_ca_client_in_scope(
+        client = await _get_ca_client_for_practice(
             tenant_id=tenant_id,
             app_key=app_key,
-            accounting_entity_id=accounting_entity_id,
             client_id=client_id,
+            allowed_entity_ids=None,
         )
+        document_book_id = str(client.get("accounting_entity_id") or accounting_entity_id)
     client_name = str((client or {}).get("client_name") or payload.client_name).strip()
     doc = {
         "document_id": document_id,
         "tenant_id": tenant_id,
         "app_key": app_key,
-        "accounting_entity_id": accounting_entity_id,
-        "book_id": accounting_entity_id,
+        "accounting_entity_id": document_book_id,
+        "book_id": document_book_id,
         "client_id": client_id,
         "client_name": client_name,
         "document_type": payload.document_type.strip(),

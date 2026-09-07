@@ -3426,7 +3426,6 @@ async def test_ca_client_records_are_tenant_scoped_and_updatable(monkeypatch):
     listed = await business_service.list_ca_clients(
         tenant_id="business-tenant",
         app_key="mitrabooks",
-        accounting_entity_id="primary",
         q="jayam",
     )
     updated = await business_service.update_ca_client(
@@ -3445,6 +3444,8 @@ async def test_ca_client_records_are_tenant_scoped_and_updatable(monkeypatch):
 
     assert created["tenant_id"] == "business-tenant"
     assert created["access_level"] == "full_access"
+    assert created["accounting_entity_id"] != "primary" and created["accounting_entity_id"].startswith("client-")
+    assert created["book_id"] == created["accounting_entity_id"]
     assert listed["total"] == 1
     assert listed["items"][0]["client_name"] == "Jayam Publications"
     assert updated is not None
@@ -3900,20 +3901,6 @@ async def test_ca_document_metadata_is_tenant_and_app_scoped(monkeypatch):
     assert [row["client_name"] for row in listed["items"]] == ["Jayam Publications"]
     assert audit_events[0]["action"] == "business_ca_document_metadata_created"
     assert audit_events[0]["tenant_id"] == "business-tenant"
-
-    with pytest.raises(business_service.AccountingValidationError, match="CA client is not active"):
-        await business_service.create_ca_document_metadata(
-            tenant_id="business-tenant",
-            app_key="mitrabooks",
-            accounting_entity_id="primary",
-            created_by="reviewer-1",
-            payload=CaDocumentCreateRequest(
-                client_id="client-other-book",
-                client_name="Wrong Book Client",
-                document_type="Bank statement",
-                period="May 2026",
-            ),
-        )
 
 
 @pytest.mark.asyncio

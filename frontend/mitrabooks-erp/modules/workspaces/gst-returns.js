@@ -4,7 +4,7 @@
 // Pure move: logic unchanged. Shell deps injected via initGstReturns(...).
 // ====================================================================
 
-import { apiRequest, renderJson } from "../../../shared/api-client.js";
+import { apiRequest, renderJson, resolveAccountingEntityId } from "../../../shared/api-client.js";
 
 export const gstReturnState = {
   lastGstSettlement: null,
@@ -147,7 +147,7 @@ export async function postGstSettlement() {
   const period = periodInput?.value || gstReturnState.gstSettlementPeriod;
   const result = await apiRequest("mitrabooks", "/api/v1/business/gst-settlement", {
     method: "POST",
-    body: JSON.stringify({ period, lock_period: !!lockInput?.checked, accounting_entity_id: "primary" }),
+    body: JSON.stringify({ period, lock_period: !!lockInput?.checked, accounting_entity_id: resolveAccountingEntityId() }),
   });
   if (result.ok) {
     gstReturnState.lastGstSettlement = result.payload;

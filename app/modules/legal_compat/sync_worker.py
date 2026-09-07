@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import logging
 import re
-import xml.etree.ElementTree as ET
+from app.modules.legal_compat.safe_xml import Element, fromstring as xml_fromstring
 from contextlib import suppress
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -38,7 +38,7 @@ def _strip_html(value: str) -> str:
     return unescape(compact)
 
 
-def _rss_item_text(item: ET.Element, tag: str) -> str:
+def _rss_item_text(item: Element, tag: str) -> str:
     direct = item.findtext(tag)
     if direct:
         return direct.strip()
@@ -75,7 +75,7 @@ async def _fetch_google_news_items(*, query: str, limit: int, timeout_seconds: i
         if response.status_code >= 400 or not response.text.strip():
             return []
 
-        root = ET.fromstring(response.text)
+        root = xml_fromstring(response.text)
         out: list[dict[str, Any]] = []
         seen: set[str] = set()
 

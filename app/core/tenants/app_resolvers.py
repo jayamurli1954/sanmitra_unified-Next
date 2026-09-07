@@ -17,6 +17,28 @@ class AppTenantContext:
     accounting_entity_id: str = DEFAULT_ACCOUNTING_ENTITY_ID
 
 
+def accounting_entity_allowlist(current_user: dict) -> set[str] | None:
+    """Return assigned client books for non-admin users; None means unrestricted."""
+    role = str(current_user.get("role") or "").strip().lower()
+    if role in ACCOUNTING_ENTITY_ADMIN_ROLES:
+        return None
+    return {
+        str(entity_id).strip()
+        for entity_id in (current_user.get("accounting_entity_ids") or [DEFAULT_ACCOUNTING_ENTITY_ID])
+        if str(entity_id).strip()
+    }
+
+
+def apply_header_accounting_entity(payload, *, x_accounting_entity_id: str | None):
+    """Prefer the trusted X-Accounting-Entity-ID book over a payload default."""
+    header = str(x_accounting_entity_id or "").strip()
+    if not header or not hasattr(payload, "accounting_entity_id"):
+        return payload
+    if str(getattr(payload, "accounting_entity_id") or "") == header:
+        return payload
+    return payload.model_copy(update={"accounting_entity_id": header})
+
+
 def resolve_business_app_tenant(
     *,
     current_user: dict,
@@ -26,12 +48,14 @@ def resolve_business_app_tenant(
     operation: str = "write",
     block_default_tenant: bool = True,
     x_accounting_entity_id: str | None = None,
+    enforce_entity_allowlist: bool = True,
 ) -> AppTenantContext:
     """Resolve and validate app/tenant scope for business data operations.
 
-    The optional accounting entity (client book) dimension lets one practice
-    tenant manage multiple client books later. It always defaults to the single
-    "primary" book so existing single-entity tenants are unaffected.
+    The accounting entity (client book) dimension lets one practice tenant
+    manage multiple client books. It defaults to the single "primary" book so
+    existing single-entity tenants are unaffected. Tenant id still comes from
+    the JWT, never from the request body.
     """
 
     expected = resolve_app_key(expected_app_key)
@@ -56,14 +80,9 @@ def resolve_business_app_tenant(
         )
 
     accounting_entity_id = str(x_accounting_entity_id or DEFAULT_ACCOUNTING_ENTITY_ID).strip() or DEFAULT_ACCOUNTING_ENTITY_ID
-    role = str(current_user.get("role") or "").strip().lower()
-    if role not in ACCOUNTING_ENTITY_ADMIN_ROLES:
-        assigned_entities = {
-            str(entity_id).strip()
-            for entity_id in (current_user.get("accounting_entity_ids") or [DEFAULT_ACCOUNTING_ENTITY_ID])
-            if str(entity_id).strip()
-        }
-        if accounting_entity_id not in assigned_entities:
+    if enforce_entity_allowlist:
+        assigned_entities = accounting_entity_allowlist(current_user)
+        if assigned_entities is not None and accounting_entity_id not in assigned_entities:
             raise HTTPException(status_code=403, detail="Accounting entity access denied")
 
     return AppTenantContext(

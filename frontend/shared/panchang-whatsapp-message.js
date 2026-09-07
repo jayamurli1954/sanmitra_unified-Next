@@ -18,7 +18,7 @@ const TITHI_I18N = {
   Dwadashi: { kn: 'ದ್ವಾದಶಿ', sa: 'द्वादशी' },
   Trayodashi: { kn: 'ತ್ರಯೋದಶಿ', sa: 'त्रयोदशी' },
   Chaturdashi: { kn: 'ಚತುರ್ದಶಿ', sa: 'चतुर्दशी' },
-  Purnima: { kn: 'ಪೂರ್ಣಿಮಾ', sa: 'पूर्णिमा' },
+  Purnima: { kn: 'ಪೌರ್ಣಿಮಾ', sa: 'पूर्णिमा' },
   Amavasya: { kn: 'ಅಮಾವಾಸ್ಯೆ', sa: 'अमावास्या' },
 };
 

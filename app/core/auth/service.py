@@ -172,10 +172,16 @@ def _otp_hash(mobile: str, otp: str) -> str:
     settings = get_settings()
     # Use a dedicated OTP_PEPPER env var to keep OTP hashing independent of JWT signing.
     # Fall back to JWT_SECRET only if OTP_PEPPER is not configured (dev/test convenience).
-    pepper = settings.OTP_PEPPER or settings.JWT_SECRET
+    # Production validate() already requires a distinct OTP_PEPPER; never reuse JWT_SECRET there.
+    is_prod = str(settings.ENVIRONMENT or "").strip().lower() in {"production", "prod"}
+    pepper = settings.OTP_PEPPER
     if not pepper:
-        # Last-resort fallback so dev environments without any secrets still work,
-        # but this path is explicitly warned about in Settings.validate().
+        if is_prod:
+            raise HTTPException(status_code=503, detail="OTP hashing is not configured")
+        pepper = settings.JWT_SECRET
+    if not pepper:
+        # Last-resort fallback so local environments without any secrets still work.
+        # Settings.validate() warns about this path and production refuses to boot.
         pepper = "sanmitra-dev-pepper"
     return sha256(f"{mobile}|{otp}|{pepper}".encode("utf-8")).hexdigest()
 

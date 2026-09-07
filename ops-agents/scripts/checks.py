@@ -254,21 +254,30 @@ def check_version_drift(repo_version: str | None, live_version: str | None) -> d
     return result
 
 
-def resolve_backend_urls(backends: list[dict]) -> list[dict]:
-    """Apply PRODUCTION_BACKEND_HEALTH_URL override; drop empty production URLs."""
+def resolve_backend_urls(
+    backends: list[dict], *, live_default: str | None = None
+) -> list[dict]:
+    """Apply PRODUCTION_BACKEND_HEALTH_URL override; use live_default when prod URL empty."""
     prod_override = (os.getenv("PRODUCTION_BACKEND_HEALTH_URL") or "").strip()
+    live_fallback = (
+        (os.getenv("LIVE_BACKEND_HEALTH_URL") or "").strip()
+        or (live_default or "").strip()
+    )
     resolved: list[dict] = []
     for b in backends or []:
         item = dict(b)
         env = str(item.get("env") or "").lower()
         url = str(item.get("health_url") or "").strip()
-        if env == "production" and prod_override:
-            url = prod_override
+        if env == "production":
+            if prod_override:
+                url = prod_override
+            elif not url and live_fallback:
+                url = live_fallback
             item["health_url"] = url
         if not url:
             item["skipped"] = True
             item["skip_reason"] = (
-                "PRODUCTION_BACKEND_HEALTH_URL not set"
+                "live/prod health URL not configured"
                 if env == "production"
                 else "health_url empty"
             )

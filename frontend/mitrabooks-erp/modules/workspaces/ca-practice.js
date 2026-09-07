@@ -5,7 +5,7 @@
 // Includes CA practice renderers (Phase 3 seam 34).
 // ====================================================================
 
-import { apiRequest, renderJson } from "../../../shared/api-client.js";
+import { apiRequest, renderJson, getActiveAccountingEntityId, setActiveAccountingEntityId } from "../../../shared/api-client.js";
 
 export let lastCaDocuments = [];
 export let lastCaDocumentsResult = null;
@@ -226,6 +226,8 @@ export async function createCaPracticeDocument(form) {
         loading: false,
       };
     }
+    const bookId = String(result.payload?.accounting_entity_id || "").trim();
+    if (bookId) setActiveAccountingEntityId(bookId);
     setLoginStatus(
       "ok",
       "Document metadata added",
@@ -292,8 +294,10 @@ export async function createCaClient(form) {
       notes: "",
     };
     form.reset();
-    await loadCaClients();
-    setLoginStatus("ok", "CA client added", `${result.payload?.client_name || "Client"} is now available in the CA practice workspace.`);
+    const bookId = String(result.payload?.accounting_entity_id || "").trim();
+    if (bookId) setActiveAccountingEntityId(bookId);
+    await loadCaClients(); await loadCaPracticeDocuments({ rerender: false });
+    setLoginStatus("ok", "CA client book created", `${result.payload?.client_name || "Client"} now has its own client book in this practice.`);
   } else {
     setLoginStatus("danger", "CA client create failed", statusDetailText(result.payload?.detail) || "Check the required fields and try again.");
   }
@@ -421,18 +425,28 @@ export function caClientComplianceLabel(tracks) {
 }
 
 export function caClientSwitchRows() {
+  const activeBook = getActiveAccountingEntityId() || "primary";
   if (Array.isArray(lastCaClients) && lastCaClients.length) {
-    return lastCaClients
-      .filter((row) => row.active !== false)
-      .map((row) => ({
-        client: row.client_name || "Unnamed client",
-        count: lastCaDocuments.filter((doc) => (doc.client_name || "") === (row.client_name || "")).length,
-        owner: row.client_owner || "",
-        access_level: row.access_level || "view_only",
-        compliance: caClientComplianceLabel(row.compliance_tracks),
-      }));
+    return lastCaClients.filter((row) => row.active !== false).map((row) => ({
+      client: row.client_name || "Unnamed client",
+      clientId: row.client_id || "",
+      bookId: row.accounting_entity_id || row.book_id || "",
+      count: lastCaDocuments.filter((doc) => (doc.accounting_entity_id || "") === (row.accounting_entity_id || "")).length,
+      owner: row.client_owner || "",
+      access_level: row.access_level || "view_only",
+      compliance: caClientComplianceLabel(row.compliance_tracks),
+      active: activeBook === (row.accounting_entity_id || row.book_id || "primary"),
+    }));
   }
   return caPracticeClientBreakdown(lastCaDocuments);
+}
+
+export async function switchCaClientBook(options = {}) {
+  const bookId = String(options.bookId || "").trim();
+  setActiveAccountingEntityId(bookId);
+  caPracticeFilters = { ...caPracticeFilters, client_name: "" };
+  setLoginStatus("ok", bookId ? "Client book active" : "Practice book active", bookId ? `${options.clientName || "Client"} is the active client book.` : "Showing the practice tenant primary book.");
+  await loadCaPracticeDocuments();
 }
 
 export function caClientById(clientId) {
@@ -567,7 +581,7 @@ export function renderCaClientMaster() {
                 <tr>
                   <td>
                     <strong>${escapeHtml(row.client_name || "-")}</strong>
-                    <span class="row-subtext">${escapeHtml(row.engagement_type || "General engagement")}</span>
+                    <span class="row-subtext">${escapeHtml(row.engagement_type || "General engagement")}${row.accounting_entity_id ? ` · ${escapeHtml(row.accounting_entity_id)}` : ""}</span>
                   </td>
                   <td>
                     <strong>${escapeHtml(row.contact_person || "-")}</strong>
@@ -982,7 +996,7 @@ export function renderCaPracticePortalWorkspace() {
         <div>
           <span class="workbench-kicker">Practice workbench</span>
           <h4>CA Practice Portal</h4>
-          <p>Manage CA access to your books and track client document workflow.</p>
+          <p>One practice tenant, many client books. Switch a book to post into that client's ledger.</p>
         </div>
         <span class="pill ok">Active</span>
       </div>
@@ -991,7 +1005,7 @@ export function renderCaPracticePortalWorkspace() {
         <article>
           <span>Client Tracking</span>
           <strong>${escapeHtml(String(summary.clientCount))}</strong>
-          <small>Client books in this tenant queue.</small>
+          <small>Client books in this practice tenant.</small>
         </article>
         <article>
           <span>Review Queue</span>
@@ -1006,23 +1020,9 @@ export function renderCaPracticePortalWorkspace() {
       </div>
       ${renderCaClientMaster()}
       <div class="planned-org-module-grid" style="margin-top:1rem">
-        ${clients.map((row) => `
-          <article>
-            <div>
-              <h4>${escapeHtml(row.client)}</h4>
-              <button class="secondary" type="button" data-business-action="ca-client-filter" data-client-name="${escapeHtml(row.client)}">Switch</button>
-            </div>
-            <p>${escapeHtml(String(row.count || 0))} document(s) in the current client queue.${caPracticeFilters.client_name === row.client ? " Active company filter." : ""}</p>
-            ${row.owner || row.compliance ? `<span class="row-subtext">${escapeHtml([row.owner, row.compliance].filter(Boolean).join(" · "))}</span>` : ""}
-          </article>
-        `).join("")}
+        ${clients.map((row) => `<article><div><h4>${escapeHtml(row.client)}</h4><button class="secondary" type="button" data-business-action="ca-book-switch" data-book-id="${escapeHtml(row.bookId || "")}" data-client-id="${escapeHtml(row.clientId || "")}" data-client-name="${escapeHtml(row.client)}">${row.active ? "Active book" : "Switch book"}</button></div><p>${escapeHtml(String(row.count || 0))} document(s) in this client book.${row.active ? " Active client book." : ""}</p>${row.owner || row.compliance || row.bookId ? `<span class="row-subtext">${escapeHtml([row.owner, row.compliance, row.bookId ? `Book ${row.bookId}` : ""].filter(Boolean).join(" · "))}</span>` : ""}</article>`).join("")}
       </div>
-      ${caPracticeFilters.client_name ? `
-      <div class="settings-boundary-note" style="margin-top:1rem">
-        <strong>Company switch:</strong>
-        Viewing CA queue for <strong>${escapeHtml(caPracticeFilters.client_name)}</strong>.
-        <button class="secondary" type="button" data-business-action="ca-client-filter-clear" style="margin-left:.5rem">Clear</button>
-      </div>` : ""}
+      ${getActiveAccountingEntityId() ? `<div class="settings-boundary-note" style="margin-top:1rem"><strong>Active client book:</strong> ERP requests use <strong>${escapeHtml(getActiveAccountingEntityId())}</strong>. <button class="secondary" type="button" data-business-action="ca-book-switch-clear" style="margin-left:.5rem">Back to practice book</button></div>` : ""}
       ${renderCaDocumentIntake(model.documentIntake)}
     </div>
   `;

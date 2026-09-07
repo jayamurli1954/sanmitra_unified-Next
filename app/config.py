@@ -508,6 +508,11 @@ class Settings:
                 "OTP_PEPPER is not set. OTP hashes will use JWT_SECRET as fallback. "
                 "Set OTP_PEPPER before deploying to production."
             )
+        elif is_prod and self.OTP_PEPPER == self.JWT_SECRET:
+            raise ValueError(
+                "OTP_PEPPER must be distinct from JWT_SECRET in production so a JWT "
+                "compromise does not also compromise OTP hashes."
+            )
 
         # DB pool recycle: warn if > 5 minutes (Render/RDS drop idle connections ~300s)
         if self.PG_POOL_RECYCLE_SECONDS > 300:

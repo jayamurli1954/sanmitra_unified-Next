@@ -4,7 +4,7 @@
 // Pure move: logic unchanged. Shell deps injected via initItcReversals(...).
 // ====================================================================
 
-import { apiRequest, renderJson } from "../../../shared/api-client.js";
+import { apiRequest, renderJson, resolveAccountingEntityId } from "../../../shared/api-client.js";
 
 export let lastItcReversal = null;
 export let lastItcReversedBills = [];
@@ -65,7 +65,7 @@ export async function reverseItcForBill(billId) {
   if (!billId) return;
   const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/itc-reversal`, {
     method: "POST",
-    body: JSON.stringify({ reversal_date: itcReversalAsOf, accounting_entity_id: "primary" }),
+    body: JSON.stringify({ reversal_date: itcReversalAsOf, accounting_entity_id: resolveAccountingEntityId() }),
   });
   if (result.ok) {
     setLoginStatus("ok", "ITC reversed", `Rule 37 reversal posted for bill ${result.payload?.bill_number || billId}.`);
@@ -82,7 +82,7 @@ export async function reclaimItcForBill(billId) {
   if (!billId) return;
   const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/itc-reclaim`, {
     method: "POST",
-    body: JSON.stringify({ reclaim_date: todayIsoDate(), accounting_entity_id: "primary" }),
+    body: JSON.stringify({ reclaim_date: todayIsoDate(), accounting_entity_id: resolveAccountingEntityId() }),
   });
   if (result.ok) {
     setLoginStatus("ok", "ITC reclaimed", `Reversed ITC re-availed for bill ${result.payload?.bill_number || billId}.`);
@@ -99,7 +99,7 @@ export async function markBillPaidFull(billId, amount) {
   if (!billId) return;
   const result = await apiRequest("mitrabooks", `/api/v1/business/bills/${encodeURIComponent(billId)}/payment`, {
     method: "POST",
-    body: JSON.stringify({ paid_amount: String(amount || "0"), paid_date: todayIsoDate(), accounting_entity_id: "primary" }),
+    body: JSON.stringify({ paid_amount: String(amount || "0"), paid_date: todayIsoDate(), accounting_entity_id: resolveAccountingEntityId() }),
   });
   if (result.ok) {
     setLoginStatus("ok", "Payment recorded", `Bill ${result.payload?.bill_number || billId} marked paid.`);

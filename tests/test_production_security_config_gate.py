@@ -127,6 +127,14 @@ def test_settings_validate_rejects_bootstrap_or_demo_seed_in_production(flag: st
         settings.validate()
 
 
+def test_settings_validate_rejects_otp_pepper_equal_to_jwt_secret() -> None:
+    settings = production_settings()
+    settings.OTP_PEPPER = settings.JWT_SECRET
+
+    with pytest.raises(ValueError, match="distinct from JWT_SECRET"):
+        settings.validate()
+
+
 def test_workspace_output_path_rejects_non_json_and_outside_workspace(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="inside the workspace"):
         workspace_output_path(tmp_path / "evidence.json")

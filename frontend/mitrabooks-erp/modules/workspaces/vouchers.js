@@ -4,7 +4,7 @@
 // Pure move: logic unchanged. Shell deps injected via initVouchers(...).
 // ====================================================================
 
-import { apiRequest, renderJson } from "../../../shared/api-client.js";
+import { apiRequest, renderJson, resolveAccountingEntityId } from "../../../shared/api-client.js";
 
 export let lastBusinessVouchers = [];
 export let lastVoucherApprovalQueue = [];
@@ -127,7 +127,7 @@ export async function reviewBusinessVoucher(voucherId, approve, notes, rejection
       approve,
       notes,
       rejection_reason: rejectionReason || null,
-      accounting_entity_id: "primary",
+      accounting_entity_id: resolveAccountingEntityId(),
     }),
   });
 

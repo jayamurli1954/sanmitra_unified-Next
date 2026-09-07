@@ -2,6 +2,7 @@ const LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
 const API_BASE_STORAGE_KEY = "sanmitra_frontend_api_base_url";
 const ACCESS_TOKEN_STORAGE_KEY = "sanmitra_frontend_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "sanmitra_frontend_refresh_token";
+const ACCOUNTING_ENTITY_STORAGE_KEY = "sanmitra_frontend_accounting_entity_id";
 const REQUEST_TIMEOUT_MS = 5000;
 
 function sessionStore() {
@@ -176,8 +177,48 @@ export function clearAllTokens() {
   const session = sessionStore();
   session?.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   session?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  session?.removeItem(ACCOUNTING_ENTITY_STORAGE_KEY);
   localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+export function getActiveAccountingEntityId() {
+  return String(sessionStore()?.getItem(ACCOUNTING_ENTITY_STORAGE_KEY) || "").trim();
+}
+
+export function setActiveAccountingEntityId(entityId) {
+  const store = sessionStore();
+  const normalized = String(entityId || "").trim();
+  if (!store) {
+    return normalized;
+  }
+  if (!normalized) {
+    store.removeItem(ACCOUNTING_ENTITY_STORAGE_KEY);
+    return "";
+  }
+  store.setItem(ACCOUNTING_ENTITY_STORAGE_KEY, normalized);
+  return normalized;
+}
+
+export function resolveAccountingEntityId(fallback = "primary") {
+  return getActiveAccountingEntityId() || fallback;
+}
+
+function applyAccountingEntityScope(appKey, path, extraHeaders = {}) {
+  const headers = { ...(extraHeaders || {}) };
+  const active = String(headers["X-Accounting-Entity-ID"] || getActiveAccountingEntityId() || "").trim();
+  if (!active) {
+    return { path, headers };
+  }
+  headers["X-Accounting-Entity-ID"] = active;
+  const scopedApp = String(appKey || "").toLowerCase() === "mitrabooks";
+  const alreadyHasQuery = /(?:\?|&)accounting_entity_id=/i.test(path);
+  const practiceRoster = /\/api\/v1\/business\/ca-clients(?:\?|$)/i.test(path);
+  if (scopedApp && !alreadyHasQuery && !practiceRoster) {
+    const join = path.includes("?") ? "&" : "?";
+    path = `${path}${join}accounting_entity_id=${encodeURIComponent(active)}`;
+  }
+  return { path, headers };
 }
 
 // Singleton in-flight promise so concurrent 401s don't fire multiple refresh calls
@@ -232,22 +273,27 @@ export function buildHeaders(appKey, extraHeaders = {}, opts = {}) {
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`;
   }
+  const entityId = String(headers["X-Accounting-Entity-ID"] || getActiveAccountingEntityId() || "").trim();
+  if (entityId && !headers["X-Accounting-Entity-ID"]) {
+    headers["X-Accounting-Entity-ID"] = entityId;
+  }
   return headers;
 }
 
 export async function apiRequest(appKey, path, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
-  const requestUrl = buildApiUrl(baseUrl, path);
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, _isRetry, ...fetchOptions } = options;
+  const { timeoutMs: _timeoutMs, _isRetry, headers: requestHeaders, ...fetchOptions } = options;
+  const scoped = applyAccountingEntityScope(appKey, path, requestHeaders || {});
+  const requestUrl = buildApiUrl(baseUrl, scoped.path);
   const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
   try {
     const response = await fetch(requestUrl, {
       ...fetchOptions,
       signal: fetchOptions.signal || controller.signal,
-      headers: buildHeaders(appKey, fetchOptions.headers || {}, { skipJsonContentType: isFormData }),
+      headers: buildHeaders(appKey, scoped.headers, { skipJsonContentType: isFormData }),
     });
 
     const contentType = response.headers.get("content-type") || "";
@@ -289,17 +335,18 @@ export async function apiRequest(appKey, path, options = {}) {
 
 export async function downloadApiFile(appKey, path, filename, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
-  const requestUrl = buildApiUrl(baseUrl, path);
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
+  const { timeoutMs: _timeoutMs, headers: requestHeaders, ...fetchOptions } = options;
+  const scoped = applyAccountingEntityScope(appKey, path, requestHeaders || {});
+  const requestUrl = buildApiUrl(baseUrl, scoped.path);
   try {
     const response = await fetch(requestUrl, {
       ...fetchOptions,
       method: fetchOptions.method || "GET",
       signal: fetchOptions.signal || controller.signal,
-      headers: buildHeaders(appKey, fetchOptions.headers || {}),
+      headers: buildHeaders(appKey, scoped.headers),
     });
 
     if (!response.ok) {
@@ -336,17 +383,18 @@ export async function downloadApiFile(appKey, path, filename, options = {}) {
 
 export async function fetchApiFileObjectUrl(appKey, path, options = {}) {
   const baseUrl = getConfiguredApiBaseUrl();
-  const requestUrl = buildApiUrl(baseUrl, path);
+  const { timeoutMs: _timeoutMs, headers: requestHeaders, ...fetchOptions } = options;
+  const scoped = applyAccountingEntityScope(appKey, path, requestHeaders || {});
+  const requestUrl = buildApiUrl(baseUrl, scoped.path);
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs || REQUEST_TIMEOUT_MS);
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
   try {
     const response = await fetch(requestUrl, {
       ...fetchOptions,
       method: fetchOptions.method || "GET",
       signal: fetchOptions.signal || controller.signal,
-      headers: buildHeaders(appKey, fetchOptions.headers || {}),
+      headers: buildHeaders(appKey, scoped.headers),
     });
 
     if (!response.ok) {

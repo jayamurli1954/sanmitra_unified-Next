@@ -34,10 +34,20 @@ New / recommended:
 
 | Name | Purpose |
 | --- | --- |
-| `PRODUCTION_BACKEND_HEALTH_URL` | Full URL ending in `/health` when prod Render differs from staging |
+| `PRODUCTION_BACKEND_HEALTH_URL` | Override live/prod `/health` when a **separate** Render prod service exists |
+| `vars.LIVE_BACKEND_HEALTH_URL` | Optional repo variable override (defaults in `ops-agents/config/services.yaml`) |
 | `LEGALMITRA_SMOKE_EMAIL` | Demo LegalMitra user for weekly smoke |
 | `LEGALMITRA_SMOKE_PASSWORD` | Demo password (never commit) |
 | `vars.LEGALMITRA_SMOKE_API_BASE` | Optional API base override |
+
+**Current stack (2026-08):** all prod frontends proxy to `sanmitra-unified-next-staging-sg.onrender.com`. The daily report monitors **Staging API** and **Live API (prod traffic)** on that host until a dedicated prod Render URL is deployed. Set `PRODUCTION_BACKEND_HEALTH_URL` only when prod diverges.
+
+```powershell
+# Optional — only when prod Render URL differs from staging:
+gh variable set PRODUCTION_BACKEND_HEALTH_URL `
+  --body "https://YOUR-PROD-SERVICE.onrender.com/health" `
+  --repo jayamurli1954/sanmitra_unified-Next
+```
 
 Optional: fill `vercel_project_id` per product in `ops-agents/config/services.yaml`.
 

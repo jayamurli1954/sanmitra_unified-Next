@@ -13,7 +13,7 @@ from app.accounting.service import AccountingNotFoundError, AccountingValidation
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.permissions.rbac import Role, require_roles
-from app.core.tenants.app_resolvers import resolve_business_app_tenant
+from app.core.tenants.app_resolvers import apply_header_accounting_entity, resolve_business_app_tenant
 from app.db.postgres import get_async_session
 from app.modules.business.schemas import (
     ApprovalReviewRequest,
@@ -43,13 +43,16 @@ async def create_business_purchase_bill(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_app_key: str | None = Header(default=None, alias="X-App-Key"),
     x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+    x_accounting_entity_id: str | None = Header(default=None, alias="X-Accounting-Entity-ID"),
 ):
+    payload = apply_header_accounting_entity(payload, x_accounting_entity_id=x_accounting_entity_id)
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
         x_app_key=x_app_key,
         expected_app_key="mitrabooks",
         operation="purchase bill posting",
+        x_accounting_entity_id=x_accounting_entity_id,
     )
     try:
         return await create_purchase_bill(

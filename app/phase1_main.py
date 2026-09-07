@@ -1,7 +1,8 @@
 """
 Phase 1: Foundation - Main FastAPI Application.
 
-Production-ready with logging, middleware, and lifecycle management.
+TEST/DEV ONLY. Production deploys `uvicorn app.main:app` (see render.yaml).
+Do not point Render, Vercel, or any live process at this module.
 """
 
 import asyncio
@@ -190,10 +191,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware - MUST be added before other middleware
+_cors_origins = [
+    origin
+    for origin in (settings.CORS_ORIGINS or [])
+    if str(origin).strip() and str(origin).strip() != "*"
+]
+if not _cors_origins:
+    _cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+# Allowlisted origins only. Wildcard + credentials would silently reopen CORS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -250,9 +259,14 @@ app.include_router(legacy_router)
 if __name__ == "__main__":
     import uvicorn
 
+    if str(settings.ENVIRONMENT or "").strip().lower() in {"production", "prod"}:
+        raise SystemExit(
+            "Refusing to start app.phase1_main in production. Use uvicorn app.main:app."
+        )
+
     uvicorn.run(
         "app.phase1_main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8000,
         reload=settings.ENVIRONMENT == "development",
         log_level="debug" if settings.ENVIRONMENT == "development" else "info",

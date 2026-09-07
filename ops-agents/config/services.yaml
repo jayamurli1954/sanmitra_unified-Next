@@ -3,8 +3,9 @@
 # Daily email folds FE/BE health, deep /health checks, latency, SSL warn,
 # optional Vercel/Sentry, and VERSION drift into one report.
 #
-# Production backend: set PRODUCTION_BACKEND_HEALTH_URL in GitHub secrets/vars
-# when a separate prod Render URL exists. Leave blank to skip that row.
+# Live traffic: all *.sanmitratech.in frontends proxy API to live_backend_health_url
+# until a separate Render production service exists. Override with GitHub secret
+# PRODUCTION_BACKEND_HEALTH_URL when prod diverges from staging host.
 #
 # vercel_project_id: optional. Project Settings → General on Vercel.
 # Requires VERCEL_TOKEN GitHub secret.
@@ -14,19 +15,21 @@ thresholds:
   be_latency_ms_warn: 2000
   ssl_warn_days: 21
 
+# Canonical API /health for production user traffic (Vercel → Render rewrite).
+live_backend_health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
+
 backends:
   - name: Staging API
     env: staging
     health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
-  - name: Production API
+  - name: Live API (prod traffic)
     env: production
-    # Overridden at runtime by PRODUCTION_BACKEND_HEALTH_URL when set.
-    health_url: ""
+    # Default from live_backend_health_url; secret PRODUCTION_BACKEND_HEALTH_URL overrides.
+    health_url: https://sanmitra-unified-next-staging-sg.onrender.com/health
 
 products:
   - name: MitraBooks
     frontend_url: https://www.mitrabooks.sanmitratech.in
-    # Shared unified backend (staging until prod URL is configured).
     backend_env: staging
     vercel_project_id: ""
 

@@ -4,7 +4,7 @@
 // Pure move: logic unchanged. Shell deps injected via initSettingsWorkspace(...).
 // ====================================================================
 
-import { apiRequest } from "../../../shared/api-client.js";
+import { apiRequest, resolveAccountingEntityId } from "../../../shared/api-client.js";
 
 export let activeSettingsDetailId = "";
 export let lastBusinessAdminSettings = null;
@@ -151,7 +151,7 @@ export function buildBusinessAdminSettingsPayload(source = {}) {
     subscription_billing: source.subscription_billing || {},
     integrations: source.integrations || {},
     ai_settings: source.ai_settings || {},
-    accounting_entity_id: "primary",
+    accounting_entity_id: resolveAccountingEntityId(),
   };
 }
 
