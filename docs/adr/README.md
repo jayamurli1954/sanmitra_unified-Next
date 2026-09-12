@@ -46,7 +46,7 @@ AI → Proposal Engine → Confirmation / Policy (ADR-012)
 
 Domain events (ADR-011) fan out side effects after successful applies without replacing this path.
 
-MIS assembly (ADR-014) sits **above** read connectors: ingest/normalize facts → metric pack → narrative → policy-gated export. It does not replace the execution path for writes.
+MIS assembly (ADR-014) sits **above** read connectors: ingest/normalize facts → metric pack → narrative → policy-gated export. It does not replace the execution path for writes. Excel/import/export and live MitraBooks Path A reads ship behind `office_ai.mis*` / `office_ai.mis.live_mitrabooks`. Spec: [`OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md`](../architecture/OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md).
 
 Review workspaces (ADR-015) sit **beside** MIS: engagement scan, working papers, and notes under `office_ai.review*`. They reuse MIS import/facts and SSDV internally. They are not new Mitra brands.
 

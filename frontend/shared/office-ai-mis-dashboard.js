@@ -1,4 +1,12 @@
 // MIS pack dashboard + attributed narrative (ADR-014).
+export {
+  applyMisLivePing,
+  clearMisLivePing,
+  handleMisLiveAction,
+  MIS_LIVE_STATE_DEFAULTS,
+  renderMisLivePullSection,
+} from "./office-ai-mis-live.js";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")

@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from app.modules.office_ai.ai import metrics as ai_metrics
 from app.modules.office_ai.connectors.base import tenant_has_module
 
 _logger = logging.getLogger("officemitra.connectors.mitrabooks")
+
+# Ledger journals for MitraBooks ERP tenants are posted under this app_key.
+# Standalone OfficeMitra requests arrive as officemitra — do not pass that to GL filters.
+MIS_LEDGER_APP_KEY = "mitrabooks"
+_CENT = Decimal("0.01")
+
+
+def _q(value: Any) -> Decimal:
+    return Decimal(str(value or 0)).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _books_enabled(tenant: dict[str, Any]) -> bool:
+    return tenant_has_module(tenant, "business") or tenant_has_module(tenant, "accounting")
 
 
 async def get_todays_revenue(
@@ -92,7 +106,212 @@ async def get_overdue_invoices(
         return []
 
 
-CA_QUEUE_APP_KEY = "mitrabooks"
+CA_QUEUE_APP_KEY = MIS_LEDGER_APP_KEY
+
+
+async def get_mis_profit_loss(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    session=None,
+    from_date: date,
+    to_date: date,
+    accounting_entity_id: str = "primary",
+) -> dict[str, Any]:
+    """Read-only P&L via accounting report service (ADR-014 Path A)."""
+    if not _books_enabled(tenant):
+        return {"enabled": False, "reason": "business_module_off", "lines": [], "income_total": None, "expense_total": None, "net_profit": None}
+    if session is None:
+        return {"enabled": False, "reason": "session_required", "lines": [], "income_total": None, "expense_total": None, "net_profit": None}
+    try:
+        from app.accounting.reports import get_profit_loss
+
+        lines, income_total, expense_total, net_profit = await get_profit_loss(
+            session,
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+            app_key=MIS_LEDGER_APP_KEY,
+            accounting_entity_id=str(accounting_entity_id or "primary").strip() or "primary",
+        )
+        return {
+            "enabled": True,
+            "lines": lines or [],
+            "income_total": _q(income_total),
+            "expense_total": _q(expense_total),
+            "net_profit": _q(net_profit),
+            "source": "mitrabooks.get_profit_loss",
+        }
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("get_mis_profit_loss failed: %s", type(exc).__name__)
+        return {"enabled": True, "error": "connector_failed", "lines": [], "income_total": None, "expense_total": None, "net_profit": None}
+
+
+async def get_mis_balance_sheet(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    session=None,
+    as_of: date,
+    accounting_entity_id: str = "primary",
+) -> dict[str, Any]:
+    """Read-only balance sheet via accounting report service (ADR-014 Path A)."""
+    if not _books_enabled(tenant):
+        return {
+            "enabled": False,
+            "reason": "business_module_off",
+            "assets": [],
+            "liabilities": [],
+            "equity": [],
+            "total_assets": None,
+            "total_liabilities": None,
+            "total_equity": None,
+        }
+    if session is None:
+        return {
+            "enabled": False,
+            "reason": "session_required",
+            "assets": [],
+            "liabilities": [],
+            "equity": [],
+            "total_assets": None,
+            "total_liabilities": None,
+            "total_equity": None,
+        }
+    try:
+        from app.accounting.reports import get_balance_sheet
+
+        assets, liabilities, equity, total_assets, total_liabilities, total_equity = await get_balance_sheet(
+            session,
+            tenant_id=tenant_id,
+            as_of=as_of,
+            app_key=MIS_LEDGER_APP_KEY,
+            accounting_entity_id=str(accounting_entity_id or "primary").strip() or "primary",
+        )
+        return {
+            "enabled": True,
+            "assets": assets or [],
+            "liabilities": liabilities or [],
+            "equity": equity or [],
+            "total_assets": _q(total_assets),
+            "total_liabilities": _q(total_liabilities),
+            "total_equity": _q(total_equity),
+            "source": "mitrabooks.get_balance_sheet",
+        }
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("get_mis_balance_sheet failed: %s", type(exc).__name__)
+        return {
+            "enabled": True,
+            "error": "connector_failed",
+            "assets": [],
+            "liabilities": [],
+            "equity": [],
+            "total_assets": None,
+            "total_liabilities": None,
+            "total_equity": None,
+        }
+
+
+async def get_mis_cash_movement(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    session=None,
+    from_date: date,
+    to_date: date,
+    accounting_entity_id: str = "primary",
+) -> dict[str, Any]:
+    """Read-only receipts/payments via accounting report service (ADR-014 Path A)."""
+    if not _books_enabled(tenant):
+        return {
+            "enabled": False,
+            "reason": "business_module_off",
+            "lines": [],
+            "total_receipts": None,
+            "total_payments": None,
+            "net": None,
+        }
+    if session is None:
+        return {
+            "enabled": False,
+            "reason": "session_required",
+            "lines": [],
+            "total_receipts": None,
+            "total_payments": None,
+            "net": None,
+        }
+    try:
+        from app.accounting.reports import get_receipts_payments
+
+        lines, total_receipts, total_payments, net = await get_receipts_payments(
+            session,
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+            app_key=MIS_LEDGER_APP_KEY,
+            accounting_entity_id=str(accounting_entity_id or "primary").strip() or "primary",
+        )
+        return {
+            "enabled": True,
+            "lines": lines or [],
+            "total_receipts": _q(total_receipts),
+            "total_payments": _q(total_payments),
+            "net": _q(net),
+            "source": "mitrabooks.get_receipts_payments",
+        }
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("get_mis_cash_movement failed: %s", type(exc).__name__)
+        return {
+            "enabled": True,
+            "error": "connector_failed",
+            "lines": [],
+            "total_receipts": None,
+            "total_payments": None,
+            "net": None,
+        }
+
+
+async def get_mis_ar_ap_aging(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    as_of: date,
+    accounting_entity_id: str = "primary",
+) -> dict[str, Any]:
+    """Read-only AR + AP ageing via allocation_service (Decimal strings; ADR-014 Path A)."""
+    if not _books_enabled(tenant):
+        return {"enabled": False, "reason": "business_module_off", "receivable": None, "payable": None}
+    try:
+        from app.modules.business import allocation_service
+
+        entity = str(accounting_entity_id or "primary").strip() or "primary"
+        receivable = await allocation_service.ar_ap_aging(
+            tenant_id=tenant_id,
+            app_key=MIS_LEDGER_APP_KEY,
+            accounting_entity_id=entity,
+            kind="receivable",
+            as_of=as_of,
+        )
+        payable = await allocation_service.ar_ap_aging(
+            tenant_id=tenant_id,
+            app_key=MIS_LEDGER_APP_KEY,
+            accounting_entity_id=entity,
+            kind="payable",
+            as_of=as_of,
+        )
+        return {
+            "enabled": True,
+            "receivable": receivable,
+            "payable": payable,
+            "source": "mitrabooks.ar_ap_aging",
+        }
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("get_mis_ar_ap_aging failed: %s", type(exc).__name__)
+        return {"enabled": True, "error": "connector_failed", "receivable": None, "payable": None}
 
 
 async def list_ca_staff_documents(

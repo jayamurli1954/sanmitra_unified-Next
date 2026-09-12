@@ -8,6 +8,7 @@
 **Optionally uses:** [ADR-009](ADR-009-officemitra-workflow-engine.md) (scheduled MIS pack runs), [ADR-010](ADR-010-officemitra-companion-writeback.md) (live MitraBooks reads — still Proposed for writes)  
 **Related:** [ADR-007](ADR-007-officemitra-modular-deployment.md) (standalone CA tenants), [ADR-013](ADR-013-officemitra-workflow-template-library.md) (curated MIS workflow templates — Future)  
 **Does not supersede:** [ADR-001](ADR-001-mitrabooks-transactional-core.md) (MitraBooks remains books of record for ERP tenants), [ADR-003](ADR-003-no-cross-product-db-access.md), accounting doctrine in `AGENTS.md` §10  
+**Remaining-slice plan:** [OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md](../architecture/OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md) — Antigravity **APPROVE** 2026-09-12; live MitraBooks reads implemented behind `office_ai.mis.live_mitrabooks`.  
 
 ## Context
 
@@ -320,7 +321,7 @@ External ERP **read** adapters and **allowlisted note/draft writes** remain gove
 5. **Narrative with citations + fact citation UI** — orchestrator + tests for “no facts → no numbers.” — **Done** (UI: Generate narrative + clickable `fact_id` chips on MIS Packs)
 6. **`data_quality_score` computation** — deterministic breakdown; PPT block when &lt; 70.
 7. **Reconcile + export actions** — differentiated risk tiers; maker-checker default for PPT.
-8. **MitraBooks MIS read connector** — report services only (ADR-002).
+8. **MitraBooks MIS read connector** — report services only (ADR-002). **Done** (Path A behind `office_ai.mis.live_mitrabooks`; plan [`OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md`](../architecture/OFFICEMITRA_ADR014_LIVE_MITRABOOKS_IMPLEMENTATION_PLAN.md)).
 9. **PPT/PDF templates** — branded, template-driven; audience-specific gap rendering; no LLM layout for v1.
 
 Do **not** start external ERP, arbitrary Excel mapping, or Tally agent work until steps 1–7 pass staging smoke on a demo CA tenant.

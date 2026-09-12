@@ -7,7 +7,7 @@ Creates:
   Maker:   admin@demo-mfg-mis.local  (tenant_admin)
   Checker: checker@demo-mfg-mis.local  (tenant_admin, different user for maker-checker)
 
-Enables office_ai + office_ai.mis and nested MIS import/export/pack flags, then
+Enables office_ai + office_ai.mis and nested MIS import/export/live_mitrabooks/pack flags, then
 loads a fixed manufacturing MIS fact pack for period 2026-07 (draft, not reconciled).
 
 MIS Excel / synthetic ERP generation stays outside this repository.
@@ -71,6 +71,7 @@ BASE_ENABLED_MODULES = [
 NESTED_MIS_FLAGS = [
     "office_ai.mis.import",
     "office_ai.mis.export",
+    "office_ai.mis.live_mitrabooks",
     "office_ai.mis.pack.manufacturing",
 ]
 

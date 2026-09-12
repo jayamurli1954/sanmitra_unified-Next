@@ -1,4 +1,4 @@
-import { renderMisDashboardStrip, renderMisNarrativeSection } from "./office-ai-mis-dashboard.js";
+import { applyMisLivePing, clearMisLivePing, handleMisLiveAction, MIS_LIVE_STATE_DEFAULTS, renderMisDashboardStrip, renderMisLivePullSection, renderMisNarrativeSection } from "./office-ai-mis-dashboard.js";
 import { applyDocumentsPing, applyReviewPing, clearDocumentsPing, clearReviewPing, documentsBannerHtml, handleDocumentsAction, handleReviewAction, refreshDocumentsData, refreshReviewData, renderDocumentsPanel, renderReviewPanel, REVIEW_STATE_DEFAULTS, reviewBannerHtml, syncDocumentsFields, syncReviewFields } from "./office-ai-review.js";
 /** @type {Record<string, any> | null} */
 let deps = null;
@@ -19,6 +19,7 @@ const state = {
   misImportEnabled: false,
   misExportEnabled: false,
   ...REVIEW_STATE_DEFAULTS,
+  ...MIS_LIVE_STATE_DEFAULTS,
   misPacks: [],
   misCatalog: [],
   misSelectedPackId: "",
@@ -206,12 +207,10 @@ function formatMisPackStatus(status) {
   if (key === "exported") return "Exported";
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
-
 function misPackById(packId) {
   const id = String(packId || "").trim();
   return (state.misPacks || []).find((p) => String(p.id || "").trim() === id) || null;
 }
-
 function advisoryBanner() {
   return `<p class="muted" style="margin:0.5rem 0 0;">Advisory only — not final legal or financial advice. Review before acting.</p>`;
 }
@@ -448,6 +447,7 @@ function renderMisPanel() {
         ${reportHtml}
       </div>`
     : `<p class="muted" style="margin-top:1rem;">Excel import requires <code>office_ai.mis.import</code>.</p>`;
+  const liveSection = renderMisLivePullSection(state, { canEdit, escapeHtml });
 
   const reconcileSection = canReconcile
     ? `<div class="stack-form" style="margin-top:1rem;">
@@ -500,6 +500,7 @@ function renderMisPanel() {
             ${renderMisDashboardStrip(state.misPackFacts)}
             ${renderMisNarrativeSection(selected)}
             ${importSection}
+            ${liveSection}
             ${reconcileSection}
             ${exportSection}
             ${citedCallout}
@@ -732,14 +733,14 @@ async function refreshWritebackFlag() {
     state.misEnabled = !!payload.mis_enabled;
     state.misImportEnabled = !!payload.mis_capabilities?.import;
     state.misExportEnabled = !!payload.mis_capabilities?.export;
-    applyReviewPing(state, payload); applyDocumentsPing(state, payload);
+    applyMisLivePing(state, payload); applyReviewPing(state, payload); applyDocumentsPing(state, payload);
     state.workflowsEnabled = !!payload.workflows_enabled;
   } catch (_err) {
     state.writebackEnabled = false;
     state.misEnabled = false;
     state.misImportEnabled = false;
     state.misExportEnabled = false;
-    clearReviewPing(state); clearDocumentsPing(state);
+    clearMisLivePing(state); clearReviewPing(state); clearDocumentsPing(state);
     state.workflowsEnabled = false;
   }
 }
@@ -1242,7 +1243,7 @@ export async function handleOfficeAiAction(action, el) {
       }
       await refreshMisData();
       await refreshProposals();
-    } else if (await handleReviewAction(action, el, { state, apiRequest, unwrap, formatApiDetail, resolveAppKey, requireDeps }) || await handleDocumentsAction(action, el, { state, apiRequest, unwrap })) {}
+    } else if (await handleMisLiveAction(action, el, { state, apiRequest, unwrap, refreshMisFacts, refreshMisData }) || await handleReviewAction(action, el, { state, apiRequest, unwrap, formatApiDetail, resolveAppKey, requireDeps }) || await handleDocumentsAction(action, el, { state, apiRequest, unwrap })) {}
   } catch (err) {
     state.error = err?.message || "OfficeMitra AI action failed";
   } finally {

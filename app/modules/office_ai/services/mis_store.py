@@ -219,6 +219,70 @@ async def insert_facts(
     return {"inserted": len(docs), "fact_ids": [doc["fact_id"] for doc in docs]}
 
 
+async def replace_facts_by_source_system(
+    *,
+    tenant_id: str,
+    pack_id: str,
+    user: dict[str, Any],
+    source_system: str,
+    facts: list[dict[str, Any]],
+    set_ingestion_path_if_blank_or_manual: bool = False,
+    data_quality_score: int | None = None,
+    data_quality_breakdown: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Delete pack facts for one source_system, then insert replacements (hybrid packs)."""
+    pack = await _require_editable_pack(tenant_id=tenant_id, pack_id=pack_id)
+    source = str(source_system or "").strip().lower()
+    if not source:
+        raise MISStoreError("source_system is required")
+
+    now = utcnow()
+    actor = _actor_id(user)
+    facts_col = get_collection(MIS_FACTS_COLLECTION)
+    delete_result = await facts_col.delete_many(
+        {"tenant_id": tenant_id, "pack_id": pack_id, "source_system": source}
+    )
+    deleted = int(getattr(delete_result, "deleted_count", 0) or 0)
+
+    inserted = 0
+    fact_ids: list[str] = []
+    if facts:
+        docs: list[dict[str, Any]] = []
+        for raw in facts:
+            normalized = _normalize_fact_input(raw, pack_id=pack_id, tenant_id=tenant_id)
+            normalized["source_system"] = source
+            normalized["created_at"] = now
+            normalized["updated_at"] = now
+            normalized["created_by"] = actor
+            normalized["updated_by"] = actor
+            docs.append(normalized)
+        await facts_col.insert_many(docs)
+        inserted = len(docs)
+        fact_ids = [doc["fact_id"] for doc in docs]
+
+    pack_set: dict[str, Any] = {"updated_at": now, "updated_by": actor}
+    if set_ingestion_path_if_blank_or_manual:
+        current_path = str(pack.get("ingestion_path") or "").strip().lower()
+        if current_path in {"", "manual"}:
+            pack_set["ingestion_path"] = source if source in MIS_INGESTION_PATHS else "mitrabooks"
+    if data_quality_score is not None:
+        pack_set["data_quality_score"] = max(0, min(100, int(data_quality_score)))
+    if data_quality_breakdown is not None:
+        pack_set["data_quality_breakdown"] = dict(data_quality_breakdown)
+
+    await get_collection(MIS_PACKS_COLLECTION).update_one(
+        {"_id": _pack_oid(pack_id), "tenant_id": tenant_id},
+        {"$set": pack_set},
+    )
+    updated = await get_pack(tenant_id=tenant_id, pack_id=pack_id)
+    return {
+        "pack": updated or {},
+        "deleted": deleted,
+        "inserted": inserted,
+        "fact_ids": fact_ids,
+    }
+
+
 async def list_facts(
     *,
     tenant_id: str,
