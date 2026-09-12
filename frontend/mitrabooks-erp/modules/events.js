@@ -5,6 +5,8 @@
 // bindings (keeps mutable let assignment semantics). Wire via initEventHandlers.
 // ====================================================================
 
+import { dispatchOpeningYearEndAction } from "./workspaces/opening-yearend.js";
+
 /** @type {Record<string, any> | null} */
 let deps = null;
 
@@ -486,24 +488,8 @@ function installEventHandlers() {
       deps.recordDunningSent();
     } else if (businessAction === "dunning-copy") {
       deps.copyDunningLetter();
-    } else if (businessAction === "ob-template") {
-      deps.downloadObTemplate();
-    } else if (businessAction === "ob-export") {
-      deps.downloadObExport();
-    } else if (businessAction === "ob-preview") {
-      deps.previewOpeningBalances();
-    } else if (businessAction === "ob-post") {
-      deps.postOpeningBalances();
-    } else if (businessAction === "vi-template") {
-      deps.downloadViTemplate();
-    } else if (businessAction === "vi-preview") {
-      deps.previewBulkVouchers();
-    } else if (businessAction === "vi-post") {
-      deps.postBulkVouchers();
-    } else if (businessAction === "ye-preview") {
-      deps.previewYearEnd();
-    } else if (businessAction === "ye-post") {
-      deps.postYearEndClose();
+    } else if (dispatchOpeningYearEndAction(businessAction)) {
+      /* opening / legacy COA / voucher import / year-end */
     } else if (businessAction === "fa-toggle-form") {
       deps.faFormOpen = !deps.faFormOpen;
       deps.rerenderBusinessReportsIfActive();

@@ -24,7 +24,7 @@ from app.accounting.service import (
 )
 from app.db.postgres import close_postgres, get_session_factory, init_postgres
 
-SOURCE_SYSTEM_CHOICES = ["ghar_mitra", "mandir_mitra", "mitra_books"]
+SOURCE_SYSTEM_CHOICES = ["ghar_mitra", "mandir_mitra", "mitra_books", "tally", "zoho", "csv"]
 
 
 def _load_json_list(path: Path) -> list[dict[str, Any]]:

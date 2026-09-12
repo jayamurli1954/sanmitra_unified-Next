@@ -2,6 +2,7 @@ import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,11 @@ from app.accounting.schemas import (
     JournalReversalRequest,
     JournalReversalResponse,
     LedgerLineResponse,
+    LegacyCoaDecisionResponse,
+    LegacyCoaImportConfirmRequest,
+    LegacyCoaImportConfirmResponse,
+    LegacyCoaImportPreviewRequest,
+    LegacyCoaImportPreviewResponse,
     MappingStatus,
     ProfitLossResponse,
     ReceiptsPaymentsResponse,
@@ -40,6 +46,7 @@ from app.accounting.service import (
     AccountingNotFoundError,
     AccountingValidationError,
     approve_coa_mappings,
+    confirm_legacy_coa_decisions,
     create_account,
     get_accounts_payable,
     get_accounts_receivable,
@@ -54,11 +61,14 @@ from app.accounting.service import (
     get_receipts_payments,
     get_trial_balance,
     initialize_default_chart_of_accounts,
+    legacy_coa_csv_template,
     list_accounts,
     list_journal_entries,
     list_coa_mappings,
+    list_legacy_coa_decisions,
     list_source_accounts,
     post_journal_entry,
+    preview_legacy_coa_csv,
     post_source_journal_entry,
     reverse_journal_entry,
     update_account,
@@ -68,6 +78,7 @@ from app.accounting.service import (
 from app.accounting.context import AccountingContext, resolve_accounting_context
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.registry import ModuleAccessError, require_module_access
+from app.core.permissions.rbac import Role, require_roles
 from app.core.tenants.service import get_tenant
 from app.db.postgres import get_async_session
 
@@ -382,6 +393,83 @@ async def approve_coa_mappings_endpoint(
         raise HTTPException(status_code=404, detail=str(exc))
 
     return CoaMappingApproveResponse(**row)
+
+
+@router.get("/coa/legacy-import/template")
+async def legacy_coa_import_template(
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    """CSV template for unique legacy ledger codes and descriptions."""
+    _ = accounting_context
+    return Response(
+        content=legacy_coa_csv_template(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="legacy_coa_mapping_template.csv"'},
+    )
+
+
+@router.post("/coa/legacy-import/preview", response_model=LegacyCoaImportPreviewResponse)
+async def preview_legacy_coa_import(
+    payload: LegacyCoaImportPreviewRequest,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    """Suggest MitraBooks matches for a unique legacy COA extract. Does not persist mappings."""
+    try:
+        return await preview_legacy_coa_csv(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            csv_text=payload.csv,
+            source_system=payload.source_system,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/coa/legacy-import/confirm", response_model=LegacyCoaImportConfirmResponse)
+async def confirm_legacy_coa_import(
+    payload: LegacyCoaImportConfirmRequest,
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+    _current_user: dict = Depends(require_roles([Role.super_admin, Role.tenant_admin, Role.accountant])),
+):
+    """Persist user-confirmed map-to-existing or create-then-map decisions with audit."""
+    try:
+        return await confirm_legacy_coa_decisions(
+            session,
+            app_key=accounting_context.app_key,
+            tenant_id=accounting_context.tenant_id,
+            accounting_entity_id=accounting_context.accounting_entity_id,
+            source_system=payload.source_system,
+            decided_by=accounting_context.user_id,
+            decisions=payload.decisions,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Account code already exists for tenant")
+
+
+@router.get("/coa/legacy-import/decisions", response_model=list[LegacyCoaDecisionResponse])
+async def list_legacy_coa_import_decisions(
+    source_system: SourceSystem | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    session: AsyncSession = Depends(get_async_session),
+    accounting_context: AccountingContext = Depends(enforce_accounting_route_tenant),
+):
+    rows = await list_legacy_coa_decisions(
+        session,
+        app_key=accounting_context.app_key,
+        tenant_id=accounting_context.tenant_id,
+        accounting_entity_id=accounting_context.accounting_entity_id,
+        source_system=source_system,
+        limit=limit,
+    )
+    return [LegacyCoaDecisionResponse(**row) for row in rows]
 
 
 @router.get("/journal", response_model=list[JournalEntryResponse])

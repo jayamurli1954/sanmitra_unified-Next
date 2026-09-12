@@ -389,6 +389,18 @@ async def _account_lookups(session, *, tenant_id: str, app_key: str, accounting_
             by_code[str(row.code)] = info
         if row.name:
             by_name[str(row.name).strip().lower()] = info
+    from app.accounting.legacy_coa_import import legacy_account_lookups
+
+    for source_code, info in (
+        await legacy_account_lookups(
+            session,
+            tenant_id=tenant_id,
+            app_key=app_key,
+            accounting_entity_id=accounting_entity_id,
+        )
+    ).items():
+        if source_code not in by_code:
+            by_code[source_code] = info
     return by_code, by_name
 
 

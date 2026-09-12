@@ -5,6 +5,7 @@ docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
 """
 from __future__ import annotations
 
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 class AccountingValidationError(ValueError):

@@ -170,3 +170,81 @@ def test_update_account_route_maps_not_found_errors(monkeypatch, accounting_acco
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Account not found"
+
+
+def test_legacy_coa_preview_route_uses_trusted_accounting_context(monkeypatch, accounting_account_client):
+    captured = {}
+
+    async def fake_preview(_session, **kwargs):
+        captured.update(kwargs)
+        return {
+            "source_system": kwargs["source_system"],
+            "rows": [],
+            "canonical_accounts": [],
+            "row_count": 0,
+            "suggested_count": 0,
+            "unmatched_count": 0,
+            "already_mapped_count": 0,
+            "can_confirm_suggested": False,
+        }
+
+    monkeypatch.setattr(accounting_router, "preview_legacy_coa_csv", fake_preview)
+
+    response = accounting_account_client.post(
+        "/api/v1/accounting/coa/legacy-import/preview",
+        json={
+            "csv": "source_account_code,source_account_name\n1001,Cash\n",
+            "source_system": "tally",
+            "tenant_id": "tenant-body-spoofed",
+        },
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(captured, expected_extra={"source_system": "tally"})
+    assert "1001" in captured["csv_text"]
+
+
+def test_legacy_coa_confirm_route_uses_trusted_context_and_role(monkeypatch, accounting_account_client):
+    captured = {}
+
+    async def fake_confirm(_session, **kwargs):
+        captured.update(kwargs)
+        return {
+            "source_system": kwargs["source_system"],
+            "confirmed_count": 1,
+            "created_account_count": 0,
+            "mapped_existing_count": 1,
+            "decisions": [],
+        }
+
+    monkeypatch.setattr(accounting_router, "confirm_legacy_coa_decisions", fake_confirm)
+    accounting_account_client.app.dependency_overrides[accounting_router.get_current_user] = lambda: {
+        "sub": TRUSTED_CONTEXT.user_id,
+        "tenant_id": TRUSTED_CONTEXT.tenant_id,
+        "app_key": TRUSTED_CONTEXT.app_key,
+        "role": "tenant_admin",
+    }
+
+    response = accounting_account_client.post(
+        "/api/v1/accounting/coa/legacy-import/confirm",
+        json={
+            "source_system": "tally",
+            "decisions": [
+                {
+                    "source_account_code": "CASH-01",
+                    "source_account_name": "Cash in Hand",
+                    "action": "map_existing",
+                    "canonical_account_id": 101,
+                }
+            ],
+            "tenant_id": "tenant-body-spoofed",
+        },
+    )
+
+    assert response.status_code == 200
+    _assert_trusted_context(
+        captured,
+        expected_extra={"source_system": "tally", "decided_by": TRUSTED_CONTEXT.user_id},
+    )
+    assert captured["decisions"][0].source_account_code == "CASH-01"
+

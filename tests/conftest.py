@@ -45,7 +45,7 @@ from app.db.phase1_postgres import Base, get_async_session
 from app.db.phase1_mongo import get_collection
 from app.core.phase1_auth import create_access_token
 from app.accounting.models.base import Base as AccountingBase
-from app.accounting.models import Account, JournalEntry, JournalLine
+from app.accounting.models import Account, CoaMappingDecision, JournalEntry, JournalLine
 
 
 # ============================================================================
@@ -145,9 +145,10 @@ async def async_session(postgres_engine):
             # Delete all data from accounting tables to ensure test isolation
             await clear_session.execute(text("DELETE FROM journal_lines"))
             await clear_session.execute(text("DELETE FROM journal_entries"))
-            await clear_session.execute(text("DELETE FROM accounts"))
+            await clear_session.execute(text("DELETE FROM coa_mapping_decisions"))
             await clear_session.execute(text("DELETE FROM coa_mappings"))
             await clear_session.execute(text("DELETE FROM coa_source_accounts"))
+            await clear_session.execute(text("DELETE FROM accounts"))
 
     # Now create a fresh session for the test
     session = session_maker()

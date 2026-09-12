@@ -1,4 +1,4 @@
-﻿from datetime import date
+﻿from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -7,8 +7,18 @@ from pydantic import BaseModel, Field, field_validator
 
 AccountType = Literal["asset", "liability", "equity", "income", "expense"]
 AccountClassification = Literal["personal", "real", "nominal"]
-SourceSystem = Literal["ghar_mitra", "mandir_mitra", "mitra_books", "legal_mitra", "invest_mitra"]
+SourceSystem = Literal[
+    "ghar_mitra",
+    "mandir_mitra",
+    "mitra_books",
+    "legal_mitra",
+    "invest_mitra",
+    "tally",
+    "zoho",
+    "csv",
+]
 MappingStatus = Literal["active", "draft", "inactive"]
+LegacyCoaDecisionAction = Literal["mapped_to_existing", "created_then_mapped"]
 
 
 class AccountCreateRequest(BaseModel):
@@ -287,6 +297,104 @@ class CoaMappingApproveRequest(BaseModel):
 class CoaMappingApproveResponse(BaseModel):
     source_system: SourceSystem
     approved_count: int
+
+
+class LegacyCoaImportPreviewRequest(BaseModel):
+    csv: str = Field(min_length=1)
+    source_system: SourceSystem = "tally"
+
+
+class LegacyCoaCanonicalAccountResponse(BaseModel):
+    id: int
+    code: str | None = None
+    name: str
+    type: AccountType
+
+
+class LegacyCoaPreviewRowResponse(BaseModel):
+    row_number: int
+    source_account_code: str
+    source_account_name: str
+    source_account_type: AccountType | None = None
+    match_status: Literal["already_mapped", "suggested", "unmatched"]
+    already_mapped: bool = False
+    mapped_account_id: int | None = None
+    mapped_account_code: str | None = None
+    mapped_account_name: str | None = None
+    suggestion: CoaMappingSuggestionResponse | None = None
+
+
+class LegacyCoaImportPreviewResponse(BaseModel):
+    source_system: SourceSystem
+    rows: list[LegacyCoaPreviewRowResponse]
+    canonical_accounts: list[LegacyCoaCanonicalAccountResponse]
+    row_count: int
+    suggested_count: int
+    unmatched_count: int
+    already_mapped_count: int
+    can_confirm_suggested: bool
+
+
+class LegacyCoaCreateAccountIn(BaseModel):
+    code: str | None = Field(default=None, max_length=30)
+    name: str = Field(min_length=2, max_length=200)
+    type: AccountType
+    classification: AccountClassification
+    is_cash_bank: bool = False
+    is_receivable: bool = False
+    is_payable: bool = False
+
+
+class LegacyCoaSuggestionSnapshotIn(BaseModel):
+    canonical_account_id: int | None = None
+    canonical_account_name: str | None = None
+    confidence: Decimal | None = None
+    reason: str | None = None
+
+
+class LegacyCoaDecisionIn(BaseModel):
+    source_account_code: str = Field(min_length=1, max_length=50)
+    source_account_name: str = Field(min_length=1, max_length=200)
+    source_account_type: AccountType | None = None
+    action: Literal["map_existing", "create_new"]
+    canonical_account_id: int | None = None
+    create: LegacyCoaCreateAccountIn | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    suggestion: LegacyCoaSuggestionSnapshotIn | None = None
+
+
+class LegacyCoaImportConfirmRequest(BaseModel):
+    source_system: SourceSystem = "tally"
+    decisions: list[LegacyCoaDecisionIn] = Field(min_length=1, max_length=500)
+
+
+class LegacyCoaDecisionResponse(BaseModel):
+    id: int
+    source_system: SourceSystem
+    source_account_code: str
+    source_account_name: str
+    action: LegacyCoaDecisionAction
+    canonical_account_id: int
+    canonical_account_code: str | None = None
+    canonical_account_name: str
+    created_account: bool
+    suggested_account_id: int | None = None
+    suggested_account_name: str | None = None
+    suggestion_confidence: Decimal | None = None
+    suggestion_reason: str | None = None
+    notes: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime
+    mapping_id: int
+    audit_event_id: str | None = None
+
+
+class LegacyCoaImportConfirmResponse(BaseModel):
+    source_system: SourceSystem
+    confirmed_count: int
+    created_account_count: int
+    mapped_existing_count: int
+    decisions: list[LegacyCoaDecisionResponse]
 
 
 class SourceJournalLineIn(BaseModel):

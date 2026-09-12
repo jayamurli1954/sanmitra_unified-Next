@@ -562,6 +562,13 @@ from app.accounting.coa_mapping import (  # noqa: E402
     upsert_coa_mappings as upsert_coa_mappings,
     upsert_source_accounts as upsert_source_accounts,
 )
+from app.accounting.legacy_coa_import import (  # noqa: E402
+    confirm_legacy_coa_decisions as confirm_legacy_coa_decisions,
+    legacy_account_lookups as legacy_account_lookups,
+    legacy_coa_csv_template as legacy_coa_csv_template,
+    list_legacy_coa_decisions as list_legacy_coa_decisions,
+    preview_legacy_coa_csv as preview_legacy_coa_csv,
+)
 
 # Reports / ledger reads (moved to reports/)
 from app.accounting.reports import (  # noqa: E402

@@ -166,7 +166,7 @@ class CoaSourceAccount(Base):
             name="uq_coa_source_accounts_app_tenant_entity_system_code",
         ),
         CheckConstraint(
-            "source_system IN ('ghar_mitra','mandir_mitra','mitra_books','legal_mitra','invest_mitra')",
+            "source_system IN ('ghar_mitra','mandir_mitra','mitra_books','legal_mitra','invest_mitra','tally','zoho','csv')",
             name="ck_coa_source_accounts_system",
         ),
         Index("ix_coa_source_accounts_tenant", "tenant_id"),
@@ -208,6 +208,57 @@ class CoaMapping(Base):
         Index("ix_coa_mappings_tenant", "tenant_id"),
         Index("ix_coa_mappings_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
         Index("ix_coa_mappings_app_tenant_entity_status", "app_key", "tenant_id", "accounting_entity_id", "status"),
+    )
+
+
+class CoaMappingDecision(Base):
+    """Append-only audit of user-confirmed legacy COA map/create decisions."""
+
+    __tablename__ = "coa_mapping_decisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    app_key: Mapped[str] = mapped_column(String(50), nullable=False, default="mandirmitra", server_default="mandirmitra")
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    accounting_entity_id: Mapped[str] = mapped_column(String(100), nullable=False, default="primary", server_default="primary")
+    source_system: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_account_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_account_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    canonical_account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
+    canonical_account_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    canonical_account_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    suggested_account_id: Mapped[int | None] = mapped_column(nullable=True)
+    suggested_account_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    suggestion_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    suggestion_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    mapping_id: Mapped[int] = mapped_column(ForeignKey("coa_mappings.id", ondelete="CASCADE"), nullable=False)
+    audit_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_system IN ('ghar_mitra','mandir_mitra','mitra_books','legal_mitra','invest_mitra','tally','zoho','csv')",
+            name="ck_coa_mapping_decisions_system",
+        ),
+        CheckConstraint(
+            "action IN ('mapped_to_existing','created_then_mapped')",
+            name="ck_coa_mapping_decisions_action",
+        ),
+        Index("ix_coa_mapping_decisions_tenant", "tenant_id"),
+        Index("ix_coa_mapping_decisions_app_tenant_entity", "app_key", "tenant_id", "accounting_entity_id"),
+        Index(
+            "ix_coa_mapping_decisions_app_tenant_entity_system_code",
+            "app_key",
+            "tenant_id",
+            "accounting_entity_id",
+            "source_system",
+            "source_account_code",
+        ),
+        Index("ix_coa_mapping_decisions_decided_at", "tenant_id", "decided_at"),
     )
 
 

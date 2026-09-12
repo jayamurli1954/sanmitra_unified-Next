@@ -12,9 +12,31 @@ export let lastViPreview = null;
 export let viCsvText = "";
 export let lastYePreview = null;
 export let yeFy = "";
+export let lastLegacyPreview = null;
+export let legacyCsvText = "";
+export let lastLegacyDecisions = [];
 
 /** @type {Record<string, Function> | null} */
 let deps = null;
+
+export function dispatchOpeningYearEndAction(businessAction) {
+  const action = String(businessAction || "");
+  if (action === "ob-template") downloadObTemplate();
+  else if (action === "ob-export") downloadObExport();
+  else if (action === "ob-preview") previewOpeningBalances();
+  else if (action === "ob-post") postOpeningBalances();
+  else if (action === "legacy-coa-template") downloadLegacyCoaTemplate();
+  else if (action === "legacy-coa-preview") previewLegacyCoa();
+  else if (action === "legacy-coa-confirm") confirmLegacyCoa();
+  else if (action === "legacy-coa-decisions") loadLegacyCoaDecisions();
+  else if (action === "vi-template") downloadViTemplate();
+  else if (action === "vi-preview") previewBulkVouchers();
+  else if (action === "vi-post") postBulkVouchers();
+  else if (action === "ye-preview") previewYearEnd();
+  else if (action === "ye-post") postYearEndClose();
+  else return false;
+  return true;
+}
 
 export function initOpeningYearEnd(injected) {
   deps = injected;
@@ -130,6 +152,260 @@ export async function downloadObExport() {
   renderJson(getApiOutput(), { ob_export: { ok: result.ok } });
 }
 
+export async function downloadLegacyCoaTemplate() {
+  const result = await downloadApiFile(
+    "mitrabooks",
+    "/api/v1/accounting/coa/legacy-import/template",
+    "legacy_coa_mapping_template.csv",
+  );
+  renderJson(getApiOutput(), { legacy_coa_template: { ok: result.ok } });
+}
+
+function defaultClassification(type) {
+  if (type === "income" || type === "expense") return "nominal";
+  if (type === "asset") return "real";
+  return "personal";
+}
+
+export async function previewLegacyCoa() {
+  const fileInput = document.querySelector("[data-legacy-coa-file]");
+  const sourceSelect = document.querySelector("[data-legacy-coa-source]");
+  const file = fileInput?.files?.[0];
+  if (!file && !legacyCsvText) {
+    setLoginStatus("warn", "Choose a file", "Upload unique legacy ledger codes and names (download the template).");
+    return;
+  }
+  if (file) legacyCsvText = await file.text();
+  const result = await apiRequest("mitrabooks", "/api/v1/accounting/coa/legacy-import/preview", {
+    method: "POST",
+    body: JSON.stringify({
+      csv: legacyCsvText,
+      source_system: sourceSelect?.value || "tally",
+    }),
+  });
+  lastLegacyPreview = result.ok ? result.payload : { ok: false, detail: result.payload?.detail || `HTTP ${result.status}.` };
+  rerenderBusinessReportsIfActive();
+  renderJson(getApiOutput(), { legacy_coa_preview: { ok: result.ok, status: result.status } });
+}
+
+export function collectLegacyCoaDecisions() {
+  const preview = lastLegacyPreview;
+  if (!preview || preview.ok === false || !Array.isArray(preview.rows)) {
+    return [];
+  }
+  const decisions = [];
+  for (const row of preview.rows) {
+    const tr = Array.from(document.querySelectorAll("[data-legacy-row]")).find(
+      (el) => el.getAttribute("data-legacy-row") === row.source_account_code,
+    );
+    if (!tr) continue;
+    const action = tr.querySelector("[data-legacy-action]")?.value || "";
+    if (!action) continue;
+    const notes = tr.querySelector("[data-legacy-notes]")?.value?.trim() || "";
+    const suggestion = row.suggestion
+      ? {
+          canonical_account_id: row.suggestion.canonical_account_id,
+          canonical_account_name: row.suggestion.canonical_account_name,
+          confidence: row.suggestion.confidence,
+          reason: row.suggestion.reason,
+        }
+      : null;
+    const base = {
+      source_account_code: row.source_account_code,
+      source_account_name: row.source_account_name,
+      source_account_type: row.source_account_type || null,
+      notes: notes || null,
+      suggestion,
+    };
+    if (action === "map_existing") {
+      const canonicalId = Number(tr.querySelector("[data-legacy-canonical]")?.value || 0);
+      if (!canonicalId) continue;
+      decisions.push({ ...base, action: "map_existing", canonical_account_id: canonicalId });
+    } else if (action === "create_new") {
+      const code = tr.querySelector("[data-legacy-new-code]")?.value?.trim() || "";
+      const name = tr.querySelector("[data-legacy-new-name]")?.value?.trim() || row.source_account_name;
+      const type = tr.querySelector("[data-legacy-new-type]")?.value || "";
+      const classification = tr.querySelector("[data-legacy-new-class]")?.value || defaultClassification(type);
+      if (!type || !classification || name.length < 2) continue;
+      decisions.push({
+        ...base,
+        action: "create_new",
+        create: { code: code || null, name, type, classification },
+      });
+    }
+  }
+  return decisions;
+}
+
+export async function confirmLegacyCoa() {
+  const sourceSelect = document.querySelector("[data-legacy-coa-source]");
+  const decisions = collectLegacyCoaDecisions();
+  if (!decisions.length) {
+    setLoginStatus("warn", "Select a decision", "Choose Map existing or Create new on each row you want to confirm. Unmatched rows stay on the list until you decide.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/accounting/coa/legacy-import/confirm", {
+    method: "POST",
+    body: JSON.stringify({
+      source_system: sourceSelect?.value || lastLegacyPreview?.source_system || "tally",
+      decisions,
+    }),
+  });
+  if (result.ok) {
+    setLoginStatus(
+      "ok",
+      "Legacy accounts confirmed",
+      `${result.payload?.confirmed_count || 0} decision(s) saved (${result.payload?.mapped_existing_count || 0} mapped, ${result.payload?.created_account_count || 0} created). Each decision is audited.`,
+    );
+    lastLegacyDecisions = Array.isArray(result.payload?.decisions) ? result.payload.decisions : [];
+    await previewLegacyCoa();
+    await loadLegacyCoaDecisions();
+  } else if (result.status === 403) {
+    setLoginStatus("danger", "Not permitted", "Tenant admin or accountant can confirm mapping decisions.");
+  } else {
+    setLoginStatus("danger", "Confirm failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(getApiOutput(), { legacy_coa_confirm: { ok: result.ok, status: result.status } });
+}
+
+export async function loadLegacyCoaDecisions() {
+  const sourceSelect = document.querySelector("[data-legacy-coa-source]");
+  const source = sourceSelect?.value || lastLegacyPreview?.source_system || "tally";
+  const result = await apiRequest(
+    "mitrabooks",
+    `/api/v1/accounting/coa/legacy-import/decisions?source_system=${encodeURIComponent(source)}`,
+    { method: "GET" },
+  );
+  lastLegacyDecisions = result.ok && Array.isArray(result.payload) ? result.payload : [];
+  if (!result.ok) {
+    setLoginStatus("warn", "Could not load mapping audit", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  rerenderBusinessReportsIfActive();
+  renderJson(getApiOutput(), { legacy_coa_decisions: { ok: result.ok, count: lastLegacyDecisions.length } });
+}
+
+export function toggleLegacyCoaRowFields(selectEl) {
+  const tr = selectEl?.closest("tr");
+  if (!tr) return;
+  const mapBox = tr.querySelector("[data-legacy-map-fields]");
+  const createBox = tr.querySelector("[data-legacy-create-fields]");
+  const action = selectEl.value;
+  if (mapBox) mapBox.style.display = action === "map_existing" ? "block" : "none";
+  if (createBox) createBox.style.display = action === "create_new" ? "block" : "none";
+}
+
+export function renderLegacyCoaSection() {
+  const sourceVal = lastLegacyPreview?.source_system || "tally";
+  const controls = `
+    <div class="report-date-controls" style="flex-wrap: wrap; gap: 10px;">
+      <label>Source
+        <select data-legacy-coa-source>
+          <option value="tally" ${sourceVal === "tally" ? "selected" : ""}>Tally</option>
+          <option value="zoho" ${sourceVal === "zoho" ? "selected" : ""}>Zoho Books</option>
+          <option value="csv" ${sourceVal === "csv" ? "selected" : ""}>Other CSV</option>
+        </select>
+      </label>
+      <label>Legacy COA CSV <input type="file" accept=".csv,text/csv" data-legacy-coa-file></label>
+      <button class="secondary" type="button" data-business-action="legacy-coa-preview">Match accounts</button>
+      <button class="secondary" type="button" data-business-action="legacy-coa-template">Download template</button>
+      <button class="secondary" type="button" data-business-action="legacy-coa-decisions">Load audit log</button>
+    </div>
+    <p class="muted">Upload unique legacy ledger codes and descriptions. MitraBooks suggests matches; you confirm Map to an existing account or Create a new MitraBooks account. Nothing posts until you confirm. Legacy codes stay searchable.</p>`;
+
+  const r = lastLegacyPreview;
+  let previewHtml = "";
+  if (!r) {
+    previewHtml = "";
+  } else if (r.ok === false) {
+    previewHtml = reportUnavailablePanel("Legacy chart of accounts", r);
+  } else {
+    const accounts = r.canonical_accounts || [];
+    const rows = (r.rows || []).map((row) => {
+      const suggestedId = row.mapped_account_id || row.suggestion?.canonical_account_id || "";
+      const preselect = row.already_mapped || row.match_status === "suggested" ? "map_existing" : "";
+      const pill = row.match_status === "already_mapped"
+        ? "ok"
+        : (row.match_status === "suggested" ? "ok" : "warn");
+      const matchLabel = row.already_mapped
+        ? `mapped → ${row.mapped_account_code || ""} ${row.mapped_account_name || ""}`
+        : (row.suggestion
+          ? `suggested ${row.suggestion.canonical_account_name} (${row.suggestion.reason}, ${row.suggestion.confidence ?? ""})`
+          : "no match");
+      const defaultClass = defaultClassification(row.source_account_type || "");
+      const typeSelect = ["asset", "liability", "equity", "income", "expense"].map((t) =>
+        `<option value="${t}" ${row.source_account_type === t ? "selected" : ""}>${t}</option>`
+      ).join("");
+      const classSelect = ["real", "personal", "nominal"].map((t) =>
+        `<option value="${t}" ${defaultClass === t ? "selected" : ""}>${t}</option>`
+      ).join("");
+      return `
+        <tr data-legacy-row="${escapeHtml(row.source_account_code)}">
+          <td class="mono-code">${escapeHtml(row.source_account_code)}</td>
+          <td>${escapeHtml(row.source_account_name)}</td>
+          <td><span class="pill ${pill}">${escapeHtml(matchLabel)}</span></td>
+          <td>
+            <select data-legacy-action>
+              <option value="" ${preselect === "" ? "selected" : ""}>Decide later</option>
+              <option value="map_existing" ${preselect === "map_existing" ? "selected" : ""}>Map to existing</option>
+              <option value="create_new">Create new MitraBooks account</option>
+            </select>
+            <div data-legacy-map-fields style="display:${preselect === "map_existing" ? "block" : "none"};margin-top:6px">
+              <select data-legacy-canonical>
+                <option value="">Select MitraBooks account</option>
+                ${accounts.map((a) => `<option value="${escapeHtml(String(a.id))}" ${String(a.id) === String(suggestedId) ? "selected" : ""}>${escapeHtml(`${a.code || "—"} — ${a.name}`)}</option>`).join("")}
+              </select>
+            </div>
+            <div data-legacy-create-fields style="display:none;margin-top:6px">
+              <input type="text" data-legacy-new-code maxlength="30" placeholder="MitraBooks code" />
+              <input type="text" data-legacy-new-name maxlength="200" value="${escapeHtml(row.source_account_name)}" placeholder="MitraBooks name" />
+              <select data-legacy-new-type><option value="">Type</option>${typeSelect}</select>
+              <select data-legacy-new-class><option value="">Class</option>${classSelect}</select>
+            </div>
+            <input type="text" data-legacy-notes maxlength="200" placeholder="Audit note (optional)" style="margin-top:6px;width:100%" />
+          </td>
+        </tr>`;
+    }).join("");
+    previewHtml = `
+      <div class="preview-heading compact">
+        <div><p>${escapeHtml(String(r.row_count))} unique legacy account(s) · ${escapeHtml(String(r.suggested_count))} suggested · ${escapeHtml(String(r.unmatched_count))} unmatched · ${escapeHtml(String(r.already_mapped_count))} already mapped.</p></div>
+        <span class="pill ${r.unmatched_count ? "warn" : "ok"}">${r.unmatched_count ? "unmatched rows need a decision" : "all rows have a suggestion or mapping"}</span>
+      </div>
+      <div class="table-preview compact-table">
+        <table>
+          <thead><tr><th>Legacy code</th><th>Legacy name</th><th>Match</th><th>Your decision</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="4" class="muted">No rows.</td></tr>`}</tbody>
+        </table>
+      </div>
+      <div class="report-date-controls">
+        <button class="primary" type="button" data-business-action="legacy-coa-confirm">Confirm selected decisions</button>
+      </div>
+      <p class="muted">Tenant admin or accountant can confirm. Suggested rows are pre-selected as Map existing. Confirm is still required. Create uses the same MitraBooks account fields as Chart of Accounts.</p>`;
+  }
+
+  const decisionRows = (lastLegacyDecisions || []).map((d) => `
+    <tr>
+      <td class="mono-code">${escapeHtml(d.source_account_code || "")}</td>
+      <td>${escapeHtml(d.source_account_name || "")}</td>
+      <td>${escapeHtml(d.action === "created_then_mapped" ? "created then mapped" : "mapped to existing")}</td>
+      <td>${escapeHtml(`${d.canonical_account_code || ""} ${d.canonical_account_name || ""}`.trim())}</td>
+      <td>${escapeHtml(d.decided_by || "")}</td>
+      <td>${escapeHtml(String(d.decided_at || "").slice(0, 19).replace("T", " "))}</td>
+    </tr>`).join("");
+
+  return `
+    ${controls}
+    ${previewHtml}
+    ${decisionRows ? `
+    <div class="table-preview compact-table">
+      <h4>Confirmed mapping audit</h4>
+      <table>
+        <thead><tr><th>Legacy code</th><th>Legacy name</th><th>Decision</th><th>MitraBooks account</th><th>By</th><th>When</th></tr></thead>
+        <tbody>${decisionRows}</tbody>
+      </table>
+    </div>` : ""}
+  `;
+}
+
 export async function downloadViTemplate() {
   const result = await downloadApiFile("mitrabooks", "/api/v1/business/vouchers/bulk-import/template", "vouchers_bulk_import_template.csv");
   renderJson(getApiOutput(), { vi_template: { ok: result.ok } });
@@ -190,6 +466,9 @@ document.addEventListener("change", (event) => {
   }
   if (target.matches("[data-ob-preset]")) {
     window.toggleObCustomMappingView();
+  }
+  if (target.matches("[data-legacy-action]")) {
+    toggleLegacyCoaRowFields(target);
   }
 });
 
@@ -311,7 +590,7 @@ export function renderBulkImportVouchersSection() {
       <button class="secondary" type="button" data-business-action="vi-preview">Preview Import</button>
       <button class="secondary" type="button" data-business-action="vi-template">Download template</button>
     </div>
-    <p class="muted">Bulk upload historical transactions/vouchers. Supports single-row double entry (debit_account, credit_account, amount) or multi-row ledger lines grouped by voucher_number.</p>`;
+    <p class="muted">Bulk upload historical transactions/vouchers. Supports single-row double entry (debit_account, credit_account, amount) or multi-row ledger lines grouped by voucher_number. Confirmed legacy account codes from the mapping step above are accepted.</p>`;
 
   const r = lastViPreview;
   if (!r) return controls;
@@ -439,6 +718,9 @@ export function renderYearEndSection() {
 
 export function renderOpeningYearEndPanel() {
   return `
+    <div class="table-preview compact-table"><h4>Legacy chart of accounts (map or create)</h4></div>
+    ${renderLegacyCoaSection()}
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
     <div class="table-preview compact-table"><h4>Opening balances (CSV import)</h4></div>
     ${renderOpeningBalancesSection()}
     <hr style="margin:18px 0;border:none;border-top:1px solid var(--line,#ddd);">
