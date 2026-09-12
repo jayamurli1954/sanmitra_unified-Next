@@ -1,7 +1,5 @@
-// OfficeMitra AI workspace — Phase 1 + Phase 2 productivity tabs.
 import { renderMisDashboardStrip, renderMisNarrativeSection } from "./office-ai-mis-dashboard.js";
-// Advisory AI only; figures come from connectors / user paste.
-
+import { applyReviewPing, clearReviewPing, handleReviewAction, refreshReviewData, renderReviewPanel, REVIEW_STATE_DEFAULTS, syncReviewFields, reviewBannerHtml } from "./office-ai-review.js";
 /** @type {Record<string, any> | null} */
 let deps = null;
 
@@ -20,6 +18,7 @@ const state = {
   misEnabled: false,
   misImportEnabled: false,
   misExportEnabled: false,
+  ...REVIEW_STATE_DEFAULTS,
   misPacks: [],
   misCatalog: [],
   misSelectedPackId: "",
@@ -182,6 +181,7 @@ function syncPasteFields(el) {
   if (misPackKey) state.misNewPackKey = misPackKey.value || "sme_general";
   if (misScore) state.misReconcileScore = misScore.value || "";
   if (misPersist) state.misImportPersist = misPersist.checked !== false;
+  syncReviewFields(root, state);
 }
 
 function proposalSummary(proposal) {
@@ -233,17 +233,11 @@ export function renderOfficeAiWorkspace() {
     ["notifications", notifLabel],
     ["brief", "Today Brief"],
   ];
-  if (proposalsEnabled) {
-    tabs.splice(1, 0, ["proposals", proposalLabel]);
-  }
+  if (proposalsEnabled) tabs.splice(1, 0, ["proposals", proposalLabel]);
   let featureInsertAt = proposalsEnabled ? 2 : 1;
-  if (state.misEnabled) {
-    tabs.splice(featureInsertAt, 0, ["mis", "MIS Packs"]);
-    featureInsertAt += 1;
-  }
-  if (state.workflowsEnabled) {
-    tabs.splice(featureInsertAt, 0, ["workflows", "Workflows"]);
-  }
+  if (state.misEnabled) tabs.splice(featureInsertAt++, 0, ["mis", "MIS Packs"]);
+  if (state.reviewEnabled) tabs.splice(featureInsertAt++, 0, ["review", "Review"]);
+  if (state.workflowsEnabled) tabs.splice(featureInsertAt, 0, ["workflows", "Workflows"]);
   const tabButtons = tabs
     .map(([id, label]) => {
       const active = state.tab === id ? "primary" : "secondary";
@@ -255,6 +249,7 @@ export function renderOfficeAiWorkspace() {
   if (state.tab === "tasks") body = renderTasksPanel();
   else if (state.tab === "proposals") body = renderProposalsPanel();
   else if (state.tab === "mis") body = renderMisPanel();
+  else if (state.tab === "review") body = renderReviewPanel(state, escapeHtml);
   else if (state.tab === "workflows") body = renderWorkflowsPanel();
   else if (state.tab === "email") body = renderEmailPanel();
   else if (state.tab === "calendar") body = renderCalendarPanel();
@@ -275,6 +270,7 @@ export function renderOfficeAiWorkspace() {
           ${state.misEnabled
             ? `<p class="muted" style="margin:0.35rem 0 0;">CA Analysis Pack (MIS) enabled: import Excel facts, reconcile with maker/checker, export when ready (ADR-014).</p>`
             : ""}
+          ${reviewBannerHtml(state)}
           ${state.workflowsEnabled
             ? `<p class="muted" style="margin:0.35rem 0 0;">Workflows enabled: multi-step OfficeMitra actions via Action Executor (ADR-009).</p>`
             : ""}
@@ -736,12 +732,14 @@ async function refreshWritebackFlag() {
     state.misEnabled = !!payload.mis_enabled;
     state.misImportEnabled = !!payload.mis_capabilities?.import;
     state.misExportEnabled = !!payload.mis_capabilities?.export;
+    applyReviewPing(state, payload);
     state.workflowsEnabled = !!payload.workflows_enabled;
   } catch (_err) {
     state.writebackEnabled = false;
     state.misEnabled = false;
     state.misImportEnabled = false;
     state.misExportEnabled = false;
+    clearReviewPing(state);
     state.workflowsEnabled = false;
   }
 }
@@ -813,6 +811,7 @@ export async function loadOfficeAiWorkspace() {
     if (state.tab === "tasks") await refreshTasks();
     else if (state.tab === "proposals") await refreshProposals();
     else if (state.tab === "mis") await refreshMisData();
+    else if (state.tab === "review") await refreshReviewData(state, { apiRequest, unwrap });
     else if (state.tab === "workflows") await refreshWorkflows();
     else if (state.tab === "email") await refreshEmails();
     else if (state.tab === "calendar") await refreshCalendar();
@@ -1243,7 +1242,7 @@ export async function handleOfficeAiAction(action, el) {
       }
       await refreshMisData();
       await refreshProposals();
-    }
+    } else if (await handleReviewAction(action, el, { state, apiRequest, unwrap, formatApiDetail, resolveAppKey, requireDeps })) {}
   } catch (err) {
     state.error = err?.message || "OfficeMitra AI action failed";
   } finally {

@@ -162,3 +162,25 @@ class MISPackExportRequest(BaseModel):
     format: Literal["excel", "pdf_summary", "ppt"] = Field(
         description="CFO Excel, CEO PDF summary, or board PPT (ADR-014)."
     )
+
+
+class ReviewEngagementCreateRequest(BaseModel):
+    period: str = Field(min_length=1, max_length=32)
+    pack_id: str | None = Field(default=None, max_length=64)
+    accounting_entity_id: str | None = Field(default=None, max_length=64)
+    jurisdiction: str = Field(default="IN", max_length=8)
+
+
+class ReviewLinkPackRequest(BaseModel):
+    pack_id: str = Field(min_length=1, max_length=64)
+
+
+class ReviewNoteCreateRequest(BaseModel):
+    description: str = Field(min_length=1, max_length=4000)
+    issue_id: str | None = Field(default=None, max_length=64)
+    assigned_to: str | None = Field(default=None, max_length=120)
+
+
+class ReviewNoteUpdateRequest(BaseModel):
+    status: Literal["open", "assigned", "resolved", "closed"] | None = None
+    assigned_to: str | None = Field(default=None, max_length=120)

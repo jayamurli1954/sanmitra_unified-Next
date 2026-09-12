@@ -59,6 +59,7 @@ Confirm Render/Vercel picked up `main` at `5534909f` (or later) before signing o
 3. [Phase 4 write-back](OFFICEMITRA_PHASE4_WRITEBACK_SMOKE_CHECKLIST.md) — generate → confirm / dismiss  
 4. [Phase 6 workflows](OFFICEMITRA_PHASE6_WORKFLOW_SMOKE_CHECKLIST.md) — template → run → idempotency → stop-on-failure + diagnostics  
 5. [Policy engine ADR-012](OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md) — evaluate + **negative** cases  
+6. Review workspaces (ADR-015) stay **off** this ERP demo tenant. Use [`OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md`](OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md) on `demo-mfg-mis` only.
 
 **Demo tenant enable (Platform Owner → Entitlements):**
 

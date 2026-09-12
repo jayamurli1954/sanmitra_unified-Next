@@ -141,6 +141,20 @@ def test_officemitra_route_contracts_are_registered() -> None:
         ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/reconcile"),
         ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/export"),
         ("POST", "/api/v1/officemitra/mis/packs/{pack_id}/narrative"),
+        ("GET", "/api/v1/officemitra/review/status"),
+        ("GET", "/api/v1/officemitra/review/engagements"),
+        ("POST", "/api/v1/officemitra/review/engagements"),
+        ("GET", "/api/v1/officemitra/review/engagements/{engagement_id}"),
+        ("POST", "/api/v1/officemitra/review/engagements/{engagement_id}/link-pack"),
+        ("POST", "/api/v1/officemitra/review/engagements/{engagement_id}/scan"),
+        ("GET", "/api/v1/officemitra/review/engagements/{engagement_id}/issues"),
+        ("POST", "/api/v1/officemitra/review/engagements/{engagement_id}/working-papers"),
+        ("GET", "/api/v1/officemitra/review/engagements/{engagement_id}/working-papers"),
+        ("GET", "/api/v1/officemitra/review/working-papers/{paper_id}/download"),
+        ("POST", "/api/v1/officemitra/review/working-papers/{paper_id}/close"),
+        ("GET", "/api/v1/officemitra/review/engagements/{engagement_id}/notes"),
+        ("POST", "/api/v1/officemitra/review/engagements/{engagement_id}/notes"),
+        ("PATCH", "/api/v1/officemitra/review/notes/{note_id}"),
     }
 
     assert expected <= routes

@@ -20,6 +20,10 @@ WORKFLOW_RUNS_COLLECTION = "officemitra_workflow_runs"
 MIS_PACKS_COLLECTION = "officemitra_mis_packs"
 MIS_FACTS_COLLECTION = "officemitra_mis_facts"
 MIS_EXPORTS_COLLECTION = "officemitra_mis_exports"
+REVIEW_ENGAGEMENTS_COLLECTION = "officemitra_review_engagements"
+REVIEW_ISSUES_COLLECTION = "officemitra_review_issues"
+REVIEW_PAPERS_COLLECTION = "officemitra_review_papers"
+REVIEW_NOTES_COLLECTION = "officemitra_review_notes"
 
 MIS_PACK_STATUSES = frozenset(
     {"draft", "pending_reconcile", "reconciled", "pending_export", "exported", "failed"}
@@ -36,6 +40,13 @@ MIS_ENTITY_TYPES = frozenset(
     }
 )
 MIS_INGESTION_PATHS = frozenset({"excel_import", "mitrabooks", "zoho", "tally", "manual"})
+REVIEW_ENGAGEMENT_STATUSES = frozenset({"open", "scanned", "closed"})
+REVIEW_ISSUE_STATUSES = frozenset({"open", "assigned", "resolved", "closed"})
+REVIEW_NOTE_STATUSES = frozenset({"open", "assigned", "resolved", "closed"})
+REVIEW_PAPER_STATUSES = frozenset({"draft", "final"})
+REVIEW_PAPER_TYPES = frozenset({"cash_lead", "ar_lead", "ap_lead", "ar_aging", "ap_aging"})
+REVIEW_RULE_VERSION = "review_rules@1.0.0"
+REVIEW_PAPER_GENERATOR_VERSION = "review_wp@1.0.0"
 
 TASK_STATUSES = frozenset({"open", "done", "cancelled"})
 TASK_SOURCES = frozenset({"manual", "ai"})
@@ -56,6 +67,7 @@ NOTIFICATION_KINDS = frozenset(
         "brief_ready",
         "proposal_ready",
         "workflow_ready",
+        "review_note_assigned",
     }
 )
 
@@ -142,6 +154,18 @@ async def ensure_indexes() -> None:
         )
         await get_collection(MIS_EXPORTS_COLLECTION).create_index(
             [("tenant_id", 1), ("pack_id", 1), ("created_at", -1)]
+        )
+        await get_collection(REVIEW_ENGAGEMENTS_COLLECTION).create_index(
+            [("tenant_id", 1), ("updated_at", -1)]
+        )
+        await get_collection(REVIEW_ISSUES_COLLECTION).create_index(
+            [("tenant_id", 1), ("engagement_id", 1), ("finding_code", 1)]
+        )
+        await get_collection(REVIEW_PAPERS_COLLECTION).create_index(
+            [("tenant_id", 1), ("engagement_id", 1), ("generated_at", -1)]
+        )
+        await get_collection(REVIEW_NOTES_COLLECTION).create_index(
+            [("tenant_id", 1), ("engagement_id", 1), ("updated_at", -1)]
         )
         _indexes_ready = True
     except Exception:

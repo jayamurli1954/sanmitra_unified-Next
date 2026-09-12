@@ -213,7 +213,18 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
         ),
         minimum_plan="pro",
         default_enabled=False,
-        features=("tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows", "mis"),
+        features=(
+            "tasks",
+            "email",
+            "brief",
+            "calendar",
+            "meeting_notes",
+            "notifications",
+            "writeback",
+            "workflows",
+            "mis",
+            "review",
+        ),
     ),
 }
 
@@ -367,7 +378,9 @@ def require_module_feature(
     explicit = [str(item or "").strip().lower() for item in (office_ai_features or ()) if str(item or "").strip()]
 
     # Opt-in features never inherit from parent-only enablement (ADR-008 / ADR-009 / ADR-014).
-    opt_in_features = frozenset({("office_ai", "writeback"), ("office_ai", "workflows"), ("office_ai", "mis")})
+    opt_in_features = frozenset(
+        {("office_ai", "writeback"), ("office_ai", "workflows"), ("office_ai", "mis"), ("office_ai", "review")}
+    )
     if (module_key, feature_key) in opt_in_features:
         if feature_key in explicit or feature_key in granular_flags:
             return definition
@@ -406,6 +419,55 @@ def is_office_ai_workflows_enabled(
     """Return True only when office_ai.workflows is explicitly enabled (default off)."""
     return _is_office_ai_opt_in_feature_enabled(
         "workflows",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_review_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Return True only when office_ai.review is explicitly enabled (default off). ADR-015."""
+    return _is_office_ai_opt_in_feature_enabled(
+        "review",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_review_working_papers_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Working papers — requires parent office_ai.review plus office_ai.review.working_papers."""
+    if not is_office_ai_review_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_review_capability_enabled(
+        "working_papers",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_review_notes_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Review notes — requires parent office_ai.review plus office_ai.review.notes."""
+    if not is_office_ai_review_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_review_capability_enabled(
+        "notes",
         enabled_modules=enabled_modules,
         office_ai_features=office_ai_features,
     )
@@ -503,6 +565,25 @@ def is_office_ai_mis_pack_enabled(
         if str(item or "").strip()
     }
     return f"mis.pack.{key}" in explicit or f"pack.{key}" in explicit
+
+
+def _is_office_ai_review_capability_enabled(
+    capability: str,
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    cap = str(capability or "").strip().lower()
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    dotted = f"office_ai.review.{cap}"
+    if dotted in normalized_modules:
+        return True
+    explicit = {
+        str(item or "").strip().lower()
+        for item in (office_ai_features or ())
+        if str(item or "").strip()
+    }
+    return cap in explicit or f"review.{cap}" in explicit
 
 
 def _is_office_ai_mis_capability_enabled(
