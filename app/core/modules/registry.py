@@ -444,6 +444,24 @@ def is_office_ai_documents_enabled(
     )
 
 
+def is_office_ai_documents_requests_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Staff missing-doc requests — requires parent office_ai.documents plus office_ai.documents.requests."""
+    if not is_office_ai_documents_enabled(
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    ):
+        return False
+    return _is_office_ai_documents_capability_enabled(
+        "requests",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
 def is_office_ai_review_enabled(
     *,
     enabled_modules: Iterable[str] | None,
@@ -604,6 +622,25 @@ def _is_office_ai_review_capability_enabled(
         if str(item or "").strip()
     }
     return cap in explicit or f"review.{cap}" in explicit
+
+
+def _is_office_ai_documents_capability_enabled(
+    capability: str,
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    cap = str(capability or "").strip().lower()
+    normalized_modules = set(_normalize_modules(enabled_modules))
+    dotted = f"office_ai.documents.{cap}"
+    if dotted in normalized_modules:
+        return True
+    explicit = {
+        str(item or "").strip().lower()
+        for item in (office_ai_features or ())
+        if str(item or "").strip()
+    }
+    return cap in explicit or f"documents.{cap}" in explicit
 
 
 def _is_office_ai_mis_capability_enabled(

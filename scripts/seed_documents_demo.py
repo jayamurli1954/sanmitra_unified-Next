@@ -7,9 +7,10 @@ Refuses: demo-mitrabooks-business and every other tenant id.
 
 This script never posts MitraBooks journals and never mutates CA document status
 from OfficeMitra. It only:
-  - adds office_ai.documents on demo-mfg-mis
+  - adds office_ai.documents and office_ai.documents.requests on demo-mfg-mis
   - creates one staff CA document via the MitraBooks ca_clients service
   - optionally links an existing Review note (OfficeMitra Mongo)
+  - raises one staff missing-document task for a type not on the queue (ADR-017)
 
 Prereq:
   python scripts/seed_mis_demo_firm.py --password "ChangeMe123!"
@@ -42,6 +43,7 @@ from app.modules.office_ai.models import ensure_indexes
 from app.modules.office_ai.services import documents_service, review_store
 
 DOCUMENTS_FLAG = "office_ai.documents"
+REQUESTS_FLAG = "office_ai.documents.requests"
 BLOCKED_TENANT_IDS = frozenset({"demo-mitrabooks-business"})
 DEMO_PERIOD = "2026-07"
 
@@ -91,6 +93,8 @@ async def _apply_documents_entitlements(tenant_id: str) -> list[str]:
         modules.append("business")
     if DOCUMENTS_FLAG not in modules:
         modules.append(DOCUMENTS_FLAG)
+    if REQUESTS_FLAG not in modules:
+        modules.append(REQUESTS_FLAG)
     await tenants.update_one(
         {"tenant_id": tenant_id},
         {
@@ -155,12 +159,28 @@ async def _run_in_process_smoke(*, tenant_id: str) -> dict[str, Any]:
         tenant=tenant or {},
         engagement_id=str(engagement["id"]),
     )
+    gaps = await documents_service.gap_report(
+        tenant_id=tenant_id,
+        tenant=tenant or {},
+        engagement_id=str(engagement["id"]),
+    )
+    request = await documents_service.create_staff_request(
+        tenant_id=tenant_id,
+        tenant=tenant or {},
+        user={"sub": "seed-documents-demo"},
+        document_type="gst_returns",
+        engagement_id=str(engagement["id"]),
+    )
     return {
         "document_id": document.get("document_id"),
         "note_id": notes[0]["id"],
         "linked": linked["item"].get("ca_document_id"),
         "queue_count": queue.get("count"),
         "queue_enabled": queue.get("enabled"),
+        "missing_count": gaps.get("missing_count"),
+        "request_created": request.get("created"),
+        "request_task_id": (request.get("item") or {}).get("id"),
+        "client_email": request.get("client_email"),
     }
 
 
@@ -169,7 +189,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     await init_mongo()
     try:
         modules = await _apply_documents_entitlements(tenant_id)
-        print(f"Documents flags on {tenant_id}: {DOCUMENTS_FLAG in modules}")
+        print(f"Documents flags on {tenant_id}: {DOCUMENTS_FLAG in modules}, requests={REQUESTS_FLAG in modules}")
         if args.flags_only:
             return 0
         result = await _run_in_process_smoke(tenant_id=tenant_id)

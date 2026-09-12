@@ -189,3 +189,9 @@ class ReviewNoteUpdateRequest(BaseModel):
 
 class DocumentsLinkNoteRequest(BaseModel):
     document_id: str = Field(min_length=1, max_length=80)
+
+
+class DocumentsMissingRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=80)
+    engagement_id: str | None = Field(default=None, max_length=64)
+    accounting_entity_id: str | None = Field(default=None, max_length=80)

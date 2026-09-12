@@ -159,6 +159,8 @@ def test_officemitra_route_contracts_are_registered() -> None:
         ("GET", "/api/v1/officemitra/documents/queue"),
         ("POST", "/api/v1/officemitra/documents/notes/{note_id}/link"),
         ("POST", "/api/v1/officemitra/documents/notes/{note_id}/unlink"),
+        ("GET", "/api/v1/officemitra/documents/gaps"),
+        ("POST", "/api/v1/officemitra/documents/requests"),
     }
 
     assert expected <= routes

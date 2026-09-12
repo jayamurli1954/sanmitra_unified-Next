@@ -54,6 +54,24 @@ async def list_tasks(*, tenant_id: str, status: str | None = None, limit: int = 
     return [serialize_doc(doc) for doc in await cursor.to_list(length=min(limit, 200))]
 
 
+async def find_open_missing_document_task(
+    *,
+    tenant_id: str,
+    document_type: str,
+    engagement_id: str | None = None,
+) -> dict | None:
+    await ensure_indexes()
+    query: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "kind": "missing_document",
+        "document_type": str(document_type or "").strip(),
+        "status": "open",
+        "engagement_id": str(engagement_id).strip() if engagement_id else None,
+    }
+    doc = await get_collection(TASKS_COLLECTION).find_one(query)
+    return serialize_doc(doc)
+
+
 async def create_task(
     *,
     tenant_id: str,
@@ -66,6 +84,9 @@ async def create_task(
     linked_email_id: str | None = None,
     prompt_version: str | None = None,
     ai_telemetry_id: str | None = None,
+    kind: str | None = None,
+    document_type: str | None = None,
+    engagement_id: str | None = None,
 ) -> dict:
     await ensure_indexes()
     now = utcnow()
@@ -86,6 +107,9 @@ async def create_task(
         "created_by": uid,
         "updated_by": uid,
         "change_reason": None,
+        "kind": str(kind).strip() if kind else None,
+        "document_type": str(document_type).strip() if document_type else None,
+        "engagement_id": str(engagement_id).strip() if engagement_id else None,
     }
     await get_collection(TASKS_COLLECTION).insert_one(doc)
     item = serialize_doc(doc)

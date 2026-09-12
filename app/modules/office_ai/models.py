@@ -68,6 +68,7 @@ NOTIFICATION_KINDS = frozenset(
         "proposal_ready",
         "workflow_ready",
         "review_note_assigned",
+        "missing_document_request",
     }
 )
 

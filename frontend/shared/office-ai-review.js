@@ -1,6 +1,9 @@
-export { applyDocumentsPing, clearDocumentsPing, documentsBannerHtml, handleDocumentsAction, refreshDocumentsData, renderDocumentsPanel, syncDocumentsFields } from "./office-ai-documents.js";
+import { DOCUMENTS_STATE_DEFAULTS } from "./office-ai-documents.js";
+
+export { DOCUMENTS_STATE_DEFAULTS, applyDocumentsPing, clearDocumentsPing, documentsBannerHtml, handleDocumentsAction, refreshDocumentsData, renderDocumentsPanel, syncDocumentsFields } from "./office-ai-documents.js";
 
 export const REVIEW_STATE_DEFAULTS = {
+  ...DOCUMENTS_STATE_DEFAULTS,
   reviewEnabled: false,
   reviewPapersEnabled: false,
   reviewNotesEnabled: false,

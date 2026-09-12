@@ -31,6 +31,7 @@ Short, durable records of *why* foundational platform choices were made.
 | [ADR-014](ADR-014-officemitra-ca-analysis-pack.md) | OfficeMitra CA Analysis Pack (MIS, narrative, export) | Accepted |
 | [ADR-015](ADR-015-officemitra-review-workspaces.md) | OfficeMitra Review workspaces (no new Mitra brands) | Accepted |
 | [ADR-016](ADR-016-officemitra-documents-package.md) | OfficeMitra Documents package (staff-side CA queue) | Accepted |
+| [ADR-017](ADR-017-officemitra-missing-document-requests.md) | OfficeMitra staff missing-document requests | Accepted |
 
 ## Layered execution model (OfficeMitra)
 
@@ -50,6 +51,8 @@ MIS assembly (ADR-014) sits **above** read connectors: ingest/normalize facts â†
 Review workspaces (ADR-015) sit **beside** MIS: engagement scan, working papers, and notes under `office_ai.review*`. They reuse MIS import/facts and SSDV internally. They are not new Mitra brands.
 
 Documents (ADR-016) is a staff **package** beside Review: it lists the MitraBooks CA queue through the connector and stores `ca_document_id` on Review notes. It is not a client portal and does not write CA status from OfficeMitra.
+
+Staff missing-document requests (ADR-017) are the next Documents package slice: gap report vs a fixed India checklist, then an OfficeMitra staff task. No client email/portal. Implementation plan: [`OFFICEMITRA_DOCUMENTS_REQUESTS_IMPLEMENTATION_PLAN.md`](../architecture/OFFICEMITRA_DOCUMENTS_REQUESTS_IMPLEMENTATION_PLAN.md).
 
 ## Related
 

@@ -3,9 +3,9 @@
 **Document type:** Product requirements (current / target / gap)  
 **Product:** OfficeMitra AI  
 **Status:** Implemented behind flags (default off); demo-tenant smoke on `demo-mfg-mis`  
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** 2026-09-12  
-**ADR:** [ADR-016](../adr/ADR-016-officemitra-documents-package.md)  
+**ADR:** [ADR-016](../adr/ADR-016-officemitra-documents-package.md), [ADR-017](../adr/ADR-017-officemitra-missing-document-requests.md)  
 **Depends on:** [ADR-015](../adr/ADR-015-officemitra-review-workspaces.md) Review notes, MitraBooks CA staff document queue
 
 This is a **package inside OfficeMitra**, not a new Mitra brand.
@@ -23,8 +23,9 @@ Staff accountants need to see which CA documents already sit in MitraBooks and p
 | Documents tab | List the existing CA staff queue for the engagement book |
 | Link | Store `ca_document_id` on a Review note |
 | Unlink | Clear that link; do not delete the CA document |
+| Missing requests (ADR-017) | Compare a fixed India checklist to the queue; raise an OfficeMitra staff task |
 
-**Not this slice:** client self-portal, AI classify, missing-doc emails to clients, OfficeMitra uploads into MitraBooks, GST/journal writes.
+**Not this slice:** client self-portal, AI classify, client missing-doc emails, OfficeMitra uploads into MitraBooks, GST/journal writes.
 
 Do not introduce ClientMitra, DocumentsMitra, or PracticeOS.
 
@@ -49,20 +50,15 @@ An accountant in OfficeMitra can:
 2. See CA queue rows for the selected engagement’s `accounting_entity_id` (default `primary`) via the MitraBooks connector.
 3. Link / unlink a Review note to a `document_id` without mutating MitraBooks.
 4. Be told that uploads and status changes happen in MitraBooks CA Practice (`ca-access`).
+5. See **missing** expected types and raise a **staff** OfficeMitra task (no client email) when `office_ai.documents.requests` is on.
 
 If `business` is not enabled, the queue is empty and `enabled` is false (fail-soft).
 
 ---
 
-## Gap (must be built)
+## Gap (this slice)
 
-- Registry flag `office_ai.documents` (default off).
-- Connector read of `list_ca_document_metadata` / `get_ca_document_metadata`.
-- Review note field `ca_document_id`.
-- Routes under `/api/v1/officemitra/documents/*`.
-- Documents tab in the OfficeMitra shell.
-- Tests: flag gate, tenant isolation, no OfficeMitra query of `business_ca_document_metadata`, no ledger posts.
-- Demo seed on `demo-mfg-mis` only.
+ADR-016 and ADR-017 are implemented behind flags (default off). Remaining: operator signoff of the smoke checklist on local/staging `demo-mfg-mis`.
 
 ---
 
@@ -72,7 +68,7 @@ If `business` is not enabled, the queue is empty and `enabled` is false (fail-so
 | --- | --- |
 | Client self-portal | Later package; CA invite viewer already exists in MitraBooks |
 | Create / upload / status from OfficeMitra | Companion write; needs Accepted ADR-010 |
-| AI classify / missing-doc requests | After staff linking is used |
+| AI classify / client missing-doc emails | Staff task requests are ADR-017; client outreach is still deferred |
 | Knowledge, notices, advisory | LegalMitra or later OfficeMitra packages |
 
 ---
@@ -82,6 +78,7 @@ If `business` is not enabled, the queue is empty and `enabled` is false (fail-so
 - No PostgreSQL ledger writes.
 - No invoices, GST filing, or payroll from Documents flows.
 - Linking a note is OfficeMitra Mongo only.
+- A missing-document request creates an OfficeMitra task (optional Review note). It does not post journals or write the CA queue.
 
 ---
 

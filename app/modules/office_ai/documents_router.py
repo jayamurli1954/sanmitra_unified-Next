@@ -1,4 +1,4 @@
-"""ADR-016 Documents routes (kept separate to avoid growing office_ai/router.py)."""
+"""ADR-016/017 Documents routes (kept separate to avoid growing office_ai/router.py)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.modules.dependencies import require_enabled_module, require_enabled_module_feature
 from app.core.modules.registry import (
     is_office_ai_documents_enabled,
+    is_office_ai_documents_requests_enabled,
     is_office_ai_review_notes_enabled,
 )
 from app.modules.office_ai import schemas
@@ -23,14 +24,28 @@ def documents_ping_fields(tenant: dict) -> dict:
         enabled_modules=tenant.get("enabled_modules") or [],
         office_ai_features=tenant.get("office_ai_features"),
     )
+    requests_enabled = is_office_ai_documents_requests_enabled(
+        enabled_modules=tenant.get("enabled_modules") or [],
+        office_ai_features=tenant.get("office_ai_features"),
+    )
     return {
         "documents_enabled": enabled,
         "documents_capabilities": {
             "client_portal": False,
             "companion_writes": False,
+            "requests": requests_enabled,
         },
         "adr_016": "accepted",
+        "adr_017": "accepted",
     }
+
+
+def _require_documents_requests(tenant: dict) -> None:
+    if not is_office_ai_documents_requests_enabled(
+        enabled_modules=tenant.get("enabled_modules") or [],
+        office_ai_features=tenant.get("office_ai_features"),
+    ):
+        raise HTTPException(status_code=403, detail="Enable office_ai.documents.requests")
 
 
 @router.get("/documents/status")
@@ -105,6 +120,47 @@ async def unlink_document_from_note(
             tenant_id=_tenant_id(ctx),
             user=ctx["user"],
             note_id=note_id,
+        )
+    except documents_service.DocumentsNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except documents_service.DocumentsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/documents/gaps")
+async def list_document_gaps(
+    accounting_entity_id: str | None = Query(default=None, max_length=80),
+    engagement_id: str | None = Query(default=None, max_length=64),
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "documents")),
+) -> dict:
+    tenant = ctx.get("tenant") or {}
+    _require_documents_requests(tenant)
+    try:
+        return await documents_service.gap_report(
+            tenant_id=_tenant_id(ctx),
+            tenant=tenant,
+            accounting_entity_id=accounting_entity_id,
+            engagement_id=engagement_id,
+        )
+    except documents_service.DocumentsNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/documents/requests")
+async def create_missing_document_request(
+    payload: schemas.DocumentsMissingRequest,
+    ctx: dict = Depends(require_enabled_module_feature("office_ai", "documents")),
+) -> dict:
+    tenant = ctx.get("tenant") or {}
+    _require_documents_requests(tenant)
+    try:
+        return await documents_service.create_staff_request(
+            tenant_id=_tenant_id(ctx),
+            tenant=tenant,
+            user=ctx["user"],
+            document_type=payload.document_type,
+            engagement_id=payload.engagement_id,
+            accounting_entity_id=payload.accounting_entity_id,
         )
     except documents_service.DocumentsNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

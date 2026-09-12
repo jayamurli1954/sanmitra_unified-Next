@@ -1,26 +1,33 @@
-// OfficeMitra Documents package (ADR-016). Staff CA queue via connector; no client portal.
+// OfficeMitra Documents package (ADR-016/017). Staff CA queue + missing-doc tasks; no client portal.
 
 export const DOCUMENTS_STATE_DEFAULTS = {
   documentsEnabled: false,
+  documentsRequestsEnabled: false,
   documentsQueue: [],
   documentsQueueEnabled: true,
   documentsQueueReason: "",
   documentsBookId: "primary",
   documentsLinkNoteId: "",
   documentsLinkDocumentId: "",
+  documentsGaps: [],
 };
 
 export function applyDocumentsPing(state, payload) {
   state.documentsEnabled = !!payload?.documents_enabled;
+  state.documentsRequestsEnabled = !!payload?.documents_capabilities?.requests;
 }
 
 export function clearDocumentsPing(state) {
   state.documentsEnabled = false;
+  state.documentsRequestsEnabled = false;
 }
 
 export function documentsBannerHtml(state) {
   if (!state.documentsEnabled) return "";
-  return `<p class="muted" style="margin:0.35rem 0 0;">Documents package enabled: staff CA queue read + Review note links (ADR-016). Uploads stay in MitraBooks CA Practice.</p>`;
+  const requests = state.documentsRequestsEnabled
+    ? " Staff missing-document requests are on (ADR-017)."
+    : "";
+  return `<p class="muted" style="margin:0.35rem 0 0;">Documents package enabled: staff CA queue read + Review note links (ADR-016).${requests} Uploads stay in MitraBooks CA Practice.</p>`;
 }
 
 export function renderDocumentsPanel(state, escapeHtml) {
@@ -45,6 +52,20 @@ export function renderDocumentsPanel(state, escapeHtml) {
       return `<option value="${escapeHtml(id)}" ${selected}>${escapeHtml(label)}</option>`;
     })
     .join("");
+  const gapRows = (state.documentsGaps || [])
+    .map((row) => {
+      const type = String(row.document_type || "").trim();
+      const present = !!row.present;
+      const action = present
+        ? "On queue"
+        : `<button class="secondary" type="button" data-office-ai-action="documents-request" data-document-type="${escapeHtml(type)}">Request</button>`;
+      return `<tr>
+        <td>${escapeHtml(String(row.label || type))}</td>
+        <td>${present ? "Present" : "Missing"}</td>
+        <td>${action}</td>
+      </tr>`;
+    })
+    .join("");
   const queueOff = state.documentsQueueEnabled === false;
   return `
     <div>
@@ -55,6 +76,14 @@ export function renderDocumentsPanel(state, escapeHtml) {
         <thead><tr><th>Client</th><th>Type</th><th>Period</th><th>Status</th><th>Review link</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" class="muted">No CA documents on this book.</td></tr>`}</tbody>
       </table>
+      ${state.documentsRequestsEnabled ? `
+        <h5>Expected papers (staff request)</h5>
+        <p class="muted">Raises an OfficeMitra task. Does not email the client or write the CA queue.</p>
+        <table class="data-table">
+          <thead><tr><th>Document</th><th>Queue</th><th></th></tr></thead>
+          <tbody>${gapRows || `<tr><td colspan="3" class="muted">No checklist rows.</td></tr>`}</tbody>
+        </table>
+      ` : `<p class="muted">Enable office_ai.documents.requests to raise staff tasks for missing types.</p>`}
       ${state.reviewNotesEnabled ? `
         <h5>Link a Review note</h5>
         <div class="erp-inline-form">
@@ -78,6 +107,7 @@ export function syncDocumentsFields(root, state) {
 export async function refreshDocumentsData(state, { apiRequest, unwrap }) {
   if (!state.documentsEnabled) {
     state.documentsQueue = [];
+    state.documentsGaps = [];
     return;
   }
   const params = new URLSearchParams();
@@ -88,6 +118,12 @@ export async function refreshDocumentsData(state, { apiRequest, unwrap }) {
   state.documentsQueueEnabled = payload.enabled !== false;
   state.documentsQueueReason = payload.reason || payload.error || "";
   state.documentsBookId = payload.accounting_entity_id || "primary";
+  if (state.documentsRequestsEnabled) {
+    const gaps = unwrap(await apiRequest(`/api/v1/officemitra/documents/gaps${qs ? `?${qs}` : ""}`));
+    state.documentsGaps = gaps.items || [];
+  } else {
+    state.documentsGaps = [];
+  }
 }
 
 export async function handleDocumentsAction(action, el, ctx) {
@@ -113,6 +149,21 @@ export async function handleDocumentsAction(action, el, ctx) {
     if (!noteId) throw new Error("Select a Review note");
     unwrap(await apiRequest(`/api/v1/officemitra/documents/notes/${encodeURIComponent(noteId)}/unlink`, { method: "POST" }));
     state.notice = "Review note unlinked. CA document remains in MitraBooks.";
+    await refreshDocumentsData(state, helpers);
+  } else if (action === "documents-request") {
+    if (!state.documentsRequestsEnabled) throw new Error("Enable office_ai.documents.requests");
+    const documentType = String(el?.getAttribute("data-document-type") || "").trim();
+    if (!documentType) throw new Error("Missing document type");
+    const body = { document_type: documentType };
+    if (state.reviewSelectedId) body.engagement_id = state.reviewSelectedId;
+    const result = unwrap(await apiRequest("/api/v1/officemitra/documents/requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }));
+    state.notice = result?.created === false
+      ? "Open staff task already exists for this missing type."
+      : "Staff task created. Upload the paper in MitraBooks CA Practice. No client email was sent.";
     await refreshDocumentsData(state, helpers);
   } else {
     return false;

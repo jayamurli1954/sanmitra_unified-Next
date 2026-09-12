@@ -76,7 +76,7 @@ India only. Rule-based scan. Dashboard reads cached scan results (&lt;3s). Gener
 
 | Item | Why deferred |
 | --- | --- |
-| Client self-portal, AI document classify, missing-doc requests | Staff queue linking is [ADR-016](../adr/ADR-016-officemitra-documents-package.md); portal remains deferred |
+| Client self-portal, AI document classify, client missing-doc emails | Staff queue linking is [ADR-016](../adr/ADR-016-officemitra-documents-package.md); staff task requests are [ADR-017](../adr/ADR-017-officemitra-missing-document-requests.md); portal and client email remain deferred |
 | Compliance calendar, knowledge/RAG, tax notices | LegalMitra CA persona / RAG; later OfficeMitra packages if composed, not rebuilt |
 | Advisory opportunities, timesheets, capacity, firm analytics | After Review is used |
 | Tally XML as a must-have, QuickBooks, Xero, Zoho OAuth | CSV/Excel first. SSDV Tally path optional follow-on |

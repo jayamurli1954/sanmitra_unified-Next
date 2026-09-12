@@ -1,4 +1,4 @@
-"""OfficeMitra Documents package (ADR-016): link Review notes to MitraBooks CA queue."""
+"""OfficeMitra Documents package (ADR-016/017): CA queue links + staff missing-doc requests."""
 from __future__ import annotations
 
 from typing import Any
@@ -119,3 +119,154 @@ async def unlink_note(
         updates={"ca_document_id": None},
     )
     return {"item": updated}
+
+
+EXPECTED_REVIEW_DOCUMENTS: tuple[tuple[str, str], ...] = (
+    ("bank_statement", "Bank statement"),
+    ("gst_returns", "GST returns working"),
+    ("tds_challans", "TDS challans"),
+    ("trial_balance", "Trial balance"),
+    ("receivable_ageing", "AR ageing"),
+)
+
+
+def expected_document_label(document_type: str) -> str:
+    key = str(document_type or "").strip().lower()
+    for code, label in EXPECTED_REVIEW_DOCUMENTS:
+        if code == key:
+            return label
+    return key.replace("_", " ").strip() or "document"
+
+
+async def gap_report(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    accounting_entity_id: str | None = None,
+    engagement_id: str | None = None,
+) -> dict[str, Any]:
+    queue = await list_queue(
+        tenant_id=tenant_id,
+        tenant=tenant,
+        accounting_entity_id=accounting_entity_id,
+        engagement_id=engagement_id,
+        limit=500,
+    )
+    period = ""
+    if engagement_id:
+        engagement = await review_store.get_engagement(tenant_id=tenant_id, engagement_id=engagement_id)
+        period = str((engagement or {}).get("period") or "").strip()
+    rows = list(queue.get("items") or [])
+    if period:
+        rows = [row for row in rows if str(row.get("period") or "").strip() == period]
+    present = {
+        str(row.get("document_type") or "").strip().lower()
+        for row in rows
+        if str(row.get("document_type") or "").strip()
+    }
+    items = []
+    for code, label in EXPECTED_REVIEW_DOCUMENTS:
+        items.append(
+            {
+                "document_type": code,
+                "label": label,
+                "present": code in present,
+            }
+        )
+    missing = [row for row in items if not row["present"]]
+    return {
+        **{k: queue.get(k) for k in ("enabled", "reason", "error", "source", "accounting_entity_id")},
+        "period": period or None,
+        "items": items,
+        "missing": missing,
+        "missing_count": len(missing),
+        "client_portal": False,
+        "client_email": False,
+        "adr_017": "accepted",
+    }
+
+
+async def create_staff_request(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    user: dict[str, Any],
+    document_type: str,
+    engagement_id: str | None = None,
+    accounting_entity_id: str | None = None,
+) -> dict[str, Any]:
+    from app.modules.office_ai.services import notification_service, task_service
+
+    code = str(document_type or "").strip().lower()
+    allowed = {item[0] for item in EXPECTED_REVIEW_DOCUMENTS}
+    if code not in allowed:
+        raise DocumentsError(f"Unknown expected document type: {code}")
+    gaps = await gap_report(
+        tenant_id=tenant_id,
+        tenant=tenant,
+        accounting_entity_id=accounting_entity_id,
+        engagement_id=engagement_id,
+    )
+    if any(row["document_type"] == code and row["present"] for row in gaps.get("items") or []):
+        raise DocumentsError(f"{expected_document_label(code)} is already on the CA queue")
+    existing = await task_service.find_open_missing_document_task(
+        tenant_id=tenant_id,
+        document_type=code,
+        engagement_id=engagement_id,
+    )
+    if existing:
+        return {"item": existing, "created": False, "note": None, "client_email": False}
+    period = ""
+    if engagement_id:
+        engagement = await review_store.get_engagement(tenant_id=tenant_id, engagement_id=engagement_id)
+        if engagement is None:
+            raise DocumentsNotFoundError(f"Engagement not found: {engagement_id}")
+        period = str(engagement.get("period") or "")
+    label = expected_document_label(code)
+    title = f"Missing document: {label}" + (f" ({period})" if period else "")
+    if gaps.get("enabled") is False:
+        body = (
+            f"Staff request for {label}. MitraBooks CA Practice is not active "
+            f"({gaps.get('reason') or 'business_module_off'}). This is an internal reminder only. "
+            "Do not email the client from OfficeMitra."
+        )
+    else:
+        body = (
+            f"Staff request for {label}. Upload it in MitraBooks CA Practice (ca-access). "
+            "Do not email the client from OfficeMitra."
+        )
+    task = await task_service.create_task(
+        tenant_id=tenant_id,
+        user=user,
+        title=title[:500],
+        notes=body,
+        source="manual",
+        kind="missing_document",
+        document_type=code,
+        engagement_id=engagement_id,
+    )
+    note = None
+    from app.core.modules.registry import is_office_ai_review_notes_enabled
+
+    if engagement_id and is_office_ai_review_notes_enabled(
+        enabled_modules=tenant.get("enabled_modules") or [],
+        office_ai_features=tenant.get("office_ai_features"),
+    ):
+        note = await review_store.create_note(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            user=user,
+            description=body,
+            task_id=str(task.get("id") or ""),
+        )
+    await notification_service.create_notification(
+        tenant_id=tenant_id,
+        user=user,
+        title=title[:200],
+        body=body[:400],
+        kind="missing_document_request",
+        href="/business/office-ai",
+        dedupe_key=f"missing_doc:{tenant_id}:{engagement_id or 'none'}:{code}",
+    )
+    return {"item": task, "created": True, "note": note, "client_email": False}
+
