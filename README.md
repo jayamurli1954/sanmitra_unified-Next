@@ -30,21 +30,21 @@ routing; it does not select a separate database.
 
 ## Current State
 
-The existing backend in `D:\sanmitra-backend` is the reference implementation. It already contains:
+`D:\sanmitra_unified-Next` is the active unified backend and ERP shell. `D:\sanmitra-backend` is reference-only.
 
-- Unified FastAPI backend foundation.
-- Modular monolith structure.
-- MongoDB-backed users, tenants, and domain data.
-- PostgreSQL accounting engine.
-- Tenant middleware scaffold.
-- RBAC foundation.
-- `X-App-Key` based product routing.
-- COA mapping APIs.
-- MandirMitra donation posting into accounting.
-- GruhaMitra maintenance collection posting into accounting.
-- LegalMitra tenant-scoped route stubs.
+This workspace already contains:
 
-The current frontend landscape is being consolidated for GruhaMitra, MandirMitra, MitraBooks, and LegalMitra only.
+- Modular FastAPI monolith with `organization_type`, `enabled_modules`, module registry, RBAC, and `X-App-Key` product context.
+- Shared PostgreSQL accounting engine (journals, ledger, trial balance, P&L, balance sheet, receipts and payments, reversal, idempotency).
+- MongoDB for tenants, users, and domain records. Every protected query must stay tenant-scoped.
+- MitraBooks ERP shell at `www.mitrabooks.sanmitratech.in` hosting business, MandirMitra, and GruhaMitra experiences.
+- MitraBooks business slices under `/api/v1/business`: parties (including `customer | vendor | both`), typed vouchers, sales invoices, purchase bills, credit/debit notes, cash AR/AP allocation, GST/TDS **preparation** reports, inventory (weighted-average periodic), bank reconciliation, fixed assets, dimensions, opening balances, year-end close, MIS, data health, and CA practice client books.
+- MandirMitra donation, seva, public payment, receipt, hundi/fund, and 80G-readiness paths posting through the shared accounting engine.
+- GruhaMitra maintenance billing and collection posting through the same engine.
+
+These slices are **live on the unified domains** (`www.mitrabooks.sanmitratech.in` and the shared backend). Remaining work is operator/compliance **signoff** and a few unfinished workflows — not a second deploy. GST outputs are preparation/reporting until a CA signs filing. Live IRP/e-way, live bank APIs, OCR auto-post, and InvestMitra remain out of unified scope.
+
+Detailed current vs target: [MitraBooks ERP Gap Matrix](docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md) and [Current vs Target](docs/architecture/CURRENT_VS_TARGET.md).
 
 ## Target State
 
@@ -67,24 +67,28 @@ The target is one unified backend platform with a split database strategy:
 - PostgreSQL: accounting, ledger, journals, reports, tax, financial invariants.
 - MongoDB: tenants, users, module data, operational records, legal data, audit records.
 
-## Immediate Gap
+## Remaining Gaps
 
-Before frontend merging starts, the platform needs a small foundation PR:
+Foundation work (`organization_type`, module registry, isolation tests, accounting invariants) is in place and live. What remains is **signoff and unfinished workflows**, not a missing deploy:
 
-- Formal `organization_type`.
-- Formal `enabled_modules`.
-- Module registry.
-- Module/feature access checks.
-- Tenant isolation tests.
-- Accounting invariant tests.
-- Clear migration documentation.
+- Hosted destructive mutation **reconfirm** on `demo-mitrabooks-business` after staging credential drift.
+- MandirMitra opt-in **demo-tenant** mutation and production signoff (donation/seva/refund/fund).
+- GST/TDS **human compliance** review. Keep outputs labeled preparation until signed. Live GST IRP/e-way bill APIs stay deferred.
+- GruhaMitra housing unit/resident lifecycle and remaining society workflows in the ERP shell.
+- Print/PDF polish, CA staff-per-book assignment, pricing client caps, and operator maker-checker signoff for opening/year-end.
+- AR/AP netting / set-off is **not implemented** (planned Phase 4 completeness; dual-role party already exists).
+
+Do not treat provider configuration shells as live integrations.
 
 ## Documentation Map
 
 - [AGENTS.md](AGENTS.md) — mandatory guardrails for agents, accounting, tenancy, and destructive shell commands (§5)
 - [Local CI & Security SOP](docs/LOCAL_CI_AND_SECURITY_SOP.md)
+- [GST/TDS compliance review](docs/operations/MITRABOOKS_GST_TDS_COMPLIANCE_REVIEW.md)
 - [Unified Platform PRD](docs/prd/SANMITRA_UNIFIED_PLATFORM_PRD.md)
 - [MitraBooks ERP Gap Matrix](docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md)
+- [MitraBooks Completion Roadmap](docs/prd/MITRABOOKS_COMPLETION_ROADMAP.md)
+- [MitraBooks Pending Gap Todo](docs/operations/MITRABOOKS_PENDING_GAP_TODO.md)
 - [Architecture](docs/architecture/ARCHITECTURE.md)
 - [Current vs Target Matrix](docs/architecture/CURRENT_VS_TARGET.md)
 - [Accounting Doctrine](docs/architecture/ACCOUNTING_DOCTRINE.md)
@@ -106,13 +110,12 @@ Before frontend merging starts, the platform needs a small foundation PR:
 
 Production releases must use tags like `backend-v1.2.3`, matching the `VERSION` file. Rollback should use the previous known-good `backend-v*` tag, not an arbitrary branch head.
 
-## Non-Goals for First PR
+## Architecture Non-Goals
 
-The first PR must not include:
+Do not include in unified MitraBooks ERP delivery:
 
-- Full frontend merge.
-- Major UI redesign.
-- Accounting engine rewrite.
-- Microservices extraction.
-- Replacing MongoDB/PostgreSQL strategy.
-- Changes to live frontend applications.
+- Accounting engine rewrite or microservices extraction.
+- Replacing the MongoDB/PostgreSQL split.
+- Desktop Electron, SQLite, or hardware-locked licensing.
+- Live GST IRP/e-way bill APIs, live bank payout execution, or OCR/AI auto-post to the ledger until a named workstream and tenant policy exist.
+- InvestMitra in unified backend, billing, E2E, or deploy.

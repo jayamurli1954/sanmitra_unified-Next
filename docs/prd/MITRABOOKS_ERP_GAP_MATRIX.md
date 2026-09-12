@@ -53,6 +53,8 @@ Update this section as implementation and E2E checks progress. Do not move a pla
 
 | Date | Area | Status | Evidence | Remaining gap |
 | --- | --- | --- | --- | --- |
+| 2026-09-10 | README / unified PRD catch-up | Docs aligned to this matrix | README remaining-gaps section and PRD MitraBooks Business Module now describe implemented-but-not-production-ready Phases 2–5 slices instead of first-PR / “not yet implemented” copy | Hosted mutation reconfirm; Mandir demo-tenant mutation; GST/TDS compliance review; Gruha lifecycle; Phase 4 netting still missing as a product row |
+| --- | --- | --- | --- | --- |
 | 2026-05-21 | MandirMitra receipt/accounting smoke | Verified locally | Donation receipt PDF, seva receipt PDF, expense posting, trial balance, voucher drill-down, Income and Expenditure, Receipts and Payments, and Balance Sheet were checked against the local backend and MitraBooks ERP shell | Expand into repeatable Stage 3 E2E checklist and scripted browser/API smoke |
 | 2026-05-21 | MandirMitra seed tenant module context | Fixed and committed | Commit `73ebf0b` preserves `seed-tenant-1` as `TEMPLE` with `temple`, `accounting`, and `audit`; `/api/v1/modules/me` returned all three enabled modules for `mandirmitra` | Apply the same discipline to all demo/bootstrap tenants before production seed strategy is finalized |
 | 2026-05-21 | Execution priority | MandirMitra live-readiness first | Platform owner direction: complete MandirMitra in all aspects and make it live-ready like LegalMitra, then take GruhaMitra because both frontends are already live in the legacy platform | Keep Phase 2 business work behind the MandirMitra live-ready gate unless it directly supports MandirMitra accounting or shell stability |

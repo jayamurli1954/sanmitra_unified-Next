@@ -15,22 +15,19 @@ InvestMitra is no longer part of the SanMitra unified backend or deployment scop
 
 ## Current State
 
-The reference backend at `D:\sanmitra-backend` already provides a unified backend foundation:
+The active platform is `D:\sanmitra_unified-Next`. `D:\sanmitra-backend` is reference-only.
 
-- One FastAPI backend.
-- Modular monolith structure.
-- Shared accounting engine.
-- PostgreSQL for accounting records.
-- MongoDB for tenant, user, and domain records.
-- Tenant middleware scaffold.
-- RBAC foundation.
-- `X-App-Key` routing for product context.
-- COA mapping APIs.
-- MandirMitra donation accounting flow.
-- GruhaMitra maintenance accounting flow.
-- LegalMitra tenant-scoped route stubs.
+What exists now:
 
-Current limitation: accounting-oriented frontends are still treated as separate product applications, creating duplicate UI and support effort.
+- One FastAPI modular monolith with `organization_type`, `enabled_modules`, module registry, RBAC, and `X-App-Key` product context.
+- Shared PostgreSQL accounting engine with journal posting, reversal, idempotency, ledger, trial balance, P&L, balance sheet, receipts and payments, and report drill-down.
+- MongoDB for tenants, users, and domain records.
+- MitraBooks ERP shell hosting business, MandirMitra, and GruhaMitra workspaces.
+- MitraBooks business APIs under `/api/v1/business` for parties, typed vouchers, sales invoices, purchase bills, credit/debit notes, cash AR/AP allocation, GST/TDS preparation, inventory, bank reconciliation, fixed assets, dimensions, opening balances, year-end close, MIS, data health, exports, and CA practice client books. These slices are **live in this repo and on the unified domains**. Remaining items are signoff and unfinished workflows (see Remaining Gaps in README), not a claim that the product is undeployed.
+- MandirMitra donation, seva, public payment, receipt, hundi/fund, and 80G-readiness flows posting through the shared accounting engine. Production/demo-tenant mutation signoff remains open.
+- GruhaMitra maintenance bill → collection → reverse hosted billing gate passed 2026-07-17. Unit/resident lifecycle and remaining society workflows remain open.
+
+Current limitation: local and demo-tenant gates are ahead of production signoff. Do not treat preparation GST reports, integration config shells, or local E2E as production filing, live bank, or live Mandir/Gruha cutover.
 
 ## Living Progress Rules
 
@@ -46,6 +43,12 @@ Rules:
 ## Latest Progress
 
 | Date | Area | Status | Evidence | Remaining gap |
+| --- | --- | --- | --- | --- |
+| 2026-09-10 | README / PRD alignment to gap matrix | Docs catch-up | README current state, remaining gaps, and this PRD MitraBooks Business Module now match `MITRABOOKS_ERP_GAP_MATRIX.md` and `MITRABOOKS_PENDING_GAP_TODO.md`: Phases 2–5 slices exist locally; production signoff is still open | Hosted destructive mutation reconfirm; Mandir demo-tenant mutation; GST/TDS compliance review; Gruha lifecycle; optional Phase 4 AR/AP netting |
+| 2026-07-18 | Combined ERP read-only regression | Passed on hosted staging demo tenants | `scripts/mitrabooks_stage5_combined_regression_gate.py` across `demo-mitrabooks-business`, `demo-mandir-tenant`, and `gruhamitra-demo-society` | Optional combined destructive mutation; production claims still blocked |
+| 2026-07-18 | Phase 5 MIS / data health / export read gate | Passed | `scripts/mitrabooks_phase5_mis_datahealth_export_gate.py` | Production report signoff; AI MIS remains deferred |
+| 2026-07-17 | GruhaMitra billing-to-accounting | Hosted gate passed | `scripts/gruhamitra_stage4_billing_gate.py` generate → post → collection → reverse | Unit/resident lifecycle and remaining society workflows |
+| 2026-07-13 | MandirMitra fund / in-kind / refund local hardening | Implemented locally | Fund subledger, maker-checker transfers, in-kind valuation, full-refund queue | Guarded two-user demo-tenant mutation and production signoff |
 | --- | --- | --- | --- | --- |
 | 2026-05-21 | MandirMitra in MitraBooks ERP | Receipt and accounting smoke verified locally | Donation receipt PDF, seva receipt PDF, expense posting, trial balance, voucher drill-down, Income and Expenditure, Receipts and Payments, and Balance Sheet were checked on the local backend and ERP shell | Convert this manual smoke into a repeatable Stage 3 checklist/script |
 | 2026-05-21 | Tenant/module context | Seed tenant context fixed and committed | Commit `73ebf0b` keeps `seed-tenant-1` as `TEMPLE` and `/api/v1/modules/me` returns `temple`, `accounting`, and `audit` for `mandirmitra` | Review remaining bootstrap/demo tenant assumptions before production seed policy |
@@ -67,8 +70,8 @@ Rules:
 | 2026-05-22 | MandirMitra final local browser smoke | Passed | `python scripts\mandirmitra_stage3_browser_smoke.py --api-base http://127.0.0.1:8001` passed with `organization_type=TEMPLE` and enabled modules `accounting`, `audit`, and `temple` | Confirm CI/Render for final signoff commit and complete production gates |
 | 2026-05-22 | MandirMitra production gates | Partially confirmed | Production DB/JWT/app-key/bootstrap/PDF fallback and tenant safety policies are confirmed; production access must use real admin email with no shared default password | Finalize MitraBooks ERP production frontend URL, backup/restore setup, and release tag/rollback execution |
 | 2026-05-22 | MandirMitra staging smoke | Non-destructive checks passed | Login/module context, tabs, receipt preview/download, Panchang, reports, balanced accounting reports, and public no-login UPI/config visibility were checked successfully; no mutation was performed on real trust data | Enable the explicit Mandir demo bootstrap tenant with demo UPI/config before destructive staging checks |
-| 2026-05-21 | Platform owner, audit, tenant entitlements | Pending review | Local source/tests/docs exist but remain uncommitted in the current working tree | Review and commit as a focused foundation batch if accepted |
-| 2026-05-21 | MitraBooks business parties and typed vouchers | Pending review | Local source/tests exist under `/api/v1/business` but remain uncommitted in the current working tree | Review separately as Phase 2 business work |
+| 2026-05-21 | Platform owner, audit, tenant entitlements | Implemented locally; not a pending uncommitted batch | Platform-owner dashboard, entitlements, and audit event listing are in this workspace with route-contract coverage | Super-admin browser E2E for the owner dashboard |
+| 2026-05-21 | MitraBooks business parties and typed vouchers | Implemented locally; not production-ready | `/api/v1/business/parties` and `/api/v1/business/vouchers` with frontend, audit, and route contracts. Later phases added invoices, bills, notes, allocation, GST preparation, inventory, BRS, MIS | Production signoff; see 2026-09-10 row |
 
 ## Target State
 
@@ -85,13 +88,13 @@ The unified MitraBooks frontend should dynamically show modules based on organiz
 
 - Reduce duplicated accounting UI.
 - Keep one shared accounting engine.
-- Treat MitraBooks as the shared accounting engine and ERP host first; full MitraBooks business ERP scope is a later expansion after MandirMitra and GruhaMitra are completed and deployed live.
+- Treat MitraBooks as the shared accounting engine and ERP host. Business ERP slices through Phase 5 reporting are **live**. MandirMitra demo-tenant mutation and remaining Gruha workflows still need signoff before calling those product cuts complete.
 - Keep tenant and product isolation explicit.
 - Allow each organization to activate only relevant modules.
 - Preserve brand-specific terminology where it improves user experience.
 - Keep LegalMitra separate because its workflows are not primarily accounting ERP workflows.
 - Validate E2E stage by stage: LegalMitra baseline, MitraBooks ERP core, MandirMitra, GruhaMitra, then combined ERP regression.
-- Current execution priority: after the minimum MitraBooks ERP/accounting foundation needed for tenant context, modules, and postings, finish MandirMitra to live-ready parity before expanding GruhaMitra. Broad MitraBooks business features must not distract from the MandirMitra live-ready gate.
+- Current execution priority: production live-ready still requires MandirMitra demo-tenant mutation, then remaining GruhaMitra ERP workflows. Local MitraBooks business slices must not be described as production. GST/TDS stay preparation until a compliance review is signed.
 
 ## Active Delivery Workflow
 
@@ -101,13 +104,13 @@ This workflow preserves the project direction agreed in prior planning sessions:
 2. Use MitraBooks as the base accounting engine, module shell, tenant/app-context layer, and financial reporting foundation.
 3. Complete MandirMitra inside that MitraBooks foundation and make it live-ready like LegalMitra.
 4. After MandirMitra is live-ready and deployment checks pass, complete GruhaMitra inside the same MitraBooks foundation.
-5. Only after MandirMitra and GruhaMitra are completed and deployed live, expand the larger MitraBooks business ERP roadmap: parties, vouchers, sales, purchases, GST, inventory, AR/AP, MIS, exports, and CA/bookkeeper workflows.
+5. MitraBooks business ERP slices (parties, vouchers, sales, purchases, GST preparation, inventory, cash AR/AP, MIS, exports, CA books) are **live** through Phase 5 reporting. Remaining delivery is signoff and unfinished work: hosted mutation reconfirm, Mandir demo-tenant mutation, GST/TDS CA filing signoff, remaining Gruha workflows, then optional Phase 4 AR/AP netting.
 
 Scope control:
 
-- MitraBooks accounting work is in scope now when it is needed by MandirMitra or later GruhaMitra.
-- MitraBooks business ERP work is deferred unless it fixes a shared accounting, reporting, tenant-context, audit, or route-contract gap needed for MandirMitra/GruhaMitra live readiness.
-- Do not let Phase 2 business modules become the active delivery track before MandirMitra and GruhaMitra are live.
+- MandirMitra and GruhaMitra production live-ready still outrank new business ERP features.
+- Do not describe local business slices, GST preparation reports, or integration config shells as production, live filing, or live bank.
+- Do not let optional Phase 4 netting or deferred IRP/e-way work jump Mandir/Gruha signoff.
 
 ## Organization Types
 
@@ -283,31 +286,35 @@ The fund-accounting subledger foundation is implemented locally. New fund master
 
 Current state:
 
-- Shared accounting APIs already support journal posting, reversal, ledger, trial balance, profit and loss, receipts/payments, balance sheet, and report drill-downs.
-- A small Phase 2 backend slice is being introduced under `/api/v1/business` for tenant/app-key scoped parties and typed vouchers.
-- Current party master work includes party creation, listing, lookup, profile update, and soft deactivation. Party profile updates do not mutate opening or current balances.
-- Current typed voucher work includes generated payment/receipt/contra/journal voucher numbers, idempotency-key reuse, voucher listing, voucher detail lookup, and reversal posting through the shared accounting reversal service.
-- Current party and voucher lifecycle actions write best-effort tenant-scoped audit events with old/new snapshots where applicable.
-- Current audit backend exposes `GET /api/v1/audit/events` for tenant-scoped, app-key scoped audit event listing with filters for entity type, entity id, and action.
-- Legacy compatibility routes still exist for older MitraBooks-style parties, invoices, and transactions, but they are not the target API surface for new business workflow work.
+- Shared accounting APIs support journal posting, reversal, ledger, trial balance, profit and loss, receipts/payments, balance sheet, and report drill-downs.
+- `/api/v1/business` is the target API surface. Legacy `mitrabooks_compat` routes remain compatibility-only.
+- Parties: tenant/app/entity-scoped create/list/get/update/deactivate. `party_type` is `customer | vendor | both`. Live balances come from party-ledger/outstanding reports, not Mongo party fields.
+- Typed vouchers: payment, receipt, contra, and journal post through the accounting service with generated numbers, idempotency, listing, detail, and reversal.
+- Sales invoices and purchase bills: draft or pending approval, approve-to-post, compensation on domain persistence failure, cancellation reversal. Invoice PDF is posted-only. Dedicated bill PDF is not implemented.
+- Credit and debit notes: GL posting, source-document linkage, compensation, cancellation reversal. Production print/export templates remain open.
+- Cash AR/AP: open-item allocation (receipts→invoices, payments→bills), FIFO suggestions, statements, dunning, ageing. Allocation writes Mongo matching only and posts no new journal. Cross-side AR/AP netting / set-off is **not implemented**.
+- GST/TDS: GSTIN, place of supply, HSN/SAC, period locks, RCM, composition, GSTR-1/3B/2B preparation, CMP-08/GSTR-4 route shape, GST settlement preview/post/reverse, TDS register. These are **preparation/reporting**, not production filing.
+- Inventory: opt-in, item master, stock register, weighted-average periodic valuation, issue/adjustment, closing-stock journal. Multi-location and batch/serial remain deferred.
+- Banking: CSV import, match/unmatch, bank/cash book. Live bank API sync is deferred.
+- Fixed assets, dimensions (including branch-to-cost-centre P&L), opening balances, year-end close, MIS, data health, governed exports, and Tally XML **masters** proof exist locally. Voucher-level Tally XML and production signoff remain open.
+- CA practice: per-client `accounting_entity_id` books, book switch via `X-Accounting-Entity-ID`, document inbox, token-based invites. Staff assignment per book and pricing client caps remain open.
+- Evidence: local Phase 3 destructive mutation (2026-07-03), Gruha billing gate (2026-07-17), Phase 5 MIS/export and inventory/banking read gates (2026-07-18), combined read-only regression (2026-07-18). Hosted destructive mutation **reconfirm** after credential drift is still required.
 
 Target state:
 
-- Customer/vendor/party master for `BUSINESS` tenants.
-- Typed payment, receipt, contra, and journal voucher APIs as facades over the shared accounting service.
-- Sales and purchase invoices with immutable GL posting links.
-- GST invoice setup and reporting readiness.
-- Inventory, AR/AP ageing, business reports, MIS, data health, and export workflows in later phases.
+- Production-ready business/professional workflows with compliance-reviewed GST preparation, operator signoff, and print/export polish.
+- Optional later: AR/AP netting document (Dr AP / Cr AR with applications on invoices and bills; GST/TDS on original documents unchanged).
+- Professional-services labels may reuse the same party/invoice engine; that product decision is still open.
 
 Gap:
 
-- Party and typed voucher contracts have backend route-contract coverage, lifecycle audit events, and audit event query support; they still need frontend integration, frontend manifest coverage, audit UI expansion, voucher cancel/update policy, reversal UX, and browser E2E.
-- Invoice posting, GST, inventory, AR/AP, MIS, exports, and payroll readiness are planned but not yet implemented in the target `/api/v1/business` module.
-- Professional-services workflows may reuse the party/invoice engine with different labels, but that is not decided yet.
+- Production signoff, hosted destructive mutation reconfirm, GST/TDS human compliance review, print/PDF polish, CA staff-per-book, opening/year-end operator maker-checker, and remaining Gruha workflows.
+- AR/AP netting is a planned Phase 4 completeness item, not current product.
+- Do not claim live GST filing, e-invoice IRP, e-way bill API, bank payout execution, or OCR auto-post.
 
 Deferred scope:
 
-- Production GST filing integrations, e-invoice/e-way bill APIs, bank sync, OCR/AI auto-posting, desktop SQLite, and production data migration remain out of immediate scope.
+- Production GST filing integrations, e-invoice/e-way bill APIs, bank sync, OCR/AI auto-posting, AI MIS narration, desktop SQLite, and production data migration remain out of immediate scope until a named workstream exists.
 
 Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assumptions, and implementation phases are maintained in [MitraBooks ERP Gap Matrix](MITRABOOKS_ERP_GAP_MATRIX.md).
 
@@ -332,6 +339,8 @@ Detailed LegalMitra enhancement scope — current vs target vs gap, multi-person
 - No live frontend disruption during migration.
 
 ## Explicit Non-Goals for Foundation PR
+
+The foundation PR is complete. These remain architecture non-goals for unified delivery:
 
 - Do not merge all frontends.
 - Do not redesign the entire UI.
