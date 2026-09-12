@@ -1,0 +1,23 @@
+---
+description: graphify knowledge graph — query before grep/read
+alwaysApply: true
+---
+
+This project uses graphify at `graphify-out/`.
+
+**MANDATORY: Before Read, Grep, Glob, or shell exploration of source code, run graphify when the graph exists:**
+- `graphify query "<question>"` — scoped subgraph for architecture / behavior questions
+- `graphify path "<A>" "<B>"` — dependency path between two symbols
+- `graphify explain "<concept>"` — nodes related to a concept
+
+Include this rule in every subagent prompt that explores code. Do not skip graphify because paths are "already known" or because you are executing a plan — the graph surfaces cross-file and INFERRED edges that grep cannot find.
+
+Only use Read/Grep/Glob directly when:
+1. graphify has already oriented you and you need specific lines to edit or debug
+2. `graphify-out/graph.json` does not exist yet (run bootstrap — see `docs/operations/GRAPHIFY_BOOTSTRAP.md`)
+
+Navigation:
+- Prefer `graphify-out/wiki/index.md` over raw file browsing when it exists
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review when query/path/explain are insufficient
+
+After modifying code files, run `graphify update .` (AST-only, no API cost).
