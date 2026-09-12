@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" width="1080" height="1350" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0d78c"/>
+      <stop offset="35%" stop-color="#c9a227"/>
+      <stop offset="70%" stop-color="#a67c1a"/>
+      <stop offset="100%" stop-color="#e6c35c"/>
+    </linearGradient>
+    <linearGradient id="parchment" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbf6ec"/>
+      <stop offset="45%" stop-color="#f3e8d4"/>
+      <stop offset="100%" stop-color="#ead9b8"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="50%" cy="40%" r="70%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#5a3d18" stop-opacity="0.12"/>
+    </radialGradient>
+    <pattern id="grain" width="6" height="6" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1.5" r="0.6" fill="#8b6914" opacity="0.06"/>
+      <circle cx="4" cy="4" r="0.5" fill="#5a3d18" opacity="0.05"/>
+    </pattern>
+    <!-- Corner lotus flourish (mirrored via transform) -->
+    <g id="cornerFlourish">
+      <path d="M0 40 C12 28 28 14 40 0" stroke="url(#goldGrad)" stroke-width="2.2" fill="none"/>
+      <path d="M0 28 C10 20 20 10 28 0" stroke="url(#goldGrad)" stroke-width="1.4" fill="none" opacity="0.85"/>
+      <path d="M8 40 C16 34 26 24 32 14" stroke="url(#goldGrad)" stroke-width="1.2" fill="none" opacity="0.7"/>
+      <circle cx="18" cy="18" r="3.2" fill="url(#goldGrad)" opacity="0.9"/>
+      <path d="M12 22 Q18 10 28 14 Q22 22 12 22Z" fill="#c9a227" opacity="0.55"/>
+      <path d="M22 12 Q30 8 34 18 Q26 20 22 12Z" fill="#e6c35c" opacity="0.5"/>
+    </g>
+    <g id="headerScroll">
+      <path d="M0 12 C40 2 80 2 120 12 C160 22 200 22 240 12 C280 2 320 2 360 12"
+            stroke="url(#goldGrad)" stroke-width="2" fill="none"/>
+      <path d="M20 12 C60 20 100 20 140 12 C180 4 220 4 260 12 C300 20 340 20 360 12"
+            stroke="#a67c1a" stroke-width="1" fill="none" opacity="0.55"/>
+      <circle cx="180" cy="12" r="4" fill="url(#goldGrad)"/>
+      <circle cx="180" cy="12" r="2" fill="#fff8e8"/>
+      <path d="M168 12 L174 6 L180 12 L174 18Z" fill="#c9a227" opacity="0.8"/>
+      <path d="M192 12 L186 6 L180 12 L186 18Z" fill="#c9a227" opacity="0.8"/>
+    </g>
+  </defs>
+
+  <!-- Parchment plate -->
+  <rect x="0" y="0" width="1080" height="1350" fill="url(#parchment)"/>
+  <rect x="0" y="0" width="1080" height="1350" fill="url(#grain)"/>
+  <rect x="0" y="0" width="1080" height="1350" fill="url(#vignette)"/>
+
+  <!-- Soft side glow (temple/leaf feel without photos) -->
+  <ellipse cx="90" cy="160" rx="110" ry="90" fill="#2e7d32" opacity="0.05"/>
+  <ellipse cx="990" cy="170" rx="120" ry="95" fill="#c9a227" opacity="0.07"/>
+  <ellipse cx="980" cy="720" rx="90" ry="120" fill="#1a5c2e" opacity="0.04"/>
+
+  <!-- Outer gold frame -->
+  <rect x="14" y="14" width="1052" height="1322" rx="28" stroke="url(#goldGrad)" stroke-width="10" fill="none"/>
+  <rect x="28" y="28" width="1024" height="1294" rx="22" stroke="#8b6914" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <rect x="38" y="38" width="1004" height="1274" rx="18" stroke="#e6c35c" stroke-width="1.5" fill="none" opacity="0.65"/>
+
+  <!-- Corner flourishes -->
+  <g transform="translate(48,48)"><use href="#cornerFlourish"/></g>
+  <g transform="translate(1032,48) scale(-1,1)"><use href="#cornerFlourish"/></g>
+  <g transform="translate(48,1302) scale(1,-1)"><use href="#cornerFlourish"/></g>
+  <g transform="translate(1032,1302) scale(-1,-1)"><use href="#cornerFlourish"/></g>
+
+  <!-- Header ornamental scroll under title zone -->
+  <g transform="translate(360,188)">
+    <use href="#headerScroll"/>
+  </g>
+
+  <!-- Side vertical ornament rails -->
+  <path d="M52 220 C58 400 46 700 52 980 C48 1100 60 1180 52 1240"
+        stroke="url(#goldGrad)" stroke-width="1.4" fill="none" opacity="0.45"/>
+  <path d="M1028 220 C1022 400 1034 700 1028 980 C1032 1100 1020 1180 1028 1240"
+        stroke="url(#goldGrad)" stroke-width="1.4" fill="none" opacity="0.45"/>
+
+  <!-- Decorative diamonds on rails -->
+  <g fill="#c9a227" opacity="0.7">
+    <path d="M52 320 l6 -8 6 8 -6 8z"/>
+    <path d="M52 560 l6 -8 6 8 -6 8z"/>
+    <path d="M52 820 l6 -8 6 8 -6 8z"/>
+    <path d="M1028 320 l6 -8 6 8 -6 8z"/>
+    <path d="M1028 560 l6 -8 6 8 -6 8z"/>
+    <path d="M1028 820 l6 -8 6 8 -6 8z"/>
+  </g>
+
+  <!-- Subtle bottom footer crest line (above green footer in HTML) -->
+  <path d="M120 1238 C280 1226 420 1226 540 1238 C660 1250 800 1250 960 1238"
+        stroke="url(#goldGrad)" stroke-width="1.6" fill="none" opacity="0.5"/>
+</svg>

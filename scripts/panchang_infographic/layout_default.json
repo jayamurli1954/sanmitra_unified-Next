@@ -1,0 +1,80 @@
+{
+  "canvas": { "width": 1080, "height": 1350 },
+  "colors": {
+    "text": "#1B3A1B",
+    "text_muted": "#4A5A4A",
+    "header": "#1B5E20",
+    "footer_bg": "#1B5E20",
+    "footer_text": "#FFFFFF"
+  },
+  "fonts": {
+    "title_en": 44,
+    "title_kn": 36,
+    "subtitle": 24,
+    "table_en": 26,
+    "table_kn": 24,
+    "table_hi": 24,
+    "muhurta_label": 22,
+    "muhurta_value": 20,
+    "vishesha": 20,
+    "footer": 18
+  },
+  "fields": {
+    "title_en": { "xy": [540, 72], "anchor": "ma", "font": "title_en" },
+    "title_kn": { "xy": [540, 118], "anchor": "ma", "font": "title_kn" },
+    "location_date": { "xy": [540, 168], "anchor": "ma", "font": "subtitle", "color": "header" },
+
+    "samvatsara_en": { "xy": [300, 260], "anchor": "ma", "font": "table_en" },
+    "samvatsara_kn": { "xy": [540, 260], "anchor": "ma", "font": "table_kn" },
+    "samvatsara_hi": { "xy": [780, 260], "anchor": "ma", "font": "table_hi" },
+
+    "ayana_en": { "xy": [300, 318], "anchor": "ma", "font": "table_en" },
+    "ayana_kn": { "xy": [540, 318], "anchor": "ma", "font": "table_kn" },
+    "ayana_hi": { "xy": [780, 318], "anchor": "ma", "font": "table_hi" },
+
+    "masa_en": { "xy": [300, 376], "anchor": "ma", "font": "table_en" },
+    "masa_kn": { "xy": [540, 376], "anchor": "ma", "font": "table_kn" },
+    "masa_hi": { "xy": [780, 376], "anchor": "ma", "font": "table_hi" },
+
+    "vara_en": { "xy": [300, 434], "anchor": "ma", "font": "table_en" },
+    "vara_kn": { "xy": [540, 434], "anchor": "ma", "font": "table_kn" },
+    "vara_hi": { "xy": [780, 434], "anchor": "ma", "font": "table_hi" },
+
+    "tithi_en": { "xy": [300, 492], "anchor": "ma", "font": "table_en" },
+    "tithi_kn": { "xy": [540, 492], "anchor": "ma", "font": "table_kn" },
+    "tithi_hi": { "xy": [780, 492], "anchor": "ma", "font": "table_hi" },
+
+    "nakshatra_en": { "xy": [300, 550], "anchor": "ma", "font": "table_en" },
+    "nakshatra_kn": { "xy": [540, 550], "anchor": "ma", "font": "table_kn" },
+    "nakshatra_hi": { "xy": [780, 550], "anchor": "ma", "font": "table_hi" },
+
+    "yoga_en": { "xy": [300, 608], "anchor": "ma", "font": "table_en" },
+    "yoga_kn": { "xy": [540, 608], "anchor": "ma", "font": "table_kn" },
+    "yoga_hi": { "xy": [780, 608], "anchor": "ma", "font": "table_hi" },
+
+    "karana_en": { "xy": [300, 666], "anchor": "ma", "font": "table_en" },
+    "karana_kn": { "xy": [540, 666], "anchor": "ma", "font": "table_kn" },
+    "karana_hi": { "xy": [780, 666], "anchor": "ma", "font": "table_hi" },
+
+    "inauspicious_title": { "xy": [270, 748], "anchor": "ma", "font": "muhurta_label", "color": "header" },
+    "auspicious_title": { "xy": [810, 748], "anchor": "ma", "font": "muhurta_label", "color": "header" },
+
+    "rahu_kala": { "xy": [80, 790], "anchor": "la", "font": "muhurta_value" },
+    "yamaganda": { "xy": [80, 824], "anchor": "la", "font": "muhurta_value" },
+    "gulika_kala": { "xy": [80, 858], "anchor": "la", "font": "muhurta_value" },
+    "dur_muhurta": { "xy": [80, 892], "anchor": "la", "font": "muhurta_value" },
+    "varjyam": { "xy": [80, 926], "anchor": "la", "font": "muhurta_value" },
+
+    "abhijit": { "xy": [560, 790], "anchor": "la", "font": "muhurta_value" },
+    "brahma_muhurat": { "xy": [560, 824], "anchor": "la", "font": "muhurta_value" },
+    "amrita_kalam": { "xy": [560, 858], "anchor": "la", "font": "muhurta_value" },
+
+    "vishesha_title": { "xy": [80, 1010], "anchor": "la", "font": "muhurta_label", "color": "header" },
+    "vishesha_1": { "xy": [80, 1050], "anchor": "la", "font": "vishesha", "max_width": 920 },
+    "vishesha_2": { "xy": [80, 1090], "anchor": "la", "font": "vishesha", "max_width": 920 },
+    "vishesha_3": { "xy": [80, 1130], "anchor": "la", "font": "vishesha", "max_width": 920 },
+
+    "footer_brand": { "xy": [540, 1288], "anchor": "ma", "font": "footer", "color": "footer_text" },
+    "footer_disclaimer": { "xy": [540, 1318], "anchor": "ma", "font": "footer", "color": "footer_text" }
+  }
+}

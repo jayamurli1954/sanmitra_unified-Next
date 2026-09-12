@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1080, initial-scale=1" />
+  <title>{{ title_en }}</title>
+  <style>
+    @font-face {
+      font-family: "NotoSansKannada";
+      src: url("{{ font_kannada_uri }}") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "NotoSansDevanagari";
+      src: url("{{ font_hindi_uri }}") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+    }
+  </style>
+  <link rel="stylesheet" href="{{ css_uri }}" />
+</head>
+<body>
+  <article class="card" id="panchang-card">
+    {% if frame_svg_uri %}
+    <img class="frame-svg" src="{{ frame_svg_uri }}" alt="" aria-hidden="true" />
+    {% endif %}
+
+    <div class="card-inner">
+      <header class="header">
+        <div class="brand brand-left">
+          {% if logo_mandirmitra_uri %}
+          <img class="logo logo-mm" src="{{ logo_mandirmitra_uri }}" alt="MandirMitra" />
+          {% endif %}
+          <div class="brand-text">MandirMitra</div>
+        </div>
+        <div class="titles">
+          <div class="title-flourish" aria-hidden="true">✦</div>
+          <h1 class="title-en">{{ title_en }}</h1>
+          <h2 class="title-kn">{{ title_kn }}</h2>
+          <div class="title-flourish title-flourish-b" aria-hidden="true">✦</div>
+        </div>
+        <div class="brand brand-right">
+          {% if logo_sanmitra_uri %}
+          <img class="logo logo-sm" src="{{ logo_sanmitra_uri }}" alt="SanMitra Tech" />
+          {% endif %}
+          <div class="brand-text brand-text-sm">SanMitra Tech</div>
+        </div>
+      </header>
+
+      <div class="location-bar">📍 {{ location_date }}</div>
+
+      <section class="table-panel">
+        <div class="panel-edge" aria-hidden="true"></div>
+        {% for row in rows %}
+        <div class="row">
+          <div class="icon" aria-hidden="true">{{ row.icon }}</div>
+          <div class="label">{{ row.label }}</div>
+          <div class="en">{{ row.en }}</div>
+          <div class="kn">{{ row.kn }}</div>
+          <div class="hi">{{ row.hi }}</div>
+        </div>
+        {% endfor %}
+      </section>
+
+      <section class="times">
+        <div class="times-box inauspicious">
+          <h3>⚠ Inauspicious</h3>
+          {% for item in inauspicious %}
+          <div class="time-line"><span>{{ item.label }}</span><span>{{ item.value }}</span></div>
+          {% endfor %}
+        </div>
+        <div class="times-box auspicious">
+          <h3>🪷 Auspicious</h3>
+          {% for item in auspicious %}
+          <div class="time-line"><span>{{ item.label }}</span><span>{{ item.value }}</span></div>
+          {% endfor %}
+          {% if art_diya_uri %}
+          <img class="art-diya" src="{{ art_diya_uri }}" alt="" />
+          {% endif %}
+        </div>
+      </section>
+
+      {% if vishesha %}
+      <section class="vishesha">
+        <div class="vishesha-main">
+          <h3>🔔 Vara Vishesha</h3>
+          <ul>
+            {% for note in vishesha %}
+            <li>
+              <span class="en">{{ note.en }}</span>
+              {% if note.kn %}<span class="kn"> · {{ note.kn }}</span>{% endif %}
+              {% if note.hi %}<span class="hi"> · {{ note.hi }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% if art_moon_uri %}
+        <img class="art-moon" src="{{ art_moon_uri }}" alt="" />
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <footer class="footer">
+        {% if logo_mandirmitra_uri %}
+        <img class="footer-logo" src="{{ logo_mandirmitra_uri }}" alt="" />
+        {% endif %}
+        <div class="footer-copy">
+          <div>{{ footer_brand }}</div>
+          <div class="disclaimer">{{ footer_disclaimer }}</div>
+        </div>
+        {% if logo_sanmitra_uri %}
+        <img class="footer-logo" src="{{ logo_sanmitra_uri }}" alt="" />
+        {% endif %}
+      </footer>
+    </div>
+  </article>
+</body>
+</html>
