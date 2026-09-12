@@ -1,4 +1,4 @@
-// OfficeMitra Review workspace (ADR-015). No live MitraBooks ledger writes.
+export { applyDocumentsPing, clearDocumentsPing, documentsBannerHtml, handleDocumentsAction, refreshDocumentsData, renderDocumentsPanel, syncDocumentsFields } from "./office-ai-documents.js";
 
 export const REVIEW_STATE_DEFAULTS = {
   reviewEnabled: false,
@@ -92,6 +92,7 @@ export function renderReviewPanel(state, escapeHtml) {
       <td>${escapeHtml(status)}</td>
       <td>${escapeHtml(String(note.description || ""))}</td>
       <td>${escapeHtml(String(note.task_id || "—"))}</td>
+      <td>${escapeHtml(String(note.ca_document_id || "—"))}</td>
       <td>
         ${closed ? "Closed" : `<button class="secondary" type="button" data-office-ai-action="review-close-note" data-note-id="${escapeHtml(id)}">Close</button>`}
       </td>
@@ -131,8 +132,8 @@ export function renderReviewPanel(state, escapeHtml) {
           <textarea data-office-ai-field="reviewNoteText" rows="3">${escapeHtml(state.reviewNoteText || "")}</textarea>
           <button class="secondary" type="button" data-office-ai-action="review-create-note">Create note (creates a task)</button>
           <table class="data-table">
-            <thead><tr><th>Status</th><th>Description</th><th>Task</th><th></th></tr></thead>
-            <tbody>${noteRows || `<tr><td colspan="4" class="muted">No notes.</td></tr>`}</tbody>
+            <thead><tr><th>Status</th><th>Description</th><th>Task</th><th>CA doc</th><th></th></tr></thead>
+            <tbody>${noteRows || `<tr><td colspan="5" class="muted">No notes.</td></tr>`}</tbody>
           </table>
         ` : ""}
       ` : ""}

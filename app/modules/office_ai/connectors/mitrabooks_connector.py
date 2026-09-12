@@ -90,3 +90,64 @@ async def get_overdue_invoices(
         ai_metrics.incr("officemitra.connector.mitrabooks.failure")
         _logger.warning("get_overdue_invoices failed: %s", type(exc).__name__)
         return []
+
+
+CA_QUEUE_APP_KEY = "mitrabooks"
+
+
+async def list_ca_staff_documents(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    accounting_entity_id: str = "primary",
+    status: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Read-only: MitraBooks CA staff queue via ca_clients (not raw Mongo)."""
+    if not tenant_has_module(tenant, "business"):
+        return {"enabled": False, "items": [], "total": 0, "reason": "business_module_off"}
+    try:
+        from app.modules.business.services import ca_clients
+
+        result = await ca_clients.list_ca_document_metadata(
+            tenant_id=tenant_id,
+            app_key=CA_QUEUE_APP_KEY,
+            accounting_entity_id=str(accounting_entity_id or "primary").strip() or "primary",
+            status=status,
+            limit=limit,
+        )
+        return {
+            "enabled": True,
+            "items": result.get("items") or [],
+            "total": int(result.get("total") or 0),
+            "source": "mitrabooks.list_ca_document_metadata",
+        }
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("list_ca_staff_documents failed: %s", type(exc).__name__)
+        return {"enabled": True, "error": "connector_failed", "items": [], "total": 0}
+
+
+async def get_ca_staff_document(
+    *,
+    tenant_id: str,
+    tenant: dict[str, Any],
+    document_id: str,
+    accounting_entity_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Read-only: one CA staff document via ca_clients."""
+    if not tenant_has_module(tenant, "business"):
+        return None
+    try:
+        from app.modules.business.services import ca_clients
+
+        return await ca_clients.get_ca_document_metadata(
+            tenant_id=tenant_id,
+            app_key=CA_QUEUE_APP_KEY,
+            document_id=document_id,
+            accounting_entity_id=accounting_entity_id,
+        )
+    except Exception as exc:
+        ai_metrics.incr("officemitra.connector.mitrabooks.failure")
+        _logger.warning("get_ca_staff_document failed: %s", type(exc).__name__)
+        return None

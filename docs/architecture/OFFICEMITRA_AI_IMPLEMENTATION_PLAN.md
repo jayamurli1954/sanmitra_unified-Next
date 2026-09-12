@@ -3,9 +3,9 @@
 **Document type:** Implementation plan (architecture + delivery sequence)  
 **Product:** OfficeMitra AI  
 **Status:** Phases 1–6 implemented locally — use phase smoke checklists for staging signoff  
-**Version:** 1.6  
+**Version:** 1.7  
 **Date:** 2026-09-12  
-**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-015  
+**ADRs:** [`docs/adr/`](../adr/README.md) ADR-001 … ADR-016  
 **Smoke checklists:**  
 - Phase 1: [`docs/operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE1_SMOKE_CHECKLIST.md)
 - Phase 2: [`docs/operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_PHASE2_SMOKE_CHECKLIST.md)
@@ -15,6 +15,7 @@
 - Policy engine (ADR-012): [`docs/operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_POLICY_ENGINE_SMOKE_CHECKLIST.md)
 - Combined local/staging prep: [`docs/operations/OFFICEMITRA_SMOKE_PREP.md`](../operations/OFFICEMITRA_SMOKE_PREP.md)
 - Review workspaces (ADR-015): [`docs/operations/OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md)
+- Documents package (ADR-016): [`docs/operations/OFFICEMITRA_DOCUMENTS_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_DOCUMENTS_SMOKE_CHECKLIST.md)
 **Supersedes positioning in:** informal notes that framed OfficeMitra as the SanMitra “operating system”
 
 > **Success criteria:** A single tenant can securely create tasks, summarize pasted emails into actionable tasks, and generate a daily brief from OfficeMitra-native data and *any available* connectors (including zero connectors in standalone mode), without any direct cross-product database access, while remaining fully compliant with ADR-001 through ADR-007.
@@ -42,6 +43,7 @@
 | D15 | Prompt versioning | Versioned prompt files (`*_vN.txt`); `prompt_version` persisted on outputs | — |
 | D16 | Modular deployment | No mandatory companion modules; Connector Manager discovers integrations at runtime | ADR-007 |
 | D17 | CA review branding | No new Mitra product names. Review, working papers, and review notes are OfficeMitra workspaces. Later practice capabilities are OfficeMitra packages, not brands. | ADR-015 |
+| D18 | Documents package | Staff CA queue is MitraBooks-owned. OfficeMitra lists via connector and links Review notes only. No client portal; no companion writes until ADR-010. | ADR-016 |
 
 **Do not reopen D1–D5, D13, D16, or D17 without a superseding ADR.**
 
@@ -151,6 +153,7 @@ User → OfficeMitra UI → OfficeMitra service → Connector Manager → Produc
 | **7+** | Companion write-back | Confirmed connector writes into allowlisted product services + capability descriptors | **Planned / gated** — requires Accepted [ADR-010](../adr/ADR-010-officemitra-companion-writeback.md) |
 | **7a** | CA Analysis Pack | Excel template → MIS facts → metric pack → attributed narrative → reconcile → export (Excel/PDF/PPT) | **Accepted** ([ADR-014](../adr/ADR-014-officemitra-ca-analysis-pack.md)) — flags, fact store, Excel import, narrative+citation UI, reconcile, Excel/PDF/PPT export in code behind `office_ai.mis*`; remaining: live MitraBooks reads + demo CA/MIS staging smoke |
 | **7b** | Review workspaces | Review scan + working papers + review notes under OfficeMitra (no new Mitra brands) | **Accepted** ([ADR-015](../adr/ADR-015-officemitra-review-workspaces.md)) — implemented behind `office_ai.review*` (default off); demo seed `scripts/seed_review_demo.py` on `demo-mfg-mis`; smoke [`OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md); PRD [OFFICEMITRA_REVIEW_WORKSPACES.md](../prd/OFFICEMITRA_REVIEW_WORKSPACES.md) |
+| **7c** | Documents package | Staff CA queue list + Review note link (no client portal) | **Accepted** ([ADR-016](../adr/ADR-016-officemitra-documents-package.md)) — implemented behind `office_ai.documents` (default off); demo seed `scripts/seed_documents_demo.py` on `demo-mfg-mis`; smoke [`OFFICEMITRA_DOCUMENTS_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_DOCUMENTS_SMOKE_CHECKLIST.md); PRD [OFFICEMITRA_DOCUMENTS_PACKAGE.md](../prd/OFFICEMITRA_DOCUMENTS_PACKAGE.md) |
 | **Platform** | Domain events / policy engine / template library | Async side effects; maker-checker policy; curated templates | Policy engine **Implemented** ([ADR-012](../adr/ADR-012-officemitra-policy-engine.md)); CA Analysis Pack **Accepted** ([ADR-014](../adr/ADR-014-officemitra-ca-analysis-pack.md)); [ADR-011](../adr/ADR-011-officemitra-domain-events.md) Proposed; [ADR-013](../adr/ADR-013-officemitra-workflow-template-library.md) Future | |
 
 **MVP ships Phase 0 + Phase 1 only.** Phases 2–5 are roadmap, not commitment inside the first PR series.
@@ -631,3 +634,4 @@ When OfficeMitra PRs merge, each PR description must confirm:
 | 1.2 | 2026-08-05 | Modular deployment (ADR-007): Connector Manager, deployment profiles, `officemitra` app key, standalone-safe Daily Brief |
 | 1.3 | 2026-08-05 | Phase 1 complete locally: retention helper, Mongo isolation tests, smoke checklist |
 | 1.4 | 2026-08-05 | Phase 2 productivity: paste calendar, meeting notes, in-app notifications + smoke checklist |
+| 1.7 | 2026-09-12 | ADR-016 Documents package: staff CA queue via connector; Review note links; no client portal |

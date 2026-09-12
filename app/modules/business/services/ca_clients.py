@@ -363,6 +363,26 @@ async def list_ca_document_metadata(
     return {"items": [_ca_document_response_doc(row) for row in rows], "total": len(rows)}
 
 
+async def get_ca_document_metadata(
+    *,
+    tenant_id: str,
+    app_key: str,
+    document_id: str,
+    accounting_entity_id: str | None = None,
+) -> dict | None:
+    filters = {
+        "tenant_id": tenant_id,
+        "app_key": app_key,
+        "document_id": str(document_id or "").strip(),
+    }
+    if accounting_entity_id:
+        filters["accounting_entity_id"] = accounting_entity_id
+    row = await business_service.get_collection(CA_DOCUMENTS_COLLECTION).find_one(filters)
+    if row is None:
+        return None
+    return _ca_document_response_doc(row)
+
+
 async def update_ca_document_metadata(
     *,
     tenant_id: str,

@@ -224,6 +224,7 @@ MODULE_REGISTRY: dict[str, ModuleDefinition] = {
             "workflows",
             "mis",
             "review",
+            "documents",
         ),
     ),
 }
@@ -379,7 +380,13 @@ def require_module_feature(
 
     # Opt-in features never inherit from parent-only enablement (ADR-008 / ADR-009 / ADR-014).
     opt_in_features = frozenset(
-        {("office_ai", "writeback"), ("office_ai", "workflows"), ("office_ai", "mis"), ("office_ai", "review")}
+        {
+            ("office_ai", "writeback"),
+            ("office_ai", "workflows"),
+            ("office_ai", "mis"),
+            ("office_ai", "review"),
+            ("office_ai", "documents"),
+        }
     )
     if (module_key, feature_key) in opt_in_features:
         if feature_key in explicit or feature_key in granular_flags:
@@ -419,6 +426,19 @@ def is_office_ai_workflows_enabled(
     """Return True only when office_ai.workflows is explicitly enabled (default off)."""
     return _is_office_ai_opt_in_feature_enabled(
         "workflows",
+        enabled_modules=enabled_modules,
+        office_ai_features=office_ai_features,
+    )
+
+
+def is_office_ai_documents_enabled(
+    *,
+    enabled_modules: Iterable[str] | None,
+    office_ai_features: Iterable[str] | None = None,
+) -> bool:
+    """Return True only when office_ai.documents is explicitly enabled (default off). ADR-016."""
+    return _is_office_ai_opt_in_feature_enabled(
+        "documents",
         enabled_modules=enabled_modules,
         office_ai_features=office_ai_features,
     )

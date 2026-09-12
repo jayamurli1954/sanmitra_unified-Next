@@ -26,6 +26,7 @@ from app.modules.mandir_compat.router import router as mandir_compat_router
 from app.modules.mitrabooks_compat.router import router as mitrabooks_compat_router
 from app.modules.office_ai.router import router as office_ai_router
 from app.modules.office_ai.mis_narrative_router import router as office_ai_mis_narrative_router
+from app.modules.office_ai.documents_router import router as office_ai_documents_router
 from app.modules.office_ai.review_router import router as office_ai_review_router
 from app.modules.rag.router import router as rag_router
 from app.modules.temple.router import router as temple_router
@@ -60,3 +61,4 @@ api_router.include_router(blog_router)
 api_router.include_router(office_ai_router)
 api_router.include_router(office_ai_mis_narrative_router)
 api_router.include_router(office_ai_review_router)
+api_router.include_router(office_ai_documents_router)

@@ -34,6 +34,7 @@ from app.modules.office_ai.services import (
     task_service,
     workflow_service,
 )
+from app.modules.office_ai.documents_router import documents_ping_fields
 from app.modules.office_ai.review_router import review_ping_fields
 from app.modules.office_ai.services.mis_excel_import import parse_mis_excel
 
@@ -116,7 +117,7 @@ async def ping(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict
         "module": "office_ai",
         "tenant_id": _tenant_id(ctx),
         "app_key": ctx.get("app_key"),
-        "features": ["tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows", "mis", "review"],
+        "features": ["tasks", "email", "brief", "calendar", "meeting_notes", "notifications", "writeback", "workflows", "mis", "review", "documents"],
         "writeback_enabled": writeback,
         "workflows_enabled": workflows,
         "mis_enabled": mis_flags["mis"],
@@ -133,6 +134,7 @@ async def ping(ctx: dict = Depends(require_enabled_module("office_ai"))) -> dict
         "metrics": ai_metrics.snapshot(),
     }
     payload.update(review_ping_fields(tenant))
+    payload.update(documents_ping_fields(tenant))
     return payload
 
 

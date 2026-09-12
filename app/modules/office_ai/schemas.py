@@ -184,3 +184,8 @@ class ReviewNoteCreateRequest(BaseModel):
 class ReviewNoteUpdateRequest(BaseModel):
     status: Literal["open", "assigned", "resolved", "closed"] | None = None
     assigned_to: str | None = Field(default=None, max_length=120)
+    ca_document_id: str | None = Field(default=None, max_length=80)
+
+
+class DocumentsLinkNoteRequest(BaseModel):
+    document_id: str = Field(min_length=1, max_length=80)

@@ -362,6 +362,7 @@ async def create_note(
         "description": text[:4000],
         "assigned_to": assignee,
         "status": "assigned" if assignee else "open",
+        "ca_document_id": None,
         "created_at": now,
         "updated_at": now,
         "created_by": actor,
@@ -416,6 +417,9 @@ async def update_note(
             payload.setdefault("status", "assigned")
     if "task_id" in updates and updates["task_id"]:
         payload["task_id"] = str(updates["task_id"]).strip()
+    if "ca_document_id" in updates:
+        linked = str(updates["ca_document_id"] or "").strip()
+        payload["ca_document_id"] = linked or None
     if not payload:
         return existing
     payload["updated_at"] = utcnow()
