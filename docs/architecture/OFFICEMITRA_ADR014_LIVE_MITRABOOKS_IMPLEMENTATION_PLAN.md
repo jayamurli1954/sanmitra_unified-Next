@@ -1,6 +1,6 @@
 # OfficeMitra — ADR-014 remaining slice: live MitraBooks MIS reads
 
-**Status:** Antigravity **APPROVE** (2026-09-12) — Path A live MitraBooks MIS ingest **implemented** behind `office_ai.mis.live_mitrabooks` (default off).
+**Status:** Antigravity **APPROVE** (2026-09-12) — Path A live MitraBooks MIS ingest **implemented** behind `office_ai.mis.live_mitrabooks` (default off). Operator smoke **PASS** 2026-09-13 on `demo-mfg-mis` ([checklist](../operations/OFFICEMITRA_MIS_LIVE_SMOKE_CHECKLIST.md)).
 **ADR:** [ADR-014](../adr/ADR-014-officemitra-ca-analysis-pack.md) (Accepted 2026-08-11)
 **Date:** 2026-09-12
 **Audience:** Core engineering / operators
@@ -234,7 +234,7 @@ Option B: a **demo-only** seeder calls the **accounting service** `post_journal`
 
 This plan defaults to **Option A** unless Antigravity selects B.
 
-**Operator smoke (after code, `demo-mfg-mis` only):**
+**Operator smoke (after code, `demo-mfg-mis` only):** use [`OFFICEMITRA_MIS_LIVE_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_MIS_LIVE_SMOKE_CHECKLIST.md).
 
 1. Seed MIS demo; confirm ping `live_mitrabooks: true`.
 2. Create or open a draft pack for `2026-07`.

@@ -73,4 +73,4 @@ office_ai.workflows
 
 ## Next product planning (out of this signoff)
 
-- Continue ADR-014 CA Analysis Pack remaining gaps (live MitraBooks MIS reads; demo CA/MIS staging smoke) behind `office_ai.mis*`. Attributed narrative + fact-citation UI is in code.
+- Continue ADR-014 CA Analysis Pack: live MitraBooks MIS reads are in code behind `office_ai.mis.live_mitrabooks`; operator smoke **PASS** 2026-09-13 on `demo-mfg-mis` ([`OFFICEMITRA_MIS_LIVE_SMOKE_CHECKLIST.md`](OFFICEMITRA_MIS_LIVE_SMOKE_CHECKLIST.md)). Zoho/Tally remain deferred.
