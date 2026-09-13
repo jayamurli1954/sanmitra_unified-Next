@@ -1,10 +1,12 @@
 # MitraBooks GST/TDS Compliance Review
 
-Date: 2026-09-10  
-Status: **Not signed for production filing**  
+Date: 2026-09-10 (evidence refresh 2026-09-13)  
+Status: **Not signed for production filing** — CA checklist ready; human CA signature open  
 Scope: preparation/reporting review of current MitraBooks GST and TDS surfaces.
 
 This review does **not** authorize live GSTN portal filing, IRP e-invoice API calls, e-way bill APIs, or treating GSTN JSON downloads as a filed return.
+
+CA production signoff package: [`MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md`](MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md).
 
 ## Verdict
 
@@ -37,11 +39,11 @@ UI copy uses “Download GSTN JSON”, not “File return”. Keep that language
 ## Gaps that block a signed production filing claim
 
 1. No GSTN / GSP adapter, no filing acknowledgement (ARN), no amendment/original vs revised return workflow.
-2. No independent CA/compliance signoff that GSTR-1 tables and 3B 3.1/4/5 match current GSTN schema for the live financial year (schema drift risk).
+2. No independent CA/compliance signature yet on [`MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md`](MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md) confirming GSTR-1 tables and 3B 3.1/4/5 match current GSTN schema / offline utility for the live financial year (schema drift risk).
 3. Effective-date tax-rate configuration is still a gap-matrix item; rates must not be treated as hard-coded forever. TDS section table is FY 2025-26 defaults with overrides — needs a Finance Act refresh process.
 4. E-invoice INV-01 payload uses JSON number encoding required by GSTN (`float` only in the payload assembler, not in the ledger). Live IRP is still deferred.
 5. Export JSON governance for GST returns is still a Phase 4 residual (pending todo).
-6. Hosted destructive mutation **reconfirm** after staging credential drift is still open, so GST real-stack evidence is not current for production signoff.
+6. ~~Hosted destructive mutation reconfirm after staging credential drift~~ — **closed 2026-09-13**: hosted Phase 3 destructive PASS on `demo-mitrabooks-business` (includes GST/TDS real-stack slice). Evidence: `MITRABOOKS_PHASE3_BUSINESS_WORKFLOW_SIGNOFF.md` Latest Run 2026-09-13.
 
 ## What operators may tell tenants
 
@@ -62,7 +64,7 @@ Forbidden until a later signed review:
 | Role | Result |
 | --- | --- |
 | Engineering review (this note) | Preparation surfaces exist; filing not enabled |
-| Compliance / CA production signoff | **Open** |
-| Live IRP / e-way workstream | Deferred until this review is signed **and** tenant policy exists |
+| Compliance / CA production signoff | **Open** — checklist at [`MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md`](MITRABOOKS_GST_TDS_CA_FILING_SIGNOFF_CHECKLIST.md); hosted GST/TDS real-stack evidence current as of 2026-09-13 |
+| Live IRP / e-way workstream | Deferred until CA checklist is signed **and** tenant policy exists |
 
 Cross-references: `docs/prd/MITRABOOKS_ERP_GAP_MATRIX.md` GST rows, `docs/operations/MITRABOOKS_PENDING_GAP_TODO.md` Phase 3/4 GST `[~]` items, `AGENTS.md` GST preparation-until-review rule.
