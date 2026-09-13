@@ -39,15 +39,25 @@ MitraBooks CA staff queue (existing)
 
 | Check | Pass |
 | --- | --- |
-| Ping `documents_enabled` is true only after flag | |
-| Queue 403 without `office_ai.documents` | |
-| Gaps/requests 403 without `office_ai.documents.requests` | |
-| Standalone without `business` returns `enabled: false`; staff task still allowed | |
-| Link writes OfficeMitra note only | |
-| Request creates OfficeMitra task; `client_email` is false | |
-| Repeat Request is idempotent while the task is open | |
-| No client portal, no CA status mutation from OfficeMitra | |
-| Seed refuses `demo-mitrabooks-business` | |
+| Ping `documents_enabled` is true only after flag | **PASS** (2026-09-13) |
+| Queue 403 without `office_ai.documents` | **PASS** (pytest) |
+| Gaps/requests 403 without `office_ai.documents.requests` | **PASS** (pytest) |
+| Standalone without `business` returns `enabled: false`; staff task still allowed | **PASS** (pytest) |
+| Link writes OfficeMitra note only | **PASS** (smoke linked note `6aa60b963148f844b2eab8e0`) |
+| Request creates OfficeMitra task; `client_email` is false | **PASS** (`client_email: False`, task `6aa60c76344b772a0ed17919`) |
+| Repeat Request is idempotent while the task is open | **PASS** (pytest) |
+| No client portal, no CA status mutation from OfficeMitra | **PASS** |
+| Seed refuses `demo-mitrabooks-business` | **PASS** |
+
+## Signoff
+
+| Field | Value |
+| --- | --- |
+| Operator | Local operator smoke (`seed_documents_demo.py --run-smoke`) + pytest |
+| Date | 2026-09-13 |
+| Environment | local (`demo-mfg-mis`) |
+| Result | **PASS** |
+| Notes | Queue enabled count=1; missing_count=4; `bank_statement` present; `gst_returns` staff task created; ERP demo Review/Documents flags false; seed refuses `demo-mitrabooks-business` |
 
 ## Non-goals
 

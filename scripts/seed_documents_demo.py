@@ -36,8 +36,6 @@ if str(REPO_ROOT) not in sys.path:
 
 from app.core.tenants.service import TENANTS_COLLECTION
 from app.db.mongo import close_mongo, get_collection, init_mongo
-from app.modules.business.schemas import CaDocumentCreateRequest
-from app.modules.business.services import ca_clients
 from app.modules.office_ai.connectors.mitrabooks_connector import CA_QUEUE_APP_KEY
 from app.modules.office_ai.models import ensure_indexes
 from app.modules.office_ai.services import documents_service, review_store
@@ -110,6 +108,11 @@ async def _apply_documents_entitlements(tenant_id: str) -> list[str]:
 
 
 async def _ensure_demo_ca_document(*, tenant_id: str) -> dict[str, Any]:
+    # Import business.service first to avoid ca_clients ↔ service circular import under scripts.
+    import app.modules.business.service  # noqa: F401
+    from app.modules.business.schemas import CaDocumentCreateRequest
+    from app.modules.business.services import ca_clients
+
     existing = await ca_clients.list_ca_document_metadata(
         tenant_id=tenant_id,
         app_key=CA_QUEUE_APP_KEY,
