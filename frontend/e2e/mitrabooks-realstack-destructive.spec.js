@@ -269,7 +269,8 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     });
     expect(caClient.tenant_id).toBe(DEMO_TENANT_ID);
     expect(caClient.app_key).toBe('mitrabooks');
-    expect(caClient.accounting_entity_id).toBe('primary');
+    const caClientBookId = String(caClient.book_id || caClient.accounting_entity_id);
+    expect(caClientBookId).toMatch(/^client-/);
 
     const caDocument = await jsonRequest(page, token, 'POST', '/business/ca-documents', {
       client_id: caClient.client_id,
@@ -288,8 +289,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     });
     expect(caDocument.tenant_id).toBe(DEMO_TENANT_ID);
     expect(caDocument.app_key).toBe('mitrabooks');
-    expect(caDocument.accounting_entity_id).toBe('primary');
-    expect(caDocument.book_id).toBe('primary');
+    expect(caDocument.accounting_entity_id).toBe(caClientBookId);
     expect(caDocument.client_id).toBe(caClient.client_id);
     expect(caDocument.status).toBe('uploaded');
     expect(caDocument.attachment_count).toBe(0);
@@ -298,14 +298,14 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     const attachment = await uploadAttachment(
       page,
       token,
-      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=primary`,
+      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=${encodeURIComponent(caClientBookId)}`,
       `phase3-demo-document-${runId}.pdf`,
       'application/pdf',
       `%PDF-1.4\n% Phase 3 demo document upload ${runId}\n`
     );
     expect(attachment.tenant_id).toBe(DEMO_TENANT_ID);
     expect(attachment.app_key).toBe('mitrabooks');
-    expect(attachment.accounting_entity_id).toBe('primary');
+    expect(attachment.accounting_entity_id).toBe(caClientBookId);
     expect(attachment.owner_type).toBe('ca_document');
     expect(attachment.owner_id).toBe(caDocument.document_id);
     expect(attachment.file_name).toBe(`phase3-demo-document-${runId}.pdf`);
@@ -316,7 +316,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       page,
       token,
       'GET',
-      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=primary`
+      `/business/ca-documents/${caDocument.document_id}/attachments?accounting_entity_id=${encodeURIComponent(caClientBookId)}`
     );
     expect(attachments.total).toBeGreaterThanOrEqual(1);
     expect(attachments.items.map((item) => item.attachment_id)).toContain(attachment.attachment_id);
@@ -332,14 +332,14 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       page,
       token,
       'GET',
-      `/business/ca-documents/${caDocument.document_id}/attachments/${attachment.attachment_id}/download?accounting_entity_id=primary`
+      `/business/ca-documents/${caDocument.document_id}/attachments/${attachment.attachment_id}/download?accounting_entity_id=${encodeURIComponent(caClientBookId)}`
     );
     expect(downloadedAttachment).toContain(`Phase 3 demo document upload ${runId}`);
 
     const underReviewDocument = await jsonRequest(page, token, 'PATCH', `/business/ca-documents/${caDocument.document_id}`, {
       status: 'under_review',
       notes: 'Demo reviewer opened the uploaded document',
-      accounting_entity_id: 'primary',
+      accounting_entity_id: caClientBookId,
     });
     expect(underReviewDocument.status).toBe('under_review');
     expect(underReviewDocument.review_started_at).toBeTruthy();
@@ -349,7 +349,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
       status: 'reviewed',
       next_action: 'No OCR handoff or auto-posting in this demo gate',
       notes: 'Manual review completed without ledger posting',
-      accounting_entity_id: 'primary',
+      accounting_entity_id: caClientBookId,
     });
     expect(reviewedDocument.status).toBe('reviewed');
     expect(reviewedDocument.reviewed_at).toBeTruthy();
@@ -357,7 +357,7 @@ test.describe('MitraBooks destructive real-stack demo E2E', () => {
     expect(reviewedDocument.attachment_count).toBeGreaterThanOrEqual(1);
     expect(reviewedDocument.next_action).toContain('No OCR');
 
-    const listedDocuments = await jsonRequest(page, token, 'GET', `/business/ca-documents?client_name=${encodeURIComponent(caClient.client_name)}&accounting_entity_id=primary`);
+    const listedDocuments = await jsonRequest(page, token, 'GET', `/business/ca-documents?client_name=${encodeURIComponent(caClient.client_name)}&accounting_entity_id=${encodeURIComponent(caClientBookId)}`);
     expect(listedDocuments.items.map((item) => item.document_id)).toContain(caDocument.document_id);
 
     const uploadAudit = await jsonRequest(

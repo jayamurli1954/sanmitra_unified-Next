@@ -141,9 +141,28 @@ If the destructive run fails at `#login-status` with `Invalid credentials`, the 
 | Export governance real-stack demo validation | Guarded destructive demo-tenant browser/API path for governed dimension JSON, opening-balance CSV, trial-balance JSON, sales-invoice PDF, Tally XML response headers, file-body evidence, and `business_export_downloaded` audit evidence | Added on 2026-07-11; execution remains opt-in through the destructive demo gate |
 | Staging shell | Optional read-only deployed shell smoke | Passed on 2026-07-02 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` |
 | Local real-stack mutation | Guarded browser/API mutation against local `demo-mitrabooks-business` | Passed on 2026-07-03 and reconfirmed on 2026-07-07 against `http://127.0.0.1:3300/mitrabooks-erp/` after GST settlement persistence hardening |
-| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; failed at deployed login with `Invalid credentials` on 2026-07-07; superseded and passed on 2026-07-14 against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` after v37 shell, BSON Decimal persistence fix, bank CSV body hardening, and GST unlock corrections. |
+| Hosted staging real-stack mutation | Guarded browser/API mutation against hosted `demo-mitrabooks-business` | Historical pass on 2026-07-03; failed at deployed login with `Invalid credentials` on 2026-07-07; superseded and passed on 2026-07-14; **reconfirmed PASS on 2026-09-13** against `https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/` after CA client-book E2E alignment (`client-*` books, not `primary`). |
 
 ## Latest Run
+
+2026-09-13:
+
+```powershell
+$env:MITRABOOKS_DEMO_E2E_CONFIRM="demo-mitrabooks-business"
+$env:E2E_USER_EMAIL="business.admin@sanmitra.local"
+$env:E2E_USER_PASSWORD="<staging-only secret>"
+python scripts/verify_staging_auth.py
+# then guarded destructive mutation only:
+python -c "from scripts.mitrabooks_phase3_business_gate import run_destructive_demo_browser; raise SystemExit(0 if run_destructive_demo_browser('https://www.mitrabooks.sanmitratech.in/mitrabooks-erp/', 'demo-mitrabooks-business')[0][1] else 1)"
+```
+
+Result:
+
+- PASS: `scripts/verify_staging_auth.py` for `demo-mitrabooks-business` (`organization_type=BUSINESS`; modules `accounting`, `audit`, `business`).
+- PASS: destructive demo policy and auth precheck for `demo-mitrabooks-business`.
+- PASS: destructive hosted staging real-stack browser/API mutation (~1.0m) via `frontend/e2e/mitrabooks-realstack-destructive.spec.js`.
+- UPDATED: destructive E2E CA document inbox slice now expects per-client `client-*` books (matches `tests/test_ca_practice_client_books.py`); no longer asserts CA clients/documents on `primary`.
+- NOTE: full Phase 3 gate staging read-only shell smoke still fails one mocked-shell case (`loads dashboard and opens core workspaces` missing expense account option `5001`). That is separate from the destructive real-stack reconfirm and does not block this hosted mutation evidence.
 
 2026-07-14:
 
