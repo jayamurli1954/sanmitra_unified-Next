@@ -124,6 +124,7 @@ const MASA_I18N = {
   Ashadha: { kn: 'ಆಷಾಢ', sa: 'आषाढ' },
   Shravana: { kn: 'ಶ್ರಾವಣ', sa: 'श्रावण' },
   Bhadrapada: { kn: 'ಭಾದ್ರಪದ', sa: 'भाद्रपद' },
+  Ashvina: { kn: 'ಆಶ್ವಿನ', sa: 'आश्विन' },
   Ashwayuja: { kn: 'ಆಶ್ವಯುಜ', sa: 'आश्वयुज' },
   Ashwin: { kn: 'ಆಶ್ವಿನ', sa: 'आश्विन' },
   Kartika: { kn: 'ಕಾರ್ತಿಕ', sa: 'कार्तिक' },
@@ -133,6 +134,7 @@ const MASA_I18N = {
   Pausha: { kn: 'ಪೌಷ', sa: 'पौष' },
   Magha: { kn: 'ಮಾಘ', sa: 'माघ' },
   Phalguna: { kn: 'ಫಾಲ್ಗುಣ', sa: 'फाल्गुन' },
+  Phalguni: { kn: 'ಫಾಲ್ಗುಣಿ', sa: 'फाल्गुनी' },
 };
 
 const SAMVATSARA_I18N = {

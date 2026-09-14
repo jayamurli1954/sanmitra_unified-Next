@@ -93,20 +93,30 @@ def _has_sankranti_between(start_jd: float, end_jd: float) -> bool:
     return start_sign != end_sign
 
 def _get_lunar_month(dt: datetime, jd: float) -> Dict:
-    """Return amanta/purnimanta lunar month with adhika detection."""
+    """Return amanta/purnimanta lunar month with adhika detection.
+
+    Amanta naming uses the Sun's rashi at the closing new moon:
+    - Normal month (has a sankranti): month = LUNAR_MONTHS[next_new_moon_rashi]
+    - Adhika month (no sankranti): month = next month in the cycle (adhika of the
+      upcoming nija month), e.g. Adhika Jyeshtha when the Sun stays in Vrishabha.
+    """
     del dt
     previous_new_moon = _find_new_moon(jd, forward=False)
     next_new_moon = _find_new_moon(jd, forward=True)
     next_solar_sign = int(get_sidereal_position(next_new_moon, swe.SUN) / 30)
-    month_name = LUNAR_MONTHS[(next_solar_sign + 1) % 12]
     is_adhika = not _has_sankranti_between(previous_new_moon, next_new_moon)
+    if is_adhika:
+        month_name = LUNAR_MONTHS[(next_solar_sign + 1) % 12]
+    else:
+        month_name = LUNAR_MONTHS[next_solar_sign % 12]
     display_name = f"Adhika {month_name}" if is_adhika else month_name
 
     phase = _phase_angle(jd)
     paksha = "Shukla" if phase < 180 else "Krishna"
     purnimanta_name = display_name
-    if paksha == "Krishna":
-        purnimanta_name = LUNAR_MONTHS[next_solar_sign % 12]
+    if paksha == "Krishna" and not is_adhika:
+        # Purnimanta advances one month during Krishna paksha.
+        purnimanta_name = LUNAR_MONTHS[(next_solar_sign + 1) % 12]
 
     return {
         "amanta": display_name,

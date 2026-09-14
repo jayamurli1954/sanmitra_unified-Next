@@ -14,6 +14,7 @@ from .calendrical import *
 from .timings import *
 from .qualities import *
 from .utils import *
+from .festivals import detect_day_festivals, festival_label_map
 
 class PanchangService:
     """
@@ -146,119 +147,22 @@ class PanchangService:
         vara: Dict,
         nakshatra: Dict,
         jd: float | None = None,
+        lunar_month: str | None = None,
+        lunar_month_purnimanta: str | None = None,
     ) -> List[Dict]:
-        """Detect day-level observances used by the display layer."""
-        del vara  # Reserved for weekday-specific festival rules
-        special_days: List[Dict] = []
-        tithi_name = tithi_data.get("name", "")
-        nakshatra_name = str(nakshatra.get("name") or "").strip()
+        """Detect day-level observances used by the display layer.
 
-        if tithi_name == "Ekadashi":
-            special_days.append(
-                {
-                    "name": "Ekadashi",
-                    "type": "fasting",
-                    "importance": "major",
-                    "description": "Fasting day dedicated to Lord Vishnu",
-                    "observances": [
-                        "Avoid all grains (rice, wheat, etc.)",
-                        "Avoid beans and lentils",
-                        "Avoid onion and garlic",
-                        "Fruits and milk products are allowed",
-                        "Sabudana, potato, sweet potato allowed",
-                    ],
-                    "benefits": [
-                        "Spiritual purification",
-                        "Removes sins",
-                        "Improves health",
-                        "Increases devotion",
-                    ],
-                }
-            )
-
-        if tithi_name == "Trayodashi":
-            special_days.append(
-                {
-                    "name": "Pradosha Vrat",
-                    "type": "worship",
-                    "importance": "medium",
-                    "description": "Auspicious time to worship Lord Shiva during twilight",
-                    "observances": [
-                        "Visit Shiva temple during sunset (5-7 PM)",
-                        "Offer Bilva leaves",
-                        "Chant Om Namah Shivaya",
-                    ],
-                    "benefits": ["Removes obstacles", "Brings peace and prosperity"],
-                }
-            )
-
-        if tithi_name == "Chaturthi" and tithi_data.get("paksha") == "Krishna":
-            special_days.append(
-                {
-                    "name": "Sankashta Chaturthi",
-                    "type": "fasting",
-                    "importance": "medium",
-                    "description": "Day dedicated to Lord Ganesha",
-                    "observances": [
-                        "Fast throughout the day",
-                        "Worship Ganesha in evening",
-                        "Break fast after sighting moon",
-                    ],
-                    "benefits": ["Removes obstacles", "Success in endeavors"],
-                }
-            )
-
-        if tithi_name == "Purnima":
-            special_days.append(
-                {
-                    "name": "Purnima",
-                    "type": "worship",
-                    "importance": "major",
-                    "description": "Full Moon day, auspicious for spiritual activities",
-                    "observances": ["Meditation", "Charity", "Temple worship"],
-                    "benefits": ["Mental peace", "Spiritual growth"],
-                }
-            )
-
-        if tithi_name == "Amavasya":
-            special_days.append(
-                {
-                    "name": "Amavasya",
-                    "type": "ancestor",
-                    "importance": "major",
-                    "description": "New Moon day, sacred for ancestor worship",
-                    "observances": ["Perform Tarpanam", "Offer food to ancestors"],
-                    "benefits": ["Blessings of ancestors", "Family harmony"],
-                }
-            )
-
-        # Onam / Thiruvonam: Chingam month + Thiruvonam nakshatra (Shravana).
-        # Malayali harvest festival honouring Mahabali / Vamana.
-        if jd is not None and nakshatra_name == "Shravana" and self._is_malayalam_chingam(jd):
-            special_days.append(
-                {
-                    "name": "Onam",
-                    "type": "festival",
-                    "importance": "major",
-                    "description": (
-                        "Thiruvonam (Onam) — Kerala’s major Malayali harvest festival "
-                        "celebrating King Mahabali’s homecoming and Lord Vishnu’s Vamana avatar"
-                    ),
-                    "observances": [
-                        "Offer prayers and welcome Mahabali (Onathappan)",
-                        "Prepare Onasadya feast and share with family/community",
-                        "Draw floral Pookkalam / Athapookkalam",
-                        "Temple visits, charity, and cultural gatherings",
-                    ],
-                    "benefits": [
-                        "Prosperity and gratitude for the harvest",
-                        "Family harmony and community bonding",
-                        "Devotion to Vishnu / Vamana tradition",
-                    ],
-                }
-            )
-
-        return special_days
+        Major festivals come from a curated Amanta catalog (non-exhaustive)
+        using masa + paksha + tithi (+ nakshatra / weekday / solar rules).
+        """
+        return detect_day_festivals(
+            tithi_data=tithi_data,
+            nakshatra=nakshatra,
+            jd=jd,
+            lunar_month=lunar_month,
+            lunar_month_purnimanta=lunar_month_purnimanta,
+            weekday=(vara or {}).get("name"),
+        )
 
     def get_day_periods(self, sunrise: str, sunset: str, day_of_week: int) -> List[Dict]:
         """Calculate the 8 daytime periods with ruler and quality labels."""
@@ -328,38 +232,7 @@ class PanchangService:
         nakshatra: Dict,
     ) -> List[Dict]:
         """Build multilingual display notes to preserve previous rich display blocks."""
-        festival_translations = {
-            "Ekadashi": (
-                "Ekadashi Fasting",
-                "ಏಕಾದಶಿ ಉಪವಾಸ",
-                "एकादशी व्रतम्",
-            ),
-            "Pradosha Vrat": (
-                "Pradosha Vrat",
-                "ಪ್ರದೋಷ ವ್ರತ",
-                "प्रदोष व्रतम्",
-            ),
-            "Sankashta Chaturthi": (
-                "Sankashta Chaturthi",
-                "ಸಂಕಷ್ಟ ಚತುರ್ಥಿ",
-                "संकष्ट चतुर्थी",
-            ),
-            "Purnima": (
-                "Purnima Observance",
-                "ಪೌರ್ಣಿಮಾ ಆಚರಣೆ",
-                "पूर्णिमा पालनम्",
-            ),
-            "Amavasya": (
-                "Amavasya Observance",
-                "ಅಮಾವಾಸ್ಯೆ ಆಚರಣೆ",
-                "अमावास्या पालनम्",
-            ),
-            "Onam": (
-                "Onam (Thiruvonam)",
-                "ಓಣಂ (ತಿರುವೋಣಂ)",
-                "ओणम् (तिरुवोणम्)",
-            ),
-        }
+        festival_translations = festival_label_map()
 
         entries: List[Dict] = []
         for fest in festivals:
@@ -702,7 +575,14 @@ class PanchangService:
         tithi["quality"] = self.get_tithi_quality(tithi["name"])
         nakshatra["quality"] = self.get_nakshatra_quality(nakshatra["name"])
 
-        festivals = self.detect_special_days(tithi, vara, nakshatra, jd=jd)
+        festivals = self.detect_special_days(
+            tithi,
+            vara,
+            nakshatra,
+            jd=jd,
+            lunar_month=calendar_info.get("lunar_month"),
+            lunar_month_purnimanta=calendar_info.get("lunar_month_purnimanta"),
+        )
         day_periods = self.get_day_periods(sun_times["sunrise"], sun_times["sunset"], day_of_week)
         south_india_special = self._build_south_india_special(festivals, karana, yoga, nakshatra)
         special_notes = self._build_special_notes(tithi, nakshatra, yoga, festivals=festivals)
