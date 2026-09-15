@@ -5,7 +5,6 @@ const fulfillJson = (route, body, status = 200) => route.fulfill({
   contentType: 'application/json',
   body: JSON.stringify(body),
 });
-
 async function mockVerifiedMitraBooksSession(page) {
   const accounts = [
     { id: 11001, code: '11001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
@@ -20,7 +19,6 @@ async function mockVerifiedMitraBooksSession(page) {
     { id: 41002, code: '42003', name: 'Miscellaneous Income', account_type: 'income', type: 'income' },
     { id: 51001, code: '51001', name: 'Purchases', account_type: 'expense', type: 'expense' },
     { id: 53004, code: '53004', name: 'Office Expense', account_type: 'expense', type: 'expense' },
-    { id: 54001, code: '54001', name: 'Bank Charges', account_type: 'expense', type: 'expense' },
     { id: 54003, code: '54003', name: 'Depreciation Expense', account_type: 'expense', type: 'expense' },
     { id: 54005, code: '54005', name: 'Miscellaneous Expense', account_type: 'expense', type: 'expense' },
   ];
