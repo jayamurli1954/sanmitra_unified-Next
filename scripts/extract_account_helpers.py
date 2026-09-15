@@ -58,6 +58,7 @@ const MITRABOOKS_FALLBACK_ACCOUNTS = [
   { account_id: 24001, account_code: "24001", account_name: "Advance from Customers", account_type: "liability" },
   { account_id: 41001, account_code: "41001", account_name: "Sales", account_type: "income" },
   { account_id: 41002, account_code: "41002", account_name: "Service Income", account_type: "income" },
+  { account_id: 51001, account_code: "51001", account_name: "Purchases", account_type: "expense" },
   { account_id: 53004, account_code: "53004", account_name: "Office Expense", account_type: "expense" },
   { account_id: 54001, account_code: "54001", account_name: "Bank Charges", account_type: "expense" },
 ];

@@ -9,19 +9,20 @@ const fulfillJson = (route, body, status = 200) => route.fulfill({
 async function mockVerifiedMitraBooksSession(page) {
   const accounts = [
     { id: 11001, code: '11001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
-    { id: 102, code: '11010', name: 'Bank Account', account_type: 'asset', type: 'asset' },
-    { id: 103, code: '12001', name: 'Sundry Debtors', account_type: 'asset', type: 'asset' },
-    { id: 104, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
-    { id: 105, code: '31004', name: 'Opening Balance Equity', account_type: 'equity', type: 'equity' },
-    { id: 106, code: '31003', name: 'Retained Earnings', account_type: 'equity', type: 'equity' },
-    { id: 107, code: '16001', name: 'Furniture and Fixtures', account_type: 'asset', type: 'asset' },
-    { id: 108, code: '16099', name: 'Accumulated Depreciation', account_type: 'asset', type: 'asset' },
+    { id: 11010, code: '11010', name: 'Bank Account', account_type: 'asset', type: 'asset' },
+    { id: 12001, code: '12001', name: 'Sundry Debtors', account_type: 'asset', type: 'asset' },
+    { id: 21001, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
+    { id: 31004, code: '31004', name: 'Opening Balance Equity', account_type: 'equity', type: 'equity' },
+    { id: 31003, code: '31003', name: 'Retained Earnings', account_type: 'equity', type: 'equity' },
+    { id: 16001, code: '16001', name: 'Furniture and Fixtures', account_type: 'asset', type: 'asset' },
+    { id: 16099, code: '16099', name: 'Accumulated Depreciation', account_type: 'asset', type: 'asset' },
     { id: 41001, code: '41001', name: 'Sales', account_type: 'income', type: 'income' },
-    { id: 202, code: '42003', name: 'Miscellaneous Income', account_type: 'income', type: 'income' },
+    { id: 41002, code: '42003', name: 'Miscellaneous Income', account_type: 'income', type: 'income' },
     { id: 51001, code: '51001', name: 'Purchases', account_type: 'expense', type: 'expense' },
     { id: 53004, code: '53004', name: 'Office Expense', account_type: 'expense', type: 'expense' },
-    { id: 302, code: '54003', name: 'Depreciation Expense', account_type: 'expense', type: 'expense' },
-    { id: 303, code: '54005', name: 'Miscellaneous Expense', account_type: 'expense', type: 'expense' },
+    { id: 54001, code: '54001', name: 'Bank Charges', account_type: 'expense', type: 'expense' },
+    { id: 54003, code: '54003', name: 'Depreciation Expense', account_type: 'expense', type: 'expense' },
+    { id: 54005, code: '54005', name: 'Miscellaneous Expense', account_type: 'expense', type: 'expense' },
   ];
   const parties = [
     {
@@ -160,7 +161,7 @@ async function mockVerifiedMitraBooksSession(page) {
       available_modules: [],
     }),
   }));
-  await page.route('**/api/v1/accounting/accounts', route => route.fulfill({
+  await page.route('**/api/v1/accounting/accounts**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(accounts),
@@ -1040,9 +1041,9 @@ async function mockVerifiedMitraBooksSession(page) {
     const preview = {
       as_of: payload.as_of || '2026-04-01',
       lines: [
-        { row_number: 2, account_id: 102, account_code: '11010', account_name: 'Bank Account', party_id: null, party_name: null, debit: '150000.00', credit: '0.00' },
-        { row_number: 3, account_id: 103, account_code: '12001', account_name: 'Sundry Debtors', party_id: 'p2', party_name: 'Bengaluru Retail Customer', debit: '40000.00', credit: '0.00' },
-        { row_number: 4, account_id: 104, account_code: '21001', account_name: 'Sundry Creditors', party_id: 'p1', party_name: 'Karnataka Office Supplies', debit: '0.00', credit: '30000.00' },
+        { row_number: 2, account_id: 11010, account_code: '11010', account_name: 'Bank Account', party_id: null, party_name: null, debit: '150000.00', credit: '0.00' },
+        { row_number: 3, account_id: 12001, account_code: '12001', account_name: 'Sundry Debtors', party_id: 'p2', party_name: 'Bengaluru Retail Customer', debit: '40000.00', credit: '0.00' },
+        { row_number: 4, account_id: 21001, account_code: '21001', account_name: 'Sundry Creditors', party_id: 'p1', party_name: 'Karnataka Office Supplies', debit: '0.00', credit: '30000.00' },
       ],
       errors: [],
       line_count: 3,
@@ -1761,7 +1762,7 @@ async function mockVerifiedMitraBooksSession(page) {
       credit: '0.00',
     };
     const bankReconPayload = () => ({
-      account: { account_id: 102, code: '11010', name: 'Bank Account' },
+      account: { account_id: 11010, code: '11010', name: 'Bank Account' },
       as_of: '2026-06-30',
       summary: {
         book_balance: '2360.00',
@@ -1839,7 +1840,7 @@ async function mockVerifiedMitraBooksSession(page) {
       const payload = request.postDataJSON();
       const match = {
         match_id: 'match-1',
-        account_id: Number(payload.account_id || 102),
+        account_id: Number(payload.account_id || 11010),
         statement_line_id: payload.statement_line_id,
         line_id: Number(payload.line_id),
         journal_id: 7101,
@@ -1894,7 +1895,7 @@ async function mockVerifiedMitraBooksSession(page) {
         ],
       },
       {
-        account_id: 102,
+        account_id: 11010,
         account_code: '11010',
         account_name: 'Bank Account',
         book_type: 'bank',
@@ -1955,10 +1956,10 @@ async function mockVerifiedMitraBooksSession(page) {
         as_of: '2026-06-13',
         balanced: true,
         lines: openingBalancePosted ? [
-          { account_id: 102, account_code: '11010', account_name: 'Bank Account', debit_total: '150000.00', credit_total: '0.00', net_balance: '150000.00' },
-          { account_id: 103, account_code: '12001', account_name: 'Sundry Debtors', debit_total: '40000.00', credit_total: '0.00', net_balance: '40000.00' },
-          { account_id: 104, account_code: '21001', account_name: 'Sundry Creditors', debit_total: '0.00', credit_total: '30000.00', net_balance: '-30000.00' },
-          { account_id: 105, account_code: '31004', account_name: 'Opening Balance Equity', debit_total: '0.00', credit_total: '160000.00', net_balance: '-160000.00' },
+          { account_id: 11010, account_code: '11010', account_name: 'Bank Account', debit_total: '150000.00', credit_total: '0.00', net_balance: '150000.00' },
+          { account_id: 12001, account_code: '12001', account_name: 'Sundry Debtors', debit_total: '40000.00', credit_total: '0.00', net_balance: '40000.00' },
+          { account_id: 21001, account_code: '21001', account_name: 'Sundry Creditors', debit_total: '0.00', credit_total: '30000.00', net_balance: '-30000.00' },
+          { account_id: 31004, account_code: '31004', account_name: 'Opening Balance Equity', debit_total: '0.00', credit_total: '160000.00', net_balance: '-160000.00' },
         ] : [],
       });
     }
@@ -2351,7 +2352,7 @@ test.describe('MitraBooks ERP static shell', () => {
 
     await page.locator('[data-business-action="report-tab"][data-report-tab="bank-recon"]').click();
     await expect(page.locator('#business-report-printable')).toContainText('Select bank account');
-    await page.locator('[data-bankrecon-account]').selectOption('102');
+    await page.locator('[data-bankrecon-account]').selectOption('11010');
     await page.locator('[data-bankrecon-file]').setInputFiles({
       name: 'bank-statement.csv',
       mimeType: 'text/csv',
