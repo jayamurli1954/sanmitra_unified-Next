@@ -8,7 +8,7 @@ const fulfillJson = (route, body, status = 200) => route.fulfill({
 
 async function mockVerifiedMitraBooksSession(page) {
   const accounts = [
-    { id: 101, code: '1001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
+    { id: 11001, code: '11001', name: 'Cash in Hand', account_type: 'asset', type: 'asset' },
     { id: 102, code: '11010', name: 'Bank Account', account_type: 'asset', type: 'asset' },
     { id: 103, code: '12001', name: 'Sundry Debtors', account_type: 'asset', type: 'asset' },
     { id: 104, code: '21001', name: 'Sundry Creditors', account_type: 'liability', type: 'liability' },
@@ -18,7 +18,8 @@ async function mockVerifiedMitraBooksSession(page) {
     { id: 108, code: '16099', name: 'Accumulated Depreciation', account_type: 'asset', type: 'asset' },
     { id: 41001, code: '41001', name: 'Sales', account_type: 'income', type: 'income' },
     { id: 202, code: '42003', name: 'Miscellaneous Income', account_type: 'income', type: 'income' },
-    { id: 301, code: '5001', name: 'Office Expense', account_type: 'expense', type: 'expense' },
+    { id: 51001, code: '51001', name: 'Purchases', account_type: 'expense', type: 'expense' },
+    { id: 53004, code: '53004', name: 'Office Expense', account_type: 'expense', type: 'expense' },
     { id: 302, code: '54003', name: 'Depreciation Expense', account_type: 'expense', type: 'expense' },
     { id: 303, code: '54005', name: 'Miscellaneous Expense', account_type: 'expense', type: 'expense' },
   ];
@@ -1091,7 +1092,7 @@ async function mockVerifiedMitraBooksSession(page) {
       net_profit: '40000.00',
       closing_lines: [
         { account_id: 41001, account_code: '41001', account_name: 'Sales', account_type: 'income', debit: '100000.00', credit: '0.00' },
-        { account_id: 301, account_code: '5001', account_name: 'Office Expense', account_type: 'expense', debit: '0.00', credit: '60000.00' },
+        { account_id: 53004, account_code: '53004', account_name: 'Office Expense', account_type: 'expense', debit: '0.00', credit: '60000.00' },
       ],
       retained_earnings: { account_code: '31003', account_name: 'Retained Earnings', debit: '0.00', credit: '40000.00' },
       already_closed: yearEndClosed ? [{ journal_entry_id: 'YE-2025-26-001', entry_date: '2026-03-31' }] : [],
@@ -1351,7 +1352,7 @@ async function mockVerifiedMitraBooksSession(page) {
         note_date: payload.note_date,
         original_bill_number: payload.original_bill_number || '',
         reason: payload.reason || 'purchase_return',
-        expense_account_code: payload.expense_account_code || '5001',
+        expense_account_code: payload.expense_account_code || '51001',
         place_of_supply: payload.place_of_supply || '',
         taxable_total: taxableTotal,
         cgst_total: gstTotal / 2,
@@ -1859,7 +1860,7 @@ async function mockVerifiedMitraBooksSession(page) {
     const bookType = url.searchParams.get('book_type') || 'all';
     const accounts = [
       {
-        account_id: 101,
+        account_id: 11001,
         account_code: '11001',
         account_name: 'Cash in Hand',
         book_type: 'cash',
@@ -2248,7 +2249,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-voucher-lines .voucher-line')).toHaveCount(3);
     await page.locator('#business-voucher-lines .voucher-line').last().getByRole('button', { name: 'Remove' }).click();
     await expect(page.locator('#business-voucher-lines .voucher-line')).toHaveCount(2);
-    await page.locator('#business-voucher-lines .account-picker-select').nth(0).selectOption('301');
+    await page.locator('#business-voucher-lines .account-picker-select').nth(0).selectOption('53004');
     await page.locator('#business-voucher-lines .account-picker-select').nth(1).selectOption('41001');
     await page.locator('#business-voucher-lines .voucher-debit').nth(0).fill('125.00');
     await page.locator('#business-voucher-lines .voucher-credit').nth(1).fill('125.00');
@@ -2366,7 +2367,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('Suggested matches');
     await expect(page.locator('#business-report-printable')).toContainText('UTR-2360');
     await expect(page.locator('#business-report-printable')).toContainText('BANK CHARGES');
-    await page.locator('[data-bankrecon-offset="stmt-2"]').selectOption('301');
+    await page.locator('[data-bankrecon-offset="stmt-2"]').selectOption('53004');
     await page.locator('[data-business-action="bankrecon-post-voucher"][data-stmt-id="stmt-2"]').click();
     await expect(page.locator('#login-status')).toContainText('Voucher posted');
     await page.locator('[data-business-action="bankrecon-match"][data-stmt-id="stmt-1"]').click();
@@ -2542,7 +2543,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await expect(page.locator('#business-report-printable')).toContainText('FY 2025-26');
     await expect(page.locator('#business-report-printable')).toContainText('ready to close');
     await expect(page.locator('#business-report-printable')).toContainText('41001 - Sales');
-    await expect(page.locator('#business-report-printable')).toContainText('5001 - Office Expense');
+    await expect(page.locator('#business-report-printable')).toContainText('53004 - Office Expense');
     await expect(page.locator('#business-report-printable')).toContainText('31003 - Retained Earnings');
     await expect(page.locator('#business-report-printable')).toContainText('1,00,000.00');
     await expect(page.locator('#business-report-printable')).toContainText('60,000.00');
@@ -2708,7 +2709,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-bill-form] input[name="bill_number"]').fill('BILL-100');
     await page.locator('[data-bill-form] input[name="bill_date"]').fill('2026-06-13');
     await page.locator('[data-bill-form] input[name="due_date"]').fill('2026-06-30');
-    await page.locator('[data-bill-form] select[name="expense_account_code"]').selectOption('5001');
+    await page.locator('[data-bill-form] select[name="expense_account_code"]').selectOption('51001');
     await page.locator('[data-bill-form] input[name="place_of_supply"]').fill('Karnataka');
     await page.locator('[data-bill-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
     await page.locator('[data-bill-form] select[name="project_id"]').selectOption('dim-prj-alpha');
@@ -2793,7 +2794,7 @@ test.describe('MitraBooks ERP static shell', () => {
     await page.locator('[data-dn-form] select[name="original_bill_id"]').selectOption('bill1');
     await expect(page.locator('[data-dn-form] select[name="original_bill_id"]')).toContainText('BILL-100');
     await page.locator('[data-dn-form] select[name="reason"]').selectOption('purchase_return');
-    await page.locator('[data-dn-form] select[name="expense_account_code"]').selectOption('5001');
+    await page.locator('[data-dn-form] select[name="expense_account_code"]').selectOption('51001');
     await page.locator('[data-dn-form] input[name="place_of_supply"]').fill('Karnataka');
     await page.locator('[data-dn-form] select[name="cost_centre_id"]').selectOption('dim-cc-blr');
     await page.locator('[data-dn-form] select[name="project_id"]').selectOption('dim-prj-alpha');
