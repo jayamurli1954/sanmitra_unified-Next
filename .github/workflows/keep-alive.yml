@@ -1,0 +1,46 @@
+name: Keep Render Backend Warm
+
+# Render's staging instance spins down when idle and returns 503 for ~30-60s while
+# it wakes — which fails the first login attempt. This pings /health every ~10 min
+# so the instance never goes cold. Public repo → Actions minutes are free.
+#
+# NOTE: GitHub cron is best-effort and can be delayed several minutes under load, so
+# the effective interval may drift above 10 min occasionally; that is fine because a
+# single warm hit resets Render's idle timer. Reuses the same health URL variable as
+# the Daily Ops Check (vars.LIVE_BACKEND_HEALTH_URL), falling back to staging.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# Least privilege: this workflow only pings an HTTP endpoint.
+permissions:
+  contents: read
+
+# Never let a slow cold-start run overlap the next scheduled ping.
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend /health
+        env:
+          HEALTH_URL: ${{ vars.LIVE_BACKEND_HEALTH_URL || 'https://sanmitra-unified-next-staging-sg.onrender.com/health' }}
+        run: |
+          echo "Pinging $HEALTH_URL"
+          # Wait out a cold start (up to ~90s), retry transient 5xx a few times.
+          # Soft-fail: a single missed ping must not turn the Actions log red, the
+          # next scheduled run will warm it anyway.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                   --connect-timeout 15 --max-time 90 \
+                   --retry 4 --retry-delay 15 --retry-all-errors \
+                   "$HEALTH_URL" || echo "000")
+          echo "HTTP status: $code"
+          if [ "$code" = "200" ]; then
+            echo "Backend is warm."
+          else
+            echo "::warning::Keep-alive ping returned $code (cold start or transient); next run will retry."
+          fi
