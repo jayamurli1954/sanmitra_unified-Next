@@ -26,6 +26,33 @@ import AppInstallButton from '../components/AppInstallButton';
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const PLATFORM_ADMIN_ROLES = new Set(['super_admin', 'superadmin', 'platform_owner', 'platform_admin']);
 
+// The staging backend sleeps when idle and returns 503 for ~30-60s while it wakes.
+// fetchWithApiFallback retries transient 5xx only a couple of times (a few seconds),
+// which is shorter than a cold start — so we add a longer, friendlier retry loop on
+// top of it for the login action. These hints distinguish a cold start / unreachable
+// backend (worth retrying) from a real auth failure like "Invalid credentials" (not).
+const COLD_START_MAX_RETRIES = 5;
+const COLD_START_RETRY_GAP_MS = 8000;
+const COLD_START_HINTS = [
+  'connect to backend',
+  'temporarily unavailable',
+  'reach backend',
+  'waking',
+  'timed out',
+  'retrying',
+  'failed to fetch',
+  'networkerror',
+  'load failed',
+];
+
+const looksLikeColdStart = (err) => {
+  if (err?.name === 'AbortError') {
+    return true;
+  }
+  const message = String(err?.message || '').toLowerCase();
+  return COLD_START_HINTS.some((hint) => message.includes(hint));
+};
+
 const normalizeCurrentUser = (userData, email) => ({
   id: userData?.id || userData?.sub,
   email: userData?.email || email,
@@ -64,6 +91,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [waking, setWaking] = useState('');
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -199,19 +227,34 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setWaking('');
     setLoading(true);
 
     try {
+      // Cold-start backstop: performPasswordLogin throws when the backend is
+      // unreachable or still waking (503). In that case show a friendly "waking up"
+      // notice and keep retrying for up to ~1 minute, instead of failing fast. A
+      // real auth failure returns an HTTP response (not a throw), so it breaks the
+      // loop immediately and is never retried.
       let response;
-      try {
-        response = await performPasswordLogin();
-      } catch (loginErr) {
-        if (loginErr?.name === 'AbortError') {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
           response = await performPasswordLogin();
-        } else {
+          break;
+        } catch (loginErr) {
+          if (looksLikeColdStart(loginErr) && attempt < COLD_START_MAX_RETRIES) {
+            setWaking(t(
+              'login.status.wakingUp',
+              'Waking up the server — this can take up to a minute on the first try. Please wait…',
+            ));
+            await new Promise((resolve) => { setTimeout(resolve, COLD_START_RETRY_GAP_MS); });
+            continue;
+          }
           throw loginErr;
         }
       }
+
+      setWaking('');
 
       if (!response.ok) {
         const message = await parseErrorMessage(response, t('login.errors.loginFailed'));
@@ -222,8 +265,15 @@ function Login() {
       await completeLoginSession(data, email);
     } catch (err) {
       console.error('Login error:', err);
+      setWaking('');
       if (err?.name === 'AbortError') {
         setError(t('login.errors.timedOut'));
+      } else if (looksLikeColdStart(err)) {
+        // Exhausted the cold-start window — give an actionable, non-alarming hint.
+        setError(t(
+          'login.errors.serverWaking',
+          'The server is taking longer than usual to wake up. Please wait a moment and try signing in again.',
+        ));
       } else if (typeof err?.message === 'string' && err.message.trim()) {
         setError(err.message);
       } else {
@@ -366,6 +416,12 @@ function Login() {
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
+            </Alert>
+          )}
+
+          {waking && (
+            <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 2 }}>
+              {waking}
             </Alert>
           )}
 
