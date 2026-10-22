@@ -160,7 +160,14 @@ def assemble_cash_flow_forecast(
         zero_crossing = None
     else:
         runway_months = float(_q(liquidity / monthly_net_burn)) if liquidity > 0 else 0.0
-        zero_crossing = (as_of + timedelta(days=float(runway_months) * float(_DAYS_PER_MONTH))).isoformat()
+        # A tiny burn against large liquidity yields a runway of thousands of years,
+        # whose day count overflows datetime.timedelta (max ~2.7M days). Treat anything
+        # beyond ~100 years as effectively unlimited: no finite zero-crossing date.
+        days_to_zero = runway_months * float(_DAYS_PER_MONTH)
+        if days_to_zero > 36500:
+            zero_crossing = None
+        else:
+            zero_crossing = (as_of + timedelta(days=days_to_zero)).isoformat()
 
     # --- Projected month-end cash series --------------------------------- #
     # Month 1 carries the one-time WC unwind; every month carries operating_cf.
