@@ -290,6 +290,8 @@ function installEventHandlers() {
       );
     } else if (businessAction === "refresh-financial-health") {
       deps.loadFinancialHealth();
+    } else if (businessAction === "refresh-cash-flow-forecast") {
+      deps.loadCashFlowForecast();
     } else if (businessAction === "ca-doc-status") {
       deps.updateCaPracticeDocumentStatus(
         button.getAttribute("data-document-id") || "",

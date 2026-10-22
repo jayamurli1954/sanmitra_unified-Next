@@ -669,6 +669,13 @@ import {
 } from "./modules/workspaces/financial-health.js";
 
 import {
+  initCashFlowForecast,
+  resetCashFlowForecastState,
+  renderCashFlowForecastWorkspace,
+  loadCashFlowForecast,
+} from "./modules/workspaces/cash-flow-forecast.js";
+
+import {
   initAccountingDrilldown,
   accountingDrilldownState,
   lastAccountingDrilldown,
@@ -1573,6 +1580,7 @@ initEventHandlers({
   loadCaPracticeDocuments,
   loadDimensionReport,
   loadFinancialHealth,
+  loadCashFlowForecast,
   loadHrFnf,
   loadHrLeave,
   loadHrRunSlips,
@@ -2153,6 +2161,7 @@ initBusinessWorkspace({
   renderBusinessDebitNoteWorkspace,
   renderBusinessCoaWorkspace,
   renderFinancialHealthWorkspace,
+  renderCashFlowForecastWorkspace,
   renderHrWorkspace,
   renderManufacturingWorkspace,
   renderDashboardPreview,
@@ -2659,6 +2668,17 @@ initAccountingDrilldown({
 });
 
 initFinancialHealth({
+  escapeHtml,
+  formatCurrency,
+  setLoginStatus,
+  getApiOutput: () => apiOutput,
+  getCurrentExperience: () => currentExperience,
+  getActiveBusinessWorkspace: () => activeBusinessWorkspace,
+  getDashboardPreview: () => dashboardPreview,
+  renderBusinessWorkspace: () => renderBusinessWorkspace(),
+});
+
+initCashFlowForecast({
   escapeHtml,
   formatCurrency,
   setLoginStatus,

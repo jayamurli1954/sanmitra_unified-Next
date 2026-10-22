@@ -254,6 +254,14 @@ class Settings:
     FINANCIAL_HEALTH_AI_MODEL = os.getenv("FINANCIAL_HEALTH_AI_MODEL", "claude-haiku-4-5").strip()
     FINANCIAL_HEALTH_AI_MAX_TOKENS = int(os.getenv("FINANCIAL_HEALTH_AI_MAX_TOKENS", "400"))
 
+    # MitraBooks Cash Flow Forecast — AI narration of the runway/burn figures.
+    # Same guardrail as Financial Health: every figure is computed deterministically
+    # from the ledger (dashboard + AR/AP aging); the model only rewrites prose.
+    # Reuses ANTHROPIC_API_KEY / ANTHROPIC_API_BASE.
+    CASH_FLOW_AI_ENABLED = os.getenv("CASH_FLOW_AI_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    CASH_FLOW_AI_MODEL = os.getenv("CASH_FLOW_AI_MODEL", "claude-haiku-4-5").strip()
+    CASH_FLOW_AI_MAX_TOKENS = int(os.getenv("CASH_FLOW_AI_MAX_TOKENS", "400"))
+
     # OfficeMitra AI — thin orchestration layer (replaceable providers; ADR-006).
     OFFICEMITRA_AI_ENABLED = os.getenv("OFFICEMITRA_AI_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     OFFICEMITRA_AI_PROVIDER = os.getenv("OFFICEMITRA_AI_PROVIDER", "claude").strip().lower()

@@ -28,6 +28,7 @@ from app.db.postgres import get_async_session
 from app.modules.business import allocation_service
 from app.modules.business import data_health as data_health_module
 from app.modules.business import export_governance
+from app.modules.business import cash_flow_forecast
 from app.modules.business import financial_health
 from app.modules.business import mis as mis_module
 from app.modules.business import report_export
@@ -82,6 +83,37 @@ async def business_financial_health(
         return await financial_health.build_financial_health(
             session, tenant_id=context.tenant_id, app_key=context.app_key,
             accounting_entity_id=accounting_entity_id, as_of=as_of, narrate=narrate,
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/cash-flow-forecast")
+async def business_cash_flow_forecast(
+    as_of: date | None = Query(default=None),
+    horizon_months: int = Query(default=6, ge=1, le=24),
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    narrate: bool = Query(default=True),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Cash Flow Forecast: a ledger-backed short-horizon cash projection, runway and
+    burn-rate breakdown, plus an optional AI narrative.
+
+    Every figure is computed deterministically from the posted ledger (as-of cash,
+    the FYTD income/expense run-rate, and AR/AP aging — see
+    ``cash_flow_forecast.assemble_cash_flow_forecast``). The AI narrative only
+    rewrites those figures into prose and never invents numbers. The ``assumptions``
+    in the response spell out the v1 timing model."""
+    context = _alloc_context(current_user, x_tenant_id, x_app_key, "cash flow forecast")
+    try:
+        return await cash_flow_forecast.build_cash_flow_forecast(
+            session, tenant_id=context.tenant_id, app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id, as_of=as_of,
+            horizon_months=horizon_months, narrate=narrate,
         )
     except AccountingValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

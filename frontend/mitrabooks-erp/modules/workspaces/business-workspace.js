@@ -67,6 +67,7 @@ function renderBusinessCreditNoteWorkspace(...args) { return requireDeps().rende
 function renderBusinessDebitNoteWorkspace(...args) { return requireDeps().renderBusinessDebitNoteWorkspace(...args); }
 function renderBusinessCoaWorkspace(...args) { return requireDeps().renderBusinessCoaWorkspace(...args); }
 function renderFinancialHealthWorkspace(...args) { return requireDeps().renderFinancialHealthWorkspace(...args); }
+function renderCashFlowForecastWorkspace(...args) { return requireDeps().renderCashFlowForecastWorkspace(...args); }
 function renderHrWorkspace(...args) { return requireDeps().renderHrWorkspace(...args); }
 function renderOfficeAiWorkspace(...args) { return requireDeps().renderOfficeAiWorkspace(...args); }
 function renderManufacturingWorkspace(...args) { return requireDeps().renderManufacturingWorkspace(...args); }
@@ -191,6 +192,9 @@ export function renderBusinessWorkspace() {
   }
   if (getActiveBusinessWorkspace() === "financial-health") {
     return renderFinancialHealthWorkspace();
+  }
+  if (getActiveBusinessWorkspace() === "cash-flow-forecast") {
+    return renderCashFlowForecastWorkspace();
   }
   if (getActiveBusinessWorkspace() === "hr") {
     return renderHrWorkspace();
@@ -366,6 +370,7 @@ export function syncBusinessNavActiveState() {
       "credit-notes": "Credit Notes",
       "debit-notes": "Debit Notes",
       "financial-health": "Financial Health",
+      "cash-flow-forecast": "Cash Flow Forecast",
       "office-ai": "OfficeMitra AI",
       "gst-returns": "GST Returns",
       "reconciliation": "Reconciliation",
