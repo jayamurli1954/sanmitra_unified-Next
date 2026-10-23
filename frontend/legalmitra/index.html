@@ -444,6 +444,57 @@
         .workspace-card.wc-wide { grid-column: span 1; }
         .day-step { min-width: 100%; border-left-width: 2px; }
       }
+
+      /* ── Watch / promo videos ───────────────────────────────────────── */
+      .legal-video-section { padding: 56px 0; }
+      .legal-video-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 22px;
+        margin-top: 28px;
+      }
+      .legal-video-card {
+        border: 1px solid rgba(231, 199, 124, 0.22);
+        border-radius: 18px;
+        background: rgba(8, 13, 25, 0.72);
+        overflow: hidden;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+      }
+      .legal-video-card video {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 9;
+        background: #0a0f1c;
+      }
+      .legal-video-meta { padding: 16px 18px 18px; }
+      .legal-video-tag {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(197, 160, 89, 0.3);
+        background: rgba(197, 160, 89, 0.1);
+        color: #e7c77c;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+      .legal-video-meta h3 {
+        margin: 0 0 6px;
+        font-size: 18px;
+        color: #f5e9cf;
+      }
+      .legal-video-meta p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: rgba(231, 199, 124, 0.72);
+      }
+      @media (max-width: 760px) {
+        .legal-video-grid { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
@@ -570,6 +621,41 @@
           <div><strong>6 Professions</strong><span>Advocates · CAs · CS · Corporate Legal · Compliance · Business</span></div>
           <div><strong>BNS/BNSS</strong><span>Grounded statutory awareness</span></div>
           <div><strong>AI + Human</strong><span>Every output requires professional review</span></div>
+        </section>
+
+        <!-- ═══════════════ 2.5 WATCH IN ACTION ═══════════════ -->
+        <section class="legal-video-section" id="watch" aria-label="LegalMitra promotional videos">
+          <div class="legal-section-heading centered">
+            <span>Watch LegalMitra in action</span>
+            <h2>See the workspace built for the new criminal laws.</h2>
+            <p>A quick look at how advocates, CAs, and corporate legal teams research, draft, and manage matters with LegalMitra.</p>
+          </div>
+          <div class="legal-video-grid">
+            <div class="legal-video-card">
+              <video controls preload="none" playsinline
+                     poster="../assets/brand/legalmitra-advocate-promo-poster.jpg">
+                <source src="../assets/brand/legalmitra-advocate-promo.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+              </video>
+              <div class="legal-video-meta">
+                <span class="legal-video-tag">Advocate story · 0:37</span>
+                <h3>Research smarter. Practice confidently.</h3>
+                <p>The new criminal laws changed everything — see instant IPC-to-BNS mapping, chamber practice, and court-ready confidence.</p>
+              </div>
+            </div>
+            <div class="legal-video-card">
+              <video controls preload="none" playsinline
+                     poster="../assets/brand/legalmitra-promo-90s-poster.jpg">
+                <source src="../assets/brand/legalmitra-promo-90s.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+              </video>
+              <div class="legal-video-meta">
+                <span class="legal-video-tag">Full feature tour · 1:32</span>
+                <h3>One workspace for every legal task.</h3>
+                <p>Source-aware research, document Q&amp;A, drafting templates, a compliance tracker, legal utilities, and trust controls — end to end.</p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- ═══════════════ 3. WHY LEGALMITRA ═══════════════ -->
