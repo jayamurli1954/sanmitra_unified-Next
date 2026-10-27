@@ -2,6 +2,9 @@
 
 This document prevents ambiguity during implementation. Treat current state as what can be relied on today from the reference backend. Treat target state as the direction to implement incrementally.
 
+CA practice competitive positioning (Marg / Tally / Zoho / ClearTax lanes vs MitraBooks + OfficeMitra): [`docs/prd/INDIAN_CA_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md`](../prd/INDIAN_CA_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md).  
+Legal practice competitive positioning (Lexis / Manupatra / SCC / LegalFirma / Zolvit lanes vs LegalMitra): [`docs/prd/INDIAN_LEGAL_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md`](../prd/INDIAN_LEGAL_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md).
+
 | Area | Current State | Target State | Foundation Gap |
 | --- | --- | --- | --- |
 | Workspace | Active work is in `D:\sanmitra_unified-Next`; reference backend is in `D:\sanmitra-backend` | All new unified work happens in `D:\sanmitra_unified-Next` | Copy/reference only what is needed; do not alter live/reference backend |

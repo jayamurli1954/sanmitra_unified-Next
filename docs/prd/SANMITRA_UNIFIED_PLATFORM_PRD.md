@@ -316,7 +316,7 @@ Deferred scope:
 
 - Production GST filing integrations, e-invoice/e-way bill APIs, bank sync, OCR/AI auto-posting, AI MIS narration, desktop SQLite, and production data migration remain out of immediate scope until a named workstream exists.
 
-Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assumptions, and implementation phases are maintained in [MitraBooks ERP Gap Matrix](MITRABOOKS_ERP_GAP_MATRIX.md).
+Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assumptions, and implementation phases are maintained in [MitraBooks ERP Gap Matrix](MITRABOOKS_ERP_GAP_MATRIX.md). Indian CA practice competitive lanes (Marg / Tally / Zoho / ClearTax vs MitraBooks + OfficeMitra) are summarized in [Indian CA Practice Software Competitive Note](INDIAN_CA_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md).
 
 ### LegalMitra
 
@@ -327,7 +327,7 @@ Detailed MitraBooks ERP scope, legacy-plan decisions, rejected desktop-era assum
 - Claude Legal Counsel provider-gated research/drafting support, with human review and source attribution.
 - Client billing integration where needed.
 
-Detailed LegalMitra enhancement scope — current vs target vs gap, multi-persona Professional Intelligence Platform direction, stage gates, and Not Now list — is maintained in [LegalMitra Professional Intelligence PRD](LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md). Implementation detail (stack, modules, code surfaces, preflight) is in [LegalMitra Architecture Specification](../architecture/LEGALMITRA_ARCHITECTURE_SPEC.md). Those documents must not override LegalMitra separation from MitraBooks ERP, Claude production gating, or Stage 1 E2E baseline rules in this PRD and `AGENTS.md`.
+Detailed LegalMitra enhancement scope — current vs target vs gap, multi-persona Professional Intelligence Platform direction, stage gates, and Not Now list — is maintained in [LegalMitra Professional Intelligence PRD](LEGALMITRA_PROFESSIONAL_INTELLIGENCE_PRD.md). Implementation detail (stack, modules, code surfaces, preflight) is in [LegalMitra Architecture Specification](../architecture/LEGALMITRA_ARCHITECTURE_SPEC.md). Competitive lanes (Lexis / Manupatra / SCC / LegalFirma / Zolvit vs LegalMitra) are summarized in [Indian Legal Practice Software Competitive Note](INDIAN_LEGAL_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md). Those documents must not override LegalMitra separation from MitraBooks ERP, Claude production gating, or Stage 1 E2E baseline rules in this PRD and `AGENTS.md`.
 
 ## Non-Functional Requirements
 

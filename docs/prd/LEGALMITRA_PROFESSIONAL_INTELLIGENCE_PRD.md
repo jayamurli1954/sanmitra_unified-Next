@@ -28,6 +28,8 @@ Advocates and law firms, Chartered Accountants and tax practitioners, Company Se
 
 Legalit and similar products are the **benchmark** for practice-management breadth and daily stickiness. LegalMitra differentiates on grounded research with citations and refusal, matter/client intelligence, proactive alerts, and multi-persona reach (Advocate / CA / CS / Corporate)—not on matching every competing screen.
 
+Market lane map (research databases vs practice OS vs marketplace): [Indian Legal Practice Software Competitive Note](INDIAN_LEGAL_PRACTICE_SOFTWARE_COMPETITIVE_NOTE.md).
+
 ### Success definition
 
 LegalMitra succeeds when professionals open it daily because it surfaces what matters, answers with traceable authority or honest refusal, and never pretends AI output is final professional advice—while adoption and trust grow before deep practice-OS breadth.
