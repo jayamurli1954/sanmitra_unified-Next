@@ -54,6 +54,7 @@ MIS pack (Excel facts) → engagement → scan findings + risk score
 - [x] No journal / invoice / GST / housing / temple writes from Review
 - [x] Tenant B cannot list Tenant A engagements *(pytest)*
 - [x] SSDV CLI is not invoked (`ssdv_cli: false`)
+- [x] Optional in-process SSDV board signals (`ssdv_inprocess: true`; `SSDV_FLAG_*` when MIS facts support board metrics; local rule mirror if `ssdv` package absent)
 - [x] Live MitraBooks ERP screens (parties, vouchers, GST, bank rec) unchanged
 
 ## Exit criteria

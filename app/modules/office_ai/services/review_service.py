@@ -90,6 +90,8 @@ async def scan_engagement(
             "rule_version": REVIEW_RULE_VERSION,
         },
     )
+    ssdv_codes = {"SSDV_FLAG_DSO", "SSDV_FLAG_CASH", "SSDV_FLAG_EQUITY", "SSDV_FLAG_PROFIT"}
+    ssdv_issue_count = sum(1 for issue in saved if str(issue.get("finding_code") or "") in ssdv_codes)
     return {
         "engagement": updated,
         "issues": saved,
@@ -98,6 +100,8 @@ async def scan_engagement(
         "data_quality_score": None,
         "engine": "review_rules",
         "ssdv_cli": False,
+        "ssdv_inprocess": True,
+        "ssdv_issue_count": ssdv_issue_count,
     }
 
 

@@ -63,12 +63,12 @@ India only. Rule-based scan. Dashboard reads cached scan results (&lt;3s). Gener
 
 ## Gap (must be built)
 
-- Module flags (default off): `office_ai.review`, `office_ai.review.working_papers`, `office_ai.review.notes`. Parent `office_ai` and `office_ai.mis` do not enable Review by themselves.
-- Engagement + SourceFile + ReviewIssue + WorkingPaper records (Mongo, tenant-scoped). Link notes to `office_ai` tasks.
-- SSDV in-process job wrapper (no CLI, no Streamlit). Review sandbox / MIS facts only.
+- Module flags (default off): `office_ai.review`, `office_ai.review.working_papers`, `office_ai.review.notes`. Parent `office_ai` and `office_ai.mis` do not enable Review by themselves. **Done** for `demo-mfg-mis` smoke.
+- SSDV in-process board red flags over MIS facts (`SSDV_FLAG_*` via `review_ssdv_signals`; prefers `ssdv.officemitra.insights.build_red_flags` when the package is importable, else a local rule mirror). No CLI, no Streamlit, no live MitraBooks ledger writes. Tally connect remains deferred. **Done**.
+- Engagement + SourceFile + ReviewIssue + WorkingPaper records (Mongo, tenant-scoped). Link notes to `office_ai` tasks. **Done**.
 - Review UI in the OfficeMitra shell (and ERP OfficeMitra panel): Review, Working papers, Review notes. **Done** behind flags.
 - Tests: tenant isolation, module gates, no live-ledger writes from ingest, finding codes stable, WP immutability after close, notes cannot leak across tenants. **Done** in `tests/test_office_ai_review.py`.
-- Remaining: operator signoff of [`docs/operations/OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md`](../operations/OFFICEMITRA_REVIEW_SMOKE_CHECKLIST.md) on local/staging `demo-mfg-mis`.
+- Remaining: re-run operator smoke on `demo-mfg-mis` after deploying this SSDV-signals change if you want live `ssdv_issue_count` confirmation.
 
 ---
 

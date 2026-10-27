@@ -240,6 +240,7 @@ def test_scan_facts_risk_score_distinct_from_quality():
     issues, score = review_scan.scan_facts(_facts())
     codes = {item["finding_code"] for item in issues}
     assert "NEGATIVE_CASH" in codes
+    assert "SSDV_FLAG_CASH" in codes
     assert "SUSPENSE_BALANCE" in codes
     assert "AR_AGING_90" in codes
     assert "AR_CONCENTRATION" in codes
@@ -247,6 +248,93 @@ def test_scan_facts_risk_score_distinct_from_quality():
     assert 0 < score <= 100
     assert all(item["ai_generated"] is False for item in issues)
     assert all(item["rule_version"] == "review_rules@1.0.0" for item in issues)
+
+
+def test_optional_ssdv_signals_board_flags_from_mis_facts():
+    from app.modules.office_ai.services import review_ssdv_signals as ssdv_sig
+
+    facts = [
+        {
+            "entity_type": "kpi",
+            "value": "150",
+            "fact_id": "kpi-dso",
+            "dimensions": {"kpi": "DSO"},
+        },
+        {
+            "entity_type": "bs_line",
+            "amount_decimal": "-5000.00",
+            "fact_id": "bs-cash",
+            "dimensions": {"line": "Cash"},
+        },
+        {
+            "entity_type": "bs_line",
+            "amount_decimal": "-100.00",
+            "fact_id": "bs-equity",
+            "dimensions": {"line": "Equity", "section": "equity"},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "10000.00",
+            "period": "2026-05",
+            "fact_id": "rev-m1",
+            "dimensions": {"line": "Revenue", "trend": True},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "2000.00",
+            "period": "2026-06",
+            "fact_id": "rev-m2",
+            "dimensions": {"line": "Revenue", "trend": True},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "1000.00",
+            "period": "2026-05",
+            "fact_id": "cogs-m1",
+            "dimensions": {"line": "COGS", "trend": True},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "3000.00",
+            "period": "2026-06",
+            "fact_id": "cogs-m2",
+            "dimensions": {"line": "COGS", "trend": True},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "1000.00",
+            "period": "2026-05",
+            "fact_id": "opex-m1",
+            "dimensions": {"line": "OPEX", "trend": True},
+        },
+        {
+            "entity_type": "pnl_line",
+            "amount_decimal": "2000.00",
+            "period": "2026-06",
+            "fact_id": "opex-m2",
+            "dimensions": {"line": "OPEX", "trend": True},
+        },
+    ]
+    issues = ssdv_sig.optional_ssdv_signals(facts)
+    codes = {item["finding_code"] for item in issues}
+    assert codes >= {"SSDV_FLAG_DSO", "SSDV_FLAG_CASH", "SSDV_FLAG_EQUITY", "SSDV_FLAG_PROFIT"}
+    assert all(item.get("source_engine") == "ssdv_board" for item in issues)
+    assert all(item["ai_generated"] is False for item in issues)
+
+    local_only = ssdv_sig._local_board_issues(ssdv_sig.extract_board_metrics(facts))
+    assert {item["finding_code"] for item in local_only} == codes
+
+
+def test_optional_ssdv_signals_empty_when_no_board_inputs():
+    from app.modules.office_ai.services import review_ssdv_signals as ssdv_sig
+
+    assert ssdv_sig.optional_ssdv_signals([]) == []
+    assert (
+        ssdv_sig.optional_ssdv_signals(
+            [{"entity_type": "party", "amount_decimal": "1", "dimensions": {"type": "customer"}}]
+        )
+        == []
+    )
 
 
 @pytest.mark.asyncio
@@ -284,6 +372,8 @@ async def test_scan_and_papers_are_tenant_scoped(fake_review_mongo):
         user=user,
     )
     assert scanned["ssdv_cli"] is False
+    assert scanned["ssdv_inprocess"] is True
+    assert scanned["ssdv_issue_count"] >= 1
     assert scanned["data_quality_score"] is None
     assert scanned["engagement"]["engagement_risk_score"] is not None
     issues = await review_store.list_issues(tenant_id="tenant-a", engagement_id=engagement["id"])

@@ -1,7 +1,7 @@
 """Deterministic Review findings from MIS facts (ADR-015).
 
-Does not post journals. Does not call SSDV CLI. Optional in-process SSDV import
-is a no-op when the package is not installed.
+Does not post journals. Does not call SSDV CLI. Optional in-process SSDV board
+red flags (or a local mirror of those rules) append SSDV_FLAG_* issues.
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.modules.office_ai.models import REVIEW_RULE_VERSION
+from app.modules.office_ai.services.review_ssdv_signals import optional_ssdv_signals
 
 SEVERITY_WEIGHTS = {"high": 25, "medium": 10, "low": 4}
 
@@ -226,10 +227,6 @@ def _flag_concentration(
         )
 
 
-def _optional_ssdv_signals(_facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """In-process SSDV hook. Never invoke the SSDV CLI. Missing package is a no-op."""
-    try:
-        import ssdv  # noqa: F401
-    except Exception:
-        return []
-    return []
+def _optional_ssdv_signals(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """In-process SSDV board red flags (or local mirror). Never invokes the SSDV CLI."""
+    return optional_ssdv_signals(facts)
