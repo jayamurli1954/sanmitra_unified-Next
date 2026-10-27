@@ -76,3 +76,23 @@ docs/ITC_REVERSAL_RULE37_PLAN.md
 docs/reviews/SECURITY_REMEDIATION_PR_PLAN.md
 docs/reviews/MITRABOOKS_REVIEW_2026-06-26.md
 docs/operations/MITRABOOKS_PENDING_GAP_TODO.md
+
+# Temp / scratch files (local only)
+tmp_*
+*.tmp
+tmp_docx_imgs/
+~$*
+
+# Generated outputs & media (local only)
+/outputs/
+/frontend/outputs/
+/presentations/
+
+# Repaired/temp Office docs & Windows shortcuts
+*.repaired.docx
+*.lnk
+
+# Local tooling / caches
+/graphify-out/
+/.playwright-cli/
+/.gemini/
