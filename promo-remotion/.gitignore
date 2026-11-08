@@ -1,0 +1,6 @@
+node_modules/
+out/
+.remotion/
+public/vo/
+public/music.mp3
+public/recordings/

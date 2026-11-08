@@ -1,0 +1,25 @@
+{
+  "name": "officemitra-ssdv-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion promo video for OfficeMitra + SSDV (SanMitra Smart Data Validator).",
+  "scripts": {
+    "dev": "remotion studio",
+    "studio": "remotion studio",
+    "render": "remotion render OfficeMitraPromo out/officemitra_promo_landscape.mp4",
+    "render:vertical": "remotion render OfficeMitraPromoVertical out/officemitra_promo_vertical.mp4",
+    "vo": "python scripts/generate_vo.py",
+    "upgrade": "remotion upgrade"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.4.5"
+  }
+}
