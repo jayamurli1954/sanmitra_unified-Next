@@ -245,6 +245,7 @@ from app.modules.business.routes import itc as _itc_routes  # noqa: E402,F401
 from app.modules.business.routes import credit_debit_notes as _credit_debit_notes_routes  # noqa: E402,F401
 from app.modules.business.routes import gst_settlement as _gst_settlement_routes  # noqa: E402,F401
 from app.modules.business.routes import bank_recon_routes as _bank_recon_routes  # noqa: E402,F401
+from app.modules.business.routes import capture as _capture_routes  # noqa: E402,F401
 
 # Test / monkeypatch surface: handlers live in routes/*, but phase2 patches these
 # names on the router facade (same pattern as service.py domain re-exports).

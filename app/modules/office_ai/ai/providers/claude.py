@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from app.config import get_settings
-from app.modules.office_ai.ai.provider_base import ProviderResult
+from app.modules.office_ai.ai.provider_base import ProviderResult, VisionImage
 
 
 def _estimate_cost(tokens_in: int | None, tokens_out: int | None) -> str | None:
@@ -36,6 +36,42 @@ class ClaudeProvider:
         user: str,
         max_tokens: int | None = None,
     ) -> ProviderResult:
+        return await self._send(
+            system=system,
+            content=user,
+            max_tokens=max_tokens,
+        )
+
+    async def complete_vision(
+        self,
+        *,
+        system: str,
+        user: str,
+        images: list[VisionImage],
+        max_tokens: int | None = None,
+    ) -> ProviderResult:
+        # Claude messages take a content array of image blocks + a text block.
+        content: list[dict] = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": image.media_type,
+                    "data": image.data_b64,
+                },
+            }
+            for image in images
+        ]
+        content.append({"type": "text", "text": user})
+        return await self._send(system=system, content=content, max_tokens=max_tokens)
+
+    async def _send(
+        self,
+        *,
+        system: str,
+        content,
+        max_tokens: int | None = None,
+    ) -> ProviderResult:
         settings = get_settings()
         model = settings.OFFICEMITRA_AI_MODEL
         token_cap = max_tokens or settings.OFFICEMITRA_AI_MAX_TOKENS
@@ -44,7 +80,7 @@ class ClaudeProvider:
             "max_tokens": token_cap,
             "temperature": 0.2,
             "system": system,
-            "messages": [{"role": "user", "content": user}],
+            "messages": [{"role": "user", "content": content}],
         }
         headers = {
             "x-api-key": settings.ANTHROPIC_API_KEY,

@@ -231,7 +231,7 @@ MITRABOOKS_PRICING = ProductPricing(
             features=(
                 "Single-user, single-company accounting",
                 "GST preparation reports and TDS/TCS tracking",
-                "Basic document upload queue with provider-gated OCR allowance",
+                "Basic document upload queue; AI OCR extraction uses your own API key (bring-your-own-key)",
                 "Email support",
             ),
         ),
@@ -271,7 +271,7 @@ MITRABOOKS_PRICING = ProductPricing(
             features=(
                 "Regular business multi-company workspace",
                 "Higher business document limits",
-                "AI MIS, document upload, provider-gated OCR extraction, and reconciliation assistance with review",
+                "AI MIS, document upload, local OCR extraction (AI boost via your own API key, BYOK), and reconciliation assistance with review",
                 "Priority support",
             ),
         ),
@@ -336,7 +336,7 @@ MITRABOOKS_CA_PRACTICE_PRICING = ProductPricing(
             features=(
                 "Full CA/bookkeeper multi-user, multi-company workspace",
                 "Up to 50 client companies",
-                "Provider-gated OCR subject to fair-use and provider controls",
+                "Local OCR extraction; optional AI boost via your connected API key — you control usage and cost with your provider",
                 "Priority support and onboarding review",
             ),
         ),
