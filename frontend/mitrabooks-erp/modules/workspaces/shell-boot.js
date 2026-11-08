@@ -70,8 +70,17 @@ export async function runChecks() {
   const activeAppKey = getExperienceAppKeys()[getCurrentExperience()] || getAppKey();
   const tokenAtStart = getAccessToken();
   const health = await loadHealth(activeAppKey);
-  healthPill.textContent = statusLabel(health);
-  healthPill.className = `pill ${health.ok ? "ok" : "danger"}`;
+  // Diagnostic pill: hide on a healthy backend (no "HTTP 200" clutter in the UI);
+  // surface the status only when something is actually wrong.
+  if (health.ok) {
+    healthPill.textContent = "";
+    healthPill.className = "pill ok";
+    healthPill.hidden = true;
+  } else {
+    healthPill.textContent = statusLabel(health);
+    healthPill.className = "pill danger";
+    healthPill.hidden = false;
+  }
 
   const modules = await loadModules(activeAppKey);
   if (modules.ok) {
