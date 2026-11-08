@@ -189,6 +189,139 @@ async def get_item(
     return {"item": item}
 
 
+_MATERIALIZABLE = {models.STATUS_DRAFTED, models.STATUS_NEEDS_REVIEW}
+_PURCHASE_KINDS = {"purchase_bill", "expense_voucher"}
+
+
+def _as_date(value):
+    import datetime as _dt
+
+    if isinstance(value, _dt.date):
+        return value
+    try:
+        return _dt.date.fromisoformat(str(value)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _synth_line(fields: dict[str, Any]) -> dict[str, Any]:
+    """One purchase-bill line from the captured fields. The reviewer verifies the
+    DRAFT bill in MitraBooks afterwards, so a single synthesized line is fine."""
+    from decimal import Decimal, InvalidOperation
+
+    def _dec(v, default="0"):
+        try:
+            return Decimal(str(v))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    taxable = _dec(fields.get("taxable_value"), "0")
+    total = _dec(fields.get("total_amount"), "0")
+    tax = _dec(fields.get("tax_amount"), "0")
+    base = taxable if taxable > 0 else total
+    gst_rate = Decimal("0")
+    if taxable > 0 and tax > 0:
+        gst_rate = (tax / taxable * Decimal("100")).quantize(Decimal("0.01"))
+        if gst_rate > Decimal("100"):
+            gst_rate = Decimal("0")
+    desc = "Imported from captured document"
+    raw_lines = fields.get("line_items")
+    if isinstance(raw_lines, list) and raw_lines and isinstance(raw_lines[0], dict):
+        d = str(raw_lines[0].get("description") or "").strip()
+        if d:
+            desc = d[:300]
+    return {"description": desc, "quantity": Decimal("1"), "rate": base, "gst_rate": gst_rate}
+
+
+async def materialize_capture(
+    session,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    capture_id: str,
+    vendor_party_id: str,
+    is_inter_state: bool = False,
+    is_reverse_charge: bool | None = None,
+    expense_account_code: str = "51001",
+    bill_number: str | None = None,
+    bill_date: str | None = None,
+    actor: str,
+) -> dict[str, Any]:
+    """Turn an approved CaptureItem into a DRAFT purchase bill in the right client's
+    books. It creates a draft only — the human posts it through the normal purchase-
+    bill approval flow, so capture never writes to the ledger itself. Idempotent per
+    capture_id. Purchase-type documents only in this slice."""
+    import datetime as _dt
+
+    from app.modules.business.schemas import PurchaseBillCreateRequest
+
+    item = await store.get(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id, capture_id=capture_id
+    )
+    if item is None:
+        raise CaptureError(f"Capture item not found: {capture_id}")
+    if item.get("status") == models.STATUS_MATERIALIZED and item.get("linked_document_id"):
+        return {"item": item, "document": None, "already_materialized": True}
+    if item.get("status") not in _MATERIALIZABLE:
+        raise CaptureError(f"Capture item is not ready to materialize (status: {item.get('status')})")
+    if item.get("client_binding_method") == "needs_client":
+        raise CaptureError("Assign a client to this document before materializing")
+    if str(item.get("doc_kind") or "") not in _PURCHASE_KINDS:
+        raise CaptureError("Only purchase bills can be materialized in this slice")
+
+    fields = item.get("extracted_fields") or {}
+    rcm = bool(item.get("possible_rcm")) if is_reverse_charge is None else bool(is_reverse_charge)
+    payload = PurchaseBillCreateRequest(
+        vendor_party_id=vendor_party_id,
+        bill_number=(bill_number or str(fields.get("invoice_number") or "").strip() or f"CAP-{capture_id[:8]}")[:120],
+        bill_date=_as_date(bill_date) or _as_date(fields.get("invoice_date")) or _dt.date.today(),
+        is_inter_state=bool(is_inter_state),
+        is_reverse_charge=rcm,
+        expense_account_code=expense_account_code or "51001",
+        line_items=[_synth_line(fields)],
+        save_as_draft=True,  # land as a DRAFT; the human posts via the normal flow
+        accounting_entity_id=accounting_entity_id,
+    )
+
+    from app.modules.business.services.purchase_bills import create_purchase_bill
+
+    bill = await create_purchase_bill(
+        session,
+        tenant_id=tenant_id,
+        app_key=app_key,
+        created_by=actor,
+        payload=payload,
+        idempotency_key=f"capture:{capture_id}",
+    )
+
+    updated = await store.update(
+        tenant_id=tenant_id, app_key=app_key, accounting_entity_id=accounting_entity_id, capture_id=capture_id,
+        updates={
+            "status": models.STATUS_MATERIALIZED,
+            "linked_document_type": "purchase_bill",
+            "linked_document_id": bill.get("bill_id"),
+            "linked_document_number": bill.get("bill_number"),
+        },
+    )
+    await log_audit_event(
+        tenant_id=tenant_id,
+        user_id=actor,
+        product=app_key,
+        action="business.capture.materialize",
+        entity_type="capture_item",
+        entity_id=capture_id,
+        new_value={
+            "accounting_entity_id": accounting_entity_id,
+            "linked_document_type": "purchase_bill",
+            "linked_document_id": bill.get("bill_id"),
+            "bill_number": bill.get("bill_number"),
+            "status": bill.get("status"),
+        },
+    )
+    return {"item": updated, "document": bill, "already_materialized": False}
+
+
 async def reject_item(
     *, tenant_id: str, app_key: str, accounting_entity_id: str, capture_id: str, reason: str, actor: str
 ) -> dict[str, Any]:

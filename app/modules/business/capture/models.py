@@ -18,6 +18,7 @@ STATUS_EXTRACTED = "extracted"
 STATUS_DRAFTED = "drafted"
 STATUS_NEEDS_REVIEW = "needs_review"
 STATUS_NEEDS_CLIENT = "needs_client"  # client/entity could not be bound — a human must assign
+STATUS_MATERIALIZED = "materialized"  # produced a draft typed document (bill/invoice) for the normal flow
 STATUS_DUPLICATE = "duplicate"
 STATUS_REJECTED = "rejected"
 

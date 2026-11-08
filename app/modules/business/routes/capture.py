@@ -6,10 +6,13 @@ Upload a bill → LLM-vision extract → validate → score → it lands as a dr
 needs_review CaptureItem. No ledger posting happens here.
 """
 from fastapi import Body, Depends, File, Header, HTTPException, Query, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounting.service import AccountingValidationError
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.tenants.app_resolvers import AppTenantContext
+from app.db.postgres import get_async_session
 from app.modules.business.capture import gating
 from app.modules.business.capture import service as capture_service
 from app.modules.business.router import _created_by, router
@@ -55,7 +58,7 @@ async def capture_upload(
 
 @router.get("/capture/items")
 async def capture_list(
-    status: str | None = Query(default=None, pattern="^(captured|drafted|needs_review|needs_client|duplicate|rejected)$"),
+    status: str | None = Query(default=None, pattern="^(captured|drafted|needs_review|needs_client|materialized|duplicate|rejected)$"),
     limit: int = Query(default=100, ge=1, le=500),
     context: AppTenantContext = Depends(gating.require_capture_context("capture list")),
 ):
@@ -104,6 +107,43 @@ async def capture_reject(
         )
     except capture_service.CaptureError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/capture/items/{capture_id}/materialize")
+async def capture_materialize(
+    capture_id: str,
+    vendor_party_id: str = Body(..., embed=True),
+    is_inter_state: bool = Body(default=False, embed=True),
+    is_reverse_charge: bool | None = Body(default=None, embed=True),
+    expense_account_code: str = Body(default="51001", embed=True),
+    bill_number: str | None = Body(default=None, embed=True),
+    bill_date: str | None = Body(default=None, embed=True),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    context: AppTenantContext = Depends(
+        gating.require_capture_context("capture materialize", gating.CAPTURE_MANAGE_ROLES)
+    ),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        return await capture_service.materialize_capture(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=context.accounting_entity_id,
+            capture_id=capture_id,
+            vendor_party_id=vendor_party_id,
+            is_inter_state=is_inter_state,
+            is_reverse_charge=is_reverse_charge,
+            expense_account_code=expense_account_code,
+            bill_number=bill_number,
+            bill_date=bill_date,
+            actor=_created_by(current_user),
+        )
+    except capture_service.CaptureError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/capture/access")
