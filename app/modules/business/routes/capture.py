@@ -55,7 +55,7 @@ async def capture_upload(
 
 @router.get("/capture/items")
 async def capture_list(
-    status: str | None = Query(default=None, pattern="^(captured|drafted|needs_review|duplicate|rejected)$"),
+    status: str | None = Query(default=None, pattern="^(captured|drafted|needs_review|needs_client|duplicate|rejected)$"),
     limit: int = Query(default=100, ge=1, le=500),
     context: AppTenantContext = Depends(gating.require_capture_context("capture list")),
 ):

@@ -17,10 +17,11 @@ STATUS_CAPTURED = "captured"
 STATUS_EXTRACTED = "extracted"
 STATUS_DRAFTED = "drafted"
 STATUS_NEEDS_REVIEW = "needs_review"
+STATUS_NEEDS_CLIENT = "needs_client"  # client/entity could not be bound — a human must assign
 STATUS_DUPLICATE = "duplicate"
 STATUS_REJECTED = "rejected"
 
-OPEN_STATUSES = {STATUS_DRAFTED, STATUS_NEEDS_REVIEW}
+OPEN_STATUSES = {STATUS_DRAFTED, STATUS_NEEDS_REVIEW, STATUS_NEEDS_CLIENT}
 
 
 def utcnow() -> datetime:
