@@ -103,4 +103,11 @@ describe('panchangInfographic model', () => {
       .toBe('2:00 PM');
     expect(buildPanchangInfographicModel(null)).toBeNull();
   });
+
+  it('includes MandirMitra URL and disclaimer in footer model', () => {
+    const model = buildPanchangInfographicModel(sample);
+    expect(model.footer).toBe('www.mandirmitra.sanmitratech.in');
+    expect(model.website).toBe('www.mandirmitra.sanmitratech.in');
+    expect(model.disclaimer).toBe('For guidance only — confirm with temple tradition before muhurta use.');
+  });
 });
