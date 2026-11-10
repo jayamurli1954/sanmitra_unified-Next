@@ -10,15 +10,15 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import DownloadIcon from '@mui/icons-material/Download';
-import ShareIcon from '@mui/icons-material/Share';
 import {
   buildWhatsAppShareUrl,
   formatPanchangWhatsAppMessage,
 } from '../utils/panchangWhatsAppMessage';
 import {
-  canvasToPngBlob,
+  WHATSAPP_SHARE_MESSAGES,
   createPanchangInfographic,
-  panchangInfographicFileName,
+  downloadPanchangInfographic,
+  sharePanchangInfographicToWhatsApp,
 } from '../utils/panchangInfographic';
 
 /**
@@ -53,53 +53,30 @@ function PanchangWhatsAppCard({ data }) {
 
   const flash = (message) => {
     setCopyStatus(message);
-    window.setTimeout(() => setCopyStatus(''), 3000);
+    window.setTimeout(() => setCopyStatus(''), 6000);
   };
 
-  const infographicFile = async () => {
-    const current = infographicRef.current;
-    if (!current) return null;
-    const blob = await canvasToPngBlob(current.canvas);
-    if (!blob) return null;
-    return new File([blob], panchangInfographicFileName(current.model), { type: 'image/png' });
-  };
-
-  const handleDownloadImage = async () => {
-    const file = await infographicFile();
+  const handleDownloadImage = () => {
+    const file = infographicRef.current?.file;
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    flash('Image downloaded — attach it in WhatsApp');
+    downloadPanchangInfographic(file);
+    flash('Image downloaded');
   };
 
   const handleShareImage = async () => {
-    const file = await infographicFile();
-    if (!file) return;
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Panchang' });
-        return;
-      } catch (err) {
-        if (err?.name === 'AbortError') return;
-      }
-    }
-    await handleDownloadImage();
+    const outcome = await sharePanchangInfographicToWhatsApp(infographicRef.current?.file);
+    const message = WHATSAPP_SHARE_MESSAGES[outcome];
+    if (message) flash(message);
   };
 
   const handleCopyImage = async () => {
-    const file = await infographicFile();
+    const file = infographicRef.current?.file;
     if (!file) return;
     try {
       await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': file })]);
       flash('Image copied — paste it into WhatsApp');
     } catch (err) {
-      await handleDownloadImage();
+      handleDownloadImage();
     }
   };
 
@@ -170,11 +147,11 @@ function PanchangWhatsAppCard({ data }) {
             <Button
               fullWidth
               variant="contained"
-              startIcon={<ShareIcon />}
+              startIcon={<WhatsAppIcon />}
               onClick={handleShareImage}
               sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1ebe57' } }}
             >
-              Share image
+              Share on WhatsApp
             </Button>
             <Button fullWidth variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownloadImage}>
               Download
@@ -220,7 +197,7 @@ function PanchangWhatsAppCard({ data }) {
           onClick={handleOpenWhatsApp}
           sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1ebe57' } }}
         >
-          Open WhatsApp
+          Send as text
         </Button>
         <Button
           fullWidth

@@ -489,10 +489,78 @@ export function canvasToPngBlob(canvas) {
   });
 }
 
-/** Render the card for an API payload; resolves to { canvas, model } or null. */
+/**
+ * Render the card for an API payload; resolves to { canvas, model, file } or
+ * null. The PNG `file` is prepared up front so a share button can hand it to
+ * the browser immediately, while the click still counts as a user gesture.
+ */
 export async function createPanchangInfographic(data) {
   const model = buildPanchangInfographicModel(data);
   if (!model || !model.rows.length) return null;
   await ensurePanchangFonts();
-  return { canvas: renderPanchangInfographic(model), model };
+  const canvas = renderPanchangInfographic(model);
+  let file = null;
+  try {
+    const blob = await canvasToPngBlob(canvas);
+    if (blob) file = new File([blob], panchangInfographicFileName(model), { type: 'image/png' });
+  } catch (err) {
+    file = null;
+  }
+  return { canvas, model, file };
 }
+
+export const WHATSAPP_WEB_URL = 'https://web.whatsapp.com/';
+
+export function downloadPanchangInfographic(file) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Send the card image to WhatsApp.
+ *
+ * WhatsApp has no link that attaches an image, so:
+ * - where the browser can share files (phones, and desktop browsers with a
+ *   share sheet) the system share sheet opens with the image - pick WhatsApp;
+ * - otherwise the image is copied to the clipboard and WhatsApp Web opens, so
+ *   it only needs to be pasted into the chat;
+ * - if the clipboard is not available either, the image is downloaded and
+ *   WhatsApp Web opens so it can be attached.
+ *
+ * @returns {Promise<'shared'|'cancelled'|'copied'|'downloaded'|'unavailable'>}
+ */
+export async function sharePanchangInfographicToWhatsApp(file) {
+  if (!file) return 'unavailable';
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Panchang' });
+      return 'shared';
+    } catch (err) {
+      if (err?.name === 'AbortError') return 'cancelled';
+    }
+  }
+  let outcome = 'copied';
+  try {
+    // Copy before opening the new tab: the clipboard needs this page focused.
+    await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': file })]);
+  } catch (err) {
+    downloadPanchangInfographic(file);
+    outcome = 'downloaded';
+  }
+  window.open(WHATSAPP_WEB_URL, '_blank', 'noopener,noreferrer');
+  return outcome;
+}
+
+export const WHATSAPP_SHARE_MESSAGES = {
+  shared: '',
+  cancelled: '',
+  copied: 'Image copied. WhatsApp is opening — open a chat and paste (Ctrl+V).',
+  downloaded: 'Image downloaded. WhatsApp is opening — attach the downloaded image in a chat.',
+  unavailable: 'The image is not ready yet — try again in a moment.',
+};
