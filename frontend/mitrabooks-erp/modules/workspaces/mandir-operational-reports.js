@@ -10,6 +10,10 @@ import {
   buildWhatsAppShareUrl,
   formatPanchangWhatsAppMessage,
 } from "../../../shared/panchang-whatsapp-message.js";
+import {
+  createPanchangInfographic,
+  panchangInfographicFileName,
+} from "../../../shared/panchang-infographic.js";
 
 /** @type {Record<string, Function> | null} */
 let deps = null;
@@ -38,6 +42,30 @@ export function panchangTimeRange(value) {
   const start = value.start || value.start_time || "";
   const end = value.end || value.end_time || "";
   return start && end ? `${start} - ${end}` : start || end || "--";
+}
+
+// The panel is rendered as an HTML string, so the infographic image is filled
+// in on the next frame, once the placeholder <img> is in the document.
+function scheduleMandirPanchangInfographic(payload) {
+  if (typeof window === "undefined" || !payload) return;
+  window.requestAnimationFrame(async () => {
+    try {
+      const result = await createPanchangInfographic(payload);
+      const image = document.getElementById("mandir-panchang-infographic");
+      const link = document.getElementById("mandir-panchang-infographic-download");
+      if (!result || !image) return;
+      const url = result.canvas.toDataURL("image/png");
+      image.src = url;
+      image.hidden = false;
+      if (link) {
+        link.href = url;
+        link.download = panchangInfographicFileName(result.model);
+        link.hidden = false;
+      }
+    } catch (error) {
+      console.error("Panchang infographic failed", error);
+    }
+  });
 }
 
 export function renderMandirPanchang(payload = getLastMandirPanchang()) {
@@ -97,6 +125,7 @@ export function renderMandirPanchang(payload = getLastMandirPanchang()) {
   ];
   const whatsappMessage = formatPanchangWhatsAppMessage(payload);
   const whatsappUrl = buildWhatsAppShareUrl(whatsappMessage);
+  scheduleMandirPanchangInfographic(payload);
 
   return `
     <div class="verification-panel" id="mandir-panchang-panel">
@@ -111,10 +140,14 @@ export function renderMandirPanchang(payload = getLastMandirPanchang()) {
         <div class="preview-heading compact">
           <div>
             <h4>WhatsApp message card</h4>
-            <p class="muted">One-page EN / ಕನ್ನಡ / संस्कृत card for vertical phone share. Full table below is unchanged.</p>
+            <p class="muted">English / ಕನ್ನಡ / संस्कृतम् infographic for phone share, with the text version below.</p>
           </div>
         </div>
-        <pre id="mandir-panchang-whatsapp-text" style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.45;max-height:360px;overflow:auto;background:#fff;padding:0.75rem;border:1px solid #e0e0e0;border-radius:8px;margin:0;">${escapeHtml(whatsappMessage)}</pre>
+        <img id="mandir-panchang-infographic" alt="Panchang infographic" hidden style="width:100%;display:block;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:0.5rem;" />
+        <div style="margin-bottom:0.75rem;">
+          <a class="button" id="mandir-panchang-infographic-download" hidden>Download image</a>
+        </div>
+        <pre id="mandir-panchang-whatsapp-text" style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.45;max-height:220px;overflow:auto;background:#fff;padding:0.75rem;border:1px solid #e0e0e0;border-radius:8px;margin:0;">${escapeHtml(whatsappMessage)}</pre>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;align-items:center;">
           <a class="button" href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
           <span class="muted">Or select the card text and copy.</span>

@@ -68,28 +68,41 @@ def jd_to_datetime(jd: float) -> datetime:
     return dt_ut + timedelta(hours=5, minutes=30)
 
 def find_transition(jd_start: float, target_val: float, get_current_val_func) -> float:
-    """Generic binary search for transition time"""
-    jd = jd_start
-    step = 0.01  # ~15 minutes
-    for _ in range(200):
-        current = get_current_val_func(jd)
-        
-        # Normalize diff to [-180, 180]
-        diff = (target_val - current + 360) % 360
-        if diff > 180: diff -= 360
+    """Find the JD at which a cyclic (0-360) quantity reaches ``target_val``.
 
-        if abs(diff) < 0.0001:
-            return jd
+    Brackets the crossing by stepping from ``jd_start`` and then bisects. The
+    earlier damped-step search could travel at most ~12 hours, so a limb ending
+    later than that (most tithis right after they begin) got a bogus end time.
+    """
 
-        if diff > 0:
-            jd += step
-        else:
-            jd -= step
+    def signed_gap(jd: float) -> float:
+        gap = (target_val - get_current_val_func(jd) + 360.0) % 360.0
+        return gap - 360.0 if gap > 180.0 else gap
 
-        # Reduce step size
-        step *= 0.5 if abs(diff) < 0.1 else 0.98
+    prev_jd = jd_start
+    prev_gap = signed_gap(prev_jd)
+    if abs(prev_gap) < 1e-7:
+        return jd_start
 
-    return jd
+    step = 0.02 if prev_gap > 0 else -0.02  # ~29 minutes
+    for _ in range(3000):  # ~60 days
+        curr_jd = prev_jd + step
+        curr_gap = signed_gap(curr_jd)
+        crossed = (prev_gap > 0) != (curr_gap > 0) and abs(curr_gap - prev_gap) < 180.0
+        if crossed:
+            lo, hi = prev_jd, curr_jd
+            lo_gap = prev_gap
+            for _ in range(50):
+                mid = (lo + hi) / 2.0
+                mid_gap = signed_gap(mid)
+                if (mid_gap > 0) == (lo_gap > 0):
+                    lo, lo_gap = mid, mid_gap
+                else:
+                    hi = mid
+            return (lo + hi) / 2.0
+        prev_jd, prev_gap = curr_jd, curr_gap
+
+    return jd_start
 
 def find_absolute_transition(jd_start: float, body_id: int, target_deg: float) -> float:
     """Find when a planet reaches a specific absolute longitude"""

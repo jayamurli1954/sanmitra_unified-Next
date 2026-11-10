@@ -211,5 +211,6 @@ def get_karana_data(jd: float) -> Dict:
         "first_half": karanas[0],
         "second_half": karanas[1],
         "is_bhadra": karanas[0]["is_bhadra"] or karanas[1]["is_bhadra"],
+        "end_time": end_time_dt.strftime("%Y-%m-%d %H:%M:%S"),
         "end_time_formatted": end_time_dt.strftime("%I:%M %p"),
     }

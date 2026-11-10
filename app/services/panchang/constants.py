@@ -51,7 +51,10 @@ SAMVATSARAS = [
 ]
 
 VARAS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-VARA_SANSKRIT = ["रविवार", "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार"]
+VARA_SANSKRIT = [
+    "रविवासरः", "सोमवासरः", "मङ्गलवासरः", "बुधवासरः",
+    "गुरुवासरः", "शुक्रवासरः", "शनिवासरः",
+]
 VARA_DEITIES = [
     "Surya (Sun)", "Chandra (Moon)", "Mangal (Mars)", "Budh (Mercury)",
     "Brihaspati (Jupiter)", "Shukra (Venus)", "Shani (Saturn)"

@@ -14,7 +14,11 @@ from .calendrical import *
 from .timings import *
 from .qualities import *
 from .utils import *
-from .festivals import detect_day_festivals, festival_label_map
+from .festivals import (
+    detect_day_festivals,
+    detect_festivals_for_civil_day,
+    festival_label_map,
+)
 
 class PanchangService:
     """
@@ -575,14 +579,10 @@ class PanchangService:
         tithi["quality"] = self.get_tithi_quality(tithi["name"])
         nakshatra["quality"] = self.get_nakshatra_quality(nakshatra["name"])
 
-        festivals = self.detect_special_days(
-            tithi,
-            vara,
-            nakshatra,
-            jd=jd,
-            lunar_month=calendar_info.get("lunar_month"),
-            lunar_month_purnimanta=calendar_info.get("lunar_month_purnimanta"),
-        )
+        # Festivals belong to the civil day (tithi at sunrise / the festival's
+        # own kala), not to the instant of the request - otherwise a festival
+        # vanishes as soon as its tithi ends in the afternoon.
+        festivals = detect_festivals_for_civil_day(dt, lat, lon)
         day_periods = self.get_day_periods(sun_times["sunrise"], sun_times["sunset"], day_of_week)
         south_india_special = self._build_south_india_special(festivals, karana, yoga, nakshatra)
         special_notes = self._build_special_notes(tithi, nakshatra, yoga, festivals=festivals)

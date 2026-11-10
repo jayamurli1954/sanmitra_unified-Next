@@ -18,7 +18,7 @@ const TITHI_I18N = {
   Dwadashi: { kn: 'ದ್ವಾದಶಿ', sa: 'द्वादशी' },
   Trayodashi: { kn: 'ತ್ರಯೋದಶಿ', sa: 'त्रयोदशी' },
   Chaturdashi: { kn: 'ಚತುರ್ದಶಿ', sa: 'चतुर्दशी' },
-  Purnima: { kn: 'ಪೌರ್ಣಿಮಾ', sa: 'पूर्णिमा' },
+  Purnima: { kn: 'ಪೂರ್ಣಿಮಾ', sa: 'पूर्णिमा' },
   Amavasya: { kn: 'ಅಮಾವಾಸ್ಯೆ', sa: 'अमावास्या' },
 };
 
@@ -32,14 +32,14 @@ const NAKSHATRA_I18N = {
   Bharani: { kn: 'ಭರಣಿ', sa: 'भरणी' },
   Krittika: { kn: 'ಕೃತ್ತಿಕಾ', sa: 'कृत्तिका' },
   Rohini: { kn: 'ರೋಹಿಣಿ', sa: 'रोहिणी' },
-  Mrigashira: { kn: 'ಮೃಗಶಿರ', sa: 'मृगशिरा' },
+  Mrigashira: { kn: 'ಮೃಗಶಿರಾ', sa: 'मृगशिरा' },
   Ardra: { kn: 'ಆರ್ದ್ರಾ', sa: 'आर्द्रा' },
   Punarvasu: { kn: 'ಪುನರ್ವಸು', sa: 'पुनर्वसु' },
   Pushya: { kn: 'ಪುಷ್ಯ', sa: 'पुष्य' },
   Ashlesha: { kn: 'ಆಶ್ಲೇಷಾ', sa: 'आश्लेषा' },
   Magha: { kn: 'ಮಘಾ', sa: 'मघा' },
-  'Purva Phalguni': { kn: 'ಪೂರ್ವ ಫಲ್ಗುನಿ', sa: 'पूर्व फाल्गुनी' },
-  'Uttara Phalguni': { kn: 'ಉತ್ತರ ಫಲ್ಗುನಿ', sa: 'उत्तर फाल्गुनी' },
+  'Purva Phalguni': { kn: 'ಪೂರ್ವ ಫಲ್ಗುಣಿ', sa: 'पूर्वफल्गुनी' },
+  'Uttara Phalguni': { kn: 'ಉತ್ತರ ಫಲ್ಗುಣಿ', sa: 'उत्तरफल्गुनी' },
   Hasta: { kn: 'ಹಸ್ತ', sa: 'हस्त' },
   Chitra: { kn: 'ಚಿತ್ರಾ', sa: 'चित्रा' },
   Swati: { kn: 'ಸ್ವಾತಿ', sa: 'स्वाती' },
@@ -53,8 +53,8 @@ const NAKSHATRA_I18N = {
   Shravana: { kn: 'ಶ್ರವಣ', sa: 'श्रवण' },
   Dhanishta: { kn: 'ಧನಿಷ್ಠಾ', sa: 'धनिष्ठा' },
   Shatabhisha: { kn: 'ಶತಭಿಷಾ', sa: 'शतभिषा' },
-  'Purva Bhadrapada': { kn: 'ಪೂರ್ವ ಭಾದ್ರಪದ', sa: 'पूर्व भाद्रपदा' },
-  'Uttara Bhadrapada': { kn: 'ಉತ್ತರ ಭಾದ್ರಪದ', sa: 'उत्तर भाद्रपदा' },
+  'Purva Bhadrapada': { kn: 'ಪೂರ್ವಾಭಾದ್ರಪದ', sa: 'पूर्वभाद्रपदा' },
+  'Uttara Bhadrapada': { kn: 'ಉತ್ತರಾಭಾದ್ರಪದ', sa: 'उत्तरभाद्रपदा' },
   Revati: { kn: 'ರೇವತಿ', sa: 'रेवती' },
 };
 
@@ -103,13 +103,13 @@ const KARANA_I18N = {
 };
 
 const VARA_I18N = {
-  Sunday: { kn: 'ರವಿವಾರ', sa: 'रविवार' },
-  Monday: { kn: 'ಸೋಮವಾರ', sa: 'सोमवार' },
-  Tuesday: { kn: 'ಮಂಗಳವಾರ', sa: 'मंगलवार' },
-  Wednesday: { kn: 'ಬುಧವಾರ', sa: 'बुधवार' },
-  Thursday: { kn: 'ಗುರುವಾರ', sa: 'गुरुवार' },
-  Friday: { kn: 'ಶುಕ್ರವಾರ', sa: 'शुक्रवार' },
-  Saturday: { kn: 'ಶನಿವಾರ', sa: 'शनिवार' },
+  Sunday: { kn: 'ಭಾನುವಾರ', sa: 'रविवासरः' },
+  Monday: { kn: 'ಸೋಮವಾರ', sa: 'सोमवासरः' },
+  Tuesday: { kn: 'ಮಂಗಳವಾರ', sa: 'मङ्गलवासरः' },
+  Wednesday: { kn: 'ಬುಧವಾರ', sa: 'बुधवासरः' },
+  Thursday: { kn: 'ಗುರುವಾರ', sa: 'गुरुवासरः' },
+  Friday: { kn: 'ಶುಕ್ರವಾರ', sa: 'शुक्रवासरः' },
+  Saturday: { kn: 'ಶನಿವಾರ', sa: 'शनिवासरः' },
 };
 
 const AYANA_I18N = {
@@ -124,17 +124,17 @@ const MASA_I18N = {
   Ashadha: { kn: 'ಆಷಾಢ', sa: 'आषाढ' },
   Shravana: { kn: 'ಶ್ರಾವಣ', sa: 'श्रावण' },
   Bhadrapada: { kn: 'ಭಾದ್ರಪದ', sa: 'भाद्रपद' },
-  Ashvina: { kn: 'ಆಶ್ವಿನ', sa: 'आश्विन' },
+  Ashvina: { kn: 'ಆಶ್ವಯುಜ', sa: 'आश्विन' },
   Ashwayuja: { kn: 'ಆಶ್ವಯುಜ', sa: 'आश्वयुज' },
   Ashwin: { kn: 'ಆಶ್ವಿನ', sa: 'आश्विन' },
   Kartika: { kn: 'ಕಾರ್ತಿಕ', sa: 'कार्तिक' },
   Margashira: { kn: 'ಮಾರ್ಗಶಿರ', sa: 'मार्गशीर्ष' },
-  Margashirsha: { kn: 'ಮಾರ್ಗಶಿರ್ಷ', sa: 'मार्गशीर्ष' },
+  Margashirsha: { kn: 'ಮಾರ್ಗಶಿರ', sa: 'मार्गशीर्ष' },
   Pushya: { kn: 'ಪುಷ್ಯ', sa: 'पुष्य' },
   Pausha: { kn: 'ಪೌಷ', sa: 'पौष' },
   Magha: { kn: 'ಮಾಘ', sa: 'माघ' },
   Phalguna: { kn: 'ಫಾಲ್ಗುಣ', sa: 'फाल्गुन' },
-  Phalguni: { kn: 'ಫಾಲ್ಗುಣಿ', sa: 'फाल्गुनी' },
+  Phalguni: { kn: 'ಫಾಲ್ಗುಣ', sa: 'फाल्गुन' },
 };
 
 const SAMVATSARA_I18N = {
@@ -143,7 +143,7 @@ const SAMVATSARA_I18N = {
   Shukla: { kn: 'ಶುಕ್ಲ', sa: 'शुक्ल' },
   Pramoda: { kn: 'ಪ್ರಮೋದ', sa: 'प्रमोद' },
   Prajapati: { kn: 'ಪ್ರಜಾಪತಿ', sa: 'प्रजापति' },
-  Angirasa: { kn: 'ಅಂಗಿರಸ', sa: 'अङ्गिरस' },
+  Angirasa: { kn: 'ಆಂಗೀರಸ', sa: 'आङ्गिरस' },
   Shrimukha: { kn: 'ಶ್ರೀಮುಖ', sa: 'श्रीमुख' },
   Bhava: { kn: 'ಭವ', sa: 'भव' },
   Yuvan: { kn: 'ಯುವ', sa: 'युवन्' },
@@ -155,13 +155,13 @@ const SAMVATSARA_I18N = {
   Vrisha: { kn: 'ವೃಷ', sa: 'वृष' },
   Chitrabhanu: { kn: 'ಚಿತ್ರಭಾನು', sa: 'चित्रभानु' },
   Svabhanu: { kn: 'ಸ್ವಭಾನು', sa: 'स्वभानु' },
-  Tarana: { kn: 'ತರಣ', sa: 'तरण' },
+  Tarana: { kn: 'ತಾರಣ', sa: 'तारण' },
   Parthiva: { kn: 'ಪಾರ್ಥಿವ', sa: 'पार्थिव' },
   Vyaya: { kn: 'ವ್ಯಯ', sa: 'व्यय' },
   Sarvajit: { kn: 'ಸರ್ವಜಿತ್', sa: 'सर्वजित्' },
   Sarvadharin: { kn: 'ಸರ್ವಧಾರಿ', sa: 'सर्वधारिन्' },
   Virodhin: { kn: 'ವಿರೋಧಿ', sa: 'विरोधिन्' },
-  Vikrita: { kn: 'ವಿಕೃತ', sa: 'विकृत' },
+  Vikrita: { kn: 'ವಿಕೃತಿ', sa: 'विकृति' },
   Khara: { kn: 'ಖರ', sa: 'खर' },
   Nandana: { kn: 'ನಂದನ', sa: 'नन्दन' },
   Vijaya: { kn: 'ವಿಜಯ', sa: 'विजय' },
@@ -171,7 +171,7 @@ const SAMVATSARA_I18N = {
   Hemalamba: { kn: 'ಹೇಮಲಂಬ', sa: 'हेमलम्ब' },
   Vilamba: { kn: 'ವಿಲಂಬ', sa: 'विलम्ब' },
   Vikarin: { kn: 'ವಿಕಾರಿ', sa: 'विकारिन्' },
-  Sharvari: { kn: 'ಶರ್ವರಿ', sa: 'शर्वरी' },
+  Sharvari: { kn: 'ಶಾರ್ವರಿ', sa: 'शार्वरी' },
   Plava: { kn: 'ಪ್ಲವ', sa: 'प्लव' },
   Shubhakrit: { kn: 'ಶುಭಕೃತ್', sa: 'शुभकृत्' },
   Shobhana: { kn: 'ಶೋಭನ', sa: 'शोभन' },
@@ -200,17 +200,68 @@ const SAMVATSARA_I18N = {
   Kshaya: { kn: 'ಕ್ಷಯ', sa: 'क्षय' },
 };
 
-function tri(en, map) {
-  if (!en) return '—';
-  const hit = map[en] || map[String(en).trim()];
-  if (!hit) return en;
-  return `${en} | ${hit.kn} | ${hit.sa}`;
+export const PANCHANG_I18N = {
+  tithi: TITHI_I18N,
+  paksha: PAKSHA_I18N,
+  nakshatra: NAKSHATRA_I18N,
+  yoga: YOGA_I18N,
+  karana: KARANA_I18N,
+  vara: VARA_I18N,
+  ayana: AYANA_I18N,
+  masa: MASA_I18N,
+  samvatsara: SAMVATSARA_I18N,
+};
+
+/**
+ * English / Kannada / Sanskrit forms of one Panchang term.
+ * Unknown terms fall back to the English name in all three slots.
+ */
+export function triParts(en, map) {
+  const name = String(en || '').trim();
+  if (!name) return null;
+  const hit = map[name];
+  return { en: name, kn: hit?.kn || name, sa: hit?.sa || name };
 }
 
-function formatClock(value) {
+/** Lunar month, including an "Adhika <month>" intercalary month. */
+export function masaParts(en) {
+  const name = String(en || '').trim();
+  if (!name) return null;
+  if (/^adhika\s+/i.test(name)) {
+    const base = triParts(name.replace(/^adhika\s+/i, ''), MASA_I18N);
+    return { en: `Adhika ${base.en}`, kn: `ಅಧಿಕ ${base.kn}`, sa: `अधिक ${base.sa}` };
+  }
+  return triParts(name, MASA_I18N);
+}
+
+function tri(en, map) {
+  const parts = map === MASA_I18N ? masaParts(en) : triParts(en, map);
+  if (!parts) return '—';
+  if (parts.kn === parts.en && parts.sa === parts.en) return parts.en;
+  return `${parts.en} | ${parts.kn} | ${parts.sa}`;
+}
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * "2:00 PM", or "3:53 PM, 11 Nov" when the limb ends on a later civil date
+ * than the card's date (otherwise the time reads as if it were today).
+ */
+export function limbEndLabel(limb, cardDate) {
+  if (!limb) return '';
+  const clock = formatClock(limb.end_time_formatted);
+  if (clock === '—') return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(limb.end_time || ''));
+  if (!match || !cardDate || String(limb.end_time).slice(0, 10) === String(cardDate).slice(0, 10)) {
+    return clock;
+  }
+  return `${clock}, ${parseInt(match[3], 10)} ${MONTH_SHORT[parseInt(match[2], 10) - 1]}`;
+}
+
+export function formatClock(value) {
   if (!value || value === 'N/A') return '—';
   if (typeof value === 'string' && (value.includes('AM') || value.includes('PM'))) {
-    return value;
+    return value.trim().replace(/^0(\d)/, '$1');
   }
   if (typeof value === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(value)) {
     const [hRaw, m] = value.split(':');
@@ -224,7 +275,7 @@ function formatClock(value) {
   return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-function timeRange(block) {
+export function timeRange(block) {
   if (!block || typeof block !== 'object') return '—';
   if (Array.isArray(block) && block.length) {
     return block
@@ -273,6 +324,10 @@ export function formatPanchangWhatsAppMessage(data) {
     ? `${paksha ? `${paksha} ` : ''}${tithiName} | ${paksha ? `${(PAKSHA_I18N[paksha]?.kn || paksha)} ` : ''}${TITHI_I18N[tithiName]?.kn || tithiName} | ${paksha ? `${(PAKSHA_I18N[paksha]?.sa || paksha)} ` : ''}${TITHI_I18N[tithiName]?.sa || tithiName}`
     : '—';
   const karanaName = karana.current || karana.name || '';
+  const till = (limb) => {
+    const label = limbEndLabel(limb, gregorian.date);
+    return label ? ` (till ${label})` : '';
+  };
 
   const dateLabel = gregorian.formatted
     || (gregorian.date
@@ -307,12 +362,12 @@ export function formatPanchangWhatsAppMessage(data) {
     line('Samvatsara', tri(samvatsaraName, SAMVATSARA_I18N)),
     line('Ayana', tri(ayanaName, AYANA_I18N)),
     line('Masa', tri(masaName, MASA_I18N)),
-    line('Vara', vara.sanskrit ? `${varaName} | ${VARA_I18N[varaName]?.kn || varaName} | ${vara.sanskrit}` : tri(varaName, VARA_I18N)),
+    line('Vara', tri(varaName, VARA_I18N)),
     '',
-    line('Tithi', tithiTri + (tithi.end_time_formatted ? ` (till ${tithi.end_time_formatted})` : '')),
-    line('Nakshatra', `${tri(nakshatra.name, NAKSHATRA_I18N)}${nakshatra.pada ? ` · Pada ${nakshatra.pada}` : ''}${nakshatra.end_time_formatted ? ` (till ${nakshatra.end_time_formatted})` : ''}`),
-    line('Yoga', `${tri(yoga.name, YOGA_I18N)}${yoga.end_time_formatted ? ` (till ${yoga.end_time_formatted})` : ''}`),
-    line('Karana', `${tri(karanaName, KARANA_I18N)}${karana.end_time_formatted ? ` (till ${karana.end_time_formatted})` : ''}`),
+    line('Tithi', tithiTri + till(tithi)),
+    line('Nakshatra', `${tri(nakshatra.name, NAKSHATRA_I18N)}${nakshatra.pada ? ` · Pada ${nakshatra.pada}` : ''}${till(nakshatra)}`),
+    line('Yoga', `${tri(yoga.name, YOGA_I18N)}${till(yoga)}`),
+    line('Karana', `${tri(karanaName, KARANA_I18N)}${till(karana)}`),
     '',
     '*Inauspicious*',
     line('Rahu Kala', timeRange(kaala.rahu_kaal || kaala.rahu)),

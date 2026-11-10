@@ -12,6 +12,10 @@ Current state:
   weekday / solar where needed).
 - Krishna-paksha month names often differ Amanta vs Purnimanta; rules store
   Amanta ``masa`` and optional ``masa_purnimanta`` and match either.
+- A festival belongs to a civil day, not to the instant the page is opened:
+  ``detect_festivals_for_civil_day`` reads the tithi at the festival's ``kala``
+  (sunrise by default; madhyahna / pradosha / nishita / moonrise where the
+  tradition fixes the day that way), so the list does not change during the day.
 
 Gap / deferred:
 - Not a complete Hindu calendar. Temple-local calendars, some regional Jayantis,
@@ -20,12 +24,14 @@ Gap / deferred:
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import swisseph as swe
 
-from .astro_utils import get_sidereal_position
-from .constants import TITHIS
+from .astro_utils import get_julian_day, get_sidereal_position
+from .calendrical import _get_lunar_month
+from .constants import NAKSHATRAS, TITHIS, VARAS
 
 # Canonical Amanta month -> accepted aliases.
 MONTH_ALIASES: Dict[str, Set[str]] = {
@@ -85,6 +91,7 @@ def _f(
     nakshatra_mode: str = "preferred",  # preferred | required | ignore
     weekday: str | None = None,
     rule: str | None = None,  # special: varalakshmi | onam | makar_sankranti | mesha_sankranti
+    kala: str = "sunrise",  # sunrise | madhyahna | aparahna | pradosha | nishita | moonrise
     importance: str = "major",
     ftype: str = "festival",
     description: str = "",
@@ -116,6 +123,7 @@ def _f(
         "nakshatra_mode": nakshatra_mode,
         "weekday": weekday,
         "rule": rule,
+        "kala": kala,
         "description": description or name,
         "observances": list(observances or ["Temple worship", "Charity", "Family observance"]),
         "benefits": list(benefits or ["Devotion", "Auspicious observance"]),
@@ -145,6 +153,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Rama Navami",
+        kala="madhyahna",
         masa="Chaitra",
         paksha="Shukla",
         tithi="Navami",
@@ -177,6 +186,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Narasimha Jayanti",
+        kala="pradosha",
         masa="Vaishakha",
         paksha="Shukla",
         tithi="Chaturdashi",
@@ -292,6 +302,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     # --- Bhadrapada (Amanta) / Janmashtami uses Shravana Amanta = Bhadrapada Purnimanta ---
     _f(
         "Krishna Janmashtami",
+        kala="nishita",
         masa="Shravana",
         masa_purnimanta="Bhadrapada",
         paksha="Krishna",
@@ -314,6 +325,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Ganesh Chaturthi",
+        kala="madhyahna",
         masa="Bhadrapada",
         paksha="Shukla",
         tithi="Chaturthi",
@@ -378,6 +390,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Vijayadashami (Dussehra)",
+        kala="aparahna",
         masa="Ashvina",
         paksha="Shukla",
         tithi="Dashami",
@@ -398,6 +411,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     # --- Kartika (Deepavali cluster: Amanta Ashvina Krishna = Purnimanta Kartika) ---
     _f(
         "Karwa Chauth",
+        kala="moonrise",
         masa="Ashvina",
         masa_purnimanta="Kartika",
         paksha="Krishna",
@@ -407,6 +421,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Dhanteras",
+        kala="pradosha",
         masa="Ashvina",
         masa_purnimanta="Kartika",
         paksha="Krishna",
@@ -425,6 +440,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Deepavali (Lakshmi Puja)",
+        kala="pradosha",
         masa="Ashvina",
         masa_purnimanta="Kartika",
         paksha="Krishna",
@@ -438,8 +454,8 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
         masa="Kartika",
         paksha="Shukla",
         tithi="Pratipada",
-        description="Bali Padyami / Govardhan - Kartika Shukla Pratipada",
-        labels=("Bali Padyami", "ಬಲಿ ಪಾಡ್ಯಮಿ", "बलि पाद्यमी"),
+        description="Bali Padyami / Bali Pratipada (Govardhan Puja) - Kartika Shukla Pratipada",
+        labels=("Bali Padyami (Bali Pratipada)", "ಬಲಿ ಪಾಡ್ಯಮಿ", "बलिप्रतिपदा"),
     ),
     _f(
         "Bhai Dooj",
@@ -447,7 +463,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
         paksha="Shukla",
         tithi="Dwitiya",
         description="Bhai Dooj / Yama Dwitiya - Kartika Shukla Dwitiya",
-        labels=("Bhai Dooj", "ಭಾಯಿ ದೂಜ್", "भाई दूज"),
+        labels=("Yama Dwitiya (Bhai Dooj)", "ಯಮ ದ್ವಿತೀಯ", "यमद्वितीया"),
     ),
     _f(
         "Tulasi Vivaha",
@@ -538,6 +554,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     # --- Phalguna / Magha for Shivaratri ---
     _f(
         "Maha Shivaratri",
+        kala="nishita",
         masa="Magha",
         masa_purnimanta=["Phalguni", "Phalguna"],
         paksha="Krishna",
@@ -552,6 +569,7 @@ MAJOR_FESTIVAL_CATALOG: List[Dict] = [
     ),
     _f(
         "Holika Dahan",
+        kala="pradosha",
         masa=["Phalguni", "Phalguna"],
         paksha="Shukla",
         tithi="Purnima",
@@ -611,6 +629,7 @@ RECURRING_OBSERVANCES: List[Dict] = [
     ),
     _f(
         "Pradosha Vrat",
+        kala="pradosha",
         tithi="Trayodashi",
         ftype="worship",
         importance="medium",
@@ -619,6 +638,7 @@ RECURRING_OBSERVANCES: List[Dict] = [
     ),
     _f(
         "Sankashta Chaturthi",
+        kala="moonrise",
         tithi="Chaturthi",
         paksha="Krishna",
         ftype="fasting",
@@ -631,7 +651,7 @@ RECURRING_OBSERVANCES: List[Dict] = [
         tithi="Purnima",
         ftype="worship",
         description="Full Moon day, auspicious for spiritual activities",
-        labels=("Purnima Observance", "ಪೌರ್ಣಿಮಾ ಆಚರಣೆ", "पूर्णिमा पालनम्"),
+        labels=("Purnima Observance", "ಪೂರ್ಣಿಮಾ ಆಚರಣೆ", "पूर्णिमा पालनम्"),
         suppress_generic=[],
     ),
     _f(
@@ -810,14 +830,17 @@ def match_major_festivals(
     weekday: str = "",
     jd: float | None = None,
     tithi_data: Dict | None = None,
+    only: str | None = None,
 ) -> List[Dict]:
-    """Return matched major festivals for the day."""
+    """Return matched major festivals for the given limbs (``only`` = one rule)."""
     matched: List[Dict] = []
     tithi_data = tithi_data or {}
     amanta = base_lunar_month_name(lunar_month)
     purnimanta = base_lunar_month_name(lunar_month_purnimanta)
 
     for entry in MAJOR_FESTIVAL_CATALOG:
+        if only is not None and entry["name"] != only:
+            continue
         rule = entry.get("rule")
         if rule:
             if _match_special_rule(
@@ -861,6 +884,7 @@ def match_recurring_observances(
     tithi_name: str,
     paksha: str,
     major_names: Iterable[str],
+    only: str | None = None,
 ) -> List[Dict]:
     majors = set(major_names)
     suppressed: Set[str] = set()
@@ -870,6 +894,8 @@ def match_recurring_observances(
 
     results: List[Dict] = []
     for entry in RECURRING_OBSERVANCES:
+        if only is not None and entry["name"] != only:
+            continue
         if entry.get("tithi") and entry["tithi"] != tithi_name:
             continue
         if entry.get("paksha") and entry["paksha"] != paksha:
@@ -929,3 +955,208 @@ def detect_day_festivals(
         seen.add(name)
         combined.append(item)
     return combined
+
+
+# ---------------------------------------------------------------------------
+# Civil-day festival resolution
+# ---------------------------------------------------------------------------
+
+_GEO_ALTITUDE_M = 920.0
+_KALAS = ("sunrise", "madhyahna", "aparahna", "pradosha", "nishita", "moonrise")
+
+
+def _rise_set_jd(jd_from: float, body: int, flag: int, lat: float, lon: float) -> float | None:
+    try:
+        res = swe.rise_trans(
+            jd_from, body, flag | swe.BIT_DISC_CENTER, [lon, lat, _GEO_ALTITUDE_M], 0, 0
+        )
+    except Exception:  # pragma: no cover - ephemeris failure
+        return None
+    return res[1][0] if res[0] == 0 else None
+
+
+def _day_anchor_jds(day: date, lat: float, lon: float) -> Dict[str, float]:
+    """Julian days of the reference instants used to assign festivals to ``day``."""
+    midnight_jd = get_julian_day(datetime(day.year, day.month, day.day))
+    noon_jd = midnight_jd + 0.5
+    sunrise = _rise_set_jd(midnight_jd, swe.SUN, swe.CALC_RISE, lat, lon) or (midnight_jd + 0.26)
+    sunset = _rise_set_jd(sunrise, swe.SUN, swe.CALC_SET, lat, lon) or (midnight_jd + 0.75)
+    next_sunrise = _rise_set_jd(sunset, swe.SUN, swe.CALC_RISE, lat, lon) or (sunrise + 1.0)
+    moonrise = _rise_set_jd(midnight_jd, swe.MOON, swe.CALC_RISE, lat, lon)
+    if moonrise is None or moonrise >= midnight_jd + 1.0:
+        moonrise = sunrise
+    night = next_sunrise - sunset
+    return {
+        "sunrise": sunrise,
+        "madhyahna": (sunrise + sunset) / 2.0 if sunset > sunrise else noon_jd,
+        # Aparahna is the 4th of five equal parts of the day; sample its middle.
+        "aparahna": sunrise + (sunset - sunrise) * 0.7 if sunset > sunrise else noon_jd + 0.1,
+        "sunset": sunset,
+        # Pradosha spans ~3 muhurtas after sunset; sample its middle.
+        "pradosha": sunset + night * (1.5 / 15.0),
+        "nishita": sunset + night / 2.0,
+        "moonrise": moonrise,
+    }
+
+
+def _tithi_index_at(jd: float) -> int:
+    moon = get_sidereal_position(jd, swe.MOON)
+    sun = get_sidereal_position(jd, swe.SUN)
+    return int(((moon - sun + 360.0) % 360.0) / 12.0)
+
+
+def _tithi_name_paksha(index: int) -> Tuple[str, str, int]:
+    paksha = "Shukla" if index < 15 else "Krishna"
+    number = (index % 15) + 1
+    if number == 15:
+        return ("Purnima" if paksha == "Shukla" else "Amavasya"), paksha, number
+    return TITHIS[number - 1], paksha, number
+
+
+def _context_at(jd: float) -> Dict:
+    index = _tithi_index_at(jd)
+    name, paksha, number = _tithi_name_paksha(index)
+    month = _get_lunar_month(None, jd)
+    moon_long = get_sidereal_position(jd, swe.MOON)
+    return {
+        "jd": jd,
+        "tithi_index": index,
+        "tithi_name": name,
+        "paksha": paksha,
+        "tithi_data": {"name": name, "paksha": paksha, "number": number},
+        "lunar_month": month["amanta"],
+        "lunar_month_purnimanta": month["purnimanta"],
+        "nakshatra_name": NAKSHATRAS[int(moon_long / (360.0 / 27.0)) % 27],
+    }
+
+
+def _instant_inside_tithi(start_jd: float, end_jd: float, tithi_index: int) -> float | None:
+    """A JD between two anchors at which ``tithi_index`` is running, if any."""
+    steps = 96
+    for i in range(1, steps):
+        jd = start_jd + (end_jd - start_jd) * i / steps
+        if _tithi_index_at(jd) == tithi_index:
+            return jd
+    return None
+
+
+def detect_festivals_for_civil_day(day: date | datetime, lat: float, lon: float) -> List[Dict]:
+    """Festivals and observances of a civil day (stable for the whole day).
+
+    For each entry the tithi is read at the entry's ``kala`` on that day. Two
+    edge cases follow the common panchanga convention:
+
+    - A tithi that misses the kala on both days (begins after one day's kala
+      and ends before the next day's): the festival goes to the day at whose
+      sunrise that tithi prevails, else to the day in which it begins.
+    - Festivals with a month rule are not repeated in an Adhika masa; they are
+      observed in the Nija month.
+    - Vriddhi tithi (covers the same kala on two days): the festival is shown on
+      the first day only.
+    """
+    if isinstance(day, datetime):
+        day = day.date()
+
+    anchors: Dict[date, Dict[str, float]] = {}
+    contexts: Dict[Tuple[date, str], Dict] = {}
+
+    def anchor(d: date, kala: str) -> float:
+        if d not in anchors:
+            anchors[d] = _day_anchor_jds(d, lat, lon)
+        return anchors[d][kala]
+
+    def ctx(d: date, kala: str) -> Dict:
+        key = (d, kala)
+        if key not in contexts:
+            contexts[key] = _context_at(anchor(d, kala))
+        return contexts[key]
+
+    weekday = VARAS[(day.weekday() + 1) % 7]
+    yesterday = day - timedelta(days=1)
+    tomorrow = day + timedelta(days=1)
+    candidates_by_kala: Dict[str, List[Dict]] = {}
+
+    def skipped_between(first: date, second: date, kala: str) -> Dict | None:
+        """Context of a tithi lying wholly between two consecutive kalas, if it
+        belongs to ``day``."""
+        start_index = _tithi_index_at(anchor(first, kala))
+        if (_tithi_index_at(anchor(second, kala)) - start_index) % 30 != 2:
+            return None
+        skipped = (start_index + 1) % 30
+        owner = second if _tithi_index_at(anchor(second, "sunrise")) == skipped else first
+        if owner != day:
+            return None
+        inside = _instant_inside_tithi(anchor(first, kala), anchor(second, kala), skipped)
+        return _context_at(inside) if inside is not None else None
+
+    def candidates(kala: str) -> List[Dict]:
+        """Tithi contexts that count for ``day`` under ``kala``."""
+        if kala in candidates_by_kala:
+            return candidates_by_kala[kala]
+        today_ctx = ctx(day, kala)
+        found: List[Dict] = []
+        if _tithi_index_at(anchor(yesterday, kala)) != today_ctx["tithi_index"]:
+            found.append(today_ctx)
+        for first, second in ((yesterday, day), (day, tomorrow)):
+            extra = skipped_between(first, second, kala)
+            if extra is not None:
+                found.append(extra)
+        candidates_by_kala[kala] = found
+        return found
+
+    sunset_jd = anchor(day, "sunset")
+    sunrise_ctx = ctx(day, "sunrise")
+
+    majors: List[Dict] = []
+    seen: Set[str] = set()
+    for entry in MAJOR_FESTIVAL_CATALOG:
+        rule = entry.get("rule")
+        if rule in {"makar_sankranti", "mesha_sankranti"}:
+            # The Sun has entered the sign by today's sunset but had not by
+            # yesterday's (a post-sunset sankranti is observed the next day).
+            pool = [dict(sunrise_ctx, jd=sunset_jd)]
+        elif rule:
+            pool = [sunrise_ctx]
+        else:
+            kala = entry.get("kala") or "sunrise"
+            pool = candidates(kala if kala in _KALAS else "sunrise")
+        for c in pool:
+            if not rule and str(c["lunar_month"]).lower().startswith("adhika "):
+                continue
+            hits = match_major_festivals(
+                tithi_name=c["tithi_name"],
+                paksha=c["paksha"],
+                lunar_month=c["lunar_month"],
+                lunar_month_purnimanta=c["lunar_month_purnimanta"],
+                nakshatra_name=c["nakshatra_name"],
+                weekday=weekday,
+                jd=c["jd"],
+                tithi_data=c["tithi_data"],
+                only=entry["name"],
+            )
+            for hit in hits:
+                if hit["name"] in seen:
+                    continue
+                seen.add(hit["name"])
+                hit["tithi"] = f"{c['paksha']} {c['tithi_name']}"
+                hit["kala"] = entry.get("kala") or "sunrise"
+                majors.append(hit)
+
+    major_names = [m["name"] for m in majors]
+    results = list(majors)
+    for entry in RECURRING_OBSERVANCES:
+        kala = entry.get("kala") or "sunrise"
+        for c in candidates(kala if kala in _KALAS else "sunrise"):
+            for hit in match_recurring_observances(
+                tithi_name=c["tithi_name"],
+                paksha=c["paksha"],
+                major_names=major_names,
+                only=entry["name"],
+            ):
+                if hit["name"] in seen:
+                    continue
+                seen.add(hit["name"])
+                hit["tithi"] = f"{c['paksha']} {c['tithi_name']}"
+                hit["kala"] = kala
+                results.append(hit)
+    return results
