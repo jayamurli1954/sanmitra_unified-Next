@@ -377,7 +377,14 @@ function Panchang() {
                       <ListItem key={`${item.event_date}-${idx}`} sx={{ px: 0 }}>
                         <ListItemText
                           primary={`${item.event_date} (${item.weekday})`}
-                          secondary={item.is_today ? 'Today' : `${item.days_away} days away`}
+                          secondary={[
+                            item.is_today
+                              ? 'Today'
+                              : `${item.days_away} ${item.days_away === 1 ? 'day' : 'days'} away`,
+                            item.starts_at_display && item.ends_at_display
+                              ? `Star: ${item.starts_at_display} to ${item.ends_at_display}`
+                              : '',
+                          ].filter(Boolean).join(' · ')}
                         />
                         {item.is_today && <Chip label="Today" size="small" color="success" />}
                       </ListItem>

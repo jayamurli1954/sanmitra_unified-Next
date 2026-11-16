@@ -244,12 +244,14 @@ async def mandir_bank_rec_unmatched_book_entries(
 
 @router.get("/dashboard/sacred-events/nakshatra/{nakshatra}")
 async def mandir_nakshatra_dates(nakshatra: str, limit: int = Query(default=8, ge=1, le=30), _current_user: dict = Depends(get_current_user)):
-    today = date.today()
-    out = []
-    for i in range(limit):
-        d = today.replace(day=min(28, today.day))
-        out.append({"event_date": str(d), "weekday": d.strftime("%A"), "days_away": i, "is_today": i == 0})
-    return {"nakshatra": nakshatra, "next_occurrences": out}
+    from app.services.panchang.constants import NAKSHATRAS
+    from app.services.panchang.nakshatra_dates import next_nakshatra_dates, resolve_nakshatra_index
+
+    try:
+        canonical = NAKSHATRAS[resolve_nakshatra_index(nakshatra)]
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unknown nakshatra: {nakshatra}")
+    return {"nakshatra": canonical, "next_occurrences": next_nakshatra_dates(canonical, limit=limit)}
 
 
 @router.post("/financial-closing/close-month", dependencies=_MANDIR_ADMIN_ROUTE_DEPS)
