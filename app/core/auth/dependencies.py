@@ -1,4 +1,5 @@
 import logging
+from time import monotonic
 
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.params import Header as HeaderParam
@@ -8,9 +9,46 @@ from app.core.auth.security import decode_token
 from app.core.audit.service import log_audit_event
 from app.core.tenants.context import InvalidAppKeyError, get_app_key, resolve_app_key, validate_app_key
 from app.core.tenants.service import ensure_tenant_is_active
+from app.core.users.service import USERS_COLLECTION
+from app.db.mongo import get_collection
 
 bearer_scheme = HTTPBearer(auto_error=False)
 _auth_dependency_logger = logging.getLogger(__name__)
+
+# Short cache so deactivation takes effect within seconds without a DB read per request.
+_USER_ACTIVE_CACHE_TTL_SECONDS = 10.0
+_USER_ACTIVE_CACHE: dict[str, tuple[float, bool]] = {}
+
+
+def clear_user_active_cache(user_id: str | None = None) -> None:
+    if user_id is None:
+        _USER_ACTIVE_CACHE.clear()
+    else:
+        _USER_ACTIVE_CACHE.pop(str(user_id), None)
+
+
+async def ensure_user_is_active(user_id: str | None) -> None:
+    """Reject tokens of users an admin has deactivated (is_active = False).
+
+    Users with no record in core_users (service or seed identities) are left alone, as
+    is the case when Mongo is not configured, mirroring ensure_tenant_is_active.
+    """
+    key = str(user_id or "").strip()
+    if not key:
+        return
+    cached = _USER_ACTIVE_CACHE.get(key)
+    if cached and monotonic() - cached[0] <= _USER_ACTIVE_CACHE_TTL_SECONDS:
+        active = cached[1]
+    else:
+        try:
+            users = get_collection(USERS_COLLECTION)
+        except RuntimeError:
+            return
+        doc = await users.find_one({"user_id": key}, {"is_active": 1})
+        active = doc is None or doc.get("is_active", True) is not False
+        _USER_ACTIVE_CACHE[key] = (monotonic(), active)
+    if not active:
+        raise HTTPException(status_code=401, detail="User account is inactive")
 
 
 async def _audit_super_admin_override_usage(
@@ -107,5 +145,6 @@ async def get_current_user(
 
     if role != "super_admin":
         await ensure_tenant_is_active(payload.get("tenant_id"))
+    await ensure_user_is_active(payload.get("sub"))
 
     return payload

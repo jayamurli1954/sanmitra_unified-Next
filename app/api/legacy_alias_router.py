@@ -9,6 +9,7 @@ from app.accounting.models.entities import Account, JournalEntry, JournalLine
 from app.core.auth.dependencies import get_current_user
 from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.schemas import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse
+from app.core.auth.router import _log_login_activity
 from app.core.auth.service import login_user, logout_refresh_token, rotate_refresh_token
 from app.core.rate_limiting import limiter
 from app.core.users.service import create_user
@@ -257,6 +258,12 @@ async def legacy_auth_login(
 ):
     app_key = resolve_app_key((x_app_key or "").strip())
     access_token, refresh_token = await login_user(payload.email, payload.password, app_key=app_key)
+    await _log_login_activity(
+        request=request,
+        access_token=access_token,
+        auth_provider="password",
+        login_method="legacy_password",
+    )
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -309,6 +316,12 @@ async def legacy_auth_local_login(
 ):
     app_key = resolve_app_key((x_app_key or "").strip())
     access_token, refresh_token = await login_user(payload.email, payload.password, app_key=app_key)
+    await _log_login_activity(
+        request=request,
+        access_token=access_token,
+        auth_provider="password",
+        login_method="legacy_local_password",
+    )
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 

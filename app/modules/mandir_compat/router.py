@@ -738,9 +738,7 @@ from app.modules.mandir_compat.routes.seva_reminders import (
 )
 
 from app.modules.mandir_compat.routes.users import (
-    mandir_update_user_profile as mandir_update_user_profile,
     mandir_users as mandir_users,
-    mandir_users_me as mandir_users_me,
 )
 
 import app.modules.mandir_compat.routes.donations_read  # noqa: E402, F401
