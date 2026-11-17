@@ -338,3 +338,11 @@ async def test_superseded_request_cannot_be_confirmed(mail):
     assert (await users.find_one({"user_id": "u-1"}))["email"] == "old@x.in"
     await email_change.confirm_email_change("tok-1")
     assert (await users.find_one({"user_id": "u-1"}))["email"] == "second@x.in"
+
+
+def test_unreachable_shared_storage_falls_back_instead_of_failing():
+    from app.core.rate_limiting import limiter
+
+    # A wrong RATE_LIMIT_STORAGE_URI or Redis outage must not turn logins into 500s.
+    assert limiter._in_memory_fallback_enabled is True
+    assert limiter._swallow_errors is True

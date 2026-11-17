@@ -41,4 +41,11 @@ def rate_limit_storage_uri() -> str:
     return str(os.getenv("RATE_LIMIT_STORAGE_URI", "") or "").strip() or _DEFAULT_STORAGE_URI
 
 
-limiter = Limiter(key_func=client_rate_limit_key, storage_uri=rate_limit_storage_uri())
+# If shared storage is unreachable (bad URL, Redis down), fall back to per-process
+# memory instead of failing the request: a broken limiter must never block logins.
+limiter = Limiter(
+    key_func=client_rate_limit_key,
+    storage_uri=rate_limit_storage_uri(),
+    in_memory_fallback_enabled=True,
+    swallow_errors=True,
+)
