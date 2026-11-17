@@ -109,6 +109,15 @@ function Profile() {
         email: profile.email.trim(),
         phone: profile.phone.trim() || null,
       };
+      const storedEmail = String(readStoredUser()?.email || '').trim().toLowerCase();
+      if (payload.email.toLowerCase() !== storedEmail) {
+        // Email changes need the current password and are confirmed from the new mailbox.
+        const currentPassword = window.prompt('Enter your current password to change your sign-in email');
+        if (!currentPassword) {
+          return;
+        }
+        payload.current_password = currentPassword;
+      }
 
       const response = await api.put(`/api/v1/users/${profile.id}`, payload);
       const data = response.data || {};
@@ -133,7 +142,12 @@ function Profile() {
       writeStoredUser(normalizedUser);
       window.dispatchEvent(new CustomEvent('user-profile-updated', { detail: normalizedUser }));
 
-      showSuccess(t('profile.messages.profileUpdated'));
+      if (data.pending_email_change) {
+        setProfile((prev) => ({ ...prev, email: data.email || prev.email }));
+        showSuccess(`Check ${data.pending_email} for a link to confirm your new email. Your current email stays active until then.`);
+      } else {
+        showSuccess(t('profile.messages.profileUpdated'));
+      }
     } catch (err) {
       showError(err.userMessage || t('profile.messages.updateFailed'));
     } finally {

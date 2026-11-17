@@ -53,6 +53,8 @@ pyswisseph==2.10.3.2
 
 # Rate limiting
 slowapi==0.1.9
+# Shared limiter storage when RATE_LIMIT_STORAGE_URI=redis://... is set
+redis==5.0.8
 
 # Web search (LegalMitra)
 tavily-python==0.7.23

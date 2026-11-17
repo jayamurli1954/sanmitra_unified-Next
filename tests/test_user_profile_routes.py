@@ -96,6 +96,7 @@ async def test_update_user_profile_is_self_only_and_persists_allowed_fields(monk
         await users_router.update_user_profile(
             "tenant-user-1",
             {"full_name": "Should Not Update"},
+            request=None,
             current_user={"sub": "platform-owner-1", "role": "super_admin"},
         )
     except HTTPException as exc:
@@ -110,6 +111,7 @@ async def test_update_user_profile_is_self_only_and_persists_allowed_fields(monk
             "email": "contact@sanmitratech.in",
             "phone": "9444019106",
         },
+        request=None,
         current_user={"sub": "platform-owner-1", "role": "super_admin"},
     )
 

@@ -145,6 +145,10 @@ async def visitors_verify_pass(
         x_app_key=x_app_key,
         operation="verify guest pass",
     )
+    # Only gate staff and society managers verify passes; residents never need to look
+    # up another flat's guest by passcode.
+    if not housing_router._can_manage_visitors(current_user.get("role")):
+        raise HTTPException(status_code=403, detail="Only security staff or society admins can verify guest passes")
     tenant_id = tenant_context.tenant_id
     app_key = tenant_context.app_key
     code = str(payload.get("code") or "").strip()

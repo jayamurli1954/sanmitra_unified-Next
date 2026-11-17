@@ -1421,20 +1421,23 @@ def test_seva_reschedule_request_and_approval(mandir_compat_client):
 
 def test_update_user_profile_route(mandir_compat_client):
     client, _collections = mandir_compat_client
+    # Changing the sign-in email now needs the current password and mailbox confirmation.
+    blocked = client.put(
+        "/api/v1/users/user-1",
+        json={"full_name": "Temple User Updated", "email": "updated@example.com"},
+    )
+    assert blocked.status_code == 400
+
     response = client.put(
         "/api/v1/users/user-1",
-        json={
-            "full_name": "Temple User Updated",
-            "email": "updated@example.com",
-            "phone": "9999999999",
-        },
+        json={"full_name": "Temple User Updated", "phone": "9999999999"},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "user-1"
     assert payload["full_name"] == "Temple User Updated"
-    assert payload["email"] == "updated@example.com"
+    assert payload["pending_email_change"] is False
 
 
 

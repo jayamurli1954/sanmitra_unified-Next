@@ -15,6 +15,7 @@ from app.accounting.service import (
     post_journal_entry,
 )
 from app.core.auth.dependencies import get_current_user
+from app.core.users.service import USERS_COLLECTION
 from app.db.mongo import get_collection
 from app.db.postgres import get_async_session
 from pydantic import BaseModel, Field
@@ -245,7 +246,6 @@ async def get_journal_detail_compat_endpoint(
 @router.put("/auth/me")
 async def update_auth_me_compat_endpoint(payload: dict, current_user: dict = Depends(get_current_user)):
     allowed = {
-        "name": payload.get("name"),
         "full_name": payload.get("name") or payload.get("full_name"),
         "phone_number": payload.get("phone_number") or payload.get("mobile") or payload.get("phone"),
         "mobile": payload.get("phone_number") or payload.get("mobile") or payload.get("phone"),
@@ -257,52 +257,73 @@ async def update_auth_me_compat_endpoint(payload: dict, current_user: dict = Dep
     if not update_fields:
         return current_user
 
-    app_key = str(current_user.get("app_key") or "").strip()
-    user_id = str(current_user.get("id") or current_user.get("user_id") or "").strip()
-    email = str(current_user.get("email") or "").strip().lower()
-    query = {"app_key": app_key} if app_key else {}
-    if user_id:
-        query["id"] = user_id
-    elif email:
-        query["email"] = email
-    else:
+    user_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
+    if not user_id:
         raise HTTPException(status_code=400, detail="Current user has no profile identifier")
-
-    users = get_collection("users")
+    # The login identity lives in core_users; the old "users" collection was never read by login.
+    query = {"user_id": user_id}
+    users = get_collection(USERS_COLLECTION)
     result = await users.update_one(query, {"$set": update_fields})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User profile not found")
 
     updated = dict(current_user)
     updated.update({key: value for key, value in update_fields.items() if key != "updated_at"})
+    if "full_name" in update_fields:
+        updated["name"] = update_fields["full_name"]
     return updated
 
 
+_ROLE_MANAGER_ROLES = {"super_admin", "tenant_admin", "admin", "secretary"}
+# Roles a society may assign through GruhaMitra. super_admin is never assignable here.
+_GRUHA_ASSIGNABLE_ROLES = {
+    "tenant_admin",
+    "admin",
+    "secretary",
+    "chairman",
+    "committee",
+    "treasurer",
+    "auditor",
+    "security",
+    "resident",
+    "owner",
+    "tenant",
+}
+# Only full society administrators may hand out administrator-level roles.
+_ADMIN_LEVEL_ROLES = {"tenant_admin", "admin"}
+
+
 def _require_role_admin(current_user: dict) -> None:
-    if current_user.get("role") not in {"super_admin", "tenant_admin", "admin", "secretary"}:
+    if current_user.get("role") not in _ROLE_MANAGER_ROLES:
         raise HTTPException(status_code=403, detail="Only admins can manage user roles")
+
+
+def _tenant_user_scope(current_user: dict) -> dict:
+    tenant_id = str(current_user.get("tenant_id") or "").strip()
+    if current_user.get("role") == "super_admin":
+        return {"tenant_id": tenant_id} if tenant_id else {}
+    app_key = str(current_user.get("app_key") or "").strip()
+    if not app_key:
+        raise HTTPException(
+            status_code=400,
+            detail="X-App-Key header or app_key in token required for non-admin users",
+        )
+    return {"tenant_id": tenant_id, "app_key": app_key}
 
 
 @router.get("/users/")
 async def users_list_compat_endpoint(current_user: dict = Depends(get_current_user)):
     _require_role_admin(current_user)
-    tenant_id = str(current_user.get("tenant_id") or "").strip()
-    app_key = str(current_user.get("app_key") or "").strip()
-
-    if current_user.get("role") != "super_admin":
-        if not app_key:
-            raise HTTPException(
-                status_code=400,
-                detail="X-App-Key header or app_key in token required for non-admin users"
-            )
-        query = {"tenant_id": tenant_id, "app_key": app_key}
-    else:
-        query = {"tenant_id": tenant_id}
-
-    users = await get_collection("users").find(query).sort("full_name", 1).to_list(length=500)
+    query = _tenant_user_scope(current_user)
+    users = (
+        await get_collection(USERS_COLLECTION)
+        .find(query, {"hashed_password": 0, "provider_subject": 0})
+        .sort("full_name", 1)
+        .to_list(length=500)
+    )
     return [
         {
-            "id": str(row.get("id") or row.get("user_id") or row.get("_id")),
+            "id": str(row.get("user_id") or row.get("id") or row.get("_id")),
             "email": row.get("email"),
             "name": row.get("name") or row.get("full_name") or row.get("email"),
             "full_name": row.get("full_name") or row.get("name") or row.get("email"),
@@ -318,23 +339,27 @@ async def users_list_compat_endpoint(current_user: dict = Depends(get_current_us
 @router.patch("/users/{user_id}/role")
 async def user_role_update_compat_endpoint(user_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
     _require_role_admin(current_user)
-    role = str(payload.get("role") or "").strip()
+    role = str(payload.get("role") or "").strip().lower()
     if not role:
         raise HTTPException(status_code=422, detail="role is required")
+    if role not in _GRUHA_ASSIGNABLE_ROLES:
+        raise HTTPException(status_code=422, detail=f"Unsupported role: {role}")
+    actor_role = str(current_user.get("role") or "").strip()
+    if role in _ADMIN_LEVEL_ROLES and actor_role not in {"super_admin", "tenant_admin"}:
+        raise HTTPException(status_code=403, detail="Only a society administrator can grant admin roles")
+    actor_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
+    if user_id == actor_id:
+        raise HTTPException(status_code=403, detail="You cannot change your own role")
 
-    query = {"id": user_id}
-    if current_user.get("role") != "super_admin":
-        query["tenant_id"] = str(current_user.get("tenant_id") or "").strip()
-        app_key = str(current_user.get("app_key") or "").strip()
-        if app_key:
-            query["app_key"] = app_key
-
-    result = await get_collection("users").update_one(
-        query,
-        {"$set": {"role": role, "updated_at": datetime.now(timezone.utc)}},
-    )
-    if result.matched_count == 0:
+    query = {"user_id": user_id, **_tenant_user_scope(current_user)}
+    users = get_collection(USERS_COLLECTION)
+    target = await users.find_one(query, {"role": 1})
+    if target is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if str(target.get("role") or "") == "super_admin":
+        raise HTTPException(status_code=403, detail="Platform administrator roles cannot be changed here")
+
+    await users.update_one(query, {"$set": {"role": role, "updated_at": datetime.now(timezone.utc)}})
     return {"status": "ok", "id": user_id, "role": role}
 
 

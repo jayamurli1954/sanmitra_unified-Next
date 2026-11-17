@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 
 from app.core.auth.dependencies import get_current_user
 from app.core.auth.security import hash_password, verify_password
 from app.core.tenants.service import get_tenant
+from app.core.users import email_change
 from app.core.users.schemas import UserCreateRequest, UserResponse
 from app.core.users.service import create_user
 from app.db.mongo import get_collection
@@ -91,10 +92,21 @@ async def me(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/email-change/confirm")
+async def email_change_confirm_page(token: str = Query(default="", max_length=256)):
+    return await email_change.confirm_page(token)
+
+
+@router.post("/email-change/confirm")
+async def email_change_confirm(token: str = Form(default="", max_length=256)):
+    return await email_change.confirm_email_change(token)
+
+
 @router.put("/{user_id}")
 async def update_user_profile(
     user_id: str,
     payload: dict,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     actor_user_id = str(current_user.get("sub") or current_user.get("user_id") or "").strip()
@@ -115,14 +127,21 @@ async def update_user_profile(
         if len(full_name) < 2:
             raise HTTPException(status_code=400, detail="Full name must be at least 2 characters")
         patch["full_name"] = full_name
+    pending_email_change = False
     if "email" in payload:
         email = str(payload.get("email") or "").strip().lower()
         _validate_profile_email(email)
-        duplicate = await users.find_one({"email": email, "user_id": {"$ne": requested_user_id}})
-        if duplicate is not None:
-            raise HTTPException(status_code=409, detail="User with this email already exists")
-        patch["email"] = email
-        patch["provider_subject"] = f"password:{email}"
+        if email != str(existing.get("email") or "").strip().lower():
+            # Never applied directly: the new mailbox must confirm (see email_change).
+            patch.update(
+                await email_change.request_email_change(
+                    request=request,
+                    existing=existing,
+                    new_email=email,
+                    current_password=str(payload.get("current_password") or ""),
+                )
+            )
+            pending_email_change = True
     if "phone" in payload:
         phone = str(payload.get("phone") or "").strip()
         patch["phone"] = phone or None
@@ -155,6 +174,8 @@ async def update_user_profile(
         "is_superuser": bool(doc.get("is_superuser")) or str(doc.get("role") or "").strip() == "super_admin",
         "is_active": bool(doc.get("is_active", True)),
         "must_change_password": bool(doc.get("must_change_password", False)),
+        "pending_email": doc.get("pending_email"),
+        "pending_email_change": pending_email_change,
     }
 
 
