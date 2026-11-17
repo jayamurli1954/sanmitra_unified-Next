@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import visitorsService from '../services/visitorsService';
 import { QRCodeSVG } from 'qrcode.react';
 
 const PublicPassScreen = () => {
   const { visitorId } = useParams();
+  const [searchParams] = useSearchParams();
+  const passToken = searchParams.get('t');
   const [pass, setPass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,7 +14,7 @@ const PublicPassScreen = () => {
   useEffect(() => {
     const fetchPass = async () => {
       try {
-        const data = await visitorsService.getPublicPass(visitorId);
+        const data = await visitorsService.getPublicPass(visitorId, passToken);
         setPass(data);
       } catch (err) {
         console.error('Error loading pass:', err);
@@ -22,7 +24,7 @@ const PublicPassScreen = () => {
       }
     };
     fetchPass();
-  }, [visitorId]);
+  }, [visitorId, passToken]);
 
   const formatExpirationTime = (isoString) => {
     if (!isoString) return '';
@@ -171,7 +173,8 @@ const PublicPassScreen = () => {
                 <QRCodeSVG value={pass.id} size={180} />
               </div>
 
-              {/* Passcode Display */}
+              {/* Passcode Display: only returned for the signed share link */}
+              {pass.passcode && (
               <div style={{
                 display: 'block',
                 marginBottom: '24px'
@@ -190,6 +193,7 @@ const PublicPassScreen = () => {
                   </div>
                 </div>
               </div>
+              )}
 
               {pass.expires_at && (
                 <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: '600', marginBottom: '16px' }}>

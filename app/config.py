@@ -53,6 +53,8 @@ class Settings:
     JWT_SECRET = os.getenv("JWT_SECRET", "")
     # Validated at startup — see validate() below.
     OTP_PEPPER = os.getenv("OTP_PEPPER", "")
+    # Optional key for signed visitor-pass links; derived from JWT_SECRET when unset.
+    VISITOR_PASS_SIGNING_SECRET = os.getenv("VISITOR_PASS_SIGNING_SECRET", "")
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")

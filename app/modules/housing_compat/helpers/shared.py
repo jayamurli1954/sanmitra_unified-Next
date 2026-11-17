@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.accounting.models import Account, JournalEntry, JournalLine
 from app.modules.housing_compat import router as housing_router
+from app.modules.housing_compat.visitor_pass import visitor_pass_token
 
 def _format_upload_size(limit_bytes: int) -> str:
     if limit_bytes >= 1024 * 1024:
@@ -1318,6 +1319,7 @@ def _visitor_response(row: dict[str, Any]) -> dict[str, Any]:
         "purpose": row.get("purpose") or "",
         "vendor_name": row.get("vendor_name") or "",
         "passcode": row.get("passcode") or "",
+        "pass_token": visitor_pass_token(str(row.get("id") or ""), row.get("expires_at")),
         "status": row.get("status") or "pending",
         "approval_by": row.get("approval_by"),
         "approved_at": row.get("approved_at"),

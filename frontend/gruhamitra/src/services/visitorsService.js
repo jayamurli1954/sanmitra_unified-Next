@@ -51,8 +51,10 @@ const visitorsService = {
     return response.data;
   },
 
-  async getPublicPass(visitorId) {
-    const response = await api.get(`/visitors/public/${visitorId}`);
+  async getPublicPass(visitorId, token) {
+    const response = await api.get(`/visitors/public/${visitorId}`, {
+      params: token ? { t: token } : undefined,
+    });
     return response.data;
   },
 };

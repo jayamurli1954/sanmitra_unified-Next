@@ -275,7 +275,8 @@ const VisitorsScreen = () => {
 
   const handleShareWhatsApp = () => {
     if (!createdPass) return;
-    const publicPassUrl = `${window.location.origin}/gruhamitra/public/pass/${createdPass.id}`;
+    const tokenQuery = createdPass.pass_token ? `?t=${encodeURIComponent(createdPass.pass_token)}` : '';
+    const publicPassUrl = `${window.location.origin}/gruhamitra/public/pass/${createdPass.id}${tokenQuery}`;
     const messageText = `*GruhaMitra Guest Pass*
 
 Dear ${createdPass.visitor_name},

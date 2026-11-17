@@ -232,8 +232,8 @@ async def visitors_create(
     expires_at = (now_dt + timedelta(hours=validity_hours)).isoformat()
 
     vehicle_type = str(payload.get("vehicle_type") or "none").strip().lower()
-    import random
-    passcode = "".join(random.choices("0123456789", k=6))
+    import secrets
+    passcode = "".join(secrets.choice("0123456789") for _ in range(6))
 
     doc = {
         "id": str(uuid4()),

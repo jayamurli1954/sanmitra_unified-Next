@@ -13,7 +13,18 @@ from io import BytesIO
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import load_workbook
 from reportlab.lib.pagesizes import A4
@@ -28,6 +39,8 @@ from app.accounting.models import Account, JournalEntry, JournalLine
 from app.accounting.schemas import JournalLineIn, JournalPostRequest
 from app.accounting.service import AccountingNotFoundError, AccountingValidationError
 from app.config import get_settings
+from app.core.rate_limiting import limiter
+from app.modules.housing_compat.visitor_pass import pass_is_usable, verify_visitor_pass_token
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
 from app.core.permissions.rbac import Role, require_roles
@@ -112,8 +125,15 @@ from app.modules.housing_compat.service import (
 )
 
 
+# Per client IP. Verify-pass is a logged-in guard flow; the public page is per link.
+VISITOR_VERIFY_RATE_LIMIT = "30/minute"
+VISITOR_PUBLIC_PASS_RATE_LIMIT = "60/minute"
+
+
 @router.post("/visitors/verify-pass")
+@limiter.limit(VISITOR_VERIFY_RATE_LIMIT)
 async def visitors_verify_pass(
+    request: Request,
     payload: dict[str, Any],
     current_user: dict = Depends(get_current_user),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
@@ -154,26 +174,34 @@ async def visitors_verify_pass(
 
 
 @router.get("/visitors/public/{visitor_id}")
-async def get_public_visitor_pass(visitor_id: str):
+@limiter.limit(VISITOR_PUBLIC_PASS_RATE_LIMIT)
+async def get_public_visitor_pass(
+    request: Request,
+    response: Response,
+    visitor_id: str,
+    t: str | None = Query(default=None, max_length=128),
+):
+    """Guest-facing pass page. No login: the passcode is shown only to a holder of the
+    signed share link (``?t=``), and never once the pass is expired, rejected or used."""
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Referrer-Policy"] = "no-referrer"
     doc = await housing_router._visitors_collection().find_one({"id": visitor_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Invite pass not found")
 
     expires_at = doc.get("expires_at")
-    is_expired = False
-    if expires_at:
-        from datetime import datetime, timezone
-        is_expired = datetime.now(timezone.utc) > datetime.fromisoformat(expires_at)
+    is_expired, may_show = pass_is_usable(doc)
+    signed = verify_visitor_pass_token(str(doc["id"]), expires_at, t)
 
     return {
         "id": doc["id"],
         "visitor_name": doc["visitor_name"],
         "flat_number": doc["flat_number"],
-        "passcode": doc["passcode"],
+        "passcode": doc["passcode"] if (signed and may_show) else None,
         "visitor_type": doc["visitor_type"],
         "status": doc["status"],
         "created_at": doc.get("created_at"),
         "expires_at": expires_at,
-        "is_expired": is_expired
+        "is_expired": is_expired,
     }
 

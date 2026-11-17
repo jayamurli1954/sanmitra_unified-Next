@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from app.modules.housing_compat import router as housing_router
 from app.modules.housing_compat import service as housing_service
@@ -1208,6 +1208,7 @@ async def test_visitor_passcode_verification(monkeypatch):
 
     # 2. Verify using passcode
     verified = await housing_router.visitors_verify_pass(
+        request=Request({"type": "http", "path": "/visitors/verify-pass", "client": ("127.0.0.1", 1234), "headers": []}),
         payload={"code": guest["passcode"]},
         current_user={"tenant_id": "society-1", "app_key": "gruhamitra", "role": "security"},
         x_tenant_id=None,
