@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "start": "react-scripts start",
+    "start:gruhamitra": "vite --config gruhamitra/vite.config.js",
+    "build:gruhamitra": "vite build --config gruhamitra/vite.config.js",
     "build": "node scripts/build.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject",

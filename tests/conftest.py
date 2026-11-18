@@ -1,5 +1,5 @@
 """
-Phase 1: Foundation - Pytest Configuration and Fixtures
+Pytest configuration and shared fixtures (runs against the real app.main app).
 
 Provides test fixtures for:
 - Database (PostgreSQL, MongoDB)
@@ -22,9 +22,6 @@ import pytest_asyncio
 # Mandir compatibility modules; current replacement coverage lives in the
 # `test_accounting_*` and `test_mandir_*` suites.
 collect_ignore = [
-    "test_core_accounting_journal.py",
-    "test_core_accounting_reconciliation.py",
-    "test_core_accounting_service.py",
     "test_donations.py",
     "test_sevas.py",
     "test_temples.py",
@@ -37,13 +34,13 @@ from datetime import datetime, timedelta
 import json
 import os
 
-from app.phase1_main import app
+from app.main import app
 from app.config import get_settings
 import app.db.mongo as runtime_mongo
-from app.phase1_config import settings
-from app.db.phase1_postgres import Base, get_async_session
-from app.db.phase1_mongo import get_collection
-from app.core.phase1_auth import create_access_token
+from app.core.auth.security import create_access_token
+
+_DEFAULT_TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/sanmitra_db"
+_DEFAULT_TEST_MONGODB_URL = "mongodb://localhost:27017"
 from app.accounting.models.base import Base as AccountingBase
 from app.accounting.models import Account, CoaMappingDecision, JournalEntry, JournalLine
 
@@ -65,7 +62,8 @@ def _resolve_test_db_url() -> str:
         return str(make_url(runtime_pg).set(database="sanmitra_test"))
 
     # Fallback: Phase-1 config URL.
-    return str(make_url(settings.DATABASE_URL).set(database="sanmitra_test"))
+    base_url = os.getenv("DATABASE_URL", "").strip() or _DEFAULT_TEST_DATABASE_URL
+    return str(make_url(base_url).set(database="sanmitra_test"))
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -86,8 +84,6 @@ async def postgres_engine():
         )
 
         async with engine.begin() as conn:
-            # Create Phase 1 tables
-            await conn.run_sync(Base.metadata.create_all)
             # Create accounting tables
             await conn.run_sync(AccountingBase.metadata.create_all)
 
@@ -105,8 +101,6 @@ async def postgres_engine():
         # Create all tables; skip postgres-backed tests when local DB is unavailable.
         try:
             async with engine.begin() as conn:
-                # Create Phase 1 tables
-                await conn.run_sync(Base.metadata.create_all)
                 # Create accounting tables
                 await conn.run_sync(AccountingBase.metadata.create_all)
         except Exception as exc:  # pragma: no cover - environment dependent
@@ -118,7 +112,6 @@ async def postgres_engine():
         # Cleanup: Drop all tables
         async with engine.begin() as conn:
             await conn.run_sync(AccountingBase.metadata.drop_all)
-            await conn.run_sync(Base.metadata.drop_all)
 
         await engine.dispose()
 
@@ -182,7 +175,7 @@ async def mongo_client():
     Uses test database.
     """
     client = AsyncIOMotorClient(
-        settings.MONGODB_URL,
+        os.getenv("MONGODB_URL", "").strip() or os.getenv("MONGODB_URI", "").strip() or _DEFAULT_TEST_MONGODB_URL,
         serverSelectionTimeoutMS=5000,
     )
     runtime_settings = get_settings()
@@ -252,10 +245,7 @@ def auth_token(test_user_id, test_tenant_id, test_app_key):
             )
     """
     return create_access_token(
-        subject=test_user_id,
-        tenant_id=test_tenant_id,
-        app_key=test_app_key,
-        expires_delta=timedelta(hours=24),
+        {"sub": test_user_id, "tenant_id": test_tenant_id, "app_key": test_app_key, "role": "tenant_admin"}
     )
 
 
@@ -281,10 +271,7 @@ def multi_tenant_auth_token(test_user_id, test_app_key):
     """
     other_tenant = "test-tenant-002"
     return create_access_token(
-        subject=test_user_id,
-        tenant_id=other_tenant,
-        app_key=test_app_key,
-        expires_delta=timedelta(hours=24),
+        {"sub": test_user_id, "tenant_id": other_tenant, "app_key": test_app_key, "role": "tenant_admin"}
     )
 
 
@@ -375,7 +362,7 @@ def request_context(test_user_id, test_tenant_id, test_app_key):
     """
     Sample request context (user + tenant info).
 
-    Mirrors what's passed from app.core.phase1_dependencies.get_request_context()
+    Request-context shape used by service-level tests.
     """
     return {
         "user_id": test_user_id,

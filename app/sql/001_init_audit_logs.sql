@@ -139,4 +139,4 @@ GROUP BY a.id, a.account_number, a.account_name, a.account_type, j.tenant_id;
 
 -- Row-level security: Only show data for current tenant
 -- Note: Implement in application layer for now (app dependencies)
--- This is documented in app/core/phase1_dependencies.py
+-- Tenant context is resolved in app/core/tenants/context.py (resolve_tenant_id)

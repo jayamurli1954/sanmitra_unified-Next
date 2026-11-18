@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -41,6 +41,10 @@ from app.modules.legal_compat.sync_queue import ensure_legal_compat_indexes
 from app.modules.legal_compat.retention import cleanup_expired_legal_retention_records, ensure_legal_retention_indexes
 from app.modules.legal_compat.sync_worker import start_legal_sync_worker, stop_legal_sync_worker
 from app.modules.mandir_compat.reminder_worker import start_seva_reminder_worker, stop_seva_reminder_worker
+from app.core.reconciliation.ledger_sync import (
+    start_ledger_reconciliation_worker,
+    stop_ledger_reconciliation_worker,
+)
 from app.modules.mandir_compat.service import ensure_demo_mandir_bootstrap
 from app.modules.rag.service import ensure_rag_indexes
 from app.modules.temple.service import ensure_donations_indexes
@@ -120,8 +124,33 @@ async def add_security_headers(request: Request, call_next):
 
 app.include_router(legacy_alias_router)
 app.include_router(api_router)
-app.include_router(gruhamitra_compat_router, prefix="/api", tags=["gruhamitra-frontend-compat"])
-app.include_router(accounting_report_alias_router, prefix="/api", tags=["accounting-reports-compat"])
+# Unversioned duplicates of routes also served under /api/v1. Current web clients call
+# /api/v1 (GruhaMitra's client rewrites to /v1). Kept for older installs, hidden from the
+# API docs, and each path logged once per process so they can be removed once unused.
+_LEGACY_UNVERSIONED_SEEN: set[str] = set()
+
+
+async def _log_legacy_unversioned_use(request: Request) -> None:
+    path = request.url.path
+    if path not in _LEGACY_UNVERSIONED_SEEN:
+        _LEGACY_UNVERSIONED_SEEN.add(path)
+        _startup_logger.warning("Deprecated unversioned API path used: %s %s (use /api/v1)", request.method, path)
+
+
+app.include_router(
+    gruhamitra_compat_router,
+    prefix="/api",
+    tags=["gruhamitra-frontend-compat"],
+    include_in_schema=False,
+    dependencies=[Depends(_log_legacy_unversioned_use)],
+)
+app.include_router(
+    accounting_report_alias_router,
+    prefix="/api",
+    tags=["accounting-reports-compat"],
+    include_in_schema=False,
+    dependencies=[Depends(_log_legacy_unversioned_use)],
+)
 
 
 @app.on_event("startup")
@@ -282,10 +311,19 @@ async def on_startup() -> None:
         # Keep app booting even if PostgreSQL is unavailable; health endpoint will show degraded state.
         _startup_logger.error("PostgreSQL startup initialisation failed: %s", exc, exc_info=True)
 
+    try:
+        await start_ledger_reconciliation_worker(
+            interval_hours=settings.LEDGER_RECONCILE_INTERVAL_HOURS,
+            lookback_days=settings.LEDGER_RECONCILE_LOOKBACK_DAYS,
+        )
+    except Exception as exc:
+        _startup_logger.warning("Ledger reconciliation worker failed to start: %s", exc, exc_info=True)
+
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
     await stop_seva_reminder_worker()
+    await stop_ledger_reconciliation_worker()
     await stop_legal_sync_worker()
     await close_mongo()
     await close_postgres()

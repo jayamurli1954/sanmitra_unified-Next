@@ -55,6 +55,9 @@ class Settings:
     OTP_PEPPER = os.getenv("OTP_PEPPER", "")
     # Optional key for signed visitor-pass links; derived from JWT_SECRET when unset.
     VISITOR_PASS_SIGNING_SECRET = os.getenv("VISITOR_PASS_SIGNING_SECRET", "")
+    # MongoDB <-> PostgreSQL ledger reconciliation (report only). 0 disables the worker.
+    LEDGER_RECONCILE_INTERVAL_HOURS = float(os.getenv("LEDGER_RECONCILE_INTERVAL_HOURS", "24"))
+    LEDGER_RECONCILE_LOOKBACK_DAYS = float(os.getenv("LEDGER_RECONCILE_LOOKBACK_DAYS", "3"))
     VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
     VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")

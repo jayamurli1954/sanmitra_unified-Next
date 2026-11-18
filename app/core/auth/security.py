@@ -1,46 +1,39 @@
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
 from typing import Any, Dict
 from uuid import uuid4
 
+import bcrypt
+import jwt
 from fastapi import HTTPException
 
 from app.config import get_settings
 
-
-@lru_cache(maxsize=1)
-def _bcrypt_context():
-    try:
-        from passlib.context import CryptContext
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"passlib not installed: {exc}")
-    return CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only uses the first 72 bytes; passlib truncated silently, so keep that
+# behaviour for existing passwords instead of rejecting them.
+_BCRYPT_MAX_BYTES = 72
 
 
-@lru_cache(maxsize=1)
-def _jwt_module():
-    try:
-        from jose import JWTError, jwt
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"python-jose not installed: {exc}")
-    return JWTError, jwt
+def _password_bytes(password: str) -> bytes:
+    return str(password or "").encode("utf-8")[:_BCRYPT_MAX_BYTES]
 
 
 def hash_password(password: str) -> str:
-    return _bcrypt_context().hash(password)
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return _bcrypt_context().verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(_password_bytes(plain_password), str(hashed_password or "").encode("ascii"))
+    except (ValueError, TypeError):
+        # Not a bcrypt hash (or malformed): never a match.
+        return False
 
 
 def decode_token(token: str) -> Dict[str, Any]:
     settings = get_settings()
-    JWTError, jwt = _jwt_module()
-
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     return payload
@@ -48,7 +41,6 @@ def decode_token(token: str) -> Dict[str, Any]:
 
 def create_access_token(payload: Dict[str, Any]) -> str:
     settings = get_settings()
-    _JWTError, jwt = _jwt_module()
 
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode = {**payload, "exp": expire, "type": "access"}
@@ -57,7 +49,6 @@ def create_access_token(payload: Dict[str, Any]) -> str:
 
 def create_refresh_token(payload: Dict[str, Any]) -> str:
     settings = get_settings()
-    _JWTError, jwt = _jwt_module()
 
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {**payload, "exp": expire, "type": "refresh", "jti": str(uuid4())}

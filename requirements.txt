@@ -18,9 +18,8 @@ alembic==1.18.3
 psycopg[binary]==3.3.3
 
 # Auth / crypto
-passlib[bcrypt]==1.7.4
 bcrypt==4.1.2
-python-jose[cryptography]==3.4.0
+PyJWT==2.9.0
 cryptography==50.0.0
 google-auth==2.45.0
 # pyasn1 0.6.4 is blocked: python-jose 3.4.0 requires pyasn1>=0.4.1,<0.5.0.

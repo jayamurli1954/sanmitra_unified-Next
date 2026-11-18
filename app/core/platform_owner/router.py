@@ -1,7 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import get_current_user
 from app.core.platform_owner.service import get_platform_owner_dashboard
+from app.core.reconciliation.ledger_sync import reconcile_ledger, save_report
+from app.db.postgres import get_async_session
 from app.core.tenants.service import set_addon_available, set_hr_addon_available
 
 router = APIRouter(prefix="/platform-owner", tags=["platform-owner"])
@@ -19,6 +24,28 @@ async def platform_owner_dashboard(
 ):
     _require_super_admin(current_user, detail="Only super admins can view platform owner dashboard")
     return await get_platform_owner_dashboard(limit=limit)
+
+
+@router.get("/ledger-reconciliation")
+async def ledger_reconciliation(
+    days: float = Query(default=7, gt=0, le=366),
+    tenant_id: str | None = Query(default=None, max_length=64),
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """MongoDB vs PostgreSQL ledger check (report only) - platform-owner only."""
+    _require_super_admin(current_user, detail="Only super admins can run ledger reconciliation")
+    report = await reconcile_ledger(
+        session,
+        since=datetime.now(timezone.utc) - timedelta(days=days),
+        tenant_id=tenant_id or None,
+    )
+    try:
+        await save_report(report)
+    except Exception:
+        pass
+    report.pop("_id", None)
+    return report
 
 
 @router.put("/tenants/{tenant_id}/hr-addon")

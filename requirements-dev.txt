@@ -5,6 +5,8 @@
 
 pytest==7.4.4
 pytest-asyncio==0.23.3
+# SQLite driver for the shared DB fixtures in tests/conftest.py (no local Postgres needed)
+aiosqlite==0.20.0
 
 # Panchang social card (HTML → PNG via Chromium)
 jinja2>=3.1.0
