@@ -570,7 +570,7 @@ async def test_public_membership_paths_are_limited_to_gruhamitra_app_key(monkeyp
     result = await housing_service.complete_resident_registration(
         payload=CompleteResidentRegistrationRequest(
             email="resident@example.com",
-            password="secret123",
+            password="Secret-Pass123!",
             terms_accepted=True,
             privacy_accepted=True,
         )

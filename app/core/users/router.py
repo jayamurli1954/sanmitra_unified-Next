@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 
 from app.core.auth.dependencies import get_current_user
+from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.security import hash_password, verify_password
 from app.core.tenants.service import get_tenant
 from app.core.users import email_change
@@ -147,8 +148,7 @@ async def update_user_profile(
         patch["phone"] = phone or None
     if "password" in payload:
         new_password = str(payload.get("password") or "")
-        if len(new_password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        validate_password_policy(new_password, field_label="New password")
         current_password = str(payload.get("current_password") or "")
         if not current_password:
             raise HTTPException(status_code=400, detail="Current password is required")
@@ -229,6 +229,7 @@ async def register_user(payload: UserCreateRequest, current_user: dict = Depends
 
     if role == "tenant_admin" and current_user.get("tenant_id") != payload.tenant_id:
         raise HTTPException(status_code=403, detail="Tenant admin cannot create users outside tenant")
+    validate_password_policy(payload.password)
 
     try:
         user = await create_user(

@@ -9,6 +9,7 @@ from email.message import EmailMessage
 from uuid import uuid4
 
 from app.config import get_settings
+from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.security import hash_password
 from app.core.email_delivery.service import log_email_delivery_attempt
 from app.core.onboarding.schemas import (
@@ -592,6 +593,8 @@ async def approve_onboarding_request(*, request_id: str, approved_by: str, paylo
         created_by=approved_by,
     )
 
+    if payload.initial_password:
+        validate_password_policy(payload.initial_password, field_label="Initial password")
     temp_password = payload.initial_password or _generate_temporary_password()
     admin_email = str(doc.get("admin_email") or "").strip().lower()
     try:
@@ -700,6 +703,8 @@ async def resend_onboarding_credentials(*, request_id: str, resent_by: str, payl
     if not user:
         raise ValueError("Approved tenant admin user not found")
 
+    if payload.initial_password:
+        validate_password_policy(payload.initial_password, field_label="Initial password")
     temp_password = payload.initial_password or _generate_temporary_password()
     now = datetime.now(timezone.utc)
 

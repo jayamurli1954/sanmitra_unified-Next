@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from app.config import get_settings
+from app.core.auth.password_policy import validate_password_policy
 from app.core.auth.security import decode_token
 from app.core.auth.service import login_google_user, login_user
 from app.core.tenants.context import resolve_app_key
@@ -483,6 +484,7 @@ async def create_mandir_first_login_onboarding(
         created_by="mandir-first-login",
     )
 
+    validate_password_policy(payload.admin_password, field_label="Admin password")
     try:
         created_admin = await create_user(
             email=payload.admin_email,

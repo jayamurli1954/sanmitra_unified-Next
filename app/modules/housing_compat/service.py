@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from app.core.auth.password_policy import validate_password_policy
+
 from app.core.tenants.service import get_tenant, list_tenants
 from app.core.users.service import create_user
 from app.db.mongo import get_collection
@@ -830,6 +832,7 @@ async def raise_damage_claim(*, tenant_id: str, app_key: str, payload: DamageCla
 async def complete_resident_registration(*, payload: CompleteResidentRegistrationRequest) -> dict:
     if not payload.terms_accepted or not payload.privacy_accepted:
         raise HTTPException(status_code=400, detail="Terms and privacy consent are required")
+    validate_password_policy(payload.password)
     email = str(payload.email).strip().lower()
     joins = get_collection(JOIN_REQUESTS)
     app_key = _housing_app_key()

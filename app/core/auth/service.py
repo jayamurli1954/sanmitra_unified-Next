@@ -243,6 +243,7 @@ async def _ensure_refresh_indexes() -> None:
     await tokens.create_index("jti", unique=True)
     await tokens.create_index("token_hash", unique=True)
     await tokens.create_index([("user_id", 1), ("revoked", 1)])
+    await tokens.create_index([("family_id", 1), ("revoked", 1)])
     await tokens.create_index("expires_at", expireAfterSeconds=0)
     _REFRESH_INDEXES_READY = True
 
@@ -259,7 +260,11 @@ async def _ensure_mobile_otp_indexes() -> None:
     _MOBILE_OTP_INDEXES_READY = True
 
 
-async def _store_refresh_token(refresh_token: str, payload: dict[str, Any]) -> None:
+async def _store_refresh_token(
+    refresh_token: str, payload: dict[str, Any], *, family_id: str | None = None
+) -> None:
+    """Persist a refresh token. Tokens rotated from the same login share a family_id,
+    so reuse of an old one can sign out the whole login (see rotate_refresh_token)."""
     if payload.get("type") != "refresh" or not payload.get("jti"):
         raise HTTPException(status_code=401, detail="Invalid refresh token payload")
 
@@ -282,8 +287,36 @@ async def _store_refresh_token(refresh_token: str, payload: dict[str, Any]) -> N
             "revoked": False,
             "revoked_at": None,
             "replaced_by": None,
+            "family_id": family_id or payload["jti"],
         }
     )
+
+
+# A client that refreshes twice at once (two tabs) legitimately presents a just-rotated
+# token; only treat reuse as theft once this window has passed.
+REFRESH_REUSE_GRACE_SECONDS = 30
+
+
+async def _revoke_refresh_family(tokens, record: dict[str, Any], now: datetime) -> int:
+    family_id = record.get("family_id")
+    if family_id:
+        query: dict[str, Any] = {"family_id": family_id, "revoked": False}
+    else:
+        # Tokens issued before families existed: follow the rotation chain forward.
+        chain: list[str] = []
+        next_jti = record.get("replaced_by")
+        while next_jti and next_jti not in chain and len(chain) < 1000:
+            chain.append(next_jti)
+            child = await tokens.find_one({"jti": next_jti}, {"replaced_by": 1})
+            next_jti = (child or {}).get("replaced_by")
+        if not chain:
+            return 0
+        query = {"jti": {"$in": chain}, "revoked": False}
+    result = await tokens.update_many(
+        query,
+        {"$set": {"revoked": True, "revoked_at": now, "revoked_reason": "refresh_token_reuse"}},
+    )
+    return int(getattr(result, "modified_count", 0) or 0)
 
 
 async def _deliver_otp_via_twilio(*, mobile: str, code: str, expires_in: int) -> dict[str, Any]:
@@ -726,6 +759,19 @@ async def rotate_refresh_token(refresh_token: str, app_key: str | None = None):
 
     now = datetime.now(timezone.utc)
     if record.get("revoked"):
+        revoked_at = record.get("revoked_at")
+        rotated = bool(record.get("replaced_by"))
+        past_grace = not isinstance(revoked_at, datetime) or (
+            now - _as_utc(revoked_at)
+        ).total_seconds() > REFRESH_REUSE_GRACE_SECONDS
+        if rotated and past_grace:
+            # A rotated token came back: someone else holds a copy. End the whole login.
+            revoked = await _revoke_refresh_family(tokens, record, now)
+            _service_logger.warning(
+                "Refresh token reuse detected for user %s; revoked %d active token(s) in its login",
+                record.get("user_id"),
+                revoked,
+            )
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     expires_at = record.get("expires_at")
@@ -753,7 +799,11 @@ async def rotate_refresh_token(refresh_token: str, app_key: str | None = None):
     new_refresh_token = create_refresh_token(user_payload)
     new_refresh_payload = decode_token(new_refresh_token)
 
-    await _store_refresh_token(new_refresh_token, new_refresh_payload)
+    await _store_refresh_token(
+        new_refresh_token,
+        new_refresh_payload,
+        family_id=record.get("family_id") or record.get("jti"),
+    )
     await tokens.update_one(
         {"_id": record["_id"]},
         {
