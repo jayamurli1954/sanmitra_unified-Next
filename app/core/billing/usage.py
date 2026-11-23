@@ -29,6 +29,36 @@ def _has_privileged_usage_access(user: dict | None) -> bool:
     return _has_privileged_usage_role(user) or _has_privileged_usage_email(user)
 
 
+def _as_utc_datetime(value) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def effective_subscription_tier(user: dict | None, default: str = "free", now: datetime | None = None) -> str:
+    """The tier a user is entitled to right now.
+
+    A paid or complimentary plan carries ``subscription_expires_at``; once that
+    moment has passed the user is treated as ``free``. Users with no expiry
+    (legacy, seeded or manually set accounts) keep their stored tier.
+    """
+    if not user:
+        return default
+    tier = str(user.get("subscription_tier") or default).strip().lower() or default
+    if tier == "free":
+        return tier
+    expires_at = _as_utc_datetime(user.get("subscription_expires_at"))
+    if expires_at is not None and expires_at <= (now or datetime.now(timezone.utc)):
+        return "free"
+    return tier
+
+
 async def ensure_terms_accepted(user_id: str | None):
     if not user_id:
         return True
@@ -50,7 +80,7 @@ async def get_usage_limits_for_user(user_id: str | None, actor: dict | None = No
         users_col = get_collection("core_users")
         user = await users_col.find_one({"user_id": user_id})
         if user:
-            tier = str(user.get("subscription_tier") or tier).lower()
+            tier = effective_subscription_tier(user, default=tier)
 
     return get_tier_limits(tier)
 
@@ -75,7 +105,7 @@ async def check_and_increment_usage(user_id: str, feature: str, actor: dict | No
     if _has_privileged_usage_access(user):
         return True
 
-    tier = user.get("subscription_tier", "free").lower()
+    tier = effective_subscription_tier(user)
     limits = get_tier_limits(tier)
 
     now = datetime.now(timezone.utc)

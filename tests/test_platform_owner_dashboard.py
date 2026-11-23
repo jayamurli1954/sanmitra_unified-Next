@@ -93,6 +93,11 @@ async def test_platform_owner_dashboard_contract_counts_tenants_and_onboarding(m
     monkeypatch.setattr(platform_owner_service, "list_onboarding_requests", fake_list_onboarding_requests)
     monkeypatch.setattr(platform_owner_service, "list_billing_transactions", fake_list_billing_transactions)
 
+    async def fake_list_complimentary_plans(*, limit: int = 200):
+        return []
+
+    monkeypatch.setattr(platform_owner_service, "list_complimentary_plans", fake_list_complimentary_plans)
+
     dashboard = await platform_owner_service.get_platform_owner_dashboard(limit=10)
 
     assert dashboard["summary"]["onboarding"]["total"] == 3
@@ -151,6 +156,11 @@ async def test_platform_owner_dashboard_dedupes_duplicate_billing_subscription_r
     monkeypatch.setattr(platform_owner_service, "list_tenants", fake_list_tenants)
     monkeypatch.setattr(platform_owner_service, "list_onboarding_requests", fake_list_onboarding_requests)
     monkeypatch.setattr(platform_owner_service, "list_billing_transactions", fake_list_billing_transactions)
+
+    async def fake_list_complimentary_plans(*, limit: int = 200):
+        return []
+
+    monkeypatch.setattr(platform_owner_service, "list_complimentary_plans", fake_list_complimentary_plans)
 
     dashboard = await platform_owner_service.get_platform_owner_dashboard(limit=10)
 

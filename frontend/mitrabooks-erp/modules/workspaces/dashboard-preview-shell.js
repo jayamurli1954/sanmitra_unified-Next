@@ -112,6 +112,72 @@ export function renderPlatformSubscriptionsTable(rows) {
   ], "No subscription records returned.");
 }
 
+function formatGrantDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Platform owner: give someone free access for N days (creates the account if needed). */
+export function renderComplimentaryPlansPanel(rows) {
+  const body = rows.length
+    ? rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.full_name || "")}<br><small>${escapeHtml(row.email || "")}</small></td>
+          <td>${escapeHtml(row.app_key || "")}</td>
+          <td>${escapeHtml(row.tier || "")}</td>
+          <td>${escapeHtml(formatGrantDate(row.subscription_expires_at))}</td>
+          <td><span class="pill ${row.active ? "ok" : "warn"}">${row.active ? "active" : "expired"}</span></td>
+          <td>${escapeHtml(row.note || "")}</td>
+          <td>${row.active
+            ? `<button type="button" class="secondary" data-comp-action="revoke" data-comp-email="${escapeHtml(row.email || "")}">End now</button>`
+            : ""}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="7">No complimentary plans yet.</td></tr>`;
+  return `
+    <article class="complimentary-plans">
+      <h4>Complimentary Plans</h4>
+      <p>Give someone free access for a set number of days. If they have no account, one is created with a temporary password; it drops to the free plan automatically when the period ends.</p>
+      <form id="complimentary-plan-form" autocomplete="off" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;align-items:end;margin:12px 0">
+        <label>Email<input name="email" type="email" required placeholder="advocate@example.com"></label>
+        <label>Full name<input name="full_name" type="text" maxlength="120" placeholder="Needed for a new account"></label>
+        <label>Firm / chamber name<input name="organization_name" type="text" maxlength="160" placeholder="Optional"></label>
+        <label>Product
+          <select name="app_key">
+            <option value="legalmitra" selected>LegalMitra</option>
+            <option value="mitrabooks">MitraBooks</option>
+            <option value="mandirmitra">MandirMitra</option>
+            <option value="gruhamitra">GruhaMitra</option>
+          </select>
+        </label>
+        <label>Plan
+          <select name="tier">
+            <option value="pro" selected>Pro (all features)</option>
+            <option value="growth">Growth</option>
+            <option value="basic">Basic</option>
+          </select>
+        </label>
+        <label>Duration
+          <select name="days">
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="180">180 days</option>
+          </select>
+        </label>
+        <label>Note<input name="note" type="text" maxlength="300" placeholder="e.g. Known advocate, feedback trial"></label>
+        <label style="display:flex;gap:6px;align-items:center"><input name="send_email" type="checkbox" checked> Email the login details</label>
+        <div><button type="submit" data-comp-action="grant">Grant access</button></div>
+      </form>
+      <div id="complimentary-plan-result" aria-live="polite" style="margin:8px 0"></div>
+      <div class="table-preview compact-table erp-table"><table>
+        <thead><tr><th>User</th><th>Product</th><th>Plan</th><th>Ends</th><th>Status</th><th>Note</th><th></th></tr></thead>
+        <tbody>${body}</tbody>
+      </table></div>
+    </article>
+  `;
+}
+
 export function emptyPlatformDashboardPayload() {
   return {
     summary: {
@@ -130,6 +196,7 @@ export function emptyPlatformDashboardPayload() {
     recent_onboarding: [],
     recent_tenants: [],
     subscription_records: [],
+    complimentary_plans: [],
   };
 }
 
@@ -211,6 +278,7 @@ export function renderPlatformDashboard(payload) {
           ["Subscription Plans", planCount, formatCountMap(subscriptions.by_plan)],
           ["Subscription Records", subscriptionRecords.length, "tenants and paid billing records"],
         ])}</div>
+        ${renderComplimentaryPlansPanel(Array.isArray(payload?.complimentary_plans) ? payload.complimentary_plans : [])}
         <article>
           <h4>Tenant Subscriptions</h4>
           ${renderPlatformSubscriptionsTable(subscriptionRecords)}

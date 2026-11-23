@@ -48,6 +48,81 @@ export function initPlatformOwnerOps(injected) {
       renderEntitlementModules(org, new Set());
     });
   }
+  bindComplimentaryPlanHandlers();
+}
+
+// ── Complimentary plans (delegated: the panel is re-rendered on every refresh) ──
+let complimentaryHandlersBound = false;
+
+function showComplimentaryResult(html) {
+  const box = document.getElementById("complimentary-plan-result");
+  if (box) box.innerHTML = html;
+}
+
+function bindComplimentaryPlanHandlers() {
+  if (complimentaryHandlersBound) return;
+  complimentaryHandlersBound = true;
+
+  document.addEventListener("submit", async (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.id !== "complimentary-plan-form") return;
+    event.preventDefault();
+    const data = new FormData(form);
+    const body = {
+      email: String(data.get("email") || "").trim(),
+      full_name: String(data.get("full_name") || "").trim() || null,
+      organization_name: String(data.get("organization_name") || "").trim() || null,
+      app_key: String(data.get("app_key") || "legalmitra"),
+      tier: String(data.get("tier") || "pro"),
+      days: Number(data.get("days") || 90),
+      note: String(data.get("note") || "").trim() || null,
+      send_email: data.get("send_email") === "on",
+    };
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    showComplimentaryResult('<p class="muted">Granting access…</p>');
+    const result = await apiRequest(getAppKey(), "/api/v1/platform-owner/complimentary-plans", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (submit) submit.disabled = false;
+    if (!result.ok) {
+      const detail = result.payload?.detail || result.error || "Request failed";
+      showComplimentaryResult(`<p class="pill warn">Could not grant access: ${escapeHtml(typeof detail === "string" ? detail : JSON.stringify(detail))}</p>`);
+      return;
+    }
+    const grant = result.payload || {};
+    const until = grant.subscription_expires_at ? new Date(grant.subscription_expires_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+    const lines = [
+      `<strong>${escapeHtml(grant.email)}</strong> now has ${escapeHtml(grant.tier)} on ${escapeHtml(grant.app_key)} until ${escapeHtml(until)}.`,
+    ];
+    if (grant.account_created) {
+      lines.push(`New account created. Login ID: <code>${escapeHtml(grant.email)}</code> · Temporary password: <code>${escapeHtml(grant.temporary_password || "")}</code> (shown once; they must change it at first login).`);
+    }
+    lines.push(grant.email_sent
+      ? "Login details were emailed."
+      : `Email not sent${grant.email_error ? ` (${escapeHtml(grant.email_error)})` : ""} — share the details yourself.`);
+    form.reset();
+    await loadPlatformOwnerDashboard();
+    showComplimentaryResult(`<div class="pill ok" style="display:block;white-space:normal;padding:10px">${lines.join("<br>")}</div>`);
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target instanceof Element ? event.target.closest('[data-comp-action="revoke"]') : null;
+    if (!button) return;
+    const email = button.getAttribute("data-comp-email") || "";
+    if (!email || !window.confirm(`End the complimentary plan for ${email} now? They will drop to the free plan.`)) return;
+    button.disabled = true;
+    const result = await apiRequest(getAppKey(), `/api/v1/platform-owner/complimentary-plans/${encodeURIComponent(email)}`, { method: "DELETE" });
+    if (!result.ok) {
+      button.disabled = false;
+      const detail = result.payload?.detail || result.error || "Request failed";
+      showComplimentaryResult(`<p class="pill warn">Could not end the plan: ${escapeHtml(String(detail))}</p>`);
+      return;
+    }
+    await loadPlatformOwnerDashboard();
+    showComplimentaryResult(`<p class="pill ok">Complimentary plan ended for ${escapeHtml(email)}.</p>`);
+  });
 }
 
 const DEFAULT_MODULES_BY_ORG = {

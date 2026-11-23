@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.onboarding.service import list_onboarding_requests
+from app.core.platform_owner.complimentary import list_complimentary_plans
 from app.core.tenants.service import list_tenants
 from app.db.mongo import get_collection
 
@@ -135,6 +136,10 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
     tenants = [_compact_tenant(row) for row in await list_tenants(limit=500)]
     onboarding = [_compact_onboarding_request(row) for row in await list_onboarding_requests(limit=500)]
     billing_transactions = await list_billing_transactions(limit=500)
+    try:
+        complimentary_plans = await list_complimentary_plans(limit=200)
+    except Exception:  # the dashboard must still load if this listing fails
+        complimentary_plans = []
 
     onboarding_by_status = Counter(row["status"] for row in onboarding)
     onboarding_by_app: dict[str, Counter] = defaultdict(Counter)
@@ -212,4 +217,5 @@ async def get_platform_owner_dashboard(*, limit: int = 25) -> dict[str, Any]:
         "recent_onboarding": recent_onboarding,
         "recent_tenants": recent_tenants,
         "subscription_records": subscription_records[: max(safe_limit, 100)],
+        "complimentary_plans": complimentary_plans,
     }
