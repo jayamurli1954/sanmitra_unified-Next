@@ -26,6 +26,11 @@
       "permanent": false
     },
     {
+      "source": "/legalmitra.html",
+      "destination": "/legalmitra/",
+      "permanent": true
+    },
+    {
       "source": "/",
       "has": [
         { "type": "host", "value": "www.legalmitra.sanmitratech.in" }
