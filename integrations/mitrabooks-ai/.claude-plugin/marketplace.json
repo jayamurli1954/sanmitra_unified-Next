@@ -1,0 +1,17 @@
+{
+  "name": "mitrabooks",
+  "owner": {
+    "name": "SanMitra Tech"
+  },
+  "metadata": {
+    "description": "MitraBooks accounting and GST tools for Claude."
+  },
+  "plugins": [
+    {
+      "name": "mitrabooks",
+      "source": "./plugins/mitrabooks",
+      "description": "Read-only MitraBooks books, GST and TDS reports plus month-end and GST return-prep workflows.",
+      "version": "1.0.0"
+    }
+  ]
+}

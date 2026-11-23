@@ -23,6 +23,7 @@ from app.modules.legal_compat.router import router as legal_compat_router
 from app.modules.legal_compat.answer_feedback_router import router as legal_answer_feedback_router
 from app.modules.legal_compat.code_crosswalk_router import router as legal_code_crosswalk_router
 from app.modules.mandir_compat.router import router as mandir_compat_router
+from app.modules.mcp.router import router as mcp_router
 from app.modules.mitrabooks_compat.router import router as mitrabooks_compat_router
 from app.modules.office_ai.router import router as office_ai_router
 from app.modules.office_ai.mis_narrative_router import router as office_ai_mis_narrative_router
@@ -56,6 +57,7 @@ api_router.include_router(mitrabooks_compat_router)
 api_router.include_router(rag_router)
 api_router.include_router(billing_router)
 api_router.include_router(business_router)
+api_router.include_router(mcp_router)
 api_router.include_router(hr_router)
 api_router.include_router(manufacturing_router)
 api_router.include_router(blog_router)

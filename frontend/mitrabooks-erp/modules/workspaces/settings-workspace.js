@@ -5,6 +5,7 @@
 // ====================================================================
 
 import { apiRequest, resolveAccountingEntityId } from "../../../shared/api-client.js";
+import { renderAiConnectionsPanel } from "./ai-connections.js";
 
 export let activeSettingsDetailId = "";
 export let lastBusinessAdminSettings = null;
@@ -87,6 +88,7 @@ const MITRABOOKS_SETTINGS_GROUPS = [
       { title: "Integrations", status: "Implemented", detail: "Tenant-scoped integration shells now save payment gateway, GST portal, bank feed, WhatsApp, email, and document storage settings without exposing provider secrets to the frontend.", visibility: "Owner, Admin" },
       { title: "Audit & Logs", status: "Implemented", detail: "Party, voucher, account, document, and lifecycle events are visible through audit trail.", visibility: "Owner, Auditor", workspace: "audit" },
       { title: "AI Settings", status: "Implemented", detail: "Tenant-scoped AI/OCR controls now save review-first settings for OCR, categorization, reconciliation assistance, MIS, and forecasting. Auto-post to ledger remains disabled.", visibility: "Owner, Admin" },
+      { title: "AI Assistant Connections", status: "Implemented", detail: "Connect Claude, ChatGPT, Cursor, Gemini CLI, Antigravity or any MCP client to these books with a personal read-only access token. The assistant sees only what your login can see and cannot post or change entries.", visibility: "Each user", panel: "ai-connections" },
     ],
   },
 ];
@@ -211,14 +213,17 @@ export function renderMitraBooksSettingsDetail() {
   const isReady = String(item.status || "").toLowerCase() === "implemented";
   const action = item.workspace
     ? `<button class="primary" type="button" data-business-action="workspace-view" data-workspace-view="${escapeHtml(item.workspace)}">Open ${escapeHtml(item.title)}</button>`
-    : sectionKey
+    : sectionKey || item.panel
       ? ""
       : `<button class="secondary" type="button" disabled>Backend contract pending</button>`;
   const evidence = item.workspace
     ? "Available through the linked MitraBooks workspace with existing tenant-scoped route checks."
     : sectionKey
       ? "Backed by the tenant-scoped MitraBooks admin settings API."
-      : "Documented as planned target scope; not yet backed by a tenant-scoped save API.";
+      : item.panel === "ai-connections"
+        ? "Backed by the MitraBooks MCP server: tokens are hashed, expire, can be revoked, and every tool call re-runs the same user, tenant and role checks as the web app."
+        : "Documented as planned target scope; not yet backed by a tenant-scoped save API.";
+  const panelHtml = item.panel === "ai-connections" ? renderAiConnectionsPanel() : "";
   return `
     <section class="settings-detail-panel" data-settings-detail="${escapeHtml(activeSettingsDetailId)}">
       <div class="preview-heading compact">
@@ -243,6 +248,7 @@ export function renderMitraBooksSettingsDetail() {
         </article>
       </div>
       ${sectionKey ? renderBusinessAdminSettingsEditor(item, sectionKey) : ""}
+      ${panelHtml}
       <div class="settings-detail-actions">
         ${action}
         <button class="secondary" type="button" data-business-action="settings-back">Back to Settings</button>

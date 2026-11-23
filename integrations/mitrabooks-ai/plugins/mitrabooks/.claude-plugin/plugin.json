@@ -1,0 +1,10 @@
+{
+  "name": "mitrabooks",
+  "version": "1.0.0",
+  "description": "MitraBooks (Indian accounting + GST) inside Claude: read-only access to your trial balance, P&L, balance sheet, ledgers, AR/AP aging, GSTR-1/3B, CMP-08/GSTR-4, TDS, bank reconciliation and health checks, plus month-end review and GST return-prep workflows.",
+  "author": {
+    "name": "SanMitra Tech"
+  },
+  "homepage": "https://www.mitrabooks.sanmitratech.in",
+  "keywords": ["accounting", "bookkeeping", "gst", "india", "month-end", "tds", "mcp"]
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mitrabooks": {
+      "type": "http",
+      "url": "https://www.mitrabooks.sanmitratech.in/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MITRABOOKS_MCP_TOKEN}"
+      }
+    }
+  }
+}
