@@ -487,6 +487,16 @@ function installEventHandlers() {
       );
     } else if (businessAction === "bankrecon-match-selected") {
       deps.matchSelectedBankReconLines();
+    } else if (businessAction === "bankrecon-match-difference") {
+      deps.confirmBankReconDifferenceMatch(
+        (button.getAttribute("data-stmt-ids") || "").split(",").filter(Boolean),
+        (button.getAttribute("data-line-ids") || "").split(",").filter(Boolean),
+        button.getAttribute("data-offset-key") || "",
+      );
+    } else if (businessAction === "bankrecon-match-selected-difference") {
+      deps.matchSelectedBankReconLinesWithDifference();
+    } else if (businessAction === "bankrecon-complete-difference") {
+      deps.completeBankReconDifferenceMatch(button.getAttribute("data-group-id") || "");
     } else if (businessAction === "bankrecon-unmatch") {
       deps.reverseBankReconMatch(button.getAttribute("data-match-id") || "");
     } else if (businessAction === "bankrecon-post-voucher") {

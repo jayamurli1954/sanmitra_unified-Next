@@ -167,6 +167,21 @@ class BankReconGroupMatchRequest(BaseModel):
     line_ids: list[int] = Field(..., min_length=1, max_length=10)
 
 
+class BankReconDifferenceMatchRequest(BaseModel):
+    """Match lines whose totals differ (bank charges, MDR, TDS, rounding) and
+    post the difference to `offset_account_*` through the voucher approval path."""
+    account_id: int = Field(..., ge=1)
+    statement_line_ids: list[str] = Field(..., min_length=1, max_length=10)
+    line_ids: list[int] = Field(..., min_length=1, max_length=10)
+    offset_account_id: int | None = Field(default=None, ge=1)
+    offset_account_code: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=300)
+    approve: bool = Field(
+        default=False,
+        description="When true, approve/post the difference voucher now and complete the match.",
+    )
+
+
 class BankStatementVoucherResponse(BaseModel):
     statement_line_id: str
     posting_status: str

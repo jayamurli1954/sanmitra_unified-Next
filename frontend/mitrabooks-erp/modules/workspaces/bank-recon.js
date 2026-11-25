@@ -155,13 +155,76 @@ export async function matchSelectedBankReconLines() {
   await confirmBankReconGroupMatch(stmtIds, bookIds);
 }
 
+/**
+ * Match lines whose totals differ (bank charges, MDR, TDS, rounding) and post
+ * the difference to the chosen offset account through the voucher path.
+ * `offsetKey` names the offset <select> to read ("manual" for the ticked lines).
+ */
+export async function confirmBankReconDifferenceMatch(statementLineIds, lineIds, offsetKey) {
+  const stmtIds = (statementLineIds || []).map((id) => String(id || "").trim()).filter(Boolean);
+  const bookIds = (lineIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+  const offsetAccountId = document.querySelector(`[data-bankrecon-diff-offset="${CSS.escape(String(offsetKey || ""))}"]`)?.value || "";
+  if (!stmtIds.length || !bookIds.length) {
+    setLoginStatus("warn", "Select lines to match", "Tick at least one bank line and one book entry. One side must have a single line.");
+    return;
+  }
+  if (!offsetAccountId) {
+    setLoginStatus("warn", "Pick an account for the difference", "For example Bank Charges, TDS Receivable or Round-off.");
+    return;
+  }
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bank-recon/match-difference", {
+    method: "POST",
+    body: JSON.stringify({
+      account_id: Number(bankReconAccountId),
+      statement_line_ids: stmtIds,
+      line_ids: bookIds,
+      offset_account_id: Number(offsetAccountId),
+      approve: true,
+    }),
+  });
+  if (result.ok) {
+    const r = result.payload || {};
+    if (r.status === "active") {
+      setLoginStatus("ok", "Matched with difference", `Difference of ${formatCurrency(Number(r.difference || 0))} posted and the lines are reconciled.`);
+    } else {
+      setLoginStatus("warn", "Waiting for approval", r.note || "The difference voucher is waiting for approval.");
+    }
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Match with difference failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(getApiOutput(), { bank_recon_difference_match: { ok: result.ok, status: result.status } });
+}
+
+export async function matchSelectedBankReconLinesWithDifference() {
+  const stmtIds = [...document.querySelectorAll("[data-bankrecon-pick-stmt]:checked")].map((el) => el.getAttribute("data-bankrecon-pick-stmt") || "");
+  const bookIds = [...document.querySelectorAll("[data-bankrecon-pick-book]:checked")].map((el) => el.getAttribute("data-bankrecon-pick-book") || "");
+  await confirmBankReconDifferenceMatch(stmtIds, bookIds, "manual");
+}
+
+export async function completeBankReconDifferenceMatch(matchGroupId) {
+  const result = await apiRequest(
+    "mitrabooks",
+    `/api/v1/business/bank-recon/match-difference/${encodeURIComponent(matchGroupId)}/complete`,
+    { method: "POST" },
+  );
+  if (result.ok) {
+    setLoginStatus("ok", "Match completed", "The approved difference voucher was added and the lines are reconciled.");
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Could not complete the match", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(getApiOutput(), { bank_recon_difference_complete: { ok: result.ok, status: result.status } });
+}
+
 export async function reverseBankReconMatch(matchId) {
   const result = await apiRequest("mitrabooks", `/api/v1/business/bank-recon/match/${encodeURIComponent(matchId)}/reverse`, { method: "POST" });
   if (result.ok) {
     const grouped = Number(result.payload?.reversed_rows || 0) > 1;
-    setLoginStatus("ok", "Unmatched", grouped
+    const voucherNote = result.payload?.note ? ` ${result.payload.note}` : "";
+    setLoginStatus("ok", "Unmatched", (grouped
       ? `The whole group (${result.payload.reversed_rows} pairs) was reversed; all its lines are open again.`
-      : "The match was reversed; both lines are open again.");
+      : "The match was reversed; both lines are open again.") + voucherNote);
     await loadBankReconciliation(bankReconAccountId);
   } else {
     setLoginStatus("danger", "Unmatch failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
@@ -316,6 +379,36 @@ export function renderBankReconPanel() {
       <td><button class="primary" type="button" data-business-action="bankrecon-match-group" data-stmt-ids="${escapeHtml((g.statement_line_ids || []).join(","))}" data-line-ids="${escapeHtml((g.line_ids || []).join(","))}">Match group</button></td>
     </tr>`).join("");
 
+  const offsetSelect = (key) => `
+    <select data-bankrecon-diff-offset="${escapeHtml(key)}">
+      <option value="">Account for difference</option>
+      ${offsetOptions}
+    </select>`;
+  const differenceRows = (r.difference_suggestions || []).map((g, i) => `
+    <tr>
+      <td>${escapeHtml(g.statement?.txn_date || "")} · ${escapeHtml(g.statement?.description || g.statement?.ref || "")}</td>
+      <td>${escapeHtml(g.book?.entry_date || "")} · ${escapeHtml(g.book?.reference || g.book?.description || "")}</td>
+      <td class="amount">${num(g.statement_amount)}</td>
+      <td class="amount">${num(g.book_amount)}</td>
+      <td class="amount"><strong>${num(g.difference)}</strong></td>
+      <td><span class="pill warn">${escapeHtml(g.hint_text || "")}</span></td>
+      <td>${offsetSelect(`sugg-${i}`)}</td>
+      <td><button class="primary" type="button" data-business-action="bankrecon-match-difference" data-stmt-ids="${escapeHtml(String(g.statement_line_id || ""))}" data-line-ids="${escapeHtml(String(g.line_id || ""))}" data-offset-key="${escapeHtml(`sugg-${i}`)}">Match &amp; post difference</button></td>
+    </tr>`).join("");
+
+  const pendingRows = (r.pending_differences || []).map((p) => `
+    <tr>
+      <td>${escapeHtml(String((p.statement_line_ids || []).length))} bank / ${escapeHtml(String((p.line_ids || []).length))} book line(s)</td>
+      <td class="amount">${num(p.statement_total)}</td>
+      <td class="amount">${num(p.book_total)}</td>
+      <td class="amount">${num(p.difference)}</td>
+      <td>${escapeHtml(p.adjustment_voucher_id || "")}</td>
+      <td>
+        <button class="primary" type="button" data-business-action="bankrecon-complete-difference" data-group-id="${escapeHtml(p.match_group_id || "")}">Complete match</button>
+        <button class="secondary" type="button" data-business-action="bankrecon-unmatch" data-match-id="${escapeHtml(p.match_id || "")}">Unmatch</button>
+      </td>
+    </tr>`).join("");
+
   const bankOnlyRows = (r.in_bank_not_in_books || []).map((l) => `
     <tr>
       <td><input type="checkbox" aria-label="Select bank line" data-bankrecon-pick-stmt="${escapeHtml(l.statement_line_id || "")}"></td>
@@ -347,7 +440,7 @@ export function renderBankReconPanel() {
     <tr>
       <td>${escapeHtml(m.statement_txn_date || "")}</td>
       <td>${escapeHtml(m.book_entry_date || "")}</td>
-      <td>${escapeHtml(m.side || "")}${m.match_group_id ? ` <span class="pill">group · ${escapeHtml(String(m.group_size || ""))} lines</span>` : ""}</td>
+      <td>${escapeHtml(m.side || "")}${m.match_group_id ? ` <span class="pill">group · ${escapeHtml(String(m.group_size || ""))} lines</span>` : ""}${m.is_adjustment ? ` <span class="pill warn">difference voucher</span>` : ""}</td>
       <td class="amount">${num(m.amount)}</td>
       <td><button class="secondary" type="button" data-business-action="bankrecon-unmatch" data-match-id="${escapeHtml(m.match_id || "")}">Unmatch</button></td>
     </tr>`).join("");
@@ -376,9 +469,32 @@ export function renderBankReconPanel() {
       </table>
     </div>
 
+    <div class="table-preview compact-table">
+      <h4>Near-matches: amounts differ slightly (bank charges, MDR, TDS, rounding)</h4>
+      <table>
+        <thead><tr><th>Bank line</th><th>Book entry</th><th class="amount">Bank</th><th class="amount">Books</th><th class="amount">Difference</th><th>Likely reason</th><th>Post difference to</th><th></th></tr></thead>
+        <tbody>${differenceRows || `<tr><td colspan="8" class="muted">No near-matches. Nothing left differs from a book entry by only a small amount.</td></tr>`}</tbody>
+      </table>
+      <p class="muted">The difference is posted as a journal voucher on this bank account. The lines count as matched only once that voucher is posted.</p>
+    </div>
+
+    ${pendingRows ? `
+    <div class="table-preview compact-table">
+      <h4>Waiting for the difference voucher to be approved (${escapeHtml(String((r.pending_differences || []).length))})</h4>
+      <table>
+        <thead><tr><th>Lines</th><th class="amount">Bank</th><th class="amount">Books</th><th class="amount">Difference</th><th>Voucher</th><th></th></tr></thead>
+        <tbody>${pendingRows}</tbody>
+      </table>
+    </div>` : ""}
+
     <div class="report-date-controls">
       <button class="secondary" type="button" data-business-action="bankrecon-match-selected">Match selected</button>
       <span class="muted">Tick bank lines and book entries below to match them by hand. One side must have a single line, and the totals must agree exactly.</span>
+    </div>
+    <div class="report-date-controls">
+      ${offsetSelect("manual")}
+      <button class="secondary" type="button" data-business-action="bankrecon-match-selected-difference">Match selected &amp; post difference</button>
+      <span class="muted">Use this when the ticked totals differ, for example TDS deducted by the customer.</span>
     </div>
 
     <div class="table-preview compact-table">

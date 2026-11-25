@@ -40,9 +40,9 @@ Priority: **P1** = needed for real-world Indian SME reconciliation; **P2** = sig
 
 | # | Capability | TallyPrime (documented) | Zoho Books (documented) | MitraBooks today | Gap | Priority |
 |---|---|---|---|---|---|---|
-| 1 | **One-to-many / many-to-one matching** (one bank line ↔ several vouchers, or the reverse) | Reconciliation works per voucher, with a bank date set on each voucher. A combined deposit is handled by giving each voucher the same bank date. There is no explicit grouped-match object. | "Match" lets you select several transactions against one statement line. Totals must agree, or the difference can be recorded as a bank charge or adjustment. | ❌ Strictly 1:1, both in suggestions and in confirm. | Engine plus confirm endpoint plus UI. **Being built first (see the section below).** | P1 |
-| 2 | Manual matching (pick any book line for a statement line) | ✅ The user enters the bank date against any voucher. | ✅ Search and select transactions manually. | ❌ The user can only confirm a suggestion. If no suggestion appears, the line cannot be matched. | Manual-pick UI plus API (the API already accepts any pair). | P1 |
-| 3 | Match with a difference (bank charges, TDS, rounding) | Record the charges as a separate voucher. | ✅ An "Add bank charges / adjustment" step during matching posts the difference. | ❌ Exact amounts only. | Tolerance suggestion plus "post the difference" voucher through the approval path. | P1 |
+| 1 | **One-to-many / many-to-one matching** (one bank line ↔ several vouchers, or the reverse) | Reconciliation works per voucher, with a bank date set on each voucher. A combined deposit is handled by giving each voucher the same bank date. There is no explicit grouped-match object. | "Match" lets you select several transactions against one statement line. Totals must agree, or the difference can be recorded as a bank charge or adjustment. | ✅ **Done.** Group suggestions plus `POST /bank-recon/match-group` (design below). | — | P1 |
+| 2 | Manual matching (pick any book line for a statement line) | ✅ The user enters the bank date against any voucher. | ✅ Search and select transactions manually. | ✅ **Done.** Tick-boxes on both unmatched tables with "Match selected" (1:1 or group). | — | P1 |
+| 3 | Match with a difference (bank charges, TDS, rounding) | Record the charges as a separate voucher. | ✅ An "Add bank charges / adjustment" step during matching posts the difference. | ✅ **Done.** Near-match suggestions plus `POST /bank-recon/match-difference` (design below). | — | P1 |
 | 4 | Rules for recurring narrations (for example "a description containing X goes to ledger Y") | ◐ Party/ledger mapping during bank-statement import in newer releases. | ✅ Bank rules: criteria on description, amount, reference or payee, with actions such as categorise, contact or account. | ❌ | Rules engine that *pre-fills* the offset account and voucher draft. It must still require confirmation. | P2 |
 | 5 | Auto-reconciliation from an imported statement | ✅ Import a bank statement and the auto-reconciliation feature matches on instrument number, amount and date. | ✅ Auto-match with "best match" and "possible matches". | ◐ Suggestions exist; the user must confirm each one, which is by design. | Add a "confirm all reference-confidence suggestions" bulk action that keeps maker-checker. | P2 |
 | 6 | Statement formats | Excel and a set of bank-specific formats. Connected banking with partner banks. | CSV, TSV, OFX, QIF, CAMT.053 and PDF import. Direct bank feeds. | ◐ CSV only. | Excel (.xlsx) and OFX/CAMT parsers that feed the same statement-line model. Bank feeds stay deferred per the bank-feed policy. | P2 |
@@ -57,9 +57,9 @@ Priority: **P1** = needed for real-world Indian SME reconciliation; **P2** = sig
 
 ## Recommended build order
 
-1. **One-to-many / many-to-one matching** (#1), the subject of this change.
-2. Manual matching UI (#2). It reuses the group-match endpoint built here. The UI in this change already lets the user tick lines and press "Match selected".
-3. Match with a difference (#3), as a follow-on to group matching.
+1. ~~One-to-many / many-to-one matching (#1)~~ — done.
+2. ~~Manual matching UI (#2)~~ — done.
+3. ~~Match with a difference (#3)~~ — done.
 4. Auto-match after a voucher is posted from a bank-only line (#12), plus atomic confirm (#14).
 5. Bank rules (#4) and reference normalisation (#7).
 6. Statement periods and locks (#8), and opening BRS (#9).
@@ -108,3 +108,32 @@ exactly to it.
 `{account_id, statement_line_ids: [...], line_ids: [...]}`. It returns the group
 id and its rows. The existing `POST /bank-recon/match/{match_id}/reverse` reverses
 the whole group.
+
+## Design: match with a difference (gap #3)
+
+**Use cases**
+
+- A customer receipt is booked at ₹10,000, but the bank credits ₹9,990 because charges were deducted. The bank account needs a **credit** of ₹10 (Dr Bank Charges, Cr Bank).
+- A vendor payment is booked at ₹5,000, but the bank debits ₹5,017.70 (NEFT charge plus GST). The bank account needs a **credit** of ₹17.70.
+- A card or UPI settlement arrives net of MDR, or a customer pays net of TDS. The difference goes to MDR expense or TDS Receivable.
+- The bank shows more than the books (interest, cashback, rounding). The bank account needs a **debit** (Dr Bank, Cr the chosen account).
+
+**Rules**
+
+- The selection follows the same shapes as group matching: 1:1, one-to-many or many-to-one. All lines must be in one direction, and the totals must differ.
+- The difference must be smaller than both totals. Otherwise the lines are probably not the same transaction.
+- The direction is worked out from the signed effect on the bank balance (statement minus books). The accountant only chooses the account for the difference.
+
+**Flow (maker-checker preserved)**
+
+1. The difference is posted as a typed **journal voucher** between the bank account and the chosen account, through the normal approval path. It is never written as a journal row directly. The ERP screen approves it straight away, as the existing "Post voucher" for bank-only lines already does. API callers can pass `approve: false`.
+2. Match rows are written with status `pending_adjustment`. This holds the lines, so they cannot be matched elsewhere, and they are not suggested again. The BRS still shows them as unmatched, because nothing has posted yet. The screen lists them under "Waiting for the difference voucher to be approved".
+3. Once the voucher is posted (immediately, or after approval followed by `POST /bank-recon/match-difference/{group}/complete`), the voucher's bank ledger line is added to the group as an `is_adjustment` row. Every row then becomes `active`, and the BRS difference closes.
+4. Unmatching releases the lines but **does not** reverse the voucher, which is a real accounting entry. The response says so. If the voucher was rejected, matching the same lines again posts a fresh voucher instead of reusing the rejected one.
+
+**Suggestions.** `suggest_difference_matches` runs after the exact 1:1 and group
+passes. It looks for 1:1 pairs in the same direction, within the date window, whose
+difference is at most ₹1,000 **and** at most 2.5% of the book amount. That covers
+bank charges and typical card/UPI MDR; TDS at 10% is matched by hand. The smallest
+difference wins, then the closest date. Each suggestion carries a likely reason
+("bank charges, MDR or TDS deducted?", "transfer charges?", "interest or rounding?").

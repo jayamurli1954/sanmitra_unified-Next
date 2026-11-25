@@ -14,7 +14,9 @@ from app.modules.business.bank_recon import (
     BANK_STATEMENT_LINES_COLLECTION,
     assemble_bank_reconciliation,
     parse_bank_statement_csv,
+    plan_difference_adjustment,
     statement_line_dedupe_key,
+    suggest_difference_matches,
     suggest_group_matches,
     suggest_matches,
     validate_group_match,
@@ -898,3 +900,269 @@ async def test_build_bank_reconciliation_returns_group_suggestions(fake_bank_col
     assert out["summary"]["matched_groups"] == 1
     assert [l["statement_line_id"] for l in out["in_bank_not_in_books"]] == ["s2"]
     assert sorted(l["line_id"] for l in out["in_books_not_in_bank"]) == [3, 4]
+
+
+# ---- Match with a difference (bank charges / MDR / TDS / rounding) -------- #
+
+def test_plan_difference_direction_for_each_case():
+    # Customer paid 10,000; bank credited 9,990 (charges deducted) -> credit bank 10.
+    p = plan_difference_adjustment([_stmt("s", "2026-04-05", deposit="9990.00")], [{"debit": "10000.00"}])
+    assert (p["side"], p["bank_entry"], p["difference"], p["hint"]) == ("deposit", "credit", Decimal("10.00"), "bank_deducted")
+    assert p["group_type"] == "one_to_one"
+    # Paid 5,000; bank debited 5,017.70 (NEFT charge + GST) -> credit bank 17.70.
+    p = plan_difference_adjustment([_stmt("s", "2026-04-05", withdrawal="5017.70")], [{"credit": "5000.00"}])
+    assert (p["side"], p["bank_entry"], p["difference"], p["hint"]) == ("withdrawal", "credit", Decimal("17.70"), "bank_charged")
+    # Bank credited more than booked -> debit bank.
+    p = plan_difference_adjustment([_stmt("s", "2026-04-05", deposit="10000.50")], [{"debit": "10000.00"}])
+    assert (p["bank_entry"], p["difference"], p["hint"]) == ("debit", Decimal("0.50"), "bank_excess")
+    # Bank debited less than booked -> money still in the bank -> debit bank.
+    p = plan_difference_adjustment([_stmt("s", "2026-04-05", withdrawal="4990.00")], [{"credit": "5000.00"}])
+    assert (p["bank_entry"], p["difference"]) == ("debit", Decimal("10.00"))
+    # Group: one deposit slip, two receipts, 50 short.
+    p = plan_difference_adjustment(
+        [_stmt("s", "2026-04-05", deposit="14950.00")], [{"debit": "10000.00"}, {"debit": "5000.00"}],
+    )
+    assert (p["group_type"], p["bank_entry"], p["difference"]) == ("one_to_many", "credit", Decimal("50.00"))
+
+
+def test_plan_difference_rejects_invalid_selections():
+    with pytest.raises(ValueError, match="already agree"):
+        plan_difference_adjustment([_stmt("s", "2026-04-05", deposit="100.00")], [{"debit": "100.00"}])
+    with pytest.raises(ValueError, match="not smaller"):
+        plan_difference_adjustment([_stmt("s", "2026-04-05", deposit="100.00")], [{"debit": "300.00"}])
+    with pytest.raises(ValueError, match="same direction"):
+        plan_difference_adjustment([_stmt("s", "2026-04-05", deposit="100.00")], [{"credit": "99.00"}])
+    with pytest.raises(ValueError, match="Many-to-many"):
+        plan_difference_adjustment(
+            [_stmt("a", "2026-04-05", deposit="100.00"), _stmt("b", "2026-04-05", deposit="1.00")],
+            [{"debit": "50.00"}, {"debit": "50.00"}],
+        )
+
+
+def test_suggest_difference_matches_tolerance_and_preference():
+    out = suggest_difference_matches(
+        [
+            _stmt("s-mdr", "2026-04-05", deposit="9764.00", desc="UPI SETTLEMENT"),    # 2.36% short of 10,000
+            _stmt("s-big", "2026-04-05", deposit="900.00"),                            # 10% short of 1,000: too much
+            _stmt("s-abs", "2026-04-05", withdrawal="201500.00"),                      # 1,500 over: above the cap
+            _stmt("s-far", "2026-04-05", withdrawal="5017.70"),                        # book line 20 days away
+        ],
+        [
+            _book(1, "2026-04-04", debit="10000.00"),
+            _book(2, "2026-04-04", debit="9770.00"),   # closer amount wins for s-mdr
+            _book(3, "2026-04-05", debit="1000.00"),
+            _book(4, "2026-04-05", credit="200000.00"),
+            _book(5, "2026-04-25", credit="5000.00"),
+        ],
+    )
+    assert len(out) == 1
+    g = out[0]
+    assert (g["statement_line_id"], g["line_id"]) == ("s-mdr", 2)
+    assert g["difference"] == "6.00" and g["bank_entry"] == "credit" and g["hint"] == "bank_deducted"
+    assert g["statement_amount"] == "9764.00" and g["book_amount"] == "9770.00"
+    # Exact matches are never offered as near-matches, and exclusions hold.
+    assert suggest_difference_matches([_stmt("s", "2026-04-05", deposit="100.00")], [_book(1, "2026-04-05", debit="100.00")]) == []
+    assert suggest_difference_matches(
+        [_stmt("s", "2026-04-05", deposit="99.00")], [_book(1, "2026-04-05", debit="100.00")], exclude_line_ids={"1"},
+    ) == []
+
+
+class _FakeVoucherBook:
+    """Stand-in for typed vouchers + the bank ledger: approving a voucher
+    posts a journal line on the bank account (account 102)."""
+
+    def __init__(self, fake_bank_collections, ledger):
+        self.collections = fake_bank_collections
+        self.ledger = ledger
+        self.posted_payloads = []
+        self.next_journal = 9000
+
+    @property
+    def vouchers(self):
+        return self.collections.setdefault("business_vouchers", _FakeCollection())
+
+    async def post(self, session, *, tenant_id, app_key, created_by, payload, idempotency_key):
+        existing = await self.vouchers.find_one({"idempotency_key": idempotency_key})
+        if existing:
+            return dict(existing)
+        self.posted_payloads.append(payload)
+        doc = {
+            "tenant_id": tenant_id, "app_key": app_key, "accounting_entity_id": payload.accounting_entity_id,
+            "voucher_id": f"v-{len(self.posted_payloads)}", "status": "pending_approval",
+            "idempotency_key": idempotency_key, "amount": str(payload.amount),
+            "debit_account_id": payload.debit_account_id, "credit_account_id": payload.credit_account_id,
+            "entry_date": payload.entry_date.isoformat(),
+        }
+        await self.vouchers.insert_one(doc)
+        return dict(doc)
+
+    async def approve(self, voucher_id):
+        doc = await self.vouchers.find_one({"voucher_id": voucher_id})
+        self.next_journal += 1
+        doc.update({"status": "posted", "journal_entry_id": self.next_journal})
+        amount = doc["amount"]
+        self.ledger.append(_book(
+            self.next_journal, doc["entry_date"],
+            debit=amount if doc["debit_account_id"] == 102 else "0.00",
+            credit=amount if doc["credit_account_id"] == 102 else "0.00",
+            reference="BRDIFF",
+        ) | {"journal_id": self.next_journal})
+        return dict(doc)
+
+    async def review(self, session, *, tenant_id, app_key, voucher_id, reviewed_by, payload):
+        return await self.approve(voucher_id)
+
+
+def _difference_fixture(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "s1", "txn_date": "2026-04-05",
+         "description": "NEFT ACME LESS CHGS", "ref": "", "withdrawal": "0.00", "deposit": "9990.00", "balance": "9990.00"},
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    ledger = [_book(1, "2026-04-04", debit="10000.00", reference="RCPT-ACME")]
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service(ledger))
+    book = _FakeVoucherBook(fake_bank_collections, ledger)
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", book.post)
+    monkeypatch.setattr("app.modules.business.service.review_typed_voucher", book.review)
+    return book
+
+
+async def _create_difference(approve, **overrides):
+    kwargs = dict(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary", account_id=102,
+        statement_line_ids=["s1"], line_ids=[1], offset_account_id=51001, offset_account_code=None,
+        description=None, approve=approve, created_by="tester", idempotency_key=None,
+    )
+    kwargs.update(overrides)
+    return await bank_recon.create_bank_recon_difference_match(object(), **kwargs)
+
+
+async def _build():
+    return await bank_recon.build_bank_reconciliation(
+        object(), tenant_id="tenant-a", app_key="mitrabooks",
+        accounting_entity_id="primary", account_id=102, as_of=date(2026, 4, 30),
+    )
+
+
+@pytest.mark.asyncio
+async def test_difference_match_suggested_then_approved_immediately_reconciles(fake_bank_collections, monkeypatch):
+    book = _difference_fixture(fake_bank_collections, monkeypatch)
+
+    before = await _build()
+    assert before["suggestions"] == [] and before["group_suggestions"] == []
+    assert [(g["statement_line_id"], g["line_id"], g["difference"]) for g in before["difference_suggestions"]] == [("s1", 1, "10.00")]
+    assert before["summary"]["difference"] == "0.00"  # identity holds; the gap shows as reconciling items
+
+    out = await _create_difference(approve=True)
+
+    payload = book.posted_payloads[0]
+    assert payload.voucher_type == "journal"
+    assert payload.amount == Decimal("10.00")
+    assert payload.debit_account_id == 51001 and payload.credit_account_id == 102   # Dr Bank Charges, Cr Bank
+    assert payload.entry_date.isoformat() == "2026-04-05"
+    assert out["status"] == "active"
+    rows = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows
+    assert {r["status"] for r in rows} == {"active"}
+    assert len(rows) == 2
+    adjustment = next(r for r in rows if r.get("is_adjustment"))
+    assert adjustment["side"] == "withdrawal" and adjustment["amount"] == "10.00"
+    assert adjustment["line_id"] == 9001
+
+    after = await _build()
+    assert after["summary"]["book_balance"] == "9990.00"
+    assert after["summary"]["difference"] == "0.00"
+    assert after["in_bank_not_in_books"] == [] and after["in_books_not_in_bank"] == []
+    assert after["difference_suggestions"] == [] and after["pending_differences"] == []
+    assert after["summary"]["matched_groups"] == 1
+
+
+@pytest.mark.asyncio
+async def test_difference_match_waits_for_approval_then_completes(fake_bank_collections, monkeypatch):
+    book = _difference_fixture(fake_bank_collections, monkeypatch)
+
+    out = await _create_difference(approve=False)
+    assert out["status"] == "pending_adjustment"
+    group_id = out["match_group_id"]
+
+    pending = await _build()
+    # Truthful BRS: still unmatched, but not suggested again and listed as pending.
+    assert [l["statement_line_id"] for l in pending["in_bank_not_in_books"]] == ["s1"]
+    assert pending["difference_suggestions"] == [] and pending["suggestions"] == []
+    assert [(p["match_group_id"], p["difference"], p["statement_line_ids"], p["line_ids"]) for p in pending["pending_differences"]] == [
+        (group_id, "10.00", ["s1"], [1]),
+    ]
+    # The held lines cannot be matched elsewhere meanwhile.
+    with pytest.raises(AccountingValidationError, match="already matched"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s1", line_id=1, created_by="tester",
+        )
+    with pytest.raises(AccountingValidationError, match="waiting for approval"):
+        await bank_recon.finalize_bank_recon_difference_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            match_group_id=group_id, finalized_by="tester",
+        )
+
+    await book.approve(out["voucher"]["voucher_id"])
+    done = await bank_recon.finalize_bank_recon_difference_match(
+        object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_group_id=group_id, finalized_by="approver",
+    )
+    assert done["status"] == "active" and len(done["matches"]) == 2
+    after = await _build()
+    assert after["summary"]["difference"] == "0.00"
+    assert after["in_bank_not_in_books"] == [] and after["pending_differences"] == []
+    with pytest.raises(AccountingValidationError, match="already complete"):
+        await bank_recon.finalize_bank_recon_difference_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            match_group_id=group_id, finalized_by="approver",
+        )
+
+
+@pytest.mark.asyncio
+async def test_difference_match_validation_and_unmatch(fake_bank_collections, monkeypatch):
+    book = _difference_fixture(fake_bank_collections, monkeypatch)
+
+    with pytest.raises(AccountingValidationError, match="Choose the account"):
+        await _create_difference(approve=True, offset_account_id=None)
+    assert book.posted_payloads == []  # nothing posted for a rejected request
+
+    out = await _create_difference(approve=False)
+    with pytest.raises(AccountingValidationError, match="already matched"):
+        await _create_difference(approve=False)
+
+    pending_row = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows[0]
+    result = await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id=pending_row["match_id"], reversed_by="tester",
+    )
+    assert result["reversed_rows"] == 1
+    assert result["adjustment_voucher_id"] == out["voucher"]["voucher_id"]
+    assert "not reversed" in result["note"]
+    # Lines are free again and suggested again.
+    again = await _build()
+    assert [g["statement_line_id"] for g in again["difference_suggestions"]] == ["s1"]
+
+
+@pytest.mark.asyncio
+async def test_difference_match_retry_after_rejected_voucher_posts_a_fresh_one(fake_bank_collections, monkeypatch):
+    book = _difference_fixture(fake_bank_collections, monkeypatch)
+    out = await _create_difference(approve=False)
+    rejected = await book.vouchers.find_one({"voucher_id": out["voucher"]["voucher_id"]})
+    rejected["status"] = "rejected"
+    with pytest.raises(AccountingValidationError, match="rejected"):
+        await bank_recon.finalize_bank_recon_difference_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            match_group_id=out["match_group_id"], finalized_by="tester",
+        )
+    row = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows[0]
+    await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id=row["match_id"], reversed_by="tester",
+    )
+
+    retry = await _create_difference(approve=True)
+
+    assert retry["status"] == "active"
+    assert retry["adjustment_voucher_id"] != out["voucher"]["voucher_id"]
+    assert len(book.posted_payloads) == 2

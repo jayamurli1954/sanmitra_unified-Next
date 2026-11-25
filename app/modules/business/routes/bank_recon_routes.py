@@ -24,6 +24,7 @@ from app.db.postgres import get_async_session
 from app.modules.business import bank_recon
 from app.modules.business import banking_books
 from app.modules.business.schemas import (
+    BankReconDifferenceMatchRequest,
     BankReconGroupMatchRequest,
     BankStatementVoucherRequest,
     BankStatementVoucherResponse,
@@ -163,6 +164,82 @@ async def business_bank_recon_match_group(
             line_ids=payload.line_ids,
             created_by=_created_by(current_user),
         )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/bank-recon/match-difference")
+async def business_bank_recon_match_difference(
+    payload: BankReconDifferenceMatchRequest,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Match lines whose totals differ by bank charges, MDR, TDS or rounding.
+    The difference is posted as a journal voucher through the normal approval
+    path; the match becomes active only once that voucher is posted."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation difference match",
+    )
+    try:
+        return await bank_recon.create_bank_recon_difference_match(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            account_id=payload.account_id,
+            statement_line_ids=payload.statement_line_ids,
+            line_ids=payload.line_ids,
+            offset_account_id=payload.offset_account_id,
+            offset_account_code=payload.offset_account_code,
+            description=payload.description,
+            approve=payload.approve,
+            created_by=_created_by(current_user),
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/bank-recon/match-difference/{match_group_id}/complete")
+async def business_bank_recon_match_difference_complete(
+    match_group_id: str,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Complete a pending difference match after its voucher has been approved."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation difference match completion",
+    )
+    try:
+        return await bank_recon.finalize_bank_recon_difference_match(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            match_group_id=match_group_id,
+            finalized_by=_created_by(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
