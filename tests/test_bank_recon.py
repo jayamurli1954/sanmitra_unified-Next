@@ -1166,3 +1166,46 @@ async def test_difference_match_retry_after_rejected_voucher_posts_a_fresh_one(f
     assert retry["status"] == "active"
     assert retry["adjustment_voucher_id"] != out["voucher"]["voucher_id"]
     assert len(book.posted_payloads) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role,expected_approve", [
+    ("tenant_admin", True),
+    ("super_admin", True),
+    ("accountant", False),
+    ("operator", False),
+    (None, False),
+])
+async def test_difference_route_only_lets_voucher_approvers_approve(monkeypatch, role, expected_approve):
+    from app.modules.business.routes import bank_recon_routes
+    from app.modules.business.schemas import BankReconDifferenceMatchRequest
+
+    seen = {}
+
+    async def fake_create(session, **kwargs):
+        seen.update(kwargs)
+        return {"status": "active" if kwargs["approve"] else "pending_adjustment"}
+
+    monkeypatch.setattr(bank_recon_routes.bank_recon, "create_bank_recon_difference_match", fake_create)
+    monkeypatch.setattr(
+        bank_recon_routes, "resolve_business_app_tenant",
+        lambda **kwargs: SimpleNamespace(tenant_id="tenant-a", app_key="mitrabooks"),
+    )
+
+    out = await bank_recon_routes.business_bank_recon_match_difference(
+        payload=BankReconDifferenceMatchRequest(
+            account_id=102, statement_line_ids=["s1"], line_ids=[1], offset_account_id=51001, approve=True,
+        ),
+        accounting_entity_id="primary",
+        _module_context={},
+        session=object(),
+        current_user={"role": role, "sub": "u1", "email": "u1@example.com"},
+        x_tenant_id=None,
+        x_app_key=None,
+        x_idempotency_key=None,
+    )
+
+    assert seen["approve"] is expected_approve
+    if not expected_approve:
+        assert out["status"] == "pending_adjustment"
+        assert "tenant admin" in out["note"]

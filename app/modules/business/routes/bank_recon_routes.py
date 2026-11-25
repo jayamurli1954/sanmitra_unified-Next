@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.accounting.service import AccountingNotFoundError, AccountingValidationError
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
+from app.core.permissions.rbac import Role
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.db.postgres import get_async_session
 from app.modules.business import bank_recon
@@ -168,6 +169,15 @@ async def business_bank_recon_match_group(
         raise HTTPException(status_code=422, detail=str(exc))
 
 
+# Same roles as the voucher review route (POST /vouchers/{id}/review): only
+# these may approve a voucher, so only these may ask for immediate approval.
+_VOUCHER_APPROVER_ROLES = {Role.super_admin.value, Role.tenant_admin.value}
+
+
+def _can_approve_vouchers(current_user: dict) -> bool:
+    return str(current_user.get("role") or "") in _VOUCHER_APPROVER_ROLES
+
+
 @router.post("/bank-recon/match-difference")
 async def business_bank_recon_match_difference(
     payload: BankReconDifferenceMatchRequest,
@@ -181,7 +191,11 @@ async def business_bank_recon_match_difference(
 ):
     """Match lines whose totals differ by bank charges, MDR, TDS or rounding.
     The difference is posted as a journal voucher through the normal approval
-    path; the match becomes active only once that voucher is posted."""
+    path; the match becomes active only once that voucher is posted.
+
+    `approve: true` is honoured only for voucher approvers (tenant_admin /
+    super_admin). For anyone else the voucher stays in the approval queue and
+    the match is returned as pending, exactly as with `approve: false`."""
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
@@ -189,8 +203,9 @@ async def business_bank_recon_match_difference(
         expected_app_key="mitrabooks",
         operation="bank reconciliation difference match",
     )
+    approve = bool(payload.approve) and _can_approve_vouchers(current_user)
     try:
-        return await bank_recon.create_bank_recon_difference_match(
+        result = await bank_recon.create_bank_recon_difference_match(
             session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
@@ -201,7 +216,7 @@ async def business_bank_recon_match_difference(
             offset_account_id=payload.offset_account_id,
             offset_account_code=payload.offset_account_code,
             description=payload.description,
-            approve=payload.approve,
+            approve=approve,
             created_by=_created_by(current_user),
             idempotency_key=x_idempotency_key,
         )
@@ -209,6 +224,12 @@ async def business_bank_recon_match_difference(
         raise HTTPException(status_code=404, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if payload.approve and not approve:
+        result["note"] = (
+            "The difference voucher is waiting for approval by a tenant admin. "
+            "Complete the match once it is posted."
+        )
+    return result
 
 
 @router.post("/bank-recon/match-difference/{match_group_id}/complete")
