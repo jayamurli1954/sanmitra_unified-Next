@@ -17,13 +17,24 @@ Design rules, mirroring payment allocation and the GSTR-2B reconciliation:
 import csv
 import hashlib
 import io
+import logging
 import re
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from uuid import uuid4
 
+logger = logging.getLogger(__name__)
+
 BANK_STATEMENT_LINES_COLLECTION = "business_bank_statement_lines"
 BANK_RECON_MATCHES_COLLECTION = "business_bank_recon_matches"
+# One document per statement line / book line currently held by a match.
+# The document `_id` encodes scope + line, so MongoDB's always-present unique
+# `_id` index makes claiming a line atomic without any extra index setup.
+# See docs/prd/MITRABOOKS_BANK_RECON_GAP_ANALYSIS.md (gap #14).
+BANK_RECON_LINE_CLAIMS_COLLECTION = "business_bank_recon_line_claims"
+# A claim whose owner never wrote any match rows (crash between claiming and
+# saving) is treated as abandoned after this long and may be taken over.
+CLAIM_STALE_AFTER_SECONDS = 300
 
 # How far apart the statement date and the book entry date may be for a
 # suggestion (cheque clearing / processing lag).
@@ -1029,10 +1040,105 @@ async def create_bank_recon_match(
         "created_by": created_by,
         "created_at": _now(),
     }
-    await match_col.insert_one(doc)
+    await claim_bank_recon_lines(
+        scope, owner_id=doc["match_id"], account_id=account_id,
+        statement_line_ids=[statement_line_id], line_ids=[line_id],
+    )
+    try:
+        await match_col.insert_one(doc)
+    except Exception:
+        await release_bank_recon_claims(scope, doc["match_id"])
+        raise
     doc.pop("_id", None)
     doc["created_at"] = doc["created_at"].isoformat()
     return doc
+
+
+def _claim_id(scope: dict, kind: str, key) -> str:
+    return "|".join([
+        "bankrecon", str(scope["tenant_id"]), str(scope["app_key"]),
+        str(scope["accounting_entity_id"]), kind, str(key),
+    ])
+
+
+async def _claim_is_abandoned(scope: dict, claim: dict) -> bool:
+    from app.db.mongo import get_collection
+
+    claimed_at = claim.get("claimed_at")
+    if isinstance(claimed_at, str):
+        try:
+            claimed_at = datetime.fromisoformat(claimed_at)
+        except ValueError:
+            claimed_at = None
+    if not isinstance(claimed_at, datetime):
+        return False
+    if claimed_at.tzinfo is None:
+        claimed_at = claimed_at.replace(tzinfo=timezone.utc)
+    if (_now() - claimed_at).total_seconds() < CLAIM_STALE_AFTER_SECONDS:
+        return False
+    owner = claim.get("owner_id")
+    match_col = get_collection(BANK_RECON_MATCHES_COLLECTION)
+    for field in ("match_group_id", "match_id"):
+        if await match_col.find_one({**scope, field: owner, "status": {"$in": LIVE_MATCH_STATUSES}}):
+            return False
+    return True
+
+
+async def claim_bank_recon_lines(
+    scope: dict,
+    *,
+    owner_id: str,
+    account_id: int,
+    statement_line_ids: list[str] = (),
+    line_ids: list[int] = (),
+) -> None:
+    """Atomically reserve lines for one match/group (`owner_id`).
+
+    Each line gets a claim document whose `_id` is derived from scope + line,
+    so two requests racing for the same line cannot both succeed: the second
+    insert hits the `_id` unique index. On any conflict the claims this call
+    already made are rolled back and AccountingValidationError is raised."""
+    from pymongo.errors import DuplicateKeyError
+
+    from app.accounting.service import AccountingValidationError
+    from app.db.mongo import get_collection
+
+    col = get_collection(BANK_RECON_LINE_CLAIMS_COLLECTION)
+    wanted = [("stmt", str(x)) for x in statement_line_ids] + [("book", str(x)) for x in line_ids]
+    taken: list[str] = []
+    now = _now()
+    try:
+        for kind, key in wanted:
+            doc = {
+                "_id": _claim_id(scope, kind, key),
+                **scope,
+                "account_id": account_id,
+                "kind": kind,
+                "key": key,
+                "owner_id": owner_id,
+                "claimed_at": now,
+            }
+            try:
+                await col.insert_one(dict(doc))
+            except DuplicateKeyError:
+                existing = await col.find_one({"_id": doc["_id"]})
+                if existing is None or not await _claim_is_abandoned(scope, existing):
+                    raise
+                await col.delete_many({"_id": doc["_id"], "owner_id": existing.get("owner_id")})
+                await col.insert_one(dict(doc))
+            taken.append(doc["_id"])
+    except DuplicateKeyError as exc:
+        if taken:
+            await col.delete_many({"_id": {"$in": taken}})
+        raise AccountingValidationError(
+            "A selected line was just matched by someone else — reload the reconciliation and try again"
+        ) from exc
+
+
+async def release_bank_recon_claims(scope: dict, owner_id: str) -> None:
+    from app.db.mongo import get_collection
+
+    await get_collection(BANK_RECON_LINE_CLAIMS_COLLECTION).delete_many({**scope, "owner_id": owner_id})
 
 
 async def _load_match_selection(
@@ -1148,7 +1254,16 @@ async def create_bank_recon_group_match(
             "created_by": created_by,
             "created_at": now,
         })
-    await match_col.insert_many(docs)
+    await claim_bank_recon_lines(
+        scope, owner_id=group_id, account_id=account_id,
+        statement_line_ids=[s.get("statement_line_id") for s in ordered_stmt],
+        line_ids=[b["line_id"] for b in ordered_book],
+    )
+    try:
+        await match_col.insert_many(docs)
+    except Exception:
+        await release_bank_recon_claims(scope, group_id)
+        raise
     for doc in docs:
         doc.pop("_id", None)
         doc["created_at"] = now.isoformat()
@@ -1189,6 +1304,7 @@ async def reverse_bank_recon_match(
             {**scope, "match_group_id": group_id, "status": {"$in": LIVE_MATCH_STATUSES}},
             {"$set": reversal},
         )
+        await release_bank_recon_claims(scope, group_id)
         out = {
             "match_id": match_id,
             "status": "reversed",
@@ -1205,6 +1321,7 @@ async def reverse_bank_recon_match(
             )
         return out
     await match_col.update_one({**scope, "match_id": match_id}, {"$set": reversal})
+    await release_bank_recon_claims(scope, match_id)
     return {"match_id": match_id, "status": "reversed"}
 
 
@@ -1358,7 +1475,102 @@ async def post_bank_statement_line_voucher(
             }
         },
     )
-    return {"statement_line_id": statement_line_id, "posting_status": posting_status, "voucher": voucher}
+    match = None
+    if posting_status == "posted" and voucher.get("journal_entry_id"):
+        match = await _auto_match_statement_voucher(
+            session,
+            scope=scope,
+            account_id=account_id,
+            stmt_line=stmt_line,
+            journal_entry_id=voucher["journal_entry_id"],
+            voucher_id=voucher.get("voucher_id"),
+            created_by=created_by,
+        )
+    return {
+        "statement_line_id": statement_line_id,
+        "posting_status": posting_status,
+        "voucher": voucher,
+        "match": match,
+    }
+
+
+async def _auto_match_statement_voucher(
+    session,
+    *,
+    scope: dict,
+    account_id: int,
+    stmt_line: dict,
+    journal_entry_id,
+    voucher_id: str | None,
+    created_by: str,
+) -> dict | None:
+    """Gap #12: once a voucher posted from a bank-only statement line is on
+    the ledger, match that line to the voucher's own bank line, so it does not
+    come back as an open item. Best effort: the voucher is already posted, so
+    any problem here leaves the line for the normal suggestions instead of
+    failing the request."""
+    from app.accounting.service import AccountingValidationError, get_ledger_lines
+    from app.db.mongo import get_collection
+
+    statement_line_id = stmt_line.get("statement_line_id")
+    match_id = str(uuid4())
+    try:
+        _, ledger_lines = await get_ledger_lines(
+            session, tenant_id=scope["tenant_id"], account_id=account_id,
+            app_key=scope["app_key"], accounting_entity_id=scope["accounting_entity_id"],
+        )
+        side, amount = _statement_side_amount(stmt_line)
+        book_line = next(
+            (
+                l for l in ledger_lines
+                if str(l.get("journal_id")) == str(journal_entry_id)
+                and _ledger_side_amount({"debit": l["debit"], "credit": l["credit"]}) == (side, amount)
+            ),
+            None,
+        )
+        if book_line is None:
+            return None
+        match_col = get_collection(BANK_RECON_MATCHES_COLLECTION)
+        if await match_col.find_one({**scope, "statement_line_id": statement_line_id, "status": {"$in": LIVE_MATCH_STATUSES}}):
+            return None
+        if await match_col.find_one({**scope, "line_id": book_line["line_id"], "status": {"$in": LIVE_MATCH_STATUSES}}):
+            return None
+        try:
+            await claim_bank_recon_lines(
+                scope, owner_id=match_id, account_id=account_id,
+                statement_line_ids=[statement_line_id], line_ids=[book_line["line_id"]],
+            )
+        except AccountingValidationError:
+            return None
+        now = _now()
+        doc = {
+            **scope,
+            "match_id": match_id,
+            "account_id": account_id,
+            "statement_line_id": statement_line_id,
+            "line_id": book_line["line_id"],
+            "journal_id": book_line["journal_id"],
+            "side": side,
+            "amount": str(amount),
+            "statement_txn_date": stmt_line.get("txn_date"),
+            "book_entry_date": book_line.get("entry_date"),
+            "source": "statement_voucher",
+            "voucher_id": voucher_id,
+            "status": MATCH_STATUS_ACTIVE,
+            "created_by": created_by,
+            "created_at": now,
+        }
+        try:
+            await match_col.insert_one(doc)
+        except Exception:
+            await release_bank_recon_claims(scope, match_id)
+            raise
+        doc.pop("_id", None)
+        doc["created_at"] = now.isoformat()
+        return doc
+    except Exception:  # pragma: no cover - defensive: never fail a posted voucher
+        logger.exception("bank recon auto-match failed for statement line %s", statement_line_id)
+        return None
 
 
 def _difference_voucher_idempotency_key(account_id: int, stmt_ids: list[str], line_ids: list[int]) -> str:
@@ -1435,12 +1647,22 @@ async def create_bank_recon_difference_match(
         created_by=created_by,
     )
     base_key = idempotency_key or _difference_voucher_idempotency_key(account_id, stmt_ids, book_ids)
-    voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=base_key)
-    # The idempotency key returns an earlier voucher for the same selection
-    # (safe retries). If that one was rejected, the accountant is retrying on
-    # purpose — post a fresh voucher rather than reuse the rejected one.
-    if str(voucher.get("status") or "").lower() == "rejected":
-        voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=f"{base_key}:{group_id}")
+    # Hold the lines before creating the voucher, so a concurrent match
+    # cannot take them while the voucher is being created.
+    await claim_bank_recon_lines(
+        scope, owner_id=group_id, account_id=account_id,
+        statement_line_ids=stmt_ids, line_ids=book_ids,
+    )
+    try:
+        voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=base_key)
+        # The idempotency key returns an earlier voucher for the same selection
+        # (safe retries). If that one was rejected, the accountant is retrying on
+        # purpose — post a fresh voucher rather than reuse the rejected one.
+        if str(voucher.get("status") or "").lower() == "rejected":
+            voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=f"{base_key}:{group_id}")
+    except Exception:
+        await release_bank_recon_claims(scope, group_id)
+        raise
 
     now = _now()
     pairs = (
@@ -1479,7 +1701,11 @@ async def create_bank_recon_difference_match(
             "created_by": created_by,
             "created_at": now,
         })
-    await match_col.insert_many(docs)
+    try:
+        await match_col.insert_many(docs)
+    except Exception:
+        await release_bank_recon_claims(scope, group_id)
+        raise
 
     if str(voucher.get("status") or "").lower() == "posted":
         return await finalize_bank_recon_difference_match(
@@ -1552,6 +1778,9 @@ async def finalize_bank_recon_difference_match(
         raise AccountingValidationError("The difference voucher did not post to this bank account for the expected amount")
     if await match_col.find_one({**scope, "line_id": adjustment_line["line_id"], "status": {"$in": LIVE_MATCH_STATUSES}}):
         raise AccountingValidationError("The difference voucher's bank line is already matched elsewhere")
+    await claim_bank_recon_lines(
+        scope, owner_id=match_group_id, account_id=account_id, line_ids=[adjustment_line["line_id"]],
+    )
 
     now = _now()
     adjustment_row = {

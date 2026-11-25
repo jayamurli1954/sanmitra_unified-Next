@@ -51,16 +51,16 @@ Priority: **P1** = needed for real-world Indian SME reconciliation; **P2** = sig
 | 9 | Opening BRS (uncleared items carried in from before MitraBooks) | ✅ Opening BRS. | ◐ Through the opening balance plus uncategorised lines. | ❌ | Allow opening uncleared items to be entered against the opening balance. | P2 |
 | 10 | Exclude / ignore a statement line (duplicates, already handled elsewhere) | ◐ | ✅ Exclude and restore. | ❌ The line stays "in bank, not in books" forever. | Soft-exclude with a reason, audited. It must still appear in the BRS appendix. | P3 |
 | 11 | Split one statement line across several ledgers when posting | Through a multi-ledger voucher. | ✅ Split transaction. | ❌ The voucher has one offset account. | A multi-line voucher from a statement line. | P3 |
-| 12 | Posting a bank-only line also reconciles it | ✅ (the voucher carries a bank date) | ✅ (a categorised line is reconciled) | ◐ The voucher posts, but the line is **not** auto-matched. It reappears as a suggestion against its own new journal line. | After the voucher is posted, create the match through the normal metadata path. | P2 |
+| 12 | Posting a bank-only line also reconciles it | ✅ (the voucher carries a bank date) | ✅ (a categorised line is reconciled) | ✅ **Done.** When the voucher posts, the line is matched to the voucher's own bank line (`source: statement_voucher`). | — | P2 |
 | 13 | BRS print/export | ✅ | ✅ | ◐ JSON plus on-screen view. | PDF/Excel export through `report_export.py`. | P3 |
-| 14 | Concurrency safety on confirm | n/a (desktop) | n/a | ◐ The "already matched" check and the insert are not atomic. Two users could double-match the same line. | A unique partial index on active `statement_line_id`/`line_id`, or a conditional upsert. | P2 |
+| 14 | Concurrency safety on confirm | n/a (desktop) | n/a | ✅ **Done.** Atomic line claims (design below). | — | P2 |
 
 ## Recommended build order
 
 1. ~~One-to-many / many-to-one matching (#1)~~ — done.
 2. ~~Manual matching UI (#2)~~ — done.
 3. ~~Match with a difference (#3)~~ — done.
-4. Auto-match after a voucher is posted from a bank-only line (#12), plus atomic confirm (#14).
+4. ~~Auto-match after a voucher is posted from a bank-only line (#12), plus atomic confirm (#14)~~ — done.
 5. Bank rules (#4) and reference normalisation (#7).
 6. Statement periods and locks (#8), and opening BRS (#9).
 7. Additional formats (#6), exclude (#10), split (#11), export (#13).
@@ -137,3 +137,40 @@ difference is at most ₹1,000 **and** at most 2.5% of the book amount. That cov
 bank charges and typical card/UPI MDR; TDS at 10% is matched by hand. The smallest
 difference wins, then the closest date. Each suggestion carries a likely reason
 ("bank charges, MDR or TDS deducted?", "transfer charges?", "interest or rounding?").
+
+## Design: auto-match a posted bank-only voucher (gap #12)
+
+When "Post voucher" is used on a bank-only statement line and the voucher posts
+(immediately, for a voucher approver), the line is matched to the voucher's own
+bank ledger line. The service finds that line by the voucher's journal entry id,
+the same direction and the same amount. The match row carries
+`source: "statement_voucher"` and the `voucher_id`.
+
+- This is best effort: the voucher is already posted, so any problem here only
+  logs and leaves the line for the normal suggestions. It never fails the request.
+- A voucher still waiting for approval is not matched. Once it posts, the line
+  appears as an exact 1:1 suggestion as before.
+
+## Design: atomic matching (gap #14)
+
+Before this change, "is this line already matched?" and "save the match" were two
+separate steps, so two users could match the same line at the same moment.
+
+- Every path that holds lines now claims each line first: single, group and
+  difference matches, completing a difference match, and the #12 auto-match.
+- A claim is a document in `business_bank_recon_line_claims` whose `_id` is
+  derived from tenant, app, entity, line kind and line id. MongoDB always keeps
+  `_id` unique, so the second of two racing requests fails on insert. This
+  needs no extra index; business indexes are currently only created by the
+  E2E seed, so a new unique index could not be relied on.
+- On a conflict, the claims the request had already made are rolled back. The
+  user sees "A selected line was just matched by someone else — reload and try
+  again".
+- Claims are released when the match is unmatched, or when the request fails
+  after claiming (for example, the difference voucher could not be created).
+- If a process dies between claiming and saving, the claim is left with no
+  match rows. Such a claim is treated as abandoned after
+  `CLAIM_STALE_AFTER_SECONDS` (5 minutes) and can be taken over.
+- Matches saved before this change have no claims. The existing
+  "already matched" checks still protect them from sequential conflicts. A
+  one-off backfill would extend race protection to them too, if wanted.

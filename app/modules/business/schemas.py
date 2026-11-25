@@ -187,6 +187,10 @@ class BankStatementVoucherResponse(BaseModel):
     posting_status: str
     voucher: TypedVoucherResponse
     note: str | None = None
+    match: dict | None = Field(
+        default=None,
+        description="When the voucher posted, the match created between the statement line and the voucher's bank line.",
+    )
 
 
 class CaDocumentCreateRequest(BaseModel):

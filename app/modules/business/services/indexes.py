@@ -62,6 +62,10 @@ async def ensure_business_indexes() -> None:
     bank_matches = get_collection("business_bank_recon_matches")
     await bank_matches.create_index([("tenant_id", 1), ("app_key", 1), ("match_id", 1)], unique=True)
     await bank_matches.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("account_id", 1), ("status", 1)])
+    # Line claims are unique by `_id` (always indexed); this index only speeds
+    # up releasing a match's claims on unmatch.
+    bank_claims = get_collection("business_bank_recon_line_claims")
+    await bank_claims.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("owner_id", 1)])
     dunning_log = get_collection("business_dunning_log")
     await dunning_log.create_index([("tenant_id", 1), ("app_key", 1), ("dunning_id", 1)], unique=True)
     await dunning_log.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("party_id", 1), ("created_at", -1)])

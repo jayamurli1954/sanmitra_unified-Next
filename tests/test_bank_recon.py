@@ -206,13 +206,27 @@ class _FakeCollection:
             rows = [{key: row.get(key) for key in keys if key in row} for row in rows]
         return _FakeCursor(rows)
 
+    def _check_unique_id(self, doc):
+        # MongoDB always keeps `_id` unique; claims rely on that.
+        if "_id" in doc and any(row.get("_id") == doc["_id"] for row in self.rows):
+            from pymongo.errors import DuplicateKeyError
+            raise DuplicateKeyError(f"E11000 duplicate key _id={doc['_id']}")
+
     async def insert_one(self, doc):
+        self._check_unique_id(doc)
         self.rows.append(doc)
         return SimpleNamespace(inserted_id=doc.get("match_id") or doc.get("statement_line_id"))
 
     async def insert_many(self, docs):
+        for doc in docs:
+            self._check_unique_id(doc)
         self.rows.extend(docs)
         return SimpleNamespace(inserted_ids=[doc.get("statement_line_id") for doc in docs])
+
+    async def delete_many(self, query):
+        before = len(self.rows)
+        self.rows = [row for row in self.rows if not self._matches(row, query)]
+        return SimpleNamespace(deleted_count=before - len(self.rows))
 
     async def update_one(self, query, update):
         row = await self.find_one(query)
@@ -516,6 +530,8 @@ async def test_post_bank_statement_line_voucher_posts_with_correct_direction_and
 
     monkeypatch.setattr("app.modules.business.service.post_typed_voucher", fake_post_and_store)
     monkeypatch.setattr("app.modules.business.service.review_typed_voucher", fake_review_typed_voucher)
+    # The posted voucher's bank line is not on this fake ledger, so no auto-match.
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service([]))
 
     out = await bank_recon.post_bank_statement_line_voucher(
         object(),
@@ -548,6 +564,7 @@ async def test_post_bank_statement_line_voucher_posts_with_correct_direction_and
     assert stored["posted_voucher_id"] == "voucher-1"
     assert stored["posted_journal_entry_id"] == 9001
     assert stored["posting_status"] == "posted"
+    assert out["match"] is None
 
 
 @pytest.mark.asyncio
@@ -1254,3 +1271,151 @@ async def test_statement_voucher_route_only_lets_voucher_approvers_approve(monke
     else:
         assert out["posting_status"] == "pending_approval"
         assert "tenant admin" in out["note"]
+
+
+# ---- Gap #14: atomic line claims ------------------------------------------ #
+
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+
+from app.modules.business.bank_recon import BANK_RECON_LINE_CLAIMS_COLLECTION  # noqa: E402
+
+
+def _claim(kind, key, owner, *, age_seconds=0):
+    return {
+        "_id": "|".join(["bankrecon", "tenant-a", "mitrabooks", "primary", kind, str(key)]),
+        **_scope(), "account_id": 102, "kind": kind, "key": str(key), "owner_id": owner,
+        "claimed_at": _dt.now(_tz.utc) - _td(seconds=age_seconds),
+    }
+
+
+@pytest.mark.asyncio
+async def test_line_claimed_by_a_concurrent_request_blocks_the_match(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+    # Another request has just claimed book line 2 but not yet written its match row.
+    fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION] = _FakeCollection([_claim("book", 2, "other-request")])
+
+    with pytest.raises(AccountingValidationError, match="just matched by someone else"):
+        await _create_group(["s1"], [1, 2])
+
+    assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []
+    # The claims this request made before the conflict were rolled back.
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert [c["owner_id"] for c in claims] == ["other-request"]
+
+
+@pytest.mark.asyncio
+async def test_abandoned_claim_is_taken_over_but_a_fresh_one_is_not(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+    fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION] = _FakeCollection([
+        _claim("book", 2, "crashed-request", age_seconds=bank_recon.CLAIM_STALE_AFTER_SECONDS + 60),
+    ])
+
+    out = await _create_group(["s1"], [1, 2])
+
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert {c["owner_id"] for c in claims} == {out["match_group_id"]}
+    assert sorted((c["kind"], c["key"]) for c in claims) == [("book", "1"), ("book", "2"), ("stmt", "s1")]
+
+
+@pytest.mark.asyncio
+async def test_claims_follow_the_match_lifecycle(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+    claims = lambda: fake_bank_collections.setdefault(BANK_RECON_LINE_CLAIMS_COLLECTION, _FakeCollection()).rows  # noqa: E731
+
+    group = await _create_group(["s1"], [1, 2])
+    assert len(claims()) == 3
+    await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id=group["matches"][0]["match_id"], reversed_by="tester",
+    )
+    assert claims() == []
+
+
+@pytest.mark.asyncio
+async def test_failed_difference_voucher_releases_the_claimed_lines(fake_bank_collections, monkeypatch):
+    _difference_fixture(fake_bank_collections, monkeypatch)
+
+    async def boom(*args, **kwargs):
+        raise AccountingValidationError("Offset account not found")
+
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", boom)
+    with pytest.raises(AccountingValidationError, match="Offset account not found"):
+        await _create_difference(approve=True)
+
+    assert fake_bank_collections.get(BANK_RECON_LINE_CLAIMS_COLLECTION, _FakeCollection()).rows == []
+    assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []
+
+
+# ---- Gap #12: a posted bank-only voucher matches its statement line ------- #
+
+def _statement_voucher_fixture(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "stmt-charge", "txn_date": "2026-04-02",
+         "description": "BANK CHARGES", "ref": "CHG-118", "withdrawal": "118.00", "deposit": "0.00", "balance": "-118.00"},
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    ledger = []
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service(ledger))
+    book = _FakeVoucherBook(fake_bank_collections, ledger)
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", book.post)
+    monkeypatch.setattr("app.modules.business.service.review_typed_voucher", book.review)
+    return book
+
+
+async def _post_statement_voucher(approve):
+    return await bank_recon.post_bank_statement_line_voucher(
+        object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, statement_line_id="stmt-charge", offset_account_id=51001, offset_account_code=None,
+        description=None, reference=None, approve=approve, created_by="tester", idempotency_key=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_posted_statement_voucher_is_matched_automatically(fake_bank_collections, monkeypatch):
+    _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+
+    out = await _post_statement_voucher(approve=True)
+
+    assert out["posting_status"] == "posted"
+    match = out["match"]
+    assert match["statement_line_id"] == "stmt-charge"
+    assert match["source"] == "statement_voucher"
+    assert (match["side"], match["amount"]) == ("withdrawal", "118.00")
+    after = await _build()
+    assert after["in_bank_not_in_books"] == [] and after["in_books_not_in_bank"] == []
+    assert after["suggestions"] == []
+    assert after["summary"]["difference"] == "0.00"
+    # The auto-match holds its lines like any other match.
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert {c["owner_id"] for c in claims} == {match["match_id"]}
+
+
+@pytest.mark.asyncio
+async def test_pending_statement_voucher_is_not_matched_until_posted(fake_bank_collections, monkeypatch):
+    _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+
+    out = await _post_statement_voucher(approve=False)
+
+    assert out["posting_status"] == "pending_approval"
+    assert out["match"] is None
+    assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []
+
+
+@pytest.mark.asyncio
+async def test_single_match_blocked_by_concurrent_claim(fake_bank_collections, monkeypatch):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "s1", "txn_date": "2026-04-01",
+         "withdrawal": "0.00", "deposit": "50000.00"},
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION] = _FakeCollection([_claim("stmt", "s1", "other-request")])
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service([
+        _book(1, "2026-04-01", debit="50000.00"),
+    ]))
+
+    with pytest.raises(AccountingValidationError, match="just matched by someone else"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s1", line_id=1, created_by="tester",
+        )
+    assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []

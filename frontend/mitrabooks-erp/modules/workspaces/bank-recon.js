@@ -313,7 +313,9 @@ export async function postBankReconStatementVoucher(statementLineId) {
     const voucher = result.payload?.voucher || {};
     const label = voucher.voucher_number || voucher.voucher_id || "Voucher";
     if (result.payload?.posting_status === "posted") {
-      setLoginStatus("ok", "Voucher posted", `${label} posted from the bank statement line.`);
+      setLoginStatus("ok", "Voucher posted", result.payload?.match
+        ? `${label} posted and the bank line is now reconciled.`
+        : `${label} posted from the bank statement line.`);
     } else {
       setLoginStatus("warn", "Waiting for approval", result.payload?.note || `${label} was created and is waiting for approval.`);
     }
