@@ -19,11 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.accounting.service import AccountingNotFoundError, AccountingValidationError
 from app.core.auth.dependencies import get_current_user
 from app.core.modules.dependencies import require_enabled_module
+from app.core.permissions.rbac import Role
 from app.core.tenants.app_resolvers import resolve_business_app_tenant
 from app.db.postgres import get_async_session
 from app.modules.business import bank_recon
 from app.modules.business import banking_books
 from app.modules.business.schemas import (
+    BankReconDifferenceMatchRequest,
+    BankReconGroupMatchRequest,
     BankStatementVoucherRequest,
     BankStatementVoucherResponse,
 )
@@ -130,6 +133,138 @@ async def business_bank_recon_match(
         raise HTTPException(status_code=422, detail=str(exc))
 
 
+@router.post("/bank-recon/match-group")
+async def business_bank_recon_match_group(
+    payload: BankReconGroupMatchRequest,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Confirm a one-to-many or many-to-one match (for example one deposit
+    slip covering several receipts). Metadata only — never posts to the
+    ledger. Direction must agree and totals must match exactly; unmatching
+    any row later unmatches the whole group."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation group match",
+    )
+    try:
+        return await bank_recon.create_bank_recon_group_match(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            account_id=payload.account_id,
+            statement_line_ids=payload.statement_line_ids,
+            line_ids=payload.line_ids,
+            created_by=_created_by(current_user),
+        )
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+# Same roles as the voucher review route (POST /vouchers/{id}/review): only
+# these may approve a voucher, so only these may ask for immediate approval.
+_VOUCHER_APPROVER_ROLES = {Role.super_admin.value, Role.tenant_admin.value}
+
+
+def _can_approve_vouchers(current_user: dict) -> bool:
+    return str(current_user.get("role") or "") in _VOUCHER_APPROVER_ROLES
+
+
+@router.post("/bank-recon/match-difference")
+async def business_bank_recon_match_difference(
+    payload: BankReconDifferenceMatchRequest,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+):
+    """Match lines whose totals differ by bank charges, MDR, TDS or rounding.
+    The difference is posted as a journal voucher through the normal approval
+    path; the match becomes active only once that voucher is posted.
+
+    `approve: true` is honoured only for voucher approvers (tenant_admin /
+    super_admin). For anyone else the voucher stays in the approval queue and
+    the match is returned as pending, exactly as with `approve: false`."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation difference match",
+    )
+    approve = bool(payload.approve) and _can_approve_vouchers(current_user)
+    try:
+        result = await bank_recon.create_bank_recon_difference_match(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            account_id=payload.account_id,
+            statement_line_ids=payload.statement_line_ids,
+            line_ids=payload.line_ids,
+            offset_account_id=payload.offset_account_id,
+            offset_account_code=payload.offset_account_code,
+            description=payload.description,
+            approve=approve,
+            created_by=_created_by(current_user),
+            idempotency_key=x_idempotency_key,
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if payload.approve and not approve:
+        result["note"] = (
+            "The difference voucher is waiting for approval by a tenant admin. "
+            "Complete the match once it is posted."
+        )
+    return result
+
+
+@router.post("/bank-recon/match-difference/{match_group_id}/complete")
+async def business_bank_recon_match_difference_complete(
+    match_group_id: str,
+    accounting_entity_id: str = Query(default="primary", min_length=1, max_length=80),
+    _module_context: dict = Depends(require_enabled_module("business")),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: dict = Depends(get_current_user),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_app_key: str | None = Header(default=None, alias="X-App-Key"),
+):
+    """Complete a pending difference match after its voucher has been approved."""
+    context = resolve_business_app_tenant(
+        current_user=current_user,
+        x_tenant_id=x_tenant_id,
+        x_app_key=x_app_key,
+        expected_app_key="mitrabooks",
+        operation="bank reconciliation difference match completion",
+    )
+    try:
+        return await bank_recon.finalize_bank_recon_difference_match(
+            session,
+            tenant_id=context.tenant_id,
+            app_key=context.app_key,
+            accounting_entity_id=accounting_entity_id,
+            match_group_id=match_group_id,
+            finalized_by=_created_by(current_user),
+        )
+    except AccountingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AccountingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @router.post("/bank-recon/match/{match_id}/reverse")
 async def business_bank_recon_unmatch(
     match_id: str,
@@ -173,7 +308,10 @@ async def business_bank_recon_statement_voucher(
 ):
     """Create a voucher for a bank-only statement line, such as bank charges,
     interest, or direct credits. The accounting entry is posted only through
-    the normal typed-voucher review path."""
+    the normal typed-voucher review path.
+
+    `approve: true` is honoured only for voucher approvers (tenant_admin /
+    super_admin); for anyone else the voucher stays in the approval queue."""
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
@@ -181,8 +319,9 @@ async def business_bank_recon_statement_voucher(
         expected_app_key="mitrabooks",
         operation="bank reconciliation statement voucher",
     )
+    approve = bool(payload.approve) and _can_approve_vouchers(current_user)
     try:
-        return await bank_recon.post_bank_statement_line_voucher(
+        result = await bank_recon.post_bank_statement_line_voucher(
             session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
@@ -193,7 +332,7 @@ async def business_bank_recon_statement_voucher(
             offset_account_code=payload.offset_account_code,
             description=payload.description,
             reference=payload.reference,
-            approve=payload.approve,
+            approve=approve,
             created_by=_created_by(current_user),
             idempotency_key=x_idempotency_key,
         )
@@ -201,6 +340,9 @@ async def business_bank_recon_statement_voucher(
         raise HTTPException(status_code=404, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if payload.approve and not approve:
+        result["note"] = "The voucher is waiting for approval by a tenant admin."
+    return result
 
 
 @router.get("/banking/books")

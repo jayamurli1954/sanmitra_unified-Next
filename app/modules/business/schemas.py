@@ -159,10 +159,38 @@ class BankStatementVoucherRequest(BaseModel):
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
+class BankReconGroupMatchRequest(BaseModel):
+    """One statement line with several book entries (one_to_many), or several
+    statement lines with one book entry (many_to_one). Totals must agree exactly."""
+    account_id: int = Field(..., ge=1)
+    statement_line_ids: list[str] = Field(..., min_length=1, max_length=10)
+    line_ids: list[int] = Field(..., min_length=1, max_length=10)
+
+
+class BankReconDifferenceMatchRequest(BaseModel):
+    """Match lines whose totals differ (bank charges, MDR, TDS, rounding) and
+    post the difference to `offset_account_*` through the voucher approval path."""
+    account_id: int = Field(..., ge=1)
+    statement_line_ids: list[str] = Field(..., min_length=1, max_length=10)
+    line_ids: list[int] = Field(..., min_length=1, max_length=10)
+    offset_account_id: int | None = Field(default=None, ge=1)
+    offset_account_code: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=300)
+    approve: bool = Field(
+        default=False,
+        description="When true, approve/post the difference voucher now and complete the match.",
+    )
+
+
 class BankStatementVoucherResponse(BaseModel):
     statement_line_id: str
     posting_status: str
     voucher: TypedVoucherResponse
+    note: str | None = None
+    match: dict | None = Field(
+        default=None,
+        description="When the voucher posted, the match created between the statement line and the voucher's bank line.",
+    )
 
 
 class CaDocumentCreateRequest(BaseModel):
