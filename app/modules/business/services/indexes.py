@@ -30,20 +30,24 @@ class _TolerantIndexCollection:
             # duplicates, MongoDB's message contains the duplicated values
             # themselves (party codes, GSTINs, names...). Record only what is
             # needed to find the index: collection, field names, error type/code.
-            failure = {
+            error_type = type(exc).__name__
+            error_code = getattr(exc, "code", None)
+            self._failures.append({
                 "collection": self._name,
                 "fields": [str(field) for field, _direction in keys],
                 "unique": bool(kwargs.get("unique")),
-                "error_type": type(exc).__name__,
-                "error_code": getattr(exc, "code", None),
-            }
-            self._failures.append(failure)
+                "error_type": error_type,
+                "error_code": error_code,
+            })
+            # Log only the failure count position, error type and code: no
+            # exception text, field names or other values derived from data.
             logger.error(
-                "Could not create a MitraBooks business index on collection %s (%s, code %s); "
-                "a unique index usually fails because existing documents contain duplicates",
-                self._name,
-                failure["error_type"],
-                failure["error_code"],
+                "Could not create MitraBooks business index #%d (%s, code %s); "
+                "a unique index usually fails because existing documents contain duplicates. "
+                "ensure_business_indexes() returns the collection and fields.",
+                len(self._failures),
+                error_type,
+                error_code,
             )
             return None
 
@@ -132,7 +136,8 @@ async def ensure_business_indexes() -> list[dict]:
     await items_col.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("code", 1)], unique=True)
     if failures:
         logger.error(
-            "MitraBooks business indexes: %d of the indexes could not be created; see errors above",
+            "MitraBooks business indexes: %d could not be created. The return value of "
+            "ensure_business_indexes() names the collection and fields of each.",
             len(failures),
         )
     return failures
