@@ -285,7 +285,8 @@ from app.modules.business.services.indexes import (  # noqa: E402
 
 
 async def ensure_business_indexes() -> list[dict]:
-    return await _ensure_business_indexes(collection_lookup=lambda name: get_collection(name))
+    # Read at call time, so a patched business_service.get_collection is used.
+    return await _ensure_business_indexes(collection_lookup=get_collection)
 
 # Typed vouchers moved to services/vouchers.py
 from app.modules.business.services.vouchers import (  # noqa: E402
