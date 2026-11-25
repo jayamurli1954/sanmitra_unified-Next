@@ -308,7 +308,10 @@ async def business_bank_recon_statement_voucher(
 ):
     """Create a voucher for a bank-only statement line, such as bank charges,
     interest, or direct credits. The accounting entry is posted only through
-    the normal typed-voucher review path."""
+    the normal typed-voucher review path.
+
+    `approve: true` is honoured only for voucher approvers (tenant_admin /
+    super_admin); for anyone else the voucher stays in the approval queue."""
     context = resolve_business_app_tenant(
         current_user=current_user,
         x_tenant_id=x_tenant_id,
@@ -316,8 +319,9 @@ async def business_bank_recon_statement_voucher(
         expected_app_key="mitrabooks",
         operation="bank reconciliation statement voucher",
     )
+    approve = bool(payload.approve) and _can_approve_vouchers(current_user)
     try:
-        return await bank_recon.post_bank_statement_line_voucher(
+        result = await bank_recon.post_bank_statement_line_voucher(
             session,
             tenant_id=context.tenant_id,
             app_key=context.app_key,
@@ -328,7 +332,7 @@ async def business_bank_recon_statement_voucher(
             offset_account_code=payload.offset_account_code,
             description=payload.description,
             reference=payload.reference,
-            approve=payload.approve,
+            approve=approve,
             created_by=_created_by(current_user),
             idempotency_key=x_idempotency_key,
         )
@@ -336,6 +340,9 @@ async def business_bank_recon_statement_voucher(
         raise HTTPException(status_code=404, detail=str(exc))
     except AccountingValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if payload.approve and not approve:
+        result["note"] = "The voucher is waiting for approval by a tenant admin."
+    return result
 
 
 @router.get("/banking/books")

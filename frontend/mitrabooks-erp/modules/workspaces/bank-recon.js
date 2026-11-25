@@ -311,7 +311,12 @@ export async function postBankReconStatementVoucher(statementLineId) {
   });
   if (result.ok) {
     const voucher = result.payload?.voucher || {};
-    setLoginStatus("ok", "Voucher posted", `${voucher.voucher_number || voucher.voucher_id || "Voucher"} posted from the bank statement line.`);
+    const label = voucher.voucher_number || voucher.voucher_id || "Voucher";
+    if (result.payload?.posting_status === "posted") {
+      setLoginStatus("ok", "Voucher posted", `${label} posted from the bank statement line.`);
+    } else {
+      setLoginStatus("warn", "Waiting for approval", result.payload?.note || `${label} was created and is waiting for approval.`);
+    }
     await loadBankReconciliation(bankReconAccountId);
   } else {
     setLoginStatus("danger", "Voucher posting failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);

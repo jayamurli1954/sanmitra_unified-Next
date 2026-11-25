@@ -1209,3 +1209,48 @@ async def test_difference_route_only_lets_voucher_approvers_approve(monkeypatch,
     if not expected_approve:
         assert out["status"] == "pending_adjustment"
         assert "tenant admin" in out["note"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role,expected_approve", [
+    ("tenant_admin", True),
+    ("super_admin", True),
+    ("accountant", False),
+    ("operator", False),
+    (None, False),
+])
+async def test_statement_voucher_route_only_lets_voucher_approvers_approve(monkeypatch, role, expected_approve):
+    from app.modules.business.routes import bank_recon_routes
+    from app.modules.business.schemas import BankStatementVoucherRequest
+
+    seen = {}
+
+    async def fake_post(session, **kwargs):
+        seen.update(kwargs)
+        status = "posted" if kwargs["approve"] else "pending_approval"
+        return {"statement_line_id": kwargs["statement_line_id"], "posting_status": status, "voucher": {}}
+
+    monkeypatch.setattr(bank_recon_routes.bank_recon, "post_bank_statement_line_voucher", fake_post)
+    monkeypatch.setattr(
+        bank_recon_routes, "resolve_business_app_tenant",
+        lambda **kwargs: SimpleNamespace(tenant_id="tenant-a", app_key="mitrabooks"),
+    )
+
+    out = await bank_recon_routes.business_bank_recon_statement_voucher(
+        payload=BankStatementVoucherRequest(
+            statement_line_id="stmt-charge", account_id=102, offset_account_id=51001, approve=True,
+        ),
+        _module_context={},
+        session=object(),
+        current_user={"role": role, "sub": "u1", "email": "u1@example.com"},
+        x_tenant_id=None,
+        x_app_key=None,
+        x_idempotency_key=None,
+    )
+
+    assert seen["approve"] is expected_approve
+    if expected_approve:
+        assert "note" not in out
+    else:
+        assert out["posting_status"] == "pending_approval"
+        assert "tenant admin" in out["note"]

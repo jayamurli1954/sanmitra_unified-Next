@@ -186,6 +186,7 @@ class BankStatementVoucherResponse(BaseModel):
     statement_line_id: str
     posting_status: str
     voucher: TypedVoucherResponse
+    note: str | None = None
 
 
 class CaDocumentCreateRequest(BaseModel):
