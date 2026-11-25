@@ -171,6 +171,17 @@ separate steps, so two users could match the same line at the same moment.
 - If a process dies between claiming and saving, the claim is left with no
   match rows. Such a claim is treated as abandoned after
   `CLAIM_STALE_AFTER_SECONDS` (5 minutes) and can be taken over.
-- Matches saved before this change have no claims. The existing
-  "already matched" checks still protect them from sequential conflicts. A
-  one-off backfill would extend race protection to them too, if wanted.
+- Matches saved before this change have no claims until the one-off backfill
+  is run:
+
+  ```bash
+  python scripts/backfill_bank_recon_claims.py --app-key mitrabooks --dry-run   # report only
+  python scripts/backfill_bank_recon_claims.py --app-key mitrabooks             # write claims
+  ```
+
+  It gives every live match (active, or pending a difference voucher) a claim
+  for each line it holds, marked `backfilled: true`. It is safe to re-run. A
+  line held by **two** live matches, which the old non-atomic checks could
+  produce, is reported as a conflict and not changed. An accountant should
+  unmatch one of the two. Until the backfill runs, the existing "already
+  matched" checks still protect legacy matches from sequential conflicts.

@@ -1820,3 +1820,87 @@ async def finalize_bank_recon_difference_match(
         "adjustment_voucher_id": head.get("adjustment_voucher_id"),
         "matches": final_rows,
     }
+
+
+async def backfill_bank_recon_claims(
+    *,
+    app_key: str,
+    tenant_id: str | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """One-off backfill for gap #14: give every live match saved before line
+    claims existed the claims it would have taken, so those lines are also
+    protected against concurrent matching.
+
+    Idempotent: a line already claimed by the same match is left alone. A line
+    claimed by a *different* live match is reported as a conflict and not
+    changed — that means two live matches hold the same line (possible only
+    with the old, non-atomic checks) and one of them should be unmatched by
+    an accountant. With `dry_run` nothing is written."""
+    from pymongo.errors import DuplicateKeyError
+
+    from app.db.mongo import get_collection
+
+    query = {"app_key": app_key, "status": {"$in": LIVE_MATCH_STATUSES}}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    rows = await get_collection(BANK_RECON_MATCHES_COLLECTION).find(query).to_list(length=None)
+    claims_col = get_collection(BANK_RECON_LINE_CLAIMS_COLLECTION)
+
+    summary = {
+        "matches_scanned": len(rows),
+        "claims_created": 0,
+        "claims_already_present": 0,
+        "conflicts": [],
+        "dry_run": dry_run,
+    }
+    planned: dict[str, str] = {}  # claim _id -> owner, for conflicts inside this run (dry run)
+    for row in rows:
+        scope = _scope(row["tenant_id"], row["app_key"], row["accounting_entity_id"])
+        owner = str(row.get("match_group_id") or row.get("match_id"))
+        for kind, key in (("stmt", row.get("statement_line_id")), ("book", row.get("line_id"))):
+            if key in (None, ""):
+                continue
+            claim_id = _claim_id(scope, kind, key)
+            existing = await claims_col.find_one({"_id": claim_id})
+            existing_owner = (existing or {}).get("owner_id") or planned.get(claim_id)
+            if existing_owner == owner:
+                summary["claims_already_present"] += 1
+                continue
+            if existing_owner is not None:
+                summary["conflicts"].append({
+                    **scope,
+                    "account_id": row.get("account_id"),
+                    "kind": kind,
+                    "line": str(key),
+                    "held_by": existing_owner,
+                    "also_held_by": owner,
+                })
+                continue
+            planned[claim_id] = owner
+            if dry_run:
+                summary["claims_created"] += 1
+                continue
+            try:
+                await claims_col.insert_one({
+                    "_id": claim_id,
+                    **scope,
+                    "account_id": row.get("account_id"),
+                    "kind": kind,
+                    "key": str(key),
+                    "owner_id": owner,
+                    "claimed_at": _now(),
+                    "backfilled": True,
+                })
+                summary["claims_created"] += 1
+            except DuplicateKeyError:
+                # Claimed concurrently by a live request between our read and write.
+                racer = await claims_col.find_one({"_id": claim_id})
+                if (racer or {}).get("owner_id") == owner:
+                    summary["claims_already_present"] += 1
+                else:
+                    summary["conflicts"].append({
+                        **scope, "account_id": row.get("account_id"), "kind": kind, "line": str(key),
+                        "held_by": (racer or {}).get("owner_id"), "also_held_by": owner,
+                    })
+    return summary

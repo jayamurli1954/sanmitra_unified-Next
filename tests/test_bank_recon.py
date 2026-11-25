@@ -1419,3 +1419,62 @@ async def test_single_match_blocked_by_concurrent_claim(fake_bank_collections, m
             account_id=102, statement_line_id="s1", line_id=1, created_by="tester",
         )
     assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []
+
+
+# ---- Gap #14: claims backfill for matches saved before claims existed ---- #
+
+@pytest.mark.asyncio
+async def test_backfill_claims_is_idempotent_scoped_and_reports_conflicts(fake_bank_collections):
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection([
+        # legacy single match
+        {**_scope(), "match_id": "m1", "account_id": 102, "statement_line_id": "s1", "line_id": 1, "status": "active"},
+        # legacy group (one statement line, two book lines)
+        {**_scope(), "match_id": "g-a", "match_group_id": "g1", "account_id": 102, "statement_line_id": "s2", "line_id": 2, "status": "active"},
+        {**_scope(), "match_id": "g-b", "match_group_id": "g1", "account_id": 102, "statement_line_id": "s2", "line_id": 3, "status": "active"},
+        # pending difference match also holds its lines
+        {**_scope(), "match_id": "p-a", "match_group_id": "p1", "account_id": 102, "statement_line_id": "s4", "line_id": 4, "status": "pending_adjustment"},
+        # a second live match on book line 1 — possible only with the old non-atomic checks
+        {**_scope(), "match_id": "m-dup", "account_id": 102, "statement_line_id": "s9", "line_id": 1, "status": "active"},
+        # ignored: reversed, other tenant, other app
+        {**_scope(), "match_id": "m-old", "account_id": 102, "statement_line_id": "s7", "line_id": 7, "status": "reversed"},
+        {**_scope("tenant-b"), "match_id": "m-b", "account_id": 102, "statement_line_id": "sb", "line_id": 8, "status": "active"},
+        {**_scope(app_key="gruhamitra"), "match_id": "m-g", "account_id": 102, "statement_line_id": "sg", "line_id": 9, "status": "active"},
+    ])
+
+    dry = await bank_recon.backfill_bank_recon_claims(app_key="mitrabooks", tenant_id="tenant-a", dry_run=True)
+    assert dry["claims_created"] == 8 and dry["dry_run"] is True
+    assert fake_bank_collections.get(BANK_RECON_LINE_CLAIMS_COLLECTION, _FakeCollection()).rows == []
+
+    first = await bank_recon.backfill_bank_recon_claims(app_key="mitrabooks", tenant_id="tenant-a")
+    assert first["matches_scanned"] == 5
+    # m1: s1,1 · g1: s2,2,3 (s2 once, the second row finds it already claimed) · p1: s4,4 · m-dup: s9
+    assert first["claims_created"] == 8
+    assert first["claims_already_present"] == 1
+    assert [(c["kind"], c["line"], c["held_by"], c["also_held_by"]) for c in first["conflicts"]] == [
+        ("book", "1", "m1", "m-dup"),
+    ]
+    assert dry["conflicts"] == first["conflicts"]
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert all(c["backfilled"] and c["tenant_id"] == "tenant-a" for c in claims)
+    assert {c["owner_id"] for c in claims} == {"m1", "g1", "p1", "m-dup"}
+
+    again = await bank_recon.backfill_bank_recon_claims(app_key="mitrabooks", tenant_id="tenant-a")
+    assert again["claims_created"] == 0
+    assert again["claims_already_present"] == 9
+    assert len(again["conflicts"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_backfilled_claims_protect_legacy_matches_and_release_on_unmatch(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows.append(
+        {**_scope(), "match_id": "legacy", "account_id": 102, "statement_line_id": "s1", "line_id": 1, "status": "active"},
+    )
+    await bank_recon.backfill_bank_recon_claims(app_key="mitrabooks")
+
+    await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id="legacy", reversed_by="tester",
+    )
+    assert fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows == []
+    await _create_group(["s1"], [1, 2])  # the lines are free again
