@@ -1605,7 +1605,7 @@ async def test_ensure_business_indexes_keeps_going_after_a_failing_index(monkeyp
 
         async def create_index(self, keys, **kwargs):
             if self.name == "business_vouchers" and kwargs.get("unique") and "idempotency_key" in str(keys):
-                raise RuntimeError("E11000 duplicate key error collection: business_vouchers")
+                raise RuntimeError('E11000 duplicate key error collection: business_vouchers dup key: { party: "ACME" }')
             created.append((self.name, tuple(k for k, _ in keys)))
 
     monkeypatch.setattr(indexes.business_service, "get_collection", _IndexCollection)
@@ -1613,7 +1613,10 @@ async def test_ensure_business_indexes_keeps_going_after_a_failing_index(monkeyp
     failures = await indexes.ensure_business_indexes()
 
     assert [f["collection"] for f in failures] == ["business_vouchers"]
-    assert "E11000" in failures[0]["error"]
+    assert failures[0]["fields"][-1] == "idempotency_key" and failures[0]["unique"] is True
+    assert failures[0]["error_type"] == "RuntimeError"
+    # The raw error text (which can carry duplicated customer data) is never kept.
+    assert "E11000" not in str(failures)
     names = {name for name, _ in created}
     # Indexes after the failing one were still created, including the last ones.
     assert {"business_items", "business_bank_recon_line_claims", "business_bank_recon_matches"} <= names

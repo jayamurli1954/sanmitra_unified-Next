@@ -26,9 +26,25 @@ class _TolerantIndexCollection:
         try:
             return await self._collection.create_index(keys, **kwargs)
         except Exception as exc:  # noqa: BLE001 - every failure is logged and reported
-            failure = {"collection": self._name, "keys": keys, "options": kwargs, "error": str(exc)}
+            # Never log or keep the exception text: for a unique index blocked by
+            # duplicates, MongoDB's message contains the duplicated values
+            # themselves (party codes, GSTINs, names...). Record only what is
+            # needed to find the index: collection, field names, error type/code.
+            failure = {
+                "collection": self._name,
+                "fields": [str(field) for field, _direction in keys],
+                "unique": bool(kwargs.get("unique")),
+                "error_type": type(exc).__name__,
+                "error_code": getattr(exc, "code", None),
+            }
             self._failures.append(failure)
-            logger.error("Could not create index on %s %s %s: %s", self._name, keys, kwargs, exc)
+            logger.error(
+                "Could not create a MitraBooks business index on collection %s (%s, code %s); "
+                "a unique index usually fails because existing documents contain duplicates",
+                self._name,
+                failure["error_type"],
+                failure["error_code"],
+            )
             return None
 
 

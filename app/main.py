@@ -30,7 +30,7 @@ from app.core.users.service import (
 from app.db.mongo import close_mongo, init_mongo, ping_mongo
 from app.db.postgres import close_postgres, create_postgres_tables, get_session_factory, init_postgres, ping_postgres
 from app.modules.business.seed import ensure_mitrabooks_e2e_seed
-from app.modules.business.services.indexes import ensure_business_indexes
+from app.modules.business.service import ensure_business_indexes
 from app.modules.hr.fnf import ensure_fnf_indexes
 from app.modules.hr.leave import ensure_leave_indexes
 from app.modules.hr.tax import ensure_tax_indexes
