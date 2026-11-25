@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import logging
 
-from app.modules.business import service as business_service
-
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +56,10 @@ async def ensure_business_indexes() -> list[dict]:
     Runs at application startup and from the E2E seed. Each index is created
     independently; failures are logged and returned rather than raised, so
     one index that cannot be built does not leave the rest missing."""
+    # Imported here, not at module level: business.service imports this module
+    # at load time, so a module-level import back would be a cyclic import.
+    from app.modules.business import service as business_service
+
     failures: list[dict] = []
 
     def get_collection(name: str):

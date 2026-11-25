@@ -1608,7 +1608,7 @@ async def test_ensure_business_indexes_keeps_going_after_a_failing_index(monkeyp
                 raise RuntimeError('E11000 duplicate key error collection: business_vouchers dup key: { party: "ACME" }')
             created.append((self.name, tuple(k for k, _ in keys)))
 
-    monkeypatch.setattr(indexes.business_service, "get_collection", _IndexCollection)
+    monkeypatch.setattr("app.modules.business.service.get_collection", _IndexCollection)
 
     failures = await indexes.ensure_business_indexes()
 
