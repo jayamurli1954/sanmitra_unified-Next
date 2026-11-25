@@ -416,7 +416,16 @@ export function renderBankReconPanel() {
       </td>
     </tr>`).join("");
 
-  const bankOnlyRows = (r.in_bank_not_in_books || []).map((l) => `
+  const bankOnlyRows = (r.in_bank_not_in_books || []).map((l) => l.posting_status === "pending_approval" ? `
+    <tr>
+      <td></td>
+      <td>${escapeHtml(l.txn_date || "")}</td>
+      <td>${escapeHtml(l.description || "")}</td>
+      <td>${escapeHtml(l.ref || "")}</td>
+      <td class="amount">${Number(l.deposit || 0) > 0 ? num(l.deposit) : ""}</td>
+      <td class="amount">${Number(l.withdrawal || 0) > 0 ? num(l.withdrawal) : ""}</td>
+      <td colspan="2"><span class="pill warn">Voucher waiting for approval</span> <span class="muted">matched automatically once approved</span></td>
+    </tr>` : `
     <tr>
       <td><input type="checkbox" aria-label="Select bank line" data-bankrecon-pick-stmt="${escapeHtml(l.statement_line_id || "")}"></td>
       <td>${escapeHtml(l.txn_date || "")}</td>

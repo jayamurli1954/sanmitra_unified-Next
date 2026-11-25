@@ -888,6 +888,58 @@ def summarize_pending_differences(rows: list[dict]) -> list[dict]:
     return list(groups.values())
 
 
+async def sync_pending_statement_vouchers(session, *, scope: dict, account_id: int) -> dict:
+    """Settle bank-only lines whose voucher was waiting for approval.
+
+    Runs whenever the reconciliation is loaded. A voucher that has since been
+    approved is matched to its line (gap #12); one that was rejected releases
+    the line so it can be matched or posted again. Metadata only: never
+    touches the ledger."""
+    from app.db.mongo import get_collection
+    from app.modules.business.service import VOUCHERS_COLLECTION
+
+    stmt_col = get_collection(BANK_STATEMENT_LINES_COLLECTION)
+    vouchers = get_collection(VOUCHERS_COLLECTION)
+    pending = await stmt_col.find(
+        {**scope, "account_id": account_id, "posting_status": "pending_approval"}
+    ).to_list(length=20000)
+    summary = {"matched": 0, "released": 0, "still_pending": 0}
+    for line in pending:
+        statement_line_id = line.get("statement_line_id")
+        voucher_id = line.get("posted_voucher_id")
+        if not voucher_id:
+            continue
+        voucher = await vouchers.find_one({**scope, "voucher_id": voucher_id})
+        status = str((voucher or {}).get("status") or "").lower()
+        line_filter = {**scope, "account_id": account_id, "statement_line_id": statement_line_id}
+        owner = _voucher_claim_owner(statement_line_id)
+        if status == "posted" and voucher.get("journal_entry_id"):
+            await stmt_col.update_one(line_filter, {"$set": {
+                "posting_status": "posted",
+                "posted_journal_entry_id": voucher.get("journal_entry_id"),
+            }})
+            match = await _auto_match_statement_voucher(
+                session, scope=scope, account_id=account_id, stmt_line=line,
+                journal_entry_id=voucher["journal_entry_id"], voucher_id=voucher_id,
+                created_by=str(voucher.get("approval_decided_by") or line.get("posted_by") or "system"),
+                held_by=owner,
+            )
+            if match is None:
+                await release_bank_recon_claims(scope, owner)
+            else:
+                summary["matched"] += 1
+        elif voucher is None or status in {"rejected", "cancelled", "reversed"}:
+            await stmt_col.update_one(line_filter, {
+                "$unset": {"posted_voucher_id": "", "posted_journal_entry_id": "", "posting_status": ""},
+                "$set": {"last_rejected_voucher_id": voucher_id},
+            })
+            await release_bank_recon_claims(scope, owner)
+            summary["released"] += 1
+        else:
+            summary["still_pending"] += 1
+    return summary
+
+
 async def _load_recon_state(scope: dict, account_id: int) -> tuple[list[dict], list[dict]]:
     from app.db.mongo import get_collection
 
@@ -939,6 +991,7 @@ async def build_bank_reconciliation(
     ]
 
     scope = _scope(tenant_id, app_key, accounting_entity_id)
+    await sync_pending_statement_vouchers(session, scope=scope, account_id=account_id)
     stmt_rows, match_rows = await _load_recon_state(scope, account_id)
     stmt_rows = [s for s in stmt_rows if str(s.get("txn_date") or "")[:10] <= as_of.isoformat()]
 
@@ -947,7 +1000,11 @@ async def build_bank_reconciliation(
     # Lines held by a pending difference match stay unmatched in the BRS
     # (their voucher is not posted yet) but are never suggested again.
     pending_rows = await _load_pending_difference_rows(scope, account_id)
-    held_stmt_ids = matched_stmt_ids | {str(m.get("statement_line_id")) for m in pending_rows}
+    held_stmt_ids = (
+        matched_stmt_ids
+        | {str(m.get("statement_line_id")) for m in pending_rows}
+        | {str(s.get("statement_line_id")) for s in stmt_rows if _has_pending_voucher(s)}
+    )
     held_line_ids = matched_line_ids | {str(m.get("line_id")) for m in pending_rows}
     open_stmt = [s for s in stmt_rows if str(s.get("statement_line_id")) not in held_stmt_ids]
     open_book = [l for l in ledger_view if str(l.get("line_id")) not in held_line_ids]
@@ -1005,6 +1062,10 @@ async def create_bank_recon_match(
     stmt_line = await stmt_col.find_one({**scope, "account_id": account_id, "statement_line_id": statement_line_id})
     if stmt_line is None:
         raise AccountingValidationError("Statement line not found")
+    if _has_pending_voucher(stmt_line):
+        raise AccountingValidationError(
+            "This bank line has a voucher waiting for approval — approve or reject it first"
+        )
     if await match_col.find_one({**scope, "statement_line_id": statement_line_id, "status": {"$in": LIVE_MATCH_STATUSES}}):
         raise AccountingValidationError("Statement line is already matched")
     if await match_col.find_one({**scope, "line_id": line_id, "status": {"$in": LIVE_MATCH_STATUSES}}):
@@ -1054,6 +1115,18 @@ async def create_bank_recon_match(
     return doc
 
 
+VOUCHER_CLAIM_PREFIX = "statement-voucher:"
+
+
+def _voucher_claim_owner(statement_line_id: str) -> str:
+    """Owner id for the hold a bank-only line keeps while its voucher waits."""
+    return f"{VOUCHER_CLAIM_PREFIX}{statement_line_id}"
+
+
+def _has_pending_voucher(stmt_line: dict) -> bool:
+    return bool(stmt_line.get("posted_voucher_id")) and stmt_line.get("posting_status") == "pending_approval"
+
+
 def _claim_id(scope: dict, kind: str, key) -> str:
     return "|".join([
         "bankrecon", str(scope["tenant_id"]), str(scope["app_key"]),
@@ -1077,6 +1150,13 @@ async def _claim_is_abandoned(scope: dict, claim: dict) -> bool:
     if (_now() - claimed_at).total_seconds() < CLAIM_STALE_AFTER_SECONDS:
         return False
     owner = claim.get("owner_id")
+    if str(owner or "").startswith(VOUCHER_CLAIM_PREFIX):
+        # A voucher hold is live while the statement line records its voucher;
+        # it is abandoned only if the request died before recording it.
+        stmt = await get_collection(BANK_STATEMENT_LINES_COLLECTION).find_one({
+            **scope, "statement_line_id": str(owner)[len(VOUCHER_CLAIM_PREFIX):],
+        })
+        return not (stmt or {}).get("posted_voucher_id")
     match_col = get_collection(BANK_RECON_MATCHES_COLLECTION)
     for field in ("match_group_id", "match_id"):
         if await match_col.find_one({**scope, field: owner, "status": {"$in": LIVE_MATCH_STATUSES}}):
@@ -1107,6 +1187,7 @@ async def claim_bank_recon_lines(
     wanted = [("stmt", str(x)) for x in statement_line_ids] + [("book", str(x)) for x in line_ids]
     taken: list[str] = []
     now = _now()
+    blocking_owner = None
     try:
         for kind, key in wanted:
             doc = {
@@ -1123,6 +1204,7 @@ async def claim_bank_recon_lines(
             except DuplicateKeyError:
                 existing = await col.find_one({"_id": doc["_id"]})
                 if existing is None or not await _claim_is_abandoned(scope, existing):
+                    blocking_owner = (existing or {}).get("owner_id")
                     raise
                 await col.delete_many({"_id": doc["_id"], "owner_id": existing.get("owner_id")})
                 await col.insert_one(dict(doc))
@@ -1130,9 +1212,22 @@ async def claim_bank_recon_lines(
     except DuplicateKeyError as exc:
         if taken:
             await col.delete_many({"_id": {"$in": taken}})
+        if str(blocking_owner or "").startswith(VOUCHER_CLAIM_PREFIX):
+            raise AccountingValidationError(
+                "A selected bank line has a voucher waiting for approval — approve or reject it first"
+            ) from exc
         raise AccountingValidationError(
             "A selected line was just matched by someone else — reload the reconciliation and try again"
         ) from exc
+
+
+async def transfer_bank_recon_claims(scope: dict, from_owner: str, to_owner: str) -> None:
+    """Hand claims to a new owner without ever releasing the lines."""
+    from app.db.mongo import get_collection
+
+    await get_collection(BANK_RECON_LINE_CLAIMS_COLLECTION).update_many(
+        {**scope, "owner_id": from_owner}, {"$set": {"owner_id": to_owner}},
+    )
 
 
 async def release_bank_recon_claims(scope: dict, owner_id: str) -> None:
@@ -1171,6 +1266,10 @@ async def _load_match_selection(
     missing = [x for x in stmt_ids if x not in by_stmt_id]
     if missing:
         raise AccountingValidationError(f"Statement line not found: {', '.join(missing)}")
+    if any(_has_pending_voucher(by_stmt_id[x]) for x in stmt_ids):
+        raise AccountingValidationError(
+            "A selected bank line has a voucher waiting for approval — approve or reject it first"
+        )
 
     if await match_col.find_one({**scope, "statement_line_id": {"$in": stmt_ids}, "status": {"$in": LIVE_MATCH_STATUSES}}):
         raise AccountingValidationError("A selected statement line is already matched")
@@ -1443,8 +1542,7 @@ async def post_bank_statement_line_voucher(
     txn_date = date.fromisoformat(str(stmt_line.get("txn_date") or "")[:10])
     line_ref = str(reference or stmt_line.get("ref") or f"BANK-{statement_line_id}").strip()
     narration = str(description or stmt_line.get("description") or "Bank statement line").strip()
-    voucher = await _post_bank_voucher(
-        session,
+    voucher_kwargs = dict(
         tenant_id=tenant_id,
         app_key=app_key,
         accounting_entity_id=accounting_entity_id,
@@ -1459,8 +1557,24 @@ async def post_bank_statement_line_voucher(
         approve=approve,
         approval_note=f"Posted from bank statement line {statement_line_id}",
         created_by=created_by,
-        idempotency_key=idempotency_key or f"bank-statement-voucher:{statement_line_id}",
     )
+    base_key = idempotency_key or f"bank-statement-voucher:{statement_line_id}"
+    # Hold the bank line from the moment its voucher exists until it is
+    # matched (posted) or released (rejected), so it cannot be matched to a
+    # different book entry meanwhile — which would leave the voucher's bank
+    # entry unmatched once it posts.
+    voucher_owner = _voucher_claim_owner(statement_line_id)
+    await claim_bank_recon_lines(
+        scope, owner_id=voucher_owner, account_id=account_id, statement_line_ids=[statement_line_id],
+    )
+    try:
+        voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=base_key)
+        if str(voucher.get("status") or "").lower() == "rejected":
+            # The key returned an earlier, rejected voucher: this is a deliberate retry.
+            voucher = await _post_bank_voucher(session, **voucher_kwargs, idempotency_key=f"{base_key}:{uuid4()}")
+    except Exception:
+        await release_bank_recon_claims(scope, voucher_owner)
+        raise
 
     posting_status = "posted" if str(voucher.get("status") or "").lower() == "posted" else "pending_approval"
     await stmt_col.update_one(
@@ -1485,7 +1599,11 @@ async def post_bank_statement_line_voucher(
             journal_entry_id=voucher["journal_entry_id"],
             voucher_id=voucher.get("voucher_id"),
             created_by=created_by,
+            held_by=voucher_owner,
         )
+        if match is None:
+            # Could not link it automatically: free the line for normal matching.
+            await release_bank_recon_claims(scope, voucher_owner)
     return {
         "statement_line_id": statement_line_id,
         "posting_status": posting_status,
@@ -1503,6 +1621,7 @@ async def _auto_match_statement_voucher(
     journal_entry_id,
     voucher_id: str | None,
     created_by: str,
+    held_by: str | None = None,
 ) -> dict | None:
     """Gap #12: once a voucher posted from a bank-only statement line is on
     the ledger, match that line to the voucher's own bank line, so it does not
@@ -1536,10 +1655,18 @@ async def _auto_match_statement_voucher(
         if await match_col.find_one({**scope, "line_id": book_line["line_id"], "status": {"$in": LIVE_MATCH_STATUSES}}):
             return None
         try:
-            await claim_bank_recon_lines(
-                scope, owner_id=match_id, account_id=account_id,
-                statement_line_ids=[statement_line_id], line_ids=[book_line["line_id"]],
-            )
+            if held_by:
+                # The statement line is already held by its voucher; claim the
+                # voucher's bank line, then hand the hold over to this match.
+                await claim_bank_recon_lines(
+                    scope, owner_id=match_id, account_id=account_id, line_ids=[book_line["line_id"]],
+                )
+                await transfer_bank_recon_claims(scope, held_by, match_id)
+            else:
+                await claim_bank_recon_lines(
+                    scope, owner_id=match_id, account_id=account_id,
+                    statement_line_ids=[statement_line_id], line_ids=[book_line["line_id"]],
+                )
         except AccountingValidationError:
             return None
         now = _now()
@@ -1903,4 +2030,35 @@ async def backfill_bank_recon_claims(
                         **scope, "account_id": row.get("account_id"), "kind": kind, "line": str(key),
                         "held_by": (racer or {}).get("owner_id"), "also_held_by": owner,
                     })
+    # Bank-only lines whose voucher is still waiting for approval are held too.
+    stmt_query = {"app_key": app_key, "posting_status": "pending_approval"}
+    if tenant_id:
+        stmt_query["tenant_id"] = tenant_id
+    pending_lines = await get_collection(BANK_STATEMENT_LINES_COLLECTION).find(stmt_query).to_list(length=None)
+    summary["pending_voucher_lines_scanned"] = len(pending_lines)
+    for line in pending_lines:
+        if not line.get("posted_voucher_id"):
+            continue
+        scope = _scope(line["tenant_id"], line["app_key"], line["accounting_entity_id"])
+        owner = _voucher_claim_owner(line.get("statement_line_id"))
+        claim_id = _claim_id(scope, "stmt", line.get("statement_line_id"))
+        existing = await claims_col.find_one({"_id": claim_id})
+        existing_owner = (existing or {}).get("owner_id") or planned.get(claim_id)
+        if existing_owner == owner:
+            summary["claims_already_present"] += 1
+            continue
+        if existing_owner is not None:
+            summary["conflicts"].append({
+                **scope, "account_id": line.get("account_id"), "kind": "stmt",
+                "line": str(line.get("statement_line_id")), "held_by": existing_owner, "also_held_by": owner,
+            })
+            continue
+        planned[claim_id] = owner
+        if not dry_run:
+            await claims_col.insert_one({
+                "_id": claim_id, **scope, "account_id": line.get("account_id"), "kind": "stmt",
+                "key": str(line.get("statement_line_id")), "owner_id": owner,
+                "claimed_at": _now(), "backfilled": True,
+            })
+        summary["claims_created"] += 1
     return summary

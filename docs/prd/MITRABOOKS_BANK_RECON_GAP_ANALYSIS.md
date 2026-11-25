@@ -185,3 +185,34 @@ separate steps, so two users could match the same line at the same moment.
   produce, is reported as a conflict and not changed. An accountant should
   unmatch one of the two. Until the backfill runs, the existing "already
   matched" checks still protect legacy matches from sequential conflicts.
+
+## Follow-ups after #12 and #14
+
+**A bank-only line is held while its voucher waits for approval.** "Post voucher"
+claims the statement line (owner `statement-voucher:<line id>`) before it creates
+the voucher.
+
+- While the voucher is pending, the line cannot be matched elsewhere. Single,
+  group and difference matches all refuse it with "voucher waiting for approval",
+  and it is left out of suggestions. Before this, the line could be matched to
+  another book entry, and the voucher's own bank entry would then be left
+  unmatched once approved.
+- Each time the reconciliation loads, `sync_pending_statement_vouchers` settles
+  these lines:
+  - **Approved:** the line is auto-matched to the voucher's bank line, and the
+    hold is handed to the match without a gap.
+  - **Rejected, cancelled or missing:** the voucher fields are cleared, the
+    rejected voucher id is kept, and the hold is released. Posting the line again
+    creates a fresh voucher instead of returning the rejected one.
+- If creating the voucher fails, the hold is released.
+- The backfill also holds lines that already had a pending voucher before this
+  change.
+
+**Business indexes at startup.** `ensure_business_indexes()` used to run only from
+the E2E seed, so a production database might have been missing every MitraBooks
+index, including unique ones such as voucher idempotency keys and party codes.
+It now runs at application startup. Each index is created on its own: one that
+cannot be built (for example a unique index over data that already has
+duplicates) is logged with its collection and keys and returned. It does not
+stop the remaining indexes or the app from starting. Check the startup logs
+after the first deploy for "Could not create index".

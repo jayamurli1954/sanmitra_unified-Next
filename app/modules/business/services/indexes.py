@@ -5,11 +5,44 @@ docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
 """
 from __future__ import annotations
 
+import logging
+
 from app.modules.business import service as business_service
 
+logger = logging.getLogger(__name__)
 
-async def ensure_business_indexes() -> None:
-    get_collection = business_service.get_collection
+
+class _TolerantIndexCollection:
+    """Wraps a collection so one failing `create_index` (for example a unique
+    index that cannot be built because existing production data already has
+    duplicates) is logged and recorded instead of aborting every index after it."""
+
+    def __init__(self, collection, name: str, failures: list[dict]):
+        self._collection = collection
+        self._name = name
+        self._failures = failures
+
+    async def create_index(self, keys, **kwargs):
+        try:
+            return await self._collection.create_index(keys, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - every failure is logged and reported
+            failure = {"collection": self._name, "keys": keys, "options": kwargs, "error": str(exc)}
+            self._failures.append(failure)
+            logger.error("Could not create index on %s %s %s: %s", self._name, keys, kwargs, exc)
+            return None
+
+
+async def ensure_business_indexes() -> list[dict]:
+    """Create the MitraBooks business indexes (idempotent).
+
+    Runs at application startup and from the E2E seed. Each index is created
+    independently; failures are logged and returned rather than raised, so
+    one index that cannot be built does not leave the rest missing."""
+    failures: list[dict] = []
+
+    def get_collection(name: str):
+        return _TolerantIndexCollection(business_service.get_collection(name), name, failures)
+
     parties = get_collection(business_service.PARTIES_COLLECTION)
     await parties.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("party_code", 1)], unique=True)
     await parties.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("party_type", 1)])
@@ -81,5 +114,9 @@ async def ensure_business_indexes() -> None:
     items_col = get_collection("business_items")
     await items_col.create_index([("tenant_id", 1), ("app_key", 1), ("item_id", 1)], unique=True)
     await items_col.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("code", 1)], unique=True)
-
-
+    if failures:
+        logger.error(
+            "MitraBooks business indexes: %d of the indexes could not be created; see errors above",
+            len(failures),
+        )
+    return failures

@@ -228,16 +228,22 @@ class _FakeCollection:
         self.rows = [row for row in self.rows if not self._matches(row, query)]
         return SimpleNamespace(deleted_count=before - len(self.rows))
 
+    @staticmethod
+    def _apply(row, update):
+        row.update(update.get("$set", {}))
+        for key in update.get("$unset", {}):
+            row.pop(key, None)
+
     async def update_one(self, query, update):
         row = await self.find_one(query)
         if row is not None:
-            row.update(update.get("$set", {}))
+            self._apply(row, update)
         return SimpleNamespace(matched_count=1 if row else 0, modified_count=1 if row else 0)
 
     async def update_many(self, query, update):
         rows = [row for row in self.rows if self._matches(row, query)]
         for row in rows:
-            row.update(update.get("$set", {}))
+            self._apply(row, update)
         return SimpleNamespace(matched_count=len(rows), modified_count=len(rows))
 
 
@@ -1478,3 +1484,144 @@ async def test_backfilled_claims_protect_legacy_matches_and_release_on_unmatch(f
     )
     assert fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows == []
     await _create_group(["s1"], [1, 2])  # the lines are free again
+
+
+# ---- A bank-only line is held while its voucher waits for approval -------- #
+
+def _hold_owner():
+    return "statement-voucher:stmt-charge"
+
+
+@pytest.mark.asyncio
+async def test_pending_statement_voucher_holds_the_line(fake_bank_collections, monkeypatch):
+    book = _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+    book.ledger.append(_book(50, "2026-04-02", credit="118.00", reference="OTHER-CHARGE"))
+
+    out = await _post_statement_voucher(approve=False)
+    assert out["posting_status"] == "pending_approval"
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert [(c["kind"], c["key"], c["owner_id"]) for c in claims] == [("stmt", "stmt-charge", _hold_owner())]
+
+    # Cannot be matched to some other book entry while the voucher is pending.
+    with pytest.raises(AccountingValidationError, match="waiting for approval"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="stmt-charge", line_id=50, created_by="tester",
+        )
+    view = await _build()
+    assert view["suggestions"] == []  # the equal-amount book line 50 is not offered for it
+    assert [l["statement_line_id"] for l in view["in_bank_not_in_books"]] == ["stmt-charge"]
+    assert view["in_bank_not_in_books"][0]["posting_status"] == "pending_approval"
+
+
+@pytest.mark.asyncio
+async def test_voucher_approved_later_is_matched_when_the_reconciliation_loads(fake_bank_collections, monkeypatch):
+    book = _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+    out = await _post_statement_voucher(approve=False)
+
+    await book.approve(out["voucher"]["voucher_id"])  # approved elsewhere, e.g. the approval queue
+    view = await _build()
+
+    assert view["in_bank_not_in_books"] == [] and view["in_books_not_in_bank"] == []
+    assert view["summary"]["difference"] == "0.00"
+    matches = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows
+    assert len(matches) == 1 and matches[0]["source"] == "statement_voucher"
+    # The hold was handed to the match, never released in between.
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert {c["owner_id"] for c in claims} == {matches[0]["match_id"]}
+    assert fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows[0]["posting_status"] == "posted"
+
+
+@pytest.mark.asyncio
+async def test_rejected_voucher_releases_the_line_and_a_repost_gets_a_fresh_voucher(fake_bank_collections, monkeypatch):
+    book = _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+    first = await _post_statement_voucher(approve=False)
+    (await book.vouchers.find_one({"voucher_id": first["voucher"]["voucher_id"]}))["status"] = "rejected"
+
+    await _build()
+
+    line = fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION].rows[0]
+    assert "posted_voucher_id" not in line and "posting_status" not in line
+    assert line["last_rejected_voucher_id"] == first["voucher"]["voucher_id"]
+    assert fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows == []
+
+    again = await _post_statement_voucher(approve=True)
+    assert again["voucher"]["voucher_id"] != first["voucher"]["voucher_id"]
+    assert again["posting_status"] == "posted" and again["match"] is not None
+
+
+@pytest.mark.asyncio
+async def test_voucher_hold_blocks_a_racing_match_with_a_clear_message(fake_bank_collections, monkeypatch):
+    _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+    # The voucher request has claimed the line but not yet recorded its voucher.
+    fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION] = _FakeCollection([
+        _claim("stmt", "stmt-charge", _hold_owner()),
+    ])
+    with pytest.raises(AccountingValidationError, match="waiting for approval"):
+        await bank_recon.claim_bank_recon_lines(
+            _scope(), owner_id="m-new", account_id=102, statement_line_ids=["stmt-charge"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_failed_statement_voucher_releases_the_hold(fake_bank_collections, monkeypatch):
+    _statement_voucher_fixture(fake_bank_collections, monkeypatch)
+
+    async def boom(*args, **kwargs):
+        raise AccountingValidationError("Offset account not found")
+
+    monkeypatch.setattr("app.modules.business.service.post_typed_voucher", boom)
+    with pytest.raises(AccountingValidationError, match="Offset account not found"):
+        await _post_statement_voucher(approve=True)
+    assert fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows == []
+
+
+@pytest.mark.asyncio
+async def test_backfill_also_holds_lines_with_a_pending_voucher(fake_bank_collections):
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection()
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "stmt-charge",
+         "posted_voucher_id": "v-9", "posting_status": "pending_approval"},
+        {**_scope(), "account_id": 102, "statement_line_id": "stmt-done",
+         "posted_voucher_id": "v-8", "posting_status": "posted"},
+    ])
+    out = await bank_recon.backfill_bank_recon_claims(app_key="mitrabooks")
+    assert out["pending_voucher_lines_scanned"] == 1 and out["claims_created"] == 1
+    claims = fake_bank_collections[BANK_RECON_LINE_CLAIMS_COLLECTION].rows
+    assert [(c["key"], c["owner_id"]) for c in claims] == [("stmt-charge", _hold_owner())]
+
+
+# ---- Business indexes are created at startup, tolerating failures -------- #
+
+@pytest.mark.asyncio
+async def test_ensure_business_indexes_keeps_going_after_a_failing_index(monkeypatch):
+    from app.modules.business.services import indexes
+
+    created = []
+
+    class _IndexCollection:
+        def __init__(self, name):
+            self.name = name
+
+        async def create_index(self, keys, **kwargs):
+            if self.name == "business_vouchers" and kwargs.get("unique") and "idempotency_key" in str(keys):
+                raise RuntimeError("E11000 duplicate key error collection: business_vouchers")
+            created.append((self.name, tuple(k for k, _ in keys)))
+
+    monkeypatch.setattr(indexes.business_service, "get_collection", _IndexCollection)
+
+    failures = await indexes.ensure_business_indexes()
+
+    assert [f["collection"] for f in failures] == ["business_vouchers"]
+    assert "E11000" in failures[0]["error"]
+    names = {name for name, _ in created}
+    # Indexes after the failing one were still created, including the last ones.
+    assert {"business_items", "business_bank_recon_line_claims", "business_bank_recon_matches"} <= names
+
+
+def test_app_startup_creates_business_indexes():
+    import inspect
+
+    import app.main as main
+
+    assert "await ensure_business_indexes()" in inspect.getsource(main)
