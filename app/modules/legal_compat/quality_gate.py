@@ -119,6 +119,23 @@ def run_quality_gate(
             )
         )
 
+    # QG-CASE-CITATIONS — no case authority outside retrieved evidence may remain
+    case_audit = payload.get("case_citation_audit")
+    if not isinstance(case_audit, dict) or is_refusal:
+        checks.append(_check("QG-CASE-CITATIONS", passed=True, detail="no case audit or refusal"))
+    else:
+        remaining = int(case_audit.get("remaining_unsupported_count") or 0)
+        checks.append(
+            _check(
+                "QG-CASE-CITATIONS",
+                passed=remaining == 0,
+                detail=(
+                    f"unsupported={int(case_audit.get('unsupported_count') or 0)} "
+                    f"redacted={int(case_audit.get('redacted_count') or 0)} remaining={remaining}"
+                ),
+            )
+        )
+
     failed_ids = [c["id"] for c in checks if c["status"] == "fail"]
     return {
         "passed": not failed_ids,
@@ -169,6 +186,62 @@ def enforce_quality_gate(
     return out
 
 
+# Human-curated, authorized offline packages: their case authorities are vetted
+# content, not model memory, so the case-citation gate does not redact them.
+_CURATED_STRATEGY_PREFIXES = ("offline_", "deterministic_")
+
+CASE_REDACTION_LIMITATION = (
+    "Case citations not found in the retrieved sources were removed. LegalMitra "
+    "only cites cases it can trace to a retrieved or authorized source."
+)
+
+
+def apply_case_citation_gate(payload: dict[str, Any]) -> dict[str, Any]:
+    """Redact case names / law-report citations not traceable to citations.
+
+    Returns a new payload with ``case_citation_audit`` attached. Statutory
+    analysis is kept; only the unsupported authorities are removed.
+    """
+    from app.modules.legal_compat.case_citation_audit import (
+        audit_case_citations,
+        redact_unsupported_case_citations,
+    )
+
+    out = dict(payload)
+    strategy = str(out.get("strategy") or "")
+    if strategy.startswith(_CURATED_STRATEGY_PREFIXES):
+        return out
+
+    citations = list(out.get("citations") or [])
+    redacted, audit = redact_unsupported_case_citations(
+        response_text=str(out.get("response") or ""),
+        citations=citations,
+    )
+    recheck = audit_case_citations(response_text=redacted, citations=citations)
+    audit["remaining_unsupported_count"] = int(recheck.get("unsupported_count") or 0)
+    # Keep the report compact: span offsets are only meaningful pre-redaction.
+    audit["claims"] = [
+        {"claim_type": c["claim_type"], "text": c["text"], "outcome": c["outcome"]}
+        for c in audit.get("claims") or []
+    ]
+    out["case_citation_audit"] = audit
+
+    if int(audit.get("unsupported_count") or 0) > 0:
+        out["response"] = redacted
+        if out.get("answer_summary"):
+            summary, _ = redact_unsupported_case_citations(
+                response_text=str(out["answer_summary"]), citations=citations
+            )
+            out["answer_summary"] = summary
+        limitations = list(out.get("limitations") or [])
+        if CASE_REDACTION_LIMITATION not in limitations:
+            limitations.append(CASE_REDACTION_LIMITATION)
+        out["limitations"] = limitations
+        if out.get("confidence") == "high":
+            out["confidence"] = "medium"
+    return out
+
+
 _SKIP_AUDIT_STRATEGIES = frozenset(
     {
         "insufficient_sources",
@@ -179,7 +252,7 @@ _SKIP_AUDIT_STRATEGIES = frozenset(
 
 
 def apply_research_trust_layers(payload: dict[str, Any]) -> dict[str, Any]:
-    """Run statute citation audit + quality gate on a finalized research payload."""
+    """Run case-citation gate, statute citation audit + quality gate on a research payload."""
     from app.modules.legal_compat.citation_audit import audit_statute_section_claims
     from app.modules.legal_compat.response_contract import insufficient_sources_response
 
@@ -187,6 +260,7 @@ def apply_research_trust_layers(payload: dict[str, Any]) -> dict[str, Any]:
     if strategy in _SKIP_AUDIT_STRATEGIES:
         return enforce_quality_gate(payload, citation_audit=None, skip_citation_presence=True)
 
+    payload = apply_case_citation_gate(payload)
     audit = audit_statute_section_claims(
         response_text=str(payload.get("response") or ""),
         citations=list(payload.get("citations") or []),
