@@ -740,13 +740,19 @@ def assemble_bank_reconciliation(
             "Matching is metadata only — confirming a match never posts to the ledger.",
             "'In bank, not in books' lines usually need a voucher (bank charges, interest, direct credits).",
             "'In books, not in bank' lines are uncleared cheques or deposits in transit — they should clear on a later statement.",
-            "Suggestions require an exact amount match within a "
-            f"{SUGGEST_DATE_WINDOW_DAYS}-day date window and are never applied automatically.",
-            "Group suggestions pair one line with several on the other side whose amounts sum exactly; "
-            "unmatching any line of a group unmatches the whole group.",
-            "Near-matches (bank charges, MDR, TDS, rounding) post the difference as a voucher through "
-            f"approval; they are suggested only within {DIFFERENCE_SUGGEST_MAX_PCT}% and "
-            f"{DIFFERENCE_SUGGEST_MAX_ABS} of the book amount, and count as matched only once the voucher is posted.",
+            (
+                "Suggestions require an exact amount match within a "
+                f"{SUGGEST_DATE_WINDOW_DAYS}-day date window and are never applied automatically."
+            ),
+            (
+                "Group suggestions pair one line with several on the other side whose amounts sum exactly; "
+                "unmatching any line of a group unmatches the whole group."
+            ),
+            (
+                "Near-matches (bank charges, MDR, TDS, rounding) post the difference as a voucher through "
+                f"approval; they are suggested only within {DIFFERENCE_SUGGEST_MAX_PCT}% and "
+                f"{DIFFERENCE_SUGGEST_MAX_ABS} of the book amount, and count as matched only once the voucher is posted."
+            ),
         ],
     }
 
