@@ -262,6 +262,240 @@ def suggest_matches(
 
 
 # --------------------------------------------------------------------------- #
+# Group matching — one statement line <-> several book lines (one_to_many), or
+# several statement lines <-> one book line (many_to_one). Exact sums only.
+# See docs/prd/MITRABOOKS_BANK_RECON_GAP_ANALYSIS.md (gap #1).
+# --------------------------------------------------------------------------- #
+
+# Hard limit on a confirmed group (server-side validation).
+GROUP_MATCH_MAX_LINES = 10
+# Suggestion search bounds — keep the subset-sum search cheap and predictable.
+GROUP_SUGGEST_MAX_LINES = 4
+GROUP_SUGGEST_MAX_CANDIDATES = 12
+_GROUP_SUGGEST_MAX_STEPS = 20000
+_GROUP_SUGGEST_MAX_SOLUTIONS = 25
+
+
+def _find_exact_subsets(target: Decimal, amounts: list[Decimal], *, max_size: int) -> list[tuple[int, ...]]:
+    """Index tuples (size >= 2, <= max_size) of `amounts` summing exactly to
+    `target`. All amounts must be positive. Bounded by a step and solution cap
+    so a pathological statement can never stall the reconciliation view."""
+    order = sorted(range(len(amounts)), key=lambda i: amounts[i], reverse=True)
+    values = [amounts[i] for i in order]
+    solutions: list[tuple[int, ...]] = []
+    steps = 0
+
+    def dfs(start: int, remaining: Decimal, chosen: list[int]) -> bool:
+        nonlocal steps
+        if remaining == 0:
+            if len(chosen) >= 2:
+                solutions.append(tuple(sorted(order[i] for i in chosen)))
+            return len(solutions) >= _GROUP_SUGGEST_MAX_SOLUTIONS
+        slots = max_size - len(chosen)
+        if slots <= 0:
+            return False
+        for i in range(start, len(values)):
+            steps += 1
+            if steps > _GROUP_SUGGEST_MAX_STEPS:
+                return True
+            # Values are sorted descending: if the largest `slots` values from
+            # here cannot reach the target, nothing later can either.
+            if sum(values[i:i + slots], Decimal("0")) < remaining:
+                return False
+            if values[i] > remaining:
+                continue
+            chosen.append(i)
+            stop = dfs(i + 1, remaining - values[i], chosen)
+            chosen.pop()
+            if stop:
+                return True
+        return False
+
+    dfs(0, target, [])
+    return solutions
+
+
+def _brief_statement(s: dict) -> dict:
+    side, amount = _statement_side_amount(s)
+    return {
+        "statement_line_id": s.get("statement_line_id"),
+        "txn_date": s.get("txn_date"),
+        "description": s.get("description"),
+        "ref": s.get("ref"),
+        "amount": str(amount),
+    }
+
+
+def _brief_book(l: dict) -> dict:
+    side, amount = _ledger_side_amount(l)
+    return {
+        "line_id": l.get("line_id"),
+        "journal_id": l.get("journal_id"),
+        "entry_date": l.get("entry_date"),
+        "reference": l.get("reference"),
+        "description": l.get("description"),
+        "amount": str(amount),
+    }
+
+
+def _group_pass(
+    singles: list[dict],
+    pool: list[dict],
+    *,
+    single_side_amount,
+    pool_side_amount,
+    single_id,
+    pool_id,
+    single_date,
+    pool_date,
+    used_singles: set[str],
+    used_pool: set[str],
+    date_window_days: int,
+) -> list[tuple[dict, list[dict], int, bool]]:
+    """For each single line, find a subset of pool lines (same side, within the
+    date window, each strictly smaller) summing exactly to it. Greedy: a line
+    is used in at most one suggestion. Returns (single, members, max_diff, ambiguous)."""
+    found = []
+    for single in sorted(singles, key=lambda x: (str(single_date(x) or ""), str(single_id(x)))):
+        sid = str(single_id(single))
+        if sid in used_singles:
+            continue
+        side, target = single_side_amount(single)
+        if target <= 0:
+            continue
+        candidates = []
+        for p in pool:
+            pid = str(pool_id(p))
+            if pid in used_pool:
+                continue
+            p_side, p_amount = pool_side_amount(p)
+            if p_side != side or p_amount <= 0 or p_amount >= target:
+                continue
+            diff = _date_diff_days(single_date(single), pool_date(p))
+            if diff is None or diff > date_window_days:
+                continue
+            candidates.append((diff, pid, p, p_amount))
+        if len(candidates) < 2:
+            continue
+        candidates.sort(key=lambda c: (c[0], c[1]))
+        candidates = candidates[:GROUP_SUGGEST_MAX_CANDIDATES]
+        subsets = _find_exact_subsets(target, [c[3] for c in candidates], max_size=GROUP_SUGGEST_MAX_LINES)
+        if not subsets:
+            continue
+        # Fewest lines first, then tightest dates, then deterministic by ids.
+        ranked = sorted(
+            subsets,
+            key=lambda idx: (len(idx), max(candidates[i][0] for i in idx), sum(candidates[i][0] for i in idx), [candidates[i][1] for i in idx]),
+        )
+        best = ranked[0]
+        members = [candidates[i][2] for i in best]
+        max_diff = max(candidates[i][0] for i in best)
+        used_singles.add(sid)
+        used_pool.update(str(pool_id(m)) for m in members)
+        found.append((single, members, max_diff, len(subsets) > 1))
+    return found
+
+
+def suggest_group_matches(
+    statement_lines: list[dict],
+    ledger_lines: list[dict],
+    *,
+    date_window_days: int = SUGGEST_DATE_WINDOW_DAYS,
+    exclude_statement_ids: set[str] | None = None,
+    exclude_line_ids: set[str] | None = None,
+) -> list[dict]:
+    """Exact-sum group suggestions over unmatched lines. Run AFTER the 1:1
+    pass and pass its picks in `exclude_*` so a line is never offered twice.
+
+    Pass 1 (one_to_many): one statement line = sum of several book lines
+            (deposit slip / UPI settlement / bulk NEFT payout).
+    Pass 2 (many_to_one): one book line = sum of several statement lines
+            (a payment the bank split into several debits).
+
+    `confidence` is "ambiguous" when more than one distinct subset fits —
+    the accountant should check which receipts the bank actually combined.
+    Never auto-applies."""
+    used_stmt = {str(x) for x in (exclude_statement_ids or set())}
+    used_book = {str(x) for x in (exclude_line_ids or set())}
+    suggestions: list[dict] = []
+
+    one_to_many = _group_pass(
+        statement_lines, ledger_lines,
+        single_side_amount=_statement_side_amount, pool_side_amount=_ledger_side_amount,
+        single_id=lambda s: s.get("statement_line_id"), pool_id=lambda l: l.get("line_id"),
+        single_date=lambda s: s.get("txn_date"), pool_date=lambda l: l.get("entry_date"),
+        used_singles=used_stmt, used_pool=used_book, date_window_days=date_window_days,
+    )
+    for s, members, max_diff, ambiguous in one_to_many:
+        side, amount = _statement_side_amount(s)
+        suggestions.append({
+            "group_type": "one_to_many",
+            "side": side,
+            "amount": str(amount),
+            "statement_line_ids": [s.get("statement_line_id")],
+            "line_ids": [m.get("line_id") for m in members],
+            "max_date_diff_days": max_diff,
+            "confidence": "ambiguous" if ambiguous else "exact_sum",
+            "statement": [_brief_statement(s)],
+            "book": [_brief_book(m) for m in members],
+        })
+
+    many_to_one = _group_pass(
+        ledger_lines, statement_lines,
+        single_side_amount=_ledger_side_amount, pool_side_amount=_statement_side_amount,
+        single_id=lambda l: l.get("line_id"), pool_id=lambda s: s.get("statement_line_id"),
+        single_date=lambda l: l.get("entry_date"), pool_date=lambda s: s.get("txn_date"),
+        used_singles=used_book, used_pool=used_stmt, date_window_days=date_window_days,
+    )
+    for l, members, max_diff, ambiguous in many_to_one:
+        side, amount = _ledger_side_amount(l)
+        suggestions.append({
+            "group_type": "many_to_one",
+            "side": side,
+            "amount": str(amount),
+            "statement_line_ids": [m.get("statement_line_id") for m in members],
+            "line_ids": [l.get("line_id")],
+            "max_date_diff_days": max_diff,
+            "confidence": "ambiguous" if ambiguous else "exact_sum",
+            "statement": [_brief_statement(m) for m in members],
+            "book": [_brief_book(l)],
+        })
+    return suggestions
+
+
+def validate_group_match(statement_lines: list[dict], book_lines: list[dict]) -> tuple[str, str, Decimal]:
+    """Pure validation of a proposed group. Returns (group_type, side, amount)
+    or raises ValueError. Exactly one side must hold a single line; the other
+    2..GROUP_MATCH_MAX_LINES lines; same direction; exact totals."""
+    n_s, n_b = len(statement_lines), len(book_lines)
+    if n_s == 0 or n_b == 0:
+        raise ValueError("Select at least one statement line and one book entry")
+    if n_s == 1 and n_b == 1:
+        raise ValueError("Use a single match for one statement line and one book entry")
+    if n_s > 1 and n_b > 1:
+        raise ValueError("Many-to-many is not supported — split it into groups with one line on one side")
+    if max(n_s, n_b) > GROUP_MATCH_MAX_LINES:
+        raise ValueError(f"A group can contain at most {GROUP_MATCH_MAX_LINES} lines on one side")
+
+    sides = {_statement_side_amount(s)[0] for s in statement_lines} | {_ledger_side_amount(l)[0] for l in book_lines}
+    if len(sides) != 1:
+        raise ValueError("All lines must be in the same direction (deposits with book debits, withdrawals with book credits)")
+    side = sides.pop()
+    if any(_statement_side_amount(s)[1] <= 0 for s in statement_lines) or any(_ledger_side_amount(l)[1] <= 0 for l in book_lines):
+        raise ValueError("Every line must carry a non-zero amount")
+
+    stmt_total = sum((_statement_side_amount(s)[1] for s in statement_lines), Decimal("0.00"))
+    book_total = sum((_ledger_side_amount(l)[1] for l in book_lines), Decimal("0.00"))
+    if stmt_total != book_total:
+        raise ValueError(
+            f"Totals do not agree: statement {side} {_q2(stmt_total)} vs book {_q2(book_total)} "
+            f"(difference {_q2(stmt_total - book_total)})"
+        )
+    group_type = "one_to_many" if n_s == 1 else "many_to_one"
+    return group_type, side, _q2(stmt_total)
+
+
+# --------------------------------------------------------------------------- #
 # Reconciliation statement — pure assembly.
 # --------------------------------------------------------------------------- #
 
@@ -273,6 +507,7 @@ def assemble_bank_reconciliation(
     ledger_lines: list[dict],
     matches: list[dict],
     suggestions: list[dict],
+    group_suggestions: list[dict] | None = None,
 ) -> dict:
     """Classify lines and compute the BRS identity:
 
@@ -327,6 +562,7 @@ def assemble_bank_reconciliation(
             "expected_statement_balance": str(_q2(expected_statement_balance)),
             "difference": difference,  # None when no statement balance column
             "matched_count": len(matches),
+            "matched_groups": len({str(m.get("match_group_id")) for m in matches if m.get("match_group_id")}),
             "statement_lines_total": len(statement_lines),
             "book_lines_total": len(ledger_lines),
             "uncleared_withdrawals": str(_q2(unmatched_book_credits)),   # issued, not presented
@@ -338,12 +574,15 @@ def assemble_bank_reconciliation(
         "in_bank_not_in_books": unmatched_stmt,     # post these (charges/interest)
         "in_books_not_in_bank": unmatched_book,     # uncleared cheques / transit
         "suggestions": suggestions,
+        "group_suggestions": group_suggestions or [],
         "notes": [
             "Matching is metadata only — confirming a match never posts to the ledger.",
             "'In bank, not in books' lines usually need a voucher (bank charges, interest, direct credits).",
             "'In books, not in bank' lines are uncleared cheques or deposits in transit — they should clear on a later statement.",
             "Suggestions require an exact amount match within a "
             f"{SUGGEST_DATE_WINDOW_DAYS}-day date window and are never applied automatically.",
+            "Group suggestions pair one line with several on the other side whose amounts sum exactly; "
+            "unmatching any line of a group unmatches the whole group.",
         ],
     }
 
@@ -486,9 +725,14 @@ async def build_bank_reconciliation(
 
     matched_stmt_ids = {str(m.get("statement_line_id")) for m in match_rows}
     matched_line_ids = {str(m.get("line_id")) for m in match_rows}
-    suggestions = suggest_matches(
-        [s for s in stmt_rows if str(s.get("statement_line_id")) not in matched_stmt_ids],
-        [l for l in ledger_view if str(l.get("line_id")) not in matched_line_ids],
+    open_stmt = [s for s in stmt_rows if str(s.get("statement_line_id")) not in matched_stmt_ids]
+    open_book = [l for l in ledger_view if str(l.get("line_id")) not in matched_line_ids]
+    suggestions = suggest_matches(open_stmt, open_book)
+    group_suggestions = suggest_group_matches(
+        open_stmt,
+        open_book,
+        exclude_statement_ids={str(g.get("statement_line_id")) for g in suggestions},
+        exclude_line_ids={str(g.get("line_id")) for g in suggestions},
     )
 
     return assemble_bank_reconciliation(
@@ -498,6 +742,7 @@ async def build_bank_reconciliation(
         ledger_lines=ledger_view,
         matches=match_rows,
         suggestions=suggestions,
+        group_suggestions=group_suggestions,
     )
 
 
@@ -564,6 +809,115 @@ async def create_bank_recon_match(
     return doc
 
 
+async def create_bank_recon_group_match(
+    session,
+    *,
+    tenant_id: str,
+    app_key: str,
+    accounting_entity_id: str,
+    account_id: int,
+    statement_line_ids: list[str],
+    line_ids: list[int],
+    created_by: str,
+) -> dict:
+    """Confirm a one-to-many or many-to-one match. Metadata only — writes one
+    match row per pair sharing a `match_group_id`, so every existing reader
+    that keys on scalar statement_line_id / line_id keeps working."""
+    from app.accounting.service import AccountingValidationError, get_ledger_lines
+    from app.db.mongo import get_collection
+
+    stmt_ids = [str(x).strip() for x in (statement_line_ids or []) if str(x).strip()]
+    book_ids = [int(x) for x in (line_ids or []) if int(x) > 0]
+    if len(set(stmt_ids)) != len(stmt_ids) or len(set(book_ids)) != len(book_ids):
+        raise AccountingValidationError("Duplicate line in the selection")
+    if not stmt_ids or not book_ids:
+        raise AccountingValidationError("Select at least one statement line and one book entry")
+
+    scope = _scope(tenant_id, app_key, accounting_entity_id)
+    stmt_col = get_collection(BANK_STATEMENT_LINES_COLLECTION)
+    match_col = get_collection(BANK_RECON_MATCHES_COLLECTION)
+
+    stmt_rows = await stmt_col.find(
+        {**scope, "account_id": account_id, "statement_line_id": {"$in": stmt_ids}}
+    ).to_list(length=len(stmt_ids) + 1)
+    by_stmt_id = {str(r.get("statement_line_id")): r for r in stmt_rows}
+    missing = [x for x in stmt_ids if x not in by_stmt_id]
+    if missing:
+        raise AccountingValidationError(f"Statement line not found: {', '.join(missing)}")
+
+    if await match_col.find_one({**scope, "statement_line_id": {"$in": stmt_ids}, "status": "active"}):
+        raise AccountingValidationError("A selected statement line is already matched")
+    if await match_col.find_one({**scope, "line_id": {"$in": book_ids}, "status": "active"}):
+        raise AccountingValidationError("A selected book entry is already matched")
+
+    _, ledger_lines = await get_ledger_lines(
+        session, tenant_id=tenant_id, account_id=account_id,
+        app_key=app_key, accounting_entity_id=accounting_entity_id,
+    )
+    by_line_id = {l["line_id"]: l for l in ledger_lines}
+    missing_book = [str(x) for x in book_ids if x not in by_line_id]
+    if missing_book:
+        raise AccountingValidationError(f"Book entry not found on this bank account: {', '.join(missing_book)}")
+
+    ordered_stmt = [by_stmt_id[x] for x in stmt_ids]
+    ordered_book = [by_line_id[x] for x in book_ids]
+    try:
+        group_type, side, group_amount = validate_group_match(
+            ordered_stmt,
+            [{"debit": l["debit"], "credit": l["credit"]} for l in ordered_book],
+        )
+    except ValueError as exc:
+        raise AccountingValidationError(str(exc)) from exc
+
+    group_id = str(uuid4())
+    now = _now()
+    group_size = len(ordered_stmt) + len(ordered_book)
+    pairs = (
+        [(ordered_stmt[0], b) for b in ordered_book]
+        if group_type == "one_to_many"
+        else [(s, ordered_book[0]) for s in ordered_stmt]
+    )
+    docs = []
+    for s, b in pairs:
+        # Each row carries its own share so summing active rows never double counts.
+        share = (
+            _ledger_side_amount({"debit": b["debit"], "credit": b["credit"]})[1]
+            if group_type == "one_to_many"
+            else _statement_side_amount(s)[1]
+        )
+        docs.append({
+            **scope,
+            "match_id": str(uuid4()),
+            "match_group_id": group_id,
+            "group_type": group_type,
+            "group_size": group_size,
+            "group_amount": str(group_amount),
+            "account_id": account_id,
+            "statement_line_id": s.get("statement_line_id"),
+            "line_id": b["line_id"],
+            "journal_id": b["journal_id"],
+            "side": side,
+            "amount": str(_q2(share)),
+            "statement_txn_date": s.get("txn_date"),
+            "book_entry_date": b.get("entry_date"),
+            "status": "active",
+            "created_by": created_by,
+            "created_at": now,
+        })
+    await match_col.insert_many(docs)
+    for doc in docs:
+        doc.pop("_id", None)
+        doc["created_at"] = now.isoformat()
+    return {
+        "match_group_id": group_id,
+        "group_type": group_type,
+        "side": side,
+        "amount": str(group_amount),
+        "status": "active",
+        "matches": docs,
+    }
+
+
 async def reverse_bank_recon_match(
     *,
     tenant_id: str,
@@ -582,10 +936,22 @@ async def reverse_bank_recon_match(
         raise AccountingNotFoundError("Match not found")
     if row.get("status") != "active":
         raise AccountingValidationError("Match is already reversed")
-    await match_col.update_one(
-        {**scope, "match_id": match_id},
-        {"$set": {"status": "reversed", "reversed_by": reversed_by, "reversed_at": _now()}},
-    )
+    reversal = {"status": "reversed", "reversed_by": reversed_by, "reversed_at": _now()}
+    group_id = row.get("match_group_id")
+    if group_id:
+        # A group is all-or-nothing: unmatching one row unmatches every row,
+        # so a statement line is never left partially matched.
+        result = await match_col.update_many(
+            {**scope, "match_group_id": group_id, "status": "active"},
+            {"$set": reversal},
+        )
+        return {
+            "match_id": match_id,
+            "status": "reversed",
+            "match_group_id": group_id,
+            "reversed_rows": int(getattr(result, "modified_count", 0) or 0),
+        }
+    await match_col.update_one({**scope, "match_id": match_id}, {"$set": reversal})
     return {"match_id": match_id, "status": "reversed"}
 
 

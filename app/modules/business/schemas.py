@@ -159,6 +159,14 @@ class BankStatementVoucherRequest(BaseModel):
     accounting_entity_id: str = Field(default="primary", min_length=1, max_length=80)
 
 
+class BankReconGroupMatchRequest(BaseModel):
+    """One statement line with several book entries (one_to_many), or several
+    statement lines with one book entry (many_to_one). Totals must agree exactly."""
+    account_id: int = Field(..., ge=1)
+    statement_line_ids: list[str] = Field(..., min_length=1, max_length=10)
+    line_ids: list[int] = Field(..., min_length=1, max_length=10)
+
+
 class BankStatementVoucherResponse(BaseModel):
     statement_line_id: str
     posting_status: str

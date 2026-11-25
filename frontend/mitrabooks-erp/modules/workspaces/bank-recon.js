@@ -119,10 +119,49 @@ export async function confirmBankReconMatch(statementLineId, lineId) {
   renderJson(getApiOutput(), { bank_recon_match: { ok: result.ok, status: result.status } });
 }
 
+export async function confirmBankReconGroupMatch(statementLineIds, lineIds) {
+  const stmtIds = (statementLineIds || []).map((id) => String(id || "").trim()).filter(Boolean);
+  const bookIds = (lineIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+  const result = await apiRequest("mitrabooks", "/api/v1/business/bank-recon/match-group", {
+    method: "POST",
+    body: JSON.stringify({
+      account_id: Number(bankReconAccountId),
+      statement_line_ids: stmtIds,
+      line_ids: bookIds,
+    }),
+  });
+  if (result.ok) {
+    const r = result.payload || {};
+    setLoginStatus("ok", "Group matched", `${stmtIds.length} bank line(s) matched to ${bookIds.length} book entr${bookIds.length === 1 ? "y" : "ies"} for ${formatCurrency(Number(r.amount || 0))}.`);
+    await loadBankReconciliation(bankReconAccountId);
+  } else {
+    setLoginStatus("danger", "Group match failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
+  }
+  renderJson(getApiOutput(), { bank_recon_group_match: { ok: result.ok, status: result.status } });
+}
+
+/** Manual matching: whatever the user ticked in the two unmatched tables. */
+export async function matchSelectedBankReconLines() {
+  const stmtIds = [...document.querySelectorAll("[data-bankrecon-pick-stmt]:checked")].map((el) => el.getAttribute("data-bankrecon-pick-stmt") || "");
+  const bookIds = [...document.querySelectorAll("[data-bankrecon-pick-book]:checked")].map((el) => el.getAttribute("data-bankrecon-pick-book") || "");
+  if (!stmtIds.length || !bookIds.length) {
+    setLoginStatus("warn", "Select lines to match", "Tick at least one bank line and one book entry. One side must have a single line.");
+    return;
+  }
+  if (stmtIds.length === 1 && bookIds.length === 1) {
+    await confirmBankReconMatch(stmtIds[0], bookIds[0]);
+    return;
+  }
+  await confirmBankReconGroupMatch(stmtIds, bookIds);
+}
+
 export async function reverseBankReconMatch(matchId) {
   const result = await apiRequest("mitrabooks", `/api/v1/business/bank-recon/match/${encodeURIComponent(matchId)}/reverse`, { method: "POST" });
   if (result.ok) {
-    setLoginStatus("ok", "Unmatched", "The match was reversed; both lines are open again.");
+    const grouped = Number(result.payload?.reversed_rows || 0) > 1;
+    setLoginStatus("ok", "Unmatched", grouped
+      ? `The whole group (${result.payload.reversed_rows} pairs) was reversed; all its lines are open again.`
+      : "The match was reversed; both lines are open again.");
     await loadBankReconciliation(bankReconAccountId);
   } else {
     setLoginStatus("danger", "Unmatch failed", statusDetailText(result.payload?.detail) || `HTTP ${result.status}.`);
@@ -264,8 +303,22 @@ export function renderBankReconPanel() {
       <td><button class="primary" type="button" data-business-action="bankrecon-match" data-stmt-id="${escapeHtml(g.statement_line_id || "")}" data-line-id="${escapeHtml(String(g.line_id || ""))}">Match</button></td>
     </tr>`).join("");
 
+  const groupLabel = (g) => (g.group_type === "many_to_one" ? "several bank → 1 book" : "1 bank → several book");
+  const stackLines = (items, dateKey, textKeys) => items.map((item) =>
+    `<div>${escapeHtml(item[dateKey] || "")} · ${escapeHtml(textKeys.map((k) => item[k]).find(Boolean) || "")} · ${num(item.amount)}</div>`).join("");
+  const groupSuggestionRows = (r.group_suggestions || []).map((g) => `
+    <tr>
+      <td><span class="pill">${escapeHtml(groupLabel(g))}</span></td>
+      <td>${stackLines(g.statement || [], "txn_date", ["description", "ref"])}</td>
+      <td>${stackLines(g.book || [], "entry_date", ["reference", "description"])}</td>
+      <td class="amount">${num(g.amount)}</td>
+      <td><span class="pill ${g.confidence === "ambiguous" ? "warn" : "ok"}">${escapeHtml(g.confidence === "ambiguous" ? "check: other combinations fit" : `exact sum ±${g.max_date_diff_days}d`)}</span></td>
+      <td><button class="primary" type="button" data-business-action="bankrecon-match-group" data-stmt-ids="${escapeHtml((g.statement_line_ids || []).join(","))}" data-line-ids="${escapeHtml((g.line_ids || []).join(","))}">Match group</button></td>
+    </tr>`).join("");
+
   const bankOnlyRows = (r.in_bank_not_in_books || []).map((l) => `
     <tr>
+      <td><input type="checkbox" aria-label="Select bank line" data-bankrecon-pick-stmt="${escapeHtml(l.statement_line_id || "")}"></td>
       <td>${escapeHtml(l.txn_date || "")}</td>
       <td>${escapeHtml(l.description || "")}</td>
       <td>${escapeHtml(l.ref || "")}</td>
@@ -282,6 +335,7 @@ export function renderBankReconPanel() {
 
   const bookOnlyRows = (r.in_books_not_in_bank || []).map((l) => `
     <tr>
+      <td><input type="checkbox" aria-label="Select book entry" data-bankrecon-pick-book="${escapeHtml(String(l.line_id || ""))}"></td>
       <td>${escapeHtml(l.entry_date || "")}</td>
       <td>${escapeHtml(l.reference || "")}</td>
       <td>${escapeHtml(l.description || "")}</td>
@@ -293,7 +347,7 @@ export function renderBankReconPanel() {
     <tr>
       <td>${escapeHtml(m.statement_txn_date || "")}</td>
       <td>${escapeHtml(m.book_entry_date || "")}</td>
-      <td>${escapeHtml(m.side || "")}</td>
+      <td>${escapeHtml(m.side || "")}${m.match_group_id ? ` <span class="pill">group · ${escapeHtml(String(m.group_size || ""))} lines</span>` : ""}</td>
       <td class="amount">${num(m.amount)}</td>
       <td><button class="secondary" type="button" data-business-action="bankrecon-unmatch" data-match-id="${escapeHtml(m.match_id || "")}">Unmatch</button></td>
     </tr>`).join("");
@@ -315,18 +369,31 @@ export function renderBankReconPanel() {
     </div>
 
     <div class="table-preview compact-table">
+      <h4>Suggested group matches: one line equals the sum of several on the other side</h4>
+      <table>
+        <thead><tr><th>Type</th><th>Bank line(s)</th><th>Book entr(ies)</th><th class="amount">Amount</th><th>Basis</th><th></th></tr></thead>
+        <tbody>${groupSuggestionRows || `<tr><td colspan="6" class="muted">No group suggestions. Nothing left sums exactly within the date window.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="report-date-controls">
+      <button class="secondary" type="button" data-business-action="bankrecon-match-selected">Match selected</button>
+      <span class="muted">Tick bank lines and book entries below to match them by hand. One side must have a single line, and the totals must agree exactly.</span>
+    </div>
+
+    <div class="table-preview compact-table">
       <h4>In bank, not in books (${escapeHtml(String((r.in_bank_not_in_books || []).length))}) — post these (charges, interest, direct credits)</h4>
       <table>
-        <thead><tr><th>Date</th><th>Narration</th><th>Ref</th><th class="amount">Deposit</th><th class="amount">Withdrawal</th><th>Offset</th><th></th></tr></thead>
-        <tbody>${bankOnlyRows || `<tr><td colspan="7" class="muted">Every bank line is matched or suggested.</td></tr>`}</tbody>
+        <thead><tr><th></th><th>Date</th><th>Narration</th><th>Ref</th><th class="amount">Deposit</th><th class="amount">Withdrawal</th><th>Offset</th><th></th></tr></thead>
+        <tbody>${bankOnlyRows || `<tr><td colspan="8" class="muted">Every bank line is matched or suggested.</td></tr>`}</tbody>
       </table>
     </div>
 
     <div class="table-preview compact-table">
       <h4>In books, not in bank (${escapeHtml(String((r.in_books_not_in_bank || []).length))}) — uncleared cheques / deposits in transit</h4>
       <table>
-        <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
-        <tbody>${bookOnlyRows || `<tr><td colspan="5" class="muted">Every book line is reflected in the bank statement.</td></tr>`}</tbody>
+        <thead><tr><th></th><th>Date</th><th>Reference</th><th>Description</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
+        <tbody>${bookOnlyRows || `<tr><td colspan="6" class="muted">Every book line is reflected in the bank statement.</td></tr>`}</tbody>
       </table>
     </div>
 

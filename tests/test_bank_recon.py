@@ -15,7 +15,9 @@ from app.modules.business.bank_recon import (
     assemble_bank_reconciliation,
     parse_bank_statement_csv,
     statement_line_dedupe_key,
+    suggest_group_matches,
     suggest_matches,
+    validate_group_match,
 )
 
 
@@ -215,6 +217,12 @@ class _FakeCollection:
         if row is not None:
             row.update(update.get("$set", {}))
         return SimpleNamespace(matched_count=1 if row else 0, modified_count=1 if row else 0)
+
+    async def update_many(self, query, update):
+        rows = [row for row in self.rows if self._matches(row, query)]
+        for row in rows:
+            row.update(update.get("$set", {}))
+        return SimpleNamespace(matched_count=len(rows), modified_count=len(rows))
 
 
 @pytest.fixture
@@ -623,3 +631,270 @@ async def test_post_bank_statement_line_voucher_deposit_credits_offset_and_rejec
             offset_account_code=None, description=None, reference=None, approve=False,
             created_by="tester", idempotency_key=None,
         )
+
+
+# ---- Group (one-to-many / many-to-one) matching ---------------------------- #
+
+def test_group_suggestion_one_deposit_covers_several_receipts():
+    # A deposit slip of 15,000 covering two customer receipts; a 7,000 decoy
+    # and a wrong-side 5,000 must not be used.
+    out = suggest_group_matches(
+        [_stmt("s1", "2026-04-05", deposit="15000.00", desc="CASH DEP SLIP 44")],
+        [
+            _book(1, "2026-04-03", debit="10000.00", reference="RCPT-1"),
+            _book(2, "2026-04-04", debit="5000.00", reference="RCPT-2"),
+            _book(3, "2026-04-04", debit="7000.00", reference="RCPT-3"),
+            _book(4, "2026-04-04", credit="5000.00", reference="PAY-9"),
+        ],
+    )
+    assert len(out) == 1
+    g = out[0]
+    assert g["group_type"] == "one_to_many"
+    assert g["side"] == "deposit"
+    assert g["amount"] == "15000.00"
+    assert g["statement_line_ids"] == ["s1"]
+    assert sorted(g["line_ids"]) == [1, 2]
+    assert g["confidence"] == "exact_sum"
+    assert g["max_date_diff_days"] == 2
+    assert sum(Decimal(b["amount"]) for b in g["book"]) == Decimal("15000.00")
+
+
+def test_group_suggestion_bank_split_one_payment_into_several_debits():
+    out = suggest_group_matches(
+        [
+            _stmt("s1", "2026-04-10", withdrawal="200000.00", desc="IMPS 1/2"),
+            _stmt("s2", "2026-04-10", withdrawal="100000.00", desc="IMPS 2/2"),
+        ],
+        [_book(1, "2026-04-09", credit="300000.00", reference="PAY-VENDOR")],
+    )
+    assert len(out) == 1
+    g = out[0]
+    assert g["group_type"] == "many_to_one"
+    assert g["side"] == "withdrawal"
+    assert sorted(g["statement_line_ids"]) == ["s1", "s2"]
+    assert g["line_ids"] == [1]
+
+
+def test_group_suggestion_respects_window_exclusions_and_strictly_smaller_parts():
+    stmt = [_stmt("s1", "2026-04-05", deposit="1000.00")]
+    # One part is 20 days away -> outside the window, so no exact subset remains.
+    assert suggest_group_matches(stmt, [
+        _book(1, "2026-04-05", debit="600.00"),
+        _book(2, "2026-04-25", debit="400.00"),
+    ]) == []
+    # Lines already taken by the 1:1 pass are excluded.
+    assert suggest_group_matches(stmt, [
+        _book(1, "2026-04-05", debit="600.00"),
+        _book(2, "2026-04-05", debit="400.00"),
+    ], exclude_line_ids={"2"}) == []
+    assert suggest_group_matches(stmt, [
+        _book(1, "2026-04-05", debit="600.00"),
+        _book(2, "2026-04-05", debit="400.00"),
+    ], exclude_statement_ids={"s1"}) == []
+    # An equal-amount line is a 1:1 match, never part of a group.
+    assert suggest_group_matches(stmt, [_book(1, "2026-04-05", debit="1000.00")]) == []
+
+
+def test_group_suggestion_prefers_fewest_lines_and_flags_ambiguity():
+    # 600+400 (2 lines) beats 300+300+400 (3 lines); both exist -> ambiguous.
+    out = suggest_group_matches(
+        [_stmt("s1", "2026-04-05", deposit="1000.00")],
+        [
+            _book(1, "2026-04-05", debit="600.00"),
+            _book(2, "2026-04-05", debit="400.00"),
+            _book(3, "2026-04-05", debit="300.00"),
+            _book(4, "2026-04-05", debit="300.00"),
+        ],
+    )
+    assert len(out) == 1
+    assert sorted(out[0]["line_ids"]) == [1, 2]
+    assert out[0]["confidence"] == "ambiguous"
+
+
+def test_group_suggestion_never_reuses_a_line_across_groups():
+    out = suggest_group_matches(
+        [
+            _stmt("s1", "2026-04-05", deposit="900.00"),
+            _stmt("s2", "2026-04-06", deposit="900.00"),
+        ],
+        [
+            _book(1, "2026-04-05", debit="500.00"),
+            _book(2, "2026-04-05", debit="400.00"),
+            _book(3, "2026-04-06", debit="450.00"),
+            _book(4, "2026-04-06", debit="450.00"),
+        ],
+    )
+    used = [line_id for g in out for line_id in g["line_ids"]]
+    assert len(used) == len(set(used)) == 4
+    assert {g["statement_line_ids"][0] for g in out} == {"s1", "s2"}
+
+
+def test_group_suggestion_search_is_bounded_on_pathological_input():
+    # 40 identical small receipts and a target no subset of <=4 can reach.
+    books = [_book(i, "2026-04-05", debit="1.00") for i in range(1, 41)]
+    assert suggest_group_matches([_stmt("s1", "2026-04-05", deposit="999.00")], books) == []
+
+
+def test_validate_group_match_rules():
+    s1 = _stmt("s1", "2026-04-05", deposit="1000.00")
+    s2 = _stmt("s2", "2026-04-05", deposit="500.00")
+    b_600 = {"debit": "600.00", "credit": "0.00"}
+    b_400 = {"debit": "400.00", "credit": "0.00"}
+    assert validate_group_match([s1], [b_600, b_400]) == ("one_to_many", "deposit", Decimal("1000.00"))
+    assert validate_group_match([s2, _stmt("s3", "2026-04-05", deposit="100.00")], [{"debit": "600.00"}]) == (
+        "many_to_one", "deposit", Decimal("600.00"),
+    )
+    with pytest.raises(ValueError, match="single match"):
+        validate_group_match([s1], [b_600])
+    with pytest.raises(ValueError, match="Many-to-many"):
+        validate_group_match([s1, s2], [b_600, b_400])
+    with pytest.raises(ValueError, match="Totals do not agree"):
+        validate_group_match([s1], [b_600, {"debit": "300.00"}])
+    with pytest.raises(ValueError, match="same direction"):
+        validate_group_match([s1], [b_600, {"credit": "400.00"}])
+    with pytest.raises(ValueError, match="at most"):
+        validate_group_match([s1], [{"debit": "10.00"}] * 11)
+
+
+def test_brs_identity_holds_with_group_matches():
+    statement_lines = [_stmt("s1", "2026-04-05", deposit="15000.00") | {"balance": "15000.00"}]
+    ledger_lines = [
+        _book(1, "2026-04-03", debit="10000.00"),
+        _book(2, "2026-04-04", debit="5000.00"),
+    ]
+    matches = [
+        {"match_id": "m1", "match_group_id": "g1", "statement_line_id": "s1", "line_id": 1, "amount": "10000.00"},
+        {"match_id": "m2", "match_group_id": "g1", "statement_line_id": "s1", "line_id": 2, "amount": "5000.00"},
+    ]
+    out = assemble_bank_reconciliation(
+        account={"account_id": 7, "code": "11010", "name": "Bank"}, as_of=date(2026, 4, 30),
+        statement_lines=statement_lines, ledger_lines=ledger_lines, matches=matches, suggestions=[],
+    )
+    assert out["summary"]["difference"] == "0.00"
+    assert out["summary"]["matched_groups"] == 1
+    assert out["in_bank_not_in_books"] == []
+    assert out["in_books_not_in_bank"] == []
+    assert out["group_suggestions"] == []
+
+
+def _group_fixture(fake_bank_collections, monkeypatch, matches=None):
+    fake_bank_collections[BANK_STATEMENT_LINES_COLLECTION] = _FakeCollection([
+        {**_scope(), "account_id": 102, "statement_line_id": "s1", "txn_date": "2026-04-05",
+         "description": "CASH DEP SLIP 44", "ref": "", "withdrawal": "0.00", "deposit": "15000.00"},
+        {**_scope(), "account_id": 102, "statement_line_id": "s2", "txn_date": "2026-04-06",
+         "description": "BANK CHG", "ref": "", "withdrawal": "118.00", "deposit": "0.00"},
+        {**_scope("tenant-b"), "account_id": 102, "statement_line_id": "s-other", "txn_date": "2026-04-05",
+         "withdrawal": "0.00", "deposit": "15000.00"},
+    ])
+    fake_bank_collections[BANK_RECON_MATCHES_COLLECTION] = _FakeCollection(matches or [])
+    monkeypatch.setattr("app.accounting.service.get_ledger_lines", _ledger_service([
+        _book(1, "2026-04-03", debit="10000.00", reference="RCPT-1"),
+        _book(2, "2026-04-04", debit="5000.00", reference="RCPT-2"),
+        _book(3, "2026-04-04", debit="4000.00", reference="RCPT-3"),
+        _book(4, "2026-04-04", credit="5000.00", reference="PAY-9"),
+    ]))
+
+
+async def _create_group(stmt_ids, line_ids):
+    return await bank_recon.create_bank_recon_group_match(
+        object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        account_id=102, statement_line_ids=stmt_ids, line_ids=line_ids, created_by="tester",
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_group_match_writes_one_row_per_pair_with_shared_group(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+
+    out = await _create_group(["s1"], [1, 2])
+
+    assert out["group_type"] == "one_to_many"
+    assert out["amount"] == "15000.00"
+    rows = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows
+    assert len(rows) == 2
+    assert {r["match_group_id"] for r in rows} == {out["match_group_id"]}
+    assert {r["statement_line_id"] for r in rows} == {"s1"}
+    assert sorted(r["line_id"] for r in rows) == [1, 2]
+    # Each row carries its own share, so the active rows sum to the group amount once.
+    assert sum(Decimal(r["amount"]) for r in rows) == Decimal("15000.00")
+    assert all(r["status"] == "active" and r["tenant_id"] == "tenant-a" for r in rows)
+    assert all(r["group_amount"] == "15000.00" and r["group_size"] == 3 for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_create_group_match_rejects_bad_groups(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+
+    with pytest.raises(AccountingValidationError, match="Totals do not agree"):
+        await _create_group(["s1"], [1, 3])
+    with pytest.raises(AccountingValidationError, match="same direction"):
+        await _create_group(["s1"], [1, 4])
+    with pytest.raises(AccountingValidationError, match="Statement line not found: s-other"):
+        await _create_group(["s-other"], [1, 2])
+    with pytest.raises(AccountingValidationError, match="Book entry not found"):
+        await _create_group(["s1"], [1, 99])
+    with pytest.raises(AccountingValidationError, match="Duplicate"):
+        await _create_group(["s1"], [1, 1])
+    with pytest.raises(AccountingValidationError, match="single match"):
+        await _create_group(["s1"], [1])
+    assert fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows == []
+
+    await _create_group(["s1"], [1, 2])
+    with pytest.raises(AccountingValidationError, match="statement line is already matched"):
+        await _create_group(["s1"], [3, 2])
+    # A book line inside a group also blocks a plain 1:1 match.
+    with pytest.raises(AccountingValidationError, match="already matched"):
+        await bank_recon.create_bank_recon_match(
+            object(), tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+            account_id=102, statement_line_id="s2", line_id=2, created_by="tester",
+        )
+
+
+@pytest.mark.asyncio
+async def test_reversing_one_row_reverses_the_whole_group(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch, matches=[
+        {**_scope("tenant-b"), "match_id": "x1", "match_group_id": "SAME", "status": "active"},
+    ])
+    out = await _create_group(["s1"], [1, 2])
+    first_match_id = out["matches"][0]["match_id"]
+
+    result = await bank_recon.reverse_bank_recon_match(
+        tenant_id="tenant-a", app_key="mitrabooks", accounting_entity_id="primary",
+        match_id=first_match_id, reversed_by="tester",
+    )
+
+    assert result["reversed_rows"] == 2
+    assert result["match_group_id"] == out["match_group_id"]
+    rows = fake_bank_collections[BANK_RECON_MATCHES_COLLECTION].rows
+    group_rows = [r for r in rows if r.get("match_group_id") == out["match_group_id"]]
+    assert all(r["status"] == "reversed" and r["reversed_by"] == "tester" for r in group_rows)
+    # Another tenant's row is untouched.
+    assert next(r for r in rows if r["match_id"] == "x1")["status"] == "active"
+    # Lines are free again.
+    await _create_group(["s1"], [1, 2])
+
+
+@pytest.mark.asyncio
+async def test_build_bank_reconciliation_returns_group_suggestions(fake_bank_collections, monkeypatch):
+    _group_fixture(fake_bank_collections, monkeypatch)
+
+    out = await bank_recon.build_bank_reconciliation(
+        object(), tenant_id="tenant-a", app_key="mitrabooks",
+        accounting_entity_id="primary", account_id=102, as_of=date(2026, 4, 30),
+    )
+
+    assert out["suggestions"] == []
+    assert len(out["group_suggestions"]) == 1
+    g = out["group_suggestions"][0]
+    assert g["statement_line_ids"] == ["s1"]
+    assert sorted(g["line_ids"]) == [1, 2]
+
+    await _create_group(["s1"], [1, 2])
+    out = await bank_recon.build_bank_reconciliation(
+        object(), tenant_id="tenant-a", app_key="mitrabooks",
+        accounting_entity_id="primary", account_id=102, as_of=date(2026, 4, 30),
+    )
+    assert out["group_suggestions"] == []
+    assert out["summary"]["matched_groups"] == 1
+    assert [l["statement_line_id"] for l in out["in_bank_not_in_books"]] == ["s2"]
+    assert sorted(l["line_id"] for l in out["in_books_not_in_bank"]) == [3, 4]

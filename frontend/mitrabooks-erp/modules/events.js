@@ -480,6 +480,13 @@ function installEventHandlers() {
       deps.uploadBankStatementFile();
     } else if (businessAction === "bankrecon-match") {
       deps.confirmBankReconMatch(button.getAttribute("data-stmt-id") || "", button.getAttribute("data-line-id") || "");
+    } else if (businessAction === "bankrecon-match-group") {
+      deps.confirmBankReconGroupMatch(
+        (button.getAttribute("data-stmt-ids") || "").split(",").filter(Boolean),
+        (button.getAttribute("data-line-ids") || "").split(",").filter(Boolean),
+      );
+    } else if (businessAction === "bankrecon-match-selected") {
+      deps.matchSelectedBankReconLines();
     } else if (businessAction === "bankrecon-unmatch") {
       deps.reverseBankReconMatch(button.getAttribute("data-match-id") || "");
     } else if (businessAction === "bankrecon-post-voucher") {
