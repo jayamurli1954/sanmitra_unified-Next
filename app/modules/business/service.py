@@ -29,20 +29,22 @@ from app.modules.business.schemas import (
     TypedVoucherReversalRequest as TypedVoucherReversalRequest,
 )
 
-PARTIES_COLLECTION = "business_parties"
-VOUCHERS_COLLECTION = "business_vouchers"
-VOUCHER_COUNTERS_COLLECTION = "business_voucher_counters"
-SALES_INVOICES_COLLECTION = "business_sales_invoices"
-PURCHASE_BILLS_COLLECTION = "business_purchase_bills"
-INVOICE_SETTINGS_COLLECTION = "business_invoice_settings"
-ADMIN_SETTINGS_COLLECTION = "business_admin_settings"
-GST_PERIOD_LOCKS_COLLECTION = "business_gst_period_locks"
-CREDIT_NOTES_COLLECTION = "business_credit_notes"
-DEBIT_NOTES_COLLECTION = "business_debit_notes"
-GST_SETTLEMENTS_COLLECTION = "business_gst_settlements"
-CA_DOCUMENTS_COLLECTION = "business_ca_document_metadata"
-CA_CLIENTS_COLLECTION = "business_ca_clients"
-BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION = "business_document_attachments"
+from app.modules.business.collections import (  # noqa: E402 - re-exported for existing callers
+    PARTIES_COLLECTION as PARTIES_COLLECTION,
+    VOUCHERS_COLLECTION as VOUCHERS_COLLECTION,
+    VOUCHER_COUNTERS_COLLECTION as VOUCHER_COUNTERS_COLLECTION,
+    SALES_INVOICES_COLLECTION as SALES_INVOICES_COLLECTION,
+    PURCHASE_BILLS_COLLECTION as PURCHASE_BILLS_COLLECTION,
+    INVOICE_SETTINGS_COLLECTION as INVOICE_SETTINGS_COLLECTION,
+    ADMIN_SETTINGS_COLLECTION as ADMIN_SETTINGS_COLLECTION,
+    GST_PERIOD_LOCKS_COLLECTION as GST_PERIOD_LOCKS_COLLECTION,
+    CREDIT_NOTES_COLLECTION as CREDIT_NOTES_COLLECTION,
+    DEBIT_NOTES_COLLECTION as DEBIT_NOTES_COLLECTION,
+    GST_SETTLEMENTS_COLLECTION as GST_SETTLEMENTS_COLLECTION,
+    CA_DOCUMENTS_COLLECTION as CA_DOCUMENTS_COLLECTION,
+    CA_CLIENTS_COLLECTION as CA_CLIENTS_COLLECTION,
+    BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION as BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION,
+)
 
 _logger = logging.getLogger(__name__)
 BUSINESS_ATTACHMENT_STORAGE_DIR = Path(__file__).resolve().parent / "data" / "uploads" / "attachments"
@@ -273,10 +275,17 @@ async def _reserve_voucher_number(
     return f"{_voucher_prefix(voucher_type)}-{financial_year}-{seq:06d}"
 
 
-# Mongo index bootstrap moved to services/indexes.py
+# Mongo index bootstrap moved to services/indexes.py. That module does not
+# import this one (no import cycle); this wrapper hands it this module's
+# get_collection, looked up at call time, so code and tests that patch
+# business_service.get_collection keep working.
 from app.modules.business.services.indexes import (  # noqa: E402
-    ensure_business_indexes as ensure_business_indexes,
+    ensure_business_indexes as _ensure_business_indexes,
 )
+
+
+async def ensure_business_indexes() -> list[dict]:
+    return await _ensure_business_indexes(collection_lookup=lambda name: get_collection(name))
 
 # Typed vouchers moved to services/vouchers.py
 from app.modules.business.services.vouchers import (  # noqa: E402

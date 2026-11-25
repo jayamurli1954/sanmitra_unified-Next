@@ -1,11 +1,16 @@
 """Mongo index bootstrap for MitraBooks business collections.
 
-Extracted verbatim from app/modules/business/service.py per
-docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Pure move: logic unchanged.
+Extracted from app/modules/business/service.py per
+docs/operations/LARGE_FILE_MODULARIZATION_PLAN.md. Collection names come from
+app.modules.business.collections (not the service facade) so this module does
+not import app.modules.business.service, which imports it.
 """
 from __future__ import annotations
 
 import logging
+
+from app.db import mongo
+from app.modules.business import collections as collection_names
 
 logger = logging.getLogger(__name__)
 
@@ -50,60 +55,60 @@ class _TolerantIndexCollection:
             return None
 
 
-async def ensure_business_indexes() -> list[dict]:
+async def ensure_business_indexes(collection_lookup=None) -> list[dict]:
     """Create the MitraBooks business indexes (idempotent).
 
     Runs at application startup and from the E2E seed. Each index is created
     independently; failures are logged and returned rather than raised, so
-    one index that cannot be built does not leave the rest missing."""
-    # Imported here, not at module level: business.service imports this module
-    # at load time, so a module-level import back would be a cyclic import.
-    from app.modules.business import service as business_service
+    one index that cannot be built does not leave the rest missing.
 
+    `collection_lookup` defaults to app.db.mongo.get_collection; the
+    app.modules.business.service wrapper passes its own (patchable) one."""
     failures: list[dict] = []
+    lookup = collection_lookup or mongo.get_collection
 
     def get_collection(name: str):
-        return _TolerantIndexCollection(business_service.get_collection(name), name, failures)
+        return _TolerantIndexCollection(lookup(name), name, failures)
 
-    parties = get_collection(business_service.PARTIES_COLLECTION)
+    parties = get_collection(collection_names.PARTIES_COLLECTION)
     await parties.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("party_code", 1)], unique=True)
     await parties.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("party_type", 1)])
-    vouchers = get_collection(business_service.VOUCHERS_COLLECTION)
+    vouchers = get_collection(collection_names.VOUCHERS_COLLECTION)
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("entry_date", -1)])
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("voucher_id", 1)], unique=True)
     await vouchers.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
-    ca_documents = get_collection(business_service.CA_DOCUMENTS_COLLECTION)
+    ca_documents = get_collection(collection_names.CA_DOCUMENTS_COLLECTION)
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("updated_at", -1)])
     await ca_documents.create_index([("tenant_id", 1), ("app_key", 1), ("document_id", 1)], unique=True)
-    ca_clients = get_collection(business_service.CA_CLIENTS_COLLECTION)
+    ca_clients = get_collection(collection_names.CA_CLIENTS_COLLECTION)
     await ca_clients.create_index([("tenant_id", 1), ("app_key", 1), ("client_id", 1)], unique=True)
     await ca_clients.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("client_name", 1)])
-    attachments = get_collection(business_service.BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION)
+    attachments = get_collection(collection_names.BUSINESS_DOCUMENT_ATTACHMENTS_COLLECTION)
     await attachments.create_index([("tenant_id", 1), ("app_key", 1), ("attachment_id", 1)], unique=True)
     await attachments.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("owner_type", 1), ("owner_id", 1), ("uploaded_at", -1)])
-    invoices = get_collection(business_service.SALES_INVOICES_COLLECTION)
+    invoices = get_collection(collection_names.SALES_INVOICES_COLLECTION)
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("invoice_date", -1)])
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("invoice_id", 1)], unique=True)
     await invoices.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
-    invoice_settings = get_collection(business_service.INVOICE_SETTINGS_COLLECTION)
+    invoice_settings = get_collection(collection_names.INVOICE_SETTINGS_COLLECTION)
     await invoice_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
-    admin_settings = get_collection(business_service.ADMIN_SETTINGS_COLLECTION)
+    admin_settings = get_collection(collection_names.ADMIN_SETTINGS_COLLECTION)
     await admin_settings.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1)], unique=True)
-    bills = get_collection(business_service.PURCHASE_BILLS_COLLECTION)
+    bills = get_collection(collection_names.PURCHASE_BILLS_COLLECTION)
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("bill_date", -1)])
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("bill_id", 1)], unique=True)
     await bills.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
-    period_locks = get_collection(business_service.GST_PERIOD_LOCKS_COLLECTION)
+    period_locks = get_collection(collection_names.GST_PERIOD_LOCKS_COLLECTION)
     await period_locks.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("period", 1)], unique=True)
-    credit_notes = get_collection(business_service.CREDIT_NOTES_COLLECTION)
+    credit_notes = get_collection(collection_names.CREDIT_NOTES_COLLECTION)
     await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("note_date", -1)])
     await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("credit_note_id", 1)], unique=True)
     await credit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
-    debit_notes = get_collection(business_service.DEBIT_NOTES_COLLECTION)
+    debit_notes = get_collection(collection_names.DEBIT_NOTES_COLLECTION)
     await debit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("note_date", -1)])
     await debit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("debit_note_id", 1)], unique=True)
     await debit_notes.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("idempotency_key", 1)], unique=True, sparse=True)
-    gst_settlements = get_collection(business_service.GST_SETTLEMENTS_COLLECTION)
+    gst_settlements = get_collection(collection_names.GST_SETTLEMENTS_COLLECTION)
     await gst_settlements.create_index([("tenant_id", 1), ("app_key", 1), ("accounting_entity_id", 1), ("period", 1)], unique=True)
     payment_allocations = get_collection("business_payment_allocations")
     await payment_allocations.create_index([("tenant_id", 1), ("app_key", 1), ("allocation_id", 1)], unique=True)
