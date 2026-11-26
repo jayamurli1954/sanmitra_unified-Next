@@ -2519,6 +2519,31 @@ button.danger {
   margin: 10px 0;
 }
 
+.legal-doc-article table {
+  display: block;
+  width: 100%;
+  margin: 14px 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.legal-doc-article th,
+.legal-doc-article td {
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-doc-article th {
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
 .legal-doc-article ul {
   display: grid;
   gap: 7px;
