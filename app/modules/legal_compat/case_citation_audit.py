@@ -83,8 +83,16 @@ def _distinctive(text: str) -> list[str]:
     return out
 
 
-def _normalize_reporter(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower())
+def _reporter_tokens(text: str) -> list[str]:
+    """Alphanumeric tokens; "2022 (2) SCC 603" == "(2022) 2 SCC 603"."""
+    return re.findall(r"[a-z]+|\d+", (text or "").lower())
+
+
+def _contains_sequence(haystack: list[str], needle: list[str]) -> bool:
+    n = len(needle)
+    if not n or n > len(haystack):
+        return False
+    return any(haystack[i : i + n] == needle for i in range(len(haystack) - n + 1))
 
 
 def _trim_case_span(text: str, start: int, end: int) -> tuple[int, int]:
@@ -165,6 +173,16 @@ def case_evidence_blob(citations: list[dict[str, Any]] | None) -> str:
     return "\n".join(parts)
 
 
+def case_name_matches(name: str, evidence_text: str) -> bool:
+    """True when the distinctive parts of a case name appear in evidence_text."""
+    return _case_name_supported(name, set(_tokens(evidence_text)))
+
+
+def reporter_matches(citation: str, evidence_text: str) -> bool:
+    """True when the citation's token sequence appears whole in evidence_text."""
+    return _reporter_supported(citation, _reporter_tokens(evidence_text))
+
+
 def _case_name_supported(name: str, evidence_tokens: set[str]) -> bool:
     distinctive = _distinctive(name)
     if not distinctive or not evidence_tokens:
@@ -173,9 +191,8 @@ def _case_name_supported(name: str, evidence_tokens: set[str]) -> bool:
     return hits >= max(1, -(-len(distinctive) * 2 // 3))  # ceil(2/3)
 
 
-def _reporter_supported(citation: str, evidence_norm: str) -> bool:
-    norm = _normalize_reporter(citation)
-    return bool(norm) and norm in evidence_norm
+def _reporter_supported(citation: str, evidence_seq: list[str]) -> bool:
+    return _contains_sequence(evidence_seq, _reporter_tokens(citation))
 
 
 # ── Audit + redaction ───────────────────────────────────────────────────────
@@ -190,7 +207,7 @@ def audit_case_citations(
     claims = find_case_claims(response_text or "")
     evidence = case_evidence_blob(citations)
     evidence_tokens = set(_tokens(evidence))
-    evidence_norm = _normalize_reporter(evidence)
+    evidence_seq = _reporter_tokens(evidence)
 
     out: list[dict[str, Any]] = []
     verified = unsupported = 0
@@ -198,7 +215,7 @@ def audit_case_citations(
         if claim["claim_type"] == "case_name":
             ok = _case_name_supported(claim["text"], evidence_tokens)
         else:
-            ok = _reporter_supported(claim["text"], evidence_norm)
+            ok = _reporter_supported(claim["text"], evidence_seq)
         outcome = "verified" if ok else "unsupported"
         if ok:
             verified += 1

@@ -26,6 +26,7 @@ import {
   loadCourtFeeRules,
   readCourtFeeIntake,
 } from "./legal-tools-court-fee.js";
+import { citationToolBodyHtml, runCitationCheck } from "./legal-tools-citation.js";
 import { createHistoryPanel } from "./history-panel.js";
 import { formatCitationAuditLine } from "./answer-trust.js";
 
@@ -482,6 +483,13 @@ function buildFollowUps(query, response) {
 }
 
 const legalTools = {
+  "citation-check": {
+    requiredPlan: "starter",
+    label: "Citation Checker",
+    title: "Check every case citation and section before you file",
+    query: "Explain how to verify Indian case citations and IPC to BNS / CrPC to BNSS section mappings before filing",
+    body: null, // rendered from citationToolBodyHtml()
+  },
   "court-fee": {
     requiredPlan: "growth",
     label: "Court Fee Calculator",
@@ -689,6 +697,9 @@ async function renderLegalTool(toolKey) {
     return;
   }
   let bodyHtml = tool.body;
+  if (toolKey === "citation-check") {
+    bodyHtml = citationToolBodyHtml();
+  }
   if (toolKey === "stamp-duty") {
     bodyHtml = stampDutyToolBodyHtml();
   }
@@ -715,6 +726,19 @@ async function renderLegalTool(toolKey) {
 async function handleToolAction(action) {
   const result = document.getElementById("tool-result");
   if (!result) return;
+
+  if (action === "citation-check") {
+    const button = legalToolPanel?.querySelector('[data-tool-action="citation-check"]');
+    if (button) button.disabled = true;
+    result.textContent = "Checking citations…";
+    try {
+      const outcome = await runCitationCheck((path, options) => apiRequest(APP_KEY, path, options));
+      result.innerHTML = outcome.html;
+    } finally {
+      if (button) button.disabled = false;
+    }
+    return;
+  }
 
   if (action === "court-fee") {
     try {
