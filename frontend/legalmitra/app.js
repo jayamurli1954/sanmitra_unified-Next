@@ -26,7 +26,12 @@ import {
   loadCourtFeeRules,
   readCourtFeeIntake,
 } from "./legal-tools-court-fee.js";
-import { citationToolBodyHtml, runCitationCheck } from "./legal-tools-citation.js";
+import {
+  citationToolBodyHtml,
+  judgmentFinderBodyHtml,
+  runCitationCheck,
+  runJudgmentFinder,
+} from "./legal-tools-citation.js";
 import { createHistoryPanel } from "./history-panel.js";
 import { formatCitationAuditLine } from "./answer-trust.js";
 
@@ -490,6 +495,13 @@ const legalTools = {
     query: "Explain how to verify Indian case citations and IPC to BNS / CrPC to BNSS section mappings before filing",
     body: null, // rendered from citationToolBodyHtml()
   },
+  "judgment-finder": {
+    requiredPlan: "starter",
+    label: "Judgment Finder",
+    title: "Find and open Supreme Court judgments (1950 onwards)",
+    query: "Explain how to find and cite a Supreme Court of India judgment by party names and neutral citation",
+    body: null, // rendered from judgmentFinderBodyHtml()
+  },
   "court-fee": {
     requiredPlan: "growth",
     label: "Court Fee Calculator",
@@ -700,6 +712,9 @@ async function renderLegalTool(toolKey) {
   if (toolKey === "citation-check") {
     bodyHtml = citationToolBodyHtml();
   }
+  if (toolKey === "judgment-finder") {
+    bodyHtml = judgmentFinderBodyHtml();
+  }
   if (toolKey === "stamp-duty") {
     bodyHtml = stampDutyToolBodyHtml();
   }
@@ -737,6 +752,13 @@ async function handleToolAction(action) {
     } finally {
       if (button) button.disabled = false;
     }
+    return;
+  }
+
+  if (action === "judgment-finder") {
+    result.textContent = "Searching Supreme Court judgments…";
+    const outcome = await runJudgmentFinder((path, options) => apiRequest(APP_KEY, path, options));
+    result.innerHTML = outcome.html;
     return;
   }
 

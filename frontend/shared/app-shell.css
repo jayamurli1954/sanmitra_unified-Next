@@ -3594,6 +3594,12 @@ button.danger {
   text-transform: uppercase;
 }
 
+.citation-check-item a {
+  color: #e7c77c;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .citation-check-detail,
 .citation-check-muted {
   color: #94a3b8;

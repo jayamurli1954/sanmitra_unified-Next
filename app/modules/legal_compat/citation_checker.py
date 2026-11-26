@@ -19,6 +19,7 @@ from functools import lru_cache
 from typing import Any, Awaitable, Callable
 
 from app.modules.legal_compat import code_crosswalk as cx
+from app.modules.legal_compat import sc_judgment_index as sc_index
 from app.modules.legal_compat.case_citation_audit import (
     case_name_matches,
     find_case_claims,
@@ -83,8 +84,8 @@ def _record_summary(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _match_case(name: str | None, citation: str | None) -> dict[str, Any]:
-    """Match a case against curated records. Returns status + matched record."""
+def _match_curated(name: str | None, citation: str | None) -> dict[str, Any]:
+    """Match against hand-curated records (carry SCC citations and treatment notes)."""
     records = curated_judgments()
     by_name = [r for r in records if name and case_name_matches(name, _record_name_text(r))]
     by_citation = [
@@ -106,6 +107,47 @@ def _match_case(name: str | None, citation: str | None) -> dict[str, Any]:
     elif citation and by_citation:
         return {"status": "verified", "record": by_citation[0]}
     return {"status": "not_found", "record": None}
+
+
+def _match_supreme_court(name: str | None, citation: str | None) -> dict[str, Any]:
+    """Match against the Supreme Court open-data index (neutral + SCR citations)."""
+    index = sc_index.get_index()
+    if not len(index):
+        return {"status": "not_found", "sc": []}
+    year = sc_index.citation_year(citation)
+    held = bool(citation) and sc_index.is_held_reporter(citation)
+
+    if held:
+        row = index.by_citation(citation)
+        if row:
+            if not name or index.name_matches(name, row):
+                return {"status": "verified", "sc": [row]}
+            return {"status": "name_differs", "sc": [row]}
+        if name:
+            candidates = index.by_name(name, year=year)
+            if candidates:
+                return {"status": "citation_differs", "sc": candidates[:3]}
+        return {"status": "not_found", "sc": []}
+
+    if not name:
+        return {"status": "not_found", "sc": []}
+    candidates = index.by_name(name, year=year)
+    if len(candidates) == 1:
+        return {"status": "found_sc" if citation else "verified", "sc": candidates}
+    if candidates:
+        return {"status": "possible_matches", "sc": candidates[:3]}
+    return {"status": "not_found", "sc": []}
+
+
+def _match_case(name: str | None, citation: str | None) -> dict[str, Any]:
+    curated = _match_curated(name, citation)
+    sc = _match_supreme_court(name, citation)
+    # A hand-curated verdict wins, except "not found" — then use the SC index.
+    if curated["status"] != "not_found":
+        # Attach the SC record (for its PDF link) when it is the same case.
+        same = [r for r in sc.get("sc") or [] if sc["status"] in {"verified", "found_sc"}]
+        return {**curated, "sc": same}
+    return {"status": sc["status"], "record": None, "sc": sc.get("sc") or []}
 
 
 def _group_authorities(text: str) -> list[dict[str, Any]]:
@@ -147,7 +189,15 @@ def _group_authorities(text: str) -> list[dict[str, Any]]:
 
 
 _CASE_MESSAGES = {
-    "verified": "Found in LegalMitra's curated judgment records.",
+    "verified": "Found in LegalMitra's judgment records.",
+    "found_sc": (
+        "Found in Supreme Court records. SCC / AIR page citations are not in our data, "
+        "so the page citation itself was not checked — confirm it in the law report."
+    ),
+    "possible_matches": (
+        "Several Supreme Court judgments match this name. Add the year or citation, "
+        "or pick the right one below."
+    ),
     "citation_differs": (
         "Case found, but the citation given does not match our record. "
         "It may be a parallel citation we do not hold, or a wrong citation — check the law report."
@@ -158,14 +208,17 @@ _CASE_MESSAGES = {
     ),
     "found_in_library": "Found in your LegalMitra library (uploaded / ingested documents).",
     "not_found": (
-        "Not found in LegalMitra's sources. This does not mean the case is fake — "
+        "Not found in LegalMitra's sources (curated records and Supreme Court judgments since 1950; "
+        "High Court judgments are not included yet). This does not mean the case is fake — "
         "verify it against the reported judgment before relying on it."
     ),
 }
 
 _CASE_SEVERITY = {
     "verified": "ok",
+    "found_sc": "ok",
     "found_in_library": "ok",
+    "possible_matches": "info",
     "citation_differs": "warning",
     "not_found": "warning",
     "name_differs": "error",
@@ -439,6 +492,7 @@ async def check_citations(
             "message": _CASE_MESSAGES[status],
             "matched_record": _record_summary(record) if record else None,
         }
+        item["supreme_court_matches"] = [sc_index.public_record(r) for r in match.get("sc") or []]
         if match.get("library_title"):
             item["library_title"] = match["library_title"]
         if record and _record_summary(record)["treatment_notes"]:
@@ -470,6 +524,8 @@ async def check_citations(
         },
         "truncated": len(text or "") > MAX_TEXT_CHARS,
         "curated_judgment_count": len(curated_judgments()),
+        "supreme_court_index_count": len(sc_index.get_index()),
+        "attribution": sc_index.ATTRIBUTION,
         "library_unavailable": library_unavailable,
         "advisory": ADVISORY,
         "human_review_required": True,

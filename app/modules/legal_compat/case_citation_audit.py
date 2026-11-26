@@ -30,18 +30,18 @@ CASE_NAME_RE = re.compile(rf"(?<![A-Za-z])(?P<left>{_PARTY})\s+{_SEP}\s+(?P<righ
 
 # Indian law-report citations.
 _REPORTER = (
-    r"SCC\s+OnLine\s+[A-Z][A-Za-z]*|SCC\s*\(\w+\)|SCC|SCR|S\.C\.R\.|SCALE|JT|AIR\s+\w+|"
+    r"SCC\s+OnLine\s+[A-Z][A-Za-z]*|SCC\s*\(\w+\)|SCC|SCR|S\.C\.R\.|INSC|SCALE|JT|AIR\s+\w+|"
     r"ITR|GSTL|STC|TMI|Taxman|taxmann\.com|ELT|E\.L\.T\.|CTR|ITD|SOT|Comp\s+Cas|"
     r"Cri\s*LJ|Cr\.?L\.?J\.?|ALL\s?ER|DLT|Bom\s*LR|MLJ|KLT|ILR"
 )
 REPORTER_RE = re.compile(
     rf"(?:"
     # (1973) 4 SCC 225 / [2021] 3 SCR 1 / (2017) 52 GSTL 513 (SC) / 1992 Supp (1) SCC 335
-    rf"[\(\[]\d{{4}}[\)\]]\s*(?:Supp\.?\s*)?(?:\(\d+\)\s*)?\d*\s*(?:{_REPORTER})\s*\d+(?:\s*\((?:SC|[A-Z][a-z]{{0,5}}\.?)\))?"
+    rf"[\(\[]\d{{4}}[\)\]]\s*(?:(?:Supp|SUPP)\.?\s*)?(?:\(\d+\)\s*)?\d*\s*(?:{_REPORTER})\s*\d+(?:\s*\((?:SC|[A-Z][a-z]{{0,5}}\.?)\))?"
     # AIR 1973 SC 1461
     rf"|AIR\s+\d{{4}}\s+[A-Z][A-Za-z]*\s+\d+"
     # 2021 SCC OnLine SC 706 / 1992 Supp (1) SCC 335 / 2022 (5) TMI 123
-    rf"|\b\d{{4}}\s+(?:Supp\.?\s*)?(?:\(\d+\)\s*)?(?:{_REPORTER})\s*\d+"
+    rf"|\b\d{{4}}\s+(?:(?:Supp|SUPP)\.?\s*)?(?:\(\d+\)\s*)?(?:{_REPORTER})\s*\d+"
     rf")"
 )
 

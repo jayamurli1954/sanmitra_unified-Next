@@ -5,7 +5,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.billing.usage import get_usage_limits_for_user
@@ -51,7 +51,15 @@ def _library_lookup_for(tenant_id: str, app_key: str) -> cc.LibraryLookup:
     return _lookup
 
 
+async def _warm_sc_index() -> None:
+    """First load parses ~38k rows (~3 s); do it off the event loop."""
+    from app.modules.legal_compat import sc_judgment_index as sc_index
+
+    await asyncio.to_thread(sc_index.get_index)
+
+
 async def _run_check(*, text: str, tenant_id: str, app_key: str, search_library: bool) -> dict[str, Any]:
+    await _warm_sc_index()
     lookup = _library_lookup_for(tenant_id, app_key) if search_library else None
     result = await cc.check_citations(text, library_lookup=lookup)
     _logger.info(
@@ -120,3 +128,32 @@ async def legalmitra_citation_check_upload(
     result = await _run_check(text=text, tenant_id=tenant_id, app_key=app_key, search_library=True)
     result["file_name"] = file.filename
     return result
+
+
+@router.get("/legalmitra/judgments/search")
+async def legalmitra_judgment_search(
+    q: str = Query(..., min_length=2, max_length=300, description="Party names, '2021 INSC 469' or '[2021] 15 S.C.R. 169'"),
+    year: int | None = Query(default=None, ge=1950, le=2100),
+    limit: int = Query(default=10, ge=1, le=25),
+    current_user: dict = Depends(_any_authenticated),
+):
+    """Find Supreme Court judgments (1950 onwards) by party name or citation.
+
+    Returns metadata and a link to the judgment PDF on the public open-data
+    bucket — the PDF is fetched only when the user opens it.
+    """
+    _ = current_user
+    from app.modules.legal_compat import sc_judgment_index as sc_index
+
+    index = await asyncio.to_thread(sc_index.get_index)
+    rows = index.search(q, year=year, limit=limit)
+    return {
+        "ok": True,
+        "query": q,
+        "count": len(rows),
+        "results": [sc_index.public_record(r) for r in rows],
+        "index_size": len(index),
+        "coverage": "Supreme Court of India, 1950 onwards. High Courts not included yet.",
+        "attribution": sc_index.ATTRIBUTION,
+        "note": "SCC / AIR citations are not part of this open dataset; search by party names, neutral (INSC) or SCR citation.",
+    }

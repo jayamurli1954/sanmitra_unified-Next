@@ -1,0 +1,14 @@
+{
+  "source": "Indian Supreme Court Judgments \u2014 Dattam Labs, AWS Open Data Registry",
+  "source_url": "https://registry.opendata.aws/indian-supreme-court-judgments/",
+  "license": "CC BY 4.0",
+  "attribution": "Judgment data: Dattam Labs, Indian Supreme Court Judgments (AWS Open Data Registry), CC BY 4.0",
+  "bucket_url": "https://indian-supreme-court-judgments.s3.amazonaws.com",
+  "pdf_url_template": "https://indian-supreme-court-judgments.s3.amazonaws.com/data/pdf/year={year}/english/{path}_EN.pdf",
+  "years": [
+    1950,
+    2026
+  ],
+  "record_count": 38293,
+  "built_at": "2026-11-26T12:55:08.402756+00:00"
+}
