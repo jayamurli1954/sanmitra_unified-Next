@@ -52,4 +52,4 @@ def test_legalmitra_logo_image_does_not_show_browser_tooltip() -> None:
 
     assert ".legal-wordmark img" in css_source
     assert "pointer-events: none;" in css_source
-    assert "app-shell.css?v=legalmitra-ai-v43" in chat_source
+    assert "app-shell.css?v=legalmitra-ai-v44" in chat_source

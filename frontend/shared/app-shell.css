@@ -2519,6 +2519,31 @@ button.danger {
   margin: 10px 0;
 }
 
+.legal-doc-article table {
+  display: block;
+  width: 100%;
+  margin: 14px 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.legal-doc-article th,
+.legal-doc-article td {
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-doc-article th {
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
 .legal-doc-article ul {
   display: grid;
   gap: 7px;
@@ -3526,6 +3551,84 @@ button.danger {
   background: rgba(255, 255, 255, 0.06);
   color: #cbd5e1;
   line-height: 1.55;
+}
+
+/* Citation Checker */
+.legal-tool-form textarea {
+  min-height: 140px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  text-transform: none;
+  resize: vertical;
+}
+
+.legal-tool-form label:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.citation-check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.citation-check-list {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.citation-check-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.4);
+  overflow-wrap: anywhere;
+}
+
+.citation-check-error { border-left-color: #f87171; }
+.citation-check-warning { border-left-color: #fbbf24; }
+.citation-check-info { border-left-color: #60a5fa; }
+.citation-check-ok { border-left-color: #4ade80; }
+
+.citation-check-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  color: #fff;
+}
+
+.citation-check-kind {
+  color: #e7c77c;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.citation-check-item a {
+  color: #e7c77c;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.citation-check-detail,
+.citation-check-muted {
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 .legal-audience-grid,

@@ -1,0 +1,90 @@
+{
+  "slice": "case_citation_gate_faults",
+  "version": "1.0",
+  "jurisdiction": "India (Central)",
+  "notes": "Case-citation gate fault fixtures: the provider answer names cases / law-report citations. Cases absent from retrieved citations must be removed before delivery; cases present in retrieved citations must be kept. Statutory analysis must survive. Fabricated authorities here are deliberately fictitious or not in the retrieved set.",
+  "cases": [
+    {
+      "id": "fabricated-sc-case-with-scc",
+      "question": "In India, how is an arbitrator appointed by the court under Section 11 of the Arbitration and Conciliation Act?",
+      "citations": [
+        {
+          "title": "Arbitration and Conciliation Act, 1996 - Section 11",
+          "snippet": "Section 11 - Appointment of arbitrators. Where the parties fail to agree, the appointment shall be made by the Supreme Court or the High Court.",
+          "score": 0.9
+        }
+      ],
+      "inject_provider_text": "Under Section 11 of the Arbitration and Conciliation Act, the High Court appoints the arbitrator when parties fail to agree. In Ramesh Kumar Textiles v. Union of India, (2019) 7 SCC 412, the Supreme Court held that the court only examines the existence of the arbitration agreement.",
+      "expect": {
+        "forbid_terms": ["ramesh kumar textiles", "(2019) 7 scc 412"],
+        "must_include_terms": ["section 11", "case citation removed"],
+        "min_unsupported": 2
+      }
+    },
+    {
+      "id": "fabricated-air-citation-alone",
+      "question": "In India, what does Section 11 of the Arbitration and Conciliation Act provide on appointment of arbitrators?",
+      "citations": [
+        {
+          "title": "Arbitration and Conciliation Act, 1996 - Section 11",
+          "snippet": "Section 11 - Appointment of arbitrators by the Supreme Court or the High Court on failure of agreement.",
+          "score": 0.9
+        }
+      ],
+      "inject_provider_text": "Section 11 lets the High Court appoint an arbitrator on failure of agreement, as settled in AIR 1998 SC 4433.",
+      "expect": {
+        "forbid_terms": ["air 1998 sc 4433"],
+        "must_include_terms": ["section 11"],
+        "min_unsupported": 1
+      }
+    },
+    {
+      "id": "retrieved-case-is-kept",
+      "question": "In India, is a court limited to examining the arbitration agreement under Section 11 of the Arbitration and Conciliation Act?",
+      "citations": [
+        {
+          "title": "Arbitration and Conciliation Act, 1996 - Section 11",
+          "snippet": "Section 11(6A) - the court shall confine to the examination of the existence of an arbitration agreement.",
+          "score": 0.9
+        },
+        {
+          "title": "Vidya Drolia v. Durga Trading Corporation",
+          "snippet": "Section 11 arbitration agreement existence prima facie review by the court.",
+          "source_type": "judgment",
+          "legal_metadata": {"citation": "(2021) 2 SCC 1", "court_name": "Supreme Court of India"},
+          "score": 0.85
+        }
+      ],
+      "inject_provider_text": "Under Section 11(6A) of the Arbitration and Conciliation Act the court's review is prima facie. See Vidya Drolia v. Durga Trading Corporation, (2021) 2 SCC 1 [R2].",
+      "expect": {
+        "must_include_terms": ["vidya drolia v. durga trading corporation", "(2021) 2 scc 1"],
+        "forbid_terms": ["case citation removed"],
+        "max_unsupported": 0
+      }
+    },
+    {
+      "id": "mixed-real-and-fabricated",
+      "question": "In India, what is the scope of review under Section 11 of the Arbitration and Conciliation Act?",
+      "citations": [
+        {
+          "title": "Arbitration and Conciliation Act, 1996 - Section 11",
+          "snippet": "Section 11(6A) - examination of the existence of an arbitration agreement by the court.",
+          "score": 0.9
+        },
+        {
+          "title": "Vidya Drolia v. Durga Trading Corporation",
+          "snippet": "Section 11 arbitration agreement existence prima facie review by the court.",
+          "source_type": "judgment",
+          "legal_metadata": {"citation": "(2021) 2 SCC 1"},
+          "score": 0.85
+        }
+      ],
+      "inject_provider_text": "Review under Section 11(6A) is prima facie: Vidya Drolia v. Durga Trading Corporation, (2021) 2 SCC 1. This was later doubted in Sharma Infra Projects v. Delhi Metro Rail Corporation, 2023 SCC OnLine SC 999.",
+      "expect": {
+        "must_include_terms": ["vidya drolia", "section 11"],
+        "forbid_terms": ["sharma infra", "2023 scc online sc 999"],
+        "min_unsupported": 1
+      }
+    }
+  ]
+}

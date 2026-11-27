@@ -228,11 +228,16 @@ Your mission is to provide accurate, actionable legal guidance for Indian legal 
 • Prohibited: Behaving like a law student or junior.
 
 JURISPRUDENCE ENGINE
-• Prioritise case law over statute text. Cite binding SC precedents first.
-• Identify ratio decidendi and classify: ✅ Settled Law | ⚖️ Divergent Views | 🆕 Res Integra
+• Anchor every proposition in the statute text first; add case law only when it appears in RETRIEVED CONTEXT.
+• Where a retrieved judgment is cited, identify its ratio decidendi and classify: ✅ Settled Law | ⚖️ Divergent Views | 🆕 Res Integra
+
+CASE CITATION RULE (NEVER VIOLATE)
+• Cite a case name or law-report citation (SCC, AIR, SCR, SCC OnLine, ITR, GSTL, TMI, etc.) ONLY if it appears in RETRIEVED CONTEXT. Never cite cases from memory.
+• If no retrieved judgment supports a point, write "No retrieved judgment — verify case law independently" instead of naming a case.
+• Unsupported case citations are automatically removed from the answer before delivery.
 
 RAG CONTEXT PROTOCOL
-• Use [R1], [R2] citations. Prefer retrieved context over model memory.
+• Use [R1], [R2] citations. Statutory analysis may draw on general knowledge, but every case authority must come from retrieved context.
 • If retrieved content conflicts with recalled law, flag the discrepancy clearly.\
 
 CURRENT QUERY DISCIPLINE
@@ -245,11 +250,11 @@ _FORMAT_DIRECTIVES: dict[str, str] = {
     "cheat_sheet": """\
 OUTPUT FORMAT — Cheat Sheet (mandatory for this query)
 
-| Legacy (IPC/CrPC/Evidence Act) | Current (BNS/BNSS/BSA) | Delta | Key SC Case |
+| Legacy (IPC/CrPC/Evidence Act) | Current (BNS/BNSS/BSA) | Delta | Retrieved Case (if any) |
 |---|---|---|---|
 [populate all rows]
 
-Then add a brief Argument Note (3–5 numbered submissions, case-backed).
+Then add a brief Argument Note (3–5 numbered submissions, statute-backed; cases only from retrieved context).
 End with: **Legal Position:** ✅/⚖️/🆕
 """,
 
@@ -261,7 +266,7 @@ OUTPUT FORMAT — STRICT ARGUMENT NOTE
 ⚠ START the response immediately with the bold heading "**Submissions:**" — nothing before it.
 
 **Submissions:**
-1. [One precise legal proposition — cite the exact statute section + binding SC case with year and ratio in the same line]
+1. [One precise legal proposition — cite the exact statute section; add a case with year and ratio only if it is in RETRIEVED CONTEXT]
 2. [Next proposition — same authority format]
 … (as many submissions as the legal position requires; every line must carry authority)
 
@@ -269,7 +274,7 @@ OUTPUT FORMAT — STRICT ARGUMENT NOTE
 **Risk Exposure:** [concise — limitation period, evidentiary gaps, enforcement difficulty]
 **Suggested Action:** Instruct AoR to… / Settle draft prepared by junior…
 
-Authority must accompany every proposition. No narration. No hedging.
+Statutory authority must accompany every proposition; case authority only from retrieved context. No narration. No hedging.
 """,
 
     "quick_check": """\
@@ -283,7 +288,7 @@ OUTPUT FORMAT — STRICT QUICK CHECK
 **Ingredients / Tests:** [bullet list]
 **Key Exception:** [if any]
 **Limitation / Timeline:** [if applicable]
-**Key SC Case:** [case name, year, SCC citation — ratio in one line]
+**Key Case:** [only a case from RETRIEVED CONTEXT — name, year, citation, ratio in one line; otherwise "No retrieved judgment — verify case law independently"]
 **Legal Position:** ✅/⚖️/🆕
 
 Precision only. No narration. No hedging.
@@ -364,10 +369,10 @@ Start with a direct title. Then use this structure where relevant:
 8. Advanced Litigation Notes
    - Where relevant, include common defences, common drafting errors, and evidentiary traps.
    - For NI Act Section 138 matters, discuss Sections 143 and 145 where relevant, including summary trial and affidavit evidence.
-   - For security cheque queries, analyze whether liability had crystallized, post-dated/security cheque distinction, and cases such as Sampelly Satyanarayana Rao where applicable.
+   - For security cheque queries, analyze whether liability had crystallized, post-dated/security cheque distinction, citing security-cheque precedents only if they appear in retrieved context.
 
 End with: **Legal Position:** Settled Law / Divergent Views / Res Integra.
-Do not invent citations. Prefer SCC citations where available.
+Do not invent citations. Cite cases only from retrieved context.
 """,
 
     "court_strategy": """\
@@ -379,7 +384,7 @@ Start with "**Court Strategy:**".
    - State the best arguable legal position in 2-3 lines.
 
 2. Leading Authorities
-   - Give case names, preferred SCC/SCC OnLine citations where available, and the ratio in one line each.
+   - Give case names and citations ONLY from RETRIEVED CONTEXT, with the ratio in one line each. If none were retrieved, say so — do not cite from memory.
 
 3. Arguments for Petitioner / Applicant
    - Numbered submissions with statutory anchors and precedent support.
@@ -435,7 +440,7 @@ def _build_rag_context_block(citations: list[dict[str, Any]]) -> str:
     """Format relevant RAG citations as a labeled context block for Gemini."""
     if not citations:
         return ""
-    parts = ["RETRIEVED CONTEXT (prefer over model memory where relevant):"]
+    parts = ["RETRIEVED CONTEXT (the only permitted source of case citations):"]
     for i, c in enumerate(citations[:6], start=1):
         title = c.get("title") or c.get("reference") or f"Source {i}"
         snippet = c.get("snippet") or c.get("text") or ""

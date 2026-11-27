@@ -31,7 +31,7 @@
     <meta name="twitter:title" content="LegalMitra — Professional Intelligence Workspace">
     <meta name="twitter:description" content="Grounded legal research, practice management and proactive compliance for Indian legal and tax professionals.">
     <meta name="twitter:image" content="https://legalmitra.sanmitratech.in/assets/brand/legalmitra-promo-90s-poster.jpg">
-    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v43">
+    <link rel="stylesheet" href="../shared/app-shell.css?v=legalmitra-ai-v44">
     <link rel="stylesheet" href="./legal-answer.css?v=legalmitra-stage2-exit-v1">
     <style>
       /* ════════════════════════════════════════════════════════════════════ */
@@ -984,9 +984,19 @@
           <div class="legal-section-heading">
             <span>Legal Tools</span>
             <h2>Free professional utilities for everyday Indian legal and compliance work.</h2>
-            <p>Use these quick tools for filing cost orientation, GST classification, legal notice preparation, limitation checks, stamp duty estimates, and HSN code review before moving into deeper LegalMitra research or drafting.</p>
+            <p>Use these quick tools for citation checking, filing cost orientation, GST classification, legal notice preparation, limitation checks, stamp duty estimates, and HSN code review before moving into deeper LegalMitra research or drafting.</p>
           </div>
           <div class="legal-tool-grid">
+            <button type="button" data-tool="citation-check" data-query="Explain how to verify Indian case citations and IPC to BNS section mappings before filing">
+              <span>Citation Checker</span>
+              <strong>Every authority verified and flagged</strong>
+              <small>Catches wrong case citations, non-existent sections and wrong IPC → BNS mappings in your draft or the other side's papers.</small>
+            </button>
+            <button type="button" data-tool="judgment-finder" data-query="Explain how to find and cite a Supreme Court of India judgment by party names and neutral citation">
+              <span>Judgment Finder</span>
+              <strong>38,000+ Supreme Court judgments</strong>
+              <small>Search by party names or citation and open the full judgment — every Supreme Court judgment since 1950.</small>
+            </button>
             <button type="button" data-tool="court-fee" data-query="Calculate court fee for a civil suit in India and explain state-wise caveats">
               <span>Court Fee Calculator</span>
               <strong>Civil suit filing cost orientation</strong>
@@ -1278,6 +1288,6 @@
     </div>
     <script src="../config.js?v=legalmitra-ai-v41"></script>
     <script type="module" src="../shared/pwa-shell.js?v=legalmitra-ai-v42"></script>
-    <script type="module" src="./app.js?v=legalmitra-stage2-exit-v1"></script>
+    <script type="module" src="./app.js?v=legalmitra-judgment-index-v1"></script>
   </body>
 </html>
