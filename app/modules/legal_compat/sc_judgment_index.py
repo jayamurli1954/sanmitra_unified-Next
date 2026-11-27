@@ -37,8 +37,24 @@ _SEP_RE = re.compile(r"\s+(?:v\.?|vs\.?|versus|V/s\.?)\s+", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-4]\d)\b")
 
 
+_INITIALS_RE = re.compile(r"\b(?:[a-z]\.){2,}")
+
+
+_STATE_ABBREVIATIONS = {
+    "ap": ("andhra", "pradesh"), "up": ("uttar", "pradesh"), "mp": ("madhya", "pradesh"),
+    "hp": ("himachal", "pradesh"), "tn": ("tamil", "nadu"), "wb": ("west", "bengal"),
+    "jk": ("jammu", "kashmir"), "nct": ("delhi",),
+}
+
+
 def _tokens(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", (text or "").lower().replace(".", " "))
+    # Keep dotted initials as one word so "A.P." and "U.P." stay distinct, and
+    # expand state abbreviations so "State of A.P." matches "STATE OF ANDHRA PRADESH".
+    low = _INITIALS_RE.sub(lambda m: m.group(0).replace(".", "") + " ", (text or "").lower())
+    out: list[str] = []
+    for tok in re.findall(r"[a-z0-9]+", low.replace(".", " ")):
+        out.extend(_STATE_ABBREVIATIONS.get(tok, (tok,)))
+    return out
 
 
 def _distinctive(text: str) -> list[str]:
@@ -130,10 +146,6 @@ class SupremeCourtIndex:
                 bucket.append(i)
         self._postings = postings
 
-    def _side_tokens(self, i: int) -> tuple[set[str], set[str]]:
-        packed = self._rows[i]
-        return _with_joins(_tokens(packed[0])), _with_joins(_tokens(packed[1]))
-
     def row(self, i: int) -> dict[str, Any]:
         return _unpack(self._rows[i])
 
@@ -161,23 +173,43 @@ class SupremeCourtIndex:
             return distinct
         return [t for t in _tokens(text) if t not in {"of", "the", "and", "ors", "anr", "others", "another"}]
 
-    def name_matches(self, name: str, row: dict[str, Any]) -> bool:
-        """Does a cited case name fit this record's parties (either order)?"""
+    @staticmethod
+    def _covers(claim_text: str, record_text: str) -> bool:
+        """The claim must also account for a fair share of the record party's own
+        distinctive words, so "D Mills" does not match "Suri Bhawani Cotton Mills"."""
+        if not _distinctive(claim_text):
+            return True  # all-generic party ("Union of India") — matched on words alone
+        record_words = _distinctive(record_text)
+        if not record_words:
+            return True
+        compact = "".join(_tokens(claim_text))
+        covered = sum(1 for w in record_words if w in compact)
+        return covered * 3 >= len(record_words)
+
+    def _fits(self, name: str, pet_text: str, res_text: str) -> bool:
         parts = _SEP_RE.split(name or "", maxsplit=1)
-        left = self._side_terms(parts[0])
-        right = self._side_terms(parts[1]) if len(parts) > 1 else []
-        if not _distinctive(name or ""):
-            return False
-        pet = _with_joins(_tokens(row.get("p") or ""))
-        res = _with_joins(_tokens(row.get("r") or ""))
-        return (self._side_ok(left, pet) and self._side_ok(right, res)) or (
-            self._side_ok(left, res) and self._side_ok(right, pet)
+        left_text = parts[0]
+        right_text = parts[1] if len(parts) > 1 else ""
+        left, right = self._side_terms(left_text), self._side_terms(right_text)
+        pet, res = _with_joins(_tokens(pet_text)), _with_joins(_tokens(res_text))
+
+        def oriented(a_text, a, b_text, b, p_text, p, r_text, r) -> bool:
+            return (
+                self._side_ok(a, p) and self._side_ok(b, r)
+                and self._covers(a_text, p_text) and (not b_text or self._covers(b_text, r_text))
+            )
+
+        return oriented(left_text, left, right_text, right, pet_text, pet, res_text, res) or oriented(
+            left_text, left, right_text, right, res_text, res, pet_text, pet
         )
 
+    def name_matches(self, name: str, row: dict[str, Any]) -> bool:
+        """Does a cited case name fit this record's parties (either order)?"""
+        if not _distinctive(name or ""):
+            return False
+        return self._fits(name, row.get("p") or "", row.get("r") or "")
+
     def by_name(self, name: str, *, year: int | None = None, limit: int = 5) -> list[dict[str, Any]]:
-        parts = _SEP_RE.split(name or "", maxsplit=1)
-        left = self._side_terms(parts[0])
-        right = self._side_terms(parts[1]) if len(parts) > 1 else []
         distinctive = _distinctive(name or "")
         if not distinctive:
             return []
@@ -186,13 +218,10 @@ class SupremeCourtIndex:
         if not present:
             return []
         rarest = min(present, key=lambda t: len(self._postings[t]))
-        matches: list[int] = []
-        for i in self._postings[rarest]:
-            pet, res = self._side_tokens(i)
-            if (self._side_ok(left, pet) and self._side_ok(right, res)) or (
-                self._side_ok(left, res) and self._side_ok(right, pet)
-            ):
-                matches.append(i)
+        matches = [
+            i for i in self._postings[rarest]
+            if self._fits(name, self._rows[i][0], self._rows[i][1])
+        ]
         if year is not None:
             near = [i for i in matches if abs(int(self._rows[i][6] or 0) - year) <= 1]
             if near:

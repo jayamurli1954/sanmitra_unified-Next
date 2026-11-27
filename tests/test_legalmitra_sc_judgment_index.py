@@ -160,3 +160,38 @@ def test_judgment_search_by_party_and_citation() -> None:
         "/api/v1/legalmitra/judgments/search", params={"q": "Puttaswamy", "year": 2017}, headers=_headers()
     ).json()
     assert any(r["neutral_citation"] == "2017 INSC 801" for r in by_word["results"])
+
+
+# ── Matching precision (regressions) ───────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "C Traders v. D Mills",  # common words only — must not match "Union Textile Traders v. Suri Bhawani Cotton Mills"
+        "Sharma Industries v. State of Punjab",
+        "Golakonda Venkateswara Rao v. State of U.P.",  # real party, wrong state (record says Andhra Pradesh)
+    ],
+)
+def test_weak_or_wrong_names_do_not_match(index, name: str) -> None:
+    assert index.by_name(name) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "nc"),
+    [
+        ("K.M. Chikkaputtaswamy v. State of A.P.", "1985 INSC 100"),  # A.P. -> ANDHRA PRADESH
+        ("State of U.P. v. Raj Narain", None),
+    ],
+)
+def test_state_abbreviations(index, name: str, nc: str | None) -> None:
+    rows = index.by_name(name)
+    assert rows
+    if nc:
+        assert rows[0]["nc"] == nc
+
+
+@pytest.mark.asyncio
+async def test_invented_case_with_common_words_is_not_verified() -> None:
+    item = await _item("C Traders v. D Mills, (2001) 3 SCC 1.")
+    assert item["status"] == "not_found"

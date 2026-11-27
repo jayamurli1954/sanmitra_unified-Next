@@ -40,11 +40,31 @@ VKC_CITATION = {
         ("See *Mohit Minerals Pvt. Ltd. vs. Union of India*.", "Mohit Minerals Pvt. Ltd. vs. Union of India"),
         ("State of U.P. Vs Raj Narain is cited.", "State of U.P. Vs Raj Narain"),
         ("Part V of the Constitution. State of Haryana v. Bhajan Lal applies.", "State of Haryana v. Bhajan Lal"),
+        ("Section 999 IPC. Fake Traders v. Mehta, [2014] 8 S.C.R. 128.", "Fake Traders v. Mehta"),
+        ("Tata Iron and Steel Co. Ltd. v. Union of India applies.", "Tata Iron and Steel Co. Ltd. v. Union of India"),
     ],
 )
 def test_find_case_names(text: str, expected: str) -> None:
     names = [c["text"] for c in find_case_claims(text) if c["claim_type"] == "case_name"]
     assert names == [expected]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "See Dr. Ram Kumar v. State of U.P. and M/s. ABC Pvt. Ltd. v. Union of India.",
+            ["Dr. Ram Kumar v. State of U.P.", "M/s. ABC Pvt. Ltd. v. Union of India"],
+        ),
+        (
+            "Maneka Gandhi v. Union of India, Arnesh Kumar v. State of Bihar and Vidya Drolia v. Durga Trading Corporation.",
+            ["Maneka Gandhi v. Union of India", "Arnesh Kumar v. State of Bihar", "Vidya Drolia v. Durga Trading Corporation"],
+        ),
+    ],
+)
+def test_adjacent_cases_are_split(text: str, expected: list[str]) -> None:
+    names = [c["text"] for c in find_case_claims(text) if c["claim_type"] == "case_name"]
+    assert names == expected
 
 
 @pytest.mark.parametrize(

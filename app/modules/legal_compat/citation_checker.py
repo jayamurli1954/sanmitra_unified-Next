@@ -307,7 +307,7 @@ def find_statute_refs(text: str) -> list[dict[str, Any]]:
             seen.add(span)
             for section in sections:
                 refs.append(
-                    {"code": code, "section": section, "text": m.group(0), "start": m.start(), "end": m.end()}
+                    {"code": code, "section": section, "text": m.group(0).rstrip(" .,;:"), "start": m.start(), "end": m.end()}
                 )
     refs.sort(key=lambda r: (r["start"], r["section"]))
     return refs

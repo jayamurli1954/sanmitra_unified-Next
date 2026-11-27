@@ -26,6 +26,9 @@ _CONNECT = r"(?:of|the|and|for|in|&|de|da|du)"
 _PARTY = rf"{_WORD}(?:\s+(?:{_CONNECT}\s+)?{_WORD}){{0,8}}"
 _SEP = r"(?:v\.?|vs\.?|Vs\.?|V/s\.?|versus|Versus)"
 
+_NEXT_SEP_RE = re.compile(rf"\s+{_SEP}\s")
+_JOINER_RE = re.compile(r"\s+and\s+|\s*[,;]\s+")
+
 CASE_NAME_RE = re.compile(rf"(?<![A-Za-z])(?P<left>{_PARTY})\s+{_SEP}\s+(?P<right>{_PARTY})")
 
 # Indian law-report citations.
@@ -53,7 +56,10 @@ _LEAD_STOP = {
     "leading", "authority", "authorities", "judgment", "decision", "ruling", "court",
 }
 
-_ABBREV_DOT = {"ltd.", "pvt.", "co.", "inc.", "anr.", "ors.", "bros.", "corpn.", "u.p.", "m.p.", "jr.", "sr."}
+_ABBREV_DOT = {
+    "ltd.", "pvt.", "co.", "inc.", "anr.", "ors.", "bros.", "corpn.", "corp.", "u.p.", "m.p.", "jr.", "sr.",
+    "mr.", "mrs.", "ms.", "dr.", "st.", "smt.", "sh.", "shri.", "govt.", "dept.", "secy.", "etc.", "m/s.",
+}
 
 # Tokens too generic to identify a case.
 _GENERIC_TOKENS = {
@@ -105,7 +111,9 @@ def _trim_case_span(text: str, start: int, end: int) -> tuple[int, int]:
         low = wm.group(0).lower()
         if (
             low.endswith(".")
-            and len(low) > 4
+            # "IPC." / "Act." end a sentence too; short initials ("K.") and known
+            # abbreviations ("Pvt.", "Dr.") do not.
+            and len(low) > 2
             and low not in _ABBREV_DOT
             and not re.fullmatch(r"(?:[a-z]\.)+", low)
             and origin + wm.end() < left_end
@@ -135,8 +143,21 @@ def find_case_claims(text: str) -> list[dict[str, Any]]:
     if not text:
         return []
     claims: list[dict[str, Any]] = []
-    for m in CASE_NAME_RE.finditer(text):
-        start, end = _trim_case_span(text, m.start(), m.end())
+    pos = 0
+    while True:
+        m = CASE_NAME_RE.search(text, pos)
+        if not m:
+            break
+        m_start, m_end = m.start(), m.end()
+        # "A v. B and C v. D": if another "v." follows straight away, the right
+        # party swallowed the next case's left party — cut it at the last joiner.
+        if _NEXT_SEP_RE.match(text, m_end):
+            right_start = m.start("right")
+            joiners = list(_JOINER_RE.finditer(text, right_start, m_end))
+            if joiners:
+                m_end = joiners[-1].start()
+        pos = max(m_end, m_start + 1)
+        start, end = _trim_case_span(text, m_start, m_end)
         span = text[start:end]
         # Need at least one distinctive token to be a case name at all.
         if not _distinctive(span):

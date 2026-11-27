@@ -141,6 +141,12 @@ async def test_statute_reference_forms(text: str, code: str, section: str, equiv
 
 
 @pytest.mark.asyncio
+async def test_statute_text_has_no_trailing_full_stop() -> None:
+    r = await _check("The complaint invokes Section 999 IPC.")
+    assert next(i for i in r["items"] if i["kind"] == "statute")["text"] == "Section 999 IPC"
+
+
+@pytest.mark.asyncio
 async def test_section_beyond_code_is_an_error() -> None:
     r = await _check("The complaint invokes Section 999 IPC.")
     item = next(i for i in r["items"] if i["kind"] == "statute")
