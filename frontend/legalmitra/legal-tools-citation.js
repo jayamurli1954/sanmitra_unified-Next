@@ -76,6 +76,11 @@ function itemDetail(item) {
   return parts.map((p) => `<div class="citation-check-detail">${p}</div>`).join("");
 }
 
+function plural(count, one, many) {
+  const n = Number(count || 0);
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 export function renderCitationCheckResult(payload) {
   const items = [...(payload.items || [])].sort(
     (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9),
@@ -111,9 +116,9 @@ export function renderCitationCheckResult(payload) {
     <div class="legal-tool-output-card">
       ${payload.file_name ? `<span class="citation-check-muted">File: ${escape(payload.file_name)}</span>` : ""}
       <div class="citation-check-summary">
-        <span>❌ ${Number(s.error || 0)} problems</span>
+        <span>❌ ${plural(s.error, "problem", "problems")}</span>
         <span>⚠️ ${Number(s.warning || 0)} to verify</span>
-        <span>🔁 ${Number(s.info || 0)} old-code sections</span>
+        <span>🔁 ${plural(s.info, "old-code section", "old-code sections")}</span>
         <span>✅ ${Number(s.ok || 0)} verified</span>
       </div>
       ${truncated}
